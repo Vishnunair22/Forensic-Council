@@ -15,6 +15,7 @@ from uuid import UUID
 from agents.arbiter_narrative import ArbiterNarrativeMixin
 from agents.arbiter_verdict import (
     AGENT_NAMES,
+    MIN_CONFIDENCE_THRESHOLD,
     AgentMetrics,
     ChallengeResult,
     FindingComparison,
@@ -556,7 +557,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             err = m.get("error_rate", 0)
 
             agent_findings = findings.get(aid, [])
-            from agents.arbiter_verdict import MIN_CONFIDENCE_THRESHOLD, confidence_of
+            from agents.arbiter_verdict import confidence_of
 
             positive = sum(
                 1
@@ -570,7 +571,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
             if positive > 0:
                 v = "SUSPICIOUS"
-
             elif inconclusive > 0:
                 v = "INCONCLUSIVE"
             elif ForensicPolicy.is_authentic(conf, err):
@@ -578,7 +578,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             elif ForensicPolicy.is_suspicious(conf, err):
                 v = "SUSPICIOUS"
             else:
-                # Default to AUTHENTIC if confidence is high and no suspicious signals found
                 v = (
                     "AUTHENTIC"
                     if conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD

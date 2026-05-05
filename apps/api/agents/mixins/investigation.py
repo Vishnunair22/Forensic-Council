@@ -63,6 +63,30 @@ class AgentInvestigationMixin:
                 priority=priority,
             )
             logger.info("Dynamic task injected", agent_id=self.agent_id, task=description)
+
+            # Issue 4.6 Fix: Broadcast updated tools_total
+            try:
+                state = await self.working_memory.get_state(self.session_id, self.agent_id)
+                new_total = len([t for t in state.tasks if t.status in ("PENDING", "IN_PROGRESS")])
+                from api.routes._session_state import broadcast_update
+                from api.schemas import BriefUpdate
+                await broadcast_update(
+                    str(self.session_id),
+                    BriefUpdate(
+                        type="AGENT_UPDATE",
+                        session_id=str(self.session_id),
+                        agent_id=self.agent_id,
+                        agent_name=self.agent_name,
+                        message=f"Task injected: {description}",
+                        data={
+                            "status": "running",
+                            "thinking": description,
+                            "tools_total": new_total,
+                        },
+                    ),
+                )
+            except Exception as e:
+                logger.debug("tools_total broadcast failed", error=str(e))
         except Exception as e:
             logger.error("Failed to inject dynamic task", agent_id=self.agent_id, error=str(e))
 

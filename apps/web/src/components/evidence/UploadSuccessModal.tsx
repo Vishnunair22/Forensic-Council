@@ -11,9 +11,10 @@ export interface UploadSuccessModalProps {
   file: File;
   onNewUpload: () => void;
   onStartAnalysis: () => Promise<void> | void;
+  onDismiss?: () => void;
 }
 
-export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: UploadSuccessModalProps) {
+export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismiss }: UploadSuccessModalProps) {
   const { playSound } = useSound();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -22,14 +23,15 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
   useEffect(() => {
     playSound("success-chime");
     setPortalTarget(document.body);
+    
+    // Fix B2: Prevent scroll jump by ensuring lock is stable during transitions
     const originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    
     return () => {
-      if (originalBodyOverflow !== "hidden") {
-        document.body.style.overflow = originalBodyOverflow;
-      } else {
-        document.body.style.overflow = "";
-      }
+      // If we are dismissing everything, restore scroll. 
+      // If we are just switching modals, the next modal will handle it.
+      document.body.style.overflow = originalBodyOverflow || "";
     };
   }, [playSound]);
 
@@ -42,10 +44,15 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
   }, [file]);
 
   useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onNewUpload(); };
+    const onEsc = (e: KeyboardEvent) => { 
+      if (e.key === "Escape") {
+        if (onDismiss) onDismiss();
+        else onNewUpload();
+      }
+    };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [onNewUpload]);
+  }, [onNewUpload, onDismiss]);
 
   if (!portalTarget) return null;
 

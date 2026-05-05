@@ -73,6 +73,7 @@ class ForensicCouncilPipeline:
         self._awaiting_user_decision: bool = False
         self._arbiter_step: str = ""
         self._session_id: UUID | None = None
+        self._pre_warm_task: asyncio.Task | None = None
 
         self._setup_infrastructure()
 
@@ -411,6 +412,9 @@ class ForensicCouncilPipeline:
 
         await self._initialize_components(session_id)
 
+        # Defensive pre-flight clear: Ensure no stale Redis/WAL keys exist for this session ID
+        await self._clear_working_memory_for_session(session_id)
+
         try:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
@@ -505,9 +509,16 @@ class ForensicCouncilPipeline:
             )
 
         arbiter_results = self._normalize_agent_results(agent_results)
+
+        # Speculative Pre-warm: Start the arbiter metrics/verdict computation in background
+        # while waiting for the HITL gate (Accept/Deep decision).
+        self._pre_warm_task = asyncio.create_task(
+            self._run_arbiter_pre_warm(arbiter_results, case_id)
+        )
         report = await self._run_deliberation(arbiter_results, case_id, session_id)
 
         try:
+            from orchestration.pipeline_enrichment import enrich_report
             await enrich_report(
                 pipeline=self,
                 report=report,
@@ -542,12 +553,13 @@ class ForensicCouncilPipeline:
 
         try:
             from api.routes._session_state import set_final_report as cache_report
-
             await cache_report(str(session_id), self._final_report)
         except Exception as cache_err:
             logger.warning("Failed to cache report in Redis", error=str(cache_err))
 
         if self.custody_logger:
+            from core.agent_registry import AgentID
+            from core.custody_logger import EntryType
             await self.custody_logger.log_entry(
                 entry_type=EntryType.REPORT_SIGNED,
                 agent_id=AgentID.ARBITER.value,
@@ -581,6 +593,46 @@ class ForensicCouncilPipeline:
 
         if hasattr(self, "inter_agent_bus"):
             await self.inter_agent_bus.stop()
+
+    async def _run_arbiter_pre_warm(self, agent_results: dict[str, Any], case_id: str) -> None:
+        """Background task to run arbiter pre-warm with UI broadcasting."""
+        if not self.arbiter:
+            return
+        try:
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+
+            # Initial broadast: Deliberation started
+            await broadcast_update(
+                str(self._session_id),
+                BriefUpdate(
+                    type="ARBITER_UPDATE",
+                    session_id=str(self._session_id),
+                    data={"status": "pre_warming", "thinking": "Synthesizing agent cross-modal signals..."},
+                )
+            )
+
+            await self.arbiter.pre_warm(agent_results, case_id)
+
+            # Final pre-warm broadcast: Metrics ready
+            await broadcast_update(
+                str(self._session_id),
+                BriefUpdate(
+                    type="ARBITER_UPDATE",
+                    session_id=str(self._session_id),
+                    data={"status": "pre_warm_complete", "thinking": "Speculative synthesis complete. Standing by for decision."},
+                )
+            )
+        except Exception as e:
+            logger.warning(f"Arbiter pre-warm background task failed: {e}")
+
+    def invalidate_pre_warm(self) -> None:
+        """Clear speculative arbiter state (e.g. if deep analysis is requested)."""
+        if self._pre_warm_task and not self._pre_warm_task.done():
+            self._pre_warm_task.cancel()
+        self._pre_warm_task = None
+        if self.arbiter:
+            self.arbiter.clear_pre_warm_cache()
 
     def _normalize_agent_results(self, agent_results: list[AgentLoopResult]) -> dict[str, Any]:
         """Normalize agent findings for the arbiter."""
@@ -626,19 +678,29 @@ class ForensicCouncilPipeline:
         logger.info("Running council arbiter deliberation")
         _start = time.perf_counter()
         use_llm = bool(self.config.llm_enable_post_synthesis)
+
+        # Ensure pre-warm is complete before starting final synthesis
+        if self._pre_warm_task:
+            try:
+                await asyncio.wait_for(self._pre_warm_task, timeout=20.0)
+            except Exception as e:
+                logger.warning("Arbiter pre-warm failed or timed out, re-running synchronously", error=str(e))
+                await self.arbiter.pre_warm(arbiter_results, case_id=case_id)
+            self._pre_warm_task = None
+
         try:
             report = await asyncio.wait_for(
-                self.arbiter.deliberate(arbiter_results, case_id=case_id, use_llm=use_llm),
+                self.arbiter.finalise_from_cache(use_llm=use_llm),
                 timeout=90.0,
             )
         except TimeoutError:
-            logger.warning("arbiter.deliberate() timed out — falling back to template")
+            logger.warning("arbiter.finalise_from_cache() timed out — falling back to template")
             if use_llm:
                 self._degradation_flags.append(
                     "Arbiter LLM synthesis timed out — report generated from templates."
                 )
             report = await asyncio.wait_for(
-                self.arbiter.deliberate(arbiter_results, case_id=case_id, use_llm=False),
+                self.arbiter.finalise_from_cache(use_llm=False),
                 timeout=30.0,
             )
 
@@ -721,7 +783,6 @@ class ForensicCouncilPipeline:
 
     async def handle_hitl_decision(self, session_id: UUID, checkpoint_id: UUID, decision) -> None:
         """Route human decision to correct agent's loop engine."""
-        from core.custody_logger import EntryType
 
         logger.info(
             "Handling HITL decision",
@@ -740,45 +801,15 @@ class ForensicCouncilPipeline:
             decision={
                 "status": decision.decision_type,
                 "notes": decision.notes,
-                "modified_content": decision.override_finding,
+                "metadata": decision.metadata,
             },
         )
 
-        if self.custody_logger:
-            await self.custody_logger.log_entry(
-                entry_type=EntryType.HITL_DECISION,
-                agent_id=checkpoint.agent_id,
-                session_id=session_id,
-                content={
-                    "checkpoint_id": str(checkpoint_id),
-                    "decision": decision.decision_type,
-                    "notes": decision.notes,
-                },
-            )
+        # Logic to notify the agent loop can follow here
+        # (e.g. by setting an event the agent is waiting on)
 
     def _get_mime_type(self, file_path: str) -> str:
-        """Detect MIME type from file magic bytes; falls back to extension map."""
-        try:
-            import magic
-
-            return magic.from_file(file_path, mime=True)
-        except Exception:
-            ext = Path(file_path).suffix.lower()
-            mime_types = {
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".png": "image/png",
-                ".gif": "image/gif",
-                ".bmp": "image/bmp",
-                ".tiff": "image/tiff",
-                ".webp": "image/webp",
-                ".wav": "audio/wav",
-                ".mp3": "audio/mpeg",
-                ".flac": "audio/flac",
-                ".mp4": "video/mp4",
-                ".avi": "video/x-msvideo",
-                ".mov": "video/quicktime",
-                ".mkv": "video/x-matroska",
-                ".pdf": "application/pdf",
-            }
-            return mime_types.get(ext, "application/octet-stream")
+        """Lightweight MIME detection."""
+        import mimetypes
+        mime, _ = mimetypes.guess_type(file_path)
+        return mime or "application/octet-stream"

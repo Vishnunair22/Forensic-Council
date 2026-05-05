@@ -616,7 +616,7 @@ class LLMClient:
                 mime_type = artifact.mime_type or mimetypes.guess_type(artifact.file_path)[0] or "image/jpeg"
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
-            
+
             payload = {
                 "contents": [
                     {
@@ -641,7 +641,7 @@ class LLMClient:
             )
             resp.raise_for_status()
             text = resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
-            
+
             if json_mode:
                 try:
                     return json.loads(text)

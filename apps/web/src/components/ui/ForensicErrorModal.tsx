@@ -9,7 +9,8 @@ import {
   RefreshCcw,
   Terminal,
   ShieldAlert,
-  X
+  X,
+  Loader2
 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 

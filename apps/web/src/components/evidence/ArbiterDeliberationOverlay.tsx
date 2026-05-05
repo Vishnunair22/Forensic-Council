@@ -103,13 +103,18 @@ export function ArbiterDeliberationOverlay({
             </div>
           </div>
 
-          {/* Progress Bar (Bottom) */}
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
+          {/* Indeterminate Progress Bar (Bottom) */}
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5 overflow-hidden">
             <motion.div
-              initial={{ width: "0%" }}
-              animate={{ width: "100%" }}
-              transition={{ duration: 15, ease: "linear" }}
-              className="h-full bg-[var(--color-primary)] shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.5)]"
+              animate={{ 
+                x: ["-100%", "200%"],
+              }}
+              transition={{ 
+                duration: 2.2, 
+                repeat: Infinity, 
+                ease: "easeInOut" 
+              }}
+              className="absolute top-0 bottom-0 w-1/3 bg-[var(--color-primary)] rounded-full shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.5)]"
             />
           </div>
         </motion.div>

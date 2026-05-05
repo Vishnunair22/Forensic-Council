@@ -166,6 +166,7 @@ function normalizeToolName(raw?: string | null): string {
     .replace(/^Calling\s+/i, "")
     .replace(/\.\.\.$/, "")
     .toLowerCase()
+    .replace(/_handler$/, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
 }
@@ -195,5 +196,6 @@ export function getLiveProgressDescriptor(
   }
 
   const fallbacks = FALLBACK_BY_AGENT[agentId] || FALLBACK_BY_AGENT.Agent1;
-  return fallbacks[Math.max(0, stepIndex) % fallbacks.length];
+  const desc = fallbacks[Math.max(0, stepIndex) % fallbacks.length];
+  return desc;
 }

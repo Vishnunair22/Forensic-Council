@@ -34,11 +34,11 @@ export interface AgentFindingCardProps {
 }
 
 const AGENT_META: Record<string, { name: string; role: string; color: string; icon: LucideIcon }> = {
-  "Agent1": { name: "Agent 01", role: "Visual Integrity", color: "cyan", icon: ShieldCheck },
-  "Agent2": { name: "Agent 02", role: "Acoustic Forensic", color: "blue", icon: Activity },
-  "Agent3": { name: "Agent 03", role: "Contextual Analysis", color: "amber", icon: Shield },
-  "Agent4": { name: "Agent 04", role: "Temporal Analysis", color: "teal", icon: ShieldAlert },
-  "Agent5": { name: "Agent 05", role: "Metadata Expert", color: "violet", icon: Cpu },
+  "Agent1": { name: "Image Forensics", role: "Pixel Integrity & AI Detection", color: "cyan", icon: ShieldCheck },
+  "Agent2": { name: "Audio Forensics", role: "Acoustic Integrity", color: "blue", icon: Activity },
+  "Agent3": { name: "Object Detection", role: "Scene & Context Analysis", color: "amber", icon: Shield },
+  "Agent4": { name: "Video Forensics", role: "Temporal Analysis", color: "teal", icon: ShieldAlert },
+  "Agent5": { name: "Metadata Expert", role: "Digital Provenance", color: "violet", icon: Cpu },
 };
 
 const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow: string }> = {
@@ -275,8 +275,9 @@ export function AgentFindingCard({
 
   return (
     <motion.div className={clsx(
-      "rounded-2xl overflow-hidden premium-glass border transition-all duration-500",
-      open ? "border-primary/20 shadow-[0_32px_64px_rgba(0,0,0,0.5)]" : "border-border-subtle shadow-none"
+      "rounded-2xl overflow-hidden border transition-all duration-500",
+      "bg-[#070A12] border border-white/8 shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset]",
+      open && "border-primary/40 shadow-[0_32px_64px_rgba(0,0,0,0.5)]"
     )}>
       {/* Header Button */}
       <button
@@ -302,9 +303,20 @@ export function AgentFindingCard({
                 <h3 className="text-sm font-black text-white tracking-tighter">{meta.name}</h3>
                 <span className="text-[10px] text-white/40 font-black tracking-wide">{meta.role}</span>
                 {anomalyCount > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-danger text-[10px] font-black">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black">
                     <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flags
                   </span>
+                )}
+                {/* Agent Verdict Badge */}
+                {metrics && (
+                   <span className={clsx(
+                     "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider",
+                     metrics.confidence_score > 0.8 ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" :
+                     metrics.confidence_score > 0.5 ? "bg-amber-500/10 border border-amber-500/20 text-amber-400" :
+                     "bg-red-500/10 border border-red-500/20 text-red-400"
+                   )}>
+                     {metrics.confidence_score > 0.8 ? "AUTHENTIC" : metrics.confidence_score > 0.5 ? "SUSPICIOUS" : "MANIPULATED"}
+                   </span>
                 )}
               </div>
               <p className="text-[10px] font-mono font-black text-white/40 flex items-center gap-2 tracking-tight">
@@ -314,6 +326,15 @@ export function AgentFindingCard({
                 <span className="text-white/10">·</span>
                 <Clock className="w-3 h-3" /> {totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}
               </p>
+              
+              {/* Surfaced Narrative Preview */}
+              {!open && overview && (
+                <div className="mt-4 animate-in fade-in slide-in-from-left-2 duration-700">
+                  <p className="text-[11px] text-white/30 leading-relaxed font-medium line-clamp-2 max-w-xl border-l border-white/10 pl-3 italic">
+                    {overview}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

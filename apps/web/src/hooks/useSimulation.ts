@@ -54,8 +54,13 @@ export const useSimulation = ({
   );
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isTransientReconnecting, setIsTransientReconnecting] = useState(false);
+  const [reconnectStatusMessage, setReconnectStatusMessage] = useState<string | null>(null);
   const [pipelineMessage, setPipelineMessage] = useState<string>("");
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
+  const [arbiterStatus, setArbiterStatus] = useState<string | null>(null);
+  const [arbiterThinking, setArbiterThinking] = useState<string | null>(null);
   const [revealQueue, setRevealQueue] = useState<AgentUpdate[]>([]);
   const isRevealingRef = useRef(false);
 
@@ -111,6 +116,8 @@ export const useSimulation = ({
         completedAgentsRef.current = [];
         setAgentUpdates({});
         setErrorMessage(null);
+        setIsTransientReconnecting(false);
+        setReconnectStatusMessage(null);
         setRevealQueue([]);
       }
 
@@ -409,7 +416,13 @@ export const useSimulation = ({
                   playSoundRef.current?.("think");
                   break;
 
-                case "PIPELINE_COMPLETE":
+                case "ARBITER_UPDATE":
+                if (update.data) {
+                  setArbiterStatus(update.data.status as string);
+                  setArbiterThinking(update.data.thinking as string || "");
+                }
+                break;
+              case "PIPELINE_COMPLETE":
                   // Normally stay on awaiting_decision until the user chooses Accept / Deep.
                   // After resumeInvestigation(), React may still report awaiting_decision for one
                   // frame while the WS already carries PIPELINE_COMPLETE — honour the resume ref.
@@ -458,6 +471,14 @@ export const useSimulation = ({
                       prev === "complete" || prev === "error" ? prev : "complete"
                     );
                     onCompleteRef.current?.();
+                  }
+                  break;
+
+                case "ARBITER_UPDATE":
+                  if (update.data) {
+                    const arbData = update.data as { status?: string; thinking?: string };
+                    setArbiterStatus(arbData.status || "processing");
+                    setArbiterThinking(arbData.thinking || update.message);
                   }
                   break;
           }
@@ -596,7 +617,8 @@ export const useSimulation = ({
                   reconnectConfig.current.maxDelay,
                 );
                 reconnectAttemptsRef.current++;
-                setErrorMessage(
+                setIsReconnecting(true);
+                setReconnectStatusMessage(
                   `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
                 );
                 setTimeout(() => {
@@ -608,6 +630,8 @@ export const useSimulation = ({
                 }, delay);
                 return prev;
               } else {
+                setIsReconnecting(false);
+                setReconnectStatusMessage(null);
                 setErrorMessage("Connection lost. Please refresh the page.");
                 return "error";
               }
@@ -627,6 +651,8 @@ export const useSimulation = ({
           .then(async () => {
             wsConnectionReady = true;
             reconnectAttemptsRef.current = 0; // Reset backoff on successful connect
+            setIsTransientReconnecting(false);
+            setReconnectStatusMessage(null);
             resolve();
             // Rehydrate: if the arbiter reached a terminal state while the socket
             // was down, catch up immediately. The arbiter-status endpoint returns
@@ -747,6 +773,8 @@ export const useSimulation = ({
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
     try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
     setErrorMessage(null);
+    setIsTransientReconnecting(false);
+    setReconnectStatusMessage(null);
     setPipelineMessage("");
     setPipelineThinking("");
     setRevealQueue([]);
@@ -767,8 +795,12 @@ export const useSimulation = ({
     setHitlCheckpoint(null);
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
     setErrorMessage(null);
+    setIsTransientReconnecting(false);
+    setReconnectStatusMessage(null);
     setPipelineMessage("Preparing forensic agents...");
     setPipelineThinking("Preparing forensic agents...");
+    setArbiterStatus(null);
+    setArbiterThinking(null);
     setRevealQueue([]);
     isRevealingRef.current = false;
   }, []);
@@ -820,7 +852,13 @@ export const useSimulation = ({
       }
 
       setStatus(deep ? "analyzing" : "processing");
-      if (deep) playSoundRef.current?.("think");
+      setArbiterStatus(deep ? null : "synthesizing");
+      if (deep) {
+        playSoundRef.current?.("think");
+        // Part 5.5 Fix: Abort any speculative frontend polling if we go DEEP
+        const { arbiterControl } = await import("@/lib/arbiterControl");
+        arbiterControl.abort();
+      }
 
       if (arbiterPollRef.current) {
         clearInterval(arbiterPollRef.current);
@@ -956,6 +994,8 @@ export const useSimulation = ({
     completedAgents,
     pipelineMessage,
     pipelineThinking,
+    arbiterStatus,
+    arbiterThinking,
     startSimulation,
     connectWebSocket,
     resumeInvestigation,
@@ -968,5 +1008,7 @@ export const useSimulation = ({
     totalAgents: AGENTS_DATA.length,
     revealQueue,
     revealPending: revealQueue.length > 0,
+    isReconnecting,
+    reconnectStatusMessage,
   };
 };

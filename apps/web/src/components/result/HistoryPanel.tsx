@@ -42,8 +42,8 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
   return (
     <div className="w-full max-w-5xl mx-auto pb-32">
-      <div className="horizon-card p-1 rounded-3xl overflow-hidden">
-        <div className="bg-[#020617] rounded-[inherit]">
+      <div className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
+        <div className="bg-[#020617]/40">
 
           {/* --- Header --- */}
           <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 border-b border-white/5 gap-6">
@@ -123,7 +123,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
                     onClick={() => onSelect(item.sessionId)}
-                    className="group relative horizon-card p-6 rounded-2xl cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+                    className="group relative bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] p-6 cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
                   >
                     <div className="flex flex-col md:flex-row gap-6 items-center">
 

@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from core.agent_registry import AgentID
+from core.media_kind import is_screen_capture_like
 from core.structured_logging import get_logger
 from orchestration.agent_factory import AgentLoopResult, _serialize_react_chain
 
@@ -31,6 +31,8 @@ _TRAILING_ABSENCE_RE = re.compile(
     r"\s+This supports the absence of (?:this specific anomaly|this specific manipulation pattern|this s.*)$",
     re.IGNORECASE,
 )
+
+PREVIEW_EXCLUDED_TOOLS = {"file_hash_verify", "hash_verify", "custody_check", "file_type_validation"}
 
 
 def _metric_digest(metadata: dict[str, Any]) -> str:
@@ -135,284 +137,7 @@ def _finding_summary_text(finding: Any) -> str:
     return ""
 
 
-def _is_screenshot_scope_only_agent3(aid: str, findings: list[Any] | None) -> bool:
-    if aid != AgentID.AGENT3.value or not findings:
-        return False
-    for finding in findings:
-        metadata = _finding_metadata(finding)
-        tool = str(metadata.get("tool_name") or _metadata_value(finding, "finding_type", "")).lower()
-        evidence_verdict = str(_metadata_value(finding, "evidence_verdict", "")).upper()
-        status = str(_metadata_value(finding, "status", "")).upper()
-        if "screenshot_scene_applicability" not in tool:
-            return False
-        if evidence_verdict != "NOT_APPLICABLE" and status != "NOT_APPLICABLE":
-            return False
-    return True
-
-
-def _is_screenshot_metadata_initial_agent5(
-    aid: str, findings: list[Any] | None, agent_inst: Any = None
-) -> bool:
-    if aid != AgentID.AGENT5.value or not findings:
-        return False
-    try:
-        from core.media_kind import is_screen_capture_like
-
-        artifact = getattr(agent_inst, "evidence_artifact", None)
-        if artifact is not None:
-            return bool(is_screen_capture_like(artifact))
-    except Exception:
-        pass
-
-    for finding in findings:
-        metadata = _finding_metadata(finding)
-        file_name = str(metadata.get("file_name") or "").lower()
-        platform = str(metadata.get("detected_platform") or "").lower()
-        note = str(metadata.get("note") or metadata.get("file_format_note") or "").lower()
-        if (
-            "screenshot" in file_name
-            or "screenshot" in platform
-            or "screen capture" in note
-        ):
-            return True
-    return False
-
-
-def _is_screen_capture_agent(
-    aid: str, findings: list[Any] | None, agent_inst: Any = None
-) -> bool:
-    artifact = getattr(agent_inst, "evidence_artifact", None)
-    artifact_metadata = getattr(artifact, "metadata", {}) if artifact is not None else {}
-    if not isinstance(artifact_metadata, dict):
-        artifact_metadata = {}
-
-    artifact_hints = " ".join(
-        str(value or "")
-        for value in (
-            artifact_metadata.get("original_filename"),
-            artifact_metadata.get("file_name"),
-            artifact_metadata.get("detected_platform"),
-            artifact_metadata.get("note"),
-            artifact_metadata.get("source"),
-            getattr(artifact, "file_path", "") if artifact is not None else "",
-            os.path.basename(str(getattr(artifact, "file_path", "") or "")),
-        )
-    ).lower()
-    if "screenshot" in artifact_hints or "screen capture" in artifact_hints:
-        return True
-
-    try:
-        from core.media_kind import is_screen_capture_like
-
-        if artifact is not None and is_screen_capture_like(artifact):
-            return True
-    except Exception:
-        pass
-
-    if not findings:
-        return False
-    for finding in findings:
-        metadata = _finding_metadata(finding)
-        haystack = " ".join(
-            str(value or "")
-            for value in (
-                metadata.get("file_name"),
-                metadata.get("detected_platform"),
-                metadata.get("note"),
-                metadata.get("file_format_note"),
-                metadata.get("raw_tool_summary"),
-                metadata.get("analysis_summary"),
-                _metadata_value(finding, "reasoning_summary", ""),
-            )
-        ).lower()
-        if "screenshot" in haystack or "screen capture" in haystack:
-            return True
-    return False
-
-
-def _screenshot_agent_override(
-    aid: str, findings: list[Any] | None, agent_inst: Any = None
-) -> dict[str, Any] | None:
-    if aid == AgentID.AGENT1.value and _is_screen_capture_agent(aid, findings, agent_inst):
-        return {
-            "agent_confidence": 0.72,
-            "agent_error_rate": 0.0,
-            "verdict": "CLEAN",
-            "narrative_summary": (
-                "Initial screenshot checks found no supported file-integrity or image-artifact "
-                "tampering signal. This does not authenticate the on-screen claim or source app; "
-                "it only describes the submitted screenshot artifact."
-            ),
-            "finding_summary": (
-                "Screenshot artifact: initial integrity checks passed. "
-                "No image-layer forgery signals were detected."
-            ),
-            "sections": [],
-            "synthesis_source": "screenshot_image_override",
-        }
-
-    if _is_screenshot_scope_only_agent3(aid, findings):
-        return {
-            "agent_confidence": 0.0,
-            "agent_error_rate": 0.0,
-            "verdict": "NOT_APPLICABLE",
-            "narrative_summary": (
-                "Bypassed: Physical scene analysis is not applicable to digital screen captures."
-            ),
-            "finding_summary": (
-                "Screenshot detected. Physical-scene object detection, lighting correlation, "
-                "and geometric vanishing-point physics were bypassed as they lack real-world "
-                "depth data in digital captures."
-            ),
-            "sections": [],
-            "synthesis_source": "screenshot_scope_override",
-        }
-
-    if _is_screenshot_metadata_initial_agent5(aid, findings, agent_inst):
-        return {
-            "agent_confidence": 0.85,
-            "agent_error_rate": 0.0,
-            "verdict": "CLEAN",
-            "narrative_summary": (
-                "Clean: Metadata provenance is consistent with a standard digital image export."
-            ),
-            "finding_summary": (
-                "Metadata Audit: Hash and container checks passed. The file structure confirms "
-                "a standard digital export with no hidden payloads or structural anomalies, "
-                "consistent with expected screenshot provenance."
-            ),
-            "sections": [],
-            "synthesis_source": "screenshot_metadata_override",
-        }
-
-    return None
-
-
-def _agent1_screenshot_preview(
-    findings: list[Any] | None,
-    screenshot_finding_summary: str,
-) -> list[dict[str, Any]]:
-    """Build valid, non-duplicated Agent1 findings for screenshot artifacts."""
-    preview: list[dict[str, Any]] = [
-        {
-            "tool": "screenshot_initial_summary",
-            "summary": screenshot_finding_summary,
-            "severity": "LOW",
-            "verdict": "CLEAN",
-            "confidence": 0.72,
-            "section": "Screenshot Artifact",
-        }
-    ]
-    if not findings:
-        return preview
-
-    wanted_tools = (
-        "file_hash_verify",
-        "frequency_domain_analysis",
-        "extract_text_from_image",
-    )
-    seen: set[str] = set()
-    for finding in findings:
-        tool = _finding_tool_name(finding)
-        tool_lower = tool.lower()
-        matched = next((name for name in wanted_tools if name in tool_lower), None)
-        if matched is None or matched in seen:
-            continue
-        seen.add(matched)
-
-        metadata = _finding_metadata(finding)
-        summary = _humanize_initial_finding(
-            agent_id=AgentID.AGENT1.value,
-            tool_name=tool,
-            summary=_finding_summary_text(finding),
-            evidence_verdict=str(_metadata_value(finding, "evidence_verdict", "")).upper(),
-            finding_status=str(_metadata_value(finding, "status", "")).upper(),
-            metadata=metadata,
-        )
-        if not summary:
-            continue
-
-        preview.append(
-            {
-                "tool": matched,
-                "summary": summary[:640],
-                "severity": "LOW",
-                "verdict": "CLEAN",
-                "confidence": _metadata_value(finding, "confidence_raw", None),
-                "section": "Screenshot Artifact",
-            }
-        )
-    return preview
-
-
-def _agent3_screenshot_preview(
-    findings: list[Any] | None,
-    screenshot_finding_summary: str,
-) -> list[dict[str, Any]]:
-    """Build valid, non-duplicated Agent3 findings for screenshot artifacts."""
-    return [
-        {
-            "tool": "scene_scope_check",
-            "summary": screenshot_finding_summary,
-            "severity": "LOW",
-            "verdict": "NOT_APPLICABLE",
-            "confidence": 0.0,
-            "section": "Bypass Logic",
-        }
-    ]
-
-
-def _agent5_screenshot_preview(
-    findings: list[Any] | None,
-    screenshot_finding_summary: str,
-) -> list[dict[str, Any]]:
-    """Build valid, non-duplicated Agent5 findings for screenshot artifacts."""
-    preview: list[dict[str, Any]] = [
-        {
-            "tool": "metadata_provenance_audit",
-            "summary": screenshot_finding_summary,
-            "severity": "LOW",
-            "verdict": "CLEAN",
-            "confidence": 0.85,
-            "section": "Provenance",
-        }
-    ]
-    if not findings:
-        return preview
-
-    wanted_tools = ("file_hash_verify", "exif_extract", "hex_signature_scan")
-    seen: set[str] = set()
-    for finding in findings:
-        tool = _finding_tool_name(finding)
-        tool_lower = tool.lower()
-        matched = next((name for name in wanted_tools if name in tool_lower), None)
-        if matched is None or matched in seen:
-            continue
-        seen.add(matched)
-
-        metadata = _finding_metadata(finding)
-        summary = _humanize_initial_finding(
-            agent_id=AgentID.AGENT5.value,
-            tool_name=tool,
-            summary=_finding_summary_text(finding),
-            evidence_verdict=str(_metadata_value(finding, "evidence_verdict", "")).upper(),
-            finding_status=str(_metadata_value(finding, "status", "")).upper(),
-            metadata=metadata,
-        )
-        if not summary:
-            continue
-
-        preview.append(
-            {
-                "tool": matched,
-                "summary": summary[:640],
-                "severity": "LOW",
-                "verdict": "CLEAN",
-                "confidence": _metadata_value(finding, "confidence_raw", None),
-                "section": "Provenance",
-            }
-        )
-    return preview
+# Synthetic screenshot overrides removed in favor of real-time tool findings.
 
 
 def _humanize_initial_finding(
@@ -423,6 +148,7 @@ def _humanize_initial_finding(
     evidence_verdict: str,
     finding_status: str,
     metadata: dict[str, Any],
+    artifact: Any = None,
 ) -> str | None:
     """Turn raw tool text into a concise card-level investigator note."""
     tool = (tool_name or "").lower()
@@ -451,7 +177,10 @@ def _humanize_initial_finding(
             "chain-of-custody record, so the submitted artifact was not altered after intake."
         )
 
-    if "exif" in tool:
+    if "exif" in tool or "metadata" in tool:
+        if is_screen_capture_like(artifact):
+            return "Container metadata is consistent with a digital screen capture (limited EXIF provenance is expected)."
+
         parts = []
         if "device: not recorded" in text.lower() or "device not recorded" in text.lower():
             parts.append("No camera/device model was recorded in EXIF")
@@ -610,6 +339,11 @@ async def run_agents_concurrent(
                     tool = m.get("tool_name") or (
                         f.finding_type if hasattr(f, "finding_type") else f.get("finding_type")
                     )
+
+                    # Filter out low-signal/internal tools from the UI preview
+                    if tool in PREVIEW_EXCLUDED_TOOLS:
+                        continue
+
                     s = _summary_for_finding(f, m)
                     sev = assign_severity_tier(f)
                     evidence_verdict = str(
@@ -638,6 +372,7 @@ async def run_agents_concurrent(
                         evidence_verdict=evidence_verdict,
                         finding_status=finding_status,
                         metadata=m,
+                        artifact=evidence_artifact,
                     )
                     if human_summary is None:
                         continue
@@ -658,6 +393,9 @@ async def run_agents_concurrent(
                             "fallback_reason": m.get("fallback_reason"),
                         }
                     )
+
+                # Sort by confidence descending to surface high-signal findings first
+                preview.sort(key=lambda x: x.get("confidence") or 0.0, reverse=True)
             if isinstance(synthesis, dict) and synthesis.get("sections"):
                 preview_tools = {str(item.get("tool") or "") for item in preview}
                 before = len(preview)
@@ -685,25 +423,6 @@ async def run_agents_concurrent(
                         }
                     )
 
-            screenshot_override = _screenshot_agent_override(aid, findings, agent_inst)
-            if screenshot_override is not None:
-                synthesis = screenshot_override
-                f_summary = screenshot_override.get("finding_summary") or screenshot_override["narrative_summary"]
-                if aid == AgentID.AGENT1.value:
-                    preview = _agent1_screenshot_preview(
-                        findings,
-                        f_summary,
-                    )
-                elif aid == AgentID.AGENT3.value:
-                    preview = _agent3_screenshot_preview(
-                        findings,
-                        f_summary,
-                    )
-                elif aid == AgentID.AGENT5.value:
-                    preview = _agent5_screenshot_preview(
-                        findings,
-                        f_summary,
-                    )
 
             await broadcast_update(
                 str(session_id),
@@ -802,7 +521,7 @@ async def run_agents_concurrent(
     for (inst, supported), aid in zip(
         agent_instances, registry.get_all_agent_ids(), strict=True
     ):
-        # Enforce strict MIME-type gating: if the agent explicitly reports it doesn't support 
+        # Enforce strict MIME-type gating: if the agent explicitly reports it doesn't support
         # the file type, mark it as skipped immediately.
         if not supported:
             await _broadcast_agent_status(

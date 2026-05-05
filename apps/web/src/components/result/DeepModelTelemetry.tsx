@@ -31,7 +31,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
  const models = Array.from(new Set(deepFindings.map((f) => f.finding_type)));
 
  return (
-  <div className="rounded-2xl overflow-hidden glass-panel border border-violet-500/20 bg-violet-500/[0.02]">
+  <div className="bg-[#070A12] border border-violet-500/20 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
    <div className="px-5 py-3.5 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">
     <div className="flex items-center gap-2">
      <Cpu className="w-3.5 h-3.5 text-violet-400" />

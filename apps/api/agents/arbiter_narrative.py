@@ -134,8 +134,8 @@ class ArbiterNarrativeMixin:
             "warning",
         }
 
-        def _fmt(findings_list: list[dict]) -> str:
-            out = []
+        def _fmt_text(findings_list: list[dict]) -> str:
+            lines = []
             # Sort findings: Deep phase first, then by confidence descending.
             sorted_findings = sorted(
                 findings_list,
@@ -151,36 +151,21 @@ class ArbiterNarrativeMixin:
                 tool_name = meta.get("tool_name", f.get("finding_type", ""))
                 is_na = any(meta.get(flag) for flag in _NOT_APPLICABLE_FLAGS)
                 is_failed = not is_na and meta.get("court_defensible") is False
-                key_metrics: dict = {}
-                for k, v in meta.items():
-                    if k.startswith("_") or k in _STRIP_KEYS:
-                        continue
-                    if k in _NOT_APPLICABLE_KEYS:
-                        key_metrics[k] = v
-                        continue
-                    if isinstance(v, (bool, int, float)):
-                        key_metrics[k] = v
-                    elif isinstance(v, str) and len(v) < 200:
-                        key_metrics[k] = v
-                    elif (
-                        isinstance(v, list)
-                        and len(v) <= 10
-                        and all(isinstance(x, (str, int, float, bool, dict)) for x in v)
-                    ):
-                        key_metrics[k] = v
-                entry = {
-                    "tool": tool_name,
-                    "confidence": round(confidence_of(f, default=0.0) or 0.0, 3),
-                    "evidence_verdict": evidence_verdict_of(f),
-                    "status": f.get("status", ""),
-                    "applicability": "NOT_APPLICABLE"
-                    if is_na
-                    else ("FAILED" if is_failed else "RAN"),
-                    "summary": (f.get("reasoning_summary") or "")[:400],
-                    "metrics": key_metrics,
-                }
-                out.append(entry)
-            return json.dumps(out, indent=2)
+
+                verdict = evidence_verdict_of(f)
+                conf = round(confidence_of(f, default=0.0) or 0.0, 3)
+                statement = f.get("court_statement") or f.get("reasoning_summary") or "No detailed statement available."
+
+                status_str = "NOT_APPLICABLE" if is_na else ("FAILED" if is_failed else "RAN")
+
+                lines.append(
+                    f"- TOOL: {tool_name}\n"
+                    f"  VERDICT: {verdict}\n"
+                    f"  CONFIDENCE: {conf * 100:.1f}%\n"
+                    f"  STATUS: {status_str}\n"
+                    f"  FORENSIC STATEMENT: {statement}\n"
+                )
+            return "\n".join(lines)
 
         tools_na = metrics.get("tools_not_applicable", 0)
         has_deep = bool(deep_f)
@@ -188,7 +173,7 @@ class ArbiterNarrativeMixin:
         initial_vs_deep_comparison = ""
         if has_deep:
             comparison_section = (
-                f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt(deep_f)}"
+                f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt_text(deep_f)}"
             )
             _comparison_pairs = []
             for df in deep_f:
@@ -251,7 +236,7 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
             f"Agent: {agent_full_name}\n"
             f"Confidence: {confidence_pct}%  |  Error rate: {error_rate_pct}%  |  "
             f"Tools succeeded: {tools_ok}/{tools_total}  |  Not applicable: {tools_na}\n\n"
-            f"Initial analysis ({len(initial_f)} tool scans):\n{_fmt(initial_f)}"
+            f"Initial analysis ({len(initial_f)} tool scans):\n{_fmt_text(initial_f)}"
             f"{comparison_section}"
             f"{initial_vs_deep_comparison}\n\n"
             f"Write the per-agent analysis section."
@@ -274,10 +259,11 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
         num_findings: int,
         cross_modal_confirmed: int,
         contested: int,
-        all_findings: list[dict[str, Any]] = None,
-        gemini_findings: list[dict[str, Any]] = None,
-        active_agent_metrics: list[dict[str, Any]] = None,
+        all_findings: list[dict[str, Any]] | None = None,
+        gemini_findings: list[dict[str, Any]] | None = None,
+        active_agent_metrics: list[dict[str, Any]] | None = None,
         overall_verdict: str = "",
+        analysis_coverage_note: str = "",
     ) -> str:
         """
         Generate an executive summary using Groq LLM.
@@ -290,9 +276,10 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                     cross_modal_confirmed,
                     contested,
                     all_findings or [],
-                    gemini_findings or [],
-                    active_agent_metrics or [],
-                    overall_verdict,
+                    gemini_findings=gemini_findings,
+                    active_agent_metrics=active_agent_metrics,
+                    overall_verdict=overall_verdict,
+                    analysis_coverage_note=analysis_coverage_note,
                 )
                 if result:
                     return result
@@ -310,9 +297,10 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
         cross_modal_confirmed: int,
         contested: int,
         all_findings: list[dict[str, Any]],
-        gemini_findings: list[dict[str, Any]] = None,
-        active_agent_metrics: list[dict[str, Any]] = None,
+        gemini_findings: list[dict[str, Any]] | None = None,
+        active_agent_metrics: list[dict[str, Any]] | None = None,
         overall_verdict: str = "",
+        analysis_coverage_note: str = "",
     ) -> str:
         """Generate executive summary using Groq LLM synthesis."""
         client = getattr(self, "_synthesis_client", None) or LLMClient(
@@ -402,6 +390,7 @@ Your summary must be:
 - Free of speculation — only state what the data shows
 - Explicit about tool failures and low-confidence findings
 - Where Gemini vision findings present, attribute them as AI-assisted analysis needing corroboration
+- Coverage context: {analysis_coverage_note} (Note any tool failures explicitly)
 
 Do NOT use bullet points. Write in continuous prose paragraphs.
 Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — explain WHY based on the numbers."""
@@ -612,7 +601,7 @@ Respond ONLY with valid JSON (no markdown):
 
 Rules:
 - verdict_sentence: state the verdict and primary reason in ≤25 words.
-- key_findings: exactly 3-5 plain English bullet items, each ≤25 words.
+- key_findings: exactly 3-5 plain English bullet items, each ≤50 words. Ensure findings are complete, authoritative sentences.
 - reliability_note: ≤20 words. Cite confidence %, error rate, and note if any tools used fallbacks."""
 
         analysis_mode = (
@@ -866,6 +855,7 @@ Rules:
                             gemini_findings=gemini_vision_findings,
                             active_agent_metrics=list(per_agent_metrics.values()),
                             overall_verdict=overall_verdict,
+                            analysis_coverage_note=analysis_coverage_note,
                         ),
                         timeout=45.0,
                     )

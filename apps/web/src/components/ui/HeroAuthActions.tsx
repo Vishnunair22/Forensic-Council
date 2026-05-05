@@ -182,7 +182,6 @@ export function HeroAuthActions() {
             key="upload-modal"
             onClose={() => setShowUpload(false)}
             onFileSelected={(f) => {
-              playSound("success-chime");
               setSelectedFile(f);
             }}
           />
@@ -192,6 +191,7 @@ export function HeroAuthActions() {
             key="success-modal"
             file={selectedFile}
             onNewUpload={() => { setSelectedFile(null); setIsHandingOff(false); }}
+            onDismiss={() => { setShowUpload(false); setSelectedFile(null); setIsHandingOff(false); }}
             onStartAnalysis={async () => {
               setIsHandingOff(true);
               playSound("envelope-close");
@@ -200,15 +200,11 @@ export function HeroAuthActions() {
             }}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {handoffVisible && (
           <LoadingOverlay
-            title="Connecting"
-            liveText="Opening evidence analysis and preparing live backend stream..."
-            dispatchedCount={0}
-            totalAgents={5}
+            key="handoff-overlay"
+            variant="minimal"
+            liveText="Uploading evidence to secure forensic pipeline..."
           />
         )}
       </AnimatePresence>

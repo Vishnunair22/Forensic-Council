@@ -66,7 +66,7 @@ class AgentReflectionMixin:
         )
 
         # RT5: Check if confidence is court-defensible
-        court_defensible = all_tasks_complete and not overconfident_findings and findings
+        court_defensible = bool(all_tasks_complete and not overconfident_findings and findings)
 
         reflection_notes = []
         if incomplete_tasks:

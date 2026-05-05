@@ -14,6 +14,8 @@ import { DegradationBanner } from "./DegradationBanner";
 import { ActionDock } from "./ActionDock";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
+import { VerdictGauge } from "./VerdictGauge";
+import { AnimatePresence } from "framer-motion";
 
 const AgentAnalysisTab = dynamic(
   () => import("./AgentAnalysisTab").then((m) => m.AgentAnalysisTab),
@@ -60,18 +62,20 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
   return (
     <div className="min-h-screen pb-48 pt-32 relative">
-      {(rs.state === "arbiter" || rs.state === "loading") && (
-        <ForensicProgressOverlay
-          title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
-          liveText={rs.arbiterMsg || "Decrypting forensic report..."}
-          telemetryLabel="Analyzing Agent Intersections"
-          showElapsed
-        />
-      )}
+      <AnimatePresence>
+        {(rs.state === "arbiter" || rs.state === "loading") && (
+          <ForensicProgressOverlay
+            title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
+            liveText={rs.arbiterMsg || "Decrypting forensic ledger..."}
+            telemetryLabel="Analyzing Agent Intersections"
+            showElapsed
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
-        <div className="glass-panel p-2 rounded-full flex items-center justify-between gap-4 bg-[#020203]/80 border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+        <div className="bg-[#020203]/80 border border-white/10 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
           <button
             onClick={rs.handleHome}
             className="px-6 py-2.5 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-3"
@@ -173,18 +177,28 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
                 {/* 1. Verdict & Identity */}
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <ResultHeader
-                    report={rs.report}
-                    fileName={rs.report.case_id || "Evidence 01"}
-                    mimeType={rs.mimeType}
-                    thumbnail={rs.thumbnail}
-                    isDeepPhase={rs.isDeepPhase}
-                    vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
+                    <ResultHeader
+                      report={rs.report}
+                      fileName={rs.report.case_id || "Evidence 01"}
+                      mimeType={rs.mimeType}
+                      thumbnail={rs.thumbnail}
+                      isDeepPhase={rs.isDeepPhase}
+                      vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
+                      confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
+                      errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
+                      manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
+                      activeAgentIds={activeAgentIds}
+                      pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
+                    />
+                  </motion.div>
+
+                {/* 1.5 Gauges */}
+                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                  <VerdictGauge 
                     confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
-                    errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
                     manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
-                    activeAgentIds={activeAgentIds}
-                    pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
+                    errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
+                    discordPct={rs.report.confidence_std_dev ? Math.round(rs.report.confidence_std_dev * 100) : 0}
                   />
                 </motion.div>
 

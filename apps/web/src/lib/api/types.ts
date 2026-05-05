@@ -92,6 +92,7 @@ export interface BriefUpdate {
     | "CONNECTED"
     | "PIPELINE_PAUSED"
     | "PIPELINE_QUARANTINED"
+    | "ARBITER_UPDATE"
     | "REPORT_READY";
   session_id: string;
   agent_id: string | null;

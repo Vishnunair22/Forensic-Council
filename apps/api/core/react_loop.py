@@ -1409,7 +1409,7 @@ class ReActLoopEngine:
                         calibrated=cal_status_str == "TRAINED",
                         calibration_status=cal_status_str,
                         evidence_verdict=evidence_verdict,
-                        status=status_val,
+                        status=status_val,  # type: ignore[arg-type]
                         evidence_refs=[],
                         reasoning_summary=self._build_readable_summary(
                             next_step.tool_name,

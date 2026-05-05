@@ -193,7 +193,7 @@ class InterAgentBus:
             self._events[key] = asyncio.Event()
         self._events[key].set()
 
-    def signal_event(self, session_id: Any, event_name: str, payload: dict = None) -> None:
+    def signal_event(self, session_id: Any, event_name: str, payload: dict | None = None) -> None:
         """Signal an event to any waiting agents. Broadcasts via Redis if available."""
         # 1. Trigger locally
         self._set_local_event(event_name)

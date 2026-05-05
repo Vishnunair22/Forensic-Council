@@ -190,9 +190,9 @@ class VideoHandlers(BaseToolHandler):
         if result.get("error") or result.get("available") is False:
             result = await self._optical_flow_fallback(artifact.file_path)
         else:
-            result.setdefault("available", True)
-            result.setdefault("court_defensible", True)
-            result.setdefault("confidence", 0.80 if result.get("flagged_frames") else 0.90)
+            result.setdefault("available", "true")
+            result.setdefault("court_defensible", "true")
+            result.setdefault("confidence", "0.80" if result.get("flagged_frames") else "0.90")
 
         await self.agent._record_tool_result("optical_flow_analysis", result)
         return result

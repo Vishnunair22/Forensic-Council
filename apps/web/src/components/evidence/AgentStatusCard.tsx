@@ -25,7 +25,7 @@ export interface AgentStatusCardProps {
   agentId: string;
   name: string;
   badge: string;
-  status: "waiting" | "queued" | "checking" | "running" | "complete" | "error" | "unsupported" | "validating";
+  status: "waiting" | "queued" | "checking" | "running" | "complete" | "error";
   thinking?: string;
   liveUpdate?: {
     status: string;
@@ -40,7 +40,6 @@ export interface AgentStatusCardProps {
   fileMime?: string;
   onComplete?: () => void;
   phase?: "initial" | "deep";
-  onSkipExpire?: (agentId: string) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onAnimationStart?: () => void;
@@ -53,8 +52,6 @@ const statusConfig = {
   running:     { color: "text-[var(--color-primary)]",    label: "Scanning" },
   complete:    { color: "text-[var(--color-primary)]",    label: "Verified"  },
   error:       { color: "text-danger",     label: "Error"     },
-  unsupported: { color: "text-white/30",   label: "Bypassed"   },
-  validating:  { color: "text-[var(--color-primary)]",    label: "Validating" },
 };
 
 const ALERT_VERDICTS = new Set([
@@ -77,7 +74,7 @@ function isAlertFinding(finding: FindingPreview) {
   return ALERT_VERDICTS.has(finding.verdict ?? "") || ["CRITICAL", "HIGH", "MEDIUM"].includes(finding.severity ?? "");
 }
 
-const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
+export const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
   "Agent1": { icon: ScanEye,  color: "text-[#60A5FA]", bg: "bg-[#60A5FA]/10" },
   "Agent2": { icon: AudioWaveform, color: "text-[#38BDF8]", bg: "bg-[#38BDF8]/10" },
   "Agent3": { icon: Boxes,    color: "text-[#818CF8]", bg: "bg-[#818CF8]/10" },
@@ -99,7 +96,9 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       animate={{ opacity: 1, x: 0 }}
       className={clsx(
         "p-4 rounded-xl border transition-all duration-300",
-        isAlert ? "bg-danger/5 border-danger/20" : "bg-white/[0.02] border-white/5"
+        isAlert 
+          ? "bg-danger/5 border-danger/20 hover:bg-danger/8" 
+          : "bg-[#0C111E] border-white/8 hover:bg-[#111830] hover:border-white/12"
       )}
     >
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -148,11 +147,20 @@ export function AgentStatusCard({
   completedData,
   fileMime,
   phase = "initial",
-  onSkipExpire,
   isExpanded = false,
   onToggleExpand,
   onAnimationStart,
 }: AgentStatusCardProps) {
+  const sanitizeThinking = (text?: string) => {
+    if (!text) return "";
+    let s = text
+      .replace(/^(Thinking|THOUGHT|ACTION):\s*/i, "")
+      .replace(/_/g, " ")
+      .trim();
+    if (s.length < 12) return "";
+    return s.length > 160 ? s.slice(0, 160) + "..." : s;
+  };
+
   const fileCategory = fileMime?.startsWith("image/") ? "image"
     : fileMime?.startsWith("audio/") ? "audio"
     : fileMime?.startsWith("video/") ? "video"
@@ -172,11 +180,6 @@ export function AgentStatusCard({
     }
   }, [status]);
 
-  useEffect(() => {
-    if (status !== "unsupported") return;
-    const t = setTimeout(() => onSkipExpire?.(agentId), 10000);
-    return () => clearTimeout(t);
-  }, [status, agentId, onSkipExpire]);
 
   const findings = React.useMemo(() => {
     const raw = completedData?.findings_preview || [];
@@ -218,15 +221,16 @@ export function AgentStatusCard({
       layout
       onAnimationStart={() => onAnimationStart?.()}
       className={clsx(
-        "glass-panel relative flex flex-col overflow-hidden transition-all duration-500",
-        status === "unsupported" ? "min-h-[200px] max-h-[300px]" : "min-h-[540px] max-h-[720px]",
-        (status === "running" || status === "validating" || status === "checking") && "border-[var(--color-primary)]/30 shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]",
+        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[540px] max-h-[720px] rounded-2xl border border-white/8 bg-[#070A12]",
+        (status === "running" || status === "checking") 
+          ? "shadow-[0_4px_24px_rgba(0,0,0,0.5),_0_0_0_1px_rgba(59,130,246,0.2),_0_1px_0_rgba(255,255,255,0.04)_inset]"
+          : "shadow-[0_4px_24px_rgba(0,0,0,0.5),_0_1px_0_rgba(255,255,255,0.04)_inset]",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
-      <div className="p-8 pb-6 border-b border-white/5 relative z-10">
+      <div className="p-8 pb-6 border-b border-white/6 rounded-t-2xl bg-[#0C111E] relative z-10">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Aperture Icon */}
@@ -258,15 +262,15 @@ export function AgentStatusCard({
               </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-2 py-0.5 rounded text-[9px] font-mono font-bold border",
-                  (status === "complete" || status === "validating" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30 text-[var(--color-primary)]" :
+                  "px-3 py-0.5 rounded text-[10px] font-mono font-bold border",
+                  (status === "complete" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30 text-[var(--color-primary)]" :
                   status === "error" ? "bg-danger/10 border-danger/30 text-danger" :
                   "bg-white/5 border-white/10 text-white/40"
                 )}>
                   {cfg.label.toUpperCase()}
                 </span>
-                <span className="text-[9px] font-mono text-white/20 tracking-widest uppercase">
-                  NODE_{agentId}
+                <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">
+                  {badge || `NODE_${agentId}`}
                 </span>
               </div>
             </div>
@@ -276,7 +280,7 @@ export function AgentStatusCard({
 
         {/* --- Progress Section --- */}
         <AnimatePresence mode="wait">
-          {(status === "running" || status === "checking" || status === "validating") && (
+          {(status === "running" || status === "checking") && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -284,27 +288,30 @@ export function AgentStatusCard({
               className="space-y-4"
             >
               <div className="flex items-center gap-3 text-white/60">
-                {(status === "validating" || status === "checking") ? (
-                  <Activity className="w-4 h-4 text-[var(--color-primary)] animate-pulse" />
-                ) : (
-                  <ProgressIcon className="w-4 h-4 text-[var(--color-primary)]" />
-                )}
+                <motion.div key={progressDescriptor.label} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+                  {status === "checking" ? (
+                    <Activity className="w-4 h-4 text-[var(--color-primary)] animate-pulse" />
+                  ) : (
+                    <ProgressIcon className="w-4 h-4 text-[var(--color-primary)]" />
+                  )}
+                </motion.div>
                 <span className="text-[10px] font-mono font-bold tracking-[0.1em] truncate">
-                  {status === "validating"
-                    ? `${name} is validating the file type.`
-                    : status === "checking"
+                  {status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
-                    : `${progressDescriptor.label} ${currentToolIndex}/${liveTotal}`}
+                    : (Math.max(liveTotal, currentToolIndex, 1) > 1 
+                        ? `${progressDescriptor.label} ${currentToolIndex}/${Math.max(liveTotal, currentToolIndex, 1)}`
+                        : progressDescriptor.label
+                      )}
                 </span>
               </div>
               <div className="relative w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
                 <motion.div
                   className="absolute top-0 bottom-0 bg-[var(--color-primary)] shadow-[0_0_15px_rgba(var(--color-primary-rgb),0.5)]"
                   animate={{
-                    width: (status === "validating" || status === "checking") ? "60%" : `${(currentToolIndex / liveTotal) * 100}%`,
-                    opacity: (status === "validating" || status === "checking") ? [0.3, 1, 0.3] : 1,
+                    width: status === "checking" ? "60%" : `${(currentToolIndex / liveTotal) * 100}%`,
+                    opacity: status === "checking" ? [0.3, 1, 0.3] : 1,
                   }}
-                  transition={(status === "validating" || status === "checking") ? { duration: 1.5, repeat: Infinity } : undefined}
+                  transition={status === "checking" ? { duration: 1.5, repeat: Infinity } : undefined}
                 />
               </div>
 
@@ -368,7 +375,7 @@ export function AgentStatusCard({
                   <Activity className="w-6 h-6" />
                </div>
                <p className="max-w-xs text-xs text-white/50 font-medium leading-relaxed">
-                 {liveUpdate?.thinking || thinking || "Connected. Waiting for this agent's first backend signal..."}
+                 {sanitizeThinking(liveUpdate?.thinking || thinking) || "Connected. Waiting for this agent's first backend signal..."}
                </p>
             </div>
 
@@ -378,34 +385,12 @@ export function AgentStatusCard({
                   <Activity className="w-6 h-6" />
                </div>
                <p className="max-w-xs text-xs text-white/45 font-medium leading-relaxed">
-                 {thinking || "Investigation is queued. Waiting for an available forensic worker..."}
+                 {sanitizeThinking(thinking) || "Investigation is queued. Waiting for an available forensic worker..."}
                </p>
             </div>
           ) : status === "waiting" ? (
-            <div className="flex flex-col items-center justify-center h-full text-center opacity-20 py-12">
-               <span className="text-[10px] font-mono font-bold text-white tracking-[0.3em] uppercase">Awaiting_Payload</span>
-            </div>
-          ) : status === "unsupported" ? (
-            <div className="py-4 space-y-4">
-               <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 0.7 }}
-                 className={clsx("w-16 h-16 mx-auto rounded-2xl flex items-center justify-center", agentGraphic.bg)}>
-                  <Icon className={clsx("w-8 h-8", agentGraphic.color)} />
-               </motion.div>
-               <p className="text-sm text-white/70 leading-relaxed text-center font-medium">
-                 {`${name} does not support ${fileMime || "this"} files. Agent skipped forensic analysis.`}
-               </p>
-               <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest text-center">
-                 Hidden in 10s
-               </p>
-            </div>
-          ) : status === "validating" ? (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
-               <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
-                  <Activity className="w-6 h-6" />
-               </div>
-               <p className="max-w-xs text-xs text-white/50 font-medium leading-relaxed">
-                 File type validation in progress for {fileCategory} evidence.
-               </p>
+            <div className="flex flex-col items-center justify-center h-full text-center py-12">
+               <span className="text-xs text-white/35 font-medium tracking-wide">Standing by — payload not yet received</span>
             </div>
           ) : null}
         </AnimatePresence>

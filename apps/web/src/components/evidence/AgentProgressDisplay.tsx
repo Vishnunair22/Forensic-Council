@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
-import { QuotaMeter } from "./QuotaMeter";
-import type { SoundType } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
-import { isAgentSupportedForMime, supportedAgentIdsForMime } from "@/lib/agentSupport";
+import { isAgentSupportedForMime } from "@/lib/agentSupport";
 import { AgentStatusCard } from "./AgentStatusCard";
+import { AgentStatusSummary } from "./AgentStatusSummary";
+import { ArbiterCard } from "./ArbiterCard";
 
 export interface FindingPreview {
  tool: string;
@@ -81,6 +81,8 @@ interface AgentProgressDisplayProps {
   revealQueue?: AgentUpdate[];
   revealPending?: boolean;
   arbiterDeliberating?: boolean;
+  arbiterStatus?: string | null;
+  arbiterThinking?: string | null;
 }
 
 const allValidAgents = AGENTS_DATA.filter((agent) => agent.id !== "Arbiter");
@@ -106,11 +108,9 @@ export function AgentProgressDisplay({
   playSound,
   revealQueue = [],
   arbiterDeliberating = false,
+  arbiterStatus = null,
+  arbiterThinking = null,
 }: AgentProgressDisplayProps) {
-  const [hiddenAgents, setHiddenAgents] = useState(new Set<string>());
-  const [validatingAgents, setValidatingAgents] = useState<Set<string>>(
-    () => new Set(allValidAgents.map(a => a.id))
-  );
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   
   const playSoundRef = useRef(playSound);
@@ -132,46 +132,10 @@ export function AgentProgressDisplay({
     });
   }, [mimeType]);  
 
-  const prevHiddenSizeRef = useRef(0);
-
-  // Play a subtle sound when unsupported agents slide off the grid
-  useEffect(() => {
-    if (hiddenAgents.size > prevHiddenSizeRef.current) {
-      playSoundRef.current?.("skipped_hide");
-    }
-    prevHiddenSizeRef.current = hiddenAgents.size;
-  }, [hiddenAgents.size]);
-
-  // Play alert-error once per agent that becomes unsupported
-  const unsupportedSoundedRef = useRef(new Set<string>());
-  useEffect(() => {
-    if (validatingAgents.size > 0 || !mimeType) return;
-    allValidAgents.forEach(agent => {
-      if (!isAgentSupportedForMime(agent.id, mimeType) && !unsupportedSoundedRef.current.has(agent.id)) {
-        unsupportedSoundedRef.current.add(agent.id);
-        playSoundRef.current?.("alert-error");
-      }
-    });
-  }, [validatingAgents.size, mimeType]);
-
   useEffect(() => {
     if (!mimeType) return;
-    setHiddenAgents(new Set());
     setExpandedCards({});
-    setValidatingAgents(new Set(allValidAgents.map(a => a.id)));
-    const timer = setTimeout(() => {
-      setValidatingAgents(new Set());
-    }, 1500);
-    return () => clearTimeout(timer);
   }, [mimeType]);
-
-  const handleSkipExpire = React.useCallback((agentId: string) => {
-    setHiddenAgents((prev) => {
-      const next = new Set(prev);
-      next.add(agentId);
-      return next;
-    });
-  }, []);
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
@@ -186,14 +150,17 @@ export function AgentProgressDisplay({
 
   const visibleAgents = useMemo(() => {
     return allValidAgents
-      .filter((a) => !hiddenAgents.has(a.id))
       .filter((a) => {
         if (phase === "deep") return initialAgentIds.includes(a.id);
-        // During initial phase, only show if supported for MIME to prevent "unsupported" flicker
         if (!mimeType) return true;
         return isAgentSupportedForMime(a.id, mimeType);
       });
-  }, [hiddenAgents, phase, initialAgentIds, mimeType]);
+  }, [phase, initialAgentIds, mimeType]);
+
+  const skippedAgents = useMemo(() => {
+    if (!mimeType) return [];
+    return allValidAgents.filter(a => !isAgentSupportedForMime(a.id, mimeType));
+  }, [mimeType]);
 
   const isQueuePending = /queue|queued|enqueued|awaiting available forensic worker|waiting for an available forensic worker/i.test(
     `${pipelineMessage || ""} ${progressText || ""}`
@@ -207,16 +174,11 @@ export function AgentProgressDisplay({
     }
 
     const liveStatus = agentUpdates[agentId]?.status;
-    if (liveStatus === "validating") return "validating";
-    if (liveStatus === "skipped") return "unsupported";
     if (liveStatus === "error" || liveStatus === "failed") return "error";
     if (liveStatus === "running") return "running";
     
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
-    if (validatingAgents.has(agentId) && !completedAgents.some((c) => c.agent_id === agentId)) {
-      return "validating";
-    }
-    if (!isSupported) return "unsupported";
+    if (!isSupported) return "waiting"; // Should not happen for visible agents
 
     if (agentUpdates[agentId]) return "running";
     if (isQueuePending) return "queued";
@@ -243,7 +205,7 @@ export function AgentProgressDisplay({
 
   const runningCount = Object.entries(agentUpdates).filter(([id, update]) => {
     if (completedAgents.some(c => c.agent_id === id)) return false;
-    return !["complete", "skipped", "error", "failed"].includes(update.status);
+    return !["complete", "error", "failed"].includes(update.status);
   }).length;
 
   return (
@@ -274,20 +236,13 @@ export function AgentProgressDisplay({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="glass-panel px-6 py-5 rounded-2xl flex items-center gap-6 border-white/10">
-             <div className="flex flex-col items-start">
-               <span className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-[0.2em]">Active_Nodes</span>
-               <span className="text-3xl font-mono font-bold text-white leading-none mt-1">0{runningCount}</span>
-             </div>
-             <div className="w-12 h-12 rounded-full border border-[var(--color-primary)]/20 flex items-center justify-center bg-[var(--color-primary)]/5">
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
-                  <Activity className="w-6 h-6 text-[var(--color-primary)]" />
-                </motion.div>
-             </div>
-          </div>
-          {sessionId && <QuotaMeter sessionId={sessionId} />}
-        </div>
+        <AgentStatusSummary 
+          visibleAgents={visibleAgents}
+          skippedAgents={skippedAgents}
+          agentUpdates={agentUpdates}
+          completedAgents={completedAgents}
+          mimeType={mimeType}
+        />
       </div>
 
 
@@ -321,15 +276,34 @@ export function AgentProgressDisplay({
                   isRevealed={true}
                   fileMime={mimeType}
                   phase={phase}
-                  onSkipExpire={handleSkipExpire}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
                   onAnimationStart={() => playSoundRef.current?.("card_reveal")}
                 />
               </motion.div>
             ))}
-          </AnimatePresence>
-        </motion.div>
+            </AnimatePresence>
+
+            {/* Arbiter Pre-warming / Active Card */}
+            <AnimatePresence>
+              {(awaitingDecision || arbiterStatus || arbiterDeliberating) && (
+                <motion.div
+                  key="arbiter-card"
+                  layout
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+                >
+                  <ArbiterCard 
+                    status={arbiterDeliberating ? "synthesizing" : arbiterStatus}
+                    thinking={arbiterThinking || progressText}
+                    phase={phase}
+                    allAgentsDone={allAgentsDone}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
       </div>
 
       <AnimatePresence>

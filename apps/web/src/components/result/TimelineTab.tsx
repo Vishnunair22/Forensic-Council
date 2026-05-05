@@ -45,8 +45,8 @@ export function TimelineTab({
          <div className="h-px flex-1 bg-white/5" />
       </div>
 
-      <div className="horizon-card p-1 rounded-3xl overflow-hidden">
-        <div className="bg-[#020617] rounded-[inherit]">
+      <div className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
+        <div className="bg-[#020617]/40">
 
           {/* Header */}
           <div className="px-10 py-8 border-b border-white/5 flex items-center justify-between gap-6">
@@ -82,15 +82,15 @@ export function TimelineTab({
                 </div>
               )}
 
-              {/* 2. Tool Volley */}
+              {/* 2. Tool Execution Nodes */}
               <div className="relative pl-10">
                 <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_#00FFFF]" />
                 <div className="space-y-8">
                   <div className="space-y-2">
                     <span className="text-[9px] font-mono font-bold text-primary/40 uppercase tracking-[0.2em]">Phase_02</span>
-                    <h4 className="text-sm font-heading font-bold text-white/80">Tool Volley</h4>
+                    <h4 className="text-sm font-heading font-bold text-white/80">Forensic Agent Scans</h4>
                     <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
-                      Parallel execution of deep neural probes and investigative agents.
+                      Execution of deep neural probes and specialized investigative agents.
                     </p>
                   </div>
 
@@ -98,14 +98,17 @@ export function TimelineTab({
                     {(hasLiveTimeline ? agentTimeline : activeAgentIds.map(id => ({ agent_id: id }))).map((update: TimelineItem, idx) => {
                       const agentId = update.agent_id;
                       const theme = AGENT_THEMES[agentId] || { color: "#00FFFF" };
+                      const completionTime = "completed_at" in update ? update.completed_at : null;
+                      const duration = (pipelineStartAt && completionTime) ? fmtDuration(pipelineStartAt, completionTime) : null;
+
                       return (
                         <motion.div
                           key={idx}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          className="flex items-center gap-4 p-4 rounded-xl horizon-card group"
+                          className="flex items-center gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02] group"
                         >
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.color, boxShadow: `0 0 10px ${theme.color}` }} />
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: theme.color, boxShadow: `0 0 10px ${theme.color}` }} />
                           <div className="flex-1">
                             <span className="text-[10px] font-mono font-bold uppercase tracking-widest" style={{ color: theme.color }}>
                               {"agent_name" in update ? update.agent_name : agentId}
@@ -114,11 +117,16 @@ export function TimelineTab({
                               {"message" in update ? update.message : "Verification Protocol Applied"}
                             </div>
                           </div>
-                          {"completed_at" in update && update.completed_at && (
-                            <span className="text-[9px] font-mono text-white/10 shrink-0">
-                              [{fmtTime(update.completed_at)}]
-                            </span>
-                          )}
+                          <div className="text-right shrink-0">
+                             {duration && (
+                               <div className="text-[9px] font-mono text-white/40 mb-1">{duration}</div>
+                             )}
+                             {completionTime && (
+                               <div className="text-[9px] font-mono text-white/10 italic">
+                                 [{fmtTime(completionTime)}]
+                               </div>
+                             )}
+                          </div>
                         </motion.div>
                       );
                     })}
@@ -132,7 +140,7 @@ export function TimelineTab({
                   <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent shadow-[0_0_10px_#8B5CF6]" />
                   <div className="space-y-2">
                     <span className="text-[9px] font-mono font-bold text-accent/40 uppercase tracking-[0.2em]">Phase_03</span>
-                    <h4 className="text-sm font-heading font-bold text-white/80">Council Synthesis</h4>
+                    <h4 className="text-sm font-heading font-bold text-white/80">Consensus Synthesis</h4>
                     <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
                       Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
                     </p>

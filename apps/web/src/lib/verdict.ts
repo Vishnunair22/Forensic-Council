@@ -62,6 +62,66 @@ export function getVerdictConfig(v: string): VerdictConfig {
       desc: "Insufficient signal strength for a verdict.",
     };
   }
+  if (u === "SUSPICIOUS") {
+    return {
+      label: "Suspicious",
+      color: "amber",
+      textColor: "text-amber-400",
+      dotColor: "bg-amber-400",
+      Icon: AlertTriangle,
+      desc: "Forensic anomalies warrant closer review.",
+    };
+  }
+  if (u === "LIKELY_AI_GENERATED" || u === "AI_GENERATED") {
+    return {
+      label: u === "AI_GENERATED" ? "AI Generated" : "Likely AI Generated",
+      color: "red",
+      textColor: "text-red-400",
+      dotColor: "bg-red-400",
+      Icon: AlertTriangle,
+      desc: "Signals consistent with AI-generated or synthetic content.",
+    };
+  }
+  if (u === "TAMPERED") {
+    return {
+      label: "Tampered",
+      color: "red",
+      textColor: "text-red-400",
+      dotColor: "bg-red-400",
+      Icon: AlertTriangle,
+      desc: "Evidence strongly consistent with manual tampering.",
+    };
+  }
+  if (u === "ABSTAIN") {
+    return {
+      label: "Abstain",
+      color: "amber",
+      textColor: "text-amber-400",
+      dotColor: "bg-amber-400",
+      Icon: AlertCircle,
+      desc: "Insufficient evidence to reach a reliable verdict.",
+    };
+  }
+  if (u === "NEEDS_REVIEW") {
+    return {
+      label: "Needs Review",
+      color: "amber",
+      textColor: "text-amber-400",
+      dotColor: "bg-amber-400",
+      Icon: AlertCircle,
+      desc: "Manual expert review required before reaching a conclusion.",
+    };
+  }
+  if (u === "CLEAN") {
+    return {
+      label: "Authentic",
+      color: "emerald",
+      textColor: "text-emerald-400",
+      dotColor: "bg-emerald-400",
+      Icon: CheckCircle,
+      desc: "No forensic evidence of manipulation found.",
+    };
+  }
   return {
     label: "Review Required",
     color: "amber",

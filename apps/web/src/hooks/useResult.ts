@@ -72,12 +72,18 @@ export function useResult(initialSessionId?: string) {
     } catch { return []; }
   });
 
-  // Session ID
   const [sessionId, setSessionId] = useState<string | null>(() =>
     initialSessionId ?? (typeof window !== "undefined"
       ? storage.getItem("forensic_session_id")
       : null)
   );
+
+  // Transition smoothness: ensure overlay shows for at least 800ms
+  const [minOverlayDone, setMinOverlayDone] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setMinOverlayDone(true), 800);
+    return () => clearTimeout(timer);
+  }, [sessionId]); // reset on session change
 
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {
@@ -85,6 +91,7 @@ export function useResult(initialSessionId?: string) {
       setSessionId(initialSessionId);
       setReport(null);
       setArbiterComplete(false);
+      setMinOverlayDone(false); // restart overlay timer
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
       
@@ -100,6 +107,7 @@ export function useResult(initialSessionId?: string) {
     storage.setItem("forensic_session_id", sid);
     setSessionId(sid);
     setArbiterComplete(false);
+    setMinOverlayDone(false);
     setReport(null);
     setState("arbiter");
     setArbiterMsg("Council deliberating on evidence...");
@@ -119,8 +127,7 @@ export function useResult(initialSessionId?: string) {
   }, [playSound]);
 
   // ── Report fetch via TanStack Query ─────────────────────────────────────────
-  // Enabled only once the arbiter confirms completion. Results are cached by
-  // sessionId so navigating back to this page never re-fetches the same report.
+  // Enabled only once the arbiter confirms completion AND min overlay time has passed.
   const {
     data: reportQueryData,
     error: reportQueryError,
@@ -130,8 +137,8 @@ export function useResult(initialSessionId?: string) {
       if (!sessionId) throw new Error("Missing session ID");
       return getReport(sessionId);
     },
-    enabled: !!sessionId && arbiterComplete,
-    staleTime: 60_000, // Allow some stale time but not Infinity until we are sure it is done
+    enabled: !!sessionId && arbiterComplete && minOverlayDone,
+    staleTime: 60_000, 
     retry: 3,
     refetchInterval: (query) => {
       const data = query.state.data as ReportResponse | undefined;
@@ -186,14 +193,14 @@ export function useResult(initialSessionId?: string) {
     async function poll() {
       if (cancelled) return;
 
-      attempts++;
       try {
         const s = await getArbiterStatus(activeSessionId);
         if (cancelled) return;
 
         if (s.status === "complete") {
-          // Hand off to the useQuery above — it will fetch and cache the report
           setArbiterComplete(true);
+          setArbiterMsg("Decrypting forensic ledger...");
+          setState("loading"); 
           return;
         } else if (s.status === "error") {
           setErrorMsg(s.message || "Investigation failed");
@@ -207,6 +214,7 @@ export function useResult(initialSessionId?: string) {
         dbg.error("Polling error", e);
       }
 
+      attempts++;
       if (!cancelled && attempts < ARBITER_POLL_MAX_ATTEMPTS) {
         timer = setTimeout(poll, pollInterval);
         pollInterval = Math.min(pollInterval * 1.3, 3000);

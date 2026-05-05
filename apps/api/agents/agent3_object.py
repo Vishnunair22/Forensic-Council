@@ -80,22 +80,18 @@ class Agent3Object(ForensicAgent):
         return is_screen_capture_like(self.evidence_artifact)
 
     @property
-    def agent_name(self) -> str:
-        return "Agent3_ObjectWeapon"
-
-    @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        if self._is_screen_capture:
+        if is_screen_capture_like(self.evidence_artifact):
             return [
-                "Run screenshot_scene_applicability for screen-capture profile and scope confirmation",
-                "Run scene_incongruence for colour and texture coherence across screenshot regions",
+                "Run object_detection for UI element and interface object identification",
             ]
         return [
-            "Run object_detection on full scene",
-            "Run vector_contraband_search for high-dimensional weapon/threat detection",
-            "Run lighting_correlation_initial to flag compositing candidates",
-            "Run scene_incongruence for contextual anomalies",
+            "Run object_detection for scene object identification",
+            "Run scene_incongruence for contextual anomaly detection",
+            "Run lighting_consistency for shadow and light direction analysis",
+            "Run scale_validation for object proportion consistency",
+            "Run contraband_database for risk object screening",
         ]
 
     @property
@@ -131,6 +127,11 @@ class Agent3Object(ForensicAgent):
         return self._compute_ceiling(base_count)
 
     async def build_initial_thought(self) -> str:
+        if self._is_screen_capture:
+            return (
+                f"Starting UI/screenshot object identification for {self.evidence_artifact.artifact_id}. "
+                f"UI/screenshot images undergo streamlined object detection; scene incongruence and lighting tools are not applicable."
+            )
         return (
             f"Starting object and weapon analysis for {self.evidence_artifact.artifact_id}. "
             f"I will perform scene-wide object detection, lighting consistency checks, "

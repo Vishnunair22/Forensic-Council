@@ -24,11 +24,17 @@ def _image_probe(file_path: str) -> dict[str, Any]:
     try:
         with Image.open(file_path) as img:
             exif = img.getexif()
+            has_camera_tags = False
+            if exif:
+                # 271: Make, 272: Model
+                has_camera_tags = any(exif.get(tag) for tag in (271, 272))
+
             return {
                 "format": (img.format or "").lower(),
                 "width": int(img.width),
                 "height": int(img.height),
                 "has_exif": bool(exif),
+                "has_camera_tags": has_camera_tags,
                 "info_keys": tuple(str(k).lower() for k in (img.info or {}).keys()),
             }
     except Exception:
@@ -73,8 +79,22 @@ def is_screen_capture_like(artifact: Any) -> bool:
     file_path = str(getattr(artifact, "file_path", "") or "")
     ext = os.path.splitext(file_path)[1].lower()
     mime = _artifact_mime(artifact)
-    if is_camera_still_candidate(artifact):
+    probe = _image_probe(file_path)
+    if not probe:
         return False
+
+    width = int(probe.get("width") or 0)
+    height = int(probe.get("height") or 0)
+
+    # Special Case: Large JPEGs that are clearly screenshots (phone exports)
+    if is_camera_still_candidate(artifact) and mime == "image/jpeg":
+        filename = os.path.basename(file_path).lower()
+        screenshot_keywords = {"screenshot", "screen", "capture", "snap", "export"}
+        has_keyword = any(k in filename for k in screenshot_keywords)
+        if width >= 1080 and not probe.get("has_camera_tags") and has_keyword:
+            return True
+        return False
+
     if ext not in {".png", ".webp", ".bmp"} and mime not in {
         "image/png",
         "image/webp",
@@ -82,12 +102,9 @@ def is_screen_capture_like(artifact: Any) -> bool:
     }:
         return False
 
-    probe = _image_probe(file_path)
-    if not probe or probe.get("has_exif"):
+    if probe.get("has_exif"):
         return False
 
-    width = int(probe.get("width") or 0)
-    height = int(probe.get("height") or 0)
     if width < 600 or height < 350:
         return False
 

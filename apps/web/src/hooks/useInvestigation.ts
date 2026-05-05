@@ -18,6 +18,7 @@ import {
 import { toast } from "./use-toast";
 import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
+import { arbiterControl } from "@/lib/arbiterControl";
 import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
@@ -114,14 +115,30 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+  const [isHydrated] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return true;
+  });
+  const [autoStartBlocking, setAutoStartBlocking] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionOnlyStorage.getItem("forensic_auto_start") === "true";
+  });
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(() => {
+    if (typeof window === "undefined") return false;
+    // Issue 3 Fix A: Guard fc_show_loading cleanup with a hard clear on reconnect
+    const hasSession = !!storage.getItem("forensic_session_id");
+    const showLoading = sessionOnlyStorage.getItem("fc_show_loading") === "true";
+    if (showLoading && hasSession) {
+      sessionOnlyStorage.removeItem("fc_show_loading");
+      return false;
+    }
+    return showLoading;
+  });
   const [analysisStreamReady, setAnalysisStreamReady] = useState(false);
   const [arbiterLiveText, setArbiterLiveText] = useState("");
-  const [autoStartBlocking, setAutoStartBlocking] = useState(false);
   const [phase, setPhase] = useState<"initial" | "deep">("initial");
   const [isSubmittingHITL, setIsSubmittingHITL] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
   const [wsConnectionError, setWsConnectionError] = useState<string | null>(null);
   const [arbiterDeliberating, setArbiterDeliberating] = useState(false);
   const analysisCompleteSoundedRef = useRef(false);
@@ -129,8 +146,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const investigationInFlightRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
-  const arbiterAbortControllerRef = useRef<AbortController | null>(null);
   const prevAwaitingDecisionRef = useRef(false);
+  const arbiterAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
@@ -157,6 +174,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     revealQueue,
     revealPending,
     restoreSimulationState,
+    isReconnecting,
+    reconnectStatusMessage,
+    arbiterStatus,
+    arbiterThinking,
   } = useSimulation({
     playSound,
     onComplete: () => {},
@@ -174,17 +195,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [completedAgents, phase, status]);
 
+  const sessionExistsRef = useRef(typeof window !== "undefined" && !!storage.getItem("forensic_session_id"));
+
+  const showUploadForm =
+    isHydrated &&
+    !autoStartBlocking &&
+    status === "idle" &&
+    !isUploading &&
+    !sessionExistsRef.current;
+
   useLayoutEffect(() => {
-    try {
-      setAutoStartBlocking(sessionOnlyStorage.getItem("forensic_auto_start") === "true");
-      if (sessionOnlyStorage.getItem("fc_show_loading") === "true") {
-        setShowLoadingOverlay(true);
-      }
-    } catch {
-      setAutoStartBlocking(false);
-    } finally {
-      setIsHydrated(true);
-    }
+    // This effect now serves as a hydration completion signal for sub-components.
   }, []);
 
   const [authError, setAuthError] = useState<string | null>(null);
@@ -212,20 +233,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
               description: `Could not establish session: ${msg}. Please refresh the page.`,
             });
           });
-      } else {
-        await autoLoginAsInvestigator()
-          .then(() => {
-            storage.setItem("forensic_auth_ok", "1");
-          })
-          .catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : "Authentication failed";
-            setAuthError(msg);
-            toast.destructive({
-              title: "Authentication Error",
-              description: `Could not establish session: ${msg}. Please refresh the page.`,
-            });
-          });
       }
+      // Issue 1 Fix A: Never initiate a fresh autoLogin call here; trust the HeroAuthActions pre-warm
     };
     authReadyRef.current = initAuth();
   }, []);
@@ -249,7 +258,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setPhase("initial");
     setAnalysisStreamReady(false);
     sessionOnlyStorage.removeItem("fc_show_loading");
+    storage.removeItem("forensic_session_id");
+    storage.removeItem("forensic_investigation_ctx");
     try { storage.removeItem("forensic_thumbnail"); } catch { /* ignore */ }
+    sessionExistsRef.current = false; // Update ref snapshot
     resetSimulationHook();
   }, [resetSimulationHook]);
 
@@ -375,6 +387,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem("forensic_investigation_ctx", investigationCtx, true);
       // Individual keys kept for hooks that read them directly
       storage.setItem("forensic_session_id", sessionIdToUse);
+      // Issue 2 Fix D: Set cookie for server-side /result redirect
+      if (typeof document !== "undefined") {
+        document.cookie = `forensic_session_id=${sessionIdToUse}; path=/; max-age=3600; SameSite=Lax`;
+      }
       storage.setItem("forensic_file_name", targetFile.name);
       storage.setItem("forensic_case_id", caseId);
       storage.setItem("forensic_investigator_id", investigatorId);
@@ -402,84 +418,88 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .finally(() => {
           investigationInFlightRef.current = false;
           __pendingFileStore.file = null;
+          sessionExistsRef.current = true; // Update ref snapshot
         });
     },
     [playSound, startSimulation, connectWebSocket, resetSimulation]
   );
 
-  useEffect(() => {
-    if (autoStartFiredRef.current) return;
 
+  // Issue 2 Fix A: Effect A — Auto-start from pending file
+  useEffect(() => {
+    if (!isHydrated || autoStartFiredRef.current) return;
     const pending = __pendingFileStore.file;
+    if (!pending) return;
+
+    autoStartFiredRef.current = true;
+    setFile(pending);
+    sessionOnlyStorage.removeItem("forensic_auto_start");
+    sessionOnlyStorage.setItem("fc_show_loading", "true");
+    setShowLoadingOverlay(true);
+    setAutoStartBlocking(false);
+    triggerAnalysis(pending);
+  }, [isHydrated, triggerAnalysis]);
+
+  // Effect B — Reconnect existing session
+  useEffect(() => {
+    if (!isHydrated || autoStartFiredRef.current) return;
+    if (__pendingFileStore.file || autoStartBlocking || isUploading) return;
+    if (status !== "idle" && status !== "error") return;
+
+    // fc_show_loading guard on reconnect
+    if (sessionOnlyStorage.getItem("fc_show_loading") === "true") {
+      sessionOnlyStorage.removeItem("fc_show_loading");
+      setShowLoadingOverlay(false);
+    }
+
     const existingSessionId = storage.getItem("forensic_session_id");
     const noReconnect = sessionOnlyStorage.getItem("fc_no_reconnect");
-    const isIdleOrError = status === "idle" || status === "error";
 
-    if (pending) {
-      autoStartFiredRef.current = true;
-      setFile(pending);
-      sessionOnlyStorage.removeItem("forensic_auto_start");
-      sessionOnlyStorage.setItem("fc_show_loading", "true");
-      setShowLoadingOverlay(true);
-      setAutoStartBlocking(false);
-      triggerAnalysis(pending);
-    } else if (autoStartBlocking && isIdleOrError && !isUploading) {
-      autoStartFiredRef.current = true;
-      setAutoStartBlocking(false);
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("forensic_auto_start");
-      sessionOnlyStorage.removeItem("fc_show_loading");
-    } else if (!pending && !autoStartBlocking && isIdleOrError && !isUploading && existingSessionId && !noReconnect) {
-      autoStartFiredRef.current = true;
-      const savedDeepAgents = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${existingSessionId}`, true, []);
-      const savedInitialAgents = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${existingSessionId}`, true, []);
-      const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
-      const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
-
-      setPhase(restoredPhase);
-      startSimulation();
-      if (savedAgents.length > 0) {
-        restoreSimulationState(savedAgents, "awaiting_decision");
-      }
-      setAnalysisStreamReady(false);
-      setUploadPhaseText("Reconnecting to analysis stream...");
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
-
-      (async () => {
-        try {
-          const st = await withTimeout(getArbiterStatus(existingSessionId), 8_000);
-          if (st.status === "not_found") {
-            // Session expired — clean up and show fresh upload form
-            storage.removeItem("forensic_session_id");
-            storage.removeItem("forensic_investigation_ctx");
-            resetSimulation();
-            return;
-          }
-          if (st.status === "complete") {
-            // Session already done — redirect to results
-            router.push("/result", { scroll: true });
-            return;
-          }
-          // Session is active — reconnect
-          // Active sessions reconnect below after status validation.
-        } catch {
-          // Status can lag or time out during container warmup. Keep the route
-          // mounted and let the live socket decide whether the session is usable.
-        }
-
-        connectWebSocket(existingSessionId, true)
-          .then(() => setAnalysisStreamReady(true))
-          .catch((wsErr: unknown) => {
-            const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-            setWsConnectionError(wsErrMsg);
-            setShowLoadingOverlay(false);
-          });
-      })();
-    } else if (noReconnect) {
-      sessionOnlyStorage.removeItem("fc_no_reconnect");
+    if (!existingSessionId || noReconnect) {
+      if (noReconnect) sessionOnlyStorage.removeItem("fc_no_reconnect");
+      return;
     }
-  }, [triggerAnalysis, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
+
+    autoStartFiredRef.current = true;
+    const savedDeepAgents = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${existingSessionId}`, true, []);
+    const savedInitialAgents = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${existingSessionId}`, true, []);
+    const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
+    const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
+
+    setPhase(restoredPhase);
+    startSimulation();
+    if (savedAgents.length > 0) {
+      restoreSimulationState(savedAgents, "awaiting_decision");
+    }
+    setAnalysisStreamReady(false);
+    setUploadPhaseText("Reconnecting to analysis stream...");
+    setShowLoadingOverlay(false);
+    sessionOnlyStorage.removeItem("fc_show_loading");
+
+    (async () => {
+      try {
+        const st = await withTimeout(getArbiterStatus(existingSessionId), 8_000);
+        if (st.status === "not_found") {
+          storage.removeItem("forensic_session_id");
+          storage.removeItem("forensic_investigation_ctx");
+          resetSimulation();
+          return;
+        }
+        if (st.status === "complete") {
+          router.push("/result", { scroll: true });
+          return;
+        }
+      } catch { /* ignore poll errors during reconnect */ }
+
+      connectWebSocket(existingSessionId, true)
+        .then(() => setAnalysisStreamReady(true))
+        .catch((wsErr: unknown) => {
+          const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+          setWsConnectionError(wsErrMsg);
+          setShowLoadingOverlay(false);
+        });
+    })();
+  }, [isHydrated, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
 
   const handleFile = (f: File) => {
     if (f.size > MAX_UPLOAD_SIZE_BYTES) {
@@ -494,7 +514,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
     setFile(f);
     setValidationError(null);
-    playSound("success");
+    playSound("success-chime");
   };
 
   const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
@@ -529,8 +549,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
-      arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      arbiterControl.abortController = new AbortController();
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterControl.abortController.signal);
       if (!ok) throw new Error("Council synthesis timed out");
       router.push("/result", { scroll: true });
     } catch (err) {
@@ -590,8 +610,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const handleNewUpload = useCallback(() => {
     playSound("click");
-    arbiterAbortControllerRef.current?.abort();
-    arbiterAbortControllerRef.current = null;
+    arbiterControl.abort();
     setArbiterDeliberating(false);
     setArbiterLiveText("");
     setFile(null);
@@ -688,27 +707,24 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [awaitingDecision, playSound]);
 
-  const hasStartedAnalysis = isHydrated && (status !== "idle" || isUploading || validCompletedAgents.length > 0);
-  const showUploadForm =
-    isHydrated &&
-    !autoStartBlocking &&
-    status === "idle" &&
-    !isUploading &&
-    !storage.getItem("forensic_session_id"); // suppress flash during reconnect
+  const hasStartedAnalysis = isHydrated && (status !== "idle" || isUploading || validCompletedAgents.length > 0 || autoStartBlocking);
 
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.
   useEffect(() => {
-    if (showLoadingOverlay && analysisStreamReady) {
+    // Issue 2 Fix E3: Wait until we are past initiating to dismiss overlay
+    const isActuallyRunning = status !== "idle" && status !== "initiating";
+    if (showLoadingOverlay && (analysisStreamReady || isActuallyRunning)) {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem("fc_show_loading");
     }
-  }, [showLoadingOverlay, analysisStreamReady, agentUpdates, validCompletedAgents]);
+  }, [showLoadingOverlay, analysisStreamReady, status, agentUpdates, validCompletedAgents]);
 
   useEffect(() => {
     if (!showLoadingOverlay) return;
     const safety = setTimeout(() => {
-      if (!analysisStreamReady) {
+      // Issue 3 Fix A: Only fire if still idle/initiating; and reduce to 6s
+      if (!analysisStreamReady && (status === "idle" || status === "initiating")) {
         setShowLoadingOverlay(false);
         sessionOnlyStorage.removeItem("fc_show_loading");
         setWsConnectionError("Analysis startup timed out. Please try again.");
@@ -717,7 +733,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           description: "The analysis stream did not start in time. Please refresh and try again.",
         });
       }
-    }, 12_000);
+    }, 6000);
     return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady]);
 
@@ -761,5 +777,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     revealQueue,
     revealPending,
     arbiterDeliberating,
+    isReconnecting,
+    reconnectStatusMessage,
+    arbiterStatus,
+    arbiterThinking,
   };
 }

@@ -20,7 +20,6 @@ import fitz
 
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
-from core.media_kind import is_screen_capture_like
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -382,41 +381,44 @@ async def _extract_text_gemini(
 ) -> dict[str, Any]:
     """
     Tier 0 — Gemini-first Multimodal OCR.
-    
+
     Uses Gemini 2.0 Flash to extract text with spatial awareness and high precision.
     This is the primary forensic tier for high-value evidence.
     """
     try:
-        from core.llm_client import LLMClient
         from core.config import get_settings
-        
+        from core.llm_client import LLMClient
+
         settings = get_settings()
         if not settings.llm_api_key or settings.llm_provider == "none":
             return {"gemini_available": False}
-            
+
         client = LLMClient(settings)
-        # We use a dedicated multimodal extraction prompt
-        prompt = """Perform high-precision OCR on the provided evidence. 
-        Extract all visible text, including small print, metadata fields, and handwriting.
+        if not client.has_vision_capability:
+            return {"gemini_available": False, "method": "none", "lines": [], "full_text": ""}
+
+        prompt = """Perform high-precision OCR on the provided evidence artifact.
         Format the output as a JSON list of lines: ["line 1", "line 2", ...].
         If no text is found, return an empty list []."""
-        
-        # This is a conceptual call to the multimodal client
-        # In the actual implementation, LLMClient handles the multimodal payload
+
+        # This matches the method in core.llm_client.LLMClient
         raw_result = await client.generate_multimodal_synthesis(
             artifact=artifact,
             prompt=prompt,
             max_tokens=1024,
             json_mode=True
         )
-        
+
         lines = []
         if isinstance(raw_result, list):
-            lines = [str(l) for l in raw_result]
+            lines = [str(line) for line in raw_result]
         elif isinstance(raw_result, dict):
-            lines = [str(l) for l in raw_result.get("lines", [])]
-            
+            lines = [str(line) for line in raw_result.get("lines", [])]
+
         full_text = "\n".join(lines)
+        if lines:
+            logger.info("Gemini OCR succeeded", word_count=len(full_text.split()))
+
         return {
             "gemini_available": True,
             "method": "gemini_multimodal",
@@ -428,7 +430,7 @@ async def _extract_text_gemini(
             "court_defensible": True
         }
     except Exception as exc:
-        logger.warning(f"Gemini OCR failed: {exc}")
+        logger.warning("Gemini OCR unavailable, falling back to EasyOCR", error=str(exc))
         return {"gemini_available": False, "error": str(exc)}
 
 
@@ -456,7 +458,10 @@ async def extract_evidence_text(
     # We prefer Gemini for screenshots and documents as it understands layout better
     gemini_res = await _extract_text_gemini(artifact)
     if gemini_res.get("gemini_available") and gemini_res.get("has_text"):
+        logger.info("Gemini OCR succeeded", word_count=gemini_res.get("word_count", 0))
         return _finalize_result(gemini_res, file_type_hint)
+    else:
+        logger.info("Gemini OCR unavailable or empty, falling back to EasyOCR")
 
     if file_type_hint == "pdf_document":
         result = await extract_text_from_pdf(artifact)
@@ -468,14 +473,8 @@ async def extract_evidence_text(
         )
         return _finalize_result(result, file_type_hint)
 
-    if is_screen_capture_like(artifact):
-        result = await _extract_text_tesseract_fallback(artifact)
-        result["screen_capture_fast_path"] = True
-        result.setdefault(
-            "note",
-            "Screen-capture-like image processed with fast OCR path.",
-        )
-        return _finalize_result(result, "image")
+    # Note: Screen captures no longer bypass Gemini. They follow the standard
+    # Tier 0 -> Tier 2 -> Tier 3 pipeline to ensure highest quality extraction.
 
     result = await extract_text_easyocr(artifact)
     return _finalize_result(result, "image")

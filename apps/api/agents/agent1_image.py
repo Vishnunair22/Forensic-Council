@@ -9,7 +9,7 @@ Does NOT perform object detection, metadata analysis, audio analysis,
 or video temporal analysis — those belong to Agents 3, 5, 2, and 4
 respectively.
 
-Phase 1 (initial, fast): CLIP semantic classification, OCR text extraction,
+Phase 1 (initial, fast): CLIP semantic classification, Gemini/EasyOCR text extraction,
   SigLIP2 neural fingerprint, SHA-256 integrity check, FFT frequency scan,
   and either ViT Neural ELA (JPEG) or Noiseprint++ sensor clustering (lossless).
 
@@ -204,7 +204,8 @@ class Agent1Image(ForensicAgent):
         )
         return (
             f"Starting image integrity analysis for '{name}'. "
-            f"Phase 1 (fast): CLIP semantic classification, Tesseract OCR, "
+            f"Phase 1 (fast): CLIP semantic classification, "
+            f"Gemini multimodal OCR (primary), EasyOCR fallback, Tesseract last-resort, "
             f"SigLIP2 neural fingerprint, SHA-256 integrity check, FFT frequency scan, "
             f"and {phase1_tool}. "
             f"Phase 2 (deep, background): TruFor splicing, BusterNet copy-move, "

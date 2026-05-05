@@ -11,12 +11,15 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
-import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
-import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
+import { AgentProgressSkeleton } from "@/components/evidence/AgentProgressSkeleton";
 
 const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
-  { loading: () => <div className="min-h-[60vh]" /> },
+  { loading: () => <AgentProgressSkeleton /> },
+);
+const ArbiterDeliberationOverlay = dynamic(
+  () => import("@/components/evidence/ArbiterDeliberationOverlay").then((mod) => mod.ArbiterDeliberationOverlay),
+  { ssr: false },
 );
 const HITLCheckpointModal = dynamic(
   () => import("@/components/evidence/HITLCheckpointModal").then((mod) => mod.HITLCheckpointModal),
@@ -78,18 +81,21 @@ export default function EvidenceUploadPage() {
         liveText={investigation.arbiterLiveText}
       />
 
-      {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
-        <LoadingOverlay
-          variant="minimal"
-          liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
-          dispatchedCount={Object.keys(investigation.agentUpdates).length}
-          totalAgents={5}
-        />
-      )}
+      <AnimatePresence mode="wait">
+        {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
+          <LoadingOverlay
+            variant="minimal"
+            liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
+            dispatchedCount={Object.keys(investigation.agentUpdates).length}
+            totalAgents={5}
+          />
+        )}
+      </AnimatePresence>
 
-      {investigation.wsConnectionError && (
+      {investigation.wsConnectionError && !investigation.isReconnecting && (
         <ForensicErrorModal
           isVisible
+          isTransient={investigation.isReconnecting}
           title="Stream Connection Failed"
           message={investigation.wsConnectionError}
           errorCode="0xFC_WS_LOST"
@@ -120,6 +126,8 @@ export default function EvidenceUploadPage() {
             revealQueue={investigation.revealQueue}
             revealPending={investigation.revealPending}
             arbiterDeliberating={investigation.arbiterDeliberating}
+            arbiterStatus={investigation.arbiterStatus}
+            arbiterThinking={investigation.arbiterThinking}
           />
 
           <HITLCheckpointModal
@@ -252,21 +260,15 @@ export default function EvidenceUploadPage() {
               </p>
             )}
 
-            {investigation.wsConnectionError && (
-              <div className="flex flex-col items-center gap-3">
-                <p className="text-center text-sm font-semibold text-red-400">
-                  {investigation.wsConnectionError}
-                </p>
-                <button className="btn-horizon-outline px-6 py-3 text-xs" onClick={investigation.retryWsConnection}>
-                  Retry Stream
-                </button>
-              </div>
-            )}
 
             {investigation.file && showSuccessModal && !investigation.hasStartedAnalysis && (
               <UploadSuccessModal
                 file={investigation.file}
                 onNewUpload={() => {
+                  setShowSuccessModal(false);
+                  investigation.setFile(null);
+                }}
+                onDismiss={() => {
                   setShowSuccessModal(false);
                   investigation.setFile(null);
                 }}
