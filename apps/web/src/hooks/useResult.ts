@@ -11,7 +11,6 @@ import {
   dbg
 } from "@/lib/api";
 import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
-import { useForensicData } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
@@ -38,10 +37,10 @@ export function useResult(initialSessionId?: string) {
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
 
   // Investigation Meta
-  const [isDeepPhase] = useState(() => getInitial("forensic_is_deep") === "true");
-  const [thumbnail] = useState(() => getInitial("forensic_thumbnail"));
-  const [mimeType] = useState(() => getInitial("forensic_mime_type"));
-  const [pipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
+  const [isDeepPhase, setIsDeepPhase] = useState(() => getInitial("forensic_is_deep") === "true");
+  const [thumbnail, setThumbnail] = useState(() => getInitial("forensic_thumbnail"));
+  const [mimeType, setMimeType] = useState(() => getInitial("forensic_mime_type"));
+  const [pipelineStartAt, setPipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
   const [agentTimeline] = useState<AgentUpdate[]>(() => {
     try {
       const sid = typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null;
@@ -88,6 +87,12 @@ export function useResult(initialSessionId?: string) {
       setArbiterComplete(false);
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
+      
+      // Also sync metadata
+      setIsDeepPhase(getInitial("forensic_is_deep") === "true");
+      setThumbnail(getInitial("forensic_thumbnail"));
+      setMimeType(getInitial("forensic_mime_type"));
+      setPipelineStartAt(getInitial("forensic_pipeline_start"));
     }
   }, [initialSessionId, sessionId]);
 
@@ -104,10 +109,10 @@ export function useResult(initialSessionId?: string) {
   const [arbiterComplete, setArbiterComplete] = useState(false);
 
   const historySavedRef = useRef(false);
-  useForensicData();
   const { playSound } = useSound();
   const soundRef = useRef(playSound);
 
+  // Lifecycle
   useEffect(() => {
     setMounted(true);
     soundRef.current = playSound;

@@ -180,9 +180,9 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                     thumbnail={rs.thumbnail}
                     isDeepPhase={rs.isDeepPhase}
                     vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
-                    confPct={Math.round((rs.report.overall_confidence ?? 0) * 100)}
-                    errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100)}
-                    manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100)}
+                    confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
+                    errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
+                    manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
                     activeAgentIds={activeAgentIds}
                     pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
                   />

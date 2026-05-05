@@ -38,23 +38,23 @@ export function AgentAnalysisTab({
 
     <div className="space-y-3">
      {activeAgentIds.map((agentId, _idx) => {
-     const allFindings = report.per_agent_findings[agentId] ?? [];
-     const metrics = report.per_agent_metrics?.[agentId];
-     const narrative = report.per_agent_analysis?.[agentId];
+      const allFindings = report?.per_agent_findings?.[agentId] ?? [];
+      const metrics = report?.per_agent_metrics?.[agentId];
+      const narrative = report?.per_agent_analysis?.[agentId];
 
-     // Split findings by phase
+      // Split findings by phase
       const initialFindings = allFindings.filter(
-       (f) =>
-        (f.metadata as Record<string, unknown>)?.analysis_phase !== "deep",
+        (f) =>
+          ((f as any)?.metadata as Record<string, unknown>)?.analysis_phase !== "deep",
       );
       const deepFindings = allFindings.filter(
-       (f) =>
-        (f.metadata as Record<string, unknown>)?.analysis_phase === "deep",
+        (f) =>
+          ((f as any)?.metadata as Record<string, unknown>)?.analysis_phase === "deep",
       );
 
       const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
       const firstActiveAgentId = activeAgentIds.find(id =>
-        (report.per_agent_findings[id] ?? []).some(
+        (report?.per_agent_findings?.[id] ?? []).some(
           f => !SKIP_TYPES.has(String((f as any)?.finding_type || "").toLowerCase())
         )
       ) ?? activeAgentIds[0];

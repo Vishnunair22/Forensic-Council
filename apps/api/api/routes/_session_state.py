@@ -158,7 +158,7 @@ async def get_final_report(session_id: str) -> tuple[Any, datetime] | None:
     redis = await _get_redis()
     key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}"
     ts_key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}:created_at"
-    data = await redis.get(key)
+    data = await redis.get_json(key)
     if data:
         # Issue 9.2: Return the real creation timestamp instead of datetime.now()
         ts_raw = await redis.get(ts_key)

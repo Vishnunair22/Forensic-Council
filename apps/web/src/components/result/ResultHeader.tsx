@@ -72,7 +72,7 @@ export function ResultHeader({
           <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
             <div className="flex items-center gap-4 mb-6">
                <span className="text-[10px] font-mono font-bold text-[var(--color-success-light)] border border-[var(--color-success-light)]/20 px-3 py-1 rounded-full bg-[var(--color-success-light)]/5 uppercase tracking-widest">
-                 ID_{report.case_id?.slice(-8) || "FC_ALPHA"}
+                 ID_{typeof report.case_id === 'string' ? report.case_id.slice(-8) : "FC_ALPHA"}
                </span>
                <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em]">
                  {isDeepPhase ? "Deep_Forensics" : "Standard_Ingestion"}
