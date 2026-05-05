@@ -9,5 +9,11 @@ interface ResultPageProps {
 
 export default function DynamicResultPage({ params }: ResultPageProps) {
   const { sessionId } = React.use(params);
+  
+  React.useEffect(() => {
+    // Failsafe: Ensure body scroll is restored when arriving on results page
+    document.body.style.overflow = "";
+  }, []);
+
   return <ResultLayout initialSessionId={sessionId} />;
 }

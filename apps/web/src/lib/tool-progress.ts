@@ -26,11 +26,11 @@ type ProgressDescriptor = {
 };
 
 export const AGENT_PREFIXES: Record<string, string> = {
-  Agent1: "Graphic",
+  Agent1: "Visual",
   Agent2: "Acoustic",
-  Agent3: "Scene",
-  Agent4: "Motion",
-  Agent5: "Digital",
+  Agent3: "Spatial",
+  Agent4: "Temporal",
+  Agent5: "Structural",
 };
 
 export function getAgentPrefix(agentId: string): string {
@@ -46,17 +46,17 @@ const DEFAULT_TOTALS: Record<string, number> = {
 };
 
 const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
-  extract_text_from_image: { label: "Identifying the image contents using ocr tools", icon: Camera },
-  extract_evidence_text: { label: "Identifying the image contents using ocr tools", icon: Camera },
-  object_text_ocr: { label: "Identifying the image contents using ocr tools", icon: Camera },
-  analyze_image_content: { label: "Classifying visual elements and content", icon: ImageIcon },
-  ela_full_image: { label: "Analyzing image compression for anomalies", icon: Scan },
-  ela_anomaly_classify: { label: "Classifying detected anomaly regions", icon: Scan },
-  jpeg_ghost_detect: { label: "Detecting JPEG recompression signatures", icon: Layers },
-  frequency_domain_analysis: { label: "Inspecting spectral frequency artifacts", icon: Activity },
-  deepfake_frequency_check: { label: "Checking synthetic-media frequency traces", icon: Brain },
-  noise_fingerprint: { label: "Comparing camera noise consistency", icon: Fingerprint },
-  prnu_analysis: { label: "Comparing sensor fingerprint consistency", icon: Fingerprint },
+  extract_text_from_image: { label: "Identifying image content using OCR tools", icon: Camera },
+  extract_evidence_text: { label: "Identifying image content using OCR tools", icon: Camera },
+  object_text_ocr: { label: "Identifying image content using OCR tools", icon: Camera },
+  analyze_image_content: { label: "Classifying visual elements using AI vision", icon: ImageIcon },
+  ela_full_image: { label: "Analyzing image compression using ELA tools", icon: Scan },
+  ela_anomaly_classify: { label: "Classifying detected anomalies using region analysis", icon: Scan },
+  jpeg_ghost_detect: { label: "Detecting recompression using JPEG ghost tools", icon: Layers },
+  frequency_domain_analysis: { label: "Inspecting spectral artifacts using frequency analysis", icon: Activity },
+  deepfake_frequency_check: { label: "Checking synthetic traces using neural frequency analysis", icon: Brain },
+  noise_fingerprint: { label: "Comparing noise consistency using sensor profiling", icon: Fingerprint },
+  prnu_analysis: { label: "Comparing sensor fingerprints using PRNU analysis", icon: Fingerprint },
   copy_move_detect: { label: "Searching for cloned image regions", icon: Layers },
   splicing_detect: { label: "Detecting image splice boundaries", icon: Layers },
   image_splice_check: { label: "Validating image splice indicators", icon: Layers },
@@ -121,12 +121,12 @@ const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
 
 const FALLBACK_BY_AGENT: Record<string, ProgressDescriptor[]> = {
   Agent1: [
-    { label: "Identifying visual content and elements", icon: ImageIcon },
-    { label: "Identifying the image contents using ocr tools", icon: Camera },
-    { label: "Analyzing image compression for anomalies", icon: Scan },
-    { label: "Inspecting spectral frequency artifacts", icon: Activity },
-    { label: "Validating camera noise consistency", icon: Fingerprint },
-    { label: "Synthesizing visual evidence", icon: Brain },
+    { label: "Identifying visual content using image analysis", icon: ImageIcon },
+    { label: "Identifying image content using OCR tools", icon: Camera },
+    { label: "Analyzing image compression using ELA tools", icon: Scan },
+    { label: "Inspecting spectral artifacts using frequency analysis", icon: Activity },
+    { label: "Validating noise consistency using sensor profiling", icon: Fingerprint },
+    { label: "Synthesizing visual evidence using Gemini", icon: Brain },
   ],
   Agent2: [
     { label: "Separating speakers in the audio", icon: Speaker },
@@ -173,14 +173,6 @@ function normalizeToolName(raw?: string | null): string {
 export function getDefaultProgressTotal(agentId: string): number {
   return DEFAULT_TOTALS[agentId] || 6;
 }
-
-const AGENT_PREFIXES: Record<string, string> = {
-  Agent1: "Visual",
-  Agent2: "Acoustic",
-  Agent3: "Spatial",
-  Agent4: "Temporal",
-  Agent5: "Structural",
-};
 
 function prettify(s: string) {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

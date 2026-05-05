@@ -22,6 +22,9 @@ export type SoundType =
   | "arbiter_done"
   | "result_reveal"
   | "alert-error"
+  | "card_reveal"
+  | "skipped_hide"
+  | "reset"
   | "hum";
 
 let globalCtx: AudioContext | null = null;
@@ -481,6 +484,48 @@ export function useSound() {
         ping.connect(pingGain);
         ping.start(t);
         ping.stop(t + 0.2);
+      } else if (type === "card_reveal") {
+        // Soft UI "pop": 440 -> 660 Hz sine blip
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(440, t);
+        o.frequency.exponentialRampToValueAtTime(660, t + 0.08);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.04, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+        o.connect(g);
+        g.connect(out);
+        o.start(t);
+        o.stop(t + 0.16);
+      } else if (type === "skipped_hide") {
+        // Descending "whoosh": 880 -> 220 Hz
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(880, t);
+        o.frequency.exponentialRampToValueAtTime(220, t + 0.2);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.03, t + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+        o.connect(g);
+        g.connect(out);
+        o.start(t);
+        o.stop(t + 0.26);
+      } else if (type === "reset") {
+        // Clean "power down": 440 -> 110 Hz with lowpass noise
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(440, t);
+        o.frequency.exponentialRampToValueAtTime(110, t + 0.4);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.05, t + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        o.connect(g);
+        g.connect(out);
+        o.start(t);
+        o.stop(t + 0.55);
       }
     } catch (e: unknown) {
       // Audio is non-critical — swallow all errors silently

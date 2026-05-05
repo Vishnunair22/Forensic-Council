@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Shield, CloudUpload, CheckCircle2, Cpu, Scale } from "lucide-react";
@@ -28,9 +28,13 @@ export default function EvidenceUploadPage() {
   const investigation = useInvestigation(playSound);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
+
 
   useEffect(() => {
+    // Failsafe: Ensure body scroll is restored when arriving on analysis page
+    // This resolves issues where modals from the landing page might have locked the scroll
+    document.body.style.overflow = "";
+    
     const onShow = (e: PageTransitionEvent) => { if (e.persisted) window.location.reload(); };
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
@@ -74,13 +78,14 @@ export default function EvidenceUploadPage() {
         liveText={investigation.arbiterLiveText}
       />
 
-      <LoadingOverlay
-        isVisible={investigation.showLoadingOverlay && !investigation.arbiterDeliberating}
-        variant="minimal"
-        liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
-        dispatchedCount={Object.keys(investigation.agentUpdates).length}
-        totalAgents={5}
-      />
+      {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
+        <LoadingOverlay
+          variant="minimal"
+          liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
+          dispatchedCount={Object.keys(investigation.agentUpdates).length}
+          totalAgents={5}
+        />
+      )}
 
       {investigation.wsConnectionError && (
         <ForensicErrorModal

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Loader2 } from "lucide-react";
 
 import { __pendingFileStore } from "@/lib/pendingFileStore";
@@ -107,8 +107,10 @@ export function HeroAuthActions() {
   return (
     <>
       <div className="flex flex-col items-center gap-4">
-        <button
+        <motion.button
           data-testid="hero-cta-begin"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => {
             playSound("envelope-open");
             router.prefetch?.("/evidence");
@@ -117,22 +119,51 @@ export function HeroAuthActions() {
             setAuthError(null);
             setHandoffVisible(false);
             setIsHandingOff(false);
-            __pendingFileStore.authPromise ||= autoLoginAsInvestigator();
+            // Reuse the pre-warmed auth promise or start a new one if missing
+            __pendingFileStore.authPromise ||= autoLoginAsInvestigator().catch((e) => {
+              console.error("Auth failed on click", e);
+              __pendingFileStore.authPromise = null;
+              throw e;
+            });
           }}
           aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
-          className="btn-horizon-primary group relative select-none"
+          className="btn-horizon-primary group relative select-none overflow-hidden"
         >
-          <span className="relative z-10 flex items-center gap-3 text-[#020617]">
+          <motion.div 
+            className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+          />
+          
+          <span className="relative z-10 flex items-center gap-4 text-[#020617]">
+            {/* Envelope Icon with animation */}
+            <div className="relative w-6 h-6 overflow-hidden">
+              <motion.div
+                initial={false}
+                animate={showUpload ? "open" : "closed"}
+                variants={{
+                  closed: { y: 0, rotateX: 0 },
+                  open: { y: -20, rotateX: 180 }
+                }}
+                transition={{ duration: 0.4, ease: "backOut" }}
+                className="absolute inset-0"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+              </motion.div>
+            </div>
+
             <span className="font-bold uppercase tracking-widest">
               {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
             </span>
+            
             {isAuthenticating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             )}
           </span>
-        </button>
+        </motion.button>
 
       </div>
 

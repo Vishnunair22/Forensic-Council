@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { CheckCircle2, FileText, X, Loader2 } from "lucide-react";
+import { useSound } from "@/hooks/useSound";
 
 export interface UploadSuccessModalProps {
   file: File;
@@ -13,20 +14,24 @@ export interface UploadSuccessModalProps {
 }
 
 export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: UploadSuccessModalProps) {
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(() =>
-    typeof document === "undefined" ? null : document.body
-  );
+  const { playSound } = useSound();
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
+    playSound("success-chime");
     setPortalTarget(document.body);
     const originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = originalBodyOverflow || "unset";
+      if (originalBodyOverflow !== "hidden") {
+        document.body.style.overflow = originalBodyOverflow;
+      } else {
+        document.body.style.overflow = "";
+      }
     };
-  }, []);
+  }, [playSound]);
 
   useEffect(() => {
     if (file.type.startsWith("image/") || file.type.startsWith("video/")) {

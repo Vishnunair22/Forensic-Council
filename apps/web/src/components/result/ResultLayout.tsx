@@ -47,7 +47,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
     return Object.keys(rs.report?.per_agent_findings ?? {}).filter((id) => {
       const flist = rs.report?.per_agent_findings[id] ?? [];
-      return flist.length > 0 && !flist.every((f) => SKIP_TYPES.has(f.finding_type.toLowerCase()));
+      return flist.length > 0 && !flist.every((f) => {
+        const fType = String((f as any)?.finding_type || "").toLowerCase();
+        return SKIP_TYPES.has(fType);
+      });
     });
   }, [rs.report]);
 

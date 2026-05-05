@@ -229,9 +229,9 @@ export function AgentFindingCard({
 
   const findings = phase === "deep" ? deepFindings : initialFindings;
   const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
-  const realFindings = findings.filter(f => !SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
+  const realFindings = findings.filter(f => !SKIP_TYPES.has(String((f as any)?.finding_type || "").toLowerCase()));
 
-  const isSkipped = realFindings.length === 0 && findings.some(f => SKIP_TYPES.has(String(f.finding_type).toLowerCase()));
+  const isSkipped = realFindings.length === 0 && findings.some(f => SKIP_TYPES.has(String((f as any)?.finding_type || "").toLowerCase()));
   const confidence = metrics?.confidence_score ?? 0;
 
   const totalTimingMs = useMemo(() => {

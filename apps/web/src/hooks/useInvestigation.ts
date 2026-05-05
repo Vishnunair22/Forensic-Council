@@ -526,7 +526,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
-    const sid = storage.getItem("forensic_session_id");
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
@@ -626,7 +625,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (sid) storage.setItem(`forensic_deep_agents:${sid}`, completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
-    const sid = storage.getItem("forensic_session_id");
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
@@ -665,11 +663,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   ).length;
 
   const awaitingDecision =
-    status === "awaiting_decision" ||
-    (phase === "initial" &&
-     expectedAgentIds.size > 0 &&
-     expectedCompletedCount >= expectedAgentIds.size &&
-     !revealPending);
+    !isNavigating &&
+    !arbiterDeliberating &&
+    (status === "awaiting_decision" ||
+      (phase === "initial" &&
+        expectedAgentIds.size > 0 &&
+        expectedCompletedCount >= expectedAgentIds.size &&
+        !revealPending));
   const allAgentsDone = phase === "deep"
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;

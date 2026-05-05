@@ -102,7 +102,11 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     document.body.style.overflow = "hidden";
     return () => {
       clearTimeout(t);
-      document.body.style.overflow = originalBodyOverflow || "unset";
+      if (originalBodyOverflow !== "hidden") {
+        document.body.style.overflow = originalBodyOverflow;
+      } else {
+        document.body.style.overflow = "";
+      }
     };
   }, []);
 

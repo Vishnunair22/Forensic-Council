@@ -55,7 +55,7 @@ export function AgentAnalysisTab({
       const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
       const firstActiveAgentId = activeAgentIds.find(id =>
         (report.per_agent_findings[id] ?? []).some(
-          f => !SKIP_TYPES.has(String(f.finding_type).toLowerCase())
+          f => !SKIP_TYPES.has(String((f as any)?.finding_type || "").toLowerCase())
         )
       ) ?? activeAgentIds[0];
 

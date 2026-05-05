@@ -128,7 +128,7 @@ export function AgentProgressDisplay({
     // Only play entrance hums for agents that are actually supported/visible
     const supported = allValidAgents.filter(a => isAgentSupportedForMime(a.id, mimeType));
     supported.forEach((_, i) => {
-      setTimeout(() => playSoundRef.current?.("hum"), i * 150 + 80);
+      setTimeout(() => playSoundRef.current?.("card_reveal"), i * 150 + 80);
     });
   }, [mimeType]);  
 
@@ -137,7 +137,7 @@ export function AgentProgressDisplay({
   // Play a subtle sound when unsupported agents slide off the grid
   useEffect(() => {
     if (hiddenAgents.size > prevHiddenSizeRef.current) {
-      playSoundRef.current?.("click");
+      playSoundRef.current?.("skipped_hide");
     }
     prevHiddenSizeRef.current = hiddenAgents.size;
   }, [hiddenAgents.size]);
@@ -324,7 +324,7 @@ export function AgentProgressDisplay({
                   onSkipExpire={handleSkipExpire}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
-                  onAnimationStart={() => playSoundRef.current?.("hum")}
+                  onAnimationStart={() => playSoundRef.current?.("card_reveal")}
                 />
               </motion.div>
             ))}

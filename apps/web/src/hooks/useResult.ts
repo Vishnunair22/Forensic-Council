@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   getArbiterStatus,
   getReport,
   type ReportDTO,
+  type ReportResponse,
   dbg
 } from "@/lib/api";
 import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
@@ -14,7 +15,7 @@ import { useForensicData } from "@/hooks/useForensicData";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 export type Tab = "analysis" | "history";
 export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
@@ -43,13 +44,30 @@ export function useResult(initialSessionId?: string) {
   const [pipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
   const [agentTimeline] = useState<AgentUpdate[]>(() => {
     try {
+      const sid = typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null;
       const isDeep = getInitial("forensic_is_deep") === "true";
+      
+      // Try scoped keys first (new pattern)
+      if (sid) {
+        const scopedKey = isDeep ? `forensic_deep_agents:${sid}` : `forensic_initial_agents:${sid}`;
+        const scopedData = storage.getItem<AgentUpdate[]>(scopedKey, true);
+        if (scopedData && Array.isArray(scopedData)) return scopedData;
+
+        // Scoped fallback: if deep, try scoped initial agents
+        if (isDeep) {
+          const scopedFallback = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
+          if (scopedFallback && Array.isArray(scopedFallback)) return scopedFallback;
+        }
+      }
+
+      // Fallback to legacy non-scoped keys
       const key = isDeep ? "forensic_deep_agents" : "forensic_initial_agents";
-      const stored = getInitial(key);
-      if (stored?.trim()) return JSON.parse(stored);
+      const stored = storage.getItem<AgentUpdate[]>(key, true);
+      if (stored && Array.isArray(stored)) return stored;
+      
       if (isDeep) {
-        const fallback = getInitial("forensic_initial_agents");
-        if (fallback?.trim()) return JSON.parse(fallback);
+        const fallback = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
+        if (fallback && Array.isArray(fallback)) return fallback;
       }
       return [];
     } catch { return []; }
@@ -61,6 +79,17 @@ export function useResult(initialSessionId?: string) {
       ? storage.getItem("forensic_session_id")
       : null)
   );
+
+  // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
+  useEffect(() => {
+    if (initialSessionId && initialSessionId !== sessionId) {
+      setSessionId(initialSessionId);
+      setReport(null);
+      setArbiterComplete(false);
+      setState("arbiter");
+      setArbiterMsg("Council deliberating on evidence...");
+    }
+  }, [initialSessionId, sessionId]);
 
   const selectSession = useCallback((sid: string) => {
     storage.setItem("forensic_session_id", sid);
@@ -97,21 +126,33 @@ export function useResult(initialSessionId?: string) {
       return getReport(sessionId);
     },
     enabled: !!sessionId && arbiterComplete,
-    staleTime: Infinity,      // A signed forensic report never goes stale
-    retry: 2,
-    select: (res) => (res.status === "complete" ? res.report ?? null : null),
+    staleTime: 60_000, // Allow some stale time but not Infinity until we are sure it is done
+    retry: 3,
+    refetchInterval: (query) => {
+      const data = query.state.data as ReportResponse | undefined;
+      if (data && data.status === "in_progress") return 2000;
+      return false;
+    },
   });
+
+  // Derived state to check if we actually have the report data
+  const finalReportData = useMemo(() => {
+    if (reportQueryData && "status" in reportQueryData && reportQueryData.status === "complete") {
+      return reportQueryData.report;
+    }
+    return null;
+  }, [reportQueryData]);
 
   // React to the report query resolving
   useEffect(() => {
-    if (!reportQueryData) return;
-    setReport(reportQueryData);
+    if (!finalReportData) return;
+    setReport(finalReportData);
     setState("ready");
     setTimeout(() => {
       soundRef.current("arbiter_done");
       soundRef.current("result_reveal");
     }, 200);
-  }, [reportQueryData]); // addToHistory removed — effect #2 owns all history writes
+  }, [finalReportData]); // addToHistory removed — effect #2 owns all history writes
 
   useEffect(() => {
     if (reportQueryError) {
@@ -202,28 +243,9 @@ export function useResult(initialSessionId?: string) {
   }, [state, report, isDeepPhase, thumbnail, mimeType]);
 
   const handleNew = useCallback(() => {
-    playSound("click");
-    playSound("envelope-close");
-    [
-      "forensic_session_id",
-      "forensic_investigation_ctx",
-      "forensic_case_id",
-      "forensic_file_name",
-      "forensic_mime_type",
-      "forensic_pipeline_start",
-      "forensic_initial_agents",
-      "forensic_deep_agents",
-      "forensic_thumbnail",
-      "forensic_is_deep",
-      "forensic_auth_ok"
-    ].forEach(k => storage.removeItem(k));
-    
-    // Clear all session-scoped agent snapshots
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-        localStorage.removeItem(key);
-      }
-    });
+    playSound("reset");
+    storage.clearAllForensicKeys();
+    sessionOnlyStorage.clearAllForensicKeys();
 
     window.dispatchEvent(new Event("fc:reset-home"));
     // Route to home with upload param which HeroAuthActions handles
@@ -231,28 +253,9 @@ export function useResult(initialSessionId?: string) {
   }, [playSound, router]);
 
   const handleHome = useCallback(() => {
-    playSound("click");
-    playSound("envelope-close");
-    [
-      "forensic_session_id",
-      "forensic_investigation_ctx",
-      "forensic_case_id",
-      "forensic_file_name",
-      "forensic_mime_type",
-      "forensic_pipeline_start",
-      "forensic_initial_agents",
-      "forensic_deep_agents",
-      "forensic_thumbnail",
-      "forensic_is_deep",
-      "forensic_auth_ok"
-    ].forEach(k => storage.removeItem(k));
-
-    // Clear all session-scoped agent snapshots
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-        localStorage.removeItem(key);
-      }
-    });
+    playSound("reset");
+    storage.clearAllForensicKeys();
+    sessionOnlyStorage.clearAllForensicKeys();
 
     window.dispatchEvent(new Event("fc:reset-home"));
     router.push("/#hero");

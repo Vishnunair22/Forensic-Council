@@ -80,27 +80,25 @@ class Agent1Image(ForensicAgent):
         useful context early and accumulates evidence progressively.
         """
         base = [
+            "Run extract_text_from_image for visible text extraction",
             "Run analyze_image_content for semantic image understanding",
             "Run file_hash_verify for evidence integrity check",
         ]
         if self._is_screen_capture or self._is_digital_capture:
             return base + [
                 "Run frequency_domain_analysis for frequency domain analysis",
-                "Run extract_text_from_image for visible text extraction",
             ]
-        base.insert(1, "Run neural_fingerprint for conceptual similarity detection")
+        base.insert(2, "Run neural_fingerprint for conceptual similarity detection")
         if self._is_lossless:
             # Lossless path: Frequency is useful, noiseprint preferred
             return base + [
                 "Run frequency_domain_analysis for frequency domain analysis",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
-                "Run extract_text_from_image for visible text extraction",
             ]
         # Lossy path: ELA is authoritative; FFT runs first for GAN/periodicity baseline
         return base + [
             "Run frequency_domain_analysis for frequency domain analysis",
             "Run neural_ela for high-confidence manipulation detection",
-            "Run extract_text_from_image for visible text extraction",
         ]
 
     @property

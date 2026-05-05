@@ -592,6 +592,68 @@ class LLMClient:
             usage=data.get("usage"),
         )
 
+    async def generate_multimodal_synthesis(
+        self,
+        artifact: Any,
+        prompt: str,
+        max_tokens: int | None = None,
+        json_mode: bool = True,
+    ) -> Any:
+        """
+        Multimodal synthesis supporting image/PDF vision inputs via Gemini.
+        Essential for Tier 0 OCR and deep forensic visual grounding.
+        """
+        if not self.gemini_api_key or self.provider == "none":
+            return {}
+
+        import base64
+        import mimetypes
+
+        try:
+            with open(artifact.file_path, "rb") as f:
+                data = f.read()
+                encoded = base64.b64encode(data).decode("utf-8")
+                mime_type = artifact.mime_type or mimetypes.guess_type(artifact.file_path)[0] or "image/jpeg"
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
+            
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"inlineData": {"mimeType": mime_type, "data": encoded}},
+                            {"text": prompt}
+                        ],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": max_tokens or 1024,
+                },
+            }
+            if json_mode:
+                payload["generationConfig"]["responseMimeType"] = "application/json"
+
+            client = await self._get_client(timeout_override=30.0)
+            resp = await self._with_retry(
+                lambda c=client, u=url, p=payload: c.post(u, json=p)
+            )
+            resp.raise_for_status()
+            text = resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
+            
+            if json_mode:
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError:
+                    # Fallback if model didn't return valid JSON despite responseMimeType
+                    return text
+            return text
+
+        except Exception as exc:
+            logger.warning(f"Multimodal synthesis failed: {exc}")
+            raise
+
     async def generate_synthesis(
         self,
         system_prompt: str,

@@ -6,6 +6,7 @@ interface AppStorage {
   getItem<T>(key: string, parseJson: true, fallback?: T | null): T | null;
   setItem(key: string, value: unknown, stringify?: boolean): void;
   removeItem(key: string): void;
+  clearAllForensicKeys(): void;
 }
 
 function createStorage(store: Storage): AppStorage {
@@ -50,6 +51,27 @@ function createStorage(store: Storage): AppStorage {
         );
       } catch (e: unknown) {
         if (isDev) console.warn(`[storage] Error removing key "${key}":`, e);
+      }
+    },
+
+    clearAllForensicKeys(): void {
+      if (!isBrowser) return;
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < store.length; i++) {
+          const key = store.key(i);
+          if (key?.startsWith("forensic_")) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => {
+          store.removeItem(k);
+          window.dispatchEvent(
+            new CustomEvent("fc_storage_update", { detail: { key: k, value: null } })
+          );
+        });
+      } catch (e: unknown) {
+        if (isDev) console.warn("[storage] Error clearing forensic keys:", e);
       }
     },
   };

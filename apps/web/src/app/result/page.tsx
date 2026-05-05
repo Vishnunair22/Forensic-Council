@@ -15,9 +15,6 @@ export default function ResultPage() {
     }
   }, [rs.sessionId, router]);
 
-  if (!rs.sessionId) {
-    return <ResultLayout />;
-  }
-
-  return null;
+  // Always render the layout so we don't have a blank frame during redirect
+  return <ResultLayout />;
 }
