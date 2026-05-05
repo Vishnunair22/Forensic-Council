@@ -20,7 +20,7 @@ export default function Home() {
     <div className="relative min-h-screen selection:bg-primary/30 selection:text-primary-foreground">
 
       {/* --- Hero Section --- */}
-      <section className="relative w-full min-h-screen flex flex-col items-center justify-center pt-32 pb-20 px-6">
+      <section id="hero" className="relative w-full min-h-screen flex flex-col items-center justify-center pt-32 pb-20 px-6">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}

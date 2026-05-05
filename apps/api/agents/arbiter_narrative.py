@@ -235,10 +235,11 @@ class ArbiterNarrativeMixin:
 
 Write {"2-3" if has_deep else "2"} clear, plain-English paragraphs for the {agent_full_name}. Structure:
 
-PARAGRAPH 1 — Initial analysis results:
+PARAGRAPH 1 — Forensic evidence assessment:
 - For each tool with applicability "RAN": cite the EXACT metric values from the "metrics" field and interpret them forensically. Do not paraphrase — state the actual numbers (e.g. "ELA found 3 localised anomaly regions with max deviation 14.2", "YOLO detected person (0.87), laptop (0.76)").
-- For each tool with applicability "NOT_APPLICABLE": briefly explain why the tool does not apply to this file type (use the ela_limitation_note / ghost_limitation_note / file_format_note from metrics). Do NOT treat these as suspicious findings.
-- For each tool with applicability "FAILED": state that it failed and what data is missing as a result.{_deep_para}
+- For each tool with applicability "NOT_APPLICABLE": explicitly state that the tool was BYPASSED for this file type. Use the reason from the finding summary (e.g. "Physical scene analysis is not applicable to digital screenshots"). Do NOT treat these as suspicious.
+- For each tool with applicability "FAILED": state that it failed to produce a valid signal and describe the missing analysis dimension.
+{_deep_para}
 
 PARAGRAPH {"3" if has_deep else "2"} — Reliability and verdict:
 - Agent confidence: {confidence_pct}%. Tool error rate: {error_rate_pct}% ({tools_ok} of {tools_total} tools succeeded, {tools_na} not applicable to file type).

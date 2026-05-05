@@ -402,6 +402,9 @@ export const useSimulation = ({
                   break;
 
                 case "PIPELINE_PAUSED":
+                  // Flush the reveal queue immediately so decision buttons can mount without delay
+                  setRevealQueue([]);
+                  isRevealingRef.current = false;
                   setStatus("awaiting_decision");
                   playSoundRef.current?.("think");
                   break;

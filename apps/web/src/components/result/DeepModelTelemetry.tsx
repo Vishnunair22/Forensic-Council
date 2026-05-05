@@ -13,8 +13,9 @@ const TOOL_LABELS: Record<string, string> = {
   neural_splicing: "TruFor Transformer",
   anomaly_tracer: "ManTra-Net Tracer",
   f3_net_frequency: "F3-Net Frequency",
-  neural_ela: "Neural ELA ViT",
+  neural_ela: "Neural ELA (ViT-L)",
   diffusion_artifact_detector: "Diffusion Discriminator",
+  gemini_deep_forensic: "Gemini 2.5 Multi-Modal",
 };
 
 export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {

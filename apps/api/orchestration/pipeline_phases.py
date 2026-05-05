@@ -439,7 +439,7 @@ def _humanize_initial_finding(
         if "skipped" in text.lower() or evidence_verdict == "NOT_APPLICABLE":
             return (
                 "Screenshot detected. Physical-scene object detection is not applicable, "
-                "so this node is skipped for the initial pass."
+                "so this node is bypassed for the initial pass."
             )
         return "Screenshot/context check completed; no physical-scene object evidence was required."
 
@@ -802,11 +802,13 @@ async def run_agents_concurrent(
     for (inst, supported), aid in zip(
         agent_instances, registry.get_all_agent_ids(), strict=True
     ):
+        # Enforce strict MIME-type gating: if the agent explicitly reports it doesn't support 
+        # the file type, mark it as skipped immediately.
         if not supported:
             await _broadcast_agent_status(
                 aid,
                 "skipped",
-                f"{aid} skipped immediately: this agent does not support the submitted file type.",
+                f"{aid} bypassed: file type '{evidence_artifact.mime_type}' not supported for this analysis dimension.",
                 error="Unsupported file type.",
                 agent_inst=inst,
             )

@@ -164,9 +164,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     completedAgentsRef.current = completedAgents;
-    if (completedAgents.length > 0 && status !== "idle") {
+    const sid = storage.getItem("forensic_session_id");
+    if (completedAgents.length > 0 && status !== "idle" && sid) {
       storage.setItem(
-        phase === "deep" ? "forensic_deep_agents" : "forensic_initial_agents",
+        phase === "deep" ? `forensic_deep_agents:${sid}` : `forensic_initial_agents:${sid}`,
         completedAgents,
         true,
       );
@@ -278,8 +279,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       const caseId = "CASE-" + uuid;
       storage.removeItem("forensic_session_id");
       storage.removeItem("forensic_investigation_ctx");
-      storage.removeItem("forensic_initial_agents");
-      storage.removeItem("forensic_deep_agents");
+      // Clean up any stale agent snapshots
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
+          localStorage.removeItem(key);
+        }
+      });
 
       setShowLoadingOverlay(true);
       sessionOnlyStorage.setItem("fc_show_loading", "true");
@@ -426,8 +431,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.removeItem("fc_show_loading");
     } else if (!pending && !autoStartBlocking && isIdleOrError && !isUploading && existingSessionId && !noReconnect) {
       autoStartFiredRef.current = true;
-      const savedDeepAgents = storage.getItem<AgentUpdate[]>("forensic_deep_agents", true, []);
-      const savedInitialAgents = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true, []);
+      const savedDeepAgents = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${existingSessionId}`, true, []);
+      const savedInitialAgents = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${existingSessionId}`, true, []);
       const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
       const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
 
@@ -517,7 +522,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("click");
     playSound("arbiter_start");
     storage.setItem("forensic_is_deep", "false");
-    storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
+    const sid = storage.getItem("forensic_session_id");
+    if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
     const sid = storage.getItem("forensic_session_id");
@@ -545,7 +551,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("click");
     playSound("think");
     storage.setItem("forensic_is_deep", "true");
-    storage.setItem("forensic_initial_agents", completedAgentsRef.current, true);
+    const sid = storage.getItem("forensic_session_id");
+    if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
     analysisCompleteSoundedRef.current = false;
     prevAwaitingDecisionRef.current = false;
     clearCompletedAgents();
@@ -599,8 +606,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     storage.removeItem("forensic_file_name");
     storage.removeItem("forensic_mime_type");
     storage.removeItem("forensic_pipeline_start");
-    storage.removeItem("forensic_initial_agents");
-    storage.removeItem("forensic_deep_agents");
+    analysisCompleteSoundedRef.current = false;
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
+        localStorage.removeItem(key);
+      }
+    });
     resetSimulation();
     sessionOnlyStorage.setItem("fc_open_upload_once", "1");
     sessionOnlyStorage.setItem("fc_no_reconnect", "1");
@@ -611,7 +622,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating) return;
     playSound("click");
     playSound("complete");
-    storage.setItem("forensic_deep_agents", completedAgentsRef.current, true);
+    const sid = storage.getItem("forensic_session_id");
+    if (sid) storage.setItem(`forensic_deep_agents:${sid}`, completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
     const sid = storage.getItem("forensic_session_id");
@@ -664,7 +676,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     if (awaitingDecision && !prevAwaitingDecisionRef.current) {
-      playSound("think");
+      // playSound("think"); // Suppressed to avoid double sound with analysis_done
     }
     prevAwaitingDecisionRef.current = awaitingDecision;
   }, [awaitingDecision, playSound]);
@@ -677,7 +689,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [awaitingDecision, playSound]);
 
   const hasStartedAnalysis = isHydrated && (status !== "idle" || isUploading || validCompletedAgents.length > 0);
-  const showUploadForm = isHydrated && !autoStartBlocking && status === "idle" && !isUploading;
+  const showUploadForm =
+    isHydrated &&
+    !autoStartBlocking &&
+    status === "idle" &&
+    !isUploading &&
+    !storage.getItem("forensic_session_id"); // suppress flash during reconnect
 
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.
@@ -689,15 +706,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [showLoadingOverlay, analysisStreamReady, agentUpdates, validCompletedAgents]);
 
   useEffect(() => {
-    if (!showLoadingOverlay || !analysisStreamReady) return;
+    if (!showLoadingOverlay) return;
     const safety = setTimeout(() => {
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
-      setWsConnectionError("Analysis startup timed out. Please try again.");
-      toast.destructive({
-        title: "Connection Timeout",
-        description: "The analysis stream did not start in time. Please refresh and try again.",
-      });
+      if (!analysisStreamReady) {
+        setShowLoadingOverlay(false);
+        sessionOnlyStorage.removeItem("fc_show_loading");
+        setWsConnectionError("Analysis startup timed out. Please try again.");
+        toast.destructive({
+          title: "Connection Timeout",
+          description: "The analysis stream did not start in time. Please refresh and try again.",
+        });
+      }
     }, 12_000);
     return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady]);

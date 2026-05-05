@@ -203,26 +203,59 @@ export function useResult(initialSessionId?: string) {
 
   const handleNew = useCallback(() => {
     playSound("click");
+    playSound("envelope-close");
     [
       "forensic_session_id",
-      "forensic_file_name",
+      "forensic_investigation_ctx",
       "forensic_case_id",
-      "forensic_thumbnail",
-      "forensic_is_deep",
+      "forensic_file_name",
+      "forensic_mime_type",
+      "forensic_pipeline_start",
       "forensic_initial_agents",
       "forensic_deep_agents",
-      "forensic_pipeline_start",
-      "forensic_mime_type",
-      "forensic_auth_ok",
-      "forensic_investigator_id"
+      "forensic_thumbnail",
+      "forensic_is_deep",
+      "forensic_auth_ok"
     ].forEach(k => storage.removeItem(k));
+    
+    // Clear all session-scoped agent snapshots
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    window.dispatchEvent(new Event("fc:reset-home"));
     // Route to home with upload param which HeroAuthActions handles
     router.push("/?upload=1");
   }, [playSound, router]);
 
   const handleHome = useCallback(() => {
     playSound("click");
-    router.push("/");
+    playSound("envelope-close");
+    [
+      "forensic_session_id",
+      "forensic_investigation_ctx",
+      "forensic_case_id",
+      "forensic_file_name",
+      "forensic_mime_type",
+      "forensic_pipeline_start",
+      "forensic_initial_agents",
+      "forensic_deep_agents",
+      "forensic_thumbnail",
+      "forensic_is_deep",
+      "forensic_auth_ok"
+    ].forEach(k => storage.removeItem(k));
+
+    // Clear all session-scoped agent snapshots
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    window.dispatchEvent(new Event("fc:reset-home"));
+    router.push("/#hero");
   }, [playSound, router]);
 
   const handleExport = useCallback(() => {

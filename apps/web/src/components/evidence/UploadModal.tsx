@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 
-function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
+function EnvelopeOpen({ isDragging, isOpen }: { isDragging: boolean; isOpen: boolean }) {
   return (
     <div className="relative flex h-24 w-24 items-center justify-center">
       <motion.div
@@ -46,7 +46,7 @@ function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
               stroke="#64748b"
               strokeWidth="0.5"
               initial={{ rotateX: 180, opacity: 0.9 }}
-              animate={{ rotateX: isDragging ? 0 : 0, opacity: 1 }}
+              animate={{ rotateX: isOpen ? 0 : 180, opacity: 1 }}
               transition={{ duration: 0.38, ease: [0.34, 1.56, 0.64, 1] }}
               style={{ transformOrigin: "32px 26px" }}
             />
@@ -58,7 +58,7 @@ function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
               rx="1"
               fill="#f8fafc"
               initial={{ y: 20, opacity: 0 }}
-              animate={{ y: isDragging ? 0 : 8, opacity: isDragging ? 1 : 0.6 }}
+              animate={{ y: (isDragging || isOpen) ? 0 : 8, opacity: (isDragging || isOpen) ? 1 : 0.6 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
             />
             <motion.path
@@ -66,7 +66,7 @@ function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
               stroke="#94a3b8"
               strokeWidth="1.5"
               initial={{ opacity: 0 }}
-              animate={{ opacity: isDragging ? 1 : 0.4 }}
+              animate={{ opacity: (isDragging || isOpen) ? 1 : 0.4 }}
               transition={{ delay: 0.15, duration: 0.2 }}
             />
             <motion.path
@@ -74,7 +74,7 @@ function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
               stroke="#94a3b8"
               strokeWidth="1.5"
               initial={{ opacity: 0 }}
-              animate={{ opacity: isDragging ? 1 : 0.4 }}
+              animate={{ opacity: (isDragging || isOpen) ? 1 : 0.4 }}
               transition={{ delay: 0.2, duration: 0.2 }}
             />
           </motion.g>
@@ -92,13 +92,16 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    const t = setTimeout(() => setHasOpened(true), 50);   // trigger open
     const originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      clearTimeout(t);
       document.body.style.overflow = originalBodyOverflow || "unset";
     };
   }, []);
@@ -143,7 +146,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeOut" } }}
+      exit={{ opacity: 0, rotateY: 90, transition: { duration: 0.3 } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -183,7 +186,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   : "border-white/5 hover:border-primary/40 hover:bg-white/[0.02]"
               }`}
             >
-              <EnvelopeOpen isDragging={isDragging} />
+              <EnvelopeOpen isDragging={isDragging} isOpen={hasOpened} />
 
               <div className="flex flex-col items-center gap-2 pointer-events-none">
                 <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-white/80 group-hover:text-primary"}`}>
@@ -204,6 +207,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 aria-label="Upload evidence file"
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
+                onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
                 onChange={(e) => {
                   if (e.target.files?.[0]) selectFile(e.target.files[0]);
                 }}

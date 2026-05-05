@@ -11,6 +11,8 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
+import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
+import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
 
 const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
@@ -26,6 +28,13 @@ export default function EvidenceUploadPage() {
   const investigation = useInvestigation(playSound);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) window.location.reload(); };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -60,23 +69,27 @@ export default function EvidenceUploadPage() {
 
   return (
     <div className="relative min-h-screen px-6 py-32">
-      {investigation.showLoadingOverlay && (
-        <LoadingOverlay
-          variant="minimal"
-          liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
-          dispatchedCount={Object.keys(investigation.agentUpdates).length}
-          totalAgents={5}
-        />
-      )}
+      <ArbiterDeliberationOverlay 
+        isVisible={investigation.arbiterDeliberating} 
+        liveText={investigation.arbiterLiveText}
+      />
 
-      {investigation.arbiterDeliberating && (
-        <LoadingOverlay
-          variant="minimal"
-          title="Council Deliberation"
-          subtitle="Arbiter Protocol"
-          liveText={investigation.arbiterLiveText || "Backend arbiter synthesizing initial agent findings..."}
-          dispatchedCount={5}
-          totalAgents={5}
+      <LoadingOverlay
+        isVisible={investigation.showLoadingOverlay && !investigation.arbiterDeliberating}
+        variant="minimal"
+        liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
+        dispatchedCount={Object.keys(investigation.agentUpdates).length}
+        totalAgents={5}
+      />
+
+      {investigation.wsConnectionError && (
+        <ForensicErrorModal
+          isVisible
+          title="Stream Connection Failed"
+          message={investigation.wsConnectionError}
+          errorCode="0xFC_WS_LOST"
+          onRetry={investigation.retryWsConnection}
+          onHome={investigation.handleNewUpload}
         />
       )}
 

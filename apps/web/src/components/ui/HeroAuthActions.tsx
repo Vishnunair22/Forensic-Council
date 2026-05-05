@@ -56,6 +56,14 @@ export function HeroAuthActions() {
 
   useEffect(() => {
     router.prefetch?.("/evidence");
+    if (!__pendingFileStore.authPromise && !document.cookie.includes("access_token")) {
+      __pendingFileStore.authPromise = autoLoginAsInvestigator().catch((e) => {
+        // Surface auth failure later when user clicks; do NOT block landing render.
+        console.warn("Pre-warm auth failed", e);
+        __pendingFileStore.authPromise = null;
+        throw e;
+      });
+    }
   }, [router]);
 
   // Open the upload modal when navigated back with ?upload=1 (e.g. from handleNewUpload)
@@ -109,7 +117,7 @@ export function HeroAuthActions() {
             setAuthError(null);
             setHandoffVisible(false);
             setIsHandingOff(false);
-            __pendingFileStore.authPromise = autoLoginAsInvestigator();
+            __pendingFileStore.authPromise ||= autoLoginAsInvestigator();
           }}
           aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
           className="btn-horizon-primary group relative select-none"

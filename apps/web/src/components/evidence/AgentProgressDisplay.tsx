@@ -124,11 +124,13 @@ export function AgentProgressDisplay({
     const ps = playSoundRef.current;
     if (!ps) return;
     ps("page_load");
-    const count = allValidAgents.length;
-    for (let i = 0; i < count; i++) {
+    
+    // Only play entrance hums for agents that are actually supported/visible
+    const supported = allValidAgents.filter(a => isAgentSupportedForMime(a.id, mimeType));
+    supported.forEach((_, i) => {
       setTimeout(() => playSoundRef.current?.("hum"), i * 150 + 80);
-    }
-  }, []);  
+    });
+  }, [mimeType]);  
 
   const prevHiddenSizeRef = useRef(0);
 
@@ -139,6 +141,18 @@ export function AgentProgressDisplay({
     }
     prevHiddenSizeRef.current = hiddenAgents.size;
   }, [hiddenAgents.size]);
+
+  // Play alert-error once per agent that becomes unsupported
+  const unsupportedSoundedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (validatingAgents.size > 0 || !mimeType) return;
+    allValidAgents.forEach(agent => {
+      if (!isAgentSupportedForMime(agent.id, mimeType) && !unsupportedSoundedRef.current.has(agent.id)) {
+        unsupportedSoundedRef.current.add(agent.id);
+        playSoundRef.current?.("alert-error");
+      }
+    });
+  }, [validatingAgents.size, mimeType]);
 
   useEffect(() => {
     if (!mimeType) return;
@@ -173,8 +187,13 @@ export function AgentProgressDisplay({
   const visibleAgents = useMemo(() => {
     return allValidAgents
       .filter((a) => !hiddenAgents.has(a.id))
-      .filter((a) => phase === "deep" ? initialAgentIds.includes(a.id) : true);
-  }, [hiddenAgents, phase, initialAgentIds]);
+      .filter((a) => {
+        if (phase === "deep") return initialAgentIds.includes(a.id);
+        // During initial phase, only show if supported for MIME to prevent "unsupported" flicker
+        if (!mimeType) return true;
+        return isAgentSupportedForMime(a.id, mimeType);
+      });
+  }, [hiddenAgents, phase, initialAgentIds, mimeType]);
 
   const isQueuePending = /queue|queued|enqueued|awaiting available forensic worker|waiting for an available forensic worker/i.test(
     `${pipelineMessage || ""} ${progressText || ""}`
@@ -209,7 +228,7 @@ export function AgentProgressDisplay({
 
   const containerVariants: import("framer-motion").Variants = {
     hidden: {},
-    show: { transition: { staggerChildren: 2, delayChildren: 0.1 } },
+    show: { transition: { staggerChildren: 0.18, delayChildren: 0.1 } },
   };
 
   const itemVariants: import("framer-motion").Variants = {

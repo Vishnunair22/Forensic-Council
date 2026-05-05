@@ -174,6 +174,18 @@ export function getDefaultProgressTotal(agentId: string): number {
   return DEFAULT_TOTALS[agentId] || 6;
 }
 
+const AGENT_PREFIXES: Record<string, string> = {
+  Agent1: "Visual",
+  Agent2: "Acoustic",
+  Agent3: "Spatial",
+  Agent4: "Temporal",
+  Agent5: "Structural",
+};
+
+function prettify(s: string) {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function getLiveProgressDescriptor(
   agentId: string,
   toolName?: string | null,
@@ -183,8 +195,9 @@ export function getLiveProgressDescriptor(
   if (normalized && TOOL_PROGRESS[normalized]) return TOOL_PROGRESS[normalized];
   if (normalized) {
     const icon = getToolIcon(normalized);
+    const prefix = AGENT_PREFIXES[agentId] || "Forensic";
     return {
-      label: `Executing forensic tool: ${toolName || normalized}`,
+      label: `${prefix} module: ${prettify(normalized)}`,
       icon,
     };
   }

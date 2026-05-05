@@ -178,7 +178,19 @@ export function AgentStatusCard({
     return () => clearTimeout(t);
   }, [status, agentId, onSkipExpire]);
 
-  const findings = completedData?.findings_preview || [];
+  const findings = React.useMemo(() => {
+    const raw = completedData?.findings_preview || [];
+    const deduped: FindingPreview[] = [];
+    const seen = new Set<string>();
+    for (const f of raw) {
+      const key = `${f.tool}-${f.summary.slice(0, 100)}`;
+      if (!seen.has(key)) {
+        deduped.push(f);
+        seen.add(key);
+      }
+    }
+    return deduped;
+  }, [completedData]);
   const verdictScore = completedData?.verdict_score;
   const agentVerdict = completedData?.agent_verdict;
   const isAgentAlert =
@@ -279,7 +291,7 @@ export function AgentStatusCard({
                 )}
                 <span className="text-[10px] font-mono font-bold tracking-[0.1em] truncate">
                   {status === "validating"
-                    ? `File type validation: checking ${fileCategory} support...`
+                    ? `${name} is validating the file type.`
                     : status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
                     : `${progressDescriptor.label} ${currentToolIndex}/${liveTotal}`}
@@ -374,12 +386,16 @@ export function AgentStatusCard({
                <span className="text-[10px] font-mono font-bold text-white tracking-[0.3em] uppercase">Awaiting_Payload</span>
             </div>
           ) : status === "unsupported" ? (
-            <div className="py-4 space-y-3">
-               <p className="text-sm text-white/60 leading-relaxed">
-                 {liveUpdate?.thinking || completedData?.message || `${name} does not support ${fileCategory} files.`}
+            <div className="py-4 space-y-4">
+               <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 0.7 }}
+                 className={clsx("w-16 h-16 mx-auto rounded-2xl flex items-center justify-center", agentGraphic.bg)}>
+                  <Icon className={clsx("w-8 h-8", agentGraphic.color)} />
+               </motion.div>
+               <p className="text-sm text-white/70 leading-relaxed text-center font-medium">
+                 {`${name} does not support ${fileMime || "this"} files. Agent skipped forensic analysis.`}
                </p>
-               <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
-                 Agent skipped - hidden after 10s
+               <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest text-center">
+                 Hidden in 10s
                </p>
             </div>
           ) : status === "validating" ? (

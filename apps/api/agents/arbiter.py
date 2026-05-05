@@ -344,8 +344,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             c
             for f in real
             if not _is_na(f) and not _is_fail(f)
-            for c in [confidence_of(f)]
-            if c is not None
+            and (c := confidence_of(f)) is not None
         ]
         avg_conf = round(sum(conf) / len(conf), 3) if conf else 0.0
         deep = sum(1 for f in real if (f.get("metadata") or {}).get("analysis_phase") == "deep")

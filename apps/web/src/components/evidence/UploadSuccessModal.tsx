@@ -57,10 +57,10 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis }: Uploa
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.985, y: 8 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.985, y: 8 }}
-          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, rotateY: -90, transformPerspective: 1200 }}
+          animate={{ opacity: 1, rotateY: 0 }}
+          exit={{ opacity: 0, rotateY: 90 }}
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           className="horizon-card p-1 relative overflow-hidden"
         >
           <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">

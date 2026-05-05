@@ -411,17 +411,20 @@ def calculate_manipulation_probability(
     if not _manip_weighted:
         return 0.0, 0
     elif len(_manip_weighted) == 1:
+        # For a single signal, we apply a more conservative decay unless the weight is very high.
         _c0, _w0 = _manip_weighted[0]
-        _anchored_decay = max(ForensicPolicy.SINGLE_SIGNAL_DECAY, _w0)
+        _anchored_decay = max(0.4, _w0 * 0.8) # Cap single-signal impact
         return round(_c0 * _anchored_decay, 3), 1
     else:
+        # Multi-signal corroboration: calculate weighted average and add volume bonus
         _sorted_manip = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)
         _top = _sorted_manip[:7]
         _tw = sum(_w for _, _w in _top)
         _sum_weighted = sum(_c * _w for _c, _w in _top)
         _base_prob = _sum_weighted / _tw if _tw > 0 else 0.0
 
-        _volume_bonus = min(0.15, (len(_sorted_manip) - 1) * 0.02)
+        # Volume bonus: more signals from independent agents increase the probability
+        _volume_bonus = min(0.25, (len(_sorted_manip) - 1) * 0.05)
 
         final_prob = round(min(ForensicPolicy.MANIP_PROBABILITY_CAP, _base_prob + _volume_bonus), 3)
         return final_prob, signals_count

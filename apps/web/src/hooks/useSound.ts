@@ -91,7 +91,11 @@ export function useSound() {
       if (_isMuted) return;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       // Try to unlock on programmatic calls (e.g., file picker callback)
-      if (!_audioUnlocked) _tryUnlock();
+      if (!_audioUnlocked) {
+        _tryUnlock();
+        setTimeout(() => playSound(type), 0);
+        return;
+      }
       if (!_audioUnlocked || !globalCtx) return;
 
       const ctx = globalCtx;
