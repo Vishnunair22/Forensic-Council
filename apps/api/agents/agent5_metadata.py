@@ -22,8 +22,8 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
-from core.handlers.metadata import MetadataHandlers
 from core.handlers.image import ImageHandlers
+from core.handlers.metadata import MetadataHandlers
 from core.handlers.video import VideoHandlers
 from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.persistence.evidence_store import EvidenceStore
@@ -141,7 +141,6 @@ class Agent5Metadata(ForensicAgent):
                 "Run timestamp_analysis for cross-field date and time consistency",
             ]
 
-        # digital_image without screen_capture hint falls into core_tasks
         if self._is_digital_image:
             return core_tasks
         return core_tasks + [
@@ -158,10 +157,6 @@ class Agent5Metadata(ForensicAgent):
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
             ]
         if self._is_av_media:
-            return [
-                "Run provenance_chain_verify for C2PA and digital provenance manifests",
-            ]
-        if self._is_digital_image:
             return [
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
             ]

@@ -100,6 +100,7 @@ describe("ForensicProgressOverlay accessibility", () => {
         title="Council deliberation"
         liveText="Compiling report"
         telemetryLabel="Arbiter telemetry"
+        showElapsed
       />,
     );
 

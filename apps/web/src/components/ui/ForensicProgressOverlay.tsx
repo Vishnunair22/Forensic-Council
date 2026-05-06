@@ -1,147 +1,97 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { Loader2 } from "lucide-react";
 
-function categorize(text: string) {
-  if (!text) return "system";
-  const lower = text.toLowerCase();
-  if (lower.includes("complete") || lower.includes("done") || lower.includes("success")) return "success";
-  if (lower.includes("error") || lower.includes("fail") || lower.includes("halt")) return "error";
-  if (lower.includes("scan") || lower.includes("analyz") || lower.includes("process")) return "info";
-  return "system";
-}
-
-function fmtDiagnosticTime(): string {
-  const d = new Date();
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
-}
-
-export interface ForensicProgressOverlayProps {
+interface ForensicProgressOverlayProps {
   title: string;
   liveText: string;
-  telemetryLabel?: string;
-  showElapsed?: boolean;
+  telemetryLabel: string;
+  showElapsed: boolean;
 }
 
 export function ForensicProgressOverlay({
   title,
   liveText,
-  telemetryLabel = "Secured Transmission",
-  showElapsed = true,
+  telemetryLabel,
+  showElapsed,
 }: ForensicProgressOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
-  const [log, setLog] = useState<{ id: number; text: string; cat: string }[]>([]);
-  const idRef = useRef(0);
-  const lastTextRef = useRef("");
 
   useEffect(() => {
-    if (!showElapsed) return;
-    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    const interval = setInterval(() => {
+      setElapsed((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-    // Lock scroll on mount
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      clearInterval(id);
-      document.body.style.overflow = originalOverflow || "unset";
-    };
-  }, [showElapsed]);
-
-  useEffect(() => {
-    const trimmed = liveText.replace(/[\u{1F300}-\u{1FFFF}]|[\u2600-\u27FF]/gu, "").trim();
-    if (!trimmed || trimmed === lastTextRef.current) return;
-    lastTextRef.current = trimmed;
-    const id = ++idRef.current;
-    setLog((prev) => {
-      const next = [...prev, { id, text: trimmed, cat: categorize(trimmed) }];
-      return next.length > 6 ? next.slice(next.length - 6) : next;
-    });
-  }, [liveText]);
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   return (
     <motion.div
+      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent"
+      style={{
+        background: "rgba(0, 0, 0, 0.85)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-3xl px-6"
+      exit={{ opacity: 0, transition: { duration: 0.4, ease: "easeOut" } }}
+      transition={{ duration: 0.12, ease: "easeOut" }}
     >
-      {/* --- Horizon Underglow --- */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 blur-[150px] rounded-full pointer-events-none" />
-
-      <div className="relative z-10 flex flex-col items-center text-center w-full max-w-5xl">
-
-        {/* --- Top Metadata --- */}
+      <div className="relative z-10 flex flex-col items-center w-full max-w-md">
         <motion.div
-          initial={{ y: 20, opacity: 0 }}
+          initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="flex items-center gap-4 mb-10"
+          className="flex items-center gap-2.5 mb-6"
         >
-          <div className="w-1 h-1 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
-          <span className="text-[10px] font-mono tracking-[0.3em] text-white/30 uppercase">
-            {telemetryLabel}
+          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+          <span className="text-xs font-semibold tracking-wide text-white/50">
+            Forensic Analysis
           </span>
         </motion.div>
 
-        {/* --- Horizon Title --- */}
-        <motion.h1
-          initial={{ y: 30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="text-4xl md:text-6xl font-heading font-bold text-white tracking-tight mb-16"
-        >
-          {title}
-        </motion.h1>
-
-        {/* --- Aperture Node --- */}
-        <div className="relative w-32 h-32 mb-20 flex items-center justify-center">
-           <motion.div
-             animate={{ rotate: 360 }}
-             transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-             className="absolute inset-0 rounded-full border-2 border-primary/20 border-dashed"
-           />
-           <div className="w-4 h-4 bg-primary rounded-full animate-ping opacity-20" />
-           <div className="w-2 h-2 bg-primary rounded-full shadow-[0_0_20px_#00FFFF]" />
+        <div className="text-center mb-8">
+          <Loader2 className="w-10 h-10 text-primary animate-spin mb-5 mx-auto" />
+          <motion.h1
+            initial={{ y: 12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.05 }}
+            className="text-2xl font-black tracking-tight text-white mb-3"
+          >
+            {title}
+          </motion.h1>
+          <p
+            className="text-sm font-mono font-semibold tracking-wide text-primary/70 text-center px-4"
+            role="status"
+            aria-live="polite"
+          >
+            {liveText}
+          </p>
         </div>
 
-        {/* --- Forensic Log Feed --- */}
-        <div className="w-full max-w-2xl min-h-[180px] flex flex-col justify-end gap-3 mb-16">
-          <AnimatePresence mode="popLayout">
-            {log.map((entry, idx) => {
-              const isLatest = idx === log.length - 1;
-              const opacity = isLatest ? 1 : 0.3 - (log.length - 1 - idx) * 0.05;
-
-              return (
-                <motion.div
-                  key={entry.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className={`flex items-center gap-4 p-3 rounded-lg border border-white/5 bg-white/[0.01] ${isLatest ? 'border-primary/20 bg-primary/[0.02]' : ''}`}
-                >
-                  <span className="text-[9px] font-mono text-white/20">[{fmtDiagnosticTime()}]</span>
-                  <span className={`text-xs font-mono tracking-tight ${
-                    entry.cat === 'success' ? 'text-success' :
-                    entry.cat === 'error' ? 'text-danger' :
-                    entry.cat === 'info' ? 'text-primary' : 'text-white/60'
-                  }`}>
-                    {entry.text}
-                  </span>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+        <div className="w-full">
+          <div className="flex items-center justify-between mb-3 text-[10px] font-mono text-white/30 uppercase tracking-widest">
+            <span>{telemetryLabel}</span>
+            {showElapsed && (
+              <span className="text-primary">{formatTime(elapsed)}</span>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <motion.div
+              className="h-full bg-primary rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: "100%" }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </div>
         </div>
-
-        {/* --- Bottom Stats --- */}
-        <div className="flex items-center gap-12 text-[10px] font-mono tracking-[0.2em] text-white/20">
-          <div>ELAPSED: {elapsed}S</div>
-          <div className="w-[1px] h-3 bg-white/10" />
-          <div>NODE: COUNCIL_HQ</div>
-          <div className="w-[1px] h-3 bg-white/10" />
-          <div className="text-primary/40">SECURE_LINK_ACTIVE</div>
-        </div>
-
       </div>
     </motion.div>
   );

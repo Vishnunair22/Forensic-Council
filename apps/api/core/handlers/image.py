@@ -701,7 +701,7 @@ class ImageHandlers(BaseToolHandler):
             result = await asyncio.wait_for(
                 real_extract_evidence_text(artifact=artifact), timeout=20.0
             )
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             logger.warning("OCR handler timed out — returning timeout error result")
             result = {
                 "error": "OCR extraction timed out after 20s",

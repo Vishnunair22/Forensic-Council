@@ -237,15 +237,13 @@ class ForensicCouncilPipeline:
                             return result
 
                         # Humanized tool names for frontend progress display
-                        TOOL_DISPLAY_NAMES = {
+                        tool_display_names = {
                             "extract_text_from_image": "Forensic OCR",
                             "file_hash_verify": "Hash Verification",
                             "analyze_image_content": "Semantic Audit",
                             "frequency_domain_analysis": "FFT Noise Scan",
-                            "neural_fingerprint_scan": "Neural Fingerprint",
-                            "diffusion_artifact_detection": "Diffusion Scan",
-                            "gan_artifact_audit": "GAN Neural Pass",
-                            "f3_net_splicing_scan": "Splicing Audit",
+                            "neural_fingerprint": "Neural Fingerprint",
+                            "diffusion_artifact_detector": "Diffusion Scan",
                             "object_detection": "Structural Audit",
                             "scene_incongruence": "Contextual Scan",
                             "hex_signature_scan": "Binary Signature",
@@ -262,7 +260,7 @@ class ForensicCouncilPipeline:
                             raw_tool_name if isinstance(raw_tool_name, str) else None
                         )
 
-                        display_name = TOOL_DISPLAY_NAMES.get(
+                        display_name = tool_display_names.get(
                             tool_name,
                             tool_name.replace("_", " ").title()
                             if tool_name

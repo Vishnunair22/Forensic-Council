@@ -350,7 +350,7 @@ def _build_forensic_system_prompt(
         "Arbiter": "cross-modal deliberation — synthesising all agent findings into a court-admissible verdict",
     }
     agent_key = next((k for k in mandates if k.lower() in agent_name.lower()), None)
-    mandate = mandates.get(agent_key, "multi-modal forensic analysis of the submitted evidence")
+    mandate = mandates.get(agent_key or "", "multi-modal forensic analysis of the submitted evidence")
 
     size_line = f"  File size: {file_size} bytes\n" if file_size else ""
     hash_line = f"  SHA-256:   {file_hash}\n" if file_hash else ""

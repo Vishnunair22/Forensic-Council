@@ -299,7 +299,7 @@ async def extract_text_easyocr(
             ),
             timeout=30.0,
         )
-    except (asyncio.TimeoutError, TimeoutError):
+    except TimeoutError:
         logger.warning("EasyOCR extraction timed out — falling back to Tesseract")
         return await _extract_text_tesseract_fallback(artifact)
     except Exception as exc:

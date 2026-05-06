@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, CheckCircle2, Cpu } from "lucide-react";
+import { Shield } from "lucide-react";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -43,7 +43,7 @@ export default function EvidenceUploadPage() {
     return () => window.removeEventListener("pageshow", onShow);
   }, []);
 
-  const showAgentProgress = investigation.hasStartedAnalysis && !investigation.showUploadForm;
+  const showAgentProgress = investigation.hasStartedAnalysis;
 
   return (
     <>
@@ -140,7 +140,6 @@ export default function EvidenceUploadPage() {
             </motion.div>
           </section>
         )}
-      )}
     </div>
     </>
   );

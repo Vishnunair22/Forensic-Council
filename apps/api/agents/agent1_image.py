@@ -119,10 +119,7 @@ class Agent1Image(ForensicAgent):
             "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
         ]
         if self._is_screen_capture or self._is_digital_capture:
-            return base + [
-                "Run gan_artifact_audit for deep neural GAN signature detection",
-                "Run f3_net_splicing_scan for frequency-domain region analysis",
-            ]
+            return base
         base.insert(0, "Run neural_copy_move for dual-branch copy-move detection")
         base.insert(0, "Run neural_splicing for ViT-based region composition analysis")
         # Only add anomaly_tracer if not lossless (as it relies heavily on JPEG noise/ghosts)
@@ -196,12 +193,10 @@ class Agent1Image(ForensicAgent):
         )
         if digital:
             return (
-                "INITIAL DECOMPOSITION: SCREEN CAPTURE INTEGRITY AUDIT.\n"
-                "1. OCR EXTRACTION: Extract text layers for context verification.\n"
-                "2. INTEGRITY CHECK: SHA-256 hash validation against intake record.\n"
-                "3. SEMANTIC CLASSIFICATION: Verify pixel distribution matches UI patterns.\n"
-                "4. FFT ANALYSIS: Scan for abnormal high-frequency noise spikes.\n"
-                "5. NEURAL FINGERPRINT: Detect synthetic GAN/Diffusion signatures."
+                f"Starting screen capture integrity analysis for '{name}'. "
+                f"Phase 1: OCR text extraction, CLIP semantic classification, "
+                f"SHA-256 integrity check, FFT frequency scan, "
+                f"and SigLIP2 neural fingerprint for GAN/Diffusion signature detection."
             )
 
         return (

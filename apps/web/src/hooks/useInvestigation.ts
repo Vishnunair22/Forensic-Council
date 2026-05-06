@@ -10,7 +10,6 @@ import {
   getArbiterStatus,
   getReport,
   getAuthToken,
-  type HITLCheckpoint,
   type ArbiterStatusResponse,
   type HITLDecision
 } from "@/lib/api";
@@ -169,7 +168,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     resumeInvestigation,
     resetSimulation: resetSimulationHook,
     hitlCheckpoint,
-    errorMessage,
+    errorMessage: _errorMessage,
     dismissCheckpoint,
     clearCompletedAgents,
     revealQueue,
@@ -203,8 +202,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     !isUploading &&
     !sessionExistsRef.current;
 
-
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [_authError, setAuthError] = useState<string | null>(null);
 
   const authReadyRef = useRef<Promise<void> | null>(null);
 
@@ -771,6 +769,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     isUploading,
     uploadPhaseText,
     showLoadingOverlay,
+    showUploadForm,
     phase,
     isSubmittingHITL,
     isNavigating,
