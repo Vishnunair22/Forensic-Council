@@ -78,7 +78,7 @@ export default function EvidenceUploadPage() {
   const showAgentProgress = investigation.hasStartedAnalysis && !investigation.showUploadForm;
 
   return (
-    <div className="relative min-h-screen px-6 py-32">
+    <div className={`relative min-h-screen px-6 py-32 transition-opacity duration-300 ${investigation.showLoadingOverlay ? "opacity-0" : "opacity-100"}`}>
       <ArbiterDeliberationOverlay 
         isVisible={investigation.arbiterDeliberating} 
         liveText={investigation.arbiterLiveText}
@@ -109,28 +109,29 @@ export default function EvidenceUploadPage() {
 
       {showAgentProgress ? (
         <>
-          <AgentProgressDisplay
-            agentUpdates={investigation.agentUpdates}
-            completedAgents={investigation.validCompletedAgents}
-            progressText={investigation.pipelineThinking}
-            allAgentsDone={investigation.allAgentsDone}
-            phase={investigation.phase}
-            awaitingDecision={investigation.awaitingDecision}
-            pipelineStatus={investigation.status}
-            pipelineMessage={investigation.arbiterLiveText || investigation.pipelineMessage}
-            onNewUpload={investigation.handleNewUpload}
-            onViewResults={investigation.handleViewResults}
-            onAcceptAnalysis={investigation.handleAcceptAnalysis}
-            onRunDeepAnalysis={investigation.handleDeepAnalysis}
-            isNavigating={investigation.isNavigating}
-            mimeType={investigation.file?.type || storage.getItem("forensic_mime_type") || undefined}
-            playSound={playSound}
-            revealQueue={investigation.revealQueue}
-            revealPending={investigation.revealPending}
-            arbiterDeliberating={investigation.arbiterDeliberating}
-            arbiterStatus={investigation.arbiterStatus}
-            arbiterThinking={investigation.arbiterThinking}
-          />
+        <AgentProgressDisplay 
+          agentUpdates={investigation.agentUpdates}
+          completedAgents={investigation.validCompletedAgents}
+          progressText={investigation.pipelineThinking}
+          allAgentsDone={investigation.allAgentsDone}
+          phase={investigation.phase}
+          awaitingDecision={investigation.awaitingDecision}
+          pipelineStatus={investigation.status}
+          pipelineMessage={investigation.pipelineMessage}
+          onNewUpload={investigation.handleNewUpload}
+          onViewResults={investigation.handleViewResults}
+          onAcceptAnalysis={investigation.handleAcceptAnalysis}
+          onRunDeepAnalysis={investigation.handleDeepAnalysis}
+          isNavigating={investigation.isNavigating}
+          mimeType={investigation.file?.type || storage.getItem("forensic_mime_type") || undefined}
+          playSound={playSound}
+          revealQueue={investigation.revealQueue}
+          revealPending={investigation.revealPending}
+          arbiterDeliberating={investigation.arbiterDeliberating}
+          arbiterStatus={investigation.arbiterStatus}
+          arbiterThinking={investigation.arbiterThinking}
+          hasStartedAnalysis={investigation.hasStartedAnalysis}
+        />
 
           <HITLCheckpointModal
             checkpoint={investigation.hitlCheckpoint}

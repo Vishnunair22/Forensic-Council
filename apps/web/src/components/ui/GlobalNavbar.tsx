@@ -62,7 +62,7 @@ export function GlobalNavbar() {
     } else {
       router.push("/", { scroll: true });
     }
-  }, [pathname, router, playSound]);
+  }, [pathname, router, playSound, hasActiveSession]);
 
   return (
     <nav

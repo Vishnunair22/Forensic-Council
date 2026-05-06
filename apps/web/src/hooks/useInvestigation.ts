@@ -290,6 +290,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       const caseId = "CASE-" + uuid;
       storage.removeItem("forensic_session_id");
       storage.removeItem("forensic_investigation_ctx");
+      storage.removeItem("forensic_hitl_checkpoint");
+      storage.removeItem("forensic_is_deep");
       // Clean up any stale agent snapshots
       Object.keys(localStorage).forEach(key => {
         if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {

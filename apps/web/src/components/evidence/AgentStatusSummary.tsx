@@ -31,7 +31,7 @@ export function AgentStatusSummary({
   const [skippedExpanded, setSkippedExpanded] = useState(false);
 
   const getAgentStatus = (agentId: string) => {
-    const completed = completedAgents.find((c) => c.agent_id === agentId);
+    const completed = completedAgents?.find((c) => c.agent_id === agentId);
     if (completed) {
       if (completed.status === "error" || completed.status === "failed") return "error";
       return "complete";

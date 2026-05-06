@@ -40,14 +40,17 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
     return () => clearInterval(interval);
   }, [isSynthesizing, isPreWarming]);
 
-  const displayText = thinking || ARBITER_PHRASES[phraseIndex];
+  const isWaiting = !isPreWarming && !isPreWarmComplete && !isSynthesizing && !isReady;
+  const displayText = isWaiting
+    ? "Arbiter is waiting for initial agent findings…"
+    : (thinking || ARBITER_PHRASES[phraseIndex]);
 
   const getStatusDisplay = () => {
     if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" };
     if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" };
     if (isPreWarmComplete) return { label: "State Cached", icon: CheckCircle2, color: "text-emerald-400/70", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
     if (isPreWarming) return { label: "Pre-warming", icon: Zap, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
-    return { label: "Standing By", icon: Activity, color: "text-white/20", bg: "bg-white/5", border: "border-white/10" };
+    return { label: "Awaiting Agents", icon: Activity, color: "text-white/30", bg: "bg-white/5", border: "border-white/10" };
   };
 
   const display = getStatusDisplay();
@@ -112,7 +115,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                   )}
                   initial={{ width: "0%" }}
                   animate={{ 
-                    width: isReady ? "100%" : isPreWarmComplete ? "85%" : isPreWarming ? "40%" : isSynthesizing ? "65%" : "0%" 
+                    width: isReady ? "100%" : isPreWarmComplete ? "85%" : isSynthesizing ? "65%" : isPreWarming ? "40%" : "5%" 
                   }}
                   transition={{ duration: 1.5, ease: "circOut" }}
                 />

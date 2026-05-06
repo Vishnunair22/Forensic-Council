@@ -340,8 +340,12 @@ async def run_agents_concurrent(
                         f.finding_type if hasattr(f, "finding_type") else f.get("finding_type")
                     )
 
-                    # Filter out low-signal/internal tools from the UI preview
+                    # Filter out low-signal/internal tools and non-applicable tools from the UI preview
                     if tool in PREVIEW_EXCLUDED_TOOLS:
+                        continue
+                    finding_ev = str(_finding_attr(f, "evidence_verdict", "")).upper()
+                    finding_st = str(_finding_attr(f, "status", "")).upper()
+                    if finding_ev == "NOT_APPLICABLE" or finding_st == "NOT_APPLICABLE":
                         continue
 
                     s = _summary_for_finding(f, m)
@@ -400,17 +404,22 @@ async def run_agents_concurrent(
                 preview_tools = {str(item.get("tool") or "") for item in preview}
                 before = len(preview)
                 _append_synthesis_sections(synthesis)
-                if before:
-                    deduped = []
-                    seen = set()
-                    for item in preview:
-                        key = (str(item.get("tool") or ""), str(item.get("summary") or "")[:80])
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        if len(deduped) < max(8, len(preview_tools) + 4):
-                            deduped.append(item)
-                    preview = deduped
+                # Always deduplicate by tool name — synthesis sections often overlap with
+                # raw tool findings. Synthesis (LLM-refined) entries take precedence.
+                seen_tools: set[str] = set()
+                # Two-pass: synthesis entries first (they are appended after `before`), then raw
+                priority_preview = preview[before:] + preview[:before]
+                deduped = []
+                for item in priority_preview:
+                    tool_key = str(item.get("tool") or "")
+                    if tool_key and tool_key in seen_tools:
+                        continue
+                    if tool_key:
+                        seen_tools.add(tool_key)
+                    deduped.append(item)
+                    if len(deduped) >= 8:
+                        break
+                preview = deduped
             if isinstance(synthesis, dict) and not preview:
                 summary = str(synthesis.get("narrative_summary") or "").strip()
                 if summary:

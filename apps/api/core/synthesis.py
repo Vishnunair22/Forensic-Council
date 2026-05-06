@@ -382,10 +382,21 @@ Return ONLY a JSON object in this format:
             if not isinstance(response, dict):
                 raise ValueError("Invalid LLM response format")
 
+            groq_verdict = response.get("verdict", "INCONCLUSIVE").upper()
+            # Re-calibrate confidence based on Groq's verdict so the score reflects
+            # the actual forensic conclusion, not just raw tool averages.
+            if groq_verdict in ("TAMPERED", "LIKELY_MANIPULATED"):
+                calibrated_confidence = max(pre_confidence, 0.82)
+            elif groq_verdict == "SUSPICIOUS":
+                calibrated_confidence = max(pre_confidence, 0.65)
+            elif groq_verdict == "AUTHENTIC":
+                calibrated_confidence = max(pre_confidence, 0.78)
+            else:
+                calibrated_confidence = pre_confidence
             return {
-                "agent_confidence": pre_confidence,
+                "agent_confidence": round(calibrated_confidence, 3),
                 "agent_error_rate": pre_error_rate,
-                "verdict": response.get("verdict", "INCONCLUSIVE"),
+                "verdict": groq_verdict,
                 "narrative_summary": response.get("narrative_summary", ""),
                 "sections": response.get("sections", []),
             }

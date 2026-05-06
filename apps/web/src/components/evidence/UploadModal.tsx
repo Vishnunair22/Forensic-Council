@@ -150,7 +150,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, rotateY: 90, transition: { duration: 0.3 } }}
+      exit={{ opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}

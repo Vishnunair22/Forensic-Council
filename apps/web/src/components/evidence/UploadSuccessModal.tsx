@@ -20,18 +20,15 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
   const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
-    playSound("success-chime");
     setPortalTarget(document.body);
-    
-    // Fix B2: Prevent scroll jump by ensuring lock is stable during transitions
-    const originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    
     return () => {
-      // If we are dismissing everything, restore scroll. 
-      // If we are just switching modals, the next modal will handle it.
-      document.body.style.overflow = originalBodyOverflow || "";
+      document.body.style.overflow = "";
     };
+  }, []);
+
+  useEffect(() => {
+    playSound("success-chime");
   }, [playSound]);
 
   useEffect(() => {

@@ -227,11 +227,16 @@ class ForensicCouncilPipeline:
                                 },
                             ),
                         )
-                    elif type_val in ("THOUGHT", "ACTION") and isinstance(content, dict):
+                    elif type_val == "ACTION" and isinstance(content, dict):
+                        # Only broadcast ACTION entries that have a real tool_name.
+                        # THOUGHT entries after all tools complete cause progress text to
+                        # keep cycling on the frontend after analysis is done.
                         if content.get("action") == "session_start":
                             return result
+                        if not content.get("tool_name"):
+                            return result
                         agent_name = AGENT_NAMES.get(agent_id, agent_id)
-                        raw_tool_name = content.get("tool_name") if type_val == "ACTION" else None
+                        raw_tool_name = content.get("tool_name")
                         tool_name = raw_tool_name if isinstance(raw_tool_name, str) else None
                         thinking_text = (
                             f"Calling {tool_name.replace('_', ' ').title()}..."
@@ -332,11 +337,11 @@ class ForensicCouncilPipeline:
                 await broadcast_update(
                     str(session_id),
                     BriefUpdate(
-                        type="AGENT_UPDATE",
+                        type="ARBITER_UPDATE",
                         session_id=str(session_id),
                         agent_id=None,
                         message=msg,
-                        data={"status": "processing", "thinking": msg},
+                        data={"status": "deliberating", "thinking": msg},
                     ),
                 )
                 existing = await get_active_pipeline_metadata(str(session_id)) or {}

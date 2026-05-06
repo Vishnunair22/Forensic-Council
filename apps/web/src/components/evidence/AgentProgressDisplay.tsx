@@ -83,6 +83,7 @@ interface AgentProgressDisplayProps {
   arbiterDeliberating?: boolean;
   arbiterStatus?: string | null;
   arbiterThinking?: string | null;
+  hasStartedAnalysis?: boolean;
 }
 
 type Agent = typeof AGENTS_DATA[number];
@@ -92,7 +93,7 @@ type AgentStatus = "waiting" | "queued" | "checking" | "running" | "complete" | 
 
 export function AgentProgressDisplay({
   agentUpdates,
-  completedAgents,
+  completedAgents = [],
   progressText,
   allAgentsDone,
   phase,
@@ -110,6 +111,7 @@ export function AgentProgressDisplay({
   arbiterDeliberating = false,
   arbiterStatus = null,
   arbiterThinking = null,
+  hasStartedAnalysis = false,
 }: AgentProgressDisplayProps) {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   
@@ -167,7 +169,7 @@ export function AgentProgressDisplay({
   );
 
   const getAgentStatus = (agentId: string): AgentStatus => {
-    const completed = completedAgents.find((c) => c.agent_id === agentId);
+    const completed = completedAgents?.find((c) => c.agent_id === agentId);
     if (completed) {
       if (completed.status === "skipped") return "unsupported";
       return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
@@ -269,7 +271,7 @@ export function AgentProgressDisplay({
                   status={getAgentStatus(agent.id)}
                   thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
                   liveUpdate={agentUpdates[agent.id]}
-                  completedData={completedAgents.find((c) => c.agent_id === agent.id)}
+                  completedData={completedAgents?.find((c) => c.agent_id === agent.id)}
                   phase={phase}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
@@ -281,7 +283,7 @@ export function AgentProgressDisplay({
 
             {/* Arbiter Pre-warming / Active Card */}
             <AnimatePresence>
-              {(awaitingDecision || arbiterStatus || arbiterDeliberating) && (
+              {(hasStartedAnalysis || awaitingDecision || arbiterStatus || arbiterDeliberating) && (
                 <motion.div
                   key="arbiter-card"
                   layout

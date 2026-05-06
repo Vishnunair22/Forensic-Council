@@ -96,6 +96,15 @@ export function HeroAuthActions() {
     setHandoffVisible(true);
 
     __pendingFileStore.file = selectedFile;
+    // Ensure auth is resolved before navigating so the evidence page
+    // never starts an investigation with a missing token.
+    if (__pendingFileStore.authPromise) {
+      try {
+        await __pendingFileStore.authPromise;
+      } catch {
+        // auth pre-warm failed — autoLoginAsInvestigator will retry on evidence page
+      }
+    }
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setShowUpload(false);
@@ -205,6 +214,7 @@ export function HeroAuthActions() {
             key="handoff-overlay"
             variant="minimal"
             liveText="Uploading evidence to secure forensic pipeline..."
+            exitDuration={0.15}
           />
         )}
       </AnimatePresence>
