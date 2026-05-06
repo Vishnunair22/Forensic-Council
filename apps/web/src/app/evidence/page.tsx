@@ -11,7 +11,8 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
+import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { AgentProgressSkeleton } from "@/components/evidence/AgentProgressSkeleton";
 
 const AgentProgressDisplay = dynamic(
@@ -35,10 +36,11 @@ export default function EvidenceUploadPage() {
 
 
   useEffect(() => {
-    // Failsafe: Ensure body scroll is restored when arriving on analysis page
-    // This resolves issues where modals from the landing page might have locked the scroll
     document.body.style.overflow = "";
-    
+    // If no pending file and no session, ensure no stale state
+    if (!__pendingFileStore.file && !storage.getItem("forensic_session_id")) {
+      sessionOnlyStorage.removeItem("forensic_auto_start");
+    }
     const onShow = (e: PageTransitionEvent) => { if (e.persisted) window.location.reload(); };
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
@@ -116,7 +118,6 @@ export default function EvidenceUploadPage() {
             awaitingDecision={investigation.awaitingDecision}
             pipelineStatus={investigation.status}
             pipelineMessage={investigation.arbiterLiveText || investigation.pipelineMessage}
-            sessionId={storage.getItem("forensic_session_id")}
             onNewUpload={investigation.handleNewUpload}
             onViewResults={investigation.handleViewResults}
             onAcceptAnalysis={investigation.handleAcceptAnalysis}

@@ -71,7 +71,6 @@ interface AgentProgressDisplayProps {
   awaitingDecision: boolean;
   pipelineStatus?: string;
   pipelineMessage?: string;
-  sessionId?: string | null;
   onNewUpload?: () => void;
   onViewResults?: () => void;
   onAcceptAnalysis?: () => void;
@@ -100,7 +99,6 @@ export function AgentProgressDisplay({
   awaitingDecision,
   pipelineStatus,
   pipelineMessage,
-  sessionId,
   onNewUpload,
   onViewResults,
   onAcceptAnalysis,
@@ -143,7 +141,7 @@ export function AgentProgressDisplay({
     if (phase !== "deep") return [];
     const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
     if (Array.isArray(raw) && raw.length) {
-      return (raw as any[]).map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
+      return (raw as AgentUpdate[]).map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
     }
     const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined));
     if (fromMime.length) return fromMime;
@@ -205,17 +203,13 @@ export function AgentProgressDisplay({
     },
   };
 
-  const runningCount = Object.entries(agentUpdates).filter(([id, update]) => {
-    if (completedAgents.some(c => c.agent_id === id)) return false;
-    return !["complete", "error", "failed"].includes(update.status);
-  }).length;
 
   return (
     <div
       className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-24 pt-24"
       aria-label="Agent forensic analysis progress"
     >
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
+      <div className="flex flex-col md:flex-row items-start justify-between gap-10 w-full mb-12 px-2">
         <div className="flex flex-col gap-2">
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
@@ -238,19 +232,20 @@ export function AgentProgressDisplay({
           </div>
         </div>
 
-        <AgentStatusSummary 
-          visibleAgents={visibleAgents}
-          skippedAgents={skippedAgents}
-          agentUpdates={agentUpdates}
-          completedAgents={completedAgents}
-          mimeType={mimeType}
-        />
+        <div className="flex-shrink-0">
+          <AgentStatusSummary 
+            visibleAgents={visibleAgents}
+            skippedAgents={skippedAgents}
+            agentUpdates={agentUpdates}
+            completedAgents={completedAgents}
+          />
+        </div>
       </div>
 
 
       <div className="w-full">
         <motion.div
-          className={`grid gap-6 ${
+          className={`grid gap-5 ${
             visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
             : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
             : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
@@ -275,8 +270,6 @@ export function AgentProgressDisplay({
                   thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
                   liveUpdate={agentUpdates[agent.id]}
                   completedData={completedAgents.find((c) => c.agent_id === agent.id)}
-                  isRevealed={true}
-                  fileMime={mimeType}
                   phase={phase}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}

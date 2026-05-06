@@ -2,8 +2,20 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Scale, Sparkles, Loader2, CheckCircle2, Zap, BrainCircuit, Activity } from "lucide-react";
+import { Scale, Loader2, CheckCircle2, Zap, BrainCircuit, Activity } from "lucide-react";
 import { clsx } from "clsx";
+import { AnimatePresence } from "framer-motion";
+
+const ARBITER_PHRASES = [
+  "Cross-correlating agent findings...",
+  "Weighing corroborating evidence...",
+  "Computing manipulation probability...",
+  "Synthesizing forensic consensus...",
+  "Validating chain of custody...",
+  "Preparing cryptographic verdict...",
+  "Analyzing cross-modal signals...",
+  "Finalizing report parameters...",
+];
 
 interface ArbiterCardProps {
   status: string | null;
@@ -17,6 +29,18 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
   const isPreWarmComplete = status === "pre_warm_complete";
   const isSynthesizing = status === "synthesizing" || status === "deliberating";
   const isReady = status === "ready" || status === "complete";
+
+  const [phraseIndex, setPhraseIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!isSynthesizing && !isPreWarming) return;
+    const interval = setInterval(() => {
+      setPhraseIndex(prev => (prev + 1) % ARBITER_PHRASES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isSynthesizing, isPreWarming]);
+
+  const displayText = thinking || ARBITER_PHRASES[phraseIndex];
 
   const getStatusDisplay = () => {
     if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" };
@@ -105,9 +129,18 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                   <Activity className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
                 )}
                 <div className="flex flex-col gap-1">
-                  <p className="text-xs text-white/80 leading-relaxed font-medium">
-                    {thinking || (isPreWarming ? "Speculative synthesis running to reduce report latency..." : "Awaiting final agent corroborations...")}
-                  </p>
+                  <AnimatePresence mode="wait">
+                    <motion.p
+                      key={displayText}
+                      initial={{ opacity: 0, y: 3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -3 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-xs text-white/80 leading-relaxed font-medium"
+                    >
+                      {displayText}
+                    </motion.p>
+                  </AnimatePresence>
                   {isPreWarming && (
                     <p className="text-[10px] text-white/40 italic">
                       Background pre-warm active.

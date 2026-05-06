@@ -66,7 +66,16 @@ export function VerdictGauge({
   );
 }
 
-function StatCard({ label, value, unit, subtext, icon: Icon, color }: any) {
+interface StatCardProps {
+  label: string;
+  value: number;
+  unit: string;
+  subtext: string;
+  icon: React.ElementType;
+  color: string;
+}
+
+function StatCard({ label, value, unit, subtext, icon: Icon, color }: StatCardProps) {
   return (
     <div className="p-8 flex flex-col items-center justify-center text-center group">
       <div className="flex items-center gap-3 mb-6">

@@ -13,6 +13,13 @@ import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BA
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 
+class SessionGoneError extends Error {
+  constructor() {
+    super("Session no longer exists");
+    this.name = "SessionGoneError";
+  }
+}
+
 // Backend and Frontend share unified Agent IDs "Agent1"–"Agent5".
 
 type SimulationStatus =
@@ -55,7 +62,6 @@ export const useSimulation = ({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
-  const [isTransientReconnecting, setIsTransientReconnecting] = useState(false);
   const [reconnectStatusMessage, setReconnectStatusMessage] = useState<string | null>(null);
   const [pipelineMessage, setPipelineMessage] = useState<string>("");
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
@@ -116,7 +122,6 @@ export const useSimulation = ({
         completedAgentsRef.current = [];
         setAgentUpdates({});
         setErrorMessage(null);
-        setIsTransientReconnecting(false);
         setReconnectStatusMessage(null);
         setRevealQueue([]);
       }
@@ -645,7 +650,6 @@ export const useSimulation = ({
           .then(async () => {
             wsConnectionReady = true;
             reconnectAttemptsRef.current = 0; // Reset backoff on successful connect
-            setIsTransientReconnecting(false);
             setReconnectStatusMessage(null);
             resolve();
             // Rehydrate: if the arbiter reached a terminal state while the socket
@@ -767,7 +771,6 @@ export const useSimulation = ({
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
     try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
     setErrorMessage(null);
-    setIsTransientReconnecting(false);
     setReconnectStatusMessage(null);
     setPipelineMessage("");
     setPipelineThinking("");
@@ -789,7 +792,6 @@ export const useSimulation = ({
     setHitlCheckpoint(null);
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
     setErrorMessage(null);
-    setIsTransientReconnecting(false);
     setReconnectStatusMessage(null);
     setPipelineMessage("Preparing forensic agents...");
     setPipelineThinking("Preparing forensic agents...");
@@ -805,12 +807,7 @@ export const useSimulation = ({
     try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
   }, []);
 
-  class SessionGoneError extends Error {
-  constructor() {
-    super("Session no longer exists");
-    this.name = "SessionGoneError";
-  }
-}
+
 
 const resumeInvestigation = useCallback(
     async (deep: boolean) => {
@@ -898,7 +895,7 @@ const resumeInvestigation = useCallback(
         }
       }, 3000);
     },
-    [sessionId],
+    [],
   );
 
   const clearCompletedAgents = useCallback(() => {

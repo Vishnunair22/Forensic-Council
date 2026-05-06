@@ -23,7 +23,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
   };
 
   return (
-    <div className={cn("flex items-center gap-4", className)}>
+    <div className={cn("flex items-center", size === "sm" ? "gap-3" : "gap-4", className)}>
       {/* --- Horizon Aperture Icon --- */}
       <motion.div
         className={cn(
@@ -35,13 +35,13 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
         {/* Glow effect on hover */}
         <motion.div
           animate={{ opacity: isHovered ? 0.3 : 0.1 }}
-          className="absolute inset-0 bg-[var(--color-success-light)] blur-xl"
+          className="absolute inset-0 bg-primary blur-xl"
         />
 
         {/* HUD Elements */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-          <div className="w-[80%] h-[1px] bg-[var(--color-success-light)]" />
-          <div className="h-[80%] w-[1px] bg-[var(--color-success-light)]" />
+          <div className="w-[80%] h-[1px] bg-primary" />
+          <div className="h-[80%] w-[1px] bg-primary" />
         </div>
 
         {/* The "FC" Core */}
@@ -61,7 +61,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
             Forensic
           </span>
           <span className={cn(
-            "font-heading font-bold text-[var(--color-success-light)] drop-shadow-[0_0_15px_rgba(167,255,210,0.4)] tracking-wider",
+            "font-heading font-bold text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.4)] tracking-wider",
             textSizes[size]
           )}>
             Council
@@ -70,19 +70,17 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
 
 
         {/* Back To Home Hint */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           {isHovered && (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
+            <motion.span
+              initial={{ opacity: 0, y: -3 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.2 }}
-              className="absolute mt-10"
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="text-[9px] font-mono font-bold tracking-widest text-primary/50 uppercase block leading-none mt-0.5"
             >
-              <span className="text-[10px] font-mono font-bold tracking-widest text-primary/60 uppercase">
-                Back To Home
-              </span>
-            </motion.div>
+              ← Reset & Home
+            </motion.span>
           )}
         </AnimatePresence>
       </div>

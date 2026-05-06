@@ -76,60 +76,61 @@ export function LoadingOverlay({
     const PhaseIcon = PHASES[effectivePhase].Icon;
     return (
       <motion.div
-        className="fixed inset-0 z-[10000] flex items-center justify-center px-6 selection:bg-transparent"
-        style={{
-          background: "rgba(0, 0, 0, 0.95)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-        }}
+        className="fixed inset-0 z-[10000] flex items-center justify-center px-6"
+        style={{ background: "rgba(5,7,13,0.92)", backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)" }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        exit={{ opacity: 0, transition: { duration: 0.4, ease: "easeOut" } }}
-        transition={{ duration: 0.12, ease: "easeOut" }}
+        exit={{ opacity: 0, transition: { duration: 0.4 } }}
+        transition={{ duration: 0.14 }}
       >
-        <div className="flex flex-col items-center">
-          <div className="w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-8 relative">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={effectivePhase}
-                initial={{ scale: 0.8, opacity: 0, rotate: -10 }}
-                animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                exit={{ scale: 1.2, opacity: 0, rotate: 10 }}
-                transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              >
-                <PhaseIcon className="w-8 h-8 text-primary" />
-              </motion.div>
-            </AnimatePresence>
-            <div className="absolute inset-0 rounded-3xl border border-primary/20 animate-ping opacity-20" />
+        {/* Primary Card */}
+        <div className="w-full max-w-sm bg-[#070A12] border border-white/10 rounded-2xl shadow-[0_32px_80px_rgba(0,0,0,0.8)] overflow-hidden">
+          {/* Card Header */}
+          <div className="px-8 pt-8 pb-6 border-b border-white/5">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center relative">
+                <AnimatePresence mode="wait">
+                  <motion.div key={effectivePhase} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.2, opacity: 0 }} transition={{ type: "spring", damping: 20 }}>
+                    <PhaseIcon className="w-5 h-5 text-primary" />
+                  </motion.div>
+                </AnimatePresence>
+                <div className="absolute inset-0 rounded-xl border border-primary/20 animate-ping opacity-20" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white">{title}</h2>
+                <p className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Forensic_Protocol</p>
+              </div>
+            </div>
           </div>
-
-          <h1 className="text-2xl font-black tracking-tight text-white mb-3">
-            {title}
-          </h1>
-          
-          <motion.p 
-            key={sanitizedText}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-sm font-mono font-semibold tracking-wide text-primary/70 text-center max-w-xs" 
-            role="status" 
-            aria-live="polite"
-          >
-            {sanitizedText || "Opening live investigation stream..."}
-          </motion.p>
-
-          <div className="flex gap-1.5 mt-8">
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                className="h-1 rounded-full bg-primary"
-                animate={{
-                  width: i === effectivePhase ? 24 : 6,
-                  opacity: i === effectivePhase ? 1 : 0.15,
-                }}
-                transition={{ type: "spring", damping: 25, stiffness: 400 }}
-              />
-            ))}
+          {/* Live Progress Text Area */}
+          <div className="px-8 py-6">
+            <div className="bg-[#0C111E] rounded-xl border border-white/5 px-5 py-4 min-h-[60px] flex items-center">
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={sanitizedText}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-sm font-mono text-primary/80 leading-relaxed"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {sanitizedText || "Opening live investigation stream..."}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+            {/* Phase dots */}
+            <div className="flex gap-1.5 mt-5 justify-center">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="h-1 rounded-full bg-primary"
+                  animate={{ width: i === effectivePhase ? 24 : 6, opacity: i === effectivePhase ? 1 : 0.15 }}
+                  transition={{ type: "spring", damping: 25 }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </motion.div>

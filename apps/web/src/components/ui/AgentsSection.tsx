@@ -9,7 +9,7 @@ import { AGENTS } from "@/lib/constants";
 export function AgentsSection() {
   return (
     <section className="py-24 px-6 relative z-10 max-w-7xl mx-auto">
-      <div className="text-center mb-24">
+      <div className="text-center mb-16">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -37,17 +37,17 @@ export function AgentsSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="relative horizon-card p-10 rounded-3xl flex flex-col items-center text-center group cursor-pointer overflow-hidden border border-white/5 hover:border-primary/20 transition-all duration-500"
+            className="relative horizon-card p-8 rounded-3xl flex flex-col items-center text-center group cursor-pointer overflow-hidden border border-white/5 hover:border-primary/20 transition-all duration-500"
           >
             {/* --- Aperture Icon (Centered) --- */}
-            <div className="relative w-20 h-20 flex items-center justify-center mb-8">
+            <div className="relative w-16 h-16 flex items-center justify-center mb-6">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
               />
               <div className="absolute inset-2 rounded-full border border-primary/10 bg-primary/5" />
-              <agent.icon className="w-8 h-8 text-primary group-hover:scale-110 transition-transform duration-500" />
+              <agent.icon className="w-7 h-7 text-primary group-hover:scale-110 transition-transform duration-500" />
             </div>
 
             <div className="mb-4">
@@ -56,8 +56,8 @@ export function AgentsSection() {
                </span>
             </div>
 
-            <div className="mb-6">
-              <h3 className="text-2xl font-heading font-bold text-white mb-4 tracking-tight">{agent.name}</h3>
+            <div className="mb-4">
+              <h3 className="text-xl font-heading font-bold text-white mb-3 tracking-tight">{agent.name}</h3>
               <p className="text-sm text-white/50 leading-relaxed font-medium group-hover:text-white/70 transition-colors duration-500 text-justify [text-align-last:center] [hyphens:auto]">
                 {agent.desc}
               </p>

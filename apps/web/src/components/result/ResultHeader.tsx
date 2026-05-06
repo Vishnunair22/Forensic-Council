@@ -1,10 +1,9 @@
 "use client";
 
 import React from "react";
-import { Lock, Fingerprint, ShieldCheck, ShieldAlert, Shield, type LucideIcon } from "lucide-react";
+import { Fingerprint, ShieldCheck, ShieldAlert, Shield, type LucideIcon } from "lucide-react";
 import type { ReportDTO } from "@/lib/api";
 import type { VerdictConfig } from "@/lib/verdict";
-import { ArcGauge } from "./ArcGauge";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";
 import { motion } from "framer-motion";
 
@@ -16,8 +15,6 @@ interface ResultHeaderProps {
   isDeepPhase: boolean;
   vc: VerdictConfig;
   confPct: number;
-  errPct: number;
-  manipPct: number;
   activeAgentIds: string[];
   pipelineDuration: string | null;
 }
@@ -36,8 +33,6 @@ export function ResultHeader({
   isDeepPhase,
   vc,
   confPct,
-  errPct,
-  manipPct,
   activeAgentIds,
   pipelineDuration,
 }: ResultHeaderProps) {

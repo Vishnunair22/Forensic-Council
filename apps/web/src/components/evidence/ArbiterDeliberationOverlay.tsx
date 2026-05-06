@@ -26,7 +26,7 @@ export function ArbiterDeliberationOverlay({
             {/* Background Glow */}
             <div className="absolute inset-0 bg-[var(--color-primary)]/10 blur-[120px] rounded-full" />
 
-            <div className="relative z-10 flex flex-col items-center text-center">
+            <div className="relative z-10 w-full max-w-lg bg-[#070A12] border border-white/10 rounded-2xl p-10 shadow-[0_40px_100px_rgba(0,0,0,0.8)] flex flex-col items-center text-center">
               {/* Animated Scales */}
               <div className="relative w-32 h-32 mb-10">
                 <motion.div

@@ -62,7 +62,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   }
 
   return (
-    <div className="min-h-screen pb-48 pt-32 relative">
+    <div className="min-h-screen pb-48 pt-28 relative">
       <AnimatePresence>
         {(rs.state === "arbiter" || rs.state === "loading") && (
           <ForensicProgressOverlay
@@ -75,7 +75,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
-      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
+      <nav className="fixed top-20 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
         <div className="bg-[#020203]/80 border border-white/10 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
           <button
             onClick={rs.handleHome}
@@ -186,8 +186,6 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                       isDeepPhase={rs.isDeepPhase}
                       vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
                       confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
-                      errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
-                      manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
                       activeAgentIds={activeAgentIds}
                       pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
                     />
@@ -206,7 +204,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 {/* 2. Intelligence Briefing (Prominent Findings) */}
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                   <IntelligenceBrief
-                    verdictSentence={rs.report.verdict_sentence}
+                    verdictSentence={rs.report.verdict_sentence || "The Forensic Council has completed its multi-agent evaluation. Review the detailed findings below for specific tool-level corroborations."}
                     keyFindings={rs.report.key_findings}
                     isDeepPhase={rs.isDeepPhase}
                   />

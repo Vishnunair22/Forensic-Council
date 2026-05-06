@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { CheckCircle2, FileText, X, Loader2 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 
@@ -109,6 +108,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   <div className="absolute bottom-4 right-4 w-4 h-4 border-b border-r border-primary/40 z-20" />
 
                   {isImage && previewUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={previewUrl}
                       alt="Preview"

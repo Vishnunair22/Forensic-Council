@@ -35,9 +35,7 @@ export interface AgentStatusCardProps {
     tool_name?: string;
   };
   completedData?: AgentUpdate;
-  isRevealed: boolean;
   isFadingOut?: boolean;
-  fileMime?: string;
   onComplete?: () => void;
   phase?: "initial" | "deep";
   isExpanded?: boolean;
@@ -82,6 +80,44 @@ export const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; b
   "Agent3": { icon: Boxes,    color: "text-[#818CF8]", bg: "bg-[#818CF8]/10" },
   "Agent4": { icon: Film,     color: "text-[#22D3EE]", bg: "bg-[#22D3EE]/10" },
   "Agent5": { icon: Database, color: "text-[#93C5FD]", bg: "bg-[#93C5FD]/10" },
+};
+
+const FALLBACK_PHRASES: Record<string, string[]> = {
+  Agent1: [
+    "Scanning pixel density distributions...",
+    "Analyzing compression artifacts...",
+    "Cross-referencing noise signatures...",
+    "Validating spectral consistency...",
+    "Running ELA differential analysis...",
+  ],
+  Agent2: [
+    "Analyzing vocal prosody features...",
+    "Scanning for splice boundaries...",
+    "Comparing audio codec fingerprints...",
+    "Running ENF frequency analysis...",
+    "Detecting AI voice synthesis markers...",
+  ],
+  Agent3: [
+    "Mapping scene object relationships...",
+    "Checking lighting consistency...",
+    "Validating shadow geometry...",
+    "Analyzing depth coherence...",
+    "Cross-referencing object metadata...",
+  ],
+  Agent4: [
+    "Analyzing inter-frame motion vectors...",
+    "Checking temporal consistency...",
+    "Scanning for face-swap artifacts...",
+    "Validating rolling shutter signatures...",
+    "Running deepfake frequency analysis...",
+  ],
+  Agent5: [
+    "Extracting EXIF metadata fields...",
+    "Cross-referencing GPS coordinates...",
+    "Analyzing software fingerprints...",
+    "Validating timestamp consistency...",
+    "Detecting metadata anomalies...",
+  ],
 };
 
 function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
@@ -148,8 +184,6 @@ export function AgentStatusCard({
   thinking,
   liveUpdate,
   completedData,
-  isRevealed,
-  fileMime,
   phase = "initial",
   isExpanded = false,
   onToggleExpand,
@@ -157,7 +191,7 @@ export function AgentStatusCard({
 }: AgentStatusCardProps) {
   const sanitizeThinking = (text?: string) => {
     if (!text) return "";
-    let s = text
+    const s = text
       .replace(/^(Thinking|THOUGHT|ACTION):\s*/i, "")
       .replace(/_/g, " ")
       .trim();
@@ -165,10 +199,24 @@ export function AgentStatusCard({
     return s.length > 160 ? s.slice(0, 160) + "..." : s;
   };
 
-  const fileCategory = fileMime?.startsWith("image/") ? "image"
-    : fileMime?.startsWith("audio/") ? "audio"
-    : fileMime?.startsWith("video/") ? "video"
-    : "this file type";
+  const [fallbackPhraseIndex, setFallbackPhraseIndex] = React.useState(0);
+  const lastThinkingRef = React.useRef<string>("");
+  const thinkingStaleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    if (status !== "running") return;
+    const currentThinking = liveUpdate?.thinking || "";
+    if (currentThinking !== lastThinkingRef.current) {
+      lastThinkingRef.current = currentThinking;
+      if (thinkingStaleTimerRef.current) clearTimeout(thinkingStaleTimerRef.current);
+    }
+    // Cycle fallback phrases every 3.5s
+    const phraseInterval = setInterval(() => {
+      setFallbackPhraseIndex(prev => (prev + 1) % (FALLBACK_PHRASES[agentId]?.length || 5));
+    }, 3500);
+    return () => clearInterval(phraseInterval);
+  }, [status, liveUpdate?.thinking, agentId]);
+
   const cfg = statusConfig[status] || statusConfig.running;
   const [stageIndex, setStageIndex] = useState(0);
 
@@ -225,7 +273,7 @@ export function AgentStatusCard({
       layout
       onAnimationStart={() => onAnimationStart?.()}
       className={clsx(
-        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[540px] max-h-[720px] rounded-2xl border border-white/8 bg-[#070A12]",
+        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl border border-white/8 bg-[#070A12]",
         (status === "running" || status === "checking") 
           ? "shadow-[0_4px_24px_rgba(0,0,0,0.5),_0_0_0_1px_rgba(59,130,246,0.2),_0_1px_0_rgba(255,255,255,0.04)_inset]"
           : "shadow-[0_4px_24px_rgba(0,0,0,0.5),_0_1px_0_rgba(255,255,255,0.04)_inset]",
@@ -356,7 +404,7 @@ export function AgentStatusCard({
       </div>
 
       {/* --- Findings Surface --- */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-8 pt-4 relative z-10">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar scroll-smooth p-8 pt-4 relative z-10">
         <AnimatePresence mode="wait">
           {status === "complete" && findings.length > 0 ? (
             <div className="space-y-4">
@@ -378,9 +426,18 @@ export function AgentStatusCard({
                <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
                   <Activity className="w-6 h-6" />
                </div>
-               <p className="max-w-xs text-xs text-white/50 font-medium leading-relaxed">
-                 {sanitizeThinking(liveUpdate?.thinking || thinking) || "Connected. Waiting for this agent's first backend signal..."}
-               </p>
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || "Processing evidence..."}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.35 }}
+                  className="max-w-xs text-xs text-white/50 font-medium leading-relaxed"
+                >
+                  {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || "Processing evidence..."}
+                </motion.p>
+              </AnimatePresence>
             </div>
 
           ) : status === "queued" ? (

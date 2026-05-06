@@ -19,7 +19,6 @@ interface AgentStatusSummaryProps {
   skippedAgents: Array<{ id: string; name: string }>;
   agentUpdates: Record<string, { status: string }>;
   completedAgents: AgentUpdate[];
-  mimeType?: string;
 }
 
 export function AgentStatusSummary({
@@ -27,9 +26,8 @@ export function AgentStatusSummary({
   skippedAgents,
   agentUpdates,
   completedAgents,
-  mimeType,
 }: AgentStatusSummaryProps) {
-  const [activeExpanded, setActiveExpanded] = useState(true);
+  const [activeExpanded, setActiveExpanded] = useState(false);
   const [skippedExpanded, setSkippedExpanded] = useState(false);
 
   const getAgentStatus = (agentId: string) => {
@@ -55,8 +53,8 @@ export function AgentStatusSummary({
   };
 
   return (
-    <div className="w-full flex flex-col gap-3">
-      <div className="bg-[#070A12] border border-white/8 rounded-2xl overflow-hidden shadow-xl">
+    <div className="flex flex-row gap-3 items-start">
+      <div className="bg-[#070A12] border border-white/8 rounded-2xl overflow-hidden shadow-xl min-w-[180px]">
         {/* Active Agents Section */}
         <div className="flex flex-col">
           <button
@@ -107,10 +105,12 @@ export function AgentStatusSummary({
             )}
           </AnimatePresence>
         </div>
+      </div>
 
-        {/* Skipped Agents Section */}
-        {skippedAgents.length > 0 && (
-          <div className="flex flex-col border-t border-white/5">
+      {/* Skipped Agents Section */}
+      {skippedAgents.length > 0 && (
+        <div className="bg-[#070A12] border border-white/8 rounded-2xl overflow-hidden shadow-xl min-w-[180px]">
+          <div className="flex flex-col">
             <button
               onClick={() => setSkippedExpanded(!skippedExpanded)}
               className="flex items-center justify-between w-full px-5 py-4 hover:bg-white/[0.02] transition-colors group"
@@ -155,8 +155,8 @@ export function AgentStatusSummary({
               )}
             </AnimatePresence>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

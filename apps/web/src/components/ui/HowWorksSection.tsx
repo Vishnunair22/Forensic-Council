@@ -9,7 +9,7 @@ import { HOW_IT_WORKS } from "@/lib/constants";
 export function HowWorksSection() {
   return (
     <section className="py-24 px-6 max-w-7xl mx-auto relative z-10">
-      <div className="text-center mb-32">
+      <div className="text-center mb-20">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -30,7 +30,7 @@ export function HowWorksSection() {
       </div>
 
       <div className="relative">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
           {HOW_IT_WORKS.map((item, i) => (
             <motion.div
               key={item.step}
@@ -41,23 +41,23 @@ export function HowWorksSection() {
               className="flex flex-col items-center"
             >
               {/* Step Icon Node */}
-              <div className="relative z-20 mb-6">
+              <div className="relative z-20 mb-5">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   whileInView={{
                     boxShadow: ["0 0 0px rgba(167,255,210,0)", "0 0 40px rgba(167,255,210,0.1)", "0 0 0px rgba(167,255,210,0)"]
                   }}
                   transition={{ duration: 3, repeat: Infinity }}
-                  className="w-20 h-20 rounded-full bg-surface-2 border border-[var(--color-success-light)]/20 flex items-center justify-center shadow-2xl"
+                  className="w-16 h-16 rounded-full bg-surface-2 border border-[var(--color-success-light)]/20 flex items-center justify-center shadow-2xl"
                 >
-                  <item.icon className="w-10 h-10 text-[var(--color-success-light)]" />
+                  <item.icon className="w-8 h-8 text-[var(--color-success-light)]" />
                 </motion.div>
               </div>
 
               {/* Step Card */}
               <div className="w-full">
-                <div className="glass-panel p-10 rounded-[2rem] group relative overflow-hidden h-full border border-white/5 hover:border-[var(--color-success-light)]/20 transition-all duration-500">
-                  <h4 className="text-xl font-heading font-bold text-white mb-6 text-center tracking-tight">{item.title}</h4>
+                <div className="glass-panel p-8 rounded-[2rem] group relative overflow-hidden h-full border border-white/5 hover:border-[var(--color-success-light)]/20 transition-all duration-500">
+                  <h4 className="text-lg font-heading font-bold text-white mb-4 text-center tracking-tight">{item.title}</h4>
                   <p className="text-sm text-white/40 leading-relaxed font-medium text-justify [text-align-last:center] tracking-wide">
                     {item.desc}
                   </p>

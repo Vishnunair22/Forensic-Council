@@ -180,10 +180,29 @@ _TOOL_GROUPS: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
+TEMPLATE_PATTERNS = [
+    "analysis complete",
+    "no significant indicators",
+    "waiting for results",
+    "ready for review",
+    "connected to engine",
+    "initializing",
+    "scanning evidence",
+    "investigation is queued",
+    "connected. waiting for this agent's first backend signal",
+    "opening live investigation stream",
+]
+
 
 class SynthesisService:
     def __init__(self, config: Settings):
         self.config = config
+
+    def _is_template_finding(self, text: str) -> bool:
+        if not text:
+            return True
+        t = text.lower()
+        return any(p in t for p in TEMPLATE_PATTERNS) or len(text.strip()) < 15
 
     async def synthesize_findings(
         self,
@@ -198,6 +217,22 @@ class SynthesisService:
         """
         Synthesize findings using Groq to produce a structured forensic narrative.
         """
+        # --- Pre-filter template findings and deduplicate ---
+        unique_findings = []
+        seen_summaries = set()
+        for f in findings:
+            summary = f.finding_type or ""
+            if self._is_template_finding(summary):
+                continue
+
+            # Use a slightly fuzzy key for deduplication
+            norm_summary = summary.lower().strip()
+            dedup_key = f"{f.metadata.get('tool_name')}:{norm_summary[:100]}"
+            if dedup_key not in seen_summaries:
+                unique_findings.append(f)
+                seen_summaries.add(dedup_key)
+
+        findings = unique_findings
         if not findings:
             return {}
 

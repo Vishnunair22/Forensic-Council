@@ -9,8 +9,7 @@ import {
   RefreshCcw,
   Terminal,
   ShieldAlert,
-  X,
-  Loader2
+  X
 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 
@@ -75,7 +74,7 @@ export function ForensicErrorModal({
                   <div className="flex items-center gap-3 mb-10">
                     <ShieldAlert className="w-4 h-4 text-danger" />
                     <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-danger/60 uppercase">
-                      Quarantine_Protocol_Active
+                      {isTransient ? "Stream_Synchronization_Lost" : "Quarantine_Protocol_Active"}
                     </span>
                   </div>
 

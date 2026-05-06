@@ -35,17 +35,25 @@ export function GlobalNavbar() {
 
   const handleLogoClick = useCallback(() => {
     if (typeof window === "undefined") return;
-
     playSound("hum");
 
-    // Fix A: Navbar owns the reset logic if navigating away from analysis
-    if (pathname !== "/") {
-      arbiterControl.abort();
-      storage.clearAllForensicKeys();
-      sessionOnlyStorage.clearAllForensicKeys();
-      __pendingFileStore.file = null;
-      __pendingFileStore.authPromise = null;
-    }
+    // Always perform full reset — navbar is universal reset button
+    arbiterControl.abort();
+    storage.clearAllForensicKeys();
+    sessionOnlyStorage.clearAllForensicKeys();
+    
+    // Also clear agent-keyed localStorage entries
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    __pendingFileStore.file = null;
+    __pendingFileStore.authPromise = null;
+    
+    // Prevent auto-reconnect on any subsequent /evidence visit
+    sessionOnlyStorage.setItem("fc_no_reconnect", "1");
 
     window.dispatchEvent(new Event("fc:reset-home"));
 
@@ -59,7 +67,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-8 left-8 z-[500]"
+      className="fixed top-6 left-6 z-[10001]"
     >
       <button
         type="button"

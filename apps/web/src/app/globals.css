@@ -149,6 +149,7 @@
 .horizon-card,
 .premium-glass,
 .premium-card {
+  will-change: transform;
   position: relative;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);

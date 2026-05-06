@@ -6,7 +6,6 @@ import { useSimulation } from "./useSimulation";
 import {
   startInvestigation,
   submitHITLDecision,
-  autoLoginAsInvestigator,
   DuplicateInvestigationError,
   getArbiterStatus,
   getReport,
@@ -740,7 +739,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
     }, 6000);
     return () => clearTimeout(safety);
-  }, [showLoadingOverlay, analysisStreamReady]);
+  }, [showLoadingOverlay, analysisStreamReady, status]);
 
   return {
     file, setFile,
