@@ -195,22 +195,21 @@ class Agent5Metadata(ForensicAgent):
             "Run compression_risk_audit to check for social media footprints",
         ]
         if self._is_screen_capture or self._is_digital_image:
+            # For screenshots: fast integrity + binary checks only.
+            # Agent 1 already handles OCR (extract_text_from_image) and semantic analysis.
+            # timestamp_analysis deferred to deep pass (screenshots rarely have meaningful EXIF timestamps).
             return [
                 "Run file_hash_verify against ingestion hash",
                 "Run exif_extract to record screenshot container metadata and software hints",
-                "Run extract_text_from_image to identify displayed timestamps and UI metadata",
                 "Run hex_signature_scan for raw-byte software signatures",
                 "Run compression_risk_audit to check for social media footprints",
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
-                "Run timestamp_analysis for cross-field date and time consistency",
             ]
 
         if self._is_digital_image:
             return core_tasks
         return core_tasks + [
             "Run exif_isolation_forest for ML-based field outlier detection",
-            "Run astro_grounding to verify shadow-sun-gps-time parity",
-            "Run gps_timezone_validate for coordinate timeline checking",
             "Run timestamp_analysis for cross-field date and time consistency",
         ]
 
@@ -218,6 +217,7 @@ class Agent5Metadata(ForensicAgent):
     def deep_task_decomposition(self) -> list[str]:
         if self._is_screen_capture or self._is_digital_image:
             return [
+                "Run timestamp_analysis for cross-field date and time consistency",
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
                 "Run gemini_deep_forensic for screenshot timestamp and provenance cross-check",
             ]
@@ -233,6 +233,8 @@ class Agent5Metadata(ForensicAgent):
             "Run metadata_anomaly_score for probabilistic fabrication detection",
             "Run provenance_chain_verify for C2PA and digital provenance manifests",
             "Run camera_profile_match against claimed device model",
+            "Run astro_grounding to verify shadow-sun-gps-time parity if GPS coordinates are present",
+            "Run gps_timezone_validate for coordinate-timezone timeline cross-check if GPS data is available",
             "Run gemini_deep_forensic for Hardware-Grounded Provenance Verification",
         ]
 

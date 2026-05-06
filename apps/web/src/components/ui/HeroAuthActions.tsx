@@ -191,14 +191,18 @@ export function HeroAuthActions() {
             }}
           />
         )}
-        {showUpload && selectedFile && !isAuthenticating && (
+        {showUpload && selectedFile && !isAuthenticating && !isHandingOff && (
           <UploadSuccessModal
             key="success-modal"
             file={selectedFile}
             onNewUpload={() => { setSelectedFile(null); setIsHandingOff(false); }}
             onDismiss={() => { setShowUpload(false); setSelectedFile(null); setIsHandingOff(false); }}
             onStartAnalysis={async () => {
+              // Synchronously cover the screen at the CSS paint level — this
+              // fires before any React render or await, bridging the navigation gap.
+              document.body.setAttribute("data-fc-loading", "1");
               setIsHandingOff(true);
+              setHandoffVisible(true);
               playSound("envelope-close");
               await new Promise((r) => setTimeout(r, 220));
               await handleStartAnalysis();

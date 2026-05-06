@@ -57,7 +57,6 @@ class Agent3Object(ForensicAgent):
             "Run object_detection for scene object identification",
             "Run scene_incongruence for contextual anomaly detection",
             "Run lighting_consistency for shadow and light direction analysis",
-            "Run scale_validation for object proportion consistency",
             "Run contraband_database for risk object screening",
         ]
 
@@ -75,10 +74,14 @@ class Agent3Object(ForensicAgent):
             tasks.extend(
                 [
                     "Run secondary_classification on low-confidence objects",
-                    "Run scale_validation on confirmed objects",
+                    "Run scale_validation on confirmed objects for geometric proportion validation",
                     "Run adversarial_robustness_check against object detection evasion",
                 ]
             )
+        else:
+            # Always run scale_validation in deep pass even without prior detections
+            # (initial pass removed it for speed; deep pass validates geometry)
+            tasks.append("Run scale_validation for object proportion and geometry consistency")
         tasks.extend(
             [
                 "Run lighting_consistency for deep ROI-aware shadow-angle audit",

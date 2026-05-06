@@ -15,7 +15,6 @@ import { DegradationBanner } from "./DegradationBanner";
 import { ActionDock } from "./ActionDock";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
-import { VerdictGauge } from "./VerdictGauge";
 import { AnimatePresence } from "framer-motion";
 
 const AgentAnalysisTab = dynamic(
@@ -63,7 +62,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
   return (
     <div className="min-h-screen pb-48 pt-28 relative">
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {(rs.state === "arbiter" || rs.state === "loading") && (
           <ForensicProgressOverlay
             title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
@@ -120,7 +119,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </nav>
 
       {/* ── Main Investigative Surface ─────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-16">
+      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-10">
 
         <div
           role="tabpanel"
@@ -180,26 +179,19 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                     <ResultHeader
                       report={rs.report}
-                      fileName={rs.report.case_id || "Evidence 01"}
+                      fileName={rs.fileName || rs.report.case_id || "Evidence"}
                       mimeType={rs.mimeType}
                       thumbnail={rs.thumbnail}
                       isDeepPhase={rs.isDeepPhase}
                       vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
                       confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
+                      manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
+                      errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
+                      discordPct={rs.report.confidence_std_dev ? Math.round(rs.report.confidence_std_dev * 100) : 0}
                       activeAgentIds={activeAgentIds}
                       pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
                     />
                   </motion.div>
-
-                {/* 1.5 Gauges */}
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <VerdictGauge 
-                    confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
-                    manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
-                    errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
-                    discordPct={rs.report.confidence_std_dev ? Math.round(rs.report.confidence_std_dev * 100) : 0}
-                  />
-                </motion.div>
 
                 {/* 2. Intelligence Briefing (Prominent Findings) */}
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>

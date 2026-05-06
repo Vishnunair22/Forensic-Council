@@ -33,6 +33,8 @@ export default function EvidenceUploadPage() {
   const investigation = useInvestigation(playSound);
 
   useEffect(() => {
+    // Remove the CSS bridge overlay — React's LoadingOverlay has now mounted and taken over.
+    document.body.removeAttribute("data-fc-loading");
     document.body.style.overflow = "";
     // If no pending file and no session, ensure no stale state
     if (!__pendingFileStore.file && !storage.getItem("forensic_session_id")) {
@@ -60,7 +62,7 @@ export default function EvidenceUploadPage() {
         liveText={investigation.arbiterLiveText}
       />
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence initial={false}>
         {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
           <LoadingOverlay
             variant="full"

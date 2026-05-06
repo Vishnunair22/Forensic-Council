@@ -76,9 +76,11 @@ async function waitForFinalReport(
         consecutiveNotFound = 0;
         try {
           const res = await withTimeout(getReport(sessionId), 30_000);
-          if (res.status === "complete" && res.report) return true;
+          // ReportDTO has report_id; a 202 in-progress response has status:"in_progress"
+          const asAny = res as Record<string, unknown>;
+          if (asAny.report_id || (asAny.status === "complete" && asAny.report)) return true;
         } catch {
-          /* in progress */
+          /* report may not be ready yet — keep polling */
         }
       }
       if (st.status === "not_found") {
@@ -253,6 +255,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [_authError, setAuthError] = useState<string | null>(null);
 
   const authReadyRef = useRef<Promise<void> | null>(null);
+
+  // Fresh-mount guard: if we arrived here with a pending file in the store,
+  // it is always a new investigation — reset the autoStart ref and purge any
+  // stale session so Effect A always fires triggerAnalysis cleanly.
+  useEffect(() => {
+    if (__pendingFileStore.file) {
+      autoStartFiredRef.current = false;
+      clearInvestigationPersistence();
+      sessionExistsRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — runs once on mount only
 
   useEffect(() => {
     if (typeof window === "undefined" || authReadyRef.current) return;
@@ -589,6 +603,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText("Final report synthesis requested. Compiling initial agent findings.");
+    let navigated = false;
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
@@ -596,6 +611,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterControl.abortController = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterControl.abortController.signal);
       if (!ok) throw new Error("Council synthesis timed out");
+      // Signal the result page to skip arbiter polling — report is already ready.
+      sessionOnlyStorage.setItem("fc_report_ready", "1");
+      // Apply CSS bridge so no blank gap exists between this overlay and the result page.
+      document.body.setAttribute("data-fc-loading", "1");
+      navigated = true;
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -604,7 +624,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
     } finally {
       setIsNavigating(false);
-      setArbiterDeliberating(false);
+      // Only clear the overlay if we did NOT navigate — if we navigated, the
+      // result page will handle clearing it. Clearing it here when navigated
+      // causes the overlay to flicker off before the result page mounts.
+      if (!navigated) {
+        setArbiterDeliberating(false);
+      }
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
 

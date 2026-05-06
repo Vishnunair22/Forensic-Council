@@ -231,3 +231,18 @@
 .glass-button:hover { background: rgba(147,197,253,.12); border-color: rgba(147,197,253,.4); box-shadow:0 0 22px rgba(59,130,246,0.22); }
 
 :focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
+
+/* ── Page-Transition Bridge ──────────────────────────────────────────
+   Applied immediately when user clicks "Begin Analysis", synchronously
+   via JS before any awaits or React state updates. Cleared by the
+   evidence page's useEffect once its own overlay is mounted.
+   Prevents the blank-screen gap during Next.js page navigation.
+─────────────────────────────────────────────────────────────────── */
+body[data-fc-loading]::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;               /* below LoadingOverlay z-[10000] */
+  background: #05070D;          /* --color-background */
+  pointer-events: none;
+}

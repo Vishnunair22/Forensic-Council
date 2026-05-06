@@ -356,11 +356,11 @@ Agent: {agent_name} ({agent_id})
 {json.dumps(grouped_sections_data, indent=2, default=str)}
 
 [INSTRUCTIONS]
-1. For each group, provide a 1-2 sentence "Forensic Opinion" that synthesizes the raw tool data.
+1. For each group, provide a 1-2 sentence "Forensic Opinion" that synthesizes the raw tool data into an actionable technical conclusion. Reference specific metric values.
 2. Determine an overall 'verdict' for this agent: AUTHENTIC, SUSPICIOUS, or TAMPERED.
-3. [EXECUTIVE SUMMARY]: The 'narrative_summary' must be a concise (max 35 words), high-impact forensic conclusion. It MUST mention the primary technical indicator.
-4. [USER-FRIENDLY FINDINGS]: For each tool in the group, translate the machine metrics into a 'user_friendly_summary'. Instead of "ELA 0.85 anomaly", say "Detected digital traces of editing in specific areas". Avoid jargon in these summaries.
-5. Use objective, technical language for the 'narrative_summary' and 'opinion', but accessible language for 'user_friendly_summary'.
+3. [EXECUTIVE SUMMARY]: The 'narrative_summary' MUST be 2-3 sentences, 60-80 words. Format: Sentence 1 — what forensic tests were applied and what was found. Sentence 2 — the primary forensic signal (with metric if available). Sentence 3 — what the verdict means for the integrity of this evidence. It MUST mention the primary technical indicator by name.
+4. [USER-FRIENDLY FINDINGS]: For each tool, write a 'user_friendly_summary' that is a specific, factual sentence. BAD example: "Neural Ela found a forensic warning signal at 85% confidence." GOOD example: "Error Level Analysis detected pixel re-compression artifacts in the upper-left quadrant — a pattern consistent with content pasting over an original background." Translate every metric into forensic meaning. Avoid jargon like 'ELA', 'FFT', 'PRNU' — spell them out.
+5. Use objective, technical language for the 'narrative_summary' and 'opinion', but accessible, specific language for 'user_friendly_summary'. Never write generic phrases like "found a forensic warning signal at X% confidence", "signal detected", or "produced a positive result".
 6. Tool failures, unavailable tools, degraded fallbacks, NOT_APPLICABLE results, and INCOMPLETE findings are coverage limitations only. Do NOT treat them as evidence of tampering or authenticity. Mention them as limitations and base SUSPICIOUS/TAMPERED verdicts only on successful POSITIVE forensic signals.
 7. For screenshots, do not claim camera authenticity. State what was actually checked: OCR text, screenshot layout, hash since intake, file structure, compression/platform footprints, timestamps, and any Gemini visual findings.
 8. Never say "expected hash", "expected content", "advanced neural analysis confirms authenticity", or "empty raw tool results". A hash only proves the uploaded artifact has not changed after intake.
@@ -368,17 +368,17 @@ Agent: {agent_name} ({agent_id})
 Return ONLY a JSON object in this format:
 {{
   "verdict": "AUTHENTIC|SUSPICIOUS|TAMPERED|INCONCLUSIVE",
-  "narrative_summary": "Telegraphic executive summary.",
+  "narrative_summary": "2-3 sentence executive summary, 60-80 words, specific and forensically grounded.",
   "sections": [
     {{
       "id": "group_id",
       "label": "Group Label",
-      "opinion": "Synthesized technical opinion.",
+      "opinion": "Synthesized technical opinion referencing specific metric values.",
       "severity": "LOW|MEDIUM|HIGH|CRITICAL",
       "refined_findings": [
         {{
           "tool": "tool_name",
-          "user_friendly_summary": "Clear, jargon-free explanation of this specific signal."
+          "user_friendly_summary": "Specific, factual finding in plain English — what was measured and what it means for authenticity."
         }}
       ]
     }}
@@ -389,7 +389,7 @@ Return ONLY a JSON object in this format:
             raw = await llm_client.generate_synthesis(
                 system_prompt="You are a Senior Forensic Analyst. Return ONLY valid JSON.",
                 user_content=prompt,
-                max_tokens=800,
+                max_tokens=1200,
                 json_mode=True,
             )
             if not raw:
@@ -614,19 +614,21 @@ Return ONLY a JSON object in this format:
 
         narrative = str(response.get("narrative_summary") or "")
         if screenshot_like and "object" in agent_name.lower():
-            scope = self._tool_grounded_summary(
-                tool_rows.get("screenshot_scene_applicability", {}),
-                screenshot_like=True,
-            )
-            layout = self._tool_grounded_summary(
-                tool_rows.get("screenshot_layout_forensics", {}),
-                screenshot_like=True,
-            )
-            response["verdict"] = "AUTHENTIC"
-            response["narrative_summary"] = " ".join(
-                x for x in (scope, layout) if x
-            )[:300] or (
-                "Screenshot-specific context analysis completed: physical-scene tools were bypassed and the UI layout check produced no anomaly signal."
+            scope_row = tool_rows.get("screenshot_scene_applicability", {})
+            layout_row = tool_rows.get("screenshot_layout_forensics", {})
+            layout_anomalies = int((scope_row.get("data") or {}).get("layout_anomaly_count") or
+                                   (layout_row.get("data") or {}).get("layout_anomaly_count") or 0)
+            verdict_text = "found no UI/document structure anomalies" if layout_anomalies == 0 else f"found {layout_anomalies} layout anomaly flag(s)"
+            dims = ""
+            scope_data = scope_row.get("data") or {}
+            if scope_data.get("width") and scope_data.get("height"):
+                dims = f" ({scope_data['width']}x{scope_data['height']}px)"
+            response["verdict"] = "AUTHENTIC" if layout_anomalies == 0 else "SUSPICIOUS"
+            # Build a meta-synthesis narrative — NOT a repetition of individual tool text
+            response["narrative_summary"] = (
+                f"Object and scene forensic tools were bypassed because this is a screen capture{dims}; "
+                f"physical geometry checks (lighting, scale, weapons) do not apply. "
+                f"Screenshot layout analysis {verdict_text}."
             )
         elif screenshot_like and _bad(narrative):
             useful = [
@@ -768,6 +770,31 @@ Return ONLY a JSON object in this format:
             return (
                 f"File structure check found valid header/trailer status with {len(anomalies)} anomaly flag(s)"
                 + (f": {'; '.join(map(str, anomalies[:3]))}." if anomalies else " and no appended payload indicators.")
+            )
+        if tool == "neural_ela":
+            score = data.get("ela_score") or data.get("anomaly_score") or data.get("ela_mean") or 0
+            regions = data.get("anomaly_regions") or data.get("flagged_regions") or []
+            region_text = f" across {len(regions)} region(s)" if regions else ""
+            if verdict == "POSITIVE":
+                return (
+                    f"Error Level Analysis (ELA) measured a re-compression inconsistency score of {float(score):.3f}{region_text}. "
+                    "This indicates that parts of the image were saved at different compression levels — a hallmark of content being pasted in from another source."
+                )
+            return (
+                f"Error Level Analysis measured a re-compression score of {float(score):.3f} with no high-confidence inconsistency regions. "
+                "Compression artifacts appear uniform across the image, with no evidence of selective pasting or manipulation."
+            )
+        if tool == "noiseprint_cluster":
+            clusters = data.get("cluster_count") or data.get("num_clusters") or 0
+            inconsistent = data.get("inconsistent_regions") or data.get("anomalous_clusters") or 0
+            if verdict == "POSITIVE" or inconsistent:
+                return (
+                    f"Noiseprint++ sensor clustering found {clusters} noise-pattern cluster(s) with {inconsistent} inconsistent region(s). "
+                    "Different noise textures in the same image suggest the pixels did not all come from the same camera sensor — a strong indicator of splicing."
+                )
+            return (
+                f"Noiseprint++ sensor clustering found {clusters} cluster(s) with no statistically inconsistent noise regions. "
+                "The sensor noise pattern is homogeneous across the image, consistent with a single capture device."
             )
         return ""
 

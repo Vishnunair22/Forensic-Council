@@ -30,9 +30,14 @@ export function useResult(initialSessionId?: string) {
   const getInitial = (key: string) => storage.getItem(key);
 
   const [mounted, setMounted] = useState(false);
-  const [state, setState] = useState<PageState>("arbiter");
+  // If fc_report_ready is set, the report is already synthesized (coming from handleAcceptAnalysis).
+  // Skip the arbiter polling phase and go straight to loading the report.
+  const reportAlreadyReady = typeof window !== "undefined" && sessionOnlyStorage.getItem("fc_report_ready") === "1";
+  const [state, setState] = useState<PageState>(() => reportAlreadyReady ? "loading" : "arbiter");
   const [report, setReport] = useState<ReportDTO | null>(null);
-  const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
+  const [arbiterMsg, setArbiterMsg] = useState(() =>
+    reportAlreadyReady ? "Decrypting forensic ledger..." : "Council deliberating on evidence..."
+  );
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
 
@@ -41,6 +46,7 @@ export function useResult(initialSessionId?: string) {
   const [thumbnail, setThumbnail] = useState(() => getInitial("forensic_thumbnail"));
   const [mimeType, setMimeType] = useState(() => getInitial("forensic_mime_type"));
   const [pipelineStartAt, setPipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
+  const [fileName, setFileName] = useState(() => getInitial("forensic_file_name"));
   const [agentTimeline] = useState<AgentUpdate[]>(() => {
     try {
       const sid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
@@ -67,9 +73,17 @@ export function useResult(initialSessionId?: string) {
       : null)
   );
 
-  // Transition smoothness: ensure overlay shows for at least 800ms
-  const [minOverlayDone, setMinOverlayDone] = useState(false);
+  // Transition smoothness: ensure overlay shows for at least 800ms.
+  // Skipped if report is already ready (fc_report_ready was set by handleAcceptAnalysis).
+  const [minOverlayDone, setMinOverlayDone] = useState(reportAlreadyReady);
   useEffect(() => {
+    // Remove the CSS bridge overlay — React overlay takes over now.
+    document.body.removeAttribute("data-fc-loading");
+    if (reportAlreadyReady) {
+      // Clear the flag so refresh doesn't skip polling incorrectly.
+      sessionOnlyStorage.removeItem("fc_report_ready");
+      return;
+    }
     const timer = setTimeout(() => setMinOverlayDone(true), 800);
     return () => clearTimeout(timer);
   }, [sessionId]); // reset on session change
@@ -103,7 +117,7 @@ export function useResult(initialSessionId?: string) {
   }, []);
 
   // Set to true when the arbiter status polling confirms the investigation is done
-  const [arbiterComplete, setArbiterComplete] = useState(false);
+  const [arbiterComplete, setArbiterComplete] = useState(reportAlreadyReady);
 
   const historySavedRef = useRef(false);
   const { playSound } = useSound();
@@ -138,9 +152,12 @@ export function useResult(initialSessionId?: string) {
 
   // Derived state to check if we actually have the report data
   const finalReportData = useMemo(() => {
-    if (reportQueryData && "status" in reportQueryData && reportQueryData.status === "complete") {
-      return reportQueryData.report;
-    }
+    if (!reportQueryData) return null;
+    // The API returns ReportDTO directly when ready, or {status:"in_progress"} as 202.
+    // ReportDTO has report_id; the in-progress wrapper has status = "in_progress".
+    const asAny = reportQueryData as Record<string, unknown>;
+    if (asAny.report_id) return reportQueryData as ReportDTO;
+    if (asAny.status === "complete" && asAny.report) return asAny.report as ReportDTO;
     return null;
   }, [reportQueryData]);
 
@@ -284,6 +301,7 @@ export function useResult(initialSessionId?: string) {
     isDeepPhase,
     thumbnail,
     mimeType,
+    fileName,
     agentTimeline,
     pipelineStartAt,
     sessionId,

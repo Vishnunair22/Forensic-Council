@@ -80,26 +80,28 @@ class Agent1Image(ForensicAgent):
         useful context early and accumulates evidence progressively.
         """
         base = [
+            "Run file_hash_verify for evidence integrity check",
             "Run extract_text_from_image for visible text extraction",
             "Run analyze_image_content for semantic image understanding",
-            "Run file_hash_verify for evidence integrity check",
         ]
         if self._is_screen_capture or self._is_digital_capture:
+            # Screenshots: fast integrity + OCR + frequency scan + semantic.
+            # neural_fingerprint (SigLIP2) deferred to deep — conceptual similarity
+            # is less informative for screenshots which are inherently unique UI states.
             return [
-                "Run extract_text_from_image for visible text extraction",
                 "Run file_hash_verify for evidence integrity check",
-                "Run analyze_image_content for semantic image understanding",
+                "Run extract_text_from_image for visible text extraction",
                 "Run frequency_domain_analysis for frequency domain analysis",
-                "Run neural_fingerprint for conceptual similarity detection",
+                "Run analyze_image_content for semantic image understanding",
             ]
-        base.insert(2, "Run neural_fingerprint for conceptual similarity detection")
+        base.insert(3, "Run neural_fingerprint for conceptual similarity detection")
         if self._is_lossless:
-            # Lossless path: Frequency is useful, noiseprint preferred
+            # Lossless path: frequency scan then noiseprint (sensor clustering preferred)
             return base + [
                 "Run frequency_domain_analysis for frequency domain analysis",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
             ]
-        # Lossy path: ELA is authoritative; FFT runs first for GAN/periodicity baseline
+        # Lossy path: frequency scan first for GAN baseline, then ELA (primary manipulation signal)
         return base + [
             "Run frequency_domain_analysis for frequency domain analysis",
             "Run neural_ela for high-confidence manipulation detection",
@@ -119,7 +121,7 @@ class Agent1Image(ForensicAgent):
             "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
         ]
         if self._is_screen_capture or self._is_digital_capture:
-            return base
+            return base + ["Run neural_fingerprint for conceptual similarity detection"]
         base.insert(0, "Run neural_copy_move for dual-branch copy-move detection")
         base.insert(0, "Run neural_splicing for ViT-based region composition analysis")
         # Only add anomaly_tracer if not lossless (as it relies heavily on JPEG noise/ghosts)
