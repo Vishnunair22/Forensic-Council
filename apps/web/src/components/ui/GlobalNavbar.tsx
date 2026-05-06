@@ -35,7 +35,7 @@ export function GlobalNavbar() {
 
   const handleLogoClick = useCallback(() => {
     if (typeof window === "undefined") return;
-    playSound("hum");
+    playSound(hasActiveSession && pathname !== "/" ? "reset" : "hum");
 
     // Always perform full reset — navbar is universal reset button
     arbiterControl.abort();
