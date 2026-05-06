@@ -58,7 +58,6 @@ export default async function RootLayout({
         <Suspense fallback={null}>
           <RouteExperience />
         </Suspense>
-        <GlobalNavbar />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-2 focus:left-2 focus:px-4 focus:py-2 glass-panel font-bold"
@@ -67,6 +66,7 @@ export default async function RootLayout({
         </a>
 
         <QueryProvider>
+          <GlobalNavbar />
           <main className="flex-1 relative z-10" id="main-content">
             {children}
           </main>

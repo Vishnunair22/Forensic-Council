@@ -114,11 +114,13 @@ general:
 
 # --- OCR ---
 ocr:
-  "extract evidence text": "extract_evidence_text"
-  "ocr text extraction": "extract_evidence_text"
-  "text from pdf": "extract_evidence_text"
-  "extract text from pdf": "extract_evidence_text"
+  "extract evidence text": "extract_text_from_image"
+  "ocr text extraction": "extract_text_from_image"
+  "text from pdf": "extract_text_from_image"
+  "extract text from pdf": "extract_text_from_image"
   "extract text from image": "extract_text_from_image"
+  "run extract_text_from_image for document text extraction": "extract_text_from_image"
+  "document text extraction": "extract_text_from_image"
 
 # --- AV Container ---
 av_container:
@@ -186,10 +188,17 @@ agent1_initial:
   # Phase-2 neural tool exact task strings
   "run neural_splicing for vit-based region composition analysis": "neural_splicing"
   "vit-based region composition analysis": "neural_splicing"
+  # Issue 4: Fix dual-branch copy-move detection (not forgery detection)
+  "run neural_copy_move for dual-branch copy-move detection": "neural_copy_move"
   "run neural_copy_move for dual-branch forgery detection": "neural_copy_move"
-  "dual-branch forgery detection": "neural_copy_move"
+  "dual-branch copy-move detection": "neural_copy_move"
   "run gemini_deep_forensic for final semantic grounding and court-ready verdict": "gemini_deep_forensic"
   "final semantic grounding and court-ready verdict": "gemini_deep_forensic"
+  # Issue 3: Add diffusion_artifact_detector mappings
+  "run diffusion_artifact_detector for ai-generation signatures": "diffusion_artifact_detector"
+  "ai-generation signatures": "diffusion_artifact_detector"
+  "run diffusion_artifact_detector to confirm ai generation": "diffusion_artifact_detector"
+  "confirm ai generation": "diffusion_artifact_detector"
 
 # --- Deep Pass Tools (Agent 1) ---
 deep_agent1:
@@ -226,6 +235,16 @@ agent3_initial:
   "run scene_incongruence for contextual anomalies": "scene_incongruence"
   "run screenshot_scene_applicability for screen-capture object/scene scope": "screenshot_scene_applicability"
   "screenshot_scene_applicability": "screenshot_scene_applicability"
+  "run screenshot_layout_forensics for ui and document layout anomaly scan": "screenshot_layout_forensics"
+  "run screenshot_layout_forensics for deep ui/document consistency cross-check": "screenshot_layout_forensics"
+  "screenshot_layout_forensics": "screenshot_layout_forensics"
+  "ui and document layout anomaly scan": "screenshot_layout_forensics"
+  "deep ui/document consistency cross-check": "screenshot_layout_forensics"
+  "ui/document layout anomaly": "screenshot_layout_forensics"
+  "potential document fabrication": "gemini_deep_forensic"
+  # Issue 1: Add explicit contraband_database mappings
+  "run contraband_database for risk object screening": "vector_contraband_search"
+  "contraband_database": "vector_contraband_search"
 
 # --- Deep Pass Tools (Agent 2) ---
 deep_agent2:
@@ -242,8 +261,16 @@ deep_agent5:
   "probabilistic fabrication detection": "metadata_anomaly_score"
   "run provenance_chain_verify": "provenance_chain_verify"
   "c2pa and digital provenance manifests": "provenance_chain_verify"
+  "screenshot timestamp and provenance cross-check": "gemini_deep_forensic"
   "run camera_profile_match": "camera_profile_match"
   "claimed device model": "camera_profile_match"
+  # Issue 2: Add three Agent 5 task phrase mappings
+  "run exif_isolation_forest for ml-based field outlier detection": "exif_isolation_forest"
+  "ml-based field outlier detection": "exif_isolation_forest"
+  "run astro_grounding to verify shadow-sun-gps-time parity": "astro_grounding"
+  "shadow-sun-gps-time parity": "astro_grounding"
+  "run gps_timezone_validate for coordinate timeline checking": "gps_timezone_validate"
+  "coordinate timeline checking": "gps_timezone_validate"
 
 # --- Deep Pass Tools (Agent 4) ---
 deep_agent4:

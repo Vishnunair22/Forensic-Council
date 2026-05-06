@@ -603,7 +603,7 @@ class LLMClient:
         Multimodal synthesis supporting image/PDF vision inputs via Gemini.
         Essential for Tier 0 OCR and deep forensic visual grounding.
         """
-        if not self.gemini_api_key or self.provider == "none":
+        if not self.gemini_api_key:
             return {}
 
         import base64

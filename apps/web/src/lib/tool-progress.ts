@@ -63,6 +63,8 @@ const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
   file_hash_verify: { label: "Verifying cryptographic file hash", icon: Shield },
   adversarial_robustness_check: { label: "Testing for anti-forensic patterns", icon: Shield },
   object_detection: { label: "Identifying objects and scene elements", icon: Search },
+  screenshot_scene_applicability: { label: "Confirming screenshot analysis scope", icon: ImageIcon },
+  screenshot_layout_forensics: { label: "Checking screenshot layout consistency", icon: Layers },
   scene_incongruence: { label: "Checking scene consistency", icon: Search },
   lighting_consistency: { label: "Comparing lighting and shadow direction", icon: Zap },
   scale_validation: { label: "Checking object scale and proportions", icon: Gauge },

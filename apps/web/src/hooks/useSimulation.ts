@@ -402,8 +402,19 @@ export const useSimulation = ({
                         completedAgentsRef.current.push(newUpdate);
                       }
 
-                      const nextToQueue = existingIndex >= 0 ? completedAgentsRef.current[existingIndex] : newUpdate;
-                      setRevealQueue((prev) => [...prev, nextToQueue]);
+                      const completedUpdate =
+                        existingIndex >= 0 ? completedAgentsRef.current[existingIndex] : newUpdate;
+                      setCompletedAgents((current) => {
+                        const exists = current.some((a) => a.agent_id === completedUpdate.agent_id);
+                        if (exists) {
+                          return current.map((a) =>
+                            a.agent_id === completedUpdate.agent_id ? completedUpdate : a,
+                          );
+                        }
+                        return [...current, completedUpdate];
+                      });
+                      playSoundRef.current?.("agent");
+                      onAgentCompleteRef.current?.(completedUpdate);
 
                       // Also transition to analyzing if still idle or initiating
                       setStatus((prev: SimulationStatus) =>
@@ -622,7 +633,7 @@ export const useSimulation = ({
                 );
                 setTimeout(() => {
                   const currentSessionId = storage.getItem(SESSION_ID_KEY);
-                  if (currentSessionId) {
+                  if (currentSessionId === targetSessionId) {
                     connectWebSocket(currentSessionId, true).catch(() => {
                     });
                   }
@@ -774,8 +785,14 @@ export const useSimulation = ({
     setReconnectStatusMessage(null);
     setPipelineMessage("");
     setPipelineThinking("");
+    setArbiterStatus(null);
+    setArbiterThinking(null);
     setRevealQueue([]);
     isRevealingRef.current = false;
+    if (arbiterPollRef.current) {
+      clearInterval(arbiterPollRef.current);
+      arbiterPollRef.current = null;
+    }
 
     if (wsRef.current) {
       wsRef.current.close();
@@ -850,6 +867,11 @@ const resumeInvestigation = useCallback(
 
       setStatus(deep ? "analyzing" : "processing");
       setArbiterStatus(deep ? null : "synthesizing");
+      setArbiterThinking(
+        deep
+          ? null
+          : "Council Arbiter is synthesizing initial agent findings into the final report.",
+      );
       if (deep) {
         playSoundRef.current?.("think");
         // Part 5.5 Fix: Abort any speculative frontend polling if we go DEEP

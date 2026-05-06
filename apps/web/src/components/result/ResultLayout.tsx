@@ -75,7 +75,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
-      <nav className="fixed top-20 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
+      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
         <div className="bg-[#020203]/80 border border-white/10 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
           <button
             onClick={rs.handleHome}
@@ -120,7 +120,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </nav>
 
       {/* ── Main Investigative Surface ─────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-6 pt-12 space-y-16">
+      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-16">
 
         <div
           role="tabpanel"
@@ -249,13 +249,13 @@ function ResultSkeletonView() {
   return (
     <div className="min-h-screen" aria-busy="true" aria-label="Loading report…">
       {/* Fake nav */}
-      <div className="sticky top-[60px] z-40 w-full bg-black/60 backdrop-blur-xl border-b border-white/[0.05]">
-        <div className="max-w-5xl mx-auto px-10 py-6 flex items-center justify-between gap-4">
-          <div className="skeleton h-5 w-40 rounded-full" />
-          <div className="skeleton h-10 w-64 rounded-2xl" />
+      <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
+        <div className="bg-[#020203]/80 border border-white/10 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+          <div className="skeleton h-8 w-16 rounded-full" />
+          <div className="skeleton h-9 w-48 rounded-full" />
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-6 pt-12 space-y-12">
+      <div className="max-w-5xl mx-auto px-6 pt-16 space-y-12">
         {/* Verdict card skeleton — matches ResultHeader layout */}
         <div className="rounded-3xl border border-white/5 glass-panel p-10 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">

@@ -641,7 +641,7 @@ class TestSynthesisService:
         assert "narrative_summary" in result
 
     @pytest.mark.asyncio
-    async def test_fallback_verdict_suspicious_on_low_confidence(self):
+    async def test_fallback_verdict_inconclusive_on_low_confidence_high_error(self):
         from core.config import get_settings
         from core.synthesis import SynthesisService
 
@@ -652,7 +652,7 @@ class TestSynthesisService:
             mock_instance.generate_synthesis = AsyncMock(side_effect=RuntimeError("forced failure"))
             MockLLM.return_value = mock_instance
 
-            # Low confidence (< 0.5) should produce SUSPICIOUS verdict
+            # Low confidence plus high tool error rate is a coverage problem, not proof of tampering.
             findings = [self._make_finding(confidence=0.3), self._make_finding(confidence=0.2)]
             result = await service.synthesize_findings(
                 agent_id="Agent1_image",
@@ -663,10 +663,10 @@ class TestSynthesisService:
                 tool_error_count=4,  # error_rate=0.8 → also SUSPICIOUS
             )
 
-        assert result["verdict"] == "SUSPICIOUS"
+        assert result["verdict"] == "INCONCLUSIVE"
 
     @pytest.mark.asyncio
-    async def test_llm_returns_markdown_json_stripped(self):
+    async def test_llm_markdown_json_cannot_override_absent_positive_signal(self):
         """LLM wrapping JSON in ```json fences should be handled correctly."""
         from core.config import get_settings
         from core.synthesis import SynthesisService
@@ -690,10 +690,10 @@ class TestSynthesisService:
                 tool_error_count=0,
             )
 
-        assert result["verdict"] == "TAMPERED"
+        assert result["verdict"] == "AUTHENTIC"
 
     @pytest.mark.asyncio
-    async def test_agent_id_normalisation_agent2(self):
+    async def test_agent_id_normalisation_agent2_without_positive_signal_stays_clean(self):
         """Agent IDs containing 'Agent2' should resolve to the Agent2 tool group."""
         from core.config import get_settings
         from core.react_loop import AgentFinding
@@ -733,7 +733,70 @@ class TestSynthesisService:
                 tool_error_count=0,
             )
 
-        assert result["verdict"] == "SUSPICIOUS"
+        assert result["verdict"] == "AUTHENTIC"
+
+    @pytest.mark.asyncio
+    async def test_screenshot_synthesis_replaces_generic_llm_tool_text(self):
+        from core.config import get_settings
+        from core.react_loop import AgentFinding
+        from core.synthesis import SynthesisService
+
+        service = SynthesisService(get_settings())
+        finding = AgentFinding(
+            agent_id="Agent1_image",
+            finding_type="hash",
+            confidence_raw=0.98,
+            status="CONFIRMED",
+            evidence_verdict="NEGATIVE",
+            reasoning_summary="SHA-256 intake check passed.",
+            metadata={
+                "tool_name": "file_hash_verify",
+                "court_defensible": True,
+                "hash_matches": True,
+                "current_hash": "abcdef1234567890",
+            },
+        )
+        llm_response = json.dumps(
+            {
+                "verdict": "AUTHENTIC",
+                "narrative_summary": "Image appears authentic.",
+                "sections": [
+                    {
+                        "id": "chain_of_custody",
+                        "label": "Chain of Custody",
+                        "opinion": "Image appears authentic.",
+                        "severity": "LOW",
+                        "refined_findings": [
+                            {
+                                "tool": "file_hash_verify",
+                                "user_friendly_summary": "The digital fingerprint matches the expected hash, proving authenticity.",
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+        with patch("core.synthesis.is_screen_capture_like", return_value=True), patch(
+            "core.synthesis.LLMClient"
+        ) as MockLLM:
+            mock_instance = AsyncMock()
+            mock_instance.generate_synthesis = AsyncMock(return_value=llm_response)
+            MockLLM.return_value = mock_instance
+
+            result = await service.synthesize_findings(
+                agent_id="Agent1_image",
+                agent_name="Image Expert",
+                findings=[finding],
+                evidence_artifact=self._make_artifact(),
+                tool_success_count=1,
+                tool_error_count=0,
+            )
+
+        summary = result["sections"][0]["refined_findings"][0]["user_friendly_summary"]
+        assert "chain-of-custody" in summary
+        assert "does not prove pre-upload authenticity" in summary
+        assert "expected hash" not in summary.lower()
 
     def test_compact_metrics_skips_internal_keys(self):
         service = self._make_service()

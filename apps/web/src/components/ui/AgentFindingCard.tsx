@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { motion } from "framer-motion";
-import { AgentFindingDTO, AgentMetricsDTO } from "@/lib/api";
+import { AgentFindingDTO, AgentMetricsDTO, ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import {
   ConfidenceBar,
@@ -30,6 +30,7 @@ export interface AgentFindingCardProps {
   deepFindings: AgentFindingDTO[];
   metrics?: AgentMetricsDTO;
   narrative?: string;
+  agentSummary?: NonNullable<ReportDTO["per_agent_summary"]>[string];
   phase?: "initial" | "deep";
   defaultOpen?: boolean;
 }
@@ -137,6 +138,23 @@ function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsD
   return `${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`;
 }
 
+function normalizeVerdict(verdict?: string) {
+  return String(verdict || "").trim().toUpperCase();
+}
+
+function verdictClasses(verdict: string) {
+  if (["AUTHENTIC", "LIKELY_AUTHENTIC"].includes(verdict)) {
+    return "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400";
+  }
+  if (["SUSPICIOUS", "LIKELY_MANIPULATED", "INCONCLUSIVE", "ABSTAIN"].includes(verdict)) {
+    return "bg-amber-500/10 border border-amber-500/20 text-amber-400";
+  }
+  if (["MANIPULATED", "TAMPERED"].includes(verdict)) {
+    return "bg-red-500/10 border border-red-500/20 text-red-400";
+  }
+  return "bg-white/5 border border-white/10 text-white/40";
+}
+
 function SectionGroup({ section }: { section: Section }) {
   const [open, setOpen] = useState(section.flag === "bad" || section.flag === "warn");
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -221,6 +239,7 @@ export function AgentFindingCard({
   deepFindings,
   metrics,
   narrative,
+  agentSummary,
   phase = "initial",
   defaultOpen = false,
 }: AgentFindingCardProps) {
@@ -228,7 +247,7 @@ export function AgentFindingCard({
   const meta = AGENT_META[agentId] || { name: agentId, role: "Unknown", color: "cyan", icon: ShieldX };
   const theme = COLOR_MAP[meta.color];
 
-  const findings = phase === "deep" ? deepFindings : initialFindings;
+  const findings = phase === "deep" ? [...initialFindings, ...deepFindings] : initialFindings;
   const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
   const realFindings = findings.filter((f: Finding) => !SKIP_TYPES.has(String(f?.finding_type || "").toLowerCase()));
 
@@ -256,6 +275,13 @@ export function AgentFindingCard({
     ).length,
     [realFindings]
   );
+  const displayVerdict = useMemo(() => {
+    const fromSummary = normalizeVerdict(agentSummary?.verdict);
+    if (fromSummary) return fromSummary;
+    if (anomalyCount > 0) return "SUSPICIOUS";
+    if ((metrics?.error_rate ?? 0) > 0.2) return "INCONCLUSIVE";
+    return "AUTHENTIC";
+  }, [agentSummary?.verdict, anomalyCount, metrics?.error_rate]);
 
   if (isSkipped) {
     return (
@@ -312,11 +338,9 @@ export function AgentFindingCard({
                 {metrics && (
                    <span className={clsx(
                      "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider",
-                     metrics.confidence_score > 0.8 ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" :
-                     metrics.confidence_score > 0.5 ? "bg-amber-500/10 border border-amber-500/20 text-amber-400" :
-                     "bg-red-500/10 border border-red-500/20 text-red-400"
+                     verdictClasses(displayVerdict)
                    )}>
-                     {metrics.confidence_score > 0.8 ? "AUTHENTIC" : metrics.confidence_score > 0.5 ? "SUSPICIOUS" : "MANIPULATED"}
+                     {displayVerdict.replace(/_/g, " ")}
                    </span>
                 )}
               </div>

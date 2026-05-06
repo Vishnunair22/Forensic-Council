@@ -50,9 +50,8 @@ class Agent3Object(ForensicAgent):
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
         if self._is_screen_capture or self._is_digital_capture:
             return [
-                "Run object_detection to identify UI components, icons, and layout structure",
-                "Run scene_incongruence for document and interface layout anomalies",
-                "Run gemini_deep_forensic to identify UI elements, interface objects, and potential document fabrication",
+                "Run screenshot_scene_applicability for screen-capture object/scene scope",
+                "Run screenshot_layout_forensics for UI and document layout anomaly scan",
             ]
         return [
             "Run object_detection for scene object identification",
@@ -66,8 +65,8 @@ class Agent3Object(ForensicAgent):
     def deep_task_decomposition(self) -> list[str]:
         if self._is_screen_capture or self._is_digital_capture:
             return [
-                "Run lighting_consistency for UI-layer shadow and depth coherence",
-                "Run scale_validation for element and icon proportion auditing",
+                "Run gemini_deep_forensic to identify UI elements, interface objects, and potential document fabrication",
+                "Run screenshot_layout_forensics for deep UI/document consistency cross-check",
             ]
         object_ctx = self._tool_context.get("object_detection", {})
         detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
@@ -98,7 +97,7 @@ class Agent3Object(ForensicAgent):
         if self._is_screen_capture or self._is_digital_capture:
             return (
                 f"Starting UI/screenshot object identification for {self.evidence_artifact.artifact_id}. "
-                f"UI/screenshot images undergo streamlined object detection; scene incongruence and lighting tools are not applicable."
+                f"UI/screenshot images undergo screenshot-specific layout analysis; physical scene geometry tools are not applicable."
             )
         return (
             f"Starting object and weapon analysis for {self.evidence_artifact.artifact_id}. "

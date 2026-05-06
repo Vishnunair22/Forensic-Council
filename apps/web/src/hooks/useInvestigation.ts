@@ -44,6 +44,18 @@ async function waitForFinalReport(
   maxMs: number,
   signal?: AbortSignal,
 ): Promise<boolean> {
+  const cleanArbiterMessage = (message: string | undefined): string => {
+    const text = String(message || "").trim();
+    if (!text) return "";
+    if (/awaiting analyst decision|initial analysis complete/i.test(text)) {
+      return "Final report synthesis requested. Waiting for the Council Arbiter to start.";
+    }
+    return text
+      .replace(/Speculative synthesis complete\.?\s*/gi, "Council evidence weights are ready. ")
+      .replace(/\.\.\./g, ".")
+      .replace(/â€¦/g, ".")
+      .trim();
+  };
   const deadline = Date.now() + maxMs;
   let pollInterval = ARBITER_POLL_INTERVAL_MS;
   let consecutiveNotFound = 0;
@@ -55,7 +67,8 @@ async function waitForFinalReport(
         INVESTIGATION_REQUEST_TIMEOUT_MS,
       ) as ArbiterStatusResponse;
 
-      if (st.message) onLiveMessage(st.message);
+      const liveMessage = cleanArbiterMessage(st.message);
+      if (liveMessage) onLiveMessage(liveMessage);
       if (st.status === "error") {
         throw new Error(st.message || "Council synthesis failed.");
       }
@@ -92,6 +105,41 @@ async function waitForFinalReport(
     pollInterval = Math.min(pollInterval * 1.2, 3000);
   }
   return false;
+}
+
+function clearAgentSnapshots() {
+  if (typeof window === "undefined") return;
+
+  storage.removeItem("forensic_initial_agents");
+  storage.removeItem("forensic_deep_agents");
+
+  Object.keys(window.localStorage).forEach((key) => {
+    if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
+      window.localStorage.removeItem(key);
+    }
+  });
+}
+
+function expireSessionCookie() {
+  if (typeof document === "undefined") return;
+  document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
+}
+
+function clearInvestigationPersistence() {
+  [
+    "forensic_session_id",
+    "forensic_investigation_ctx",
+    "forensic_thumbnail",
+    "forensic_mime_type",
+    "forensic_file_name",
+    "forensic_case_id",
+    "forensic_pipeline_start",
+    "forensic_hitl_checkpoint",
+    "forensic_is_deep",
+  ].forEach((key) => storage.removeItem(key));
+
+  clearAgentSnapshots();
+  expireSessionCookie();
 }
 
 export function useInvestigation(playSound: (type: SoundType) => void) {
@@ -235,19 +283,19 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
 
   const resetSimulation = useCallback(() => {
+    arbiterControl.abort();
     setIsUploading(false);
     setPhase("initial");
     setAnalysisStreamReady(false);
+    setArbiterDeliberating(false);
+    setArbiterLiveText("");
+    setWsConnectionError(null);
     sessionOnlyStorage.removeItem("fc_show_loading");
-    storage.removeItem("forensic_session_id");
-    storage.removeItem("forensic_investigation_ctx");
-    storage.removeItem("forensic_thumbnail");
-    storage.removeItem("forensic_mime_type");
-    storage.removeItem("forensic_file_name");
-    storage.removeItem("forensic_case_id");
-    storage.removeItem("forensic_pipeline_start");
-    storage.removeItem("forensic_hitl_checkpoint");
-    storage.removeItem("forensic_is_deep");
+    clearInvestigationPersistence();
+    lastSessionIdRef.current = null;
+    completedAgentsRef.current = [];
+    analysisCompleteSoundedRef.current = false;
+    prevAwaitingDecisionRef.current = false;
     sessionExistsRef.current = false; // Update ref snapshot
     resetSimulationHook();
   }, [resetSimulationHook]);
@@ -260,6 +308,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (investigationInFlightRef.current) return;
       investigationInFlightRef.current = true;
 
+      arbiterControl.abort();
+      resetSimulationHook();
+      clearInvestigationPersistence();
+      lastSessionIdRef.current = null;
+      completedAgentsRef.current = [];
+      analysisCompleteSoundedRef.current = false;
+      prevAwaitingDecisionRef.current = false;
+      sessionExistsRef.current = false;
+
       playSound("scan");
       setIsUploading(true);
       setValidationError(null);
@@ -269,22 +326,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setAutoStartBlocking(false);
       setUploadPhaseText("Uploading evidence to secure pipeline…");
       setArbiterLiveText("");
+      setArbiterDeliberating(false);
+      startSimulation();
 
       const investigatorId = investigatorIdRef.current;
       const uuid = (typeof crypto !== "undefined" && "randomUUID" in crypto)
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
       const caseId = "CASE-" + uuid;
-      storage.removeItem("forensic_session_id");
-      storage.removeItem("forensic_investigation_ctx");
-      storage.removeItem("forensic_hitl_checkpoint");
-      storage.removeItem("forensic_is_deep");
-      // Clean up any stale agent snapshots
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-          localStorage.removeItem(key);
-        }
-      });
 
       setShowLoadingOverlay(true);
       sessionOnlyStorage.setItem("fc_show_loading", "true");
@@ -358,8 +407,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         }
       }
 
-      startSimulation();
-
       // Write all investigation context atomically under one key so
       // the result page always sees a consistent snapshot, then write
       // individual keys for backward-compatible reads elsewhere.
@@ -410,7 +457,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
-    [playSound, startSimulation, connectWebSocket, resetSimulation]
+    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook]
   );
 
 
@@ -481,7 +528,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           return;
         }
         if (st.status === "complete") {
-          router.push("/result", { scroll: true });
+          router.push(`/result/${existingSessionId}`, { scroll: true });
           return;
         }
       } catch { /* ignore poll errors during reconnect */ }
@@ -541,13 +588,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
     setIsNavigating(true);
     setArbiterDeliberating(true);
+    setArbiterLiveText("Final report synthesis requested. Compiling initial agent findings.");
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
+      setArbiterLiveText("Council Arbiter is synthesizing initial agent findings into the final report.");
       arbiterControl.abortController = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterControl.abortController.signal);
       if (!ok) throw new Error("Council synthesis timed out");
-      router.push("/result", { scroll: true });
+      router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
         title: "Council synthesis failed",
@@ -613,18 +662,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setWsConnectionError(null);
     lastSessionIdRef.current = null;
     autoStartFiredRef.current = false;
-    storage.removeItem("forensic_session_id");
-    storage.removeItem("forensic_investigation_ctx");
-    storage.removeItem("forensic_case_id");
-    storage.removeItem("forensic_file_name");
-    storage.removeItem("forensic_mime_type");
-    storage.removeItem("forensic_pipeline_start");
     analysisCompleteSoundedRef.current = false;
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-        localStorage.removeItem(key);
-      }
-    });
+    prevAwaitingDecisionRef.current = false;
+    completedAgentsRef.current = [];
+    clearInvestigationPersistence();
     resetSimulation();
     sessionOnlyStorage.removeItem("forensic_auto_start");
     sessionOnlyStorage.setItem("fc_open_upload_once", "1");
@@ -645,7 +686,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
-      router.push("/result", { scroll: true });
+      router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
         title: "Could not load report",

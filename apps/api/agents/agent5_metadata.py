@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from functools import cached_property
 from typing import Any
 
 from agents.base_agent import ForensicAgent
@@ -76,15 +77,15 @@ class Agent5Metadata(ForensicAgent):
         self._agent1_context = agent1_gemini_findings or {}
         self._agent1_context_event.set()
 
-    @property
+    @cached_property
     def _is_digital_image(self) -> bool:
         return is_digitally_created_image(self.evidence_artifact)
 
-    @property
+    @cached_property
     def _is_screen_capture(self) -> bool:
         return is_screen_capture_like(self.evidence_artifact)
 
-    @property
+    @cached_property
     def _is_av_media(self) -> bool:
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
         file_path = getattr(self.evidence_artifact, "file_path", "").lower()
@@ -107,6 +108,56 @@ class Agent5Metadata(ForensicAgent):
             )
         )
 
+    @cached_property
+    def _is_image_media(self) -> bool:
+        mime = (getattr(self.evidence_artifact, "mime_type", "") or "").lower()
+        file_path = (getattr(self.evidence_artifact, "file_path", "") or "").lower()
+        return mime.startswith("image/") or file_path.endswith(
+            (
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".bmp",
+                ".tiff",
+                ".tif",
+                ".webp",
+                ".heic",
+                ".heif",
+                ".dng",
+                ".avif",
+                ".raw",
+            )
+        )
+
+    @cached_property
+    def _is_document_media(self) -> bool:
+        mime = (getattr(self.evidence_artifact, "mime_type", "") or "").lower()
+        file_path = (getattr(self.evidence_artifact, "file_path", "") or "").lower()
+        return mime in {
+            "application/pdf",
+            "text/plain",
+            "text/csv",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        } or file_path.endswith(
+            (
+                ".pdf",
+                ".txt",
+                ".csv",
+                ".doc",
+                ".docx",
+                ".xls",
+                ".xlsx",
+                ".ppt",
+                ".pptx",
+            )
+        )
+
     @property
     def agent_name(self) -> str:
         return "Agent5_MetadataContext"
@@ -124,6 +175,18 @@ class Agent5Metadata(ForensicAgent):
                 "Run mediainfo_profile for stream and codec provenance",
             ]
 
+        if not self._is_image_media:
+            tasks = [
+                "Run file_hash_verify against ingestion hash",
+                "Run file_structure_analysis for binary anomalies in headers and trailers",
+                "Run hex_signature_scan for raw-byte software signatures",
+                "Run compression_risk_audit to check for social media footprints",
+                "Run timestamp_analysis for filesystem chronology consistency",
+            ]
+            if self._is_document_media:
+                tasks.insert(1, "Run extract_text_from_image for document text extraction")
+            return tasks
+
         core_tasks = [
             "Run file_hash_verify against ingestion hash",
             "Run exif_extract to capture all metadata fields",
@@ -134,6 +197,7 @@ class Agent5Metadata(ForensicAgent):
         if self._is_screen_capture or self._is_digital_image:
             return [
                 "Run file_hash_verify against ingestion hash",
+                "Run exif_extract to record screenshot container metadata and software hints",
                 "Run extract_text_from_image to identify displayed timestamps and UI metadata",
                 "Run hex_signature_scan for raw-byte software signatures",
                 "Run compression_risk_audit to check for social media footprints",
@@ -155,8 +219,13 @@ class Agent5Metadata(ForensicAgent):
         if self._is_screen_capture or self._is_digital_image:
             return [
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
+                "Run gemini_deep_forensic for screenshot timestamp and provenance cross-check",
             ]
         if self._is_av_media:
+            return [
+                "Run provenance_chain_verify for C2PA and digital provenance manifests",
+            ]
+        if not self._is_image_media:
             return [
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
             ]

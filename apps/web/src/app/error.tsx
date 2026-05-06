@@ -49,7 +49,7 @@ export default function GlobalError({
         <div className="w-full space-y-4">
           <motion.button
             onClick={() => reset()}
-            className="btn-premium w-full py-4 tracking-wide"
+            className="btn-horizon-primary w-full py-4 tracking-wide"
             whileTap={{ scale: 0.98 }}
           >
             <RefreshCcw className="w-4 h-4" />
@@ -66,7 +66,7 @@ export default function GlobalError({
         </div>
 
         {process.env.NODE_ENV === "development" && (
-          <div className="mt-8 p-5 bg-surface-low/80 rounded-2xl border border-danger/20 w-full overflow-hidden text-left shadow-inner">
+          <div className="mt-8 p-5 bg-surface-2 rounded-2xl border border-danger/20 w-full overflow-hidden text-left shadow-inner">
             <p className="text-[10px] font-mono text-danger/80 break-all leading-relaxed tracking-tight">
               Diagnostic_Err: {error.message}
             </p>

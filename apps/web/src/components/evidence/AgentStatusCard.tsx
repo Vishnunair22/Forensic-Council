@@ -254,11 +254,15 @@ export function AgentStatusCard({
   const toolsRan = completedData?.tools_ran || findings.length || 0;
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
-  // Take the max of the backend value and the cycling stageIndex so the display
-  // always advances even when the backend sends a stale tools_done (e.g. stuck at 0 or 1).
+  // Once the backend has emitted a concrete tool, trust that progress instead
+  // of cycling through synthetic stages. This keeps live text from advancing
+  // after the agent has already produced findings.
+  const hasBackendToolProgress = Boolean(liveUpdate?.tool_name);
   const liveDone =
     typeof liveUpdate?.tools_done === "number"
-      ? Math.max(liveUpdate.tools_done, stageIndex + 1)
+      ? liveUpdate.tools_done
+      : hasBackendToolProgress
+        ? 1
       : stageIndex + 1;
   const currentToolIndex = Math.min(Math.max(1, liveDone), liveTotal);
   const progressDescriptor = getLiveProgressDescriptor(

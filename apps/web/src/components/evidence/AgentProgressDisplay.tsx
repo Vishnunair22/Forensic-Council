@@ -179,6 +179,7 @@ export function AgentProgressDisplay({
 
     const liveStatus = agentUpdates[agentId]?.status;
     if (liveStatus === "error" || liveStatus === "failed") return "error";
+    if (liveStatus === "complete") return "complete";
     if (liveStatus === "validating") return "validating";
     if (liveStatus === "running") return "running";
     
@@ -296,7 +297,12 @@ export function AgentProgressDisplay({
                 >
                   <ArbiterCard 
                     status={arbiterDeliberating ? "synthesizing" : arbiterStatus}
-                    thinking={arbiterThinking || progressText}
+                    thinking={
+                      arbiterThinking ||
+                      (arbiterDeliberating
+                        ? "Council Arbiter is synthesizing agent findings into the final report."
+                        : null)
+                    }
                     phase={phase}
                     allAgentsDone={allAgentsDone}
                   />

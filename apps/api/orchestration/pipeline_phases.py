@@ -121,8 +121,8 @@ def _finding_tool_name(finding: Any) -> str:
 def _finding_summary_text(finding: Any) -> str:
     metadata = _finding_metadata(finding)
     for candidate in (
-        _metadata_value(finding, "reasoning_summary", ""),
         metadata.get("llm_refined_summary"),
+        _metadata_value(finding, "reasoning_summary", ""),
         metadata.get("raw_tool_summary"),
         metadata.get("analysis_summary"),
         metadata.get("summary"),
@@ -163,9 +163,19 @@ def _humanize_initial_finding(
 
     if "screenshot scene applicability" in tool or "screenshot scene applicability" in text.lower():
         if "skipped" in text.lower() or evidence_verdict == "NOT_APPLICABLE":
+            dims = (
+                f"{metadata.get('width')}x{metadata.get('height')}px"
+                if metadata.get("width") and metadata.get("height")
+                else "screen capture"
+            )
+            aspect = metadata.get("aspect_class") or "screen-capture"
+            theme = ""
+            if "is_dark_mode" in metadata:
+                theme = ", dark UI theme" if metadata.get("is_dark_mode") else ", light UI theme"
+            chrome = ", browser/window chrome detected" if metadata.get("ui_chrome_detected") else ""
             return (
-                "Screenshot detected. Physical-scene object detection is not applicable, "
-                "so this node is bypassed for the initial pass."
+                f"Screenshot scope confirmed ({dims}, {aspect}{theme}{chrome}). "
+                "Physical-scene object, weapon, lighting, and scale checks were bypassed because they do not apply to screen captures."
             )
         return "Screenshot/context check completed; no physical-scene object evidence was required."
 
@@ -202,11 +212,39 @@ def _humanize_initial_finding(
     if "extract_text" in tool or "extract text" in text.lower():
         preview = metadata.get("ocr_text_preview") or metadata.get("text_preview")
         if preview:
-            return f"OCR extracted visible text from the screenshot for context: {str(preview)[:180]}"
+            clean_preview = " ".join(str(preview).replace("|", " | ").split())
+            return f"OCR extracted visible screenshot text for context: {clean_preview[:180]}"
         if "ocr extracted" in text.lower():
             return text.replace("Extract Text From Image: ", "").replace("Checked: ", "")
 
+    if "screenshot_layout_forensics" in tool:
+        anomalies = int(metadata.get("layout_anomaly_count") or 0)
+        edge_density = metadata.get("edge_density")
+        hard_edge_density = metadata.get("hard_edge_density")
+        h_rule = metadata.get("horizontal_rule_density")
+        v_rule = metadata.get("vertical_rule_density")
+        if anomalies:
+            return (
+                f"Screenshot layout check flagged {anomalies} UI/document structure anomaly "
+                f"(edge density {edge_density}); review the visible interface for pasted or misaligned regions."
+            )
+        return (
+            "Screenshot layout check found no UI/document structure anomaly flags"
+            + (
+                f" (edge density {edge_density}, hard-edge density {hard_edge_density}, "
+                f"horizontal/vertical rule density {h_rule}/{v_rule})."
+                if edge_density is not None
+                else "."
+            )
+        )
+
     if "analyze_image_content" in tool or "analyze image content" in text.lower():
+        if metadata.get("semantic_scope") == "screenshot_fast_profile":
+            return (
+                f"Screenshot semantic profile recorded {metadata.get('width')}x{metadata.get('height')}px "
+                f"({metadata.get('color_mode')} mode). Heavy scene classification was bypassed; "
+                "use OCR, layout, hash, and provenance checks for screenshot authenticity."
+            )
         if agent_id == AgentID.AGENT1.value and (
             "screenshot" in str(metadata).lower() or "screen capture" in str(metadata).lower()
         ):
@@ -221,6 +259,14 @@ def _humanize_initial_finding(
     if evidence_verdict == "NEGATIVE" and finding_status != "INCOMPLETE":
         metric_note = _metric_digest(metadata)
         clean_text = text.replace("Checked: ", "")
+        generic_patterns = (
+            "completed and found no supported anomaly signal",
+            "completed; review detailed tool metrics",
+            "analysis complete",
+        )
+        if any(p in clean_text.lower() for p in generic_patterns):
+            tool_label = str(tool_name or "Tool").replace("_", " ").title()
+            clean_text = f"{tool_label} returned a negative result"
         if metric_note and metric_note.lower() not in clean_text.lower():
             return f"{clean_text} Key metrics: {metric_note}."
         return clean_text
@@ -279,8 +325,8 @@ async def run_agents_concurrent(
 
             def _summary_for_finding(finding, metadata: dict[str, Any]) -> str:
                 summary_candidates = (
-                    _finding_attr(finding, "reasoning_summary", ""),
                     metadata.get("llm_refined_summary"),
+                    _finding_attr(finding, "reasoning_summary", ""),
                     metadata.get("raw_tool_summary"),
                     metadata.get("analysis_summary"),
                     metadata.get("summary"),
@@ -307,15 +353,37 @@ async def run_agents_concurrent(
                 return f"{tool_name} completed; review detailed tool metrics for this finding."
 
             def _append_synthesis_sections(synthesis_data: dict[str, Any]) -> None:
+                actual_tools = set()
+                for existing_finding in findings or []:
+                    existing_meta = (
+                        existing_finding.metadata
+                        if hasattr(existing_finding, "metadata")
+                        else existing_finding.get("metadata", {})
+                        if isinstance(existing_finding, dict)
+                        else {}
+                    )
+                    existing_tool = existing_meta.get("tool_name") or (
+                        existing_finding.finding_type
+                        if hasattr(existing_finding, "finding_type")
+                        else existing_finding.get("finding_type")
+                        if isinstance(existing_finding, dict)
+                        else None
+                    )
+                    if existing_tool:
+                        actual_tools.add(str(existing_tool))
+
                 for section in synthesis_data.get("sections") or []:
                     refined = section.get("refined_findings") or []
                     for item in refined:
+                        tool_name = str(item.get("tool") or "").strip()
+                        if not tool_name or tool_name not in actual_tools:
+                            continue
                         summary = str(item.get("user_friendly_summary") or "").strip()
                         if not summary:
                             continue
                         preview.append(
                             {
-                                "tool": item.get("tool") or section.get("label") or "agent_synthesis",
+                                "tool": tool_name,
                                 "summary": summary[:560],
                                 "severity": section.get("severity") or "LOW",
                                 "verdict": str(synthesis_data.get("verdict") or "INCONCLUSIVE"),
@@ -421,7 +489,14 @@ async def run_agents_concurrent(
                 preview = deduped
             if isinstance(synthesis, dict) and not preview:
                 summary = str(synthesis.get("narrative_summary") or "").strip()
-                if summary:
+                if summary and not any(
+                    p in summary.lower()
+                    for p in (
+                        "empty raw tool results",
+                        "lack of results",
+                        "no digital traces or anomalies were detected due to",
+                    )
+                ):
                     preview.append(
                         {
                             "tool": "agent_synthesis",

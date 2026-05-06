@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
@@ -12,6 +13,7 @@ export function GlobalNavbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { playSound } = useSound();
+  const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -64,6 +66,7 @@ export function GlobalNavbar() {
 
     // Always perform full reset — navbar is universal reset button
     arbiterControl.abort();
+    queryClient.clear();
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
     
@@ -87,7 +90,7 @@ export function GlobalNavbar() {
     } else {
       router.push("/", { scroll: true });
     }
-  }, [pathname, router, playSound, hasActiveSession]);
+  }, [pathname, router, playSound, hasActiveSession, queryClient]);
 
   return (
     <nav

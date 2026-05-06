@@ -43,31 +43,20 @@ export function useResult(initialSessionId?: string) {
   const [pipelineStartAt, setPipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
   const [agentTimeline] = useState<AgentUpdate[]>(() => {
     try {
-      const sid = typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null;
+      const sid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
       const isDeep = getInitial("forensic_is_deep") === "true";
-      
-      // Try scoped keys first (new pattern)
+
       if (sid) {
         const scopedKey = isDeep ? `forensic_deep_agents:${sid}` : `forensic_initial_agents:${sid}`;
         const scopedData = storage.getItem<AgentUpdate[]>(scopedKey, true);
         if (scopedData && Array.isArray(scopedData)) return scopedData;
 
-        // Scoped fallback: if deep, try scoped initial agents
         if (isDeep) {
           const scopedFallback = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
           if (scopedFallback && Array.isArray(scopedFallback)) return scopedFallback;
         }
       }
 
-      // Fallback to legacy non-scoped keys
-      const key = isDeep ? "forensic_deep_agents" : "forensic_initial_agents";
-      const stored = storage.getItem<AgentUpdate[]>(key, true);
-      if (stored && Array.isArray(stored)) return stored;
-      
-      if (isDeep) {
-        const fallback = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
-        if (fallback && Array.isArray(fallback)) return fallback;
-      }
       return [];
     } catch { return []; }
   });

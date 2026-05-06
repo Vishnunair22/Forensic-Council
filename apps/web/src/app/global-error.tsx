@@ -20,7 +20,7 @@ export default function GlobalError({
 
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body>
+      <body style={{ backgroundColor: "#05070D", color: "#F1F5F9" }}>
         <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
           <motion.div
             className="relative max-w-md w-full p-8 rounded-3xl overflow-hidden flex flex-col items-center z-10 border border-red-500/15 bg-white/[0.03]"
@@ -55,14 +55,14 @@ export default function GlobalError({
             <div className="w-full space-y-3">
               <motion.button
                 onClick={() => reset()}
-                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-white border border-primary/30"
+                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-[#04070F]"
                 style={{
-                  background: "linear-gradient(135deg, #00FF41 0%, #10b981 100%)",
-                  boxShadow: "0 0 24px rgba(var(--color-primary-rgb),0.18)",
+                  background: "linear-gradient(135deg, #93C5FD 0%, #3B82F6 60%, #2563EB 100%)",
+                  boxShadow: "0 10px 30px -8px rgba(59,130,246,0.6), inset 0 1px 0 rgba(255,255,255,0.35)",
                 }}
                 whileHover={{
                   scale: 1.02,
-                  boxShadow: "0 0 32px rgba(var(--color-primary-rgb),0.28)",
+                  boxShadow: "0 0 32px rgba(59,130,246,0.35)",
                 }}
                 whileTap={{ scale: 0.98 }}
               >

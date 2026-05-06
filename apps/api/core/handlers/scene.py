@@ -35,6 +35,11 @@ class SceneHandlers(BaseToolHandler):
             "Screen-capture object/scene applicability check",
         )
         registry.register(
+            "screenshot_layout_forensics",
+            self.screenshot_layout_forensics_handler,
+            "Screenshot UI/document layout consistency analysis",
+        )
+        registry.register(
             "object_detection", self.object_detection_handler, "YOLO11 Object detection"
         )
         registry.register(
@@ -159,6 +164,103 @@ class SceneHandlers(BaseToolHandler):
         return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    async def screenshot_layout_forensics_handler(self, input_data: dict) -> dict:
+        """Screenshot-specific UI/document layout and compositing pre-screen."""
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        file_path = getattr(artifact, "file_path", "") or ""
+
+        if not file_path:
+            result = {
+                "available": False,
+                "degraded": True,
+                "confidence": 0.0,
+                "court_defensible": False,
+                "error": "No file path available for screenshot layout analysis.",
+            }
+            await self.agent._record_tool_result("screenshot_layout_forensics", result)
+            return result
+
+        def _analyze() -> dict:
+            with Image.open(file_path) as img:
+                rgb = img.convert("RGB")
+                w, h = rgb.size
+                arr = np.array(rgb)
+
+            gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+            edge_density = float(np.count_nonzero(edges)) / max(float(w * h), 1.0)
+
+            # UI grids, tables, window chrome, and pasted rectangular regions tend
+            # to leave strong horizontal/vertical structure in screenshots.
+            horiz_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(12, w // 80), 1))
+            vert_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(12, h // 80)))
+            horizontal = cv2.morphologyEx(edges, cv2.MORPH_OPEN, horiz_kernel)
+            vertical = cv2.morphologyEx(edges, cv2.MORPH_OPEN, vert_kernel)
+            horizontal_density = float(np.count_nonzero(horizontal)) / max(float(w * h), 1.0)
+            vertical_density = float(np.count_nonzero(vertical)) / max(float(w * h), 1.0)
+
+            diff_x = np.abs(np.diff(gray.astype(np.int16), axis=1))
+            diff_y = np.abs(np.diff(gray.astype(np.int16), axis=0))
+            hard_edge_density = float(
+                np.count_nonzero(diff_x > 45) + np.count_nonzero(diff_y > 45)
+            ) / max(float((w - 1) * h + w * (h - 1)), 1.0)
+
+            row_energy = edges.sum(axis=1)
+            col_energy = edges.sum(axis=0)
+            prominent_rows = int(
+                np.count_nonzero(row_energy > row_energy.mean() + row_energy.std())
+            )
+            prominent_cols = int(
+                np.count_nonzero(col_energy > col_energy.mean() + col_energy.std())
+            )
+
+            anomalies: list[str] = []
+            if hard_edge_density > 0.22 and edge_density < 0.04:
+                anomalies.append("Large abrupt rectangular transitions with sparse edge detail.")
+            if horizontal_density < 0.0005 and vertical_density < 0.0005 and edge_density > 0.10:
+                anomalies.append("Dense edges without stable UI/document grid structure.")
+            if prominent_rows > max(40, h // 12) and prominent_cols > max(40, w // 12):
+                anomalies.append("Unusually fragmented row/column edge pattern for a screenshot.")
+
+            ui_structure_present = (
+                horizontal_density >= 0.0005
+                or vertical_density >= 0.0005
+                or prominent_rows >= 8
+                or prominent_cols >= 8
+            )
+            return {
+                "available": True,
+                "width": w,
+                "height": h,
+                "edge_density": round(edge_density, 5),
+                "hard_edge_density": round(hard_edge_density, 5),
+                "horizontal_rule_density": round(horizontal_density, 5),
+                "vertical_rule_density": round(vertical_density, 5),
+                "prominent_row_count": prominent_rows,
+                "prominent_column_count": prominent_cols,
+                "ui_or_document_structure_present": ui_structure_present,
+                "layout_anomalies": anomalies,
+                "layout_anomaly_count": len(anomalies),
+                "evidence_verdict": "SUSPICIOUS" if anomalies else "NEGATIVE",
+                "confidence": 0.76 if anomalies else 0.70,
+                "court_defensible": True,
+                "backend": "opencv-screenshot-layout-heuristics",
+            }
+
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(None, _analyze)
+        except Exception as exc:
+            result = {
+                "available": False,
+                "degraded": True,
+                "confidence": 0.0,
+                "court_defensible": False,
+                "error": str(exc),
+            }
+
+        await self.agent._record_tool_result("screenshot_layout_forensics", result)
+        return result
 
     def _is_video(self, path: str) -> bool:
         return str(path).lower().endswith((".mp4", ".avi", ".mov", ".mkv", ".webm"))

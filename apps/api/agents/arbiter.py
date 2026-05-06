@@ -77,6 +77,47 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self._key_store.get_or_create(AgentID.ARBITER)
         self._synthesis_client: Any = None
         self._step_hook: Any = None
+        self._pre_warm_agent_results: dict[str, dict[str, Any]] | None = None
+        self._pre_warm_case_id: str = ""
+        self._pre_warm_report: ForensicReport | None = None
+
+    async def pre_warm(
+        self,
+        agent_results: dict[str, dict[str, Any]],
+        case_id: str = "",
+    ) -> ForensicReport:
+        """
+        Build a deterministic arbiter report from current agent findings.
+
+        The pre-warm pass avoids LLM calls so the decision gate can have the
+        verdict math and finding groups ready. Finalisation can then reuse these
+        inputs and add Groq synthesis after the investigator accepts the run.
+        """
+        self._pre_warm_agent_results = agent_results
+        self._pre_warm_case_id = case_id
+        self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False)
+        return self._pre_warm_report
+
+    async def finalise_from_cache(self, use_llm: bool = True) -> ForensicReport:
+        """Finalize cached arbiter inputs into the report returned to the result page."""
+        if self._pre_warm_agent_results is None:
+            raise RuntimeError("Arbiter has no cached agent findings to finalise")
+        if not use_llm and self._pre_warm_report is not None:
+            return self._pre_warm_report
+        report = await self.deliberate(
+            self._pre_warm_agent_results,
+            self._pre_warm_case_id,
+            use_llm=use_llm,
+        )
+        if not use_llm:
+            self._pre_warm_report = report
+        return report
+
+    def clear_pre_warm_cache(self) -> None:
+        """Drop cached arbiter inputs when the run changes, for example before deep analysis."""
+        self._pre_warm_agent_results = None
+        self._pre_warm_case_id = ""
+        self._pre_warm_report = None
 
     async def deliberate(
         self,
@@ -92,7 +133,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 await self._step_hook(msg)
 
         # ── 1. Finding Extraction & Deduplication ─────────────────────────
-        await _step("Gathering all agent findings…")
+        await _step("Compiling agent findings.")
         all_findings, per_agent_findings, per_agent_metrics, skipped_agents = [], {}, {}, {}
         active_results, gemini_findings_by_agent = {}, {}
 
@@ -156,10 +197,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         man_prob, man_signals = calculate_manipulation_probability(all_findings, comp_penalty)
 
         # ── 3. Cross-Modal Deliberation ───────────────────────────────────
-        await _step("Running cross-modal comparison…")
+        await _step("Comparing corroborating and conflicting tool signals.")
         comparisons = await cross_agent_comparison(all_findings)
 
-        await _step("Executing parallel multi-way challenge loops…")
+        await _step("Resolving cross-agent disagreements.")
         contested = await self._run_challenges(comparisons)
 
         # Final verdict mapping
@@ -174,7 +215,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         )
 
         # ── 4. Narrative Synthesis ────────────────────────────────────────
-        await _step(f"Verdict: {overall_verdict} — synthesising report…")
+        await _step(f"Verdict {overall_verdict}: generating final report.")
         analysis_cov = self._get_coverage_note(active_metrics, all_findings)
 
         narratives = await self.deliberate_narratives(

@@ -102,6 +102,14 @@ def _file_count(path: Path) -> int:
         return 0
 
 
+def _has_large_file(path: Path, min_size: int = 1_000_000) -> bool:
+    """Return True when a cache path contains at least one real model artifact."""
+    try:
+        return any(p.is_file() and p.stat().st_size > min_size for p in path.rglob("*"))
+    except OSError:
+        return False
+
+
 def check_filesystem_cache() -> tuple[int, int]:
     """
     Walk each cache directory and report status.
@@ -149,16 +157,12 @@ def check_specific_model_assets() -> bool:
 
     hf_root = Path(settings.hf_home)
     for model_dir in REQUIRED_HF_MODEL_DIRS:
-        candidate_blobs = [
-            hf_root / "hub" / model_dir / "blobs",
-            hf_root / "transformers" / model_dir / "blobs",
+        candidate_dirs = [
+            hf_root / "hub" / model_dir,
+            hf_root / "transformers" / model_dir,
         ]
-        has_blob = any(
-            blobs.exists()
-            and any(p.is_file() and p.stat().st_size > 1_000_000 for p in blobs.glob("*"))
-            for blobs in candidate_blobs
-        )
-        if has_blob:
+        has_artifact = any(_has_large_file(cache_dir) for cache_dir in candidate_dirs)
+        if has_artifact:
             print(f"  {GREEN}[OK]{RESET}  HuggingFace model cache: {model_dir}")
         else:
             print(f"  {RED}[MISS]{RESET}  HuggingFace model cache missing: {model_dir}")

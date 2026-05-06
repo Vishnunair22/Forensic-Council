@@ -783,3 +783,51 @@ _TOOL_INTERPRETERS.update(
         "metadata_anomaly_scorer": lambda o: _TOOL_INTERPRETERS["metadata_anomaly_score"](o),
     }
 )
+
+
+_TOOL_INTERPRETERS.update(
+    {
+        "frequency_domain_analysis": lambda o: (
+            f"Frequency scan measured anomaly score {o.get('anomaly_score', 0):.3f} "
+            f"and high-frequency ratio {o.get('high_freq_ratio', 0):.3f}. "
+            + (
+                "This is a frequency-domain warning signal."
+                if o.get("anomaly_score", 0) > 0.4
+                else "No periodic/GAN-like frequency anomaly was detected."
+            )
+        ),
+        "file_hash_verify": lambda o: (
+            "SHA-256 intake check: "
+            + str(o.get("current_hash", o.get("computed_hash", o.get("original_hash", ""))))[:20]
+            + "... "
+            + (
+                "matches the chain-of-custody record. This proves the submitted file has not changed after upload; it does not prove pre-upload authenticity."
+                if o.get("hash_matches") is True or o.get("hash_match") is True
+                else "does not match the chain-of-custody record; the submitted artifact may have changed after ingestion."
+            )
+        ),
+        "extract_text_from_image": lambda o: (
+            str(o.get("method", "OCR"))
+            + " extracted "
+            + str(o.get("word_count", 0))
+            + " word(s). "
+            + (
+                "Preview: '" + str(o.get("text", o.get("full_text", "")))[:160] + "...'"
+                if o.get("text") or o.get("full_text")
+                else "No readable text was extracted; this is an OCR coverage limit, not an authenticity signal."
+            )
+        ),
+        "screenshot_layout_forensics": lambda o: (
+            (
+                f"Screenshot layout scan found {o.get('layout_anomaly_count', 0)} UI/document structure warning(s), "
+                f"with edge density {o.get('edge_density')}."
+            )
+            if o.get("layout_anomaly_count")
+            else (
+                f"Screenshot layout scan found stable UI/document structure, edge density {o.get('edge_density')}, "
+                f"hard-edge density {o.get('hard_edge_density')}, "
+                f"horizontal/vertical rule density {o.get('horizontal_rule_density')}/{o.get('vertical_rule_density')}."
+            )
+        ),
+    }
+)

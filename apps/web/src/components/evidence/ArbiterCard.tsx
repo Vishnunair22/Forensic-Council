@@ -7,14 +7,10 @@ import { clsx } from "clsx";
 import { AnimatePresence } from "framer-motion";
 
 const ARBITER_PHRASES = [
-  "Cross-correlating agent findings...",
-  "Weighing corroborating evidence...",
-  "Computing manipulation probability...",
-  "Synthesizing forensic consensus...",
-  "Validating chain of custody...",
-  "Preparing cryptographic verdict...",
-  "Analyzing cross-modal signals...",
-  "Finalizing report parameters...",
+  "Compiling agent findings into the final report.",
+  "Comparing corroborating and conflicting tool signals.",
+  "Synthesizing per-agent verdicts and confidence scores.",
+  "Preparing the signed council report.",
 ];
 
 interface ArbiterCardProps {
@@ -33,23 +29,34 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
   const [phraseIndex, setPhraseIndex] = React.useState(0);
 
   React.useEffect(() => {
-    if (!isSynthesizing && !isPreWarming) return;
+    if ((!isSynthesizing && !isPreWarming) || thinking) return;
     const interval = setInterval(() => {
       setPhraseIndex(prev => (prev + 1) % ARBITER_PHRASES.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [isSynthesizing, isPreWarming]);
+  }, [isSynthesizing, isPreWarming, thinking]);
+
+  const cleanThinking = React.useMemo(() => {
+    if (!thinking) return "";
+    return thinking
+      .replace(/Speculative synthesis complete\.?\s*/gi, "Council evidence weights are ready. ")
+      .replace(/Initial analysis complete\. Awaiting analyst decision\.?/gi, "Council evidence weights are ready for your decision.")
+      .replace(/Deep analysis complete\. Awaiting analyst request for arbiter synthesis\.?/gi, "Deep findings are ready for final report synthesis.")
+      .replace(/\.\.\./g, ".")
+      .replace(/…/g, ".")
+      .trim();
+  }, [thinking]);
 
   const isWaiting = !isPreWarming && !isPreWarmComplete && !isSynthesizing && !isReady;
   const displayText = isWaiting
-    ? "Arbiter is waiting for initial agent findings…"
-    : (thinking || ARBITER_PHRASES[phraseIndex]);
+    ? `Arbiter is waiting for ${phase === "deep" ? "deep" : "initial"} agent findings.`
+    : (cleanThinking || (isReady ? "Council report is ready. Opening the result page when the signed report is available." : ARBITER_PHRASES[phraseIndex]));
 
   const getStatusDisplay = () => {
     if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" };
     if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" };
-    if (isPreWarmComplete) return { label: "State Cached", icon: CheckCircle2, color: "text-emerald-400/70", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
-    if (isPreWarming) return { label: "Pre-warming", icon: Zap, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
+    if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-emerald-400/70", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
+    if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
     return { label: "Awaiting Agents", icon: Activity, color: "text-white/30", bg: "bg-white/5", border: "border-white/10" };
   };
 
@@ -62,14 +69,12 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
       animate={{ opacity: 1, scale: 1, y: 0 }}
       className="relative group h-full"
     >
-      {/* Premium Glow Effect */}
       <div className={clsx(
         "absolute -inset-0.5 rounded-2xl blur opacity-10 transition duration-1000 animate-pulse",
         isReady ? "bg-emerald-500" : isSynthesizing ? "bg-blue-500" : "bg-primary"
       )} />
-      
+
       <div className="relative h-full bg-[#070A12] border border-white/8 rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4),_0_1px_0_rgba(255,255,255,0.05)_inset] flex flex-col">
-        {/* Header Section */}
         <div className="px-5 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={clsx(
@@ -85,7 +90,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               </p>
             </div>
           </div>
-          
+
           <div className={clsx(
             "px-2 py-1 rounded-md border flex items-center gap-1.5 transition-all duration-500",
             display.bg, display.border
@@ -97,25 +102,24 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
           </div>
         </div>
 
-        {/* Content Section */}
         <div className="p-5 flex flex-col flex-1 justify-between gap-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Synthesis_Engine</span>
                 <span className="text-[10px] font-mono text-white/50">
-                  {isReady ? "COMPLETED" : isSynthesizing ? "COMPUTING" : "LATENCY_OPTIMISED"}
+                  {isReady ? "COMPLETED" : isSynthesizing ? "COMPUTING" : "PREPARING"}
                 </span>
               </div>
               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   className={clsx(
                     "h-full shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.4)]",
                     isReady ? "bg-emerald-500" : "bg-gradient-to-r from-[var(--color-primary)] to-blue-400"
                   )}
                   initial={{ width: "0%" }}
-                  animate={{ 
-                    width: isReady ? "100%" : isPreWarmComplete ? "85%" : isSynthesizing ? "65%" : isPreWarming ? "40%" : "5%" 
+                  animate={{
+                    width: isReady ? "100%" : isPreWarmComplete ? "85%" : isSynthesizing ? "65%" : isPreWarming ? "40%" : "5%"
                   }}
                   transition={{ duration: 1.5, ease: "circOut" }}
                 />
@@ -146,7 +150,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                   </AnimatePresence>
                   {isPreWarming && (
                     <p className="text-[10px] text-white/40 italic">
-                      Background pre-warm active.
+                      Evidence weights are being prepared in the background.
                     </p>
                   )}
                 </div>
@@ -154,7 +158,6 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
             </div>
           </div>
 
-          {/* Activity Visualizer */}
           <div className="flex items-center gap-1.5 h-4 px-1">
             {[...Array(12)].map((_, i) => (
               <motion.div

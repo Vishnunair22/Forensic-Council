@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { ShieldAlert, ArrowLeft, RefreshCw, Cpu } from "lucide-react";
+import { sessionOnlyStorage } from "@/lib/storage";
 
 export default function SessionExpiredPage() {
   const router = useRouter();
@@ -67,7 +68,14 @@ export default function SessionExpiredPage() {
               
               <button
                 type="button"
-                onClick={() => router.push("/?upload=1")}
+                onClick={() => {
+                  sessionOnlyStorage.setItem("fc_open_upload_once", "1");
+                  if (window.location.pathname === "/") {
+                    window.dispatchEvent(new Event("fc:open-upload"));
+                  } else {
+                    router.push("/");
+                  }
+                }}
                 className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-xs font-black tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-3"
                 data-testid="session-expired-retry-cta"
               >

@@ -77,6 +77,14 @@ def _dir_size_mb(directory: str) -> float:
     return total / (1024 * 1024)
 
 
+def _large_cached_files(directory: Path, min_size: int) -> list[Path]:
+    """Find substantial model artifacts across HF blobs and Windows snapshot copies."""
+    try:
+        return [p for p in directory.rglob("*") if p.is_file() and p.stat().st_size > min_size]
+    except OSError:
+        return []
+
+
 def setup_dirs() -> None:
     for path in CACHE_DIRS.values():
         Path(path).mkdir(parents=True, exist_ok=True)
@@ -197,15 +205,7 @@ def download_open_clip(force: bool = False) -> bool:
     model_dir = Path(hf_dir) / "hub" / model_slug
 
     # Robust check: look for any blob > 50 MB (the actual model weights)
-    clip_cached = (
-        [
-            p
-            for p in (model_dir / "blobs").glob("*")
-            if p.is_file() and p.stat().st_size > 50_000_000
-        ]
-        if (model_dir / "blobs").exists()
-        else []
-    )
+    clip_cached = _large_cached_files(model_dir, 50_000_000)
 
     if clip_cached and not force:
         print(
@@ -229,18 +229,10 @@ def download_open_clip(force: bool = False) -> bool:
             open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
 
         # Post-download size guard: confirm at least one large blob landed.
-        post_blobs = (
-            [
-                p
-                for p in (model_dir / "blobs").glob("*")
-                if p.is_file() and p.stat().st_size > 50_000_000
-            ]
-            if (model_dir / "blobs").exists()
-            else []
-        )
+        post_blobs = _large_cached_files(model_dir, 50_000_000)
         if not post_blobs:
             raise RuntimeError(
-                f"CLIP/SigLIP download succeeded but no large blob found in {model_dir}/blobs - possible partial download"
+                f"CLIP/SigLIP download succeeded but no large artifact found in {model_dir} - possible partial download"
             )
         print(f"  {GREEN}[OK  ]{RESET}  OpenCLIP/SigLIP downloaded.")
         return True
@@ -298,11 +290,7 @@ def download_speechbrain(force: bool = False) -> bool:
     """SpeechBrain ECAPA-TDNN - used for audio anti-spoofing."""
     hf_dir = CACHE_DIRS["HF"]
     sb_dir = Path(hf_dir) / "hub" / "models--speechbrain--spkrec-ecapa-voxceleb"
-    cached = (
-        [p for p in (sb_dir / "blobs").glob("*") if p.is_file() and p.stat().st_size > 10_000_000]
-        if (sb_dir / "blobs").exists()
-        else []
-    )
+    cached = _large_cached_files(sb_dir, 10_000_000)
     if cached and not force:
         print(f"  {GREEN}[SKIP]{RESET}  SpeechBrain ECAPA - already cached ({cached[0]})")
         return True
@@ -332,12 +320,7 @@ def download_audio_deepfake(force: bool = False) -> bool:
         Path(hf_dir) / "hub" / HF_MODEL_DIRS["speechbrain_aasist"],
         Path(hf_dir) / "transformers" / HF_MODEL_DIRS["speechbrain_aasist"],
     ]
-    cached = [
-        p
-        for model_dir in model_dirs
-        for p in (model_dir / "blobs").glob("*")
-        if p.is_file() and p.stat().st_size > 1_000_000
-    ]
+    cached = [p for model_dir in model_dirs for p in _large_cached_files(model_dir, 1_000_000)]
     if cached and not force:
         print(f"  {GREEN}[SKIP]{RESET}  Audio deepfake detector - already cached ({cached[0]})")
         return True

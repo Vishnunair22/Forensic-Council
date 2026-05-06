@@ -13,6 +13,17 @@ export function ArbiterDeliberationOverlay({
   isVisible,
   liveText,
 }: ArbiterDeliberationOverlayProps) {
+  const cleanLiveText = React.useMemo(() => {
+    if (!liveText) return "";
+    return liveText
+      .replace(/Speculative synthesis complete\.?\s*/gi, "Council evidence weights are ready. ")
+      .replace(/Initial analysis complete\. Awaiting analyst decision\.?/gi, "Final report synthesis requested. Waiting for the Council Arbiter to start.")
+      .replace(/Deep analysis complete\. Awaiting analyst request for arbiter synthesis\.?/gi, "Deep findings are ready. Starting final report synthesis.")
+      .replace(/\.\.\./g, ".")
+      .replace(/…/g, ".")
+      .trim();
+  }, [liveText]);
+
   return (
     <AnimatePresence>
       {isVisible && (
@@ -85,17 +96,17 @@ export function ArbiterDeliberationOverlay({
 
                 <div className="space-y-4">
                   <p className="text-white/60 text-sm leading-relaxed max-w-sm mx-auto">
-                    The Forensic Council is synthesizing multi-agent findings into a final deterministic report.
+                    The Council Arbiter is synthesizing per-agent findings into the signed result report.
                   </p>
                   
                   <div className="h-6 flex items-center justify-center">
                     <motion.p
-                      key={liveText}
+                      key={cleanLiveText}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="text-[11px] font-mono font-bold text-[var(--color-primary)] uppercase tracking-[0.2em]"
+                      className="text-[11px] font-mono font-bold text-[var(--color-primary)] tracking-[0.08em]"
                     >
-                      {liveText || "Analyzing tool corroborations..."}
+                      {cleanLiveText || "Compiling agent findings into the final report."}
                     </motion.p>
                   </div>
                 </div>

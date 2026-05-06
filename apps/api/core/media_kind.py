@@ -109,7 +109,8 @@ def is_screen_capture_like(artifact: Any) -> bool:
         return False
 
     aspect = width / max(height, 1)
-    monitor_like = 1.15 <= aspect <= 2.5
+    # Accept both landscape (monitor) and portrait (phone) screenshots
+    monitor_like = (1.15 <= aspect <= 2.5) or (0.4 <= aspect <= 0.75)
     metadata_hint = bool(
         set(probe.get("info_keys") or ()) & {"software", "source", "screen", "creation time", "dpi"}
     )

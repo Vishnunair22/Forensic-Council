@@ -6,7 +6,9 @@ Scene Handlers Unit Tests
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import numpy as np
 import pytest
+from PIL import Image
 
 
 class TestSceneHandlers:
@@ -85,3 +87,26 @@ class TestSceneHandlers:
 
         call_count = mock_registry.register.call_count
         assert call_count >= 5, f"Expected >=5 tools, got {call_count}"
+
+    @pytest.mark.asyncio
+    async def test_screenshot_layout_forensics_returns_useful_metrics(self, mock_agent, tmp_path):
+        """Screenshot layout analysis returns stable UI/document metrics."""
+        from core.handlers.scene import SceneHandlers
+
+        path = tmp_path / "screen.png"
+        arr = np.full((480, 800, 3), 245, dtype=np.uint8)
+        arr[40:80, 0:800] = 30
+        arr[120:124, 40:760] = 80
+        arr[200:204, 40:760] = 80
+        arr[80:430, 220:224] = 80
+        Image.fromarray(arr, mode="RGB").save(path, format="PNG")
+        mock_agent.evidence_artifact.file_path = str(path)
+
+        handler = SceneHandlers(mock_agent)
+        result = await handler.screenshot_layout_forensics_handler({"artifact": mock_agent.evidence_artifact})
+
+        assert result["available"] is True
+        assert result["backend"] == "opencv-screenshot-layout-heuristics"
+        assert result["ui_or_document_structure_present"] is True
+        assert "edge_density" in result
+        mock_agent._record_tool_result.assert_awaited_with("screenshot_layout_forensics", result)

@@ -169,8 +169,13 @@ async def get_arbiter_status(
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
                 if status == "paused_resume_requested":
                     return {
-                        "status": "paused_resume_requested",
+                        "status": "running",
                         "message": metadata.get("brief") or "Resume requested",
+                    }
+                if status in {"deliberating", "synthesizing"}:
+                    return {
+                        "status": "running",
+                        "message": metadata.get("brief") or "Council Arbiter is synthesizing the final report.",
                     }
                 msg = metadata.get("brief") or "Investigation in progress…"
                 return {"status": "running", "message": msg}
@@ -693,6 +698,41 @@ async def resume_investigation(
 
     pipeline.run_deep_analysis_flag = request.deep_analysis
     pipeline.deep_analysis_decision_event.set()
+
+    synthesis_message = (
+        "Deep analysis requested. Dispatching expanded forensic checks."
+        if request.deep_analysis
+        else "Final report synthesis requested. Compiling initial agent findings."
+    )
+    try:
+        await set_active_pipeline_metadata(
+            session_id,
+            {
+                **metadata,
+                "status": "deep_analysis_requested" if request.deep_analysis else "deliberating",
+                "deep_analysis": request.deep_analysis,
+                "brief": synthesis_message,
+                "awaiting_decision": False,
+                "resume_requested_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        from api.routes._session_state import broadcast_update
+        from api.schemas import BriefUpdate
+
+        await broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="ARBITER_UPDATE",
+                session_id=session_id,
+                message=synthesis_message,
+                data={
+                    "status": "deliberating" if not request.deep_analysis else "processing",
+                    "thinking": synthesis_message,
+                },
+            ),
+        )
+    except Exception as e:
+        _log.debug("Resume progress broadcast skipped", session_id=session_id, error=str(e))
 
     _log.info(
         "Investigation resume signal sent",

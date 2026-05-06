@@ -370,7 +370,10 @@ class ForensicCouncilPipeline:
                     ),
                 )
                 existing = await get_active_pipeline_metadata(str(session_id)) or {}
-                await set_active_pipeline_metadata(str(session_id), {**existing, "brief": msg})
+                await set_active_pipeline_metadata(
+                    str(session_id),
+                    {**existing, "status": "deliberating", "brief": msg, "awaiting_decision": False},
+                )
             except Exception as _e:
                 logger.debug("Arbiter step broadcast skipped", error=str(_e))
 
@@ -540,7 +543,7 @@ class ForensicCouncilPipeline:
 
         arbiter_results = self._normalize_agent_results(agent_results)
 
-        # Speculative Pre-warm: Start the arbiter metrics/verdict computation in background
+        # Pre-warm the arbiter metrics/verdict computation in the background
         # while waiting for the HITL gate (Accept/Deep decision).
         self._pre_warm_task = asyncio.create_task(
             self._run_arbiter_pre_warm(arbiter_results, case_id)
@@ -632,25 +635,27 @@ class ForensicCouncilPipeline:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
 
-            # Initial broadast: Deliberation started
+            # Initial broadcast: arbiter preparation started.
             await broadcast_update(
                 str(self._session_id),
                 BriefUpdate(
                     type="ARBITER_UPDATE",
                     session_id=str(self._session_id),
-                    data={"status": "pre_warming", "thinking": "Synthesizing agent cross-modal signals..."},
+                    message="Preparing council evidence weights.",
+                    data={"status": "pre_warming", "thinking": "Preparing council evidence weights."},
                 )
             )
 
             await self.arbiter.pre_warm(agent_results, case_id)
 
-            # Final pre-warm broadcast: Metrics ready
+            # Final pre-warm broadcast: metrics are ready for the user decision.
             await broadcast_update(
                 str(self._session_id),
                 BriefUpdate(
                     type="ARBITER_UPDATE",
                     session_id=str(self._session_id),
-                    data={"status": "pre_warm_complete", "thinking": "Speculative synthesis complete. Standing by for decision."},
+                    message="Council evidence weights are ready for your decision.",
+                    data={"status": "pre_warm_complete", "thinking": "Council evidence weights are ready for your decision."},
                 )
             )
         except Exception as e:
@@ -709,7 +714,7 @@ class ForensicCouncilPipeline:
         _start = time.perf_counter()
         use_llm = bool(self.config.llm_enable_post_synthesis)
 
-        # Ensure pre-warm is complete before starting final synthesis
+        # Ensure pre-warm is complete before starting final synthesis.
         if self._pre_warm_task:
             try:
                 await asyncio.wait_for(self._pre_warm_task, timeout=20.0)
@@ -717,8 +722,15 @@ class ForensicCouncilPipeline:
                 logger.warning("Arbiter pre-warm failed or timed out, re-running synchronously", error=str(e))
                 await self.arbiter.pre_warm(arbiter_results, case_id=case_id)
             self._pre_warm_task = None
+        if getattr(self.arbiter, "_pre_warm_agent_results", None) is None:
+            await self.arbiter.pre_warm(arbiter_results, case_id=case_id)
 
         try:
+            await self._broadcast_final_arbiter_status(
+                session_id,
+                "deliberating",
+                "Compiling final report from agent findings.",
+            )
             report = await asyncio.wait_for(
                 self.arbiter.finalise_from_cache(use_llm=use_llm),
                 timeout=90.0,
@@ -733,6 +745,11 @@ class ForensicCouncilPipeline:
                 self.arbiter.finalise_from_cache(use_llm=False),
                 timeout=30.0,
             )
+        await self._broadcast_final_arbiter_status(
+            session_id,
+            "complete",
+            f"Council report ready: {report.overall_verdict}.",
+        )
 
         logger.info(
             "Arbiter deliberation complete",
@@ -741,6 +758,43 @@ class ForensicCouncilPipeline:
             verdict=report.overall_verdict,
         )
         return report
+
+    async def _broadcast_final_arbiter_status(
+        self,
+        session_id: UUID,
+        status: str,
+        thinking: str,
+    ) -> None:
+        """Broadcast clean arbiter progress text and cache it for polling clients."""
+        try:
+            from api.routes._session_state import (
+                broadcast_update,
+                get_active_pipeline_metadata,
+                set_active_pipeline_metadata,
+            )
+            from api.schemas import BriefUpdate
+
+            await broadcast_update(
+                str(session_id),
+                BriefUpdate(
+                    type="ARBITER_UPDATE",
+                    session_id=str(session_id),
+                    message=thinking,
+                    data={"status": status, "thinking": thinking},
+                ),
+            )
+            existing = await get_active_pipeline_metadata(str(session_id)) or {}
+            await set_active_pipeline_metadata(
+                str(session_id),
+                {
+                    **existing,
+                    "status": "completed" if status == "complete" else status,
+                    "brief": thinking,
+                    "awaiting_decision": False,
+                },
+            )
+        except Exception as exc:
+            logger.debug("Arbiter status broadcast skipped", error=str(exc))
 
     async def _handle_global_abort(self, payload: dict | None = None) -> None:
         """Handle a GLOBAL_ABORT signal by cancelling the investigation."""

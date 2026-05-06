@@ -54,6 +54,50 @@ def _finding_importance(finding: dict[str, Any]) -> tuple[int, int, float]:
     return (verdict_weight, severity_weight, confidence_of(finding, default=0.0) or 0.0)
 
 
+def _tool_name(finding: dict[str, Any]) -> str:
+    return str((finding.get("metadata") or {}).get("tool_name") or finding.get("finding_type") or "")
+
+
+def _tool_meta(finding: dict[str, Any]) -> dict[str, Any]:
+    meta = finding.get("metadata")
+    return meta if isinstance(meta, dict) else {}
+
+
+def _first_by_tool(findings: list[dict[str, Any]], *tool_names: str) -> dict[str, Any] | None:
+    wanted = set(tool_names)
+    for finding in findings:
+        if _tool_name(finding) in wanted:
+            return finding
+    return None
+
+
+def _is_generic_executive_summary(text: str) -> bool:
+    lower = " ".join(str(text or "").lower().split())
+    if len(lower) < 60:
+        return True
+    generic_phrases = (
+        "multi-agent forensic analysis",
+        "analysis was conducted",
+        "evidence appears authentic",
+        "image integrity confirmed",
+        "based on the analysis",
+        "no significant anomalies were detected",
+    )
+    return any(phrase in lower for phrase in generic_phrases) and not any(
+        marker in lower
+        for marker in (
+            "anomaly score",
+            "sha-256",
+            "edge density",
+            "ocr",
+            "exif",
+            "hex signature",
+            "compression",
+            "gemini",
+        )
+    )
+
+
 class ArbiterNarrativeMixin:
     """
     Mixin for CouncilArbiter that provides LLM-based narrative synthesis methods.
@@ -277,11 +321,26 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
                     analysis_coverage_note=analysis_coverage_note,
                 )
                 if result:
-                    return result
+                    if not _is_generic_executive_summary(result):
+                        return result
+                    grounded = self._grounded_executive_summary(
+                        overall_verdict,
+                        active_agent_metrics or [],
+                        all_findings or [],
+                        analysis_coverage_note,
+                    )
+                    if grounded:
+                        return grounded
             except Exception as exc:
                 logger.warning(f"LLM executive summary failed, using template: {exc}")
 
-        return self._template_executive_summary(
+        grounded = self._grounded_executive_summary(
+            overall_verdict,
+            active_agent_metrics or [],
+            all_findings or [],
+            analysis_coverage_note,
+        )
+        return grounded or self._template_executive_summary(
             num_agents, num_findings, cross_modal_confirmed, contested, all_findings
         )
 
@@ -375,19 +434,19 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
             f"\n\nCouncil Arbiter computed verdict: {overall_verdict}" if overall_verdict else ""
         )
 
-        system_prompt = f"""You are the Council Arbiter writing the Executive Summary of a court-admissible forensic evidence report.
+        system_prompt = f"""You are the Council Arbiter writing the top-level Executive Summary of a forensic evidence report.
 The computed verdict for this evidence is: {overall_verdict or "REVIEW REQUIRED"}
 
 Your summary must be:
 - Factual and grounded only in the structured findings data provided
-- Written in formal, precise legal/forensic language
-- 3-5 paragraphs: (1) scope and active agents with their confidence scores, (2) key confirmed findings with exact metrics, (3) contested or tool-failure issues, (4) overall verdict justification based on confidence and error rates
+- Written as exactly 2-3 short lines, not paragraphs
+- Specific: cite the decisive tool findings, verdict, confidence, and material caveats
 - Free of speculation — only state what the data shows
 - Explicit about tool failures and low-confidence findings
-- Where Gemini vision findings present, attribute them as AI-assisted analysis needing corroboration
 - Coverage context: {analysis_coverage_note} (Note any tool failures explicitly)
 
-Do NOT use bullet points. Write in continuous prose paragraphs.
+Do NOT use boilerplate such as "multi-agent forensic analysis was conducted".
+Do NOT use bullet points. Return only the 2-3 line summary text.
 Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — explain WHY based on the numbers."""
 
         user_content = f"""Forensic analysis statistics:
@@ -401,7 +460,7 @@ Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — expla
 Top findings by confidence (classical tools):
 {json.dumps(findings_digest, indent=2)}{gemini_section}{metrics_summary}
 
-Write the Executive Summary for this forensic report. Justify the {overall_verdict} verdict based on the data."""
+Write the 2-3 line Executive Summary for this forensic report. Justify the {overall_verdict} verdict based on the data."""
 
         return await client.generate_synthesis(
             system_prompt=system_prompt,
@@ -419,31 +478,130 @@ Write the Executive Summary for this forensic report. Justify the {overall_verdi
         all_findings: list[dict[str, Any]] | None,
     ) -> str:
         """Deterministic template fallback when LLM is not configured."""
-        lines = [
-            f"This report presents findings from a multi-agent forensic analysis conducted by "
-            f"{num_agents} specialized agents, resulting in {num_findings} individual findings.",
-        ]
+        grounded = self._grounded_executive_summary("", [], all_findings or [], "")
+        if grounded:
+            return grounded
+        lines = [f"{num_agents} active agent(s) produced {num_findings} finding(s)."]
         if cross_modal_confirmed > 0:
             lines.append(
-                f"Cross-modal confirmation was achieved for {cross_modal_confirmed} findings, "
-                "where multiple independent agents using different analysis techniques arrived "
-                "at the same conclusion."
+                f"{cross_modal_confirmed} finding(s) were corroborated across agents."
             )
         if contested > 0:
             lines.append(
-                f"{contested} finding(s) were identified as contested, requiring further "
-                "review or tribunal resolution."
+                f"{contested} finding(s) remain contested and require review."
             )
         if all_findings:
             top = sorted(all_findings, key=_finding_importance, reverse=True)[:3]
             highlights = [f.get("reasoning_summary", "") for f in top if f.get("reasoning_summary")]
             if highlights:
-                lines.append("Key findings include: " + " ".join(highlights[:2]))
-        lines.append(
-            "The full analysis chain is preserved in the chain of custody log and "
-            "ReAct chains sections of this report."
+                lines.append("Key signal: " + " ".join(highlights[:2])[:360])
+        return "\n".join(lines[:3])
+
+    def _grounded_executive_summary(
+        self,
+        overall_verdict: str,
+        active_agent_metrics: list[dict[str, Any]],
+        all_findings: list[dict[str, Any]],
+        analysis_coverage_note: str = "",
+    ) -> str:
+        """Build a precise two-line report summary directly from decisive tool metrics."""
+        if not all_findings:
+            return ""
+
+        confidence_values = [
+            float(m.get("confidence_score") or 0.0)
+            for m in active_agent_metrics
+            if not m.get("skipped") and float(m.get("confidence_score") or 0.0) > 0
+        ]
+        confidence = round((sum(confidence_values) / len(confidence_values)) * 100) if confidence_values else 0
+        verdict = (overall_verdict or "REVIEW REQUIRED").replace("_", " ").title()
+
+        freq = _first_by_tool(all_findings, "frequency_domain_analysis")
+        hash_f = _first_by_tool(all_findings, "file_hash_verify")
+        ocr = _first_by_tool(all_findings, "extract_text_from_image", "extract_evidence_text")
+        layout = _first_by_tool(all_findings, "screenshot_layout_forensics")
+        exif = _first_by_tool(all_findings, "exif_extract")
+        hex_f = _first_by_tool(all_findings, "hex_signature_scan")
+        structure = _first_by_tool(all_findings, "file_structure_analysis")
+        compression = _first_by_tool(all_findings, "compression_risk_audit")
+
+        integrity_bits: list[str] = []
+        if freq:
+            meta = _tool_meta(freq)
+            integrity_bits.append(
+                f"FFT anomaly score {float(meta.get('anomaly_score') or 0):.3f}"
+                + (
+                    f" / high-frequency ratio {float(meta.get('high_freq_ratio')):.3f}"
+                    if isinstance(meta.get("high_freq_ratio"), (int, float))
+                    else ""
+                )
+            )
+        if hash_f:
+            meta = _tool_meta(hash_f)
+            matched = meta.get("hash_matches") is True or meta.get("hash_match") is True
+            digest = str(meta.get("current_hash") or meta.get("computed_hash") or meta.get("original_hash") or "")
+            integrity_bits.append(
+                f"SHA-256 {'matched intake custody' if matched else 'mismatched intake custody'}"
+                + (f" ({digest[:12]}...)" if digest else "")
+            )
+        if structure:
+            meta = _tool_meta(structure)
+            anomalies = meta.get("anomalies") if isinstance(meta.get("anomalies"), list) else []
+            integrity_bits.append(f"file structure found {len(anomalies)} anomaly flag(s)")
+        if hex_f:
+            meta = _tool_meta(hex_f)
+            software = meta.get("software_signatures") if isinstance(meta.get("software_signatures"), list) else []
+            integrity_bits.append(
+                "hex scan found "
+                + (", ".join(str(x) for x in software[:2]) if software else "no embedded editing-software signature")
+            )
+
+        context_bits: list[str] = []
+        if ocr:
+            meta = _tool_meta(ocr)
+            words = int(meta.get("word_count") or 0)
+            method = meta.get("method") or meta.get("ocr_engine") or "OCR"
+            preview = " ".join(
+                str(meta.get("text") or meta.get("full_text") or meta.get("ocr_text_preview") or "")
+                .replace("|", " | ")
+                .split()
+            )
+            context_bits.append(
+                f"{method} OCR read {words} word(s)"
+                + (f": {preview[:90]}" if preview else "")
+            )
+        if layout:
+            meta = _tool_meta(layout)
+            context_bits.append(
+                f"screenshot layout had {int(meta.get('layout_anomaly_count') or 0)} anomaly flag(s)"
+                + (f" at edge density {meta.get('edge_density')}" if meta.get("edge_density") is not None else "")
+            )
+        if exif:
+            meta = _tool_meta(exif)
+            fields = int(meta.get("total_fields_extracted") or 0)
+            has_device = bool(meta.get("device_model") or meta.get("camera_make") or meta.get("camera_model"))
+            context_bits.append(
+                f"EXIF contained {fields} field(s) and {'device metadata' if has_device else 'no camera/device capture record'}"
+            )
+        if compression:
+            meta = _tool_meta(compression)
+            impact = meta.get("forensic_reliability_impact") or "unspecified"
+            penalty = meta.get("compression_penalty", 1.0)
+            context_bits.append(f"compression/provenance reliability impact {impact} (penalty {float(penalty or 1.0):.2f})")
+
+        line_one = (
+            f"{verdict}"
+            + (f" at {confidence}% confidence" if confidence else "")
+            + ": "
+            + "; ".join(integrity_bits[:3])
+            + "."
         )
-        return " ".join(lines)
+        line_two = "; ".join(context_bits[:3])
+        if analysis_coverage_note and "failed" in analysis_coverage_note.lower():
+            line_two = (line_two + f"; coverage note: {analysis_coverage_note}").strip("; ")
+        if not line_two:
+            line_two = "No high-confidence manipulation signal was reported; provenance strength depends on available metadata and successful tool coverage."
+        return line_one[:360] + "\n" + line_two[:360] + "."
 
     async def _generate_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
@@ -794,7 +952,7 @@ Rules:
                 incomplete_count=len(incomplete_findings),
             )
         else:
-            await _step("Generating forensic summary via Groq (parallel synthesis)…")
+            await _step("Generating Groq summaries from tool findings.")
 
             async def t_structured():
                 return await self._generate_structured_summary(
@@ -816,7 +974,7 @@ Rules:
                 async def _one(aid, res):
                     async with sem:
                         try:
-                            await _step(f"Synthesizing {AGENT_NAMES.get(aid, aid)} narrative...")
+                            await _step(f"Summarizing {AGENT_NAMES.get(aid, aid)} findings.")
                             narr = await asyncio.wait_for(
                                 self._generate_agent_narrative(
                                     aid, res.get("findings", []), per_agent_metrics.get(aid, {})
@@ -839,7 +997,7 @@ Rules:
 
             async def t_executive():
                 try:
-                    await _step("Generating cross-modal executive summary...")
+                    await _step("Generating cross-modal executive summary.")
                     return await asyncio.wait_for(
                         self._generate_executive_summary(
                             len(active_agent_results),

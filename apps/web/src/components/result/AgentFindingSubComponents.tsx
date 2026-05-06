@@ -69,6 +69,28 @@ function findingMeaning(finding: AgentFindingDTO, status: string) {
  return "This result is useful context, but by itself does not support a firm conclusion.";
 }
 
+function cleanFindingSummary(finding: AgentFindingDTO) {
+ const metadata = finding.metadata || {};
+ const candidates = [
+  metadata.llm_refined_summary,
+  metadata.raw_tool_summary,
+  metadata.analysis_summary,
+  metadata.summary,
+  finding.reasoning_summary,
+ ].map((v) => String(v || "").trim()).filter(Boolean);
+ const generic = /^(analysis complete|checked:?\s*$|no diagnostic output|.+completed; review detailed tool metrics|.+completed\.)$/i;
+ const picked = candidates.find((text) => !generic.test(text)) || candidates[0] || "";
+ if (picked) return picked.replace(/^Checked:\s*/i, "");
+
+ const tool = fmtTool((metadata.tool_name as string) || finding.finding_type);
+ const verdict = String(finding.evidence_verdict || "").toUpperCase();
+ if (verdict === "POSITIVE") return `${tool} found a forensic warning signal.`;
+ if (verdict === "NEGATIVE") return `${tool} found no supported anomaly for this evidence.`;
+ if (verdict === "ERROR") return `${tool} did not complete and should be treated as a coverage limitation.`;
+ if (verdict === "NOT_APPLICABLE") return `${tool} is not applicable to this file type.`;
+ return `${tool} returned an inconclusive result.`;
+}
+
 // ─── Confidence Bar Component ───
 export function ConfidenceBar({ value }: { value: number }) {
  const filled = Math.round(value * 5);
@@ -108,17 +130,22 @@ export function ToolRow({
  const toolName = (finding.metadata?.tool_name as string) || finding.finding_type;
 
  const na = finding.metadata?.ela_not_applicable || finding.metadata?.ghost_not_applicable;
- const status = na ? "na" : (finding.status === "CONFIRMED" ? "success" : (finding.status === "ERROR" ? "error" : "warning"));
+ const evidenceVerdict = String(finding.evidence_verdict || "").toUpperCase();
+ const status = na || evidenceVerdict === "NOT_APPLICABLE"
+  ? "na"
+  : evidenceVerdict === "ERROR" || finding.status === "ERROR"
+    ? "error"
+    : evidenceVerdict === "POSITIVE"
+      ? "warning"
+      : finding.status === "CONFIRMED" || evidenceVerdict === "NEGATIVE"
+        ? "success"
+        : "warning";
 
  const Icon = getToolIcon(toolName);
  const timingMs = (finding.metadata?.execution_time_ms as number) || null;
  const confidence = finding.raw_confidence_score || 0;
  const metrics = metricHighlights(finding.metadata);
- const primarySummary =
-  (finding.metadata?.llm_refined_summary as string) ||
-  (finding.metadata?.raw_tool_summary as string) ||
-  finding.reasoning_summary ||
-  "No diagnostic output.";
+ const primarySummary = cleanFindingSummary(finding);
 
  return (
   <div className={clsx("group", !isLast && "border-b border-white/[0.03]")}>
@@ -225,7 +252,7 @@ export function ToolRow({
 
       {finding.status === "INCOMPLETE" && (
        <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-[10px] font-bold tracking-wide">
-        <AlertTriangle className="w-3.5 h-3.5" /> No Matching Tool — Task Not Executed
+        <AlertTriangle className="w-3.5 h-3.5" /> Tool Did Not Complete
        </div>
       )}
      </div>

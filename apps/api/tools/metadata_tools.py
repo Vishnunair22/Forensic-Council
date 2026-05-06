@@ -184,9 +184,22 @@ async def hex_signature_scan(*, artifact: Any = None, file_path: str | None = No
     path = _artifact_path(artifact, file_path)
     if not path or not Path(path).exists():
         return {"available": False, "error": "file not found"}
+    p = Path(path)
     with open(path, "rb") as fh:
-        header = fh.read(16).hex()
-    return {"available": True, "header_hex": header, "verdict": "CLEAN"}
+        sample = fh.read(min(65536, max(16, p.stat().st_size)))
+    header = sample[:16].hex()
+    signatures = []
+    for marker in (b"Photoshop", b"Adobe", b"GIMP", b"Canva", b"PicsArt", b"Snapseed"):
+        if marker.lower() in sample.lower():
+            signatures.append(marker.decode("ascii", errors="ignore"))
+    return {
+        "available": True,
+        "header_hex": header,
+        "bytes_scanned": len(sample),
+        "software_signatures": signatures,
+        "editing_software_detected": bool(signatures),
+        "verdict": "CLEAN" if not signatures else "REVIEW",
+    }
 
 
 async def extract_deep_metadata(*, artifact: Any = None, file_path: str | None = None, **kwargs: Any) -> dict[str, Any]:

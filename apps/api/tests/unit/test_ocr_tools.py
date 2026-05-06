@@ -1,10 +1,11 @@
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
 from core.evidence import EvidenceArtifact
 from tools.ocr_tools import (
     _build_summary,
+    _extract_text_gemini,
     _extract_text_easyocr_sync,
     _extract_text_pymupdf_sync,
     _get_easyocr_reader,
@@ -172,3 +173,38 @@ class TestOCRTools:
             result = await extract_evidence_text(mock_artifact)
             assert "scanned_pdf_note" in result
             assert "rasterise pages" in result["scanned_pdf_note"]
+
+    @pytest.mark.asyncio
+    async def test_gemini_ocr_uses_gemini_key_when_llm_provider_is_none(self, mock_artifact):
+        mock_artifact.file_path = "screen.png"
+        mock_artifact.mime_type = "image/png"
+        settings = MagicMock(
+            gemini_api_key="g" * 32,
+            llm_provider="none",
+            llm_api_key=None,
+            gemini_model="gemini-2.5-flash",
+        )
+
+        with (
+            patch("core.config.get_settings", return_value=settings),
+            patch("tools.ocr_tools.is_screen_capture_like", return_value=True),
+            patch("core.llm_client.LLMClient") as mock_client_cls,
+        ):
+            mock_client = MagicMock()
+            mock_client.generate_multimodal_synthesis = AsyncMock(
+                return_value={
+                    "lines": ["SYSTEM OVERVIEW", "10:42 AM"],
+                    "structured_metadata": {"timestamps": ["10:42 AM"], "ui_elements": ["SYSTEM OVERVIEW"]},
+                    "ocr_confidence": 0.93,
+                }
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = await _extract_text_gemini(mock_artifact)
+
+        assert result["gemini_available"] is True
+        assert result["method"] == "gemini_multimodal"
+        assert result["screenshot_optimized"] is True
+        assert result["lines"] == ["SYSTEM OVERVIEW", "10:42 AM"]
+        assert result["structured_metadata"]["timestamps"] == ["10:42 AM"]
+        assert result["avg_confidence"] == 0.93

@@ -20,6 +20,7 @@ import fitz
 
 from core.evidence import EvidenceArtifact
 from core.exceptions import ToolUnavailableError
+from core.media_kind import is_screen_capture_like
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -400,31 +401,58 @@ async def _extract_text_gemini(
         from core.llm_client import LLMClient
 
         settings = get_settings()
-        if not settings.llm_api_key or settings.llm_provider == "none":
+        gemini_api_key = str(getattr(settings, "gemini_api_key", "") or "").strip()
+        if not gemini_api_key or gemini_api_key.lower() in {"none", "placeholder"}:
             return {"gemini_available": False}
 
         client = LLMClient(settings)
-        if not client.has_vision_capability:
-            return {"gemini_available": False, "method": "none", "lines": [], "full_text": ""}
+        is_screenshot = is_screen_capture_like(artifact)
+        if is_screenshot:
+            prompt = """Perform high-precision forensic OCR on this screenshot.
+Extract every visible text item exactly as shown, preserving reading order and UI grouping.
+Include system clocks, dates, app/window titles, browser URL/search bars, tab labels, menus,
+buttons, form fields, table headers/cells, usernames, handles, IDs, filenames, notifications,
+status bar text, error messages, captions, watermarks, and small footer/header text.
+Do not summarize or correct spelling. If text is partially occluded, transcribe the visible part
+and mark it in structured_metadata.suspicious_elements.
 
-        prompt = """Perform high-precision forensic OCR on the provided evidence artifact.
-        Extract all visible text, focusing on:
-        1. Timestamps and dates (e.g., system clock, message headers, file timestamps).
-        2. Identifiers (e.g., usernames, profile names, IDs, phone numbers).
-        3. UI Elements (e.g., button labels, window titles, URL bars, signal/battery indicators).
-        4. Suspicious text (e.g., inconsistent fonts, overlapping layers, mismatched alignment).
-        
-        Format the output as a JSON object:
-        {
-          "lines": ["line 1", "line 2", ...],
-          "structured_metadata": {
-            "timestamps": [],
-            "identifiers": [],
-            "ui_elements": [],
-            "suspicious_elements": []
-          }
-        }
-        If no text is found, return an empty lines list and empty metadata lists."""
+Return ONLY valid JSON:
+{
+  "lines": ["verbatim line 1", "verbatim line 2"],
+  "structured_metadata": {
+    "timestamps": [],
+    "identifiers": [],
+    "ui_elements": [],
+    "urls": [],
+    "document_fields": [],
+    "suspicious_elements": [],
+    "reading_order_notes": ""
+  },
+  "ocr_confidence": 0.0
+}
+If no text is present, return an empty lines list and empty metadata fields."""
+        else:
+            prompt = """Perform high-precision forensic OCR on the provided evidence artifact.
+Extract all visible text exactly as shown, focusing on:
+1. Timestamps and dates.
+2. Identifiers such as usernames, profile names, IDs, phone numbers, and URLs.
+3. UI or document elements such as headings, labels, captions, and tables.
+4. Suspicious text such as inconsistent fonts, overlapping layers, or mismatched alignment.
+
+Return ONLY valid JSON:
+{
+  "lines": ["line 1", "line 2"],
+  "structured_metadata": {
+    "timestamps": [],
+    "identifiers": [],
+    "ui_elements": [],
+    "urls": [],
+    "document_fields": [],
+    "suspicious_elements": []
+  },
+  "ocr_confidence": 0.0
+}
+If no text is found, return an empty lines list and empty metadata fields."""
 
         # This matches the method in core.llm_client.LLMClient
         raw_result = await client.generate_multimodal_synthesis(
@@ -436,13 +464,19 @@ async def _extract_text_gemini(
 
         lines = []
         metadata = {}
+        ocr_confidence = 0.98
         if isinstance(raw_result, dict):
             lines = [str(line) for line in raw_result.get("lines", [])]
-            metadata = raw_result.get("structured_metadata", {})
+            metadata = raw_result.get("structured_metadata", {}) or {}
+            try:
+                ocr_confidence = float(raw_result.get("ocr_confidence") or ocr_confidence)
+            except (TypeError, ValueError):
+                ocr_confidence = 0.98
         elif isinstance(raw_result, list):
             lines = [str(line) for line in raw_result]
 
         full_text = "\n".join(lines)
+        preview = " | ".join(lines[:5])
         if lines:
             logger.info("Gemini OCR succeeded", word_count=len(full_text.split()))
 
@@ -454,8 +488,10 @@ async def _extract_text_gemini(
             "word_count": len(full_text.split()),
             "has_text": bool(lines),
             "structured_metadata": metadata,
-            "avg_confidence": 0.98,  # Gemini 2.0 is extremely reliable for OCR
-            "court_defensible": True
+            "avg_confidence": max(0.0, min(1.0, ocr_confidence)),
+            "ocr_text_preview": preview,
+            "screenshot_optimized": is_screenshot,
+            "court_defensible": True,
         }
     except Exception as exc:
         logger.warning("Gemini OCR unavailable, falling back to EasyOCR", error=str(exc))

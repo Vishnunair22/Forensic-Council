@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ResultLayout } from "@/components/result/ResultLayout";
 import { storage } from "@/lib/storage";
 
 export function ResultClientRedirect() {
@@ -17,5 +16,5 @@ export function ResultClientRedirect() {
     }
   }, [router]);
 
-  return <ResultLayout />;
+  return null;
 }

@@ -38,7 +38,13 @@ export default function EvidenceUploadPage() {
     if (!__pendingFileStore.file && !storage.getItem("forensic_session_id")) {
       sessionOnlyStorage.removeItem("forensic_auto_start");
     }
-    const onShow = (e: PageTransitionEvent) => { if (e.persisted) window.location.reload(); };
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        const hasSession = !!sessionStorage.getItem("forensic_session_id") || 
+                           !!localStorage.getItem("forensic_session_id");
+        if (!hasSession) window.location.reload();
+      }
+    };
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
   }, []);
@@ -65,7 +71,7 @@ export default function EvidenceUploadPage() {
         )}
       </AnimatePresence>
 
-      <div className={`relative min-h-screen px-6 py-32 transition-opacity duration-300 ${investigation.showLoadingOverlay ? "opacity-0" : "opacity-100"}`}>
+      <div className="relative min-h-screen px-6 py-32">
         {investigation.wsConnectionError && !investigation.isReconnecting && (
           <ForensicErrorModal
             isVisible

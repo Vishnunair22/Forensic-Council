@@ -25,6 +25,9 @@ Fix log (applied in audit pass):
 from __future__ import annotations
 
 import asyncio
+import os
+import time
+from typing import Any
 
 import cv2
 import numpy as np
@@ -37,6 +40,7 @@ from core.forensics import (
     classify_ela_anomalies,
 )
 from core.handlers.base import BaseToolHandler
+from core.media_kind import is_screen_capture_like
 from core.ml_subprocess import run_ml_tool
 from core.scoring import ConfidenceCalibrator
 from core.structured_logging import get_logger
@@ -64,6 +68,19 @@ from tools.ml_tools.splicing_detector import detect_splicing  # sync, run in exe
 from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
 
 logger = get_logger(__name__)
+
+_OCR_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_OCR_INFLIGHT: dict[str, asyncio.Task] = {}
+_OCR_CACHE_TTL_SECONDS = 900.0
+
+
+def _ocr_cache_key(artifact: Any) -> str:
+    path = str(getattr(artifact, "file_path", "") or "")
+    try:
+        stat = os.stat(path)
+        return f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
+    except OSError:
+        return path
 
 
 class ImageHandlers(BaseToolHandler):
@@ -690,6 +707,34 @@ class ImageHandlers(BaseToolHandler):
     async def analyze_image_content_handler(self, input_data: dict) -> dict:
         """CLIP semantic classification."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if is_screen_capture_like(artifact):
+            try:
+                with Image.open(artifact.file_path) as img:
+                    width, height = img.size
+                    mode = img.mode
+                result = {
+                    "available": True,
+                    "image_type": "screen capture / digital UI",
+                    "summary": (
+                        f"Screenshot semantic profile: {width}x{height}px, {mode} color mode. "
+                        "Heavy CLIP scene classification is bypassed for initial screenshot analysis because it is slow and does not prove authenticity."
+                    ),
+                    "width": width,
+                    "height": height,
+                    "color_mode": mode,
+                    "semantic_scope": "screenshot_fast_profile",
+                    "confidence": 0.72,
+                    "court_defensible": True,
+                }
+            except Exception as exc:
+                result = {
+                    "available": False,
+                    "error": str(exc),
+                    "confidence": 0.0,
+                    "court_defensible": False,
+                }
+            await self.agent._record_tool_result("analyze_image_content", result)
+            return result
         result = await real_analyze_image_content(artifact=artifact)
         await self.agent._record_tool_result("analyze_image_content", result)
         return result
@@ -697,19 +742,33 @@ class ImageHandlers(BaseToolHandler):
     async def extract_text_from_image_handler(self, input_data: dict) -> dict:
         """Tiered OCR — unified entry point for PDF/Image text extraction."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        key = _ocr_cache_key(artifact)
+        cached = _OCR_CACHE.get(key)
+        if cached and time.monotonic() - cached[0] < _OCR_CACHE_TTL_SECONDS:
+            result = {**cached[1], "shared_ocr_cache_hit": True}
+            await self._store("extract_text_from_image", result, "extract_evidence_text")
+            return result
+
         try:
-            result = await asyncio.wait_for(
-                real_extract_evidence_text(artifact=artifact), timeout=20.0
-            )
+            task = _OCR_INFLIGHT.get(key)
+            if task is None or task.done():
+                task = asyncio.create_task(real_extract_evidence_text(artifact=artifact))
+                _OCR_INFLIGHT[key] = task
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=55.0)
+            _OCR_CACHE[key] = (time.monotonic(), dict(result))
         except TimeoutError:
             logger.warning("OCR handler timed out — returning timeout error result")
             result = {
-                "error": "OCR extraction timed out after 20s",
+                "error": "OCR extraction timed out after 55s",
                 "timeout": True,
                 "available": True,
                 "confidence": 0.0,
                 "has_text": False,
             }
+        finally:
+            task = _OCR_INFLIGHT.get(key)
+            if task is not None and task.done():
+                _OCR_INFLIGHT.pop(key, None)
         # Store under both primary and legacy OCR keys for backward compatibility
         await self._store("extract_text_from_image", result, "extract_evidence_text")
         return result

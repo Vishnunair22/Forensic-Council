@@ -42,6 +42,7 @@ export function AgentAnalysisTab({
       const allFindings = report?.per_agent_findings?.[agentId] ?? [];
       const metrics = report?.per_agent_metrics?.[agentId];
       const narrative = report?.per_agent_analysis?.[agentId];
+      const agentSummary = report?.per_agent_summary?.[agentId];
 
       // Split findings by phase
       const initialFindings = allFindings.filter(
@@ -66,6 +67,7 @@ export function AgentAnalysisTab({
         deepFindings={deepFindings}
         metrics={metrics}
         narrative={narrative}
+        agentSummary={agentSummary}
         phase={isDeepPhase ? "deep" : "initial"}
         defaultOpen={agentId === firstActiveAgentId}
        />

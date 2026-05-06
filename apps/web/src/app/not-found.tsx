@@ -38,9 +38,9 @@ export default function NotFound() {
     </div>
 
     <div className="flex flex-col sm:flex-row gap-3 w-full">
-     <Link
-      href="/"
-      className="btn-primary flex-1 py-3 rounded-xl font-medium inline-flex items-center justify-center gap-2 text-white border border-primary/30"
+<Link
+       href="/"
+       className="btn-primary flex-1 py-3"
      >
       <Home className="w-4 h-4" aria-hidden="true" />
       Dashboard
