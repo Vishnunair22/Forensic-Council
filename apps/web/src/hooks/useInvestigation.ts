@@ -147,6 +147,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
   const prevAwaitingDecisionRef = useRef(false);
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
+  const minOverlayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const overlayStartTimeRef = useRef<number>(0);
 
   useEffect(() => {
     return () => {
@@ -407,8 +409,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .then(() => {
           setAnalysisStreamReady(true);
           setUploadPhaseText("Agents dispatching…");
-          setShowLoadingOverlay(false);
-          sessionOnlyStorage.removeItem("fc_show_loading");
+          // Issue 3 Fix: Do NOT call setShowLoadingOverlay(false) here.
+          // The overlay dismissal is now handled by the state-tracking effect
+          // which ensures a minimum display duration of 2.5s for UX.
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -441,7 +444,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.removeItem("forensic_auto_start");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setShowLoadingOverlay(true);
-    setAutoStartBlocking(false);
+    // Keep autoStartBlocking=true until triggerAnalysis sets isUploading=true.
+    // This prevents showUploadForm from flickering true during the transition.
+    // triggerAnalysis will call setAutoStartBlocking(false) after isUploading is set.
     triggerAnalysis(pending);
   }, [isHydrated, triggerAnalysis]);
 
@@ -718,28 +723,57 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.
   useEffect(() => {
-    // Issue 2 Fix E3: Wait until we are past initiating to dismiss overlay
+    // Wait until the backend has transitioned out of initiating to dismiss.
+    // status !== "idle" && status !== "initiating" means we've started receiving real updates.
     const isActuallyRunning = status !== "idle" && status !== "initiating";
-    if (showLoadingOverlay && (analysisStreamReady || isActuallyRunning)) {
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
+    
+    if (showLoadingOverlay) {
+      if (overlayStartTimeRef.current === 0) {
+        overlayStartTimeRef.current = Date.now();
+      }
+
+      if (isActuallyRunning) {
+        const elapsed = Date.now() - overlayStartTimeRef.current;
+        const minDuration = 2500; // Keep overlay for at least 2.5s for perceived performance
+
+        if (elapsed >= minDuration) {
+          setShowLoadingOverlay(false);
+          sessionOnlyStorage.removeItem("fc_show_loading");
+        } else if (!minOverlayTimerRef.current) {
+          minOverlayTimerRef.current = setTimeout(() => {
+            setShowLoadingOverlay(false);
+            sessionOnlyStorage.removeItem("fc_show_loading");
+            minOverlayTimerRef.current = null;
+          }, minDuration - elapsed);
+        }
+      }
+    } else {
+      // If overlay is hidden, ensure timer is cleared and start time reset
+      if (minOverlayTimerRef.current) {
+        clearTimeout(minOverlayTimerRef.current);
+        minOverlayTimerRef.current = null;
+      }
+      overlayStartTimeRef.current = 0;
     }
-  }, [showLoadingOverlay, analysisStreamReady, status, agentUpdates, validCompletedAgents]);
+  }, [showLoadingOverlay, status]);
+
 
   useEffect(() => {
     if (!showLoadingOverlay) return;
     const safety = setTimeout(() => {
-      // Issue 3 Fix A: Only fire if still idle/initiating; and reduce to 6s
+      // Hard safety: if the overlay is still up after 8s, something is stuck.
+      // We dismiss it to let the user see the current (possibly errored) state.
+      setShowLoadingOverlay(false);
+      sessionOnlyStorage.removeItem("fc_show_loading");
+      
       if (!analysisStreamReady && (status === "idle" || status === "initiating")) {
-        setShowLoadingOverlay(false);
-        sessionOnlyStorage.removeItem("fc_show_loading");
         setWsConnectionError("Analysis startup timed out. Please try again.");
         toast.destructive({
           title: "Connection Timeout",
           description: "The analysis stream did not start in time. Please refresh and try again.",
         });
       }
-    }, 6000);
+    }, 8000);
     return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady, status]);
 

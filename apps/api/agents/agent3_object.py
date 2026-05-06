@@ -36,12 +36,10 @@ logger = get_logger(__name__)
 
 
 class Agent3Object(ForensicAgent):
-    """
-    Agent 3 - Object & Context Validation Agent.
+    @property
+    def agent_name(self) -> str:
+        return "Agent3_ObjectDetection"
 
-    Mandate (STRICT): Object presence, identification, and contextual
-    plausibility ONLY. Not a second image-forensics agent.
-    """
 
     def __init__(
         self,
@@ -82,9 +80,9 @@ class Agent3Object(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        if is_screen_capture_like(self.evidence_artifact):
+        if self._is_screen_capture:
             return [
-                "Run object_detection for UI element and interface object identification",
+                "Run gemini_deep_forensic to identify UI elements, interface objects, and potential document fabrication",
             ]
         return [
             "Run object_detection for scene object identification",

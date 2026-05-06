@@ -291,10 +291,20 @@ async def extract_text_easyocr(
         raise ToolUnavailableError(f"File not found: {artifact.file_path}")
 
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        _OCR_EXECUTOR,
-        lambda: _extract_text_easyocr_sync(artifact.file_path, detail=detail),
-    )
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                _OCR_EXECUTOR,
+                lambda: _extract_text_easyocr_sync(artifact.file_path, detail=detail),
+            ),
+            timeout=30.0,
+        )
+    except (asyncio.TimeoutError, TimeoutError):
+        logger.warning("EasyOCR extraction timed out — falling back to Tesseract")
+        return await _extract_text_tesseract_fallback(artifact)
+    except Exception as exc:
+        logger.error(f"EasyOCR extraction failed: {exc}")
+        return await _extract_text_tesseract_fallback(artifact)
 
     if not result.get("easyocr_available"):
         # Graceful fallback to Tesseract

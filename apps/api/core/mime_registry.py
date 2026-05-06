@@ -82,6 +82,9 @@ class MimeRegistry:
     @classmethod
     def is_supported(cls, agent_name: str, mime_type: str = "", file_path: str = "") -> bool:
         """Check if a file is supported by an agent."""
+        from core.structured_logging import get_logger
+        _log = get_logger(__name__)
+
         supported_types = cls.get_supported_types(agent_name)
         if "*" in supported_types:
             return True
@@ -99,4 +102,12 @@ class MimeRegistry:
             if any(file_lower.endswith(ext) for ext in exts):
                 return True
 
+        _log.debug(
+            "Agent support rejected",
+            agent=agent_name,
+            mime=mime_type,
+            ext=file_path.split(".")[-1] if "." in file_path else "none",
+            supported_prefixes=supported_types
+        )
         return False
+

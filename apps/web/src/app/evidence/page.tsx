@@ -78,7 +78,9 @@ export default function EvidenceUploadPage() {
   const showAgentProgress = investigation.hasStartedAnalysis && !investigation.showUploadForm;
 
   return (
-    <div className={`relative min-h-screen px-6 py-32 transition-opacity duration-300 ${investigation.showLoadingOverlay ? "opacity-0" : "opacity-100"}`}>
+    <>
+      {/* Overlays live OUTSIDE the opacity wrapper — fixed position must not
+          inherit a parent opacity compositing context or they become invisible */}
       <ArbiterDeliberationOverlay 
         isVisible={investigation.arbiterDeliberating} 
         liveText={investigation.arbiterLiveText}
@@ -87,7 +89,7 @@ export default function EvidenceUploadPage() {
       <AnimatePresence mode="wait">
         {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
           <LoadingOverlay
-            variant="minimal"
+            variant="full"
             liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
             dispatchedCount={Object.keys(investigation.agentUpdates).length}
             totalAgents={5}
@@ -95,54 +97,56 @@ export default function EvidenceUploadPage() {
         )}
       </AnimatePresence>
 
-      {investigation.wsConnectionError && !investigation.isReconnecting && (
-        <ForensicErrorModal
-          isVisible
-          isTransient={investigation.isReconnecting}
-          title="Stream Connection Failed"
-          message={investigation.wsConnectionError}
-          errorCode="0xFC_WS_LOST"
-          onRetry={investigation.retryWsConnection}
-          onHome={investigation.handleNewUpload}
-        />
-      )}
-
-      {showAgentProgress ? (
-        <>
-        <AgentProgressDisplay 
-          agentUpdates={investigation.agentUpdates}
-          completedAgents={investigation.validCompletedAgents}
-          progressText={investigation.pipelineThinking}
-          allAgentsDone={investigation.allAgentsDone}
-          phase={investigation.phase}
-          awaitingDecision={investigation.awaitingDecision}
-          pipelineStatus={investigation.status}
-          pipelineMessage={investigation.pipelineMessage}
-          onNewUpload={investigation.handleNewUpload}
-          onViewResults={investigation.handleViewResults}
-          onAcceptAnalysis={investigation.handleAcceptAnalysis}
-          onRunDeepAnalysis={investigation.handleDeepAnalysis}
-          isNavigating={investigation.isNavigating}
-          mimeType={investigation.file?.type || storage.getItem("forensic_mime_type") || undefined}
-          playSound={playSound}
-          revealQueue={investigation.revealQueue}
-          revealPending={investigation.revealPending}
-          arbiterDeliberating={investigation.arbiterDeliberating}
-          arbiterStatus={investigation.arbiterStatus}
-          arbiterThinking={investigation.arbiterThinking}
-          hasStartedAnalysis={investigation.hasStartedAnalysis}
-        />
-
-          <HITLCheckpointModal
-            checkpoint={investigation.hitlCheckpoint}
-            isOpen={!!investigation.hitlCheckpoint}
-            isSubmitting={investigation.isSubmittingHITL}
-            onDecision={investigation.handleHITLDecision}
-            onDismiss={investigation.dismissCheckpoint}
+      <div className={`relative min-h-screen px-6 py-32 transition-opacity duration-300 ${investigation.showLoadingOverlay ? "opacity-0" : "opacity-100"}`}>
+        {investigation.wsConnectionError && !investigation.isReconnecting && (
+          <ForensicErrorModal
+            isVisible
+            isTransient={investigation.isReconnecting}
+            title="Stream Connection Failed"
+            message={investigation.wsConnectionError}
+            errorCode="0xFC_WS_LOST"
+            onRetry={investigation.retryWsConnection}
+            onHome={investigation.handleNewUpload}
           />
-        </>
-      ) : (
-        <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
+        )}
+
+        {showAgentProgress ? (
+          <>
+          <AgentProgressDisplay 
+            agentUpdates={investigation.agentUpdates}
+            completedAgents={investigation.validCompletedAgents}
+            progressText={investigation.pipelineThinking}
+            allAgentsDone={investigation.allAgentsDone}
+            phase={investigation.phase}
+            awaitingDecision={investigation.awaitingDecision}
+            pipelineStatus={investigation.status}
+            pipelineMessage={investigation.pipelineMessage}
+            onNewUpload={investigation.handleNewUpload}
+            onViewResults={investigation.handleViewResults}
+            onAcceptAnalysis={investigation.handleAcceptAnalysis}
+            onRunDeepAnalysis={investigation.handleDeepAnalysis}
+            isNavigating={investigation.isNavigating}
+            mimeType={investigation.file?.type || storage.getItem("forensic_mime_type") || undefined}
+            playSound={playSound}
+            revealQueue={investigation.revealQueue}
+            revealPending={investigation.revealPending}
+            arbiterDeliberating={investigation.arbiterDeliberating}
+            arbiterStatus={investigation.arbiterStatus}
+            arbiterThinking={investigation.arbiterThinking}
+            hasStartedAnalysis={investigation.hasStartedAnalysis}
+          />
+
+            <HITLCheckpointModal
+              checkpoint={investigation.hitlCheckpoint}
+              isOpen={!!investigation.hitlCheckpoint}
+              isSubmitting={investigation.isSubmittingHITL}
+              onDecision={investigation.handleHITLDecision}
+              onDismiss={investigation.dismissCheckpoint}
+            />
+          </>
+        ) : (
+          <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
+            {/* ... rest of page content ... */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full" />
@@ -302,5 +306,6 @@ export default function EvidenceUploadPage() {
         </section>
       )}
     </div>
+    </>
   );
 }

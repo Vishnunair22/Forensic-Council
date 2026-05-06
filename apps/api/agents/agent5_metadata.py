@@ -23,6 +23,7 @@ from core.custody_logger import CustodyLogger
 from core.episodic_memory import EpisodicMemory
 from core.evidence import EvidenceArtifact
 from core.handlers.metadata import MetadataHandlers
+from core.handlers.image import ImageHandlers
 from core.handlers.video import VideoHandlers
 from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.persistence.evidence_store import EvidenceStore
@@ -130,6 +131,14 @@ class Agent5Metadata(ForensicAgent):
             "Run hex_signature_scan for raw-byte software signatures",
             "Run compression_risk_audit to check for social media footprints",
         ]
+        if self._is_screen_capture:
+            return [
+                "Run file_hash_verify against ingestion hash",
+                "Run extract_text_from_image to identify displayed timestamps and UI metadata",
+                "Run file_structure_analysis for binary anomalies in headers and trailers",
+                "Run timestamp_analysis for cross-field date and time consistency",
+            ]
+
         if self._is_digital_image:
             return core_tasks
         return core_tasks + [
@@ -213,6 +222,13 @@ class Agent5Metadata(ForensicAgent):
 
         registry.register(
             "gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis"
+        )
+
+        # ── OCR (for screenshot timestamp extraction) ─────────────────────────
+        registry.register(
+            "extract_text_from_image",
+            ImageHandlers(self).extract_text_from_image_handler,
+            "Tiered OCR for displayed metadata extraction",
         )
 
         return registry

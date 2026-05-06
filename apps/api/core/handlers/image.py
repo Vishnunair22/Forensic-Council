@@ -697,7 +697,19 @@ class ImageHandlers(BaseToolHandler):
     async def extract_text_from_image_handler(self, input_data: dict) -> dict:
         """Tiered OCR — unified entry point for PDF/Image text extraction."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        result = await real_extract_evidence_text(artifact=artifact)
+        try:
+            result = await asyncio.wait_for(
+                real_extract_evidence_text(artifact=artifact), timeout=20.0
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            logger.warning("OCR handler timed out — returning timeout error result")
+            result = {
+                "error": "OCR extraction timed out after 20s",
+                "timeout": True,
+                "available": True,
+                "confidence": 0.0,
+                "has_text": False,
+            }
         # Store under both primary and legacy OCR keys for backward compatibility
         await self._store("extract_text_from_image", result, "extract_evidence_text")
         return result

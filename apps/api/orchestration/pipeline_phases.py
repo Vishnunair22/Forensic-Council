@@ -401,7 +401,6 @@ async def run_agents_concurrent(
                 # Sort by confidence descending to surface high-signal findings first
                 preview.sort(key=lambda x: x.get("confidence") or 0.0, reverse=True)
             if isinstance(synthesis, dict) and synthesis.get("sections"):
-                preview_tools = {str(item.get("tool") or "") for item in preview}
                 before = len(preview)
                 _append_synthesis_sections(synthesis)
                 # Always deduplicate by tool name — synthesis sections often overlap with
@@ -494,59 +493,71 @@ async def run_agents_concurrent(
 
     # --- Phase 1: Initialize agents and run initial passes ------------------
 
-    agent_instances = []
-    for aid in registry.get_all_agent_ids():
-        extra = {}
-        if aid in (AgentID.AGENT2.value, AgentID.AGENT3.value, AgentID.AGENT4.value):
-            extra = {"inter_agent_bus": pipeline.inter_agent_bus}
+    async def _init_agent(aid: str):
+        try:
+            extra = {}
+            if aid in (AgentID.AGENT2.value, AgentID.AGENT3.value, AgentID.AGENT4.value):
+                extra = {"inter_agent_bus": pipeline.inter_agent_bus}
 
-        cls = registry.get_agent_class(aid)
-        kwargs = {
-            "agent_id": aid,
-            "session_id": session_id,
-            "evidence_artifact": evidence_artifact,
-            "config": pipeline.config,
-            "working_memory": pipeline.working_memory,
-            "episodic_memory": pipeline.episodic_memory,
-            "custody_logger": pipeline.custody_logger,
-            "evidence_store": pipeline.evidence_store,
-            "heavy_tool_semaphore": pipeline.heavy_tool_semaphore,
-            **extra,
-        }
-        inst = cls(**kwargs)
-        if pipeline.inter_agent_bus is not None:
-            pipeline.inter_agent_bus.register_agent(aid, inst)
+            cls = registry.get_agent_class(aid)
+            kwargs = {
+                "agent_id": aid,
+                "session_id": session_id,
+                "evidence_artifact": evidence_artifact,
+                "config": pipeline.config,
+                "working_memory": pipeline.working_memory,
+                "episodic_memory": pipeline.episodic_memory,
+                "custody_logger": pipeline.custody_logger,
+                "evidence_store": pipeline.evidence_store,
+                "heavy_tool_semaphore": pipeline.heavy_tool_semaphore,
+                **extra,
+            }
+            inst = cls(**kwargs)
+            if pipeline.inter_agent_bus is not None:
+                pipeline.inter_agent_bus.register_agent(aid, inst)
 
-        supported = inst.supports_uploaded_file
-        agent_instances.append((inst, supported))
-
-        await _broadcast_agent_status(
-            aid,
-            "validating",
-            f"{aid} file type validation in progress.",
-            agent_inst=inst,
-        )
-
-    for (inst, supported), aid in zip(
-        agent_instances, registry.get_all_agent_ids(), strict=True
-    ):
-        # Enforce strict MIME-type gating: if the agent explicitly reports it doesn't support
-        # the file type, mark it as skipped immediately.
-        if not supported:
+            # Broadcast "validating" phase start for this specific node
             await _broadcast_agent_status(
                 aid,
-                "skipped",
-                f"{aid} bypassed: file type '{evidence_artifact.mime_type}' not supported for this analysis dimension.",
-                error="Unsupported file type.",
+                "validating",
+                f"{aid} file type validation in progress.",
                 agent_inst=inst,
             )
-        else:
+
+            supported = inst.supports_uploaded_file
+
+            if not supported:
+                await _broadcast_agent_status(
+                    aid,
+                    "skipped",
+                    f"{aid} bypassed: file type '{evidence_artifact.mime_type}' not supported for this analysis dimension.",
+                    error="Unsupported file type.",
+                    agent_inst=inst,
+                )
+            else:
+                await _broadcast_agent_status(
+                    aid,
+                    "running",
+                    f"{aid} file type validated. Starting initial analysis.",
+                    agent_inst=inst,
+                )
+            return inst, supported
+        except Exception as e:
+            logger.error(f"Failed to initialize agent {aid}", error=str(e))
             await _broadcast_agent_status(
                 aid,
-                "running",
-                f"{aid} file type validated. Starting initial analysis.",
-                agent_inst=inst,
+                "error",
+                f"Failed to initialize {aid}: {str(e)}",
+                error=str(e)
             )
+            return None, False
+
+
+    # Initialize all agents and their status states concurrently to minimize time-to-first-feedback
+    agent_instances = await asyncio.gather(
+        *[_init_agent(aid) for aid in registry.get_all_agent_ids()]
+    )
+
 
     applicable_ids = [
         aid

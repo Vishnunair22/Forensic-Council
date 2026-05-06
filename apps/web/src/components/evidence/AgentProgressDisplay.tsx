@@ -177,6 +177,7 @@ export function AgentProgressDisplay({
 
     const liveStatus = agentUpdates[agentId]?.status;
     if (liveStatus === "error" || liveStatus === "failed") return "error";
+    if (liveStatus === "validating") return "validating";
     if (liveStatus === "running") return "running";
     
     const isSupported = isAgentSupportedForMime(agentId, mimeType);

@@ -421,24 +421,25 @@ export function AgentStatusCard({
                 </button>
               )}
             </div>
-          ) : status === "checking" ? (
+          ) : (status === "checking" || status === "validating") ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
                <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
                   <Activity className="w-6 h-6" />
                </div>
               <AnimatePresence mode="wait">
                 <motion.p
-                  key={sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || "Processing evidence..."}
+                  key={sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.35 }}
                   className="max-w-xs text-xs text-white/50 font-medium leading-relaxed"
                 >
-                  {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || "Processing evidence..."}
+                  {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                 </motion.p>
               </AnimatePresence>
             </div>
+
 
           ) : status === "queued" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
