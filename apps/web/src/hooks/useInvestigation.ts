@@ -174,9 +174,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(() => {
     if (typeof window === "undefined") return false;
     // Issue 3 Fix A: Guard fc_show_loading cleanup with a hard clear on reconnect
+    const isAutoStart = sessionOnlyStorage.getItem("forensic_auto_start") === "true";
     const hasSession = !!storage.getItem("forensic_session_id");
     const showLoading = sessionOnlyStorage.getItem("fc_show_loading") === "true";
-    if (showLoading && hasSession) {
+    if (showLoading && hasSession && !isAutoStart) {
       sessionOnlyStorage.removeItem("fc_show_loading");
       return false;
     }
@@ -265,7 +266,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       clearInvestigationPersistence();
       sessionExistsRef.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally empty — runs once on mount only
 
   useEffect(() => {
@@ -607,12 +607,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
-      setArbiterLiveText("Council Arbiter is synthesizing initial agent findings into the final report.");
-      arbiterControl.abortController = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterControl.abortController.signal);
-      if (!ok) throw new Error("Council synthesis timed out");
-      // Signal the result page to skip arbiter polling — report is already ready.
-      sessionOnlyStorage.setItem("fc_report_ready", "1");
+      // Remove fc_report_ready so the result page knows to poll for arbiter progress natively.
+      sessionOnlyStorage.removeItem("fc_report_ready");
       // Apply CSS bridge so no blank gap exists between this overlay and the result page.
       document.body.setAttribute("data-fc-loading", "1");
       navigated = true;

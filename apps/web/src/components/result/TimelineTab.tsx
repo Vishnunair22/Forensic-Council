@@ -45,8 +45,8 @@ export function TimelineTab({
          <div className="h-px flex-1 bg-white/5" />
       </div>
 
-      <div className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
-        <div className="bg-[#020617]/40">
+      <div className="bg-surface-1 border border-white/5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
+        <div className="bg-surface-2/40">
 
           {/* Header */}
           <div className="px-10 py-8 border-b border-white/5 flex items-center justify-between gap-6">

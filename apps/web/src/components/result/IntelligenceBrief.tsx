@@ -22,7 +22,7 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] relative overflow-hidden"
+          className="bg-surface-1 border border-white/5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] relative overflow-hidden"
         >
           <div className="p-8 md:p-10 relative">
             <Quote className="absolute -top-6 -right-6 w-40 h-40 text-white/[0.015] pointer-events-none" />
@@ -67,6 +67,7 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {keyFindings.map((finding, i) => {
+              if (typeof finding !== "string") return null;
               const lower = finding.toLowerCase();
               const isDanger = /detected|found|confirmed|splicing|manipulation|tampered|ai-generated|synthetic|fabricat/.test(lower);
               const isWarning = /inconsistency|anomaly|suspicious|potential|warning/.test(lower);
@@ -78,7 +79,7 @@ export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPha
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
-                  className="bg-[#070A12] border border-white/8 rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.4),0_1px_0_rgba(255,255,255,0.03)_inset] p-5 flex items-start gap-4 hover:bg-white/[0.02] transition-all group"
+                  className="bg-surface-1 border border-white/5 rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.4),0_1px_0_rgba(255,255,255,0.03)_inset] p-5 flex items-start gap-4 hover:bg-surface-2 transition-all group"
                 >
                   <div className={clsx(
                     "w-9 h-9 shrink-0 rounded-xl flex items-center justify-center border transition-all duration-500 mt-0.5",

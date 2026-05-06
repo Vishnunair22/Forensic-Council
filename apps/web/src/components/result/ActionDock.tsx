@@ -15,7 +15,7 @@ interface ActionDockProps {
 export function ActionDock({ onHome, onNew, onExport }: ActionDockProps) {
   return (
     <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-1000 w-full max-w-xl px-6 pointer-events-none">
-      <div className="bg-[#020203]/80 border border-white/10 rounded-full p-2 backdrop-blur-xl shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
+      <div className="bg-surface-1/80 border border-white/5 rounded-full p-2 backdrop-blur-xl shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
         <div className="flex items-center justify-between gap-2">
 
           <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, Loader2, Upload, Wifi, Zap } from "lucide-react";
 import { clsx } from "clsx";
@@ -78,7 +79,7 @@ export function LoadingOverlay({
     const phase = PHASES[effectivePhase];
     const PhaseIcon = phase.Icon;
 
-    return (
+    return createPortal(
       <motion.div
         className="fixed inset-0 z-[10000] flex items-end justify-center pb-16 px-6"
         style={{ background: "rgba(5,7,13,0.85)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
@@ -174,11 +175,12 @@ export function LoadingOverlay({
             </div>
           </div>
         </motion.div>
-      </motion.div>
+      </motion.div>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <motion.div
       className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent"
       style={{
@@ -302,6 +304,7 @@ export function LoadingOverlay({
           </AnimatePresence>
         </div>
       </div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }

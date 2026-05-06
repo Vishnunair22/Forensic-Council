@@ -320,8 +320,8 @@ export function AgentProgressDisplay({
             exit={{ opacity: 0, y: 20 }}
             className="w-full max-w-2xl mx-auto px-6 py-8"
           >
-            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
-              <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
+            <div className="glass-panel p-2 rounded-full border-white/5">
+              <div className="bg-surface-1/50 rounded-full p-2 flex items-center gap-3">
                 <button
                   data-testid="accept-analysis-btn"
                   onClick={onAcceptAnalysis}
@@ -357,8 +357,8 @@ export function AgentProgressDisplay({
             exit={{ opacity: 0, y: 20 }}
             className="w-full max-w-2xl mx-auto px-6 py-8"
           >
-            <div className="glass-panel p-2 rounded-full shadow-[0_40px_100px_rgba(0,0,0,0.8)] border-white/10">
-              <div className="bg-[#020203]/80 rounded-full p-2 flex items-center gap-3">
+            <div className="glass-panel p-2 rounded-full border-white/5">
+              <div className="bg-surface-1/50 rounded-full p-2 flex items-center gap-3">
                 <button
                   data-testid="new-analysis-btn"
                   aria-label="New investigation"

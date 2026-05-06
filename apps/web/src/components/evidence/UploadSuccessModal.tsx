@@ -82,7 +82,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
-              className="w-16 h-16 rounded-full bg-success/10 border border-success/20 text-success flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(34,197,94,0.1)]"
+              className="w-16 h-16 rounded-full bg-success/10 border border-success/20 text-success flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
             >
               <CheckCircle2 className="w-8 h-8" />
             </motion.div>
@@ -95,10 +95,10 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                 <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
 
                   {/* HUD Corners */}
-                  <div className="absolute top-4 left-4 w-4 h-4 border-t border-l border-primary/40 z-20" />
-                  <div className="absolute top-4 right-4 w-4 h-4 border-t border-r border-primary/40 z-20" />
-                  <div className="absolute bottom-4 left-4 w-4 h-4 border-b border-l border-primary/40 z-20" />
-                  <div className="absolute bottom-4 right-4 w-4 h-4 border-b border-r border-primary/40 z-20" />
+                  <div className="absolute top-4 left-4 w-3 h-3 border-t border-l border-primary/20 z-20" />
+                  <div className="absolute top-4 right-4 w-3 h-3 border-t border-r border-primary/20 z-20" />
+                  <div className="absolute bottom-4 left-4 w-3 h-3 border-b border-l border-primary/20 z-20" />
+                  <div className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-primary/20 z-20" />
 
                   {isImage && previewUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
@@ -124,7 +124,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   )}
 
                   {/* File Metadata HUD */}
-                  <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 to-transparent backdrop-blur-sm border-t border-white/5 flex items-center justify-between">
+                  <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/70 via-black/40 to-transparent backdrop-blur-[2px] border-t border-white/5 flex items-center justify-between">
                     <div className="text-left">
                       <p className="text-xs font-mono text-white/80 truncate max-w-[200px]">
                         {file.name}

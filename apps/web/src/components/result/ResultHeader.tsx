@@ -3,7 +3,7 @@
 import React from "react";
 import {
   Fingerprint, ShieldCheck, ShieldAlert, Shield, Activity,
-  ShieldX, Zap, type LucideIcon
+  Zap, type LucideIcon
 } from "lucide-react";
 import type { ReportDTO } from "@/lib/api";
 import type { VerdictConfig } from "@/lib/verdict";
@@ -88,7 +88,7 @@ export function ResultHeader({
     : fileName;
 
   return (
-    <section className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] relative overflow-hidden">
+    <section className="bg-surface-1 border border-white/5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] relative overflow-hidden">
       <div className="p-8 md:p-10">
 
         {/* ── Header Identity Row ─────────────────────────────────────── */}

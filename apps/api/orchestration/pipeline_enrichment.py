@@ -68,6 +68,9 @@ def _detect_gemini_degradation(pipeline: Any, report: Any) -> None:
     if not gemini_key or "your_gemini_key" in gemini_key:
         return
 
+    if hasattr(pipeline, "run_deep_analysis_flag") and not pipeline.run_deep_analysis_flag:
+        return
+
     gemini_findings = report.gemini_vision_findings
     if not gemini_findings:
         pipeline._degradation_flags.append(

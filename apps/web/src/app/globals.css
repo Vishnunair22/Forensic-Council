@@ -28,20 +28,20 @@
   --color-danger-rgb: 244, 63, 94;
 
   /* Surfaces */
-  --color-background: #05070D;        /* deep navy-black */
+  --color-background: #030408;        /* deeper, richer space-navy */
   --color-foreground: #F1F5F9;
   --color-surface-1: #070A12;
   --color-surface-2: #0C111E;
   --color-surface-3: #111830;
 
   /* Borders (shared) */
-  --color-border-subtle: rgba(148,163,184,0.08);
+  --color-border-subtle: rgba(148,163,184,0.06);
 
   /* Glass tokens */
-  --glass-bg: rgba(59,130,246,0.05);
-  --glass-border: rgba(147,197,253,0.18);
-  --glass-highlight: rgba(255,255,255,0.06);
-  --glass-blur: 20px;
+  --glass-bg: rgba(59,130,246,0.03);      /* ultra-subtle tint */
+  --glass-border: rgba(147,197,253,0.08); /* softer, barely-there border */
+  --glass-highlight: rgba(255,255,255,0.04);
+  --glass-blur: 24px;
 
   --radius-xl: 18px;
   --radius-2xl: 28px;
@@ -123,8 +123,8 @@
   left: -10%;
   width: 60%;
   height: 60%;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
-  filter: blur(80px);
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.07) 0%, transparent 70%);
+  filter: blur(100px);
   animation: orb-float 20s infinite alternate;
 }
 
@@ -134,8 +134,8 @@
   right: -10%;
   width: 60%;
   height: 60%;
-  background: radial-gradient(circle, rgba(147, 197, 253, 0.10) 0%, transparent 70%);
-  filter: blur(80px);
+  background: radial-gradient(circle, rgba(147, 197, 253, 0.06) 0%, transparent 70%);
+  filter: blur(100px);
   animation: orb-float 25s infinite alternate-reverse;
 }
 
@@ -195,19 +195,23 @@
 
 /* Blue-centric buttons */
 .btn-primary, .btn-horizon-primary {
-  --ring: rgba(59,130,246,.35);
+  --ring: rgba(59,130,246,.25);
   display:inline-flex; align-items:center; justify-content:center; gap:.55rem;
-  padding: .95rem 2.2rem; border-radius: 999px;
+  padding: 1rem 2.5rem; border-radius: 999px;
   font: 700 .78rem/1 var(--font-heading);
   letter-spacing:.12em; text-transform:uppercase;
   color: #04070F !important;
-  background: linear-gradient(135deg, #93C5FD 0%, #3B82F6 60%, #2563EB 100%);
-  border: 1px solid rgba(147,197,253,.7);
-  box-shadow: 0 10px 30px -8px rgba(59,130,246,.6),
-              inset 0 1px 0 rgba(255,255,255,.35);
-  transition: transform .25s, box-shadow .25s, filter .25s;
+  background: linear-gradient(135deg, #BFDBFE 0%, #60A5FA 50%, #3B82F6 100%);
+  border: 1px solid rgba(255,255,255,.4);
+  box-shadow: 0 10px 30px -8px rgba(59,130,246,.4),
+              inset 0 1px 0 rgba(255,255,255,.5);
+  transition: transform .3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .3s cubic-bezier(0.4, 0, 0.2, 1), filter .3s ease;
 }
-.btn-primary:hover { transform: translateY(-1px); filter:brightness(1.08); box-shadow: 0 14px 40px -10px rgba(59,130,246,.75); }
+.btn-primary:hover, .btn-horizon-primary:hover { 
+  transform: translateY(-2px); 
+  filter:brightness(1.1); 
+  box-shadow: 0 14px 40px -10px rgba(59,130,246,.6), inset 0 1px 0 rgba(255,255,255,.6); 
+}
 
 .btn-outline, .btn-horizon-outline, .btn-pill-secondary {
   display:inline-flex; align-items:center; justify-content:center; gap:.55rem;
@@ -231,18 +235,3 @@
 .glass-button:hover { background: rgba(147,197,253,.12); border-color: rgba(147,197,253,.4); box-shadow:0 0 22px rgba(59,130,246,0.22); }
 
 :focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
-
-/* ── Page-Transition Bridge ──────────────────────────────────────────
-   Applied immediately when user clicks "Begin Analysis", synchronously
-   via JS before any awaits or React state updates. Cleared by the
-   evidence page's useEffect once its own overlay is mounted.
-   Prevents the blank-screen gap during Next.js page navigation.
-─────────────────────────────────────────────────────────────────── */
-body[data-fc-loading]::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 9998;               /* below LoadingOverlay z-[10000] */
-  background: #05070D;          /* --color-background */
-  pointer-events: none;
-}

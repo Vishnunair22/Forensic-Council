@@ -32,7 +32,9 @@ export function useResult(initialSessionId?: string) {
   const [mounted, setMounted] = useState(false);
   // If fc_report_ready is set, the report is already synthesized (coming from handleAcceptAnalysis).
   // Skip the arbiter polling phase and go straight to loading the report.
-  const reportAlreadyReady = typeof window !== "undefined" && sessionOnlyStorage.getItem("fc_report_ready") === "1";
+  const [reportAlreadyReady] = useState(() => 
+    typeof window !== "undefined" && sessionOnlyStorage.getItem("fc_report_ready") === "1"
+  );
   const [state, setState] = useState<PageState>(() => reportAlreadyReady ? "loading" : "arbiter");
   const [report, setReport] = useState<ReportDTO | null>(null);
   const [arbiterMsg, setArbiterMsg] = useState(() =>
@@ -46,7 +48,7 @@ export function useResult(initialSessionId?: string) {
   const [thumbnail, setThumbnail] = useState(() => getInitial("forensic_thumbnail"));
   const [mimeType, setMimeType] = useState(() => getInitial("forensic_mime_type"));
   const [pipelineStartAt, setPipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
-  const [fileName, setFileName] = useState(() => getInitial("forensic_file_name"));
+  const [fileName] = useState(() => getInitial("forensic_file_name"));
   const [agentTimeline] = useState<AgentUpdate[]>(() => {
     try {
       const sid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
@@ -86,7 +88,7 @@ export function useResult(initialSessionId?: string) {
     }
     const timer = setTimeout(() => setMinOverlayDone(true), 800);
     return () => clearTimeout(timer);
-  }, [sessionId]); // reset on session change
+  }, [sessionId, reportAlreadyReady]); // reset on session change
 
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {

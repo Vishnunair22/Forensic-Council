@@ -136,7 +136,7 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
         "p-4 rounded-xl border transition-all duration-300",
         isAlert 
           ? "bg-danger/5 border-danger/20 hover:bg-danger/8" 
-          : "bg-[#0C111E] border-white/8 hover:bg-[#111830] hover:border-white/12"
+          : "bg-surface-2 border-white/5 hover:bg-surface-3 hover:border-white/10"
       )}
     >
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -277,16 +277,16 @@ export function AgentStatusCard({
       layout
       onAnimationStart={() => onAnimationStart?.()}
       className={clsx(
-        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl border border-white/8 bg-[#070A12]",
+        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl border border-white/8 bg-surface-1",
         (status === "running" || status === "checking") 
-          ? "shadow-[0_4px_24px_rgba(0,0,0,0.5),_0_0_0_1px_rgba(59,130,246,0.2),_0_1px_0_rgba(255,255,255,0.04)_inset]"
-          : "shadow-[0_4px_24px_rgba(0,0,0,0.5),_0_1px_0_rgba(255,255,255,0.04)_inset]",
+          ? "shadow-[0_8px_40px_rgba(0,0,0,0.4),_0_0_0_1px_rgba(59,130,246,0.15),_0_1px_0_rgba(255,255,255,0.04)_inset]"
+          : "shadow-[0_8px_32px_rgba(0,0,0,0.3),_0_1px_0_rgba(255,255,255,0.03)_inset]",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
-      <div className="p-8 pb-6 border-b border-white/6 rounded-t-2xl bg-[#0C111E] relative z-10">
+      <div className="p-8 pb-6 border-b border-white/5 rounded-t-2xl bg-surface-2 relative z-10">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Aperture Icon */}

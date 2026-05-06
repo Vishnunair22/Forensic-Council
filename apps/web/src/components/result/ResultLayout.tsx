@@ -47,9 +47,14 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
   const activeAgentIds = useMemo(() => {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
-    return Object.keys(rs.report?.per_agent_findings ?? {}).filter((id) => {
-      const flist = rs.report?.per_agent_findings[id] ?? [];
-      return flist.length > 0 && !flist.every((f: Finding) => {
+    const findingsRecord = rs.report?.per_agent_findings;
+    if (!findingsRecord || typeof findingsRecord !== "object" || Array.isArray(findingsRecord)) {
+      return [];
+    }
+    return Object.keys(findingsRecord).filter((id) => {
+      const flist = findingsRecord[id];
+      if (!Array.isArray(flist) || flist.length === 0) return false;
+      return !flist.every((f: Finding) => {
         const fType = String(f?.finding_type || "").toLowerCase();
         return SKIP_TYPES.has(fType);
       });
@@ -75,7 +80,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
       {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
-        <div className="bg-[#020203]/80 border border-white/10 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+        <div className="bg-surface-1/80 border border-white/5 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
           <button
             onClick={rs.handleHome}
             className="px-6 py-2.5 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-3"

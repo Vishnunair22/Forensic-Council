@@ -39,7 +39,8 @@ export function AgentAnalysisTab({
 
     <div className="space-y-3">
      {activeAgentIds.map((agentId, _idx) => {
-      const allFindings = report?.per_agent_findings?.[agentId] ?? [];
+      const rawFindings = report?.per_agent_findings?.[agentId];
+      const allFindings = Array.isArray(rawFindings) ? rawFindings : [];
       const metrics = report?.per_agent_metrics?.[agentId];
       const narrative = report?.per_agent_analysis?.[agentId];
       const agentSummary = report?.per_agent_summary?.[agentId];

@@ -198,9 +198,6 @@ export function HeroAuthActions() {
             onNewUpload={() => { setSelectedFile(null); setIsHandingOff(false); }}
             onDismiss={() => { setShowUpload(false); setSelectedFile(null); setIsHandingOff(false); }}
             onStartAnalysis={async () => {
-              // Synchronously cover the screen at the CSS paint level — this
-              // fires before any React render or await, bridging the navigation gap.
-              document.body.setAttribute("data-fc-loading", "1");
               setIsHandingOff(true);
               setHandoffVisible(true);
               playSound("envelope-close");
@@ -212,7 +209,7 @@ export function HeroAuthActions() {
         {handoffVisible && (
           <LoadingOverlay
             key="handoff-overlay"
-            variant="minimal"
+            variant="full"
             liveText="Uploading evidence to secure forensic pipeline..."
             exitDuration={0.15}
           />

@@ -27,21 +27,19 @@ export default function Home() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="flex flex-col items-center text-center max-w-5xl mx-auto gap-8"
         >
-          <div className="space-y-4">
+          <div className="space-y-6">
 
             <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter leading-[0.95] text-white">
               Multi-Agent Forensic <br />
-              <span className="text-white/90">Evidence Analysis System</span>
+              <span className="text-hero-gradient">Evidence Analysis System</span>
             </h1>
 
             <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-primary/60 font-mono mb-2">
               System_Overview
             </p>
-            <p className="text-lg md:text-xl text-white/60 max-w-3xl mx-auto font-medium leading-relaxed">
+            <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto font-medium leading-relaxed">
               Forensic Council is a Multi-Agent AI application that utilizes specialized agents to analyze digital forensic evidence and synthesize cohesive, authoritative reports.
             </p>
-
-
 
           </div>
 
@@ -50,18 +48,20 @@ export default function Home() {
           </div>
 
           {/* Decorative Elements */}
-          <div className="grid grid-cols-3 gap-8 mt-10 opacity-50">
-            <div className="flex flex-col items-center gap-2">
-              <Cpu className="w-5 h-5 text-primary/70" />
-              <span className="text-[10px] uppercase tracking-widest font-mono text-white/40">Neural Processing</span>
+          <div className="flex items-center gap-6 mt-10 opacity-50">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-primary/70" />
+              <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Neural Processing</span>
             </div>
-            <div className="flex flex-col items-center gap-2">
-              <Scale className="w-5 h-5 text-primary/70" />
-              <span className="text-[10px] uppercase tracking-widest font-mono text-white/40">Arbiter Protocol</span>
+            <span className="w-1 h-1 rounded-full bg-white/20"></span>
+            <div className="flex items-center gap-2">
+              <Scale className="w-4 h-4 text-primary/70" />
+              <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Arbiter Protocol</span>
             </div>
-            <div className="flex flex-col items-center gap-2">
-              <Shield className="w-5 h-5 text-primary/70" />
-              <span className="text-[10px] uppercase tracking-widest font-mono text-white/40">Chain of Custody</span>
+            <span className="w-1 h-1 rounded-full bg-white/20"></span>
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary/70" />
+              <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Chain of Custody</span>
             </div>
           </div>
         </motion.div>

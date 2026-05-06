@@ -186,17 +186,17 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               onDrop={handleDrop}
               className={`w-full border-2 border-dashed rounded-2xl p-16 transition-all duration-500 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden ${
                 isDragging
-                  ? "border-primary bg-primary/5 shadow-[0_0_40px_rgba(0,255,255,0.1)]"
-                  : "border-white/5 hover:border-primary/40 hover:bg-white/[0.02]"
+                  ? "border-primary bg-primary/5 shadow-[0_0_40px_rgba(59,130,246,0.1)]"
+                  : "border-slate-800 hover:border-primary/30 hover:bg-white/[0.02]"
               }`}
             >
               <EnvelopeOpen isDragging={isDragging} isOpen={true} />
 
               <div className="flex flex-col items-center gap-2 pointer-events-none">
-                <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-white/80 group-hover:text-primary"}`}>
+                <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-slate-300 group-hover:text-primary"}`}>
                   {isDragging ? "Release Payload" : "Drop Evidence File"}
                 </span>
-                <p className="text-sm font-medium text-white/30 max-w-[240px] leading-relaxed">
+                <p className="text-sm font-medium text-slate-500 max-w-[240px] leading-relaxed">
                   Select a forensic file for multi-agent neural verification.
                 </p>
               </div>
