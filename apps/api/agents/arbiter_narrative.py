@@ -601,7 +601,20 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
             line_two = (line_two + f"; coverage note: {analysis_coverage_note}").strip("; ")
         if not line_two:
             line_two = "No high-confidence manipulation signal was reported; provenance strength depends on available metadata and successful tool coverage."
-        return line_one[:360] + "\n" + line_two[:360] + "."
+        line_three_bits: list[str] = []
+        if len(integrity_bits) > 3:
+            line_three_bits.append("; ".join(integrity_bits[3:5]))
+        if len(context_bits) > 3:
+            line_three_bits.append("; ".join(context_bits[3:5]))
+        if not line_three_bits and any("no camera/device capture record" in bit for bit in context_bits):
+            line_three_bits.append(
+                "Screenshot provenance remains limited because camera/device EXIF is absent; clean hash, layout, and binary checks do not prove pre-upload authenticity."
+            )
+        line_three = " ".join(line_three_bits).strip()
+        lines = [line_one[:360], line_two[:360] + "."]
+        if line_three:
+            lines.append(line_three[:360] + ("." if not line_three.endswith(".") else ""))
+        return "\n".join(lines)
 
     async def _generate_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0

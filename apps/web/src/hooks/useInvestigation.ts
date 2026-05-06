@@ -10,6 +10,7 @@ import {
   getArbiterStatus,
   getReport,
   getAuthToken,
+  autoLoginAsInvestigator,
   type ArbiterStatusResponse,
   type HITLDecision
 } from "@/lib/api";
@@ -77,7 +78,7 @@ async function waitForFinalReport(
         try {
           const res = await withTimeout(getReport(sessionId), 30_000);
           // ReportDTO has report_id; a 202 in-progress response has status:"in_progress"
-          const asAny = res as Record<string, unknown>;
+          const asAny = res as unknown as Record<string, unknown>;
           if (asAny.report_id || (asAny.status === "complete" && asAny.report)) return true;
         } catch {
           /* report may not be ready yet — keep polling */
@@ -289,8 +290,24 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
               description: `Could not establish session: ${msg}. Please refresh the page.`,
             });
           });
+      } else if (__pendingFileStore.file || sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
+        __pendingFileStore.authPromise = autoLoginAsInvestigator();
+        await __pendingFileStore.authPromise
+          .then(() => {
+            storage.setItem("forensic_auth_ok", "1");
+            __pendingFileStore.authPromise = null;
+          })
+          .catch((err: unknown) => {
+            __pendingFileStore.authPromise = null;
+            const msg = err instanceof Error ? err.message : "Authentication failed";
+            setAuthError(msg);
+            toast.destructive({
+              title: "Authentication Error",
+              description: `Could not establish session: ${msg}. Please refresh the page.`,
+            });
+            throw err;
+          });
       }
-      // Issue 1 Fix A: Never initiate a fresh autoLogin call here; trust the HeroAuthActions pre-warm
     };
     authReadyRef.current = initAuth();
   }, []);
@@ -461,9 +478,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-          setWsConnectionError(wsErrMsg);
           setShowLoadingOverlay(false);
           resetSimulation();
+          setWsConnectionError(wsErrMsg);
         })
         .finally(() => {
           investigationInFlightRef.current = false;
@@ -481,7 +498,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     const pending = __pendingFileStore.file;
     if (!pending) {
       sessionOnlyStorage.removeItem("forensic_auto_start");
+      sessionOnlyStorage.removeItem("fc_show_loading");
       setAutoStartBlocking(false);
+      setShowLoadingOverlay(false);
       return;
     }
 

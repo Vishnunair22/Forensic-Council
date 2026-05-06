@@ -132,7 +132,8 @@ export function useResult(initialSessionId?: string) {
   }, [playSound]);
 
   // ── Report fetch via TanStack Query ─────────────────────────────────────────
-  // Enabled only once the arbiter confirms completion AND min overlay time has passed.
+  // Probe the report endpoint as soon as the result page mounts. Arbiter status
+  // is useful progress text, but the signed report is the real readiness signal.
   const {
     data: reportQueryData,
     error: reportQueryError,
@@ -142,7 +143,7 @@ export function useResult(initialSessionId?: string) {
       if (!sessionId) throw new Error("Missing session ID");
       return getReport(sessionId);
     },
-    enabled: !!sessionId && arbiterComplete && minOverlayDone,
+    enabled: !!sessionId && minOverlayDone,
     staleTime: 60_000, 
     retry: 3,
     refetchInterval: (query) => {
@@ -157,8 +158,8 @@ export function useResult(initialSessionId?: string) {
     if (!reportQueryData) return null;
     // The API returns ReportDTO directly when ready, or {status:"in_progress"} as 202.
     // ReportDTO has report_id; the in-progress wrapper has status = "in_progress".
-    const asAny = reportQueryData as Record<string, unknown>;
-    if (asAny.report_id) return reportQueryData as ReportDTO;
+    const asAny = reportQueryData as unknown as Record<string, unknown>;
+    if (asAny.report_id) return reportQueryData as unknown as ReportDTO;
     if (asAny.status === "complete" && asAny.report) return asAny.report as ReportDTO;
     return null;
   }, [reportQueryData]);
@@ -166,6 +167,7 @@ export function useResult(initialSessionId?: string) {
   // React to the report query resolving
   useEffect(() => {
     if (!finalReportData) return;
+    setArbiterComplete(true);
     setReport(finalReportData);
     setState("ready");
     setTimeout(() => {

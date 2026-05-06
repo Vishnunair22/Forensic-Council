@@ -12,6 +12,7 @@ import {
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
 import { getToolIcon } from "@/lib/tool-icons";
+import { cleanFindingText } from "@/lib/findingText";
 import type { AgentFindingDTO } from "@/lib/api";
 
 const TECHNICAL_KEYS_TO_HIDE = new Set([
@@ -80,15 +81,15 @@ function cleanFindingSummary(finding: AgentFindingDTO) {
  ].map((v) => String(v || "").trim()).filter(Boolean);
  const generic = /^(analysis complete|checked:?\s*$|no diagnostic output|.+completed; review detailed tool metrics|.+completed\.)$/i;
  const picked = candidates.find((text) => !generic.test(text)) || candidates[0] || "";
- if (picked) return picked.replace(/^Checked:\s*/i, "");
+ if (picked) return cleanFindingText(picked.replace(/^Checked:\s*/i, ""));
 
  const tool = fmtTool((metadata.tool_name as string) || finding.finding_type);
  const verdict = String(finding.evidence_verdict || "").toUpperCase();
- if (verdict === "POSITIVE") return `${tool} found a forensic warning signal.`;
- if (verdict === "NEGATIVE") return `${tool} found no supported anomaly for this evidence.`;
+ if (verdict === "POSITIVE") return `${tool} reported a supported forensic warning. Review the diagnostic metrics before deciding authenticity.`;
+ if (verdict === "NEGATIVE") return `${tool} found no supported anomaly for its specific test.`;
  if (verdict === "ERROR") return `${tool} did not complete and should be treated as a coverage limitation.`;
  if (verdict === "NOT_APPLICABLE") return `${tool} is not applicable to this file type.`;
- return `${tool} returned an inconclusive result.`;
+ return `${tool} returned context, but not a firm manipulation signal.`;
 }
 
 // ─── Confidence Bar Component ───
@@ -239,7 +240,7 @@ export function ToolRow({
        <div className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/5">
         <CheckCircle2 className="w-3.5 h-3.5 text-white/50 mt-0.5 shrink-0" />
         <p className="text-[11px] text-white/40 leading-relaxed italic">
-         {finding.metadata?.section_key_signal as string}
+         {cleanFindingText(finding.metadata?.section_key_signal as string)}
         </p>
        </div>
       )}

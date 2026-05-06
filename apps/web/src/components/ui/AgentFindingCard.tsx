@@ -19,6 +19,7 @@ import { clsx } from "clsx";
 import { motion } from "framer-motion";
 import { AgentFindingDTO, AgentMetricsDTO, ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
+import { cleanFindingText } from "@/lib/findingText";
 import {
   ConfidenceBar,
   ToolRow
@@ -74,8 +75,8 @@ function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
     const sectionId = (f.metadata?.section_id as string) || "other";
     const sectionLabel = (f.metadata?.section_label as string) || "Other Analysis";
     const sectionFlag = (f.metadata?.section_flag as string) || "info";
-    const keySignal = (f.metadata?.section_key_signal as string) || "";
-    const analysis = (f.metadata?.llm_synthesis as string) || "";
+    const keySignal = cleanFindingText((f.metadata?.section_key_signal as string) || "");
+    const analysis = cleanFindingText((f.metadata?.llm_synthesis as string) || "");
 
     let group = groupMap.get(sectionId);
     if (!group) {
@@ -100,7 +101,7 @@ function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
 }
 
 function cleanSummary(text: string, maxLen = 210) {
-  const stripped = text.replace(/^[^:]{1,55}:\s*/, "").trim();
+  const stripped = cleanFindingText(text.replace(/^[^:]{1,55}:\s*/, "").trim());
   if (stripped.length <= maxLen) return stripped;
   const clipped = stripped.slice(0, maxLen);
   const lastSpace = clipped.lastIndexOf(" ");
@@ -109,7 +110,7 @@ function cleanSummary(text: string, maxLen = 210) {
 
 function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsDTO, narrative?: string) {
   if (narrative && narrative.trim().length > 0) {
-    return cleanSummary(narrative.trim(), 360);
+    return cleanSummary(narrative.trim(), 520);
   }
 
   const active = findings.filter((f) => f.evidence_verdict !== "NOT_APPLICABLE");
@@ -135,7 +136,10 @@ function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsD
     .filter(Boolean)
     .join(" ");
 
-  return `${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`;
+  return cleanFindingText(
+    `${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`,
+    520,
+  );
 }
 
 function normalizeVerdict(verdict?: string) {

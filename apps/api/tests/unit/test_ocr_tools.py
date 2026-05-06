@@ -208,3 +208,32 @@ class TestOCRTools:
         assert result["lines"] == ["SYSTEM OVERVIEW", "10:42 AM"]
         assert result["structured_metadata"]["timestamps"] == ["10:42 AM"]
         assert result["avg_confidence"] == 0.93
+
+    @pytest.mark.asyncio
+    async def test_gemini_ocr_parses_json_string_and_line_objects(self, mock_artifact):
+        mock_artifact.file_path = "screen.png"
+        mock_artifact.mime_type = "image/png"
+        settings = MagicMock(
+            gemini_api_key="g" * 32,
+            llm_provider="none",
+            llm_api_key=None,
+            gemini_model="gemini-2.5-flash",
+        )
+
+        with (
+            patch("core.config.get_settings", return_value=settings),
+            patch("tools.ocr_tools.is_screen_capture_like", return_value=True),
+            patch("core.llm_client.LLMClient") as mock_client_cls,
+        ):
+            mock_client = MagicMock()
+            mock_client.generate_multimodal_synthesis = AsyncMock(
+                return_value='{"lines":[{"text":"FC Forensic Council"},{"content":"Upload Evidence"}],"ocr_confidence":0.91}'
+            )
+            mock_client_cls.return_value = mock_client
+
+            result = await _extract_text_gemini(mock_artifact)
+
+        assert result["gemini_available"] is True
+        assert result["lines"] == ["FC Forensic Council", "Upload Evidence"]
+        assert result["word_count"] == 5
+        assert result["avg_confidence"] == 0.91

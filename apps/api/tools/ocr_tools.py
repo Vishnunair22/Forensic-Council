@@ -12,6 +12,7 @@ Implements a three-tier pipeline:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -30,6 +31,86 @@ _OCR_EXECUTOR = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4
 
 # Thread-local storage for EasyOCR readers to avoid re-init overhead
 _EASYOCR_READER = None
+
+
+def _coerce_gemini_ocr_lines(raw_result: Any) -> tuple[list[str], dict[str, Any], float]:
+    """Normalize Gemini OCR responses across JSON, text JSON, and line-object variants."""
+    parsed = raw_result
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if text.startswith("```"):
+            text = text.strip("`").removeprefix("json").strip()
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return ([line.strip() for line in text.splitlines() if line.strip()], {}, 0.90)
+
+    metadata: dict[str, Any] = {}
+    confidence = 0.98
+    lines: list[str] = []
+
+    if isinstance(parsed, dict):
+        metadata = parsed.get("structured_metadata", {}) or parsed.get("metadata", {}) or {}
+        try:
+            confidence = float(
+                parsed.get("ocr_confidence")
+                or parsed.get("confidence")
+                or parsed.get("avg_confidence")
+                or confidence
+            )
+        except (TypeError, ValueError):
+            confidence = 0.98
+
+        raw_lines = (
+            parsed.get("lines")
+            or parsed.get("text_lines")
+            or parsed.get("ocr_lines")
+            or parsed.get("items")
+            or []
+        )
+        if isinstance(raw_lines, str):
+            raw_lines = [line.strip() for line in raw_lines.splitlines() if line.strip()]
+        if isinstance(raw_lines, list):
+            for item in raw_lines:
+                if isinstance(item, str):
+                    value = item
+                elif isinstance(item, dict):
+                    value = (
+                        item.get("text")
+                        or item.get("line")
+                        or item.get("content")
+                        or item.get("value")
+                        or ""
+                    )
+                else:
+                    value = str(item)
+                value = " ".join(str(value).split())
+                if value:
+                    lines.append(value)
+
+        if not lines:
+            text_value = parsed.get("full_text") or parsed.get("text") or parsed.get("ocr_text") or ""
+            lines = [line.strip() for line in str(text_value).splitlines() if line.strip()]
+            if not lines and str(text_value).strip():
+                lines = [" ".join(str(text_value).split())]
+    elif isinstance(parsed, list):
+        for item in parsed:
+            if isinstance(item, str):
+                value = item
+            elif isinstance(item, dict):
+                value = item.get("text") or item.get("line") or item.get("content") or ""
+            else:
+                value = str(item)
+            value = " ".join(str(value).split())
+            if value:
+                lines.append(value)
+
+    # Deduplicate adjacent repeats without changing the model's reading order.
+    deduped: list[str] = []
+    for line in lines:
+        if not deduped or deduped[-1] != line:
+            deduped.append(line)
+    return deduped, metadata if isinstance(metadata, dict) else {}, max(0.0, min(1.0, confidence))
 
 
 def _get_easyocr_reader():
@@ -125,6 +206,21 @@ def _build_summary(result: dict[str, Any], file_type_hint: str) -> str:
 
 
 def _finalize_result(result: dict[str, Any], file_type_hint: str) -> dict[str, Any]:
+    full_text = str(result.get("full_text") or result.get("text") or "").strip()
+    lines = result.get("lines")
+    if not full_text and isinstance(lines, list):
+        full_text = "\n".join(str(line).strip() for line in lines if str(line).strip())
+    preview = str(result.get("ocr_text_preview") or result.get("text_preview") or "").strip()
+    if not preview and full_text:
+        preview = " | ".join(line.strip() for line in full_text.splitlines() if line.strip())[:240]
+    if full_text:
+        result.setdefault("full_text", full_text)
+        result.setdefault("text", full_text)
+        result.setdefault("has_text", True)
+        result.setdefault("word_count", len(full_text.split()))
+    if preview:
+        result.setdefault("ocr_text_preview", preview)
+        result.setdefault("text_preview", preview)
     result["file_type_hint"] = file_type_hint
     result["summary"] = _build_summary(result, file_type_hint)
     return result
@@ -462,19 +558,7 @@ If no text is found, return an empty lines list and empty metadata fields."""
             json_mode=True
         )
 
-        lines = []
-        metadata = {}
-        ocr_confidence = 0.98
-        if isinstance(raw_result, dict):
-            lines = [str(line) for line in raw_result.get("lines", [])]
-            metadata = raw_result.get("structured_metadata", {}) or {}
-            try:
-                ocr_confidence = float(raw_result.get("ocr_confidence") or ocr_confidence)
-            except (TypeError, ValueError):
-                ocr_confidence = 0.98
-        elif isinstance(raw_result, list):
-            lines = [str(line) for line in raw_result]
-
+        lines, metadata, ocr_confidence = _coerce_gemini_ocr_lines(raw_result)
         full_text = "\n".join(lines)
         preview = " | ".join(lines[:5])
         if lines:
@@ -521,7 +605,9 @@ async def extract_evidence_text(
     # Tier 0: Gemini Multimodal OCR (if enabled)
     # We prefer Gemini for screenshots and documents as it understands layout better
     gemini_res = await _extract_text_gemini(artifact)
-    if gemini_res.get("gemini_available") and gemini_res.get("has_text"):
+    if gemini_res.get("gemini_available") and (
+        gemini_res.get("has_text") or is_screen_capture_like(artifact)
+    ):
         logger.info("Gemini OCR succeeded", word_count=gemini_res.get("word_count", 0))
         return _finalize_result(gemini_res, file_type_hint)
     else:

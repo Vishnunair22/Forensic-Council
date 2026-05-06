@@ -797,6 +797,8 @@ class TestSynthesisService:
         assert "chain-of-custody" in summary
         assert "does not prove pre-upload authenticity" in summary
         assert "expected hash" not in summary.lower()
+        assert "/app/storage/evidence" not in result["narrative_summary"]
+        assert "since intake" in result["narrative_summary"]
 
     def test_compact_metrics_skips_internal_keys(self):
         service = self._make_service()

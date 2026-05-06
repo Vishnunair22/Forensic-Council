@@ -215,10 +215,47 @@ BAD_SYNTHESIS_PHRASES = (
     "expected content",
     "advanced neural analysis confirms",
     "image appears authentic",
+    "the image file",
+    "was analyzed using",
+    "supports the authenticity of the image file",
     "empty raw tool results",
     "lack of results",
     "no digital traces or anomalies were detected due to",
+    "/app/storage/evidence",
 )
+
+
+def _clean_preview_text(text: str, limit: int = 180) -> str:
+    return " ".join(str(text or "").replace("|", " | ").split())[:limit].strip()
+
+
+def _tool_data(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {}
+    data = row.get("data")
+    return data if isinstance(data, dict) else {}
+
+
+def _row_verdict(row: dict[str, Any] | None) -> str:
+    if not isinstance(row, dict):
+        return ""
+    return str(row.get("evidence_verdict") or row.get("status") or "").upper()
+
+
+def _is_negative(row: dict[str, Any] | None) -> bool:
+    return _row_verdict(row) in {"NEGATIVE", "CONFIRMED", "CLEAN"}
+
+
+def _is_positive(row: dict[str, Any] | None) -> bool:
+    return _row_verdict(row) in {"POSITIVE", "FLAGGED", "CONTESTED"}
+
+
+def _first_row(tool_rows: dict[str, dict[str, Any]], *names: str) -> dict[str, Any]:
+    for name in names:
+        row = tool_rows.get(name)
+        if row:
+            return row
+    return {}
 
 
 class SynthesisService:
@@ -613,6 +650,7 @@ Return ONLY a JSON object in this format:
                 section["opinion"] = " ".join(x for x in grounded_any[:2] if x)[:420]
 
         narrative = str(response.get("narrative_summary") or "")
+        needs_grounded_narrative = _bad(narrative) or len(narrative.strip()) < 120
         if screenshot_like and "object" in agent_name.lower():
             scope_row = tool_rows.get("screenshot_scene_applicability", {})
             layout_row = tool_rows.get("screenshot_layout_forensics", {})
@@ -630,6 +668,47 @@ Return ONLY a JSON object in this format:
                 f"physical geometry checks (lighting, scale, weapons) do not apply. "
                 f"Screenshot layout analysis {verdict_text}."
             )
+        elif screenshot_like and "image" in agent_name.lower():
+            freq_data = (tool_rows.get("frequency_domain_analysis", {}) or {}).get("data") or {}
+            hash_data = (tool_rows.get("file_hash_verify", {}) or {}).get("data") or {}
+            ocr_data = (tool_rows.get("extract_text_from_image", {}) or {}).get("data") or {}
+            semantic_data = (tool_rows.get("analyze_image_content", {}) or {}).get("data") or {}
+            hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
+            words = int(ocr_data.get("word_count") or 0)
+            ocr_preview = _clean_preview_text(
+                ocr_data.get("text") or ocr_data.get("full_text") or ocr_data.get("ocr_text_preview") or "",
+                130,
+            )
+            dims = (
+                f"{semantic_data.get('width')}x{semantic_data.get('height')}px"
+                if semantic_data.get("width") and semantic_data.get("height")
+                else "screenshot"
+            )
+            response["narrative_summary"] = (
+                "Image integrity checks found no manipulation signal in the screenshot's spectral profile; "
+                f"frequency anomaly score was {float(freq_data.get('anomaly_score') or 0):.3f} "
+                f"with high-frequency ratio {float(freq_data.get('high_freq_ratio') or 0):.3f}. "
+                f"SHA-256 {'matched' if hash_match else 'did not match'} the intake custody record, verifying the uploaded file has not changed after submission. "
+                f"Gemini OCR read {words} visible word(s)"
+                + (f" ({ocr_preview}). " if ocr_preview else ". ")
+                + f"Semantic profiling recorded a {dims} digital UI; these results support file integrity since intake, not camera-origin authenticity."
+            )
+        elif screenshot_like and ("metadata" in agent_name.lower() or "provenance" in agent_name.lower()):
+            grounded = self._agent_grounded_narrative(
+                agent_name,
+                tool_rows,
+                screenshot_like=screenshot_like,
+            )
+            if grounded:
+                response["narrative_summary"] = grounded
+        elif needs_grounded_narrative:
+            grounded = self._agent_grounded_narrative(
+                agent_name,
+                tool_rows,
+                screenshot_like=screenshot_like,
+            )
+            if grounded:
+                response["narrative_summary"] = grounded
         elif screenshot_like and _bad(narrative):
             useful = [
                 self._tool_grounded_summary(row, screenshot_like=True)
@@ -643,6 +722,105 @@ Return ONLY a JSON object in this format:
                 else f"{agent_name} completed screenshot-specific checks; review tool rows for exact OCR, layout, and provenance metrics."
             )
         return response
+
+    def _agent_grounded_narrative(
+        self,
+        agent_name: str,
+        tool_rows: dict[str, dict[str, Any]],
+        *,
+        screenshot_like: bool,
+    ) -> str:
+        """Build a compact agent-level summary from actual tool metrics."""
+        name = agent_name.lower()
+
+        if "image" in name:
+            freq = _tool_data(_first_row(tool_rows, "frequency_domain_analysis", "deepfake_frequency_check"))
+            ela = _tool_data(_first_row(tool_rows, "neural_ela", "ela_full_image", "ela_anomaly_classify"))
+            hash_row = _first_row(tool_rows, "file_hash_verify")
+            hash_data = _tool_data(hash_row)
+            hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
+            score = float(freq.get("anomaly_score") or ela.get("anomaly_score") or 0)
+            return (
+                "Image-integrity checks combined pixel/compression review, spectral analysis, and intake hash verification. "
+                f"The strongest measurable signal was an anomaly score of {score:.3f}; "
+                f"the SHA-256 custody check {'matched' if hash_match else 'did not match'} the uploaded artifact. "
+                "This supports integrity of the submitted file since intake, while camera-origin authenticity still depends on metadata and provenance coverage."
+            )
+
+        if "audio" in name:
+            spoof = _first_row(tool_rows, "anti_spoofing_detect", "anti_spoofing_deep_ensemble")
+            clone = _first_row(tool_rows, "voice_clone_detect", "voice_clone_deep_ensemble")
+            splice = _first_row(tool_rows, "audio_splice_detect")
+            codec = _first_row(tool_rows, "codec_fingerprinting", "mediainfo_profile")
+            flags = sum(1 for row in (spoof, clone, splice, codec) if _is_positive(row))
+            clean = sum(1 for row in (spoof, clone, splice, codec) if _is_negative(row))
+            return (
+                "Audio-forensic checks reviewed synthetic-speech risk, anti-spoofing behavior, edit continuity, and codec/container provenance. "
+                f"{flags} active warning signal(s) and {clean} clean signal(s) were available from the completed tools. "
+                "The agent verdict should be read as an acoustic-integrity assessment, not a statement about speaker identity unless diarization or speaker-match evidence is present."
+            )
+
+        if "object" in name or "scene" in name:
+            layout = _tool_data(_first_row(tool_rows, "screenshot_layout_forensics"))
+            if screenshot_like or layout:
+                anomalies = int(layout.get("layout_anomaly_count") or 0)
+                edge = layout.get("edge_density")
+                return (
+                    "Scene analysis was adapted for a screenshot: physical-world object, lighting, shadow, and scale checks were bypassed as not applicable. "
+                    f"The screenshot layout scan found {anomalies} UI/document structure anomaly flag(s)"
+                    + (f" with edge density {edge}." if edge is not None else ".")
+                    + " This is useful context for screen-capture consistency, not a camera-scene authenticity claim."
+                )
+            objects = _tool_data(_first_row(tool_rows, "object_detection"))
+            lighting = _first_row(tool_rows, "lighting_consistency", "shadow_validation", "scale_validation")
+            object_count = int(objects.get("object_count") or len(objects.get("objects", []) or []))
+            return (
+                "Scene-context checks reviewed detected objects against physical consistency signals such as lighting, shadow, and scale. "
+                f"Object detection reported {object_count} visible object(s); "
+                f"physical-consistency tools {'raised a warning' if _is_positive(lighting) else 'did not raise a supported warning'}. "
+                "These findings speak to scene plausibility and compositing risk, not file custody."
+            )
+
+        if "video" in name:
+            flow = _tool_data(_first_row(tool_rows, "optical_flow_analysis", "optical_flow_analyze"))
+            frame = _first_row(tool_rows, "frame_consistency_analysis", "interframe_forgery_detector", "vfi_error_map")
+            face = _tool_data(_first_row(tool_rows, "face_swap_detection"))
+            media = _tool_data(_first_row(tool_rows, "mediainfo_profile", "av_file_identity", "video_metadata"))
+            flow_score = flow.get("motion_anomaly_score") or flow.get("anomaly_score") or flow.get("mean_flow_error")
+            face_swap = face.get("face_swap_detected") is True
+            codec = media.get("codec") or media.get("video_codec") or media.get("format") or "container metadata"
+            return (
+                "Video-forensic checks reviewed temporal motion continuity, frame-to-frame consistency, biometric forgery risk, and container metadata. "
+                f"Optical-flow anomaly score was {float(flow_score or 0):.3f}; face-swap screening {'reported a face-swap signal' if face_swap else 'did not report a face-swap signal'}. "
+                f"Container review recorded {codec}, so the verdict reflects both visual continuity and file-level provenance signals."
+            )
+
+        if "metadata" in name or "provenance" in name:
+            exif = _tool_data(_first_row(tool_rows, "exif_extract", "extract_deep_metadata"))
+            hash_data = _tool_data(_first_row(tool_rows, "file_hash_verify"))
+            hex_data = _tool_data(_first_row(tool_rows, "hex_signature_scan"))
+            compression = _tool_data(_first_row(tool_rows, "compression_risk_audit"))
+            structure = _tool_data(_first_row(tool_rows, "file_structure_analysis"))
+            fields = int(exif.get("total_fields_extracted") or exif.get("field_count") or 0)
+            hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
+            scanned = int(hex_data.get("bytes_scanned") or 0)
+            anomalies = structure.get("anomalies") if isinstance(structure.get("anomalies"), list) else []
+            impact = compression.get("forensic_reliability_impact") or "limited"
+            if screenshot_like:
+                return (
+                    "Metadata and binary-provenance checks found a stable intake hash, valid file structure, and no editing-software byte signature in the scanned header. "
+                    f"EXIF contained {fields} field(s), which is common for screenshots but limits proof of original capture device and time; "
+                    f"compression/platform reliability impact is {impact}. "
+                    "Together these findings support integrity since upload while keeping original screenshot provenance limited."
+                )
+            return (
+                "Metadata and binary-provenance checks reviewed EXIF, timestamps, file structure, hash custody, and embedded software signatures. "
+                f"EXIF returned {fields} field(s), SHA-256 {'matched' if hash_match else 'did not match'} intake custody, "
+                f"and the hex scan reviewed {scanned:,} bytes with {len(anomalies)} structure anomaly flag(s). "
+                "This agent is strongest for provenance and chronology; it does not replace pixel, audio, or video manipulation analysis."
+            )
+
+        return ""
 
     def _tool_grounded_summary(self, row: dict[str, Any], *, screenshot_like: bool) -> str:
         tool = str(row.get("tool") or "")
@@ -669,18 +847,32 @@ Return ONLY a JSON object in this format:
                 .split()
             ).strip()
             if words > 0 or preview:
-                return f"{method} extracted {words} word(s) from the screenshot. Visible text preview: {preview[:180]}"
+                return (
+                    f"Gemini Vision OCR read {words} visible word(s) from the screenshot and preserved the main UI text for context"
+                    if method == "gemini_multimodal"
+                    else f"{method} extracted {words} word(s) from the screenshot"
+                ) + (f": {preview[:180]}." if preview else ".")
+            if method == "gemini_multimodal" or data.get("gemini_available"):
+                return (
+                    "Gemini Vision OCR completed but did not find readable text in this screenshot. "
+                    "This is a content/OCR coverage note, not an authenticity signal."
+                )
+            if screenshot_like:
+                return (
+                    f"{method} returned no readable screenshot text. "
+                    "Gemini Vision OCR should be used for screenshot text extraction; absence of OCR text is a coverage note only, not an authenticity signal."
+                )
             return (
-                f"{method} did not extract readable text. Treat this as an OCR coverage limit"
-                + (" for this screenshot." if screenshot_like else ".")
+                f"{method} returned no readable text. "
+                "This is an OCR coverage note only, not an authenticity signal."
             )
         if tool == "frequency_domain_analysis":
             score = data.get("anomaly_score", 0)
             hfr = data.get("high_freq_ratio", None)
             return (
-                f"Frequency scan measured anomaly score {float(score or 0):.3f}"
+                f"Frequency-domain scan measured anomaly score {float(score or 0):.3f}"
                 + (f" and high-frequency ratio {float(hfr):.3f}" if isinstance(hfr, (int, float)) else "")
-                + (". No frequency-domain manipulation pattern was detected." if verdict == "NEGATIVE" else ". Review as a frequency-domain warning signal.")
+                + (". No periodic/GAN-like frequency artifact pattern was detected." if verdict == "NEGATIVE" else ". Review as a frequency-domain warning signal.")
             )
         if tool == "neural_fingerprint":
             sim = data.get("top_similarity", data.get("similarity", data.get("confidence", conf)))
@@ -694,8 +886,8 @@ Return ONLY a JSON object in this format:
                 return f"Semantic image classification did not produce a usable result ({err[:140]}). This is a coverage limit, not an authenticity signal."
             if data.get("semantic_scope") == "screenshot_fast_profile":
                 return (
-                    f"Screenshot semantic profile recorded {data.get('width')}x{data.get('height')}px "
-                    f"({data.get('color_mode')} mode). Heavy scene classification was bypassed for the initial pass because screenshot authenticity is better assessed by OCR, layout, hash, and provenance checks."
+                    f"Screenshot content was classified as a digital UI capture: {data.get('width')}x{data.get('height')}px "
+                    f"({data.get('color_mode')} mode). Heavy natural-scene classification was intentionally bypassed; screenshot review relies on OCR, layout, hash, and provenance checks."
                 )
             image_type = data.get("image_type") or data.get("top_label") or data.get("label")
             return f"Semantic classifier labeled the visible content as {image_type or 'image content'}; this is context only, not proof of authenticity."
@@ -795,6 +987,159 @@ Return ONLY a JSON object in this format:
             return (
                 f"Noiseprint++ sensor clustering found {clusters} cluster(s) with no statistically inconsistent noise regions. "
                 "The sensor noise pattern is homogeneous across the image, consistent with a single capture device."
+            )
+        if tool in {"anti_spoofing_detect", "anti_spoofing_deep_ensemble"}:
+            score = data.get("spoof_score") or data.get("synthetic_probability") or data.get("probability") or conf
+            decision = data.get("verdict") or data.get("decision") or ("warning" if verdict == "POSITIVE" else "clean")
+            if verdict == "POSITIVE":
+                return (
+                    f"Anti-spoofing analysis reported a spoofing-risk score of {float(score or 0):.3f} ({decision}). "
+                    "This is a synthetic or replay-speech warning signal and should be corroborated with voice-clone and splice checks."
+                )
+            return (
+                f"Anti-spoofing analysis reported a spoofing-risk score of {float(score or 0):.3f} ({decision}). "
+                "No supported spoofing pattern was detected in the analyzed audio segments."
+            )
+        if tool in {"voice_clone_detect", "voice_clone_deep_ensemble"}:
+            score = data.get("clone_probability") or data.get("synthetic_probability") or data.get("score") or conf
+            model = data.get("model") or data.get("backend") or "voice-clone model"
+            if verdict == "POSITIVE":
+                return (
+                    f"Voice-clone screening reported clone/synthetic probability {float(score or 0):.3f} using {model}. "
+                    "This is an AI-speech warning signal, not speaker identification by itself."
+                )
+            return (
+                f"Voice-clone screening reported clone/synthetic probability {float(score or 0):.3f} using {model}. "
+                "No high-confidence AI voice-clone pattern was detected."
+            )
+        if tool == "audio_splice_detect":
+            points = data.get("splice_points") if isinstance(data.get("splice_points"), list) else []
+            score = data.get("splice_score") or data.get("anomaly_score") or len(points)
+            if verdict == "POSITIVE" or points:
+                return (
+                    f"Audio splice analysis found {len(points)} candidate edit point(s) with splice score {float(score or 0):.3f}. "
+                    "Abrupt acoustic discontinuities may indicate cuts or inserted segments."
+                )
+            return (
+                f"Audio splice analysis found no candidate edit points and splice score {float(score or 0):.3f}. "
+                "The available waveform continuity checks did not support an edit/tamper signal."
+            )
+        if tool in {"prosody_analyze", "prosody_analysis"}:
+            jitter = data.get("jitter") or data.get("jitter_local") or 0
+            shimmer = data.get("shimmer") or data.get("shimmer_local") or 0
+            return (
+                f"Prosody analysis measured jitter {float(jitter or 0):.3f} and shimmer {float(shimmer or 0):.3f}. "
+                "These voice-stability metrics are context for naturalness and synthesis risk, not a standalone authenticity decision."
+            )
+        if tool == "codec_fingerprinting":
+            generations = data.get("generation_count") or data.get("transcode_count") or 0
+            codec = data.get("codec") or data.get("codec_family") or "audio codec"
+            return (
+                f"Codec fingerprinting identified {codec} with {int(generations or 0)} suspected re-encoding generation(s). "
+                "Multiple generations can weaken provenance, while a single consistent codec chain is less suspicious."
+            )
+        if tool == "background_noise_analysis":
+            changes = data.get("noise_floor_jumps") or data.get("discontinuities") or 0
+            return (
+                f"Background-noise analysis found {int(changes or 0)} noise-floor discontinuity signal(s). "
+                "Stable background texture supports continuity; sudden changes can indicate editing or inserted audio."
+            )
+        if tool == "enf_analysis":
+            jumps = data.get("enf_jumps") or data.get("frequency_jumps") or 0
+            return (
+                f"Electrical-network-frequency analysis found {int(jumps or 0)} frequency jump(s). "
+                "Consistent hum timing supports continuity when an ENF signal is present."
+            )
+        if tool == "audio_visual_sync":
+            offset = data.get("sync_offset_ms") or data.get("av_offset_ms") or 0
+            return (
+                f"Audio/video sync analysis measured lip-sync offset {float(offset or 0):.1f}ms. "
+                "Large offsets may indicate dubbing or timeline edits; small offsets are usually compatible with normal encoding."
+            )
+        if tool == "object_detection":
+            count = int(data.get("object_count") or len(data.get("objects", []) or []))
+            labels = data.get("top_labels") or data.get("labels") or []
+            label_text = ", ".join(str(x) for x in labels[:5]) if isinstance(labels, list) else str(labels)
+            return (
+                f"Object detection identified {count} visible object(s)"
+                + (f" ({label_text})" if label_text else "")
+                + ". This establishes scene context for later consistency checks."
+            )
+        if tool in {"scene_incongruence", "contraband_database", "vector_contraband_search"}:
+            matches = data.get("matches") if isinstance(data.get("matches"), list) else []
+            if verdict == "POSITIVE" or matches:
+                return (
+                    f"Scene-context search reported {len(matches)} relevant warning match(es). "
+                    "Review the matched labels before treating the scene as contextually inconsistent."
+                )
+            return "Scene-context search found no supported contraband or semantic-incongruence match."
+        if tool in {"lighting_consistency", "lighting_correlation_initial", "shadow_validation", "scale_validation"}:
+            score = data.get("consistency_score") or data.get("correlation") or data.get("geometry_score") or conf
+            if verdict == "POSITIVE":
+                return (
+                    f"Physical-consistency analysis measured score {float(score or 0):.3f} and raised a geometry/lighting warning. "
+                    "This can indicate compositing when corroborated by pixel-level manipulation evidence."
+                )
+            return (
+                f"Physical-consistency analysis measured score {float(score or 0):.3f} with no supported geometry, lighting, shadow, or scale warning."
+            )
+        if tool in {"optical_flow_analysis", "optical_flow_analyze"}:
+            score = data.get("motion_anomaly_score") or data.get("anomaly_score") or data.get("mean_flow_error") or 0
+            frames = data.get("flagged_frames") if isinstance(data.get("flagged_frames"), list) else []
+            if verdict == "POSITIVE" or frames:
+                return (
+                    f"Optical-flow analysis measured motion anomaly score {float(score or 0):.3f} across {len(frames)} flagged frame(s). "
+                    "Abrupt motion-field breaks can indicate frame insertion or generated-frame artifacts."
+                )
+            return (
+                f"Optical-flow analysis measured motion anomaly score {float(score or 0):.3f} with no flagged frame-continuity breaks."
+            )
+        if tool in {"frame_consistency_analysis", "interframe_forgery_detector", "vfi_error_map", "thumbnail_coherence"}:
+            score = data.get("temporal_anomaly_score") or data.get("consistency_score") or data.get("anomaly_score") or conf
+            return (
+                f"Temporal frame-consistency analysis measured score {float(score or 0):.3f}. "
+                + ("Review as a frame-level warning signal." if verdict == "POSITIVE" else "No supported inter-frame forgery signal was reported.")
+            )
+        if tool == "face_swap_detection":
+            detected = data.get("face_swap_detected") is True
+            score = data.get("face_swap_score") or data.get("confidence") or conf
+            return (
+                f"Face-swap screening {'reported' if detected or verdict == 'POSITIVE' else 'did not report'} a biometric forgery signal "
+                f"(score {float(score or 0):.3f})."
+            )
+        if tool in {"av_file_identity", "mediainfo_profile", "video_metadata"}:
+            codec = data.get("codec") or data.get("video_codec") or data.get("audio_codec") or data.get("format") or "container"
+            duration = data.get("duration") or data.get("duration_s") or data.get("duration_seconds")
+            return (
+                f"Container profiling recorded {codec}"
+                + (f" with duration {duration}s" if duration else "")
+                + ". This describes file provenance and encoding consistency; it is not a manipulation finding by itself."
+            )
+        if tool == "rolling_shutter_validation":
+            score = data.get("rolling_shutter_score") or data.get("consistency_score") or conf
+            return (
+                f"Rolling-shutter validation measured sensor-consistency score {float(score or 0):.3f}. "
+                + ("Review as a device-motion warning signal." if verdict == "POSITIVE" else "No supported rolling-shutter inconsistency was reported.")
+            )
+        if tool in {"metadata_anomaly_score", "metadata_anomaly_scorer"}:
+            score = data.get("anomaly_score") or data.get("metadata_anomaly_score") or conf
+            return (
+                f"Metadata anomaly model measured score {float(score or 0):.3f}. "
+                + ("This is a provenance warning signal that should be checked against EXIF, timestamps, and C2PA." if verdict == "POSITIVE" else "No supported metadata-fabrication pattern was detected.")
+            )
+        if tool in {"provenance_chain_verify", "c2pa_validator"}:
+            present = data.get("c2pa_present") is True or data.get("provenance_found") is True
+            verified = data.get("provenance_verified") is True
+            return (
+                f"C2PA/provenance check {'found' if present else 'did not find'} embedded Content Credentials; "
+                f"manifest verification {'passed' if verified else 'was not available or did not pass'}. "
+                "Absence of C2PA is common, but it limits signed-source provenance."
+            )
+        if tool == "steganography_scan":
+            suspected = data.get("stego_suspected") is True or data.get("hidden_data_suspected") is True
+            return (
+                "Steganography scan "
+                + ("reported a hidden-payload warning signal." if suspected or verdict == "POSITIVE" else "found no supported hidden-payload signal.")
             )
         return ""
 

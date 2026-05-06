@@ -90,7 +90,8 @@ def test_agent1_uses_short_screen_capture_initial_plan(tmp_path):
 
     assert "Run extract_text_from_image for visible text extraction" in tasks
     assert all("noiseprint" not in t.lower() for t in tasks)
-    assert "Run neural_fingerprint for conceptual similarity detection" in tasks
+    assert "Run frequency_domain_analysis for frequency domain analysis" in tasks
+    assert all("neural_fingerprint" not in t.lower() for t in tasks)
 
 
 def test_agent3_skips_physical_scene_tools_for_screen_capture(tmp_path):
@@ -118,7 +119,9 @@ def test_agent5_omits_camera_provenance_tools_for_screen_capture(tmp_path):
     assert "gps_timezone" not in tasks
     assert "astro_grounding" not in tasks
     assert "exif_isolation_forest" not in tasks
+    assert "extract_text_from_image" not in tasks
     assert agent.deep_task_decomposition == [
+        "Run timestamp_analysis for cross-field date and time consistency",
         "Run provenance_chain_verify for C2PA and digital provenance manifests",
         "Run gemini_deep_forensic for screenshot timestamp and provenance cross-check",
     ]

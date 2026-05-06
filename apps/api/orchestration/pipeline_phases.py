@@ -207,12 +207,15 @@ def _humanize_initial_finding(
 
     if "frequency_domain_analysis" in tool or "frequency domain analysis" in text.lower():
         if "0.000" in text or "appears natural" in text.lower():
-            return "Frequency analysis found no unusual high-frequency artifact pattern; compression/noise distribution looks normal."
+            return "Frequency-domain analysis found no periodic/GAN-like artifact pattern; the screenshot's high-frequency distribution is within the expected range."
 
     if "extract_text" in tool or "extract text" in text.lower():
         preview = metadata.get("ocr_text_preview") or metadata.get("text_preview")
         if preview:
             clean_preview = " ".join(str(preview).replace("|", " | ").split())
+            method = str(metadata.get("method") or metadata.get("ocr_engine") or "OCR")
+            if method == "gemini_multimodal":
+                return f"Gemini Vision OCR read visible screenshot text for context: {clean_preview[:180]}"
             return f"OCR extracted visible screenshot text for context: {clean_preview[:180]}"
         if "ocr extracted" in text.lower():
             return text.replace("Extract Text From Image: ", "").replace("Checked: ", "")
@@ -241,9 +244,9 @@ def _humanize_initial_finding(
     if "analyze_image_content" in tool or "analyze image content" in text.lower():
         if metadata.get("semantic_scope") == "screenshot_fast_profile":
             return (
-                f"Screenshot semantic profile recorded {metadata.get('width')}x{metadata.get('height')}px "
-                f"({metadata.get('color_mode')} mode). Heavy scene classification was bypassed; "
-                "use OCR, layout, hash, and provenance checks for screenshot authenticity."
+                f"Screenshot content was identified as a digital UI capture ({metadata.get('width')}x{metadata.get('height')}px, "
+                f"{metadata.get('color_mode')} mode). Natural-scene classification was bypassed; "
+                "OCR, layout, hash, and provenance checks carry the screenshot review."
             )
         if agent_id == AgentID.AGENT1.value and (
             "screenshot" in str(metadata).lower() or "screen capture" in str(metadata).lower()
@@ -414,6 +417,12 @@ async def run_agents_concurrent(
                     finding_ev = str(_finding_attr(f, "evidence_verdict", "")).upper()
                     finding_st = str(_finding_attr(f, "status", "")).upper()
                     if finding_ev == "NOT_APPLICABLE" or finding_st == "NOT_APPLICABLE":
+                        continue
+                    if (
+                        aid == AgentID.AGENT5.value
+                        and tool == "extract_text_from_image"
+                        and is_screen_capture_like(evidence_artifact)
+                    ):
                         continue
 
                     s = _summary_for_finding(f, m)

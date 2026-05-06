@@ -812,8 +812,10 @@ _TOOL_INTERPRETERS.update(
             + str(o.get("word_count", 0))
             + " word(s). "
             + (
-                "Preview: '" + str(o.get("text", o.get("full_text", "")))[:160] + "...'"
-                if o.get("text") or o.get("full_text")
+                "Preview: '"
+                + str(o.get("text") or o.get("full_text") or o.get("ocr_text_preview") or o.get("text_preview") or "")[:160]
+                + "...'"
+                if o.get("text") or o.get("full_text") or o.get("ocr_text_preview") or o.get("text_preview")
                 else "No readable text was extracted; this is an OCR coverage limit, not an authenticity signal."
             )
         ),

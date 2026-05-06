@@ -2,20 +2,21 @@
 
 import React, { useMemo } from "react";
 import dynamic from "next/dynamic";
-import { Home as HomeIcon, Activity } from "lucide-react";
-import { motion } from "framer-motion";
+import { Activity, FileSearch, History as HistoryIcon, Home as HomeIcon } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
+import type { AgentFindingDTO, ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
+import { cleanFindingText } from "@/lib/findingText";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
+import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ReportFooter } from "./ReportFooter";
 import { IntelligenceBrief } from "./IntelligenceBrief";
 import { DegradationBanner } from "./DegradationBanner";
 import { ActionDock } from "./ActionDock";
-import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
-import { AnimatePresence } from "framer-motion";
 
 const AgentAnalysisTab = dynamic(
   () => import("./AgentAnalysisTab").then((m) => m.AgentAnalysisTab),
@@ -61,6 +62,8 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
     });
   }, [rs.report]);
 
+  const keyFindings = useMemo(() => buildKeyFindings(rs.report), [rs.report]);
+
   if (!rs.mounted) {
     return <ResultSkeletonView />;
   }
@@ -71,19 +74,18 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
         {(rs.state === "arbiter" || rs.state === "loading") && (
           <ForensicProgressOverlay
             title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
-            liveText={rs.arbiterMsg || "Decrypting forensic ledger..."}
-            telemetryLabel="Analyzing Agent Intersections"
+            liveText={rs.arbiterMsg || "Preparing final forensic report..."}
+            telemetryLabel="Compiling agent findings"
             showElapsed
           />
         )}
       </AnimatePresence>
 
-      {/* ── Horizon Navigation Dock ──────────────────────────────────── */}
-      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
-        <div className="bg-surface-1/80 border border-white/5 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
+        <div className="bg-surface-1/90 border border-white/8 rounded-2xl flex items-center justify-between gap-3 p-2 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
           <button
             onClick={rs.handleHome}
-            className="px-6 py-2.5 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-3"
+            className="px-4 py-3 text-[10px] font-mono font-bold text-white/45 hover:text-white transition-all uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl hover:bg-white/5"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             HUB
@@ -92,7 +94,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           <div
             role="tablist"
             aria-label="Report sections"
-            className="flex items-center gap-2 pr-1 focus:outline-none"
+            className="flex items-center gap-2 focus:outline-none"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -110,126 +112,144 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
-                  "px-8 py-2.5 text-[10px] font-mono font-bold transition-all duration-300 rounded-full uppercase tracking-[0.2em]",
+                  "px-5 sm:px-7 py-3 text-[10px] font-mono font-bold transition-all duration-300 rounded-xl uppercase tracking-[0.16em] flex items-center gap-2",
                   rs.activeTab === tab
                     ? "bg-[var(--color-primary)] text-[#020617] shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.3)]"
-                    : "text-white/30 hover:text-white/60 hover:bg-white/5"
+                    : "text-white/30 hover:text-white/60 hover:bg-white/5",
                 )}
               >
-                {tab === "analysis" ? "OVERVIEW" : "LOGS"}
+                {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
+                {tab === "analysis" ? "Current Analysis" : "History"}
               </button>
             ))}
           </div>
         </div>
       </nav>
 
-      {/* ── Main Investigative Surface ─────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 pt-16 space-y-10">
-
         <div
           role="tabpanel"
           id="tabpanel-history"
           aria-labelledby="tab-history"
           hidden={rs.activeTab !== "history"}
         >
-          <HistoryPanel onDismiss={() => rs.setActiveTab("analysis")} onSelect={(sid) => {
-            rs.selectSession(sid);        // drives sessionId state + resets arbiter poll
-            rs.setActiveTab("analysis");
-          }} />
+          <HistoryPanel
+            onDismiss={() => rs.setActiveTab("analysis")}
+            onSelect={(sid) => {
+              rs.selectSession(sid);
+              rs.setActiveTab("analysis");
+            }}
+          />
         </div>
+
         <div
           role="tabpanel"
           id="tabpanel-analysis"
           aria-labelledby="tab-analysis"
           hidden={rs.activeTab !== "analysis"}
         >
-            <ForensicErrorModal
-              isVisible={rs.state === "error"}
-              message={rs.errorMsg}
-              onHome={rs.handleHome}
-              onRetry={rs.handleNew}
-            />
-            {rs.state === "error" && (
-              <div className="flex flex-col items-center justify-center py-32 opacity-20">
-                <p className="font-mono text-xs">Analysis Pipeline Halted</p>
-              </div>
-            )}
-            {rs.state === "empty" && (
-              <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
-            )}
-            {rs.state === "arbiter" && (
-              <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
-                <Activity className="w-8 h-8 text-primary animate-pulse" />
-                <p className="font-mono text-xs font-semibold tracking-wide text-white/60">Awaiting Neural Synthesis...</p>
-              </div>
-            )}
-            {rs.state === "ready" && rs.report && (
-              <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  hidden: { opacity: 0 },
-                  visible: { opacity: 1, transition: { staggerChildren: 0.15 } }
-                }}
-                className="space-y-12"
-              >
-                {/* 0. Degradation Notice (if any) */}
-                {rs.report.degradation_flags && rs.report.degradation_flags.length > 0 && (
-                  <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                    <DegradationBanner flags={rs.report.degradation_flags} />
-                  </motion.div>
-                )}
+          <ForensicErrorModal
+            isVisible={rs.state === "error"}
+            message={rs.errorMsg}
+            onHome={rs.handleHome}
+            onRetry={rs.handleNew}
+          />
 
-                {/* 1. Verdict & Identity */}
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                    <ResultHeader
-                      report={rs.report}
-                      fileName={rs.fileName || rs.report.case_id || "Evidence"}
-                      mimeType={rs.mimeType}
-                      thumbnail={rs.thumbnail}
-                      isDeepPhase={rs.isDeepPhase}
-                      vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
-                      confPct={Math.round((rs.report.overall_confidence ?? 0) * 100) || 0}
-                      manipPct={Math.round((rs.report.manipulation_probability ?? 0) * 100) || 0}
-                      errPct={Math.round((rs.report.overall_error_rate ?? 0) * 100) || 0}
-                      discordPct={rs.report.confidence_std_dev ? Math.round(rs.report.confidence_std_dev * 100) : 0}
-                      activeAgentIds={activeAgentIds}
-                      pipelineDuration={rs.pipelineStartAt && rs.report.signed_utc ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc) : "—"}
-                    />
-                  </motion.div>
+          {rs.state === "error" && (
+            <div className="flex flex-col items-center justify-center py-32 opacity-20">
+              <p className="font-mono text-xs">Analysis Pipeline Halted</p>
+            </div>
+          )}
 
-                {/* 2. Intelligence Briefing (Prominent Findings) */}
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <IntelligenceBrief
-                    verdictSentence={rs.report.verdict_sentence || "The Forensic Council has completed its multi-agent evaluation. Review the detailed findings below for specific tool-level corroborations."}
-                    keyFindings={rs.report.key_findings}
-                    isDeepPhase={rs.isDeepPhase}
-                  />
-                </motion.div>
+          {rs.state === "empty" && (
+            <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
+          )}
 
-                {/* 3. Detailed Forensic Panels */}
-                {rs.isDeepPhase && (
-                  <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                    <DeepModelTelemetry report={rs.report} />
-                  </motion.div>
-                )}
+          {rs.state === "arbiter" && (
+            <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
+              <Activity className="w-8 h-8 text-primary animate-pulse" />
+              <p className="font-mono text-xs font-semibold tracking-wide text-white/60">
+                Arbiter is compiling agent findings...
+              </p>
+            </div>
+          )}
 
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <AgentAnalysisTab report={rs.report} activeAgentIds={activeAgentIds} isDeepPhase={rs.isDeepPhase} />
-                </motion.div>
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <TimelineTab report={rs.report} activeAgentIds={activeAgentIds} agentTimeline={rs.agentTimeline} pipelineStartAt={rs.pipelineStartAt} />
-                </motion.div>
-
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                  <ReportFooter handleHome={rs.handleHome} />
-                </motion.div>
+          {rs.state === "ready" && rs.report && (
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: { opacity: 1, transition: { staggerChildren: 0.12 } },
+              }}
+              className="space-y-10"
+            >
+              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <ResultHeader
+                  report={rs.report}
+                  fileName={rs.fileName || rs.report.case_id || "Evidence"}
+                  mimeType={rs.mimeType}
+                  thumbnail={rs.thumbnail}
+                  isDeepPhase={rs.isDeepPhase}
+                  vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
+                  confPct={toPct(rs.report.overall_confidence)}
+                  manipPct={toPct(rs.report.manipulation_probability)}
+                  errPct={toPct(rs.report.overall_error_rate)}
+                  discordPct={toPct(rs.report.confidence_std_dev)}
+                  activeAgentIds={activeAgentIds}
+                  pipelineDuration={
+                    rs.pipelineStartAt && rs.report.signed_utc
+                      ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc)
+                      : null
+                  }
+                />
               </motion.div>
-            )}
+
+              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <IntelligenceBrief
+                  verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
+                  keyFindings={keyFindings}
+                  reliabilityNote={rs.report.reliability_note}
+                  uncertaintyStatement={rs.report.uncertainty_statement}
+                  coverageNote={rs.report.analysis_coverage_note}
+                  skippedAgents={rs.report.skipped_agents}
+                  isDeepPhase={rs.isDeepPhase}
+                />
+              </motion.div>
+
+              {rs.report.degradation_flags && rs.report.degradation_flags.length > 0 && (
+                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                  <DegradationBanner flags={rs.report.degradation_flags} />
+                </motion.div>
+              )}
+
+              {rs.isDeepPhase && (
+                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                  <DeepModelTelemetry report={rs.report} />
+                </motion.div>
+              )}
+
+              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <AgentAnalysisTab report={rs.report} activeAgentIds={activeAgentIds} isDeepPhase={rs.isDeepPhase} />
+              </motion.div>
+
+              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <TimelineTab
+                  report={rs.report}
+                  activeAgentIds={activeAgentIds}
+                  agentTimeline={rs.agentTimeline}
+                  pipelineStartAt={rs.pipelineStartAt}
+                />
+              </motion.div>
+
+              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <ReportFooter handleHome={rs.handleHome} />
+              </motion.div>
+            </motion.div>
+          )}
         </div>
       </div>
 
-      {/* ── Sticky Action Dock ─────────────────────────────────────────── */}
       {rs.state === "ready" && rs.activeTab === "analysis" && (
         <ActionDock
           onHome={rs.handleHome}
@@ -241,60 +261,142 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   );
 }
 
-/** Skeleton shown while the page hydrates / session restores */
 function ResultSkeletonView() {
   return (
-    <div className="min-h-screen" aria-busy="true" aria-label="Loading report…">
-      {/* Fake nav */}
-      <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-2xl px-6">
-        <div className="bg-[#020203]/80 border border-white/10 rounded-full flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
-          <div className="skeleton h-8 w-16 rounded-full" />
-          <div className="skeleton h-9 w-48 rounded-full" />
+    <div className="min-h-screen" aria-busy="true" aria-label="Loading report">
+      <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
+        <div className="bg-[#020203]/80 border border-white/10 rounded-2xl flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+          <div className="skeleton h-10 w-20 rounded-xl" />
+          <div className="skeleton h-10 w-80 rounded-xl" />
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-6 pt-16 space-y-12">
-        {/* Verdict card skeleton — matches ResultHeader layout */}
-        <div className="rounded-3xl border border-white/5 glass-panel p-10 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">
-            {/* ArcGauge placeholder */}
-            <div className="skeleton w-40 h-40 rounded-2xl mx-auto" />
-            {/* Right column: verdict + discord + 3 metric cards */}
-            <div className="flex-1 space-y-6">
-              <div className="space-y-3 text-center md:text-left">
-                <div className="skeleton h-4 w-28 mx-auto md:mx-0" />
-                <div className="skeleton h-10 w-64 rounded-2xl mx-auto md:mx-0" />
-              </div>
-              <div className="flex gap-3 justify-center md:justify-start">
-                <div className="skeleton h-7 w-28 rounded-full" />
-                <div className="skeleton h-7 w-28 rounded-full" />
-              </div>
-              {/* 3 metric cards matching MetricsPanel */}
-              <div className="grid grid-cols-3 gap-3 pt-6 border-t border-white/5">
-                {[1,2,3].map(i => <div key={i} className="skeleton h-20 rounded-2xl" />)}
-              </div>
+      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-8">
+        <div className="rounded-2xl border border-white/5 glass-panel p-8 space-y-8">
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            <div className="skeleton w-32 h-32 rounded-xl" />
+            <div className="flex-1 space-y-4 w-full">
+              <div className="skeleton h-4 w-56 rounded-full" />
+              <div className="skeleton h-10 w-80 rounded-xl" />
+              <div className="skeleton h-20 w-full rounded-xl" />
             </div>
+            <div className="skeleton w-28 h-28 rounded-full" />
           </div>
         </div>
-        {/* Agent tabs skeleton */}
-        <div className="space-y-6">
-          <div className="skeleton h-10 w-80 rounded-full" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton h-48 rounded-2xl" />)}
-          </div>
-        </div>
+        <div className="skeleton h-56 rounded-2xl" />
+        <div className="skeleton h-80 rounded-2xl" />
       </div>
     </div>
   );
 }
 
 function fmtDuration(from: string | null, to?: string): string {
-  if (!from || !to) return "—";
+  if (!from || !to) return "-";
   try {
     const ms = new Date(to).getTime() - new Date(from).getTime();
+    if (ms < 0) return "-";
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
     return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
   } catch {
-    return "—";
+    return "-";
+  }
+}
+
+function toPct(value: number | null | undefined): number {
+  return Math.max(0, Math.min(100, Math.round(Number(value ?? 0) * 100)));
+}
+
+function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
+  if (!report) return [];
+
+  const findings: string[] = [];
+  const push = (value: string | null | undefined, maxLen = 230) => {
+    const cleaned = cleanFindingText(value, maxLen);
+    if (!cleaned || isLowValueFinding(cleaned)) return;
+    if (!findings.some((existing) => sameFinding(existing, cleaned))) {
+      findings.push(cleaned);
+    }
+  };
+
+  (report.key_findings ?? []).forEach((finding) => push(finding));
+
+  if (findings.length < 4) push(report.verdict_sentence, 260);
+  if (findings.length < 4) push(report.executive_summary, 260);
+
+  const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
+    .map(([agentId, text]) => ({
+      agentId,
+      text: cleanFindingText(text, 240),
+      priority: agentPriority(agentId),
+    }))
+    .filter((item) => item.text && !isLowValueFinding(item.text))
+    .sort((a, b) => a.priority - b.priority);
+
+  for (const item of agentNarratives) {
+    if (findings.length >= 5) break;
+    push(item.text, 240);
+  }
+
+  const toolFindings = Object.values(report.per_agent_findings ?? {})
+    .flat()
+    .filter(Boolean)
+    .map((finding) => ({
+      text: cleanToolSummary(finding),
+      confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
+      severity: finding.severity_tier ?? "INFO",
+    }))
+    .filter((item) => item.text && !isLowValueFinding(item.text))
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+
+  for (const item of toolFindings) {
+    if (findings.length >= 6) break;
+    push(item.text, 220);
+  }
+
+  return findings.slice(0, 6);
+}
+
+function cleanToolSummary(finding: AgentFindingDTO): string {
+  const metadata = finding.metadata ?? {};
+  const llmSummary = typeof metadata.llm_refined_summary === "string" ? metadata.llm_refined_summary : "";
+  const details = typeof metadata.details === "string" ? metadata.details : "";
+  return cleanFindingText(llmSummary || finding.reasoning_summary || finding.court_statement || details, 220);
+}
+
+function sameFinding(a: string, b: string): boolean {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  return na === nb || na.includes(nb.slice(0, 90)) || nb.includes(na.slice(0, 90));
+}
+
+function isLowValueFinding(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.length < 24 ||
+    lower.includes("template") ||
+    lower.includes("lorem ipsum") ||
+    lower.includes("no significant findings were identified") ||
+    lower.includes("review the detailed findings below") ||
+    lower.includes("forensic council has completed its multi-agent evaluation")
+  );
+}
+
+function agentPriority(agentId: string): number {
+  if (agentId === "Agent1") return 1;
+  if (agentId === "Agent5") return 2;
+  if (agentId === "Agent3") return 3;
+  if (agentId === "Agent2") return 4;
+  if (agentId === "Agent4") return 5;
+  return 10;
+}
+
+function severityRank(severity: string): number {
+  switch (severity) {
+    case "CRITICAL": return 5;
+    case "HIGH": return 4;
+    case "MEDIUM": return 3;
+    case "LOW": return 2;
+    default: return 1;
   }
 }

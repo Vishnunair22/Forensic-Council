@@ -1,113 +1,180 @@
 "use client";
 
 import React from "react";
-import { Hash, AlertCircle, CheckCircle2, Quote, Minus } from "lucide-react";
+import { AlertCircle, CheckCircle2, CircleDashed, FileText, Info, Minus } from "lucide-react";
 import { motion } from "framer-motion";
-import { clsx } from "clsx";
+import clsx from "clsx";
+import { cleanFindingText } from "@/lib/findingText";
 
 interface IntelligenceBriefProps {
   verdictSentence?: string;
   keyFindings?: string[];
+  reliabilityNote?: string;
+  uncertaintyStatement?: string;
+  coverageNote?: string;
+  skippedAgents?: Record<string, string>;
   isDeepPhase?: boolean;
 }
 
-export function IntelligenceBrief({ verdictSentence, keyFindings = [], isDeepPhase = false }: IntelligenceBriefProps) {
-  if (!verdictSentence && keyFindings.length === 0) return null;
+export function IntelligenceBrief({
+  verdictSentence,
+  keyFindings = [],
+  reliabilityNote,
+  uncertaintyStatement,
+  coverageNote,
+  skippedAgents,
+  isDeepPhase = false,
+}: IntelligenceBriefProps) {
+  const cleanVerdictSentence = cleanFindingText(verdictSentence, 320);
+  const cleanKeyFindings = keyFindings
+    .map((finding) => cleanFindingText(finding, 260))
+    .filter(Boolean);
+  const notes = [
+    { label: "Reliability", value: cleanFindingText(reliabilityNote, 220) },
+    { label: "Uncertainty", value: cleanFindingText(uncertaintyStatement, 220) },
+    { label: "Coverage", value: cleanFindingText(coverageNote, 220) },
+  ].filter((note) => note.value);
+  const skipped = Object.entries(skippedAgents ?? {});
+
+  if (!cleanVerdictSentence && cleanKeyFindings.length === 0 && notes.length === 0 && skipped.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-8">
-
-      {/* --- Executive Verdict Quote --- */}
-      {verdictSentence && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-surface-1 border border-white/5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] relative overflow-hidden"
-        >
-          <div className="p-8 md:p-10 relative">
-            <Quote className="absolute -top-6 -right-6 w-40 h-40 text-white/[0.015] pointer-events-none" />
-
-            <div className="flex items-center gap-3 mb-6">
-              <Hash className="w-4 h-4 text-[var(--color-success-light)]" />
-              <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.4em]">
-                EXECUTIVE_SUMMARY // ANALYST_VERDICT
-              </span>
-              <div className="ml-auto">
-                <span className={clsx(
-                  "text-[9px] font-mono font-bold px-3 py-1 rounded-full border uppercase tracking-widest",
-                  isDeepPhase
-                    ? "text-[var(--color-success-light)] border-[var(--color-success-light)]/20 bg-[var(--color-success-light)]/5"
-                    : "text-white/20 border-white/10 bg-white/[0.02]"
-                )}>
-                  {isDeepPhase ? "Deep_Analysis" : "Initial_Scan"}
-                </span>
-              </div>
-            </div>
-
-            <p className="text-xl sm:text-2xl font-medium text-white/80 leading-relaxed italic font-sans relative z-10 tracking-tight">
-              &ldquo;{verdictSentence}&rdquo;
-            </p>
-
-            <div className="mt-8 flex items-center gap-3 text-[9px] font-mono text-white/10 uppercase tracking-widest">
-              <span className="w-2 h-2 rounded-full bg-[var(--color-success-light)]/20" />
-              <span>Authenticated_Forensic_Analytic_Bridge</span>
-            </div>
+    <section className="space-y-5" aria-label="Key findings">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 px-1">
+        <div>
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary/70" />
+            <h2 className="text-lg font-heading font-bold text-white/85">Key Findings</h2>
           </div>
-        </motion.div>
-      )}
+          <p className="mt-1 text-xs text-white/35">
+            Arbiter-selected signals from the agent and tool outputs.
+          </p>
+        </div>
+        <span className={clsx(
+          "w-fit rounded-md border px-3 py-1.5 text-[9px] font-mono font-bold uppercase tracking-[0.16em]",
+          isDeepPhase ? "text-success/75 border-success/20 bg-success/5" : "text-white/35 border-white/10 bg-white/[0.025]",
+        )}>
+          {isDeepPhase ? "Deep Analysis" : "Initial Analysis"}
+        </span>
+      </div>
 
-      {/* --- Key Findings --- */}
-      {keyFindings.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-4 px-1">
-            <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.4em]">Key_Findings</span>
-            <div className="h-px flex-1 bg-white/5" />
-            <span className="text-[9px] font-mono text-white/15">{keyFindings.length} Signal{keyFindings.length !== 1 ? "s" : ""}</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {keyFindings.map((finding, i) => {
-              if (typeof finding !== "string") return null;
-              const lower = finding.toLowerCase();
-              const isDanger = /detected|found|confirmed|splicing|manipulation|tampered|ai-generated|synthetic|fabricat/.test(lower);
-              const isWarning = /inconsistency|anomaly|suspicious|potential|warning/.test(lower);
-              const severity = isDanger ? "danger" : isWarning ? "warning" : "info";
-
-              return (
-                <motion.div
-                  key={`finding-${i}`}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className="bg-surface-1 border border-white/5 rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.4),0_1px_0_rgba(255,255,255,0.03)_inset] p-5 flex items-start gap-4 hover:bg-surface-2 transition-all group"
-                >
-                  <div className={clsx(
-                    "w-9 h-9 shrink-0 rounded-xl flex items-center justify-center border transition-all duration-500 mt-0.5",
-                    severity === "danger"
-                      ? "bg-red-500/10 border-red-500/20 text-red-400 group-hover:scale-110"
-                      : severity === "warning"
-                        ? "bg-amber-500/10 border-amber-500/20 text-amber-400 group-hover:scale-110"
-                        : "bg-primary/10 border-primary/20 text-primary group-hover:scale-110"
-                  )}>
-                    {severity === "info"
-                      ? <CheckCircle2 className="w-4 h-4" />
-                      : severity === "warning"
-                        ? <Minus className="w-4 h-4" />
-                        : <AlertCircle className="w-4 h-4" />
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[9px] font-mono font-bold text-white/10 mb-1.5 uppercase tracking-widest">
-                      Finding_{i.toString().padStart(2, "0")}
+      {cleanKeyFindings.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {cleanKeyFindings.map((finding, i) => {
+            const severity = classifyFinding(finding);
+            return (
+              <motion.article
+                key={`${i}-${finding.slice(0, 20)}`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.035 }}
+                className="rounded-xl border border-white/8 bg-surface-1 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.22)]"
+              >
+                <div className="flex items-start gap-4">
+                  <FindingIcon severity={severity} />
+                  <div className="min-w-0">
+                    <div className="text-[9px] font-mono font-bold text-white/20 uppercase tracking-[0.18em]">
+                      Signal {String(i + 1).padStart(2, "0")}
                     </div>
-                    <p className="text-[13px] text-white/55 leading-relaxed font-medium">{finding}</p>
+                    <p className="mt-2 text-sm text-white/62 leading-relaxed">
+                      {finding}
+                    </p>
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
+                </div>
+              </motion.article>
+            );
+          })}
         </div>
       )}
+
+      <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-5 md:p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl border border-primary/20 bg-primary/5 flex items-center justify-center shrink-0">
+            <Info className="w-4 h-4 text-primary/70" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.18em]">
+              Arbiter Summary
+            </div>
+            {cleanVerdictSentence && (
+              <p className="mt-2 text-sm md:text-base text-white/65 leading-relaxed">
+                {cleanVerdictSentence}
+              </p>
+            )}
+
+            {(notes.length > 0 || skipped.length > 0) && (
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {notes.map((note) => (
+                  <div key={note.label} className="rounded-xl border border-white/8 bg-black/10 p-4">
+                    <div className="text-[9px] font-mono font-bold text-white/25 uppercase tracking-[0.16em]">
+                      {note.label}
+                    </div>
+                    <p className="mt-2 text-xs text-white/48 leading-relaxed">
+                      {note.value}
+                    </p>
+                  </div>
+                ))}
+                {skipped.length > 0 && (
+                  <div className="rounded-xl border border-white/8 bg-black/10 p-4">
+                    <div className="text-[9px] font-mono font-bold text-white/25 uppercase tracking-[0.16em]">
+                      Skipped Agents
+                    </div>
+                    <p className="mt-2 text-xs text-white/48 leading-relaxed">
+                      {skipped.map(([agent, reason]) => `${agent}: ${cleanFindingText(reason, 80)}`).join("; ")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FindingIcon({ severity }: { severity: "danger" | "warning" | "info" | "neutral" }) {
+  const base = "w-9 h-9 shrink-0 rounded-xl flex items-center justify-center border mt-0.5";
+  if (severity === "danger") {
+    return (
+      <div className={clsx(base, "bg-danger/10 border-danger/20 text-danger")}>
+        <AlertCircle className="w-4 h-4" />
+      </div>
+    );
+  }
+  if (severity === "warning") {
+    return (
+      <div className={clsx(base, "bg-warning/10 border-warning/20 text-warning")}>
+        <Minus className="w-4 h-4" />
+      </div>
+    );
+  }
+  if (severity === "neutral") {
+    return (
+      <div className={clsx(base, "bg-white/[0.03] border-white/10 text-white/35")}>
+        <CircleDashed className="w-4 h-4" />
+      </div>
+    );
+  }
+  return (
+    <div className={clsx(base, "bg-primary/10 border-primary/20 text-primary")}>
+      <CheckCircle2 className="w-4 h-4" />
     </div>
   );
+}
+
+function classifyFinding(finding: string): "danger" | "warning" | "info" | "neutral" {
+  const lower = finding.toLowerCase();
+  if (/tamper|manipulat|fabricat|synthetic|forged|splic|confirmed anomaly|malware|payload/.test(lower)) {
+    return "danger";
+  }
+  if (/limited|missing|absent|risk|cannot|inconclusive|warning|uncertain|coverage/.test(lower)) {
+    return "warning";
+  }
+  if (/bypassed|not applicable|no readable text|no visible text/.test(lower)) {
+    return "neutral";
+  }
+  return "info";
 }

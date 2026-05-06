@@ -590,6 +590,12 @@ class ForensicCouncilPipeline:
         except Exception as cache_err:
             logger.warning("Failed to cache report in Redis", error=str(cache_err))
 
+        await self._broadcast_final_arbiter_status(
+            session_id,
+            "complete",
+            f"Council report ready: {self._final_report.overall_verdict}.",
+        )
+
         if self.custody_logger:
             from core.agent_registry import AgentID
             from core.custody_logger import EntryType
@@ -747,8 +753,8 @@ class ForensicCouncilPipeline:
             )
         await self._broadcast_final_arbiter_status(
             session_id,
-            "complete",
-            f"Council report ready: {report.overall_verdict}.",
+            "synthesizing",
+            f"Council verdict selected: {report.overall_verdict}. Signing and caching the report.",
         )
 
         logger.info(

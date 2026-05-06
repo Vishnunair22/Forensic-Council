@@ -635,7 +635,7 @@ class LLMClient:
             if json_mode:
                 payload["generationConfig"]["responseMimeType"] = "application/json"
 
-            client = await self._get_client(timeout_override=30.0)
+            client = await self._get_client(timeout_override=55.0)
             resp = await self._with_retry(
                 lambda c=client, u=url, p=payload: c.post(u, json=p)
             )
