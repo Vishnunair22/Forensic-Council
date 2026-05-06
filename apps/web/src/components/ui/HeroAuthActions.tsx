@@ -84,10 +84,6 @@ export function HeroAuthActions() {
     }
   }, []);
 
-  useEffect(() => {
-    setIsNavigating(false);
-    setIsAuthenticating(false);
-  }, []);
 
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile || isAuthenticating || isNavigating) return;
@@ -195,7 +191,7 @@ export function HeroAuthActions() {
             }}
           />
         )}
-        {showUpload && selectedFile && (
+        {showUpload && selectedFile && !isAuthenticating && (
           <UploadSuccessModal
             key="success-modal"
             file={selectedFile}

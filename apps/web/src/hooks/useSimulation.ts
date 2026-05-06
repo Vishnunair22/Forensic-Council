@@ -1002,10 +1002,8 @@ const resumeInvestigation = useCallback(
     restoreSimulationState,
     hitlCheckpoint,
     errorMessage,
-    totalAgents: AGENTS_DATA.length,
     revealQueue,
     revealPending: revealQueue.length > 0,
     isReconnecting,
-    reconnectStatusMessage,
   };
 };

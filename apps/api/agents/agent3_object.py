@@ -13,24 +13,15 @@ are the sole responsibilities.
 
 from __future__ import annotations
 
-import asyncio
-import uuid
 from functools import cached_property
-from typing import Any
 
 from agents.base_agent import ForensicAgent
-from core.config import Settings
-from core.custody_logger import CustodyLogger
-from core.episodic_memory import EpisodicMemory
-from core.evidence import EvidenceArtifact
 from core.handlers.image import ImageHandlers
 from core.handlers.scene import SceneHandlers
-from core.media_kind import is_screen_capture_like
-from core.persistence.evidence_store import EvidenceStore
+from core.media_kind import is_digitally_created_image, is_screen_capture_like
 from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
-from core.working_memory import WorkingMemory
 
 logger = get_logger(__name__)
 
@@ -41,33 +32,6 @@ class Agent3Object(ForensicAgent):
         return "Agent3_ObjectDetection"
 
 
-    def __init__(
-        self,
-        agent_id: str,
-        session_id: uuid.UUID,
-        evidence_artifact: EvidenceArtifact,
-        config: Settings,
-        working_memory: WorkingMemory,
-        episodic_memory: EpisodicMemory,
-        custody_logger: CustodyLogger,
-        evidence_store: EvidenceStore,
-        inter_agent_bus: Any | None = None,
-        heavy_tool_semaphore: asyncio.Semaphore | None = None,
-    ) -> None:
-        super().__init__(
-            agent_id=agent_id,
-            session_id=session_id,
-            evidence_artifact=evidence_artifact,
-            config=config,
-            working_memory=working_memory,
-            episodic_memory=episodic_memory,
-            custody_logger=custody_logger,
-            evidence_store=evidence_store,
-            inter_agent_bus=inter_agent_bus,
-            heavy_tool_semaphore=heavy_tool_semaphore,
-        )
-        self._agent1_context: dict = {}
-        self._agent1_context_event: asyncio.Event = asyncio.Event()
 
     def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         self._agent1_context = agent1_gemini_findings or {}
@@ -77,11 +41,17 @@ class Agent3Object(ForensicAgent):
     def _is_screen_capture(self) -> bool:
         return is_screen_capture_like(self.evidence_artifact)
 
+    @cached_property
+    def _is_digital_capture(self) -> bool:
+        return is_digitally_created_image(self.evidence_artifact)
+
     @property
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        if self._is_screen_capture:
+        if self._is_screen_capture or self._is_digital_capture:
             return [
+                "Run object_detection to identify UI components, icons, and layout structure",
+                "Run scene_incongruence for document and interface layout anomalies",
                 "Run gemini_deep_forensic to identify UI elements, interface objects, and potential document fabrication",
             ]
         return [
@@ -94,10 +64,10 @@ class Agent3Object(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
-        if self._is_screen_capture:
+        if self._is_screen_capture or self._is_digital_capture:
             return [
-                "Run scene_incongruence for document and text contextual anomalies",
-                "Run gemini_deep_forensic to describe content and identify any concerns",
+                "Run lighting_consistency for UI-layer shadow and depth coherence",
+                "Run scale_validation for element and icon proportion auditing",
             ]
         object_ctx = self._tool_context.get("object_detection", {})
         detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
@@ -125,7 +95,7 @@ class Agent3Object(ForensicAgent):
         return self._compute_ceiling(base_count)
 
     async def build_initial_thought(self) -> str:
-        if self._is_screen_capture:
+        if self._is_screen_capture or self._is_digital_capture:
             return (
                 f"Starting UI/screenshot object identification for {self.evidence_artifact.artifact_id}. "
                 f"UI/screenshot images undergo streamlined object detection; scene incongruence and lighting tools are not applicable."

@@ -34,8 +34,10 @@ export default function Home() {
               <span className="text-white/90">Evidence Analysis System</span>
             </h1>
 
-            <p className="text-lg md:text-xl text-white/70 max-w-3xl mx-auto font-medium leading-relaxed">
-              <span className="text-primary/60 font-bold uppercase tracking-[0.3em] text-[11px] block mb-4">System_Overview</span>
+            <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-primary/60 font-mono mb-2">
+              System_Overview
+            </p>
+            <p className="text-lg md:text-xl text-white/60 max-w-3xl mx-auto font-medium leading-relaxed">
               Forensic Council is a Multi-Agent AI application that utilizes specialized agents to analyze digital forensic evidence and synthesize cohesive, authoritative reports.
             </p>
 
@@ -48,18 +50,18 @@ export default function Home() {
           </div>
 
           {/* Decorative Elements */}
-          <div className="grid grid-cols-3 gap-8 mt-10 opacity-60">
+          <div className="grid grid-cols-3 gap-8 mt-10 opacity-50">
             <div className="flex flex-col items-center gap-2">
-              <Cpu className="w-5 h-5 text-primary" />
-              <span className="text-[10px] uppercase tracking-tighter font-mono">Neural Processing</span>
+              <Cpu className="w-5 h-5 text-primary/70" />
+              <span className="text-[10px] uppercase tracking-widest font-mono text-white/40">Neural Processing</span>
             </div>
             <div className="flex flex-col items-center gap-2">
-              <Scale className="w-5 h-5 text-primary" />
-              <span className="text-[10px] uppercase tracking-tighter font-mono">Arbiter Protocol</span>
+              <Scale className="w-5 h-5 text-primary/70" />
+              <span className="text-[10px] uppercase tracking-widest font-mono text-white/40">Arbiter Protocol</span>
             </div>
             <div className="flex flex-col items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              <span className="text-[10px] uppercase tracking-tighter font-mono">Chain of Custody</span>
+              <Shield className="w-5 h-5 text-primary/70" />
+              <span className="text-[10px] uppercase tracking-widest font-mono text-white/40">Chain of Custody</span>
             </div>
           </div>
         </motion.div>
@@ -68,16 +70,10 @@ export default function Home() {
       {/* --- Content Section ---  */}
       <section className="relative w-full px-6 pb-24 max-w-7xl mx-auto space-y-16">
         <GlassPanel className="relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Cpu className="w-32 h-32 text-primary" />
-          </div>
           <HowWorksSection />
         </GlassPanel>
 
         <GlassPanel className="relative overflow-hidden group">
-          <div className="absolute top-0 left-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Scale className="w-32 h-32 text-primary" />
-          </div>
           <AgentsSection />
         </GlassPanel>
       </section>

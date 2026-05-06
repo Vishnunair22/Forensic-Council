@@ -64,6 +64,14 @@ class AgentInvestigationMixin:
             )
             logger.info("Dynamic task injected", agent_id=self.agent_id, task=description)
 
+            # Check if analysis is still active to avoid stale telemetry cycling
+            if getattr(self, "_investigation_completed", False):
+                logger.debug(
+                    "Investigation already completed, skipping telemetry broadcast",
+                    agent_id=self.agent_id,
+                )
+                return
+
             # Issue 4.6 Fix: Broadcast updated tools_total
             try:
                 state = await self.working_memory.get_state(self.session_id, self.agent_id)

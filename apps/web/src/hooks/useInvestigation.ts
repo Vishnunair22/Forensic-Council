@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSimulation } from "./useSimulation";
 import {
@@ -176,12 +176,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     revealPending,
     restoreSimulationState,
     isReconnecting,
-    reconnectStatusMessage,
     arbiterStatus,
     arbiterThinking,
   } = useSimulation({
     playSound,
-    onComplete: () => {},
   });
 
   useEffect(() => {
@@ -205,9 +203,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     !isUploading &&
     !sessionExistsRef.current;
 
-  useLayoutEffect(() => {
-    // This effect now serves as a hydration completion signal for sub-components.
-  }, []);
 
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -240,19 +235,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     authReadyRef.current = initAuth();
   }, []);
 
-  const filePreviewUrl = useMemo(() => {
-    if (!file) return null;
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-      return URL.createObjectURL(file);
-    }
-    return null;
-  }, [file]);
-
-  useEffect(() => {
-    return () => {
-      if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
-    };
-  }, [filePreviewUrl]);
 
   const resetSimulation = useCallback(() => {
     setIsUploading(false);
@@ -261,7 +243,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.removeItem("fc_show_loading");
     storage.removeItem("forensic_session_id");
     storage.removeItem("forensic_investigation_ctx");
-    try { storage.removeItem("forensic_thumbnail"); } catch { /* ignore */ }
+    storage.removeItem("forensic_thumbnail");
+    storage.removeItem("forensic_mime_type");
+    storage.removeItem("forensic_file_name");
+    storage.removeItem("forensic_case_id");
+    storage.removeItem("forensic_pipeline_start");
+    storage.removeItem("forensic_hitl_checkpoint");
+    storage.removeItem("forensic_is_deep");
     sessionExistsRef.current = false; // Update ref snapshot
     resetSimulationHook();
   }, [resetSimulationHook]);
@@ -274,7 +262,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (investigationInFlightRef.current) return;
       investigationInFlightRef.current = true;
 
-      playSound("upload");
       playSound("scan");
       setIsUploading(true);
       setValidationError(null);
@@ -539,7 +526,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         note: note || `Investigator decision: ${decision}`,
       });
       dismissCheckpoint();
-      playSound("success");
+      playSound("success-chime");
     } catch {
       toast.destructive({ title: "Decision Failed", description: "Could not submit decision." });
     } finally {
@@ -781,45 +768,37 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     file, setFile,
     isDragging, setIsDragging,
     validationError, setValidationError,
-    authError,
     isUploading,
     uploadPhaseText,
-    showLoadingOverlay, setShowLoadingOverlay,
-    analysisStreamReady,
-    arbiterLiveText,
-    autoStartBlocking, setAutoStartBlocking,
+    showLoadingOverlay,
     phase,
     isSubmittingHITL,
     isNavigating,
     status,
     agentUpdates,
-    validCompletedAgents,
+    completedAgents,
     pipelineMessage,
     pipelineThinking,
-    hitlCheckpoint: hitlCheckpoint as HITLCheckpoint | null,
-    errorMessage,
+    hitlCheckpoint,
     dismissCheckpoint,
-    handleFile,
-    triggerAnalysis,
+    revealQueue,
+    revealPending,
+    isReconnecting,
+    arbiterStatus,
+    arbiterThinking,
+    validCompletedAgents,
+    wsConnectionError,
     retryWsConnection,
+    handleFile,
     handleHITLDecision,
     handleAcceptAnalysis,
     handleDeepAnalysis,
     handleNewUpload,
     handleViewResults,
-    resetSimulation,
+    arbiterDeliberating,
+    arbiterLiveText,
+    hasStartedAnalysis,
     allAgentsDone,
     awaitingDecision,
-    hasStartedAnalysis,
-    showUploadForm,
-    validAgentsData,
-    wsConnectionError,
-    revealQueue,
-    revealPending,
-    arbiterDeliberating,
-    isReconnecting,
-    reconnectStatusMessage,
-    arbiterStatus,
-    arbiterThinking,
   };
 }

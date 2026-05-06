@@ -8,7 +8,7 @@ import { AGENTS } from "@/lib/constants";
  */
 export function AgentsSection() {
   return (
-    <section className="py-24 px-6 relative z-10 max-w-7xl mx-auto">
+    <section className="py-12 px-2 relative z-10 max-w-7xl mx-auto">
       <div className="text-center mb-16">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
@@ -58,7 +58,7 @@ export function AgentsSection() {
 
             <div className="mb-4">
               <h3 className="text-xl font-heading font-bold text-white mb-3 tracking-tight">{agent.name}</h3>
-              <p className="text-sm text-white/50 leading-relaxed font-medium group-hover:text-white/70 transition-colors duration-500 text-justify [text-align-last:center] [hyphens:auto]">
+              <p className="text-sm text-white/50 leading-relaxed font-medium group-hover:text-white/70 transition-colors duration-500 text-center">
                 {agent.desc}
               </p>
             </div>

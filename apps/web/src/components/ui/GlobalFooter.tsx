@@ -13,7 +13,7 @@ export function GlobalFooter() {
         </div>
 
         <div className="text-[10px] font-mono tracking-widest text-white/60 uppercase">
-          &copy; 2024 Forensic Council
+          &copy; {new Date().getFullYear()} Forensic Council
         </div>
 
         <div className="hidden md:block text-[9px] font-mono tracking-[0.4em] text-white/50 uppercase font-bold">

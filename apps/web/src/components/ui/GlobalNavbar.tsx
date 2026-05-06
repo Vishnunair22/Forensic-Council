@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
@@ -14,6 +14,8 @@ export function GlobalNavbar() {
   const { playSound } = useSound();
   const [isHovered, setIsHovered] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
 
   // Poll for active session to show destructive reset badge
   useEffect(() => {
@@ -31,6 +33,29 @@ export function GlobalNavbar() {
       clearInterval(interval);
       window.removeEventListener("fc_storage_update", checkSession);
     };
+  }, []);
+
+  // Hide navbar on scroll down, show on scroll up
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY < 60) {
+        // Always show near top of page
+        setIsVisible(true);
+      } else if (currentScrollY > lastScrollY.current) {
+        // Scrolling down — hide
+        setIsVisible(false);
+      } else {
+        // Scrolling up — show
+        setIsVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleLogoClick = useCallback(() => {
@@ -67,7 +92,9 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className="fixed top-6 left-6 z-[10001]"
+      className={`fixed top-6 left-6 z-[10001] transition-transform duration-300 ease-in-out ${
+        isVisible ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+      }`}
     >
       <button
         type="button"

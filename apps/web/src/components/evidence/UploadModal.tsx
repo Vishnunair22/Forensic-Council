@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
+import { useSound } from "@/hooks/useSound";
 
 function EnvelopeOpen({ isDragging, isOpen }: { isDragging: boolean; isOpen: boolean }) {
   return (
@@ -92,16 +93,14 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [hasOpened, setHasOpened] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { playSound } = useSound();
 
   useEffect(() => {
     setMounted(true);
-    const t = setTimeout(() => setHasOpened(true), 50);   // trigger open
     const originalBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      clearTimeout(t);
       if (originalBodyOverflow !== "hidden") {
         document.body.style.overflow = originalBodyOverflow;
       } else {
@@ -132,8 +131,9 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       return;
     }
     setError(null);
+    playSound("click");
     onFileSelected(file);
-  }, [onFileSelected]);
+  }, [onFileSelected, playSound]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -190,7 +190,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   : "border-white/5 hover:border-primary/40 hover:bg-white/[0.02]"
               }`}
             >
-              <EnvelopeOpen isDragging={isDragging} isOpen={hasOpened} />
+              <EnvelopeOpen isDragging={isDragging} isOpen={true} />
 
               <div className="flex flex-col items-center gap-2 pointer-events-none">
                 <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-white/80 group-hover:text-primary"}`}>

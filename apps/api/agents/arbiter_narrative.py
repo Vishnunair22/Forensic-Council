@@ -25,13 +25,25 @@ logger = get_logger(__name__)
 
 
 def _finding_importance(finding: dict[str, Any]) -> tuple[int, int, float]:
+    verdict = evidence_verdict_of(finding)
+    meta = finding.get("metadata") or {}
+    tool_name = meta.get("tool_name", "")
+
+    # Elevate high-integrity tools that confirm authenticity (NEGATIVE/CLEAN).
+    # This ensures definitive "clean" signals are cited in the synthesized report.
+    is_high_integrity_clean = (
+        verdict == "NEGATIVE"
+        and tool_name in {"file_hash_verify", "hash_verify", "exif_extract", "file_structure_analysis"}
+    )
+
     verdict_weight = {
         "POSITIVE": 4,
         "INCONCLUSIVE": 2,
-        "NEGATIVE": 1,
+        "NEGATIVE": 3 if is_high_integrity_clean else 1,
         "ERROR": 0,
         "NOT_APPLICABLE": 0,
-    }.get(evidence_verdict_of(finding), 1)
+    }.get(verdict, 1)
+
     severity_weight = {
         "CRITICAL": 4,
         "HIGH": 3,
@@ -116,23 +128,6 @@ class ArbiterNarrativeMixin:
         deep_f = [f for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
 
         _NOT_APPLICABLE_FLAGS = ("ela_not_applicable", "ghost_not_applicable")
-        _NOT_APPLICABLE_KEYS = {
-            "ela_not_applicable",
-            "ghost_not_applicable",
-            "ela_limitation_note",
-            "ghost_limitation_note",
-            "file_format_note",
-            "is_camera_format",
-        }
-        _STRIP_KEYS = {
-            "stub_warning",
-            "llm_synthesis",
-            "llm_reasoning",
-            "synthesis_phase",
-            "analysis_phase",
-            "tool_name",
-            "warning",
-        }
 
         def _fmt_text(findings_list: list[dict]) -> str:
             lines = []
@@ -146,7 +141,7 @@ class ArbiterNarrativeMixin:
                 reverse=True,
             )
 
-            for f in sorted_findings[:8]:
+            for f in sorted_findings[:12]:
                 meta = f.get("metadata") or {}
                 tool_name = meta.get("tool_name", f.get("finding_type", ""))
                 is_na = any(meta.get(flag) for flag in _NOT_APPLICABLE_FLAGS)

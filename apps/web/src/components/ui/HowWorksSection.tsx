@@ -8,7 +8,7 @@ import { HOW_IT_WORKS } from "@/lib/constants";
  */
 export function HowWorksSection() {
   return (
-    <section className="py-24 px-6 max-w-7xl mx-auto relative z-10">
+    <section className="py-12 px-2 max-w-7xl mx-auto relative z-10">
       <div className="text-center mb-20">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
@@ -58,7 +58,7 @@ export function HowWorksSection() {
               <div className="w-full">
                 <div className="glass-panel p-8 rounded-[2rem] group relative overflow-hidden h-full border border-white/5 hover:border-[var(--color-success-light)]/20 transition-all duration-500">
                   <h4 className="text-lg font-heading font-bold text-white mb-4 text-center tracking-tight">{item.title}</h4>
-                  <p className="text-sm text-white/40 leading-relaxed font-medium text-justify [text-align-last:center] tracking-wide">
+                  <p className="text-sm text-white/40 leading-relaxed font-medium text-center tracking-wide">
                     {item.desc}
                   </p>
 

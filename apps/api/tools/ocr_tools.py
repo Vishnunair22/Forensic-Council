@@ -407,9 +407,24 @@ async def _extract_text_gemini(
         if not client.has_vision_capability:
             return {"gemini_available": False, "method": "none", "lines": [], "full_text": ""}
 
-        prompt = """Perform high-precision OCR on the provided evidence artifact.
-        Format the output as a JSON list of lines: ["line 1", "line 2", ...].
-        If no text is found, return an empty list []."""
+        prompt = """Perform high-precision forensic OCR on the provided evidence artifact.
+        Extract all visible text, focusing on:
+        1. Timestamps and dates (e.g., system clock, message headers, file timestamps).
+        2. Identifiers (e.g., usernames, profile names, IDs, phone numbers).
+        3. UI Elements (e.g., button labels, window titles, URL bars, signal/battery indicators).
+        4. Suspicious text (e.g., inconsistent fonts, overlapping layers, mismatched alignment).
+        
+        Format the output as a JSON object:
+        {
+          "lines": ["line 1", "line 2", ...],
+          "structured_metadata": {
+            "timestamps": [],
+            "identifiers": [],
+            "ui_elements": [],
+            "suspicious_elements": []
+          }
+        }
+        If no text is found, return an empty lines list and empty metadata lists."""
 
         # This matches the method in core.llm_client.LLMClient
         raw_result = await client.generate_multimodal_synthesis(
@@ -420,10 +435,12 @@ async def _extract_text_gemini(
         )
 
         lines = []
-        if isinstance(raw_result, list):
-            lines = [str(line) for line in raw_result]
-        elif isinstance(raw_result, dict):
+        metadata = {}
+        if isinstance(raw_result, dict):
             lines = [str(line) for line in raw_result.get("lines", [])]
+            metadata = raw_result.get("structured_metadata", {})
+        elif isinstance(raw_result, list):
+            lines = [str(line) for line in raw_result]
 
         full_text = "\n".join(lines)
         if lines:
@@ -436,7 +453,8 @@ async def _extract_text_gemini(
             "full_text": full_text,
             "word_count": len(full_text.split()),
             "has_text": bool(lines),
-            "avg_confidence": 0.98, # Gemini 2.0 is extremely reliable for OCR
+            "structured_metadata": metadata,
+            "avg_confidence": 0.98,  # Gemini 2.0 is extremely reliable for OCR
             "court_defensible": True
         }
     except Exception as exc:
@@ -483,8 +501,6 @@ async def extract_evidence_text(
         )
         return _finalize_result(result, file_type_hint)
 
-    # Note: Screen captures no longer bypass Gemini. They follow the standard
-    # Tier 0 -> Tier 2 -> Tier 3 pipeline to ensure highest quality extraction.
 
     result = await extract_text_easyocr(artifact)
     return _finalize_result(result, "image")

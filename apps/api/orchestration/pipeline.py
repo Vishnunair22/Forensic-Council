@@ -235,14 +235,41 @@ class ForensicCouncilPipeline:
                             return result
                         if not content.get("tool_name"):
                             return result
+
+                        # Humanized tool names for frontend progress display
+                        TOOL_DISPLAY_NAMES = {
+                            "extract_text_from_image": "Forensic OCR",
+                            "file_hash_verify": "Hash Verification",
+                            "analyze_image_content": "Semantic Audit",
+                            "frequency_domain_analysis": "FFT Noise Scan",
+                            "neural_fingerprint_scan": "Neural Fingerprint",
+                            "diffusion_artifact_detection": "Diffusion Scan",
+                            "gan_artifact_audit": "GAN Neural Pass",
+                            "f3_net_splicing_scan": "Splicing Audit",
+                            "object_detection": "Structural Audit",
+                            "scene_incongruence": "Contextual Scan",
+                            "hex_signature_scan": "Binary Signature",
+                            "compression_risk_audit": "Compression Scan",
+                            "provenance_chain_verify": "C2PA Provenance",
+                            "timestamp_analysis": "Chronology Audit",
+                            "file_structure_analysis": "Structure Check",
+                            "gemini_deep_forensic": "Multimodal Synthesis",
+                        }
+
                         agent_name = AGENT_NAMES.get(agent_id, agent_id)
                         raw_tool_name = content.get("tool_name")
-                        tool_name = raw_tool_name if isinstance(raw_tool_name, str) else None
-                        thinking_text = (
-                            f"Calling {tool_name.replace('_', ' ').title()}..."
-                            if tool_name
-                            else content.get("content", "Analyzing...")
+                        tool_name = (
+                            raw_tool_name if isinstance(raw_tool_name, str) else None
                         )
+
+                        display_name = TOOL_DISPLAY_NAMES.get(
+                            tool_name,
+                            tool_name.replace("_", " ").title()
+                            if tool_name
+                            else "Forensic Pass",
+                        )
+
+                        thinking_text = f"Running {display_name}..."
                         iteration = content.get("iteration")
                         tools_done = (
                             iteration if isinstance(iteration, int) and iteration > 0 else None

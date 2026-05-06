@@ -78,7 +78,7 @@ export function ArbiterDeliberationOverlay({
                   <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
                     <Zap className="w-3 h-3 text-white/40" />
                     <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider">
-                      Groq_Engine_Active
+                      Synthesis_Active
                     </span>
                   </div>
                 </div>

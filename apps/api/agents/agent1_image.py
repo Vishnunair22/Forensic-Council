@@ -88,6 +88,9 @@ class Agent1Image(ForensicAgent):
             return [
                 "Run extract_text_from_image for visible text extraction",
                 "Run file_hash_verify for evidence integrity check",
+                "Run analyze_image_content for semantic image understanding",
+                "Run frequency_domain_analysis for frequency domain analysis",
+                "Run neural_fingerprint for conceptual similarity detection",
             ]
         base.insert(2, "Run neural_fingerprint for conceptual similarity detection")
         if self._is_lossless:
@@ -116,7 +119,10 @@ class Agent1Image(ForensicAgent):
             "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
         ]
         if self._is_screen_capture or self._is_digital_capture:
-            return base
+            return base + [
+                "Run gan_artifact_audit for deep neural GAN signature detection",
+                "Run f3_net_splicing_scan for frequency-domain region analysis",
+            ]
         base.insert(0, "Run neural_copy_move for dual-branch copy-move detection")
         base.insert(0, "Run neural_splicing for ViT-based region composition analysis")
         # Only add anomaly_tracer if not lossless (as it relies heavily on JPEG noise/ghosts)
@@ -151,13 +157,6 @@ class Agent1Image(ForensicAgent):
             "SHA-256 hash verification against ingestion record",
         )
 
-        # ── Legacy/Compatibility mappings ─────────────────────────────────────
-        # extract_evidence_text is used in some decomposition lists; map it to the unified OCR
-        registry.register(
-            "extract_evidence_text",
-            self.extract_text_from_image_handler,
-            "Evidence text extraction (unified)",
-        )
 
         # ── Gemini Vision Handler (Unified) ───────────────────────────────────
         async def gemini_deep_forensic_handler(input_data: dict) -> dict:
@@ -183,14 +182,6 @@ class Agent1Image(ForensicAgent):
 
         return registry
 
-    async def extract_text_from_image_handler(self, input_data: dict) -> dict:
-        """Compatibility proxy for ImageHandlers' OCR."""
-        if self._tool_registry is None:
-            return {"error": "registry not built", "available": False}
-        handler = self._tool_registry.get_handler("extract_text_from_image")
-        if handler is None or handler is self.extract_text_from_image_handler:
-            return {"error": "OCR handler not found or aliased to self", "available": False}
-        return await handler(input_data)
 
     async def build_initial_thought(self) -> str:
         name = os.path.basename(getattr(self.evidence_artifact, "file_path", "unknown"))
@@ -203,6 +194,16 @@ class Agent1Image(ForensicAgent):
             if lossless
             else "ViT Neural ELA manipulation detection"
         )
+        if digital:
+            return (
+                "INITIAL DECOMPOSITION: SCREEN CAPTURE INTEGRITY AUDIT.\n"
+                "1. OCR EXTRACTION: Extract text layers for context verification.\n"
+                "2. INTEGRITY CHECK: SHA-256 hash validation against intake record.\n"
+                "3. SEMANTIC CLASSIFICATION: Verify pixel distribution matches UI patterns.\n"
+                "4. FFT ANALYSIS: Scan for abnormal high-frequency noise spikes.\n"
+                "5. NEURAL FINGERPRINT: Detect synthetic GAN/Diffusion signatures."
+            )
+
         return (
             f"Starting image integrity analysis for '{name}'. "
             f"Phase 1 (fast): CLIP semantic classification, "
@@ -266,10 +267,6 @@ class Agent1Image(ForensicAgent):
                     priority=15,
                 )
 
-            if any(k in image_type for k in ("social media", "screenshot", "document", "post")):
-                await self.update_sub_task(
-                    f"High-risk {image_type} identified — grounding metadata check..."
-                )
 
             # AI generation suspicion
             if has_ai_marker or "digitally generated" in image_type:
@@ -279,12 +276,6 @@ class Agent1Image(ForensicAgent):
                     priority=20,
                 )
 
-            # surveillance footage
-            if "surveillance" in image_type or "security" in image_type:
-                await self.inject_task(
-                    description="Run noise_fingerprint to check sensor consistency in surveillance frame",
-                    priority=15,
-                )
 
             await self.update_sub_task(f"Semantic Context: {image_type}")
             await self._publish_agent_context("initial", [finding])

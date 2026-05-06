@@ -131,14 +131,17 @@ class Agent5Metadata(ForensicAgent):
             "Run hex_signature_scan for raw-byte software signatures",
             "Run compression_risk_audit to check for social media footprints",
         ]
-        if self._is_screen_capture:
+        if self._is_screen_capture or self._is_digital_image:
             return [
                 "Run file_hash_verify against ingestion hash",
                 "Run extract_text_from_image to identify displayed timestamps and UI metadata",
+                "Run hex_signature_scan for raw-byte software signatures",
+                "Run compression_risk_audit to check for social media footprints",
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
                 "Run timestamp_analysis for cross-field date and time consistency",
             ]
 
+        # digital_image without screen_capture hint falls into core_tasks
         if self._is_digital_image:
             return core_tasks
         return core_tasks + [
@@ -150,8 +153,10 @@ class Agent5Metadata(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
-        if self._is_screen_capture:
-            return []
+        if self._is_screen_capture or self._is_digital_image:
+            return [
+                "Run provenance_chain_verify for C2PA and digital provenance manifests",
+            ]
         if self._is_av_media:
             return [
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
@@ -169,7 +174,9 @@ class Agent5Metadata(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        return self._compute_ceiling(len(self.task_decomposition))
+        # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
+        base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
+        return self._compute_ceiling(base_count)
 
     async def build_initial_thought(self) -> str:
         return (

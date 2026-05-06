@@ -79,7 +79,6 @@ interface AgentProgressDisplayProps {
   mimeType?: string;
   playSound?: (type: SoundType) => void;
   revealQueue?: AgentUpdate[];
-  revealPending?: boolean;
   arbiterDeliberating?: boolean;
   arbiterStatus?: string | null;
   arbiterThinking?: string | null;
@@ -141,9 +140,12 @@ export function AgentProgressDisplay({
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
-    const raw = storage.getItem<AgentUpdate[]>("forensic_initial_agents", true);
-    if (Array.isArray(raw) && raw.length) {
-      return (raw as AgentUpdate[]).map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
+    const sid = storage.getItem("forensic_session_id");
+    if (sid) {
+      const raw = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
+      if (Array.isArray(raw) && raw.length) {
+        return (raw as AgentUpdate[]).map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
+      }
     }
     const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined));
     if (fromMime.length) return fromMime;

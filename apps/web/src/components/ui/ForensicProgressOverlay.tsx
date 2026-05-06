@@ -80,7 +80,7 @@ export function ForensicProgressOverlay({
         >
           <div className="w-1 h-1 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#00FFFF]" />
           <span className="text-[10px] font-mono tracking-[0.3em] text-white/30 uppercase">
-            {telemetryLabel} {"// ID_SCAN_V4"}
+            {telemetryLabel}
           </span>
         </motion.div>
 

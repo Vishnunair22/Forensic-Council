@@ -15,12 +15,10 @@ export interface UploadSuccessModalProps {
 
 export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismiss }: UploadSuccessModalProps) {
   const { playSound } = useSound();
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
-    setPortalTarget(document.body);
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
@@ -50,8 +48,6 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
     return () => window.removeEventListener("keydown", onEsc);
   }, [onNewUpload, onDismiss]);
 
-  if (!portalTarget) return null;
-
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/");
 
@@ -59,7 +55,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ rotateX: -180, opacity: 0, transition: { duration: 0.45 } }}
+      exit={{ opacity: 0, transition: { duration: 0.25, ease: "easeIn" } }}
       transition={{ duration: 0.18, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
     >
@@ -182,6 +178,6 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
         </motion.div>
       </div>
     </motion.div>,
-    portalTarget
+    document.body
   );
 }
