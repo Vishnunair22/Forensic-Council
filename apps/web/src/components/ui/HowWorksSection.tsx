@@ -8,13 +8,13 @@ import { HOW_IT_WORKS } from "@/lib/constants";
  */
 export function HowWorksSection() {
   return (
-    <section className="py-12 px-2 max-w-7xl mx-auto relative z-10">
-      <div className="text-center mb-20">
+    <section className="py-10 px-2 max-w-7xl mx-auto relative z-10">
+      <div className="text-center mb-14 sm:mb-16">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-4xl md:text-5xl font-heading font-bold text-white mb-6"
+          className="text-3xl sm:text-4xl md:text-5xl font-heading font-bold text-white mb-5 tracking-tight"
         >
           How Forensic <span className="text-[var(--color-primary-soft)]">Council Works</span>
         </motion.h2>
@@ -23,14 +23,14 @@ export function HowWorksSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.1 }}
-          className="text-lg font-medium text-white/40 max-w-3xl mx-auto leading-relaxed"
+          className="text-base sm:text-lg font-medium text-slate-300/80 max-w-3xl mx-auto leading-relaxed"
         >
           A multi-stage neural verification pipeline ensuring the cryptographic and semantic integrity of digital media through specialized AI coordination.
         </motion.p>
       </div>
 
       <div className="relative">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6 relative z-10">
           {HOW_IT_WORKS.map((item, i) => (
             <motion.div
               key={item.step}
@@ -56,9 +56,9 @@ export function HowWorksSection() {
 
               {/* Step Card */}
               <div className="w-full">
-                <div className="step-card p-8 rounded-[2rem] group relative overflow-hidden h-full">
+                <div className="step-card p-6 sm:p-7 rounded-2xl group relative overflow-hidden h-full">
                   <h4 className="text-lg font-heading font-bold text-white mb-4 text-center tracking-tight">{item.title}</h4>
-                  <p className="text-sm text-white/45 leading-relaxed font-medium text-center tracking-wide">
+                  <p className="text-sm text-slate-300/75 leading-relaxed font-medium text-center">
                     {item.desc}
                   </p>
 

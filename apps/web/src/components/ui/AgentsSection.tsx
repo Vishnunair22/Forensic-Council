@@ -8,28 +8,28 @@ import { AGENTS } from "@/lib/constants";
  */
 export function AgentsSection() {
   return (
-    <section className="py-12 px-2 relative z-10 max-w-7xl mx-auto">
-      <div className="text-center mb-16">
+    <section className="py-10 px-2 relative z-10 max-w-7xl mx-auto">
+      <div className="text-center mb-12 sm:mb-14">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-4xl md:text-5xl font-heading font-bold text-white mb-6"
+          className="text-3xl sm:text-4xl md:text-5xl font-heading font-bold text-white mb-5 tracking-tight"
         >
-          Meet The <span className="text-primary">Council</span>
+          Meet the <span className="text-primary">Council</span>
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.1 }}
-          className="text-base font-medium text-white/40 max-w-2xl mx-auto"
+          className="text-base font-medium text-slate-300/80 max-w-2xl mx-auto leading-relaxed"
         >
           Autonomous neural investigative nodes optimized for multi-modal evidence consensus.
         </motion.p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
         {AGENTS.map((agent, i) => (
           <motion.div
             key={agent.id}
@@ -37,7 +37,7 @@ export function AgentsSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="relative horizon-card p-8 rounded-3xl flex flex-col items-center text-center group cursor-pointer overflow-hidden border border-white/5 hover:border-primary/20 transition-all duration-500"
+            className="relative horizon-card p-6 sm:p-7 rounded-2xl flex flex-col items-center text-center group cursor-pointer overflow-hidden border border-white/8 hover:border-primary/30 transition-all duration-500"
           >
             {/* --- Aperture Icon (Centered) --- */}
             <div className="relative w-16 h-16 flex items-center justify-center mb-6">
@@ -58,7 +58,7 @@ export function AgentsSection() {
 
             <div className="mb-4">
               <h3 className="text-xl font-heading font-bold text-white mb-3 tracking-tight">{agent.name}</h3>
-              <p className="text-sm text-white/50 leading-relaxed font-medium group-hover:text-white/70 transition-colors duration-500 text-center">
+              <p className="text-sm text-slate-300/75 leading-relaxed font-medium group-hover:text-slate-100 transition-colors duration-500 text-center">
                 {agent.desc}
               </p>
             </div>
@@ -67,11 +67,11 @@ export function AgentsSection() {
             <div className="mt-auto pt-8 border-t border-white/5 w-full flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
                  <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]" />
-                 <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase">
+                 <span className="text-[10px] font-mono text-slate-300/60 tracking-widest uppercase">
                    Node_{agent.id}_Active
                  </span>
               </div>
-              <div className="text-[9px] font-mono text-primary/40 tracking-widest opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0">
+              <div className="text-[9px] font-mono text-primary-soft/70 tracking-widest opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0">
                 LATENCY: {10 + i * 2}MS // UPTIME: 99.9%
               </div>
             </div>

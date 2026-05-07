@@ -15,7 +15,13 @@ import {
   type HITLDecision
 } from "@/lib/api";
 import { toast } from "./use-toast";
-import { AGENTS as AGENTS_DATA, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS } from "@/lib/constants";
+import {
+  AGENTS as AGENTS_DATA,
+  INVESTIGATION_REQUEST_TIMEOUT_MS,
+  ARBITER_POLL_INTERVAL_MS,
+  ALLOWED_MIME_TYPES,
+  MAX_UPLOAD_SIZE_BYTES,
+} from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
 import { type SoundType } from "@/hooks/useSound";
@@ -160,6 +166,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const investigatorIdRef = useRef<string>(_initInvestigatorId());
   const [file, setFile] = useState<File | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
   const [isHydrated] = useState(() => {
@@ -658,6 +665,25 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
   }, [file, triggerAnalysis, startSimulation, connectWebSocket, resetSimulation]);
 
+  const handleFile = useCallback((targetFile: File) => {
+    if (targetFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      setValidationError("File exceeds 50MB limit.");
+      setFile(null);
+      playSound("error");
+      return;
+    }
+
+    if (!ALLOWED_MIME_TYPES.has(targetFile.type)) {
+      setValidationError(`File type "${targetFile.type || "unknown"}" is not supported.`);
+      setFile(null);
+      playSound("error");
+      return;
+    }
+
+    setValidationError(null);
+    setFile(targetFile);
+  }, [playSound]);
+
   const handleNewUpload = useCallback(() => {
     playSound("click");
     arbiterControl.abort();
@@ -803,6 +829,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   return {
     file, setFile,
+    validationError,
+    handleFile,
+    showUploadForm: !hasStartedAnalysis,
     isUploading,
     uploadPhaseText,
     showLoadingOverlay,

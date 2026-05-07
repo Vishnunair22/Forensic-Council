@@ -8,7 +8,6 @@ interface BrandLogoProps {
   size?: "sm" | "md" | "lg";
   isHovered?: boolean;
 }
-
 export function BrandLogo({ className, size = "md", isHovered = false }: BrandLogoProps) {
   const iconSizes = {
     sm: "w-9 h-9",
@@ -77,9 +76,9 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="text-[9px] font-mono font-bold tracking-widest text-primary/50 uppercase block leading-none mt-0.5"
+              className="text-[9px] font-mono font-bold tracking-widest text-primary-soft uppercase block leading-none mt-0.5"
             >
-              ← Reset & Home
+              Reset & Home
             </motion.span>
           )}
         </AnimatePresence>

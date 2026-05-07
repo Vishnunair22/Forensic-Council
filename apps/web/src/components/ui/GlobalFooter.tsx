@@ -1,24 +1,10 @@
-"use client";
-
-/**
- * GlobalFooter: Universal footer for the Horizon theme.
- * Keeps original disclaimer text while adding forensic telemetry styling.
- */
 export function GlobalFooter() {
   return (
-    <footer className="w-full py-16 px-8 relative z-[100] bg-transparent mt-auto overflow-hidden border-t border-white/[0.04]">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="hidden md:block text-[9px] font-mono tracking-[0.4em] text-white/50 uppercase font-bold">
-          Council_Bridge_2.0
-        </div>
-
-        <div className="text-[10px] font-mono tracking-widest text-white/60 uppercase">
-          &copy; {new Date().getFullYear()} Forensic Council
-        </div>
-
-        <div className="hidden md:block text-[9px] font-mono tracking-[0.4em] text-white/50 uppercase font-bold">
-          Node_Status: Active
-        </div>
+    <footer className="w-full px-6 py-10 relative z-[100] bg-transparent mt-auto overflow-hidden border-t border-white/[0.08]">
+      <div className="max-w-5xl mx-auto text-center">
+        <p className="text-sm font-medium leading-6 text-slate-300">
+          Forensic Council is an academic project and can occasionally make mistakes.
+        </p>
       </div>
     </footer>
   );

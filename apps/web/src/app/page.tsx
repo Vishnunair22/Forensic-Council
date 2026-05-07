@@ -1,10 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Shield, Scale, Cpu } from "lucide-react";
+import { sessionOnlyStorage } from "@/lib/storage";
 
 const HowWorksSection = dynamic(
   () => import("@/components/ui/HowWorksSection").then((mod) => mod.HowWorksSection),
@@ -15,55 +17,77 @@ const AgentsSection = dynamic(
   { loading: () => <div className="min-h-56" /> },
 );
 
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.12 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: "easeOut" } },
+};
+
 export default function Home() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const openUploadOnce = sessionOnlyStorage.getItem("fc_open_upload_once");
+
+    if (params.get("upload") !== "1" && openUploadOnce !== "1") {
+      sessionOnlyStorage.removeItem("forensic_auto_start");
+      sessionOnlyStorage.removeItem("fc_show_loading");
+      window.sessionStorage.removeItem("forensic_auto_start");
+      window.sessionStorage.removeItem("fc_show_loading");
+    }
+  }, []);
+
   return (
     <div className="relative min-h-screen selection:bg-primary/30 selection:text-primary-foreground">
 
       {/* --- Hero Section --- */}
-      <section id="hero" className="relative w-full min-h-screen flex flex-col items-center justify-center pt-24 pb-20 px-6">
+      <section id="hero" className="relative w-full min-h-[92vh] flex flex-col items-center justify-center pt-28 pb-16 px-5 sm:px-6">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="flex flex-col items-center text-center max-w-5xl mx-auto gap-8"
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="flex flex-col items-center text-center max-w-5xl mx-auto gap-8 z-10"
         >
           <div className="space-y-6">
 
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter leading-[0.95] text-white">
+            <motion.h1 variants={itemVariants} className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.02] text-white text-glow">
               Multi-Agent Forensic <br />
               <span className="text-hero-gradient">Evidence Analysis System</span>
-            </h1>
+            </motion.h1>
 
-            <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-primary/60 font-mono mb-2">
+            <motion.p variants={itemVariants} className="text-xs font-bold uppercase tracking-[0.24em] sm:tracking-[0.32em] text-primary-soft font-mono mb-2">
               System_Overview
-            </p>
-            <p className="text-lg md:text-xl text-white/55 max-w-2xl mx-auto font-medium leading-relaxed">
+            </motion.p>
+            <motion.p variants={itemVariants} className="text-base md:text-xl text-slate-200/80 max-w-2xl mx-auto font-medium leading-relaxed">
               Forensic Council is a Multi-Agent AI application that utilizes specialized agents to analyze digital forensic evidence and synthesize cohesive, authoritative reports.
-            </p>
+            </motion.p>
 
           </div>
 
-          <div className="flex flex-col items-center mt-2">
+          <motion.div variants={itemVariants} className="flex flex-col items-center mt-2">
             <HeroAuthActions />
-          </div>
+          </motion.div>
 
           {/* Decorative Elements */}
-          <div className="flex items-center gap-6 mt-10 opacity-[0.55]">
+          <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-8 text-slate-300/75">
             <div className="flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-primary/70" />
-              <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Neural Processing</span>
+              <Cpu className="w-4 h-4 text-primary-soft" />
+              <span className="text-xs uppercase tracking-widest font-mono">Neural Processing</span>
             </div>
-            <span className="w-1 h-1 rounded-full bg-white/20"></span>
+            <span className="hidden sm:block w-1 h-1 rounded-full bg-white/25"></span>
             <div className="flex items-center gap-2">
-              <Scale className="w-4 h-4 text-primary/70" />
-              <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Arbiter Protocol</span>
+              <Scale className="w-4 h-4 text-primary-soft" />
+              <span className="text-xs uppercase tracking-widest font-mono">Arbiter Protocol</span>
             </div>
-            <span className="w-1 h-1 rounded-full bg-white/20"></span>
+            <span className="hidden sm:block w-1 h-1 rounded-full bg-white/25"></span>
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary/70" />
-              <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Chain of Custody</span>
+              <Shield className="w-4 h-4 text-primary-soft" />
+              <span className="text-xs uppercase tracking-widest font-mono">Chain of Custody</span>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       </section>
 

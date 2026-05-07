@@ -299,6 +299,7 @@ export function useResult(initialSessionId?: string) {
 
   return {
     state,
+    arbiterComplete,
     report,
     arbiterMsg,
     errorMsg,
