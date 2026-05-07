@@ -6,6 +6,5 @@ export * from "./GlobalFooter";
 export * from "./GlobalNavbar";
 export * from "./HowWorksSection";
 export * from "./LoadingOverlay";
-export * from "./PageTransition";
 export * from "./Toaster";
 export * from "./dialog";

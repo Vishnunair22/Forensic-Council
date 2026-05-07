@@ -9,9 +9,8 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FileUploadSection } from "@/components/evidence/FileUploadSection";
 import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
 
 jest.mock("framer-motion", () => ({
@@ -52,14 +51,6 @@ if (typeof window !== "undefined") {
   window.URL.revokeObjectURL = jest.fn();
 }
 
-const baseUpload = {
-  file: null as File | null, isDragging: false, isUploading: false,
-  validationError: null as string | null,
-  onFileSelect: jest.fn(), onFileDrop: jest.fn(),
-  onDragEnter: jest.fn(), onDragLeave: jest.fn(),
-  onUpload: jest.fn(), onClear: jest.fn(),
-};
-
 const baseProgress = {
   agentUpdates: {}, completedAgents: [],
   progressText: "Ready", allAgentsDone: false,
@@ -75,13 +66,6 @@ beforeEach(() => jest.clearAllMocks());
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Keyboard Navigation", () => {
-  it("Tab moves focus to interactive elements in FileUploadSection", async () => {
-    const user = userEvent.setup();
-    render(<FileUploadSection {...baseUpload} />);
-    await user.tab();
-    expect(document.activeElement).not.toBe(document.body);
-  });
-
   it("Tab moves through all buttons in decision panel", async () => {
     const user = userEvent.setup();
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} />);
@@ -91,17 +75,6 @@ describe("Keyboard Navigation", () => {
     expect(document.activeElement).toBe(buttons[0]);
   });
 
-  it("Enter activates upload button (native button behavior)", () => {
-    const file = new File(["x"], "t.jpg", { type: "image/jpeg" });
-    const onUpload = jest.fn();
-    render(<FileUploadSection {...baseUpload} file={file} onUpload={onUpload} />);
-    const btn = screen.getByRole("button", { name: /begin|analyze|start/i });
-    btn.focus();
-    expect(document.activeElement).toBe(btn);
-    fireEvent.click(btn); // Simulates Enter on focused button
-    expect(onUpload).toHaveBeenCalled();
-  });
-
   it("Space activates a focused button (native button behavior)", () => {
     const onDeep = jest.fn();
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} onRunDeepAnalysis={onDeep} />);
@@ -109,22 +82,6 @@ describe("Keyboard Navigation", () => {
     btn.focus();
     fireEvent.click(btn);
     expect(onDeep).toHaveBeenCalled();
-  });
-
-  it("focus does not get trapped in FileUploadSection (can Tab out)", async () => {
-    const user = userEvent.setup();
-    render(
-      <div>
-        <FileUploadSection {...baseUpload} />
-        <button data-testid="outside">Outside</button>
-      </div>
-    );
-    for (let i = 0; i < 15; i++) {
-      await user.tab();
-      if (document.activeElement?.getAttribute("data-testid") === "outside") break;
-    }
-    // If we reach here without hanging, focus is not trapped
-    expect(true).toBe(true);
   });
 });
 
@@ -141,31 +98,11 @@ describe("ARIA Labels and Semantic HTML", () => {
     });
   });
 
-  it("FileUploadSection buttons have descriptive text", () => {
-    const file = new File(["x"], "e.jpg", { type: "image/jpeg" });
-    render(<FileUploadSection {...baseUpload} file={file} />);
-    screen.getAllByRole("button").forEach(btn => {
-      expect((btn.textContent?.trim().length ?? 0) + (btn.getAttribute("aria-label")?.length ?? 0)).toBeGreaterThan(0);
-    });
-  });
-
-  it("file input is present and discoverable", () => {
-    render(<FileUploadSection {...baseUpload} />);
-    expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-  });
-
   it("disabled buttons are marked as disabled (not just visually styled)", () => {
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} isNavigating={true} />);
     const disabledBtns = screen.getAllByRole("button").filter(b => b.hasAttribute("disabled"));
     expect(disabledBtns.length).toBeGreaterThan(0);
-    // Native disabled is accessible — no aria-disabled needed when using disabled attribute
     disabledBtns.forEach(btn => expect(btn).toBeDisabled());
-  });
-
-  it("no form element is used (avoiding implicit form submission)", () => {
-    render(<FileUploadSection {...baseUpload} />);
-    // No <form> should be present (we use event handlers)
-    expect(document.querySelector("form")).not.toBeInTheDocument();
   });
 
   it("progress text is in the document (accessible to screen readers)", () => {
@@ -175,49 +112,10 @@ describe("ARIA Labels and Semantic HTML", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ERROR ANNOUNCEMENT
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe("Error State Accessibility", () => {
-  it("validation error is visible text (not color alone)", () => {
-    render(<FileUploadSection {...baseUpload} validationError="Unsupported format." />);
-    expect(screen.getByText(/Unsupported format/i)).toBeInTheDocument();
-  });
-
-  it("50MB limit error is communicated via text", () => {
-    render(<FileUploadSection {...baseUpload} validationError="File exceeds 50MB limit." />);
-    expect(screen.getByText(/50MB/i)).toBeInTheDocument();
-  });
-
-  it("error appears when validationError prop changes (re-render)", async () => {
-    const { rerender } = render(<FileUploadSection {...baseUpload} validationError={null} />);
-    expect(screen.queryByText(/50MB/i)).not.toBeInTheDocument();
-    rerender(<FileUploadSection {...baseUpload} validationError="File exceeds 50MB limit." />);
-    await waitFor(() => expect(screen.getByText(/50MB/i)).toBeInTheDocument());
-  });
-
-  it("error clears when validationError prop is set back to null", async () => {
-    const { rerender } = render(<FileUploadSection {...baseUpload} validationError="Error!" />);
-    expect(screen.getByText("Error!")).toBeInTheDocument();
-    rerender(<FileUploadSection {...baseUpload} validationError={null} />);
-    await waitFor(() => expect(screen.queryByText("Error!")).not.toBeInTheDocument());
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // LOADING/BUSY STATES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Loading State Accessibility", () => {
-  const file = new File(["x"], "e.jpg", { type: "image/jpeg" });
-
-  it("upload loading state provides text feedback beyond visual spinner", () => {
-    render(<FileUploadSection {...baseUpload} file={file} isUploading={true} />);
-    const hasText = screen.queryByText(/uploading|loading|processing/i);
-    const hasDisabled = document.querySelector("[disabled]");
-    expect(hasText || hasDisabled).toBeTruthy();
-  });
-
   it("arbiter navigation state provides text feedback (Compiling Report)", () => {
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} isNavigating={true} />);
     const hasText = screen.queryAllByText(/pipeline|triage|resolved|investigation/i).length > 0;
@@ -245,8 +143,6 @@ describe("Focus Management", () => {
     btn.focus();
     expect(document.activeElement).toBe(btn);
     rerender(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} progressText="v2" />);
-    // Focus should not jump away on text update
-    // Note: React may or may not preserve focus; we just verify no crash
     expect(document.body).toBeTruthy();
   });
 });
@@ -268,11 +164,6 @@ describe("No Color-Only Information", () => {
     render(<AgentProgressDisplay {...baseProgress} phase="deep" allAgentsDone={true} />);
     expect(screen.getByText(/analysis phase complete/i)).toBeInTheDocument();
   });
-
-  it("drag state renders without crash (visual feedback may be color)", () => {
-    const { container } = render(<FileUploadSection {...baseUpload} isDragging={true} />);
-    expect(container.firstChild).toBeTruthy();
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -282,19 +173,9 @@ describe("No Color-Only Information", () => {
 describe("Document Structure", () => {
   it("agent progress display has meaningful heading or landmark", () => {
     render(<AgentProgressDisplay {...baseProgress} progressText="Analysis in progress" />);
-    // Either a heading, region, or status element should be present
     const hasStructure =
       document.querySelector("h1, h2, h3, [role='heading'], [role='status'], [role='main']") ||
       screen.queryByText(/Analysis in progress/i);
     expect(hasStructure).toBeTruthy();
-  });
-
-  it("file upload area is discoverable", () => {
-    render(<FileUploadSection {...baseUpload} />);
-    // Should be a label, region, or similar landmark
-    const discoverable =
-      document.querySelector("label, [role='region'], [role='main'], [aria-label]") ||
-      document.querySelector('input[type="file"]');
-    expect(discoverable).toBeTruthy();
   });
 });

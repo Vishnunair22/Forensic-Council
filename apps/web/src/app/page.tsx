@@ -1,12 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
 import { motion, type Variants } from "framer-motion";
 import { Shield, Scale, Cpu } from "lucide-react";
-import { sessionOnlyStorage } from "@/lib/storage";
 
 const HowWorksSection = dynamic(
   () => import("@/components/ui/HowWorksSection").then((mod) => mod.HowWorksSection),
@@ -28,18 +26,6 @@ const itemVariants: Variants = {
 };
 
 export default function Home() {
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const openUploadOnce = sessionOnlyStorage.getItem("fc_open_upload_once");
-
-    if (params.get("upload") !== "1" && openUploadOnce !== "1") {
-      sessionOnlyStorage.removeItem("forensic_auto_start");
-      sessionOnlyStorage.removeItem("fc_show_loading");
-      window.sessionStorage.removeItem("forensic_auto_start");
-      window.sessionStorage.removeItem("fc_show_loading");
-    }
-  }, []);
-
   return (
     <div className="relative min-h-screen selection:bg-primary/30 selection:text-primary-foreground">
 

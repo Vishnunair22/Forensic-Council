@@ -10,7 +10,6 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { FileUploadSection } from "@/components/evidence/FileUploadSection";
 import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
 
 // Mock URL.createObjectURL
@@ -43,21 +42,6 @@ jest.mock("@/components/ui/AgentIcon", () => ({
   AgentIcon: () => <div data-testid="agent-icon" />,
 }));
 
-// ── FileUploadSection helpers ─────────────────────────────────────────────────
-
-const uploadDefaults = {
-  file: null as File | null,
-  isDragging: false,
-  isUploading: false,
-  validationError: null as string | null,
-  onFileSelect: jest.fn(),
-  onFileDrop: jest.fn(),
-  onDragEnter: jest.fn(),
-  onDragLeave: jest.fn(),
-  onUpload: jest.fn(),
-  onClear: jest.fn(),
-};
-
 // ── AgentProgressDisplay helpers ──────────────────────────────────────────────
 
 const progressDefaults = {
@@ -75,115 +59,6 @@ const progressDefaults = {
 };
 
 beforeEach(() => jest.clearAllMocks());
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FileUploadSection
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe("FileUploadSection", () => {
-  describe("default (no file) rendering", () => {
-    it("renders without crashing", () => {
-      const { container } = render(<FileUploadSection {...uploadDefaults} />);
-      expect(container.firstChild).toBeTruthy();
-    });
-    it("shows upload prompt text", () => {
-      render(<FileUploadSection {...uploadDefaults} />);
-      expect(screen.getByText(/drag\s*&\s*drop or click to browse/i)).toBeInTheDocument();
-    });
-    it("renders file input element", () => {
-      render(<FileUploadSection {...uploadDefaults} />);
-      expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
-    });
-    it("does not render upload action button when no file", () => {
-      render(<FileUploadSection {...uploadDefaults} />);
-      expect(screen.queryByRole("button", { name: /begin|analyze|start investigation/i })).not.toBeInTheDocument();
-    });
-  });
-
-  describe("with file selected", () => {
-    const file = new File(["content"], "evidence.jpg", { type: "image/jpeg" });
-    it("shows file name", () => {
-      render(<FileUploadSection {...uploadDefaults} file={file} />);
-      expect(screen.getByText(/evidence\.jpg/i)).toBeInTheDocument();
-    });
-    it("renders upload action button", () => {
-      render(<FileUploadSection {...uploadDefaults} file={file} />);
-      expect(screen.getByRole("button", { name: /begin|analyze|start/i })).toBeInTheDocument();
-    });
-    it("renders clear/reset button", () => {
-      render(<FileUploadSection {...uploadDefaults} file={file} />);
-      expect(screen.getByRole("button", { name: /clear|reset|remove|discard/i })).toBeInTheDocument();
-    });
-    it("calls onUpload with file when upload clicked", () => {
-      const onUpload = jest.fn();
-      render(<FileUploadSection {...uploadDefaults} file={file} onUpload={onUpload} />);
-      fireEvent.click(screen.getByRole("button", { name: /begin|analyze|start|investigate/i }));
-      expect(onUpload).toHaveBeenCalledWith(file);
-    });
-    it("calls onClear when clear clicked", () => {
-      const onClear = jest.fn();
-      render(<FileUploadSection {...uploadDefaults} file={file} onClear={onClear} />);
-      fireEvent.click(screen.getByRole("button", { name: /clear|reset|remove|discard/i }));
-      expect(onClear).toHaveBeenCalled();
-    });
-  });
-
-  describe("uploading state", () => {
-    const file = new File(["x"], "e.jpg", { type: "image/jpeg" });
-    it("disables upload button when isUploading", () => {
-      render(<FileUploadSection {...uploadDefaults} file={file} isUploading={true} />);
-      const btns = screen.getAllByRole("button");
-      const disabled = btns.some(b => b.hasAttribute("disabled"));
-      expect(disabled).toBe(true);
-    });
-    it("shows loading indicator", () => {
-      render(<FileUploadSection {...uploadDefaults} file={file} isUploading={true} />);
-      // Either a spinner SVG or loading text
-      const hasLoading =
-        document.querySelector('[class*="spin"]') ||
-        document.querySelector('[class*="animate"]') ||
-        screen.queryByText(/loading|uploading|processing/i);
-      expect(hasLoading || true).toBeTruthy(); // Presence of component without crash
-    });
-  });
-
-  describe("validation errors", () => {
-    it("shows error message when validationError is set", () => {
-      render(<FileUploadSection {...uploadDefaults} validationError="File exceeds 50MB limit." />);
-      expect(screen.getByText(/50MB/i)).toBeInTheDocument();
-    });
-    it("shows unsupported format error", () => {
-      render(<FileUploadSection {...uploadDefaults} validationError="Unsupported format." />);
-      expect(screen.getByText(/Unsupported format/i)).toBeInTheDocument();
-    });
-  });
-
-  describe("file input interaction", () => {
-    it("calls onFileSelect when file chosen via input", async () => {
-      const onFileSelect = jest.fn();
-      render(<FileUploadSection {...uploadDefaults} onFileSelect={onFileSelect} />);
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-      const file = new File(["x"], "pic.jpg", { type: "image/jpeg" });
-      await userEvent.upload(input, file);
-      expect(onFileSelect).toHaveBeenCalledWith(file);
-    });
-  });
-
-  describe("drag state", () => {
-    it("calls onDragEnter when dragenter fires on drop zone", () => {
-      const onDragEnter = jest.fn();
-      render(<FileUploadSection {...uploadDefaults} onDragEnter={onDragEnter} />);
-      const zone = document.querySelector("[data-testid='drop-zone']") ?? document.body.firstChild as Element;
-      if (zone) fireEvent.dragEnter(zone);
-      // onDragEnter may or may not have been called depending on rendered element
-    });
-    it("does not crash with isDragging=true", () => {
-      const { container } = render(<FileUploadSection {...uploadDefaults} isDragging={true} />);
-      expect(container.firstChild).toBeTruthy();
-    });
-  });
-});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AgentProgressDisplay

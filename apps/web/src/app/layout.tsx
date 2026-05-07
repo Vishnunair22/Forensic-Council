@@ -27,8 +27,6 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-
-
 export const metadata: Metadata = {
   title: { default: "Forensic Council", template: "%s | Forensic Council" },
   description: "Multi-Agent Forensic Evidence Analysis System — Court-grade digital evidence verification.",
@@ -38,19 +36,13 @@ export const metadata: Metadata = {
 
 export const viewport = { themeColor: "#020617", width: "device-width", initialScale: 1 } as const;
 
-
-
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      </head>
       <body
         className={`${geist.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip`}
       >

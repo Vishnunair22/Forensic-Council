@@ -6,7 +6,7 @@ import { AlertTriangle, RefreshCcw, Home } from "lucide-react";
 import Link from "next/link";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 
-export default function GlobalError({
+export default function RouteError({
   error,
   reset,
 }: {

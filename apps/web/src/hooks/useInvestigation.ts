@@ -101,7 +101,7 @@ async function waitForFinalReport(
     } catch (e: unknown) {
       if (e instanceof Error && e.message.includes("Council synthesis"))
         throw e;
-      if (e instanceof Error && e.message.includes("not found") || e instanceof Error && e.message.includes("session may have expired"))
+      if (e instanceof Error && (e.message.includes("not found") || e.message.includes("session may have expired")))
         throw e;
     }
     await new Promise<void>((r) => {
@@ -169,10 +169,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
-  const [isHydrated] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return true;
-  });
   const [autoStartBlocking, setAutoStartBlocking] = useState(() => {
     if (typeof window === "undefined") return false;
     return sessionOnlyStorage.getItem("forensic_auto_start") === "true";
@@ -485,7 +481,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   // Effect A — Auto-start from pending file (set by HeroAuthActions before navigating here)
   useEffect(() => {
-    if (!isHydrated || autoStartFiredRef.current) return;
+    if (autoStartFiredRef.current) return;
     const pending = __pendingFileStore.file;
     if (!pending) {
       sessionOnlyStorage.removeItem("forensic_auto_start");
@@ -503,11 +499,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     // Keep autoStartBlocking=true until triggerAnalysis calls setAutoStartBlocking(false),
     // preventing the "No Evidence Queued" empty state from briefly flashing.
     triggerAnalysis(pending);
-  }, [isHydrated, triggerAnalysis]);
+  }, [triggerAnalysis]);
 
   // Effect B — Reconnect existing session
   useEffect(() => {
-    if (!isHydrated || autoStartFiredRef.current) return;
+    if (autoStartFiredRef.current) return;
     if (__pendingFileStore.file || autoStartBlocking || isUploading) return;
     if (status !== "idle" && status !== "error") return;
 
@@ -564,7 +560,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           setShowLoadingOverlay(false);
         });
     })();
-  }, [isHydrated, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
+  }, [autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
 
   const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
     if (!hitlCheckpoint || isSubmittingHITL) return;
@@ -768,7 +764,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [awaitingDecision, playSound]);
 
-  const hasStartedAnalysis = isHydrated && (status !== "idle" || isUploading || validCompletedAgents.length > 0 || autoStartBlocking);
+  const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0 || autoStartBlocking;
 
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.

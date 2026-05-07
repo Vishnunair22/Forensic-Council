@@ -3,14 +3,12 @@
 import { motion } from "framer-motion";
 import { AGENTS } from "@/lib/constants";
 
-/**
- * AgentsSection: A high-fidelity Bento Grid for the Forensic Council members.
- */
 export function AgentsSection() {
   return (
-    <section className="py-10 px-2 relative z-10 max-w-7xl mx-auto">
+    <section aria-labelledby="agents-heading" className="py-10 px-2 relative z-10 max-w-7xl mx-auto">
       <div className="text-center mb-12 sm:mb-14">
         <motion.h2
+          id="agents-heading"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -36,48 +34,47 @@ export function AgentsSection() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: i * 0.1, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="relative horizon-card p-6 sm:p-7 rounded-2xl flex flex-col items-center text-center group cursor-pointer overflow-hidden border border-white/8 hover:border-primary/30 transition-all duration-500"
+            transition={{ delay: i * 0.08, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="relative horizon-card p-6 sm:p-7 rounded-2xl flex flex-col items-center text-center group overflow-hidden border border-white/[0.08] hover:border-primary/30 transition-[border-color] duration-300"
           >
-            {/* --- Aperture Icon (Centered) --- */}
-            <div className="relative w-16 h-16 flex items-center justify-center mb-6">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 rounded-full border border-primary/[0.12] border-dashed"
-              />
+            {/* Aperture icon ring */}
+            <div className="relative w-16 h-16 flex items-center justify-center mb-6" aria-hidden="true">
+              <div className="absolute inset-0 rounded-full border border-primary/[0.12] border-dashed [animation:spin_28s_linear_infinite]" />
               <div className="absolute inset-2 rounded-full border border-primary/[0.08] bg-primary/[0.04]" />
-              <agent.icon className="w-7 h-7 text-primary/80 group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
+              <agent.icon className="w-7 h-7 text-primary/80 group-hover:text-primary group-hover:scale-110 transition-[color,transform] duration-300" />
             </div>
 
             <div className="mb-4">
-               <span className="text-[10px] font-mono font-bold text-primary/60 tracking-[0.2em] uppercase bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
-                 {agent.badge}
-               </span>
+              <span className="text-[10px] font-mono font-bold text-primary/60 tracking-[0.2em] uppercase bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
+                {agent.badge}
+              </span>
             </div>
 
             <div className="mb-4">
               <h3 className="text-xl font-heading font-bold text-white mb-3 tracking-tight">{agent.name}</h3>
-              <p className="text-sm text-slate-300/75 leading-relaxed font-medium group-hover:text-slate-100 transition-colors duration-500 text-center">
+              <p className="text-sm text-slate-300/75 leading-relaxed font-medium group-hover:text-slate-100 transition-colors duration-300 text-center">
                 {agent.desc}
               </p>
             </div>
 
-            {/* --- Live Telemetry Feed (Centered) --- */}
-            <div className="mt-auto pt-8 border-t border-white/5 w-full flex flex-col items-center gap-3">
+            {/* Status indicator */}
+            <div className="mt-auto pt-6 border-t border-white/5 w-full flex flex-col items-center gap-2" aria-hidden="true">
               <div className="flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]" />
-                 <span className="text-[10px] font-mono text-slate-300/60 tracking-widest uppercase">
-                   Node_{agent.id}_Active
-                 </span>
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_var(--color-primary)]" />
+                <span className="text-[10px] font-mono text-slate-300/60 tracking-widest uppercase">
+                  Node_{agent.id}_Active
+                </span>
               </div>
-              <div className="text-[9px] font-mono text-primary-soft/70 tracking-widest opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0">
+              <div className="text-[9px] font-mono text-primary-soft/70 tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 LATENCY: {10 + i * 2}MS // UPTIME: 99.9%
               </div>
             </div>
 
-            {/* Premium Glow Effect */}
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+            {/* Hover glow */}
+            <div
+              className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              aria-hidden="true"
+            />
           </motion.div>
         ))}
       </div>

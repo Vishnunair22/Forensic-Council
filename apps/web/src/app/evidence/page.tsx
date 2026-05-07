@@ -34,20 +34,19 @@ export default function EvidenceUploadPage() {
 
   useEffect(() => {
     document.body.style.overflow = "";
-    // If no pending file and no session, ensure no stale state
     if (!__pendingFileStore.file && !storage.getItem("forensic_session_id")) {
       sessionOnlyStorage.removeItem("forensic_auto_start");
     }
+    // On bfcache restore with no session, navigate home rather than reloading
+    // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {
-      if (e.persisted) {
-        const hasSession = !!sessionStorage.getItem("forensic_session_id") || 
-                           !!localStorage.getItem("forensic_session_id");
-        if (!hasSession) window.location.reload();
+      if (e.persisted && !storage.getItem("forensic_session_id")) {
+        router.replace("/");
       }
     };
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
-  }, []);
+  }, [router]);
 
   const showAgentProgress = investigation.hasStartedAnalysis;
 
@@ -63,10 +62,9 @@ export default function EvidenceUploadPage() {
       <AnimatePresence initial={false}>
         {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
           <LoadingOverlay
-            variant="full"
             liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
             dispatchedCount={Math.min(Object.keys(investigation.agentUpdates).filter(k => k !== "Arbiter").length, 5)}
-            totalAgents={5}
+            playSound={playSound}
           />
         )}
       </AnimatePresence>

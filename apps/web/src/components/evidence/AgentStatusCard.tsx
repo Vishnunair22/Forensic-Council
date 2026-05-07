@@ -35,12 +35,10 @@ export interface AgentStatusCardProps {
     tool_name?: string;
   };
   completedData?: AgentUpdate;
-  isFadingOut?: boolean;
   onComplete?: () => void;
   phase?: "initial" | "deep";
   isExpanded?: boolean;
   onToggleExpand?: () => void;
-  onAnimationStart?: () => void;
 }
 
 const statusConfig = {
@@ -166,6 +164,7 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       )}
       {isLong && (
         <button
+          type="button"
           onClick={() => setExpanded((e) => !e)}
           className="mt-3 text-[11px] font-mono text-[var(--color-primary)] uppercase tracking-widest"
         >
@@ -187,7 +186,6 @@ export function AgentStatusCard({
   phase = "initial",
   isExpanded = false,
   onToggleExpand,
-  onAnimationStart,
 }: AgentStatusCardProps) {
   const sanitizeThinking = (text?: string) => {
     if (!text) return "";
@@ -196,7 +194,7 @@ export function AgentStatusCard({
       .replace(/_/g, " ")
       .trim();
     if (s.length < 12) return "";
-    return s.length > 160 ? s.slice(0, 160) + "..." : s;
+    return s;
   };
 
   const [fallbackPhraseIndex, setFallbackPhraseIndex] = React.useState(0);
@@ -275,7 +273,6 @@ export function AgentStatusCard({
   return (
     <motion.div
       layout
-      onAnimationStart={() => onAnimationStart?.()}
       className={clsx(
         "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl border border-white/8 bg-surface-1",
         (status === "running" || status === "checking") 
@@ -291,11 +288,7 @@ export function AgentStatusCard({
           <div className="flex items-center gap-5">
             {/* Aperture Icon */}
             <div className="relative w-16 h-16 flex items-center justify-center">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 rounded-full border border-[var(--color-primary)]/20 border-dashed"
-              />
+              <div className="absolute inset-0 rounded-full border border-[var(--color-primary)]/20 border-dashed [animation:spin_15s_linear_infinite]" />
               <Icon className={clsx("w-7 h-7 relative z-10", agentGraphic.color)} />
             </div>
 
@@ -418,6 +411,7 @@ export function AgentStatusCard({
 
               {findings.length > 2 && (
                 <button
+                  type="button"
                   onClick={() => onToggleExpand?.()}
                   className="w-full py-3 rounded-lg border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 transition-all text-[10px] font-mono uppercase tracking-widest"
                 >
@@ -425,11 +419,15 @@ export function AgentStatusCard({
                 </button>
               )}
             </div>
-          ) : (status === "checking" || status === "validating") ? (
+          ) : (status === "running" || status === "checking" || status === "validating") ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
-               <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] animate-pulse">
-                  <Activity className="w-6 h-6" />
-               </div>
+              <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)]">
+                {status === "running" ? (
+                  <ProgressIcon className="w-6 h-6" />
+                ) : (
+                  <Activity className="w-6 h-6 animate-pulse" />
+                )}
+              </div>
               <AnimatePresence mode="wait">
                 <motion.p
                   key={sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
@@ -437,7 +435,7 @@ export function AgentStatusCard({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.35 }}
-                  className="max-w-xs text-xs text-white/50 font-medium leading-relaxed"
+                  className="max-w-[280px] text-xs text-white/55 font-medium leading-relaxed"
                 >
                   {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                 </motion.p>

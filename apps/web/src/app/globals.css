@@ -54,13 +54,12 @@
 }
 
 @layer base {
-  html, body {
-    background-color: transparent;
-  }
-  :root {
+  html {
     background-color: var(--color-background);
+    scroll-behavior: smooth;
   }
   body {
+    background-color: transparent;
     color: var(--color-foreground);
     font-family: var(--font-sans);
     overflow-x: hidden;
@@ -112,13 +111,11 @@
   }
 }
 
-/* ── The "Deep Spectrum" Background ── */
-/* Unified glass primitives */
+/* ── Glass primitives ── */
 .glass-panel,
 .horizon-card,
 .premium-glass,
 .premium-card {
-  will-change: transform;
   position: relative;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);

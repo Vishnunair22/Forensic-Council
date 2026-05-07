@@ -104,13 +104,14 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      className={`fixed top-4 left-4 sm:top-6 sm:left-6 z-[10001] transition-transform duration-300 ease-in-out ${
+      aria-hidden={!isVisible}
+      className={`fixed top-4 left-4 sm:top-6 sm:left-6 z-[10001] transition-[transform,opacity] duration-300 ease-in-out ${
         isVisible ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
       }`}
     >
       <button
         type="button"
-        className="group flex items-center px-4 py-2.5 sm:px-5 sm:py-3 bg-surface-2/90 rounded-full border border-white/10 shadow-2xl backdrop-blur-xl hover:bg-surface-3 transition-all active:scale-95 relative"
+        className="group flex items-center px-4 py-2.5 sm:px-5 sm:py-3 bg-surface-2/90 rounded-full border border-white/10 shadow-2xl backdrop-blur-xl hover:bg-surface-3 transition-[background-color,border-color,transform] active:scale-95 relative"
         onClick={handleLogoClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

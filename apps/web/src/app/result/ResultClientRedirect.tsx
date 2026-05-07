@@ -12,7 +12,7 @@ export function ResultClientRedirect() {
     if (sessionId) {
       router.replace(`/result/${sessionId}`);
     } else {
-      router.replace("/evidence");
+      router.replace("/");
     }
   }, [router]);
 

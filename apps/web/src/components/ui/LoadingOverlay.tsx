@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Wifi, Zap } from "lucide-react";
+import type { SoundType } from "@/hooks/useSound";
 
 export interface LoadingOverlayProps {
   liveText?: string;
   dispatchedCount?: number;
-  totalAgents?: number;
-  title?: string;
-  subtitle?: string;
-  variant?: "full" | "minimal";
+  playSound?: (sound: SoundType) => void;
   exitDuration?: number;
 }
 
@@ -25,13 +23,13 @@ const PHASES = [
   {
     id: "connect",
     Icon: Wifi,
-    label: "Connecting to Evidence Analysis",
+    label: "Connecting to Analysis",
     detail: "Opening live investigation channel",
   },
   {
     id: "dispatch",
     Icon: Zap,
-    label: "Dispatching Forensic Agents",
+    label: "Dispatching Agents",
     detail: "Activating specialist analysis units",
   },
 ] as const;
@@ -51,17 +49,25 @@ function sanitizeLiveText(text: string): string {
 export function LoadingOverlay({
   liveText,
   dispatchedCount = 0,
-  variant = "full",
+  playSound,
   exitDuration = 0.4,
 }: LoadingOverlayProps) {
   const sanitizedText = sanitizeLiveText(liveText || "");
   const targetIndex = resolvePhaseIndex(liveText || "", dispatchedCount);
 
-  // Phase index can only advance forward — never regress
   const [phaseIndex, setPhaseIndex] = useState(targetIndex);
   useEffect(() => {
     setPhaseIndex((prev) => Math.max(prev, targetIndex));
   }, [targetIndex]);
+
+  // Play sound on each phase advance (skip initial mount)
+  const prevPhaseRef = useRef(phaseIndex);
+  useEffect(() => {
+    if (phaseIndex !== prevPhaseRef.current) {
+      playSound?.("scan");
+      prevPhaseRef.current = phaseIndex;
+    }
+  }, [phaseIndex, playSound]);
 
   const clampedPhase = Math.min(phaseIndex, PHASES.length - 1);
   const phase = PHASES[clampedPhase];
@@ -71,100 +77,6 @@ export function LoadingOverlay({
     Math.max(12, Math.round(((clampedPhase + 1) / PHASES.length) * 72) + dispatchedCount * 3),
   );
 
-  if (variant === "minimal") {
-    return createPortal(
-      <motion.div
-        className="fixed inset-0 z-[10000] flex items-end justify-center pb-16 px-6"
-        style={{ background: "rgba(5,7,13,0.85)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0, transition: { duration: exitDuration } }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 24, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: 0.05 }}
-          className="w-full max-w-md"
-        >
-          <div className="bg-[#070A12] border border-white/10 rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] overflow-hidden">
-            <div className="h-[2px] w-full bg-white/5">
-              <motion.div
-                className="h-full bg-primary rounded-full"
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-              />
-            </div>
-            <div className="flex items-center gap-5 px-6 py-5">
-              <div className="shrink-0 w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center relative">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={clampedPhase}
-                    initial={{ opacity: 0, scale: 0.6, rotate: -15 }}
-                    animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                    exit={{ opacity: 0, scale: 1.2, rotate: 15 }}
-                    transition={{ type: "spring", damping: 18, stiffness: 300 }}
-                  >
-                    <PhaseIcon className="w-5 h-5 text-primary" />
-                  </motion.div>
-                </AnimatePresence>
-                <motion.div
-                  className="absolute inset-0 rounded-xl border border-primary/30"
-                  animate={{ opacity: [0.3, 0.7, 0.3] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <AnimatePresence mode="wait">
-                  <motion.p
-                    key={`label-${clampedPhase}`}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.22, ease: "easeOut" }}
-                    className="text-sm font-bold text-white tracking-tight"
-                  >
-                    {phase.label}
-                  </motion.p>
-                </AnimatePresence>
-                <AnimatePresence mode="wait">
-                  <motion.p
-                    key={sanitizedText || phase.detail}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.2, ease: "easeOut", delay: 0.05 }}
-                    className="text-xs font-mono text-white/40 mt-0.5 truncate"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {sanitizedText || phase.detail}
-                  </motion.p>
-                </AnimatePresence>
-              </div>
-              <div className="shrink-0 flex flex-col gap-1.5 items-center">
-                {PHASES.map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className={`rounded-full ${i <= clampedPhase ? "bg-primary" : "bg-white/15"}`}
-                    animate={{
-                      width: i === clampedPhase ? 16 : 4,
-                      height: 4,
-                      opacity: i < clampedPhase ? 0.8 : i === clampedPhase ? 1 : 0.15,
-                    }}
-                    transition={{ type: "spring", damping: 22, stiffness: 280 }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>,
-      document.body
-    );
-  }
-
-  // ── Full variant — horizontal swapping phase cards ─────────────────────────
   return createPortal(
     <motion.div
       className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none"
@@ -179,23 +91,23 @@ export function LoadingOverlay({
       transition={{ duration: 0.14, ease: "easeOut" }}
     >
       {/* Ambient glow */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <motion.div
-          className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] h-[280px] rounded-full blur-[90px]"
+          className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[240px] rounded-full blur-[88px]"
           style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.07) 0%, transparent 70%)" }}
-          animate={{ opacity: [0.6, 1, 0.6] }}
+          animate={{ opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
-      <div className="relative z-10 flex flex-col items-center w-full max-w-[360px]">
-
+      <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
         {/* Live indicator header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.07, duration: 0.28, ease: "easeOut" }}
           className="flex items-center gap-2.5 mb-10"
+          aria-hidden="true"
         >
           <motion.div
             className="w-1.5 h-1.5 rounded-full bg-primary"
@@ -212,7 +124,7 @@ export function LoadingOverlay({
           />
         </motion.div>
 
-        {/* ── Phase card — slides in/out horizontally on phase change ── */}
+        {/* Horizontal gradient phase card */}
         <div className="w-full mb-5" style={{ overflow: "hidden" }}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -225,16 +137,18 @@ export function LoadingOverlay({
               <div
                 className="relative rounded-2xl overflow-hidden"
                 style={{
-                  background: "#060914",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  boxShadow: "0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.025)",
+                  background: "linear-gradient(108deg, #060d1c 0%, #080f24 60%, rgba(59,130,246,0.055) 100%)",
+                  border: "1px solid rgba(59,130,246,0.11)",
+                  boxShadow: "0 24px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03)",
                 }}
               >
-                {/* Top progress strip */}
+                {/* Top progress strip — gradient */}
                 <div className="h-[1.5px] w-full" style={{ background: "rgba(255,255,255,0.04)" }}>
                   <motion.div
-                    className="h-full bg-primary rounded-full"
-                    style={{ opacity: 0.75 }}
+                    className="h-full rounded-full"
+                    style={{
+                      background: "linear-gradient(90deg, rgba(59,130,246,0.7) 0%, rgba(147,197,253,0.9) 100%)",
+                    }}
                     animate={{ width: `${progress}%` }}
                     transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1] }}
                   />
@@ -244,46 +158,48 @@ export function LoadingOverlay({
                   {/* Phase icon */}
                   <div
                     className="relative shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
+                    aria-hidden="true"
                     style={{
-                      background: "rgba(59,130,246,0.07)",
-                      border: "1px solid rgba(59,130,246,0.16)",
+                      background: "rgba(59,130,246,0.08)",
+                      border: "1px solid rgba(59,130,246,0.14)",
                     }}
                   >
                     <PhaseIcon className="w-[18px] h-[18px] text-primary relative z-10" />
-                    {/* Pulse ring */}
                     <motion.div
                       className="absolute inset-0 rounded-xl"
-                      style={{ border: "1px solid rgba(59,130,246,0.35)" }}
-                      animate={{ opacity: [0.25, 0.7, 0.25], scale: [1, 1.06, 1] }}
+                      style={{ border: "1px solid rgba(59,130,246,0.38)" }}
+                      animate={{ opacity: [0.2, 0.65, 0.2], scale: [1, 1.05, 1] }}
                       transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
                     />
                   </div>
 
                   {/* Text block */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-[3px]">
+                    {/* Phase label — bold title */}
+                    <div className="flex items-center gap-2 mb-[5px]">
                       <span
                         className="text-[13px] font-bold tracking-tight leading-none truncate"
                         style={{ color: "rgba(255,255,255,0.92)" }}
                       >
                         {phase.label}
                       </span>
-                      {/* Live dot */}
                       <motion.div
                         className="w-[5px] h-[5px] rounded-full bg-primary shrink-0"
                         animate={{ opacity: [1, 0.12, 1] }}
                         transition={{ duration: 0.95, repeat: Infinity, ease: "easeInOut" }}
+                        aria-hidden="true"
                       />
                     </div>
+                    {/* Live detail — crossfades on each backend update */}
                     <AnimatePresence mode="wait">
                       <motion.p
                         key={sanitizedText || phase.detail}
-                        initial={{ opacity: 0, y: 3 }}
+                        initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -3 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
-                        className="text-[11px] font-mono leading-relaxed truncate"
-                        style={{ color: "rgba(255,255,255,0.30)" }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="text-[11px] font-mono leading-snug truncate"
+                        style={{ color: "rgba(255,255,255,0.38)" }}
                         role="status"
                         aria-live="polite"
                       >
@@ -296,20 +212,30 @@ export function LoadingOverlay({
                   <motion.div
                     className="shrink-0 w-[18px] h-[18px] rounded-full border-[1.5px]"
                     style={{
-                      borderColor: "rgba(59,130,246,0.14)",
+                      borderColor: "rgba(59,130,246,0.12)",
                       borderTopColor: "rgba(59,130,246,0.72)",
                     }}
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
+                    aria-hidden="true"
                   />
                 </div>
+
+                {/* Right-side directional glow */}
+                <div
+                  className="absolute inset-y-0 right-0 w-2/5 pointer-events-none"
+                  style={{
+                    background: "linear-gradient(270deg, rgba(59,130,246,0.045) 0%, transparent 100%)",
+                  }}
+                  aria-hidden="true"
+                />
               </div>
             </motion.div>
           </AnimatePresence>
         </div>
 
         {/* Phase step dots */}
-        <div className="flex items-center gap-[7px]">
+        <div className="flex items-center gap-[7px]" aria-hidden="true">
           {PHASES.map((p, i) => (
             <motion.div
               key={p.id}
@@ -317,7 +243,7 @@ export function LoadingOverlay({
               animate={{
                 width: i === clampedPhase ? 22 : i < clampedPhase ? 7 : 5,
                 height: 3,
-                opacity: i < clampedPhase ? 0.6 : i === clampedPhase ? 1 : 0.22,
+                opacity: i < clampedPhase ? 0.55 : i === clampedPhase ? 1 : 0.2,
               }}
               transition={{ type: "spring", damping: 26, stiffness: 320 }}
             />

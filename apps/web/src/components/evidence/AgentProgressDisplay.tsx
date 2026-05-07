@@ -279,7 +279,6 @@ export function AgentProgressDisplay({
                   phase={phase}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
-                  onAnimationStart={() => playSoundRef.current?.("card_reveal")}
                 />
               </motion.div>
             ))}
