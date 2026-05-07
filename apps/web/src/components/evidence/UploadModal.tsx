@@ -12,10 +12,10 @@ function EnvelopeOpen({ isDragging, isOpen }: { isDragging: boolean; isOpen: boo
     <div className="relative flex h-24 w-24 items-center justify-center">
       <motion.div
         animate={{ rotate: 360 }}
-        transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+        transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-0 rounded-full border border-primary/[0.18] border-dashed"
       />
-      <div className="absolute inset-2 rounded-full border border-primary/10" />
+      <div className="absolute inset-2 rounded-full border border-primary/[0.08]" />
       <div className="relative w-16 h-12">
         <svg viewBox="0 0 64 48" className="w-full h-full">
           <defs>
@@ -124,14 +124,15 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const selectFile = useCallback((file: File) => {
     if (file.size > MAX_UPLOAD_SIZE_BYTES) {
       setError("File must be 50MB or smaller.");
+      playSound("error");
       return;
     }
     if (!ALLOWED_MIME_TYPES.has(file.type)) {
       setError(`File type "${file.type || "unknown"}" is not supported.`);
+      playSound("error");
       return;
     }
     setError(null);
-    playSound("click");
     onFileSelected(file);
   }, [onFileSelected, playSound]);
 
@@ -152,7 +153,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#020617]/85 backdrop-blur-2xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -167,16 +168,19 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           className="horizon-card p-1 relative overflow-hidden"
         >
           {/* Beveled Interior */}
-          <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">
+          <div className="rounded-[inherit] p-10 flex flex-col items-center text-center" style={{ background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(59,130,246,0.05) 0%, #020617 60%)" }}>
 
             <button
-              onClick={onClose}
-              className="absolute top-6 right-6 text-white/20 hover:text-primary transition-colors"
+              onClick={() => { playSound("click"); onClose(); }}
+              className="absolute top-6 right-6 text-white/25 hover:text-white/70 transition-colors"
               aria-label="Close upload dialog"
             >
               <X className="w-5 h-5" />
             </button>
 
+            <p className="text-[10px] font-mono font-bold tracking-[0.25em] text-primary/50 uppercase mb-3">
+              Evidence Intake
+            </p>
             <h2 className="text-2xl font-heading font-bold text-white mb-8">Upload Evidence</h2>
 
             <div
@@ -184,19 +188,19 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`w-full border-2 border-dashed rounded-2xl p-16 transition-all duration-500 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden ${
+              className={`w-full border border-dashed rounded-2xl p-12 transition-all duration-500 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden ${
                 isDragging
-                  ? "border-primary bg-primary/5 shadow-[0_0_40px_rgba(59,130,246,0.1)]"
-                  : "border-slate-800 hover:border-primary/30 hover:bg-white/[0.02]"
+                  ? "border-primary bg-primary/[0.06] shadow-[0_0_50px_rgba(59,130,246,0.12),inset_0_0_30px_rgba(59,130,246,0.04)]"
+                  : "border-white/[0.08] hover:border-primary/25 hover:bg-white/[0.018]"
               }`}
             >
               <EnvelopeOpen isDragging={isDragging} isOpen={true} />
 
               <div className="flex flex-col items-center gap-2 pointer-events-none">
-                <span className={`text-xl font-heading font-bold tracking-tight transition-colors ${isDragging ? "text-primary" : "text-slate-300 group-hover:text-primary"}`}>
+                <span className={`text-xl font-heading font-bold tracking-tight transition-colors duration-300 ${isDragging ? "text-primary" : "text-white/75 group-hover:text-white"}`}>
                   {isDragging ? "Release Payload" : "Drop Evidence File"}
                 </span>
-                <p className="text-sm font-medium text-slate-500 max-w-[240px] leading-relaxed">
+                <p className="text-sm font-medium text-white/35 max-w-[240px] leading-relaxed">
                   Select a forensic file for multi-agent neural verification.
                 </p>
               </div>
@@ -218,7 +222,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               />
             </div>
             {error && (
-              <p className="mt-4 text-sm font-semibold text-red-400" role="alert">
+              <p className="mt-4 text-sm font-semibold text-[var(--color-danger)]" role="alert">
                 {error}
               </p>
             )}

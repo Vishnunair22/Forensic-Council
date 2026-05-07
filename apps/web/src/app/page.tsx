@@ -37,7 +37,7 @@ export default function Home() {
             <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-primary/60 font-mono mb-2">
               System_Overview
             </p>
-            <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto font-medium leading-relaxed">
+            <p className="text-lg md:text-xl text-white/55 max-w-2xl mx-auto font-medium leading-relaxed">
               Forensic Council is a Multi-Agent AI application that utilizes specialized agents to analyze digital forensic evidence and synthesize cohesive, authoritative reports.
             </p>
 
@@ -48,7 +48,7 @@ export default function Home() {
           </div>
 
           {/* Decorative Elements */}
-          <div className="flex items-center gap-6 mt-10 opacity-50">
+          <div className="flex items-center gap-6 mt-10 opacity-[0.55]">
             <div className="flex items-center gap-2">
               <Cpu className="w-4 h-4 text-primary/70" />
               <span className="text-[10px] uppercase tracking-widest font-mono text-white/50">Neural Processing</span>
@@ -69,11 +69,11 @@ export default function Home() {
 
       {/* --- Content Section ---  */}
       <section className="relative w-full px-6 pb-24 max-w-7xl mx-auto space-y-16">
-        <GlassPanel className="relative overflow-hidden group">
+        <GlassPanel className="relative overflow-hidden group no-hover-lift">
           <HowWorksSection />
         </GlassPanel>
 
-        <GlassPanel className="relative overflow-hidden group">
+        <GlassPanel className="relative overflow-hidden group no-hover-lift">
           <AgentsSection />
         </GlassPanel>
       </section>

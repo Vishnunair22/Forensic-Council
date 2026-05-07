@@ -16,7 +16,7 @@ export function HowWorksSection() {
           viewport={{ once: true }}
           className="text-4xl md:text-5xl font-heading font-bold text-white mb-6"
         >
-          How Forensic <span className="text-[var(--color-success-light)]">Council Works</span>
+          How Forensic <span className="text-[var(--color-primary-soft)]">Council Works</span>
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -45,26 +45,25 @@ export function HowWorksSection() {
                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   whileInView={{
-                    boxShadow: ["0 0 0px rgba(167,255,210,0)", "0 0 40px rgba(167,255,210,0.1)", "0 0 0px rgba(167,255,210,0)"]
+                    boxShadow: ["0 0 0px rgba(59,130,246,0)", "0 0 40px rgba(59,130,246,0.18)", "0 0 0px rgba(59,130,246,0)"]
                   }}
                   transition={{ duration: 3, repeat: Infinity }}
-                  className="w-16 h-16 rounded-full bg-surface-2 border border-[var(--color-success-light)]/20 flex items-center justify-center shadow-2xl"
+                  className="w-16 h-16 rounded-full bg-surface-2 border border-primary/25 flex items-center justify-center shadow-2xl"
                 >
-                  <item.icon className="w-8 h-8 text-[var(--color-success-light)]" />
+                  <item.icon className="w-8 h-8 text-primary" />
                 </motion.div>
               </div>
 
               {/* Step Card */}
               <div className="w-full">
-                <div className="glass-panel p-8 rounded-[2rem] group relative overflow-hidden h-full border border-white/5 hover:border-[var(--color-success-light)]/20 transition-all duration-500">
+                <div className="step-card p-8 rounded-[2rem] group relative overflow-hidden h-full">
                   <h4 className="text-lg font-heading font-bold text-white mb-4 text-center tracking-tight">{item.title}</h4>
-                  <p className="text-sm text-white/40 leading-relaxed font-medium text-center tracking-wide">
+                  <p className="text-sm text-white/45 leading-relaxed font-medium text-center tracking-wide">
                     {item.desc}
                   </p>
 
-
                   {/* Decorative Gradient Background */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-success-light)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                 </div>
               </div>
             </motion.div>

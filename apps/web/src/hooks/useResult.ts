@@ -269,6 +269,7 @@ export function useResult(initialSessionId?: string) {
     playSound("reset");
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
+    document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
 
     window.dispatchEvent(new Event("fc:reset-home"));
     // Route to home with upload param which HeroAuthActions handles
@@ -279,6 +280,7 @@ export function useResult(initialSessionId?: string) {
     playSound("reset");
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
+    document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
 
     window.dispatchEvent(new Event("fc:reset-home"));
     router.push("/#hero");

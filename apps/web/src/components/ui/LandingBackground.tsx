@@ -7,6 +7,7 @@ export const LandingBackground = () => {
     <div className="bg-mesh-container">
       <div className="mesh-orb-1" />
       <div className="mesh-orb-2" />
+      <div className="mesh-orb-3" />
 
       {/* Subtle Noise Texture */}
       <div

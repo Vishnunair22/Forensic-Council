@@ -15,7 +15,7 @@ import {
   type HITLDecision
 } from "@/lib/api";
 import { toast } from "./use-toast";
-import { AGENTS as AGENTS_DATA, ALLOWED_MIME_TYPES, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
+import { AGENTS as AGENTS_DATA, INVESTIGATION_REQUEST_TIMEOUT_MS, ARBITER_POLL_INTERVAL_MS } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
 import { type SoundType } from "@/hooks/useSound";
@@ -160,8 +160,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const investigatorIdRef = useRef<string>(_initInvestigatorId());
   const [file, setFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
   const [isHydrated] = useState(() => {
@@ -174,7 +172,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   });
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(() => {
     if (typeof window === "undefined") return false;
-    // Issue 3 Fix A: Guard fc_show_loading cleanup with a hard clear on reconnect
+    // Guard: if a session existed before auto-start, don't carry over the loading flag
     const isAutoStart = sessionOnlyStorage.getItem("forensic_auto_start") === "true";
     const hasSession = !!storage.getItem("forensic_session_id");
     const showLoading = sessionOnlyStorage.getItem("fc_show_loading") === "true";
@@ -196,7 +194,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const investigationInFlightRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
-  const prevAwaitingDecisionRef = useRef(false);
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
   const minOverlayTimerRef = useRef<NodeJS.Timeout | null>(null);
   const overlayStartTimeRef = useRef<number>(0);
@@ -246,13 +243,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [completedAgents, phase, status]);
 
   const sessionExistsRef = useRef(typeof window !== "undefined" && !!storage.getItem("forensic_session_id"));
-
-  const showUploadForm =
-    isHydrated &&
-    !autoStartBlocking &&
-    status === "idle" &&
-    !isUploading &&
-    !sessionExistsRef.current;
 
   const [_authError, setAuthError] = useState<string | null>(null);
 
@@ -326,8 +316,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     lastSessionIdRef.current = null;
     completedAgentsRef.current = [];
     analysisCompleteSoundedRef.current = false;
-    prevAwaitingDecisionRef.current = false;
-    sessionExistsRef.current = false; // Update ref snapshot
+    sessionExistsRef.current = false;
     resetSimulationHook();
   }, [resetSimulationHook]);
 
@@ -345,12 +334,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       lastSessionIdRef.current = null;
       completedAgentsRef.current = [];
       analysisCompleteSoundedRef.current = false;
-      prevAwaitingDecisionRef.current = false;
       sessionExistsRef.current = false;
 
       playSound("scan");
       setIsUploading(true);
-      setValidationError(null);
       setWsConnectionError(null);
       setPhase("initial");
       setAnalysisStreamReady(false);
@@ -423,7 +410,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           });
         } else {
           const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
-          setValidationError(errorMsg);
           setIsUploading(false);
           setShowLoadingOverlay(false);
           resetSimulation();
@@ -453,7 +439,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem("forensic_investigation_ctx", investigationCtx, true);
       // Individual keys kept for hooks that read them directly
       storage.setItem("forensic_session_id", sessionIdToUse);
-      // Issue 2 Fix D: Set cookie for server-side /result redirect
       if (typeof document !== "undefined") {
         document.cookie = `forensic_session_id=${sessionIdToUse}; path=/; max-age=3600; SameSite=Lax`;
       }
@@ -472,9 +457,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .then(() => {
           setAnalysisStreamReady(true);
           setUploadPhaseText("Agents dispatching…");
-          // Issue 3 Fix: Do NOT call setShowLoadingOverlay(false) here.
-          // The overlay dismissal is now handled by the state-tracking effect
-          // which ensures a minimum display duration of 2.5s for UX.
+          // Overlay dismissal is handled by the status-tracking effect below,
+          // which enforces a 2.5s minimum display duration.
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -492,7 +476,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   );
 
 
-  // Issue 2 Fix A: Effect A — Auto-start from pending file
+  // Effect A — Auto-start from pending file (set by HeroAuthActions before navigating here)
   useEffect(() => {
     if (!isHydrated || autoStartFiredRef.current) return;
     const pending = __pendingFileStore.file;
@@ -509,9 +493,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.removeItem("forensic_auto_start");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setShowLoadingOverlay(true);
-    // Keep autoStartBlocking=true until triggerAnalysis sets isUploading=true.
-    // This prevents showUploadForm from flickering true during the transition.
-    // triggerAnalysis will call setAutoStartBlocking(false) after isUploading is set.
+    // Keep autoStartBlocking=true until triggerAnalysis calls setAutoStartBlocking(false),
+    // preventing the "No Evidence Queued" empty state from briefly flashing.
     triggerAnalysis(pending);
   }, [isHydrated, triggerAnalysis]);
 
@@ -575,22 +558,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         });
     })();
   }, [isHydrated, autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
-
-  const handleFile = (f: File) => {
-    if (f.size > MAX_UPLOAD_SIZE_BYTES) {
-      setValidationError("File must be 50MB or smaller.");
-      playSound("error");
-      return;
-    }
-    if (!ALLOWED_MIME_TYPES.has(f.type)) {
-      setValidationError(`File type "${f.type}" is not supported.`);
-      playSound("error");
-      return;
-    }
-    setFile(f);
-    setValidationError(null);
-    playSound("success-chime");
-  };
 
   const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
     if (!hitlCheckpoint || isSubmittingHITL) return;
@@ -657,7 +624,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     const sid = storage.getItem("forensic_session_id");
     if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
     analysisCompleteSoundedRef.current = false;
-    prevAwaitingDecisionRef.current = false;
     clearCompletedAgents();
     setPhase("deep");
     try {
@@ -703,7 +669,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     lastSessionIdRef.current = null;
     autoStartFiredRef.current = false;
     analysisCompleteSoundedRef.current = false;
-    prevAwaitingDecisionRef.current = false;
     completedAgentsRef.current = [];
     clearInvestigationPersistence();
     resetSimulation();
@@ -769,13 +734,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const allAgentsDone = phase === "deep"
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;
-
-  useEffect(() => {
-    if (awaitingDecision && !prevAwaitingDecisionRef.current) {
-      // playSound("think"); // Suppressed to avoid double sound with analysis_done
-    }
-    prevAwaitingDecisionRef.current = awaitingDecision;
-  }, [awaitingDecision, playSound]);
 
   useEffect(() => {
     if (awaitingDecision && !analysisCompleteSoundedRef.current) {
@@ -845,12 +803,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   return {
     file, setFile,
-    isDragging, setIsDragging,
-    validationError, setValidationError,
     isUploading,
     uploadPhaseText,
     showLoadingOverlay,
-    showUploadForm,
     phase,
     isSubmittingHITL,
     isNavigating,
@@ -869,7 +824,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     validCompletedAgents,
     wsConnectionError,
     retryWsConnection,
-    handleFile,
     handleHITLDecision,
     handleAcceptAnalysis,
     handleDeepAnalysis,

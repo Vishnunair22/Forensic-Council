@@ -57,22 +57,22 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.25, ease: "easeIn" } }}
       transition={{ duration: 0.18, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#020617]/85 backdrop-blur-2xl p-4"
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
         <motion.div
-          initial={{ opacity: 0, rotateY: -90, transformPerspective: 1200 }}
-          animate={{ opacity: 1, rotateY: 0 }}
-          exit={{ opacity: 0, rotateY: 90 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, scale: 0.97, y: 14 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.98, y: -10 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
           className="horizon-card p-1 relative overflow-hidden"
         >
-          <div className="bg-[#020617] rounded-[inherit] p-10 flex flex-col items-center text-center">
+          <div className="rounded-[inherit] p-10 flex flex-col items-center text-center" style={{ background: "radial-gradient(ellipse 70% 40% at 50% 0%, rgba(52,211,153,0.05) 0%, #020617 55%)" }}>
             <button
-              onClick={() => { onNewUpload(); }}
+              onClick={() => { playSound("click"); onNewUpload(); }}
               aria-label="Close"
               data-testid="success-modal-close"
-              className="absolute top-6 right-6 text-white/40 hover:text-primary"
+              className="absolute top-6 right-6 text-white/25 hover:text-white/70 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -87,18 +87,23 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
               <CheckCircle2 className="w-8 h-8" />
             </motion.div>
 
-            <div className="space-y-6 w-full mb-10">
-              <h2 className="text-2xl font-heading font-bold text-white">Evidence Ready</h2>
+            <div className="space-y-6 w-full mb-8">
+              <div>
+                <p className="text-[10px] font-mono font-bold tracking-[0.25em] text-[var(--color-success)]/60 uppercase mb-1.5">
+                  Evidence Secured
+                </p>
+                <h2 className="text-2xl font-heading font-bold text-white">Evidence Ready</h2>
+              </div>
 
               {/* Preview with HUD Frame */}
-              <div className="relative rounded-xl overflow-hidden border border-white/5 bg-white/[0.02]">
+              <div className="relative rounded-xl overflow-hidden border border-white/[0.07] bg-white/[0.02]">
                 <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
 
                   {/* HUD Corners */}
-                  <div className="absolute top-4 left-4 w-3 h-3 border-t border-l border-primary/20 z-20" />
-                  <div className="absolute top-4 right-4 w-3 h-3 border-t border-r border-primary/20 z-20" />
-                  <div className="absolute bottom-4 left-4 w-3 h-3 border-b border-l border-primary/20 z-20" />
-                  <div className="absolute bottom-4 right-4 w-3 h-3 border-b border-r border-primary/20 z-20" />
+                  <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-primary/30 z-20 rounded-tl" />
+                  <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-primary/30 z-20 rounded-tr" />
+                  <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-primary/30 z-20 rounded-bl" />
+                  <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-primary/30 z-20 rounded-br" />
 
                   {isImage && previewUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
@@ -117,7 +122,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                       playsInline
                     />
                   ) : (
-                    <div className="flex flex-col items-center gap-3 text-white/10">
+                    <div className="flex flex-col items-center gap-3 text-white/20">
                       <FileText className="w-12 h-12" strokeWidth={1} />
                       <span className="text-[10px] font-mono tracking-widest uppercase">DATA_SECURED</span>
                     </div>
@@ -145,7 +150,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
 
             <div className="flex w-full gap-4">
               <button
-                onClick={onNewUpload}
+                onClick={() => { playSound("click"); onNewUpload(); }}
                 disabled={isStarting}
                 className="btn-horizon-outline flex-1 py-4 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >

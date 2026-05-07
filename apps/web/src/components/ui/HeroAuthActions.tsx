@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
@@ -12,7 +12,6 @@ import { autoLoginAsInvestigator } from "@/lib/api/client";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
-import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 
 export function HeroAuthActions() {
@@ -20,19 +19,20 @@ export function HeroAuthActions() {
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const [handoffVisible, setHandoffVisible] = useState(false);
+  const [handoffText, setHandoffText] = useState("Uploading evidence to secure forensic pipeline...");
   const [isHandingOff, setIsHandingOff] = useState(false);
   const { playSound } = useSound();
 
+  // Handle back-navigation events dispatched from the evidence page
   useEffect(() => {
     const resetHome = () => {
       setShowUpload(false);
       setSelectedFile(null);
       setIsAuthenticating(false);
-      setAuthError(null);
       setHandoffVisible(false);
+      setHandoffText("Uploading evidence to secure forensic pipeline...");
       setIsHandingOff(false);
     };
 
@@ -40,7 +40,6 @@ export function HeroAuthActions() {
       setShowUpload(true);
       setSelectedFile(null);
       setIsAuthenticating(false);
-      setAuthError(null);
       setHandoffVisible(false);
       setIsHandingOff(false);
       router.prefetch?.("/evidence");
@@ -54,11 +53,11 @@ export function HeroAuthActions() {
     };
   }, [router]);
 
+  // Pre-warm auth and prefetch evidence route on mount
   useEffect(() => {
     router.prefetch?.("/evidence");
     if (!__pendingFileStore.authPromise && !document.cookie.includes("access_token")) {
       __pendingFileStore.authPromise = autoLoginAsInvestigator().catch((e) => {
-        // Surface auth failure later when user clicks; do NOT block landing render.
         console.warn("Pre-warm auth failed", e);
         __pendingFileStore.authPromise = null;
         throw e;
@@ -66,7 +65,7 @@ export function HeroAuthActions() {
     }
   }, [router]);
 
-  // Open the upload modal when navigated back with ?upload=1 (e.g. from handleNewUpload)
+  // Re-open upload modal when returning from evidence page via ?upload=1 or fc_open_upload_once
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const openUploadOnce = sessionOnlyStorage.getItem("fc_open_upload_once");
@@ -84,28 +83,29 @@ export function HeroAuthActions() {
     }
   }, []);
 
-
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile || isAuthenticating || isNavigating) return;
     setIsAuthenticating(true);
-    setAuthError(null);
     setHandoffVisible(true);
 
     __pendingFileStore.file = selectedFile;
-    // Ensure auth is resolved before navigating so the evidence page
-    // never starts an investigation with a missing token.
+    // Resolve pre-warmed auth before navigating so the evidence page never
+    // starts an investigation with a missing token. Failures are non-fatal —
+    // the evidence page will retry auth independently.
     if (__pendingFileStore.authPromise) {
       try {
         await __pendingFileStore.authPromise;
       } catch {
-        // auth pre-warm failed — autoLoginAsInvestigator will retry on evidence page
+        // swallowed — evidence page retries
       }
     }
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setShowUpload(false);
+    // Advance overlay to "Connecting" phase so the card transitions before navigation
+    setHandoffText("Connecting to evidence analysis stream...");
+    await new Promise<void>((resolve) => setTimeout(resolve, 380));
     setIsNavigating(true);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     router.push("/evidence", { scroll: true });
   }, [router, selectedFile, isAuthenticating, isNavigating]);
 
@@ -121,74 +121,63 @@ export function HeroAuthActions() {
             router.prefetch?.("/evidence");
             setShowUpload(true);
             setSelectedFile(null);
-            setAuthError(null);
             setHandoffVisible(false);
             setIsHandingOff(false);
-            // Reuse the pre-warmed auth promise or start a new one if missing
+            // Reuse pre-warmed auth promise or start a new one if missing
             __pendingFileStore.authPromise ||= autoLoginAsInvestigator().catch((e) => {
               console.error("Auth failed on click", e);
               __pendingFileStore.authPromise = null;
               throw e;
             });
           }}
-          aria-label={isAuthenticating ? "Initializing..." : authError ? authError : "Upload a file to begin analysis"}
+          aria-label="Upload a file to begin analysis"
           className="btn-horizon-primary group relative select-none overflow-hidden"
         >
-          <motion.div 
+          <motion.div
             className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
           />
-          
+
           <span className="relative z-10 flex items-center gap-4 text-[#020617]">
-            {/* Envelope Icon with animation */}
+            {/* Envelope icon that flies up when upload modal is open */}
             <div className="relative w-6 h-6 overflow-hidden">
               <motion.div
                 initial={false}
                 animate={showUpload ? "open" : "closed"}
                 variants={{
                   closed: { y: 0, rotateX: 0 },
-                  open: { y: -20, rotateX: 180 }
+                  open: { y: -20, rotateX: 180 },
                 }}
                 transition={{ duration: 0.4, ease: "backOut" }}
                 className="absolute inset-0"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-6 h-6"
+                >
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                   <polyline points="22,6 12,13 2,6" />
                 </svg>
               </motion.div>
             </div>
 
-            <span className="font-bold uppercase tracking-widest">
-              {isAuthenticating ? "Initializing..." : authError ? authError : "Begin Analysis"}
-            </span>
-            
-            {isAuthenticating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-            )}
+            <span className="font-bold uppercase tracking-widest">Begin Analysis</span>
+
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </span>
         </motion.button>
-
       </div>
-
-      <ForensicErrorModal
-        isVisible={!!authError}
-        title="Protocol Initialization Failure"
-        message={authError || "Could not establish secure investigator session."}
-        errorCode="0xFC_AUTH_INIT"
-        onRetry={handleStartAnalysis}
-        onHome={() => { setAuthError(null); setSelectedFile(null); }}
-      />
 
       <AnimatePresence>
         {showUpload && !selectedFile && !isHandingOff && (
           <UploadModal
             key="upload-modal"
             onClose={() => setShowUpload(false)}
-            onFileSelected={(f) => {
-              setSelectedFile(f);
-            }}
+            onFileSelected={(f) => setSelectedFile(f)}
           />
         )}
         {showUpload && selectedFile && !isAuthenticating && !isHandingOff && (
@@ -210,7 +199,7 @@ export function HeroAuthActions() {
           <LoadingOverlay
             key="handoff-overlay"
             variant="full"
-            liveText="Uploading evidence to secure forensic pipeline..."
+            liveText={handoffText}
             exitDuration={0.15}
           />
         )}

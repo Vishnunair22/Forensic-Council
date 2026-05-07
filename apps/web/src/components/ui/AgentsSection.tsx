@@ -43,11 +43,11 @@ export function AgentsSection() {
             <div className="relative w-16 h-16 flex items-center justify-center mb-6">
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 rounded-full border border-primary/20 border-dashed"
+                transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 rounded-full border border-primary/[0.12] border-dashed"
               />
-              <div className="absolute inset-2 rounded-full border border-primary/10 bg-primary/5" />
-              <agent.icon className="w-7 h-7 text-primary group-hover:scale-110 transition-transform duration-500" />
+              <div className="absolute inset-2 rounded-full border border-primary/[0.08] bg-primary/[0.04]" />
+              <agent.icon className="w-7 h-7 text-primary/80 group-hover:text-primary group-hover:scale-110 transition-all duration-500" />
             </div>
 
             <div className="mb-4">
