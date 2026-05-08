@@ -42,6 +42,8 @@ export async function POST() {
   const setCookie = response.headers?.get("set-cookie");
   const upstreamSetCookie = getSetCookie ? getSetCookie() : setCookie ? [setCookie] : [];
   for (const cookie of upstreamSetCookie) {
+    const name = cookie.split("=", 1)[0].trim().toLowerCase();
+    if (name === "access_token" || name === "csrf_token") continue;
     nextResponse.headers.append("Set-Cookie", cookie);
   }
 

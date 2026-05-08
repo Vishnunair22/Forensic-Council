@@ -6,14 +6,14 @@
     "sha256": null,
     "license": "Apache-2.0",
     "required": true,
-    "notes": "Primary audio deepfake detection model (wav2vec2-based). Controls AASIST_MODEL_NAME."
+    "notes": "Primary audio deepfake detection model. REQUIRED: Pin revision to a specific Git SHA and provide sha256 for production."
   },
   "clovaai/AASIST": {
     "revision": "main",
     "sha256": null,
     "license": "research-only",
     "required": false,
-    "notes": "Opt-in fallback. Research-only license — not for commercial use. Set AASIST_MODEL_NAME=clovaai/AASIST to enable."
+    "notes": "Opt-in fallback. Research-only license. REQUIRED: Pin revision to a specific Git SHA and provide sha256 if used."
   },
   "pyannote/speaker-diarization-3.1": {
     "revision": "main",

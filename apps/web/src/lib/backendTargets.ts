@@ -5,7 +5,7 @@ function normalizeBaseUrl(url: string): string {
 export function getBackendBaseUrls(): string[] {
   const internalUrl = process.env.INTERNAL_API_URL;
   const publicUrl = process.env.NEXT_PUBLIC_API_URL;
-  const isDocker = Boolean(process.env.RUNNING_IN_DOCKER);
+  const isDocker = process.env.RUNNING_IN_DOCKER === "1";
   const isProduction = process.env.NODE_ENV === "production";
 
   const devCandidates = isDocker

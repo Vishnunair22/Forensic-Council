@@ -87,6 +87,11 @@ seed_cache_dir() {
         return 0
     fi
 
+    if [ "$(id -u)" != "0" ] && ! [ -w "$DST" ]; then
+        echo "  WARN: cannot seed $LABEL — running as non-root and $DST not writable. Volume should already be populated by build-time bake."
+        return 0
+    fi
+
     DST_COUNT=$(find "$DST" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     SRC_COUNT=$(find "$SRC" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
@@ -151,11 +156,14 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Normal Docker builds should bake these into the image."
         echo "  This fallback runs once per empty volume."
         echo "============================================================"
-        if [ "$(id -u)" = "0" ]; then
-            runuser -u appuser -- python scripts/model_pre_download.py --strict
-        else
-            python scripts/model_pre_download.py --strict
-        fi
+        for i in 1 2 3; do
+            if [ "$(id -u)" = "0" ]; then
+                runuser -u appuser -- python scripts/model_pre_download.py --strict && break
+            else
+                python scripts/model_pre_download.py --strict && break
+            fi
+            [ "$i" -lt 3 ] && { echo "  HF retry $i/3 in 30s"; sleep 30; } || { echo "  Model download failed after 3 attempts"; exit 1; }
+        done
         echo "  Model download complete. Log: /tmp/model_download.log"
     else
         echo "  ML model volumes already populated - skipping download."

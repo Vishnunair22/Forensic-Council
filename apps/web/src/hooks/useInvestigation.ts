@@ -6,7 +6,6 @@ import { useSimulation } from "./useSimulation";
 import {
   startInvestigation,
   submitHITLDecision,
-  DuplicateInvestigationError,
   getArbiterStatus,
   getReport,
   getAuthToken,
@@ -28,6 +27,7 @@ import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
+import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -114,41 +114,6 @@ async function waitForFinalReport(
     pollInterval = Math.min(pollInterval * 1.2, 3000);
   }
   return false;
-}
-
-function clearAgentSnapshots() {
-  if (typeof window === "undefined") return;
-
-  storage.removeItem("forensic_initial_agents");
-  storage.removeItem("forensic_deep_agents");
-
-  Object.keys(window.localStorage).forEach((key) => {
-    if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-      window.localStorage.removeItem(key);
-    }
-  });
-}
-
-function expireSessionCookie() {
-  if (typeof document === "undefined") return;
-  document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
-}
-
-function clearInvestigationPersistence() {
-  [
-    "forensic_session_id",
-    "forensic_investigation_ctx",
-    "forensic_thumbnail",
-    "forensic_mime_type",
-    "forensic_file_name",
-    "forensic_case_id",
-    "forensic_pipeline_start",
-    "forensic_hitl_checkpoint",
-    "forensic_is_deep",
-  ].forEach((key) => storage.removeItem(key));
-
-  clearAgentSnapshots();
-  expireSessionCookie();
 }
 
 export function useInvestigation(playSound: (type: SoundType) => void) {
@@ -406,24 +371,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         const investigationRes = await startInvestigation(targetFile, caseId, investigatorId);
         sessionIdToUse = investigationRes.session_id;
       } catch (err) {
-        if (err instanceof DuplicateInvestigationError) {
-          const sid = err.existingSessionId;
-          storage.setItem("forensic_session_id", sid);
-          sessionIdToUse = sid;
-          toast.default({
-            title: "Resuming Existing Session",
-            description: "This file was already submitted. Connecting to the active investigation.",
-          });
-        } else {
-          const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
-          setIsUploading(false);
-          setShowLoadingOverlay(false);
-          resetSimulation();
-          playSound("error");
-          toast.destructive({ title: "Investigation Failed", description: errorMsg });
-          investigationInFlightRef.current = false;
-          return;
-        }
+        const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
+        setIsUploading(false);
+        setShowLoadingOverlay(false);
+        resetSimulation();
+        playSound("error");
+        toast.destructive({ title: "Investigation Failed", description: errorMsg });
+        investigationInFlightRef.current = false;
+        return;
       } finally {
         if (!sessionIdToUse) {
           investigationInFlightRef.current = false;
@@ -487,6 +442,20 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (autoStartFiredRef.current) return;
     const pending = __pendingFileStore.file;
     if (!pending) {
+      if (sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
+        clearInvestigationPersistence();
+        sessionOnlyStorage.removeItem("forensic_auto_start");
+        sessionOnlyStorage.removeItem("fc_show_loading");
+        sessionOnlyStorage.setItem("fc_open_upload_once", "1");
+        setAutoStartBlocking(false);
+        setShowLoadingOverlay(false);
+        toast.destructive({
+          title: "Upload handoff expired",
+          description: "Please select the evidence file again to start a fresh analysis.",
+        });
+        router.replace("/?upload=1");
+        return;
+      }
       sessionOnlyStorage.removeItem("forensic_auto_start");
       sessionOnlyStorage.removeItem("fc_show_loading");
       setAutoStartBlocking(false);

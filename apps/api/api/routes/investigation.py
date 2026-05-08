@@ -8,6 +8,7 @@ Orchestration logic has been moved to orchestration/investigation_runner.py.
 
 import asyncio
 import hashlib
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -140,6 +141,109 @@ async def _cleanup_stale_investigation_session(
             session_id=session_id,
             reason=reason,
             error=str(cleanup_error),
+        )
+
+
+async def _supersede_prior_investigations(
+    *,
+    investigator_user_id: str,
+    keep_session_id: str,
+) -> None:
+    """Retire older sessions for this investigator before starting a fresh upload."""
+    try:
+        from core.persistence.redis_client import get_redis_client
+
+        redis = await get_redis_client()
+        metadata_prefix = "forensic:session:metadata:"
+        task_hash = "forensic:investigation:tasks"
+        queue_key = "forensic:investigation:queue"
+
+        keys = await redis.keys(f"{metadata_prefix}*")
+        superseded: list[str] = []
+        for key in keys:
+            key_text = key.decode() if isinstance(key, bytes) else str(key)
+            session_id = key_text.replace(metadata_prefix, "")
+            if session_id == keep_session_id:
+                continue
+            metadata = await redis.get_json(key)
+            if not isinstance(metadata, dict):
+                continue
+            if metadata.get("investigator_id") != investigator_user_id:
+                continue
+            status = str(metadata.get("status") or "").lower()
+            if status in {"completed", "error", "interrupted", "terminated", "superseded"}:
+                continue
+
+            superseded.append(session_id)
+            await redis.set(
+                key,
+                {
+                    **metadata,
+                    "status": "superseded",
+                    "brief": "Superseded by a newer evidence upload.",
+                    "awaiting_decision": False,
+                    "superseded_by": keep_session_id,
+                    "superseded_at": datetime.now(UTC).isoformat(),
+                },
+                ex=900,
+            )
+            await redis.delete(f"forensic:replay:{session_id}")
+            await redis.delete(f"forensic:session:resume_decision:{session_id}")
+            try:
+                await redis.hdel(task_hash, session_id)
+            except Exception:
+                logger.debug("Failed to delete superseded task metadata", session_id=session_id)
+
+            try:
+                await redis.set(
+                    f"forensic:session:resume_decision:{session_id}",
+                    {
+                        "deep_analysis": False,
+                        "decided_by": investigator_user_id,
+                        "decided_at": datetime.now(UTC).isoformat(),
+                        "superseded_by": keep_session_id,
+                    },
+                    ex=300,
+                )
+                await redis.client.publish(
+                    "forensic:notify_decision",
+                    json.dumps({"session_id": session_id, "deep_analysis": False}),
+                )
+            except Exception as notify_error:
+                logger.debug(
+                    "Failed to notify superseded investigation",
+                    session_id=session_id,
+                    error=str(notify_error),
+                )
+
+        if superseded:
+            try:
+                queued = await redis.client.lrange(queue_key, 0, -1)
+                remaining = [
+                    item
+                    for item in queued
+                    if (item.decode() if isinstance(item, bytes) else str(item)) not in superseded
+                ]
+                async with redis.client.pipeline(transaction=True) as pipe:
+                    pipe.delete(queue_key)
+                    if remaining:
+                        pipe.rpush(queue_key, *remaining)
+                    await pipe.execute()
+            except Exception as queue_error:
+                logger.debug("Failed to prune superseded queue entries", error=str(queue_error))
+
+            logger.info(
+                "Superseded prior investigations for fresh upload",
+                investigator_id=investigator_user_id,
+                keep_session_id=keep_session_id,
+                superseded=superseded,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Fresh-upload stale-session cleanup skipped",
+            investigator_id=investigator_user_id,
+            keep_session_id=keep_session_id,
+            error=str(exc),
         )
 
 
@@ -354,6 +458,11 @@ async def start_investigation(
                 "original_filename": file.filename,
                 "created_at": datetime.now(UTC).isoformat(),
             },
+        )
+
+        await _supersede_prior_investigations(
+            investigator_user_id=current_user.user_id,
+            keep_session_id=session_id,
         )
 
         if settings.use_redis_worker:

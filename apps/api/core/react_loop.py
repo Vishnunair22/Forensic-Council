@@ -725,7 +725,7 @@ class ReActLoopEngine:
         working_memory: WorkingMemory,
         custody_logger: CustodyLogger,
         redis_client: Any = None,
-        hitl_timeout: float = 300.0,
+        hitl_timeout: float = 3600.0,
         heavy_tool_semaphore: asyncio.Semaphore | None = None,
         agent: Any | None = None,
     ) -> None:
@@ -739,7 +739,7 @@ class ReActLoopEngine:
             working_memory: Working memory for task tracking
             custody_logger: Logger for chain of custody
             redis_client: Redis client for HITL checkpoint storage
-            hitl_timeout: Timeout in seconds for waiting on HITL resume (default 300s = 5 min)
+            hitl_timeout: Timeout in seconds for waiting on HITL resume (default 3600s = 1 hour)
             heavy_tool_semaphore: Shared semaphore for throttling heavy CPU/GPU tools
         """
         self.agent_id = agent_id

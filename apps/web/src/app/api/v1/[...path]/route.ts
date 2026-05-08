@@ -73,7 +73,7 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
     }
   }
 
-  return NextResponse.json(
+  const errResp = NextResponse.json(
     {
       error: `Failed to reach backend API: ${
         lastError instanceof Error ? lastError.message : "unknown error"
@@ -81,6 +81,8 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
     },
     { status: 503 },
   );
+  errResp.headers.set("Cache-Control", "no-store");
+  return errResp;
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

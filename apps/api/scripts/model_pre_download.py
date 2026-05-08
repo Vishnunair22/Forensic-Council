@@ -370,6 +370,13 @@ def _validate_lock_file() -> None:
             missing_metadata.append(model_id)
         if config.get("enforce_sha") and not config.get("sha256"):
             enforced_without_checksum.append(model_id)
+        if config.get("required") and config.get("revision") == "main" and "/" in model_id:
+            # Third-party repos must be pinned to a SHA in production/strict
+            if os.environ.get("STRICT_MODEL_PIN") == "1":
+                 raise RuntimeError(
+                     f"Model {model_id} is pinned to 'main' in models.lock.json. "
+                     "Production builds require a specific commit SHA for reproducibility."
+                 )
 
     if missing_metadata:
         raise RuntimeError(

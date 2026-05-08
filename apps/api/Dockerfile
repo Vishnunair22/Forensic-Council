@@ -68,6 +68,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 # -- Stage 1: deps-core - core packages only, NO ML extras --------------------
 # Used by: migration (keeps that image ~2-3 GB lighter)
+# NOTE: must remain on debian-slim (glibc) — asyncpg has no musl wheels < 0.30.
 FROM base AS deps-core
 
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \

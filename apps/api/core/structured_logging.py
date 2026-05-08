@@ -195,15 +195,38 @@ def get_logger(name: str | None = None, level: str | None = None) -> StructuredL
     return _logger_cache[name]
 
 
-def configure_root_logger(level: str = "INFO") -> None:
-    """
-    Configure the root logger with structured formatting.
+class ConsoleFormatter(logging.Formatter):
+    """Human-readable formatter with color-coding for local development."""
 
-    This should be called once at application startup.
+    COLORS = {
+        logging.DEBUG: "\033[0;36m",    # Cyan
+        logging.INFO: "\033[0;32m",     # Green
+        logging.WARNING: "\033[1;33m",  # Yellow
+        logging.ERROR: "\033[0;31m",    # Red
+        logging.CRITICAL: "\033[1;31m", # Bold Red
+    }
+    RESET = "\033[0m"
+
+    def format(self, record: logging.LogRecord) -> str:
+        color = self.COLORS.get(record.levelno, "")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        message = record.getMessage()
+        if record.exc_info:
+            message += "\n" + self.formatException(record.exc_info)
+        return f"{color}[{timestamp}] {record.levelname:<7} {record.name}:{record.lineno} - {message}{self.RESET}"
+
+
+def configure_root_logger(level: str = "INFO", fmt: str | None = None) -> None:
+    """
+    Configure the root logger with structured or console formatting.
 
     Args:
         level: Log level for the root logger
+        fmt: Log format ('json' or 'console'). If None, reads from LOG_FORMAT env var.
     """
+    import os
+    fmt = fmt or os.environ.get("LOG_FORMAT", "console").lower()
+
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, level.upper()))
 
@@ -211,9 +234,12 @@ def configure_root_logger(level: str = "INFO") -> None:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Add structured handler
+    # Add appropriate handler
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(StructuredFormatter())
+    if fmt == "json":
+        handler.setFormatter(StructuredFormatter())
+    else:
+        handler.setFormatter(ConsoleFormatter())
     root_logger.addHandler(handler)
 
     # Third-party HTTP clients log full request URLs at INFO. Keep them quiet so

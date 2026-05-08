@@ -37,7 +37,22 @@ assert_min_len "$BOOTSTRAP_ADMIN_PASSWORD" 16 BOOTSTRAP_ADMIN_PASSWORD
 assert_min_len "$BOOTSTRAP_INVESTIGATOR_PASSWORD" 16 BOOTSTRAP_INVESTIGATOR_PASSWORD
 assert_min_len "$METRICS_SCRAPE_TOKEN" 32 METRICS_SCRAPE_TOKEN
 
-cat <<EOF
+echo "---------------------------------------------------------------"
+if [ "${1:-}" = "--update" ]; then
+    if [ ! -f .env ]; then
+        echo "Error: .env file not found. Run this from the root after 'cp .env.example .env'."
+        exit 1
+    fi
+    for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD QDRANT_API_KEY BOOTSTRAP_ADMIN_PASSWORD BOOTSTRAP_INVESTIGATOR_PASSWORD DEMO_PASSWORD METRICS_SCRAPE_TOKEN; do
+        val=$(eval echo \$$var)
+        # Use sed to replace placeholders. On macOS/BSD, sed -i '' is needed, but we target Linux/Debian.
+        sed -i "s|^${var}=.*|${var}=${val}|" .env
+    done
+    mkdir -p infra/secrets
+    echo -n "$METRICS_SCRAPE_TOKEN" > infra/secrets/metrics_scrape_token.txt
+    echo "SUCCESS: .env updated with fresh keys and infra/secrets/metrics_scrape_token.txt written."
+else
+    cat <<EOF
 SIGNING_KEY=${SIGNING_KEY}
 JWT_SECRET_KEY=${JWT_SECRET_KEY}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -48,7 +63,8 @@ BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD}
 DEMO_PASSWORD=${DEMO_PASSWORD}
 METRICS_SCRAPE_TOKEN=${METRICS_SCRAPE_TOKEN}
 EOF
-
-echo "---------------------------------------------------------------"
-echo "IMPORTANT: Save these variables to your .env file immediately."
-echo "Do NOT share these keys or commit them to version control."
+    echo "---------------------------------------------------------------"
+    echo "IMPORTANT: Save these variables to your .env file immediately."
+    echo "Or run: ./infra/generate_production_keys.sh --update"
+    echo "Do NOT share these keys or commit them to version control."
+fi

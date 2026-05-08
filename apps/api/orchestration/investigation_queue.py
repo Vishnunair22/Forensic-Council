@@ -161,6 +161,19 @@ class InvestigationWorker:
             return 660.0
         return max(30.0, timeout)
 
+    def _concurrency(self) -> int:
+        raw = os.environ.get("WORKER_CONCURRENCY", "2")
+        try:
+            concurrency = int(raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid WORKER_CONCURRENCY; using default",
+                value=raw,
+                default=2,
+            )
+            return 2
+        return max(1, concurrency)
+
     async def _write_heartbeat(self) -> None:
         redis = await self.queue._get_redis()
         await redis.set(
@@ -186,12 +199,108 @@ class InvestigationWorker:
         """Start the worker loop."""
         self._running = True
         redis = await self.queue._get_redis()
-        logger.info(f"Worker {self.worker_id} started, waiting for tasks...")
+        concurrency = self._concurrency()
+        logger.info(
+            f"Worker {self.worker_id} started, waiting for tasks...",
+            concurrency=concurrency,
+        )
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        active_tasks: set[asyncio.Task] = set()
+
+        async def process_task(task: InvestigationTask) -> None:
+            try:
+                if self._handler is None:
+                    logger.error(f"Worker {self.worker_id}: No handler set")
+                    task.status = InvestigationStatus.FAILED
+                    task.error = "No worker handler configured"
+                    await self.queue.update_task(task)
+                    return
+
+                task.status = InvestigationStatus.RUNNING
+                task.started_at = time.time()
+                await self.queue.update_task(task)
+
+                logger.info(
+                    f"Worker {self.worker_id} processing task",
+                    session_id=str(task.session_id),
+                )
+
+                try:
+                    timeout_seconds = self._task_timeout_seconds()
+                    result = await asyncio.wait_for(
+                        self._handler(
+                            evidence_file_path=task.evidence_file_path,
+                            case_id=task.case_id,
+                            investigator_id=task.investigator_id,
+                            original_filename=task.original_filename,
+                            session_id=task.session_id,
+                        ),
+                        timeout=timeout_seconds,
+                    )
+
+                    task.status = InvestigationStatus.COMPLETED
+                    task.result = (
+                        result.model_dump(mode="json")
+                        if hasattr(result, "model_dump")
+                        else result
+                    )
+                    task.completed_at = time.time()
+                except TimeoutError:
+                    task.status = InvestigationStatus.FAILED
+                    task.error = (
+                        f"Investigation worker timed out after "
+                        f"{self._task_timeout_seconds():.0f}s"
+                    )
+                    task.completed_at = time.time()
+                    logger.error(
+                        f"Worker {self.worker_id} task timed out",
+                        session_id=str(task.session_id),
+                        timeout_seconds=self._task_timeout_seconds(),
+                    )
+                except Exception as e:
+                    task.status = InvestigationStatus.FAILED
+                    task.error = str(e)
+                    task.completed_at = time.time()
+                    logger.error(
+                        f"Worker {self.worker_id} task failed",
+                        session_id=str(task.session_id),
+                        error=str(e),
+                        exc_info=True,
+                    )
+
+                await self.queue.update_task(task)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(
+                    f"Worker {self.worker_id} task bookkeeping failed",
+                    session_id=str(task.session_id),
+                    error=str(e),
+                    exc_info=True,
+                )
 
         try:
             while self._running:
                 try:
+                    active_tasks = {t for t in active_tasks if not t.done()}
+                    if len(active_tasks) >= concurrency:
+                        done, pending = await asyncio.wait(
+                            active_tasks,
+                            timeout=1,
+                            return_when=asyncio.FIRST_COMPLETED,
+                        )
+                        for done_task in done:
+                            try:
+                                await done_task
+                            except Exception as e:
+                                logger.error(
+                                    f"Worker {self.worker_id} background task crashed",
+                                    error=str(e),
+                                    exc_info=True,
+                                )
+                        active_tasks = set(pending)
+                        continue
+
                     # BLPOP blocks until a task is available (timeout 5s)
                     result = await redis.client.blpop(InvestigationQueue.QUEUE_KEY, timeout=5)
                     if not result:
@@ -205,68 +314,8 @@ class InvestigationWorker:
                         logger.error(f"Worker {self.worker_id}: Task {session_id} metadata missing")
                         continue
 
-                    if self._handler is None:
-                        logger.error(f"Worker {self.worker_id}: No handler set")
-                        task.status = InvestigationStatus.FAILED
-                        task.error = "No worker handler configured"
-                        await self.queue.update_task(task)
-                        continue
-
-                    task.status = InvestigationStatus.RUNNING
-                    task.started_at = time.time()
-                    await self.queue.update_task(task)
-
-                    logger.info(
-                        f"Worker {self.worker_id} processing task",
-                        session_id=str(session_id),
-                    )
-
-                    try:
-                        # Execute the investigation
-                        # The handler is expected to be ForensicCouncilPipeline.run_investigation or a wrapper
-                        timeout_seconds = self._task_timeout_seconds()
-                        result = await asyncio.wait_for(
-                            self._handler(
-                                evidence_file_path=task.evidence_file_path,
-                                case_id=task.case_id,
-                                investigator_id=task.investigator_id,
-                                original_filename=task.original_filename,
-                                session_id=task.session_id,
-                            ),
-                            timeout=timeout_seconds,
-                        )
-
-                        task.status = InvestigationStatus.COMPLETED
-                        task.result = (
-                            result.model_dump(mode="json")
-                            if hasattr(result, "model_dump")
-                            else result
-                        )
-                        task.completed_at = time.time()
-                    except TimeoutError:
-                        task.status = InvestigationStatus.FAILED
-                        task.error = (
-                            f"Investigation worker timed out after "
-                            f"{self._task_timeout_seconds():.0f}s"
-                        )
-                        task.completed_at = time.time()
-                        logger.error(
-                            f"Worker {self.worker_id} task timed out",
-                            session_id=str(session_id),
-                            timeout_seconds=self._task_timeout_seconds(),
-                        )
-                    except Exception as e:
-                        task.status = InvestigationStatus.FAILED
-                        task.error = str(e)
-                        task.completed_at = time.time()
-                        logger.error(
-                            f"Worker {self.worker_id} task failed",
-                            session_id=str(session_id),
-                            error=str(e),
-                            exc_info=True,
-                        )
-
-                    await self.queue.update_task(task)
+                    bg_task = asyncio.create_task(process_task(task))
+                    active_tasks.add(bg_task)
 
                 except asyncio.CancelledError:
                     break
@@ -279,6 +328,8 @@ class InvestigationWorker:
                 await heartbeat_task
             except asyncio.CancelledError:
                 pass
+            if active_tasks:
+                await asyncio.gather(*active_tasks, return_exceptions=True)
 
     async def stop(self) -> None:
         """Stop the worker loop."""

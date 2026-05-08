@@ -33,6 +33,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3000/ > /dev/null || exit 1
 
+RUN echo '⚠ frontend running in DEVELOPMENT target — do not expose publicly' \
+    > /app/apps/web/.dev_target_banner
+
 CMD ["npm", "run", "dev"]
 
 # Stage 2: Builder - production build
@@ -44,6 +47,8 @@ COPY apps/web/ ./
 # Build-time variable baked into the JS bundle
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+RUN test -z "${NEXT_PUBLIC_API_URL}" || \
+    echo "ℹ Baked NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} into bundle. To change, rebuild."
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds

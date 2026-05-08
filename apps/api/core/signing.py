@@ -25,6 +25,12 @@ Key Rotation:
    a "KEY_ROTATION" custody entry signed by both old and new keys.
    The old key is retired but kept for verifying historical entries.
 
+Invariant:
+   Only the 'backend' service (Arbiter) is authorized to perform report
+   signing and key rotation (write operations to DB/storage). The 'worker'
+   service mounts /app/storage/keys as read-only and must never attempt
+   to write or re-derive keys in a way that requires write access.
+
 ⚠️  UPGRADE NOTICE (v1.3.0 → v1.4.0):
     The HKDF key derivation now uses an explicit domain-separation salt.
     This changes the Fernet encryption key used to protect DB-stored agent
