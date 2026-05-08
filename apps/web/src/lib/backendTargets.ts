@@ -15,6 +15,7 @@ export function getBackendBaseUrls(): string[] {
   const prodCandidates = [
     internalUrl,
     publicUrl,
+    isDocker ? "http://backend:8000" : "http://localhost:8000",
   ].filter((v): v is string => Boolean(v?.trim()));
 
   const candidates = (isProduction ? prodCandidates : devCandidates).filter(

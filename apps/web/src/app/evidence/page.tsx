@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,7 +16,6 @@ import { AgentProgressSkeleton } from "@/components/evidence/AgentProgressSkelet
 
 const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
-  { loading: () => <AgentProgressSkeleton /> },
 );
 const ArbiterDeliberationOverlay = dynamic(
   () => import("@/components/evidence/ArbiterDeliberationOverlay").then((mod) => mod.ArbiterDeliberationOverlay),
@@ -84,28 +83,30 @@ export default function EvidenceUploadPage() {
 
         {showAgentProgress ? (
           <>
-          <AgentProgressDisplay 
-            agentUpdates={investigation.agentUpdates}
-            completedAgents={investigation.validCompletedAgents}
-            progressText={investigation.pipelineThinking}
-            allAgentsDone={investigation.allAgentsDone}
-            phase={investigation.phase}
-            awaitingDecision={investigation.awaitingDecision}
-            pipelineStatus={investigation.status}
-            pipelineMessage={investigation.pipelineMessage}
-            onNewUpload={investigation.handleNewUpload}
-            onViewResults={investigation.handleViewResults}
-            onAcceptAnalysis={investigation.handleAcceptAnalysis}
-            onRunDeepAnalysis={investigation.handleDeepAnalysis}
-            isNavigating={investigation.isNavigating}
-            mimeType={investigation.file?.type || storage.getItem("forensic_mime_type") || undefined}
-            playSound={playSound}
-            revealQueue={investigation.revealQueue}
-            arbiterDeliberating={investigation.arbiterDeliberating}
-            arbiterStatus={investigation.arbiterStatus}
-            arbiterThinking={investigation.arbiterThinking}
-            hasStartedAnalysis={investigation.hasStartedAnalysis}
-          />
+          <Suspense fallback={<AgentProgressSkeleton mimeType={investigation.mimeType} />}>
+            <AgentProgressDisplay
+              agentUpdates={investigation.agentUpdates}
+              completedAgents={investigation.validCompletedAgents}
+              progressText={investigation.pipelineThinking}
+              allAgentsDone={investigation.allAgentsDone}
+              phase={investigation.phase}
+              awaitingDecision={investigation.awaitingDecision}
+              pipelineStatus={investigation.status}
+              pipelineMessage={investigation.pipelineMessage}
+              onNewUpload={investigation.handleNewUpload}
+              onViewResults={investigation.handleViewResults}
+              onAcceptAnalysis={investigation.handleAcceptAnalysis}
+              onRunDeepAnalysis={investigation.handleDeepAnalysis}
+              isNavigating={investigation.isNavigating}
+              mimeType={investigation.mimeType || undefined}
+              playSound={playSound}
+              revealQueue={investigation.revealQueue}
+              arbiterDeliberating={investigation.arbiterDeliberating}
+              arbiterStatus={investigation.arbiterStatus}
+              arbiterThinking={investigation.arbiterThinking}
+              hasStartedAnalysis={investigation.hasStartedAnalysis}
+            />
+          </Suspense>
 
             <HITLCheckpointModal
               checkpoint={investigation.hitlCheckpoint}

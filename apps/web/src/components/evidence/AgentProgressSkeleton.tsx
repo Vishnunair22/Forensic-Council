@@ -2,8 +2,15 @@
 
 import React from "react";
 import { Activity } from "lucide-react";
+import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 
-export function AgentProgressSkeleton() {
+interface AgentProgressSkeletonProps {
+  mimeType?: string | null;
+}
+
+export function AgentProgressSkeleton({ mimeType }: AgentProgressSkeletonProps = {}) {
+  const count = mimeType ? supportedAgentIdsForMime(mimeType).size : 3;
+
   return (
     <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-24 pt-24 animate-pulse">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-10 w-full mb-12 px-2">
@@ -31,7 +38,7 @@ export function AgentProgressSkeleton() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3, 4, 5].map((i) => (
+        {Array.from({ length: count }, (_, i) => i + 1).map((i) => (
           <div key={i} className="h-[400px] rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden p-8 space-y-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-white/5" />

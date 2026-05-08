@@ -36,8 +36,13 @@ export function getWSBase(): string {
     } catch { /* fall through */ }
   }
 
-  // Dev convenience — Next.js on :3000, backend on :8000
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+  // Dev convenience: direct Next.js dev server on :3000, backend on :8000.
+  // When the app is reached through Caddy on :80/:443, keep WebSockets
+  // same-origin so production/local proxy routing remains valid.
+  if (
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
+    window.location.port === "3000"
+  ) {
     return `ws://${window.location.hostname}:8000`;
   }
 

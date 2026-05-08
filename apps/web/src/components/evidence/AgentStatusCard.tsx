@@ -11,6 +11,8 @@ import {
   Film,
   Database,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -63,6 +65,8 @@ const ALERT_VERDICTS = new Set([
   "LIKELY_SYNTHETIC",
 ]);
 
+const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+
 function normalizeVerdict(verdict?: string) {
   const value = (verdict || "INCONCLUSIVE").replace(/_/g, " ");
   return value.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -70,6 +74,28 @@ function normalizeVerdict(verdict?: string) {
 
 function isAlertFinding(finding: FindingPreview) {
   return ALERT_VERDICTS.has(finding.verdict ?? "") || ["CRITICAL", "HIGH", "MEDIUM"].includes(finding.severity ?? "");
+}
+
+function rankFinding(f: FindingPreview): number {
+  const sv = (f.severity || "").toUpperCase();
+  if (sv in SEVERITY_RANK) return SEVERITY_RANK[sv];
+  if (isAlertFinding(f)) return 1.5;
+  return 4;
+}
+
+function extractHeadline(f: FindingPreview): string {
+  if (f.key_signal?.trim()) return f.key_signal.trim();
+  const summary = (f.summary || "").trim();
+  const firstSentence = summary.split(/(?<=\.)\s+/)[0];
+  return firstSentence.length <= 180 ? firstSentence : firstSentence.slice(0, 160) + "…";
+}
+
+function extractDetail(f: FindingPreview, headline: string): string {
+  const summary = (f.summary || "").trim();
+  if (!summary || summary === headline) return "";
+  if (f.key_signal?.trim() === headline) return summary;
+  const after = summary.slice(headline.replace(/…$/, "").length).replace(/^[.\s]+/, "").trim();
+  return after;
 }
 
 export const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
@@ -118,59 +144,118 @@ const FALLBACK_PHRASES: Record<string, string[]> = {
   ],
 };
 
+const SEV_DOT: Record<string, string> = {
+  CRITICAL: "bg-red-400",
+  HIGH:     "bg-danger",
+  MEDIUM:   "bg-amber-400",
+  LOW:      "bg-white/30",
+};
+
+const SEV_LABEL: Record<string, string> = {
+  CRITICAL: "text-red-400",
+  HIGH:     "text-danger",
+  MEDIUM:   "text-amber-400",
+  LOW:      "text-white/35",
+};
+
 function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
   const [expanded, setExpanded] = useState(false);
   const isAlert = isAlertFinding(f);
-  const text = f.summary || "";
-  const isLong = text.length > 260;
-  const visible = expanded || !isLong ? text : text.slice(0, 260) + "...";
+  const sev = (f.severity || "").toUpperCase();
+
+  const dotColor = SEV_DOT[sev] ?? (isAlert ? "bg-danger/80" : "bg-white/20");
+  const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger/70" : "text-white/40");
+
+  const headline = extractHeadline(f);
+  const detail = extractDetail(f, headline);
+  const MAX = 200;
+  const needsExpand = detail.length > MAX;
+  const visibleDetail = needsExpand && !expanded ? detail.slice(0, MAX).trimEnd() + "…" : detail;
 
   return (
     <motion.div
-      data-testid={`agent-card-${i}`}
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      className={clsx(
-        "p-4 rounded-xl border transition-all duration-300",
-        isAlert 
-          ? "bg-danger/5 border-danger/20 hover:bg-danger/8" 
-          : "bg-surface-2 border-white/5 hover:bg-surface-3 hover:border-white/10"
-      )}
+      data-testid={`agent-finding-${i}`}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: i * 0.05, duration: 0.25 }}
+      className="flex gap-3 py-3.5"
     >
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <span className="min-w-0 truncate text-[11px] font-mono font-bold text-white/55 uppercase tracking-[0.08em]">
-          {fmtTool(f.tool)}
-        </span>
-        <div className="flex items-center gap-2">
+      {/* Severity indicator bar */}
+      <div className={clsx(
+        "w-[3px] self-stretch rounded-full shrink-0 min-h-[16px]",
+        sev === "CRITICAL" ? "bg-red-400/80" :
+        sev === "HIGH" ? "bg-danger/70" :
+        sev === "MEDIUM" ? "bg-amber-400/60" :
+        isAlert ? "bg-danger/50" : "bg-white/12"
+      )} />
+
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Top row: tool name chip + severity badge + confidence */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {f.tool && (
+            <span className={clsx(
+              "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wide",
+              isAlert
+                ? "bg-danger/10 text-danger/80 border border-danger/20"
+                : "bg-white/6 text-white/60 border border-white/10"
+            )}>
+              {fmtTool(f.tool)}
+            </span>
+          )}
+          {sev && SEV_LABEL[sev] && (
+            <span className={clsx("text-[10px] font-mono font-semibold uppercase tracking-wide", sevLabelColor)}>
+              {sev}
+            </span>
+          )}
           {f.degraded && (
-            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500" title={f.fallback_reason || "Tool degraded"}>
-              DEGRADED
+            <span className="text-[10px] font-mono text-amber-400/60 uppercase" title={f.fallback_reason || ""}>
+              degraded
             </span>
           )}
           {typeof f.confidence === "number" && (
-            <span className={clsx("text-[11px] font-mono font-bold", isAlert ? "text-danger" : "text-success")}>
-              {Math.round(f.confidence * 100)}% confidence
+            <span className={clsx(
+              "ml-auto text-[11px] font-mono font-bold tabular-nums shrink-0",
+              isAlert ? "text-danger/90" : "text-white/50"
+            )}>
+              {Math.round(f.confidence * 100)}%
             </span>
           )}
         </div>
-      </div>
-      <p className="text-sm text-white/85 font-medium leading-6 mb-1">
-        {visible}
-      </p>
-      {f.degraded && f.fallback_reason && (
-        <p className="text-[11px] text-amber-400/80 font-mono mt-2 leading-relaxed">
-          Tool fallback used: {f.fallback_reason}
+
+        {/* Headline — primary finding statement */}
+        <p className={clsx(
+          "text-[13px] font-medium leading-snug",
+          isAlert ? "text-white" : "text-white/85"
+        )}>
+          {headline}
         </p>
-      )}
-      {isLong && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-3 text-[11px] font-mono text-[var(--color-primary)] uppercase tracking-widest"
-        >
-          {expanded ? "Show less" : "Show more"}
-        </button>
-      )}
+
+        {/* Detail — supporting evidence */}
+        {detail && (
+          <div className="space-y-1">
+            <p className="text-[12px] text-white/55 leading-relaxed">{visibleDetail}</p>
+            {needsExpand && (
+              <button
+                type="button"
+                onClick={() => setExpanded(e => !e)}
+                className="inline-flex items-center gap-1 text-[10px] font-mono text-[var(--color-primary)]/60 hover:text-[var(--color-primary)] transition-colors"
+              >
+                {expanded
+                  ? <><ChevronUp className="w-3 h-3" /><span>less</span></>
+                  : <><ChevronDown className="w-3 h-3" /><span>more</span></>
+                }
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Trailing meta: section label */}
+        {f.section && (
+          <span className="text-[10px] font-mono text-white/25 uppercase tracking-wide">
+            {f.section}
+          </span>
+        )}
+      </div>
     </motion.div>
   );
 }
@@ -236,13 +321,14 @@ export function AgentStatusCard({
     const deduped: FindingPreview[] = [];
     const seen = new Set<string>();
     for (const f of raw) {
-      const key = `${f.tool}-${f.summary.slice(0, 100)}`;
+      const key = f.tool || (f.summary || "").slice(0, 90).toLowerCase().trim();
       if (!seen.has(key)) {
         deduped.push(f);
         seen.add(key);
       }
     }
-    return deduped;
+    // Highest-severity / alert findings first
+    return deduped.sort((a, b) => rankFinding(a) - rankFinding(b));
   }, [completedData]);
   const verdictScore = completedData?.verdict_score;
   const agentVerdict = completedData?.agent_verdict;
@@ -391,8 +477,9 @@ export function AgentStatusCard({
                 </div>
               </div>
               {(completedData.summary || completedData.message) && (
-                <p className="text-sm text-white/75 leading-6 border-t border-white/5 pt-3">
-                  {completedData.summary || completedData.message}
+                <p className="text-[12px] text-white/60 leading-relaxed border-t border-white/5 pt-3">
+                  {(completedData.summary || completedData.message || "").slice(0, 280)}
+                  {(completedData.summary || completedData.message || "").length > 280 ? "…" : ""}
                 </p>
               )}
             </motion.div>
@@ -404,18 +491,30 @@ export function AgentStatusCard({
       <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar scroll-smooth p-8 pt-4 relative z-10">
         <AnimatePresence mode="wait">
           {status === "complete" && findings.length > 0 ? (
-            <div className="space-y-4">
-              {(isExpanded ? findings : findings.slice(0, 2)).map((f, i) => (
-                <FindingRow key={`${f.tool}-${i}`} f={f} i={i} />
-              ))}
+            <div>
+              <div className="divide-y divide-white/[0.05]">
+                {(isExpanded ? findings : findings.slice(0, 3)).map((f, i) => (
+                  <FindingRow key={`${f.tool}-${i}`} f={f} i={i} />
+                ))}
+              </div>
 
-              {findings.length > 2 && (
+              {findings.length > 3 && (
                 <button
                   type="button"
                   onClick={() => onToggleExpand?.()}
-                  className="w-full py-3 rounded-lg border border-dashed border-white/10 text-white/30 hover:text-white/60 hover:border-white/20 transition-all text-[10px] font-mono uppercase tracking-widest"
+                  className={clsx(
+                    "mt-4 w-full py-2.5 rounded-lg flex items-center justify-center gap-1.5",
+                    "text-[11px] font-mono font-semibold uppercase tracking-wider",
+                    "border transition-all duration-200",
+                    isExpanded
+                      ? "bg-white/[0.04] border-white/10 text-white/40 hover:text-white/60 hover:border-white/20"
+                      : "bg-[var(--color-primary)]/6 border-[var(--color-primary)]/20 text-[var(--color-primary)]/70 hover:bg-[var(--color-primary)]/10 hover:border-[var(--color-primary)]/35 hover:text-[var(--color-primary)]"
+                  )}
                 >
-                  {isExpanded ? "Collapse_Logs" : `View_${findings.length - 2}_More_Signals`}
+                  {isExpanded
+                    ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
+                    : <><ChevronDown className="w-3.5 h-3.5" /><span>{findings.length - 3} more {findings.length - 3 === 1 ? "signal" : "signals"}</span></>
+                  }
                 </button>
               )}
             </div>
@@ -455,6 +554,20 @@ export function AgentStatusCard({
           ) : status === "waiting" ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
                <span className="text-xs text-white/35 font-medium tracking-wide">Standing by — payload not yet received</span>
+            </div>
+          ) : status === "unsupported" ? (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">
+              <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-center text-white/35">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <p className="max-w-xs text-xs text-white/55 font-medium leading-relaxed">
+                {sanitizeThinking(liveUpdate?.thinking || thinking) ||
+                  completedData?.message ||
+                  "This specialist does not support the submitted file type."}
+              </p>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-white/25">
+                Hidden after 10s
+              </span>
             </div>
           ) : null}
         </AnimatePresence>

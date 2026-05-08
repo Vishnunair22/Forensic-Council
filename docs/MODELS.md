@@ -12,7 +12,8 @@ Pins specific commits/hashes for reproducibility.
 
 | Category | Model | Version/Commit | Notes |
 |----------|-------|----------------|-------|
-| **Vision** | YOLO (Ultralytics) | `8.3.0` | Default: `yolo11n.pt` |
+| **Vision** | DETR object detector | `facebook/detr-resnet-50` | Default object detector; Apache-2.0 |
+| **Vision** | YOLO (Ultralytics) | `8.3.x` | Optional: `yolo11n.pt` when `ENABLE_AGPL_MODELS=true` |
 | **Vision** | OpenCLIP (SigLIP) | latest | `ViT-B-32` default |
 | **Audio** | Vansh180 deepfake | `main` | Default: `Vansh180/deepfake-audio-wav2vec2` |
 | **Audio** | AST Anti-Spoofing | - | Alternative: `MattyB95/AST-anti-spoofing` |
@@ -45,7 +46,7 @@ Pins specific commits/hashes for reproducibility.
 
 | Model | License | Risk |
 |-------|---------|------|
-| MattyB95/AST-anti-spoofing | **Apache-2.0** | None |
+| Vansh180/deepfake-audio-wav2vec2 | **Apache-2.0** | None |
 | AASIST (opt-in) | **Research-only** | HIGH |
 | pyannote diarization | **MIT** | LOW — requires HF acceptance |
 
@@ -69,25 +70,27 @@ Pins specific commits/hashes for reproducibility.
 
 ### Overview
 
-The system uses persistent Docker volumes to cache ML models (~1.2 GB total) across container restarts.
+The system uses persistent Docker volumes to cache ML models across container
+restarts. Docker builds can also bake a seed cache into the backend/worker
+image with `PRELOAD_MODELS=1`; the entrypoint copies that seed into empty named
+volumes on first start.
 
 ### Cache Directories
 
 | Directory | Contents | Size |
 |-----------|----------|------|
-| `/app/cache/huggingface/` | OpenCLIP, SpeechBrain | ~578 MB |
-| `/app/cache/ultralytics/` | YOLO weights | ~6 MB |
+| `/app/cache/huggingface/` | OpenCLIP/SigLIP, SpeechBrain, audio deepfake, DETR | several GB |
+| `/app/cache/ultralytics/` | YOLO weights when AGPL mode is enabled | ~6 MB |
 | `/app/cache/easyocr/` | OCR models | ~200 MB |
 | `/app/cache/torch/` | PyTorch hub | ~98 MB |
 | `/app/cache/calibration_models/` | JSON calibration files | ~1.5 MB |
 
 ### First Run vs Subsequent Runs
 
-**First Run (5-10 min download):**
+**First Run (5-20 min download if image seed is absent):**
 - Entrypoint seeds calibration models
-- `model_pre_download.py` runs in background
-- API starts in ~30s (during download)
-- First investigation: 30-60s cold start
+- `model_pre_download.py --strict` runs before the API/worker accepts traffic
+- Named volumes are populated and reused by later rebuilds
 
 **Subsequent Runs (30-60s):**
 - Cache detected, download skipped
@@ -111,7 +114,8 @@ docker exec forensic_api du -sh /app/cache/*
 | `HF_HOME` | `/app/cache/huggingface` | HuggingFace cache |
 | `YOLO_CONFIG_DIR` | `/app/cache/ultralytics` | YOLO weights |
 | `TORCH_HOME` | `/app/cache/torch` | PyTorch hub |
-| `SKIP_MODEL_DOWNLOAD` | `0` | Skip pre-download |
+| `PRELOAD_MODELS` | `1` | Bake model seed cache into Docker images at build time |
+| `SKIP_MODEL_DOWNLOAD` | `0` | Set to `1` only for CI/offline smoke builds |
 
 ---
 

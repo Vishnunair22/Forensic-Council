@@ -41,6 +41,10 @@ CACHE_DIRS = {
     "HF": settings.hf_home,
     "EASYOCR": settings.easyocr_model_dir,
 }
+RUNTIME_CACHE_DIRS = [
+    settings.numba_cache_dir,
+    settings.calibration_models_path,
+]
 
 HF_MODEL_DIRS = {
     "open_clip": "models--" + settings.siglip_model_name.replace("/", "--"),
@@ -87,6 +91,8 @@ def _large_cached_files(directory: Path, min_size: int) -> list[Path]:
 
 def setup_dirs() -> None:
     for path in CACHE_DIRS.values():
+        Path(path).mkdir(parents=True, exist_ok=True)
+    for path in RUNTIME_CACHE_DIRS:
         Path(path).mkdir(parents=True, exist_ok=True)
 
 
@@ -195,14 +201,15 @@ def download_open_clip(force: bool = False) -> bool:
     """OpenCLIP / SigLIP - used by Agent 1 and Agent 3 for zero-shot classification and neural fingerprints."""
     hf_dir = CACHE_DIRS["HF"]
     model_name = settings.siglip_model_name
+    open_clip_cache = Path(hf_dir) / "open_clip"
 
     # Normalise slug: strip hf-hub: prefix before building the cache path.
     clean_name = model_name.replace("hf-hub:", "")
     if model_name == "ViT-B-32":
-        model_slug = "models--timm--vit_base_patch32_clip_224.openai"
+        model_dir = open_clip_cache
     else:
         model_slug = f"models--{clean_name.replace('/', '--')}"
-    model_dir = Path(hf_dir) / "hub" / model_slug
+        model_dir = Path(hf_dir) / "hub" / model_slug
 
     # Robust check: look for any blob > 50 MB (the actual model weights)
     clip_cached = _large_cached_files(model_dir, 50_000_000)
@@ -226,7 +233,11 @@ def download_open_clip(force: bool = False) -> bool:
             import open_clip
 
             pretrained = "openai" if "siglip" not in model_name.lower() else "webli"
-            open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
+            open_clip.create_model_and_transforms(
+                model_name,
+                pretrained=pretrained,
+                cache_dir=str(open_clip_cache),
+            )
 
         # Post-download size guard: confirm at least one large blob landed.
         post_blobs = _large_cached_files(model_dir, 50_000_000)
@@ -300,7 +311,9 @@ def download_speechbrain(force: bool = False) -> bool:
         from speechbrain.inference.speaker import EncoderClassifier
 
         EncoderClassifier.from_hparams(
-            source="speechbrain/spkrec-ecapa-voxceleb", run_opts={"device": "cpu"}
+            source="speechbrain/spkrec-ecapa-voxceleb",
+            savedir=str(sb_dir),
+            run_opts={"device": "cpu"},
         )
         print(f"  {GREEN}[OK  ]{RESET}  SpeechBrain downloaded.")
         return True

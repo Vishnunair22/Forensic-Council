@@ -19,13 +19,13 @@ describe("LoadingOverlay", () => {
   });
 
   test("renders overlay container", () => {
-    const { container } = render(<LoadingOverlay />);
-    expect(container.firstChild).toBeTruthy();
+    render(<LoadingOverlay />);
+    expect(document.body.querySelector(".fixed.inset-0")).toBeTruthy();
   });
 
   test("applies fixed positioning and blur classes", () => {
-    const { container } = render(<LoadingOverlay />);
-    const el = container.firstChild as HTMLElement;
+    render(<LoadingOverlay />);
+    const el = document.body.querySelector(".fixed.inset-0") as HTMLElement;
     expect(el.className).toContain("fixed");
     expect(el.className).toContain("inset-0");
   });

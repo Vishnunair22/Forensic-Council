@@ -269,7 +269,6 @@ class VideoHandlers(BaseToolHandler):
             with tempfile.TemporaryDirectory() as tmpdir:
                 for source in frame_dir:
                     os.replace(source, os.path.join(tmpdir, os.path.basename(source)))
-                from typing import Any as _Any
                 frames_artifact = SimpleNamespace(file_path=tmpdir)
                 result = await real_frame_consistency_analyze(frames_artifact=frames_artifact)  # type: ignore[arg-type]
                 inconsistencies = result.get("inconsistencies", [])

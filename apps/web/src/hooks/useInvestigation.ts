@@ -339,6 +339,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       analysisCompleteSoundedRef.current = false;
       sessionExistsRef.current = false;
 
+      setMimeType(targetFile.type);
+      storage.setItem("forensic_mime_type", targetFile.type);
+
       playSound("scan");
       setIsUploading(true);
       setWsConnectionError(null);
@@ -625,18 +628,29 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("think");
     storage.setItem("forensic_is_deep", "true");
     const sid = storage.getItem("forensic_session_id");
-    if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
+    if (sid) {
+      // Save only non-skipped initial agents so the deep-phase card list stays correct
+      const nonSkipped = (completedAgentsRef.current as AgentUpdate[]).filter(
+        (a) => a.status !== "skipped",
+      );
+      storage.setItem(`forensic_initial_agents:${sid}`, nonSkipped, true);
+    }
     analysisCompleteSoundedRef.current = false;
     clearCompletedAgents();
     setPhase("deep");
     try {
+      // Reconnect the WebSocket BEFORE resuming so the old connection's internal
+      // message queue (which still holds initial-phase AGENT_UPDATE / AGENT_COMPLETE
+      // messages) is discarded. The new socket starts with an empty queue and will
+      // only receive deep-phase messages.
+      if (sid) await connectWebSocket(sid, true);
       await resumeInvestigation(true);
     } catch {
       playSound("error");
     } finally {
       investigationInFlightRef.current = false;
     }
-  }, [playSound, resumeInvestigation, clearCompletedAgents]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents, connectWebSocket]);
 
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem("forensic_session_id");
@@ -730,9 +744,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     validAgentsData.some((v) => v.id === c.agent_id)
   );
 
-  const [mimeType, setMimeType] = useState<string | null>(() =>
-    storage.getItem("forensic_mime_type") || null
-  );
+  const [mimeType, setMimeType] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    if (__pendingFileStore.file?.type) return __pendingFileStore.file.type;
+    return storage.getItem("forensic_mime_type") || null;
+  });
 
   useEffect(() => {
     setMimeType(storage.getItem("forensic_mime_type") || file?.type || null);
@@ -859,5 +875,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     hasStartedAnalysis,
     allAgentsDone,
     awaitingDecision,
+    mimeType,
   };
 }

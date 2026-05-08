@@ -59,7 +59,7 @@ MIN_FILES: dict[str, int] = {
 
 def _open_clip_cache_dir(model_name: str) -> str:
     if model_name == "ViT-B-32":
-        return "models--timm--vit_base_patch32_clip_224.openai"
+        return "open_clip"
     return "models--" + model_name.replace("hf-hub:", "").replace("/", "--")
 
 
@@ -158,6 +158,7 @@ def check_specific_model_assets() -> bool:
     hf_root = Path(settings.hf_home)
     for model_dir in REQUIRED_HF_MODEL_DIRS:
         candidate_dirs = [
+            hf_root / model_dir,
             hf_root / "hub" / model_dir,
             hf_root / "transformers" / model_dir,
         ]

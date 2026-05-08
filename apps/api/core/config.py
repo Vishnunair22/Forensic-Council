@@ -9,12 +9,14 @@ All configuration is centralized and validated at startup.
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import quote_plus
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _config_logger = logging.getLogger(__name__)
+_APP_ROOT = Path(__file__).resolve().parent.parent
 
 # Default credentials that must be changed in production
 INSECURE_DEFAULTS = {
@@ -255,6 +257,27 @@ class Settings(BaseSettings):
         default=os.getenv("NUMBA_CACHE_DIR", "/app/cache/numba_cache"),
         description="Numba JIT cache directory",
     )
+
+    @field_validator(
+        "hf_home",
+        "torch_home",
+        "yolo_model_dir",
+        "easyocr_model_dir",
+        "numba_cache_dir",
+        "calibration_models_path",
+        mode="after",
+    )
+    @classmethod
+    def normalize_container_cache_paths_for_host(cls, v: str) -> str:
+        """Map Docker-only /app paths to writable local paths on Windows host runs."""
+        if os.name != "nt" or os.environ.get("RUNNING_IN_DOCKER") == "1":
+            return v
+        normalized = v.replace("\\", "/")
+        if normalized.startswith("/app/cache/"):
+            return str(_APP_ROOT / ".cache" / normalized.removeprefix("/app/cache/"))
+        if normalized.startswith("/app/storage/"):
+            return str(_APP_ROOT / "storage" / normalized.removeprefix("/app/storage/"))
+        return v
 
     # Security Configuration
     signing_key: str = Field(

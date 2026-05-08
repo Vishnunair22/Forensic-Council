@@ -275,7 +275,9 @@ services:
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
-      SKIP_MODEL_DOWNLOAD: "1"
+      # Allow first-run startup fallback if PRELOAD_MODELS=0 or a seed cache is
+      # missing. Set SKIP_MODEL_DOWNLOAD=1 explicitly for CI smoke builds.
+      SKIP_MODEL_DOWNLOAD: ${SKIP_MODEL_DOWNLOAD:-0}
     depends_on:
       postgres:
         condition: service_healthy

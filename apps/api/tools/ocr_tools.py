@@ -29,6 +29,9 @@ logger = get_logger(__name__)
 # Shared executor for CPU-bound OCR tasks to avoid blocking the event loop
 _OCR_EXECUTOR = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4))
 
+# Per-process Gemini OCR cache — keyed by file_path (upload paths embed session ID)
+_GEMINI_OCR_CACHE: dict[str, dict] = {}
+
 # Thread-local storage for EasyOCR readers to avoid re-init overhead
 _EASYOCR_READER = None
 
@@ -487,11 +490,19 @@ async def _extract_text_gemini(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:
     """
-    Tier 0 — Gemini-first Multimodal OCR.
+    Tier 0 — Gemini Unified Vision OCR.
 
-    Uses Gemini 2.0 Flash to extract text with spatial awareness and high precision.
-    This is the primary forensic tier for high-value evidence.
+    Single Gemini call that extracts text AND identifies image content.
+    Results are cached per file_path so subsequent tool calls (analyze_image_content,
+    screenshot_layout_forensics, etc.) reuse the same response without a second API hit.
     """
+    cache_key = str(getattr(artifact, "file_path", "") or "")
+    # Only cache absolute paths — test fixtures use relative paths and must not cross-contaminate
+    use_cache = bool(cache_key and os.path.isabs(cache_key))
+    if use_cache and cache_key in _GEMINI_OCR_CACHE:
+        logger.info("Gemini OCR cache hit", file_path=cache_key)
+        return _GEMINI_OCR_CACHE[cache_key]
+
     try:
         from core.config import get_settings
         from core.llm_client import LLMClient
@@ -503,68 +514,109 @@ async def _extract_text_gemini(
 
         client = LLMClient(settings)
         is_screenshot = is_screen_capture_like(artifact)
+
         if is_screenshot:
-            prompt = """Perform high-precision forensic OCR on this screenshot.
-Extract every visible text item exactly as shown, preserving reading order and UI grouping.
-Include system clocks, dates, app/window titles, browser URL/search bars, tab labels, menus,
-buttons, form fields, table headers/cells, usernames, handles, IDs, filenames, notifications,
-status bar text, error messages, captions, watermarks, and small footer/header text.
-Do not summarize or correct spelling. If text is partially occluded, transcribe the visible part
-and mark it in structured_metadata.suspicious_elements.
+            prompt = """You are a forensic analyst examining a screenshot for evidentiary purposes.
+Perform two tasks in one pass:
 
-Return ONLY valid JSON:
+TASK 1 — CONTENT IDENTIFICATION:
+Identify exactly what this screenshot shows: the application name (if recognisable), the type of
+interface (web browser, mobile app, desktop GUI, messaging app, email, social media, document, etc.),
+and a 1-sentence description of what action or data is displayed.
+
+TASK 2 — PRECISION OCR:
+Extract every visible text item verbatim, preserving reading order and UI grouping.
+Include: system clock/date, app/window titles, browser address bar, tab labels, menu items,
+buttons, form field labels and values, table headers and cell content, usernames, @handles,
+post text, message content, IDs, filenames, notification text, status bar items,
+error messages, captions, watermarks, and any footer/header text.
+Do NOT summarise, paraphrase, or correct spelling. Transcribe partially occluded text and flag it.
+
+Return ONLY valid JSON — no markdown, no preamble:
 {
-  "lines": ["verbatim line 1", "verbatim line 2"],
+  "content_type": "precise type, e.g. screenshot of WhatsApp conversation on Android",
+  "content_description": "one sentence describing what is shown",
+  "lines": ["verbatim text line 1", "verbatim text line 2"],
   "structured_metadata": {
-    "timestamps": [],
-    "identifiers": [],
-    "ui_elements": [],
-    "urls": [],
-    "document_fields": [],
-    "suspicious_elements": [],
-    "reading_order_notes": ""
+    "timestamps": ["exact timestamp strings found"],
+    "identifiers": ["usernames, handles, IDs, phone numbers found"],
+    "urls": ["full URLs found"],
+    "ui_elements": ["button labels, menu items, headings found"],
+    "document_fields": ["form labels and values found"],
+    "suspicious_elements": ["partially occluded or anomalous text"]
   },
-  "ocr_confidence": 0.0
+  "ocr_confidence": 0.97
 }
-If no text is present, return an empty lines list and empty metadata fields."""
+If no text is visible, return empty lists and an empty content_description."""
         else:
-            prompt = """Perform high-precision forensic OCR on the provided evidence artifact.
-Extract all visible text exactly as shown, focusing on:
-1. Timestamps and dates.
-2. Identifiers such as usernames, profile names, IDs, phone numbers, and URLs.
-3. UI or document elements such as headings, labels, captions, and tables.
-4. Suspicious text such as inconsistent fonts, overlapping layers, or mismatched alignment.
+            prompt = """You are a forensic analyst examining an image file for evidentiary purposes.
+Perform two tasks in one pass:
 
-Return ONLY valid JSON:
+TASK 1 — CONTENT IDENTIFICATION:
+Identify exactly what this image shows: photograph, scanned document, AI-generated image,
+infographic, meme, etc. Provide a 1-2 sentence description of the content and its forensic context.
+
+TASK 2 — PRECISION OCR:
+Extract all visible text exactly as it appears, focusing on:
+- Timestamps, dates, and times
+- Names, usernames, phone numbers, email addresses, and URLs
+- Document headings, labels, captions, table content
+- Any text that appears inconsistent in font, size, or alignment (potential overlay/forgery)
+
+Return ONLY valid JSON — no markdown, no preamble:
 {
-  "lines": ["line 1", "line 2"],
+  "content_type": "precise description, e.g. photograph of printed document",
+  "content_description": "1-2 sentence forensic description",
+  "lines": ["verbatim text line 1", "verbatim text line 2"],
   "structured_metadata": {
     "timestamps": [],
     "identifiers": [],
-    "ui_elements": [],
     "urls": [],
+    "ui_elements": [],
     "document_fields": [],
     "suspicious_elements": []
   },
   "ocr_confidence": 0.0
 }
-If no text is found, return an empty lines list and empty metadata fields."""
+If no text is visible, return empty lists."""
 
-        # This matches the method in core.llm_client.LLMClient
         raw_result = await client.generate_multimodal_synthesis(
             artifact=artifact,
             prompt=prompt,
-            max_tokens=1024,
-            json_mode=True
+            max_tokens=1536,
+            json_mode=True,
         )
 
         lines, metadata, ocr_confidence = _coerce_gemini_ocr_lines(raw_result)
         full_text = "\n".join(lines)
         preview = " | ".join(lines[:5])
-        if lines:
-            logger.info("Gemini OCR succeeded", word_count=len(full_text.split()))
 
-        return {
+        # Extract content description and type from the raw response
+        content_type = ""
+        content_description = ""
+        try:
+            import json as _json
+            if isinstance(raw_result, dict):
+                content_type = str(raw_result.get("content_type") or "")
+                content_description = str(raw_result.get("content_description") or "")
+            elif isinstance(raw_result, str):
+                text = raw_result.strip()
+                # Strip optional markdown code fence
+                if text.startswith("```"):
+                    text = text.split("```", 2)[-1].lstrip("json").strip()
+                    if text.endswith("```"):
+                        text = text[:-3].strip()
+                parsed = _json.loads(text)
+                if isinstance(parsed, dict):
+                    content_type = str(parsed.get("content_type") or "")
+                    content_description = str(parsed.get("content_description") or "")
+        except Exception:
+            pass
+
+        if lines:
+            logger.info("Gemini OCR succeeded", word_count=len(full_text.split()), content_type=content_type)
+
+        result = {
             "gemini_available": True,
             "method": "gemini_multimodal",
             "lines": lines,
@@ -576,7 +628,12 @@ If no text is found, return an empty lines list and empty metadata fields."""
             "ocr_text_preview": preview,
             "screenshot_optimized": is_screenshot,
             "court_defensible": True,
+            "content_type": content_type,
+            "content_description": content_description,
         }
+        if use_cache:
+            _GEMINI_OCR_CACHE[cache_key] = result
+        return result
     except Exception as exc:
         logger.warning("Gemini OCR unavailable, falling back to EasyOCR", error=str(exc))
         return {"gemini_available": False, "error": str(exc)}

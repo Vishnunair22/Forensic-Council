@@ -353,57 +353,21 @@ export const useSimulation = ({
                         },
                       }));
 
-                      // Upsert: for deep-phase completions, MERGE with the
-                      // initial-phase data instead of replacing it. This preserves
-                      // the initial findings_preview and section_flags while
-                      // appending deep-specific fields.
+                      // Upsert by agent_id — replace entirely so deep-phase findings
+                      // are never contaminated with initial-phase data.
                       const existingIndex =
                         completedAgentsRef.current.findIndex(
                           (a: AgentUpdate) => a.agent_id === newUpdate.agent_id,
                         );
                       if (existingIndex >= 0) {
-                        const existing = completedAgentsRef.current[existingIndex];
-                        const mergedUpdate: AgentUpdate = {
-                          ...newUpdate,
-                          // Keep initial message if deep message is generic
-                          message: newUpdate.message || existing.message,
-                          // Merge findings previews with de-duplication (by tool name only).
-                          // Deep-phase findings replace initial-phase findings for the same tool.
-                          findings_preview: (() => {
-                            const existingPrev = existing.findings_preview || [];
-                            const newPrev = newUpdate.findings_preview || [];
-                            const newByTool = new Map(newPrev.map((nf) => [nf.tool, nf]));
-                            return [
-                              ...existingPrev.map((ef) => newByTool.get(ef.tool) ?? ef),
-                              ...newPrev.filter((nf) => !existingPrev.some((ef) => ef.tool === nf.tool)),
-                            ];
-                          })(),
-                          // Merge section_flags: initial first, then deep (dedup by id)
-                          section_flags: [
-                            ...(existing.section_flags || []),
-                            ...(newUpdate.section_flags || []).filter(
-                              (ns) => !(existing.section_flags || []).some(
-                                (es) => ns.id && es.id && ns.id === es.id
-                              )
-                            ),
-                          ],
-                          // Sum findings counts from both phases (only if deep-phase findings are truly new)
-                          findings_count: Math.max(
-                            existing.findings_count || 0,
-                            newUpdate.findings_count || 0,
-                            (existing.findings_count || 0) + ((newUpdate.findings_preview || []).length - (existing.findings_preview || []).length)
-                          ),
-                          // Deep-phase verdict takes precedence if present
-                          agent_verdict: newUpdate.agent_verdict || existing.agent_verdict,
-                          verdict_score: newUpdate.verdict_score ?? existing.verdict_score,
-                        };
-                        completedAgentsRef.current[existingIndex] = mergedUpdate;
+                        completedAgentsRef.current[existingIndex] = newUpdate;
                       } else {
                         completedAgentsRef.current.push(newUpdate);
                       }
 
-                      const completedUpdate =
-                        existingIndex >= 0 ? completedAgentsRef.current[existingIndex] : newUpdate;
+                      const completedUpdate = completedAgentsRef.current[
+                        existingIndex >= 0 ? existingIndex : completedAgentsRef.current.length - 1
+                      ];
                       setCompletedAgents((current) => {
                         const exists = current.some((a) => a.agent_id === completedUpdate.agent_id);
                         if (exists) {

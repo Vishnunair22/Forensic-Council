@@ -5,8 +5,8 @@ import pytest
 from core.evidence import EvidenceArtifact
 from tools.ocr_tools import (
     _build_summary,
-    _extract_text_gemini,
     _extract_text_easyocr_sync,
+    _extract_text_gemini,
     _extract_text_pymupdf_sync,
     _get_easyocr_reader,
     _is_pdf,

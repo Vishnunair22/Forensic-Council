@@ -505,7 +505,7 @@ docker compose -f infra/docker-compose.yml restart worker
 | Argument | Default | Effect |
 |----------|---------|--------|
 | `PRELOAD_MODELS=1` | `1` | Downloads all 6 ML models into the image at build time. Clean volume starts hot. |
-| `PRELOAD_MODELS=0` | — | Skips build-time download. Models are fetched lazily on first use (adds 3–10 min to first investigation). Use in CI. |
+| `PRELOAD_MODELS=0` | - | Skips build-time download. On container startup, the backend/worker entrypoint downloads any missing required model caches unless `SKIP_MODEL_DOWNLOAD=1` is set. Use `SKIP_MODEL_DOWNLOAD=1` only for CI/offline smoke builds. |
 | `YOLO_MODEL_NAME` | `detr-resnet-50` | Object detection model (default Apache-2.0; YOLO requires ENABLE_AGPL_MODELS=true) |
 | `AASIST_MODEL_NAME` | `Vansh180/deepfake-audio-wav2vec2` | Audio deepfake model |
 

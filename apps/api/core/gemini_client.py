@@ -114,6 +114,12 @@ _VISION_MIME_TYPES = {
 }
 
 
+# Per-process cache for deep forensic analysis results.
+# Keyed by file_path — upload paths include the session ID so collisions across
+# concurrent investigations are impossible.  Cleared by process restart / new deploy.
+_DEEP_FORENSIC_CACHE: dict[str, "GeminiVisionFinding"] = {}
+
+
 @dataclass
 class GeminiVisionFinding:
     """
@@ -139,6 +145,7 @@ class GeminiVisionFinding:
     raw_response: str = ""
     latency_ms: float = 0.0
     error: str | None = None
+    from_cache: bool = False
     # Deep forensic analysis extras (populated by deep_forensic_analysis)
     _extracted_text: list[str] = field(default_factory=list)
     _interface_identification: str = ""
@@ -522,6 +529,16 @@ class GeminiVisionClient:
         if not self._enabled:
             return await self._local_forensic_fallback(file_path, exif_summary)
 
+        # Return cached result if this file was already analysed in this process lifetime.
+        # Cache key is file_path alone — upload paths embed the session ID so collisions
+        # across concurrent investigations are impossible.
+        cache_key = str(file_path)
+        if cache_key in _DEEP_FORENSIC_CACHE:
+            cached = _DEEP_FORENSIC_CACHE[cache_key]
+            logger.info("Gemini deep forensic cache hit — reusing result", file_path=file_path)
+            cached.from_cache = True
+            return cached
+
         if signal_callback:
             maybe_awaitable = signal_callback("Gemini deep forensic analysis started.")
             if hasattr(maybe_awaitable, "__await__"):
@@ -601,12 +618,16 @@ class GeminiVisionClient:
             "}"
         )
 
-        return await self._run_vision_analysis(
+        result = await self._run_vision_analysis(
             file_path=file_path,
             prompt=prompt,
             analysis_type="deep_forensic_analysis",
             model_hint=model_hint,
         )
+        # Cache the result for subsequent agents in the same process lifetime
+        if result and not result.error:
+            _DEEP_FORENSIC_CACHE[cache_key] = result
+        return result
 
     async def analyze_metadata_visual_consistency(
         self,

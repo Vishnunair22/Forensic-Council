@@ -30,11 +30,11 @@
 
 ### Symptom: "First request takes 30+ minutes"
 
-**Cause**: Models downloading in background
+**Cause**: Models are downloading into the persistent Docker cache volumes or were not preloaded into the image.
 
 **Fix**:
-- Pre-download models: `python probes/model_pre_download.py`
-- Check `/tmp/model_download.log`
+- Check cache state: `docker exec forensic_api python scripts/model_cache_check.py`
+- Pre-download or repair caches: `docker exec forensic_api python scripts/model_pre_download.py --force`
 - Increase Docker memory limit to 8GB
 - Verify internet connectivity from container
 
@@ -46,7 +46,7 @@
 docker exec forensic_api ls -la /app/cache/
 
 # Force re-download
-docker exec forensic_api python -c "from core.ml_subprocess import warmup_all_tools; import asyncio; asyncio.run(warmup_all_tools(force=True))"
+docker exec forensic_api python scripts/model_pre_download.py --force
 ```
 
 ---

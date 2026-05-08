@@ -144,7 +144,10 @@ export function AgentProgressDisplay({
     if (sid) {
       const raw = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
       if (Array.isArray(raw) && raw.length) {
-        return (raw as AgentUpdate[]).map((a) => a.agent_id).filter((id): id is string => typeof id === "string");
+        return (raw as AgentUpdate[])
+          .filter((a) => a.status !== "skipped")
+          .map((a) => a.agent_id)
+          .filter((id): id is string => typeof id === "string");
       }
     }
     const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined));
@@ -156,10 +159,10 @@ export function AgentProgressDisplay({
     return allValidAgents
       .filter((a): boolean => {
         if (phase === "deep") return initialAgentIds.includes(a.id);
-        if (!mimeType) return true;
+        if (!mimeType) return false;
         return isAgentSupportedForMime(a.id, mimeType);
       });
-  }, [phase, initialAgentIds, mimeType]);
+  }, [phase, initialAgentIds, mimeType, agentUpdates, completedAgents]);
 
   const skippedAgents = useMemo(() => {
     if (!mimeType) return [];
@@ -179,6 +182,7 @@ export function AgentProgressDisplay({
 
     const liveStatus = agentUpdates[agentId]?.status;
     if (liveStatus === "error" || liveStatus === "failed") return "error";
+    if (liveStatus === "skipped") return "unsupported";
     if (liveStatus === "complete") return "complete";
     if (liveStatus === "validating") return "validating";
     if (liveStatus === "running") return "running";

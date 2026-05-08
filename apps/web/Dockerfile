@@ -48,7 +48,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds
 # Near-instant recompilation when only source files change.
-RUN --mount=type=cache,target=/app/.next/cache \
+RUN --mount=type=cache,target=/app/apps/web/.next/cache \
     npm run build
 
 # Stage 3: Runner - minimal production image

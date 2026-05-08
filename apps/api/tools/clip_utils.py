@@ -118,7 +118,9 @@ class CLIPImageAnalyzer:
             logger.info(f"Loading Vision-Language model {self._model_name}...")
 
             self._model, _, self._preprocess = open_clip.create_model_and_transforms(
-                self._model_name, pretrained=_pretrained
+                self._model_name,
+                pretrained=_pretrained,
+                cache_dir=os.path.join(settings.hf_home, "open_clip"),
             )
             self._tokenizer = open_clip.get_tokenizer(self._model_name)
 

@@ -142,15 +142,17 @@ docker compose \
 Fast Dockerfile smoke build without model preloading:
 
 ```bash
-PRELOAD_MODELS=0 docker compose \
+PRELOAD_MODELS=0 SKIP_MODEL_DOWNLOAD=1 docker compose \
   -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml \
   --env-file .env \
   build migration backend worker frontend
 ```
 
-Use this for CI or Dockerfile validation. Use the default `PRELOAD_MODELS=1`
-for production image builds so clean model volumes start warm.
+Use this for CI or Dockerfile validation. For a runnable stack with empty model
+volumes, leave `SKIP_MODEL_DOWNLOAD` unset so the entrypoint can populate any
+missing caches. Use the default `PRELOAD_MODELS=1` for production image builds
+so clean model volumes start warm.
 
 CI and local tests use the same base compose file unless a test-specific override is added later.
 

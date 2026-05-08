@@ -211,12 +211,22 @@ def _humanize_initial_finding(
 
     if "extract_text" in tool or "extract text" in text.lower():
         preview = metadata.get("ocr_text_preview") or metadata.get("text_preview")
+        content_desc = str(metadata.get("content_description") or "").strip()
+        content_type_val = str(metadata.get("content_type") or "").strip()
         if preview:
             clean_preview = " ".join(str(preview).replace("|", " | ").split())
             method = str(metadata.get("method") or metadata.get("ocr_engine") or "OCR")
             if method == "gemini_multimodal":
-                return f"Gemini Vision OCR read visible screenshot text for context: {clean_preview[:180]}"
-            return f"OCR extracted visible screenshot text for context: {clean_preview[:180]}"
+                id_part = f"{content_type_val}. " if content_type_val else ""
+                if content_desc:
+                    return (
+                        f"Gemini Vision identified: {content_desc[:120]}. "
+                        f"Text extracted: {clean_preview[:160]}"
+                    )
+                return f"{id_part}Gemini Vision OCR extracted visible text: {clean_preview[:180]}"
+            return f"OCR extracted visible text for context: {clean_preview[:180]}"
+        if content_desc:
+            return f"Gemini Vision identified: {content_desc[:200]}"
         if "ocr extracted" in text.lower():
             return text.replace("Extract Text From Image: ", "").replace("Checked: ", "")
 
@@ -304,7 +314,8 @@ async def run_agents_concurrent(
     # --- Broadcast helper ---------------------------------------------------
 
     async def _broadcast_agent_status(
-        aid: str, status: str, message: str, findings=None, error=None, agent_inst=None
+        aid: str, status: str, message: str, findings=None, error=None, agent_inst=None,
+        initial_tool_names: set | None = None,
     ):
         try:
             from api.routes._session_state import AGENT_NAMES, broadcast_update
@@ -356,7 +367,11 @@ async def run_agents_concurrent(
                 return f"{tool_name} completed; review detailed tool metrics for this finding."
 
             def _append_synthesis_sections(synthesis_data: dict[str, Any]) -> None:
-                actual_tools = set()
+                # Build actual_tools from the passed findings.
+                # When findings is None (deep phase with no new tool findings), allow ALL
+                # synthesis sections through so the deep card can still show LLM-refined summaries.
+                actual_tools: set[str] = set()
+                restrict_to_actual = bool(findings)
                 for existing_finding in findings or []:
                     existing_meta = (
                         existing_finding.metadata
@@ -375,12 +390,23 @@ async def run_agents_concurrent(
                     if existing_tool:
                         actual_tools.add(str(existing_tool))
 
+                seen_synthesis_tools: set[str] = set()
                 for section in synthesis_data.get("sections") or []:
                     refined = section.get("refined_findings") or []
                     for item in refined:
                         tool_name = str(item.get("tool") or "").strip()
-                        if not tool_name or tool_name not in actual_tools:
+                        if not tool_name:
                             continue
+                        if restrict_to_actual and tool_name not in actual_tools:
+                            continue
+                        # Suppress initial-phase tools from deep-phase synthesis preview
+                        if initial_tool_names and tool_name in initial_tool_names:
+                            continue
+                        if tool_name in PREVIEW_EXCLUDED_TOOLS:
+                            continue
+                        if tool_name in seen_synthesis_tools:
+                            continue
+                        seen_synthesis_tools.add(tool_name)
                         summary = str(item.get("user_friendly_summary") or "").strip()
                         if not summary:
                             continue
@@ -390,7 +416,7 @@ async def run_agents_concurrent(
                                 "summary": summary[:560],
                                 "severity": section.get("severity") or "LOW",
                                 "verdict": str(synthesis_data.get("verdict") or "INCONCLUSIVE"),
-                                "key_signal": section.get("key_signal") or section.get("opinion") or "",
+                                "key_signal": "",
                                 "confidence": synthesis_data.get("agent_confidence"),
                                 "section": section.get("label") or "",
                                 "degraded": bool(synthesis_data.get("fallback_reason")),
@@ -399,6 +425,7 @@ async def run_agents_concurrent(
                         )
 
             if findings:
+                seen_raw_tools: set[str] = set()
                 for f in findings:
                     m = (
                         f.metadata
@@ -423,6 +450,11 @@ async def run_agents_concurrent(
                         and tool == "extract_text_from_image"
                         and is_screen_capture_like(evidence_artifact)
                     ):
+                        continue
+
+                    # Dedup by tool name — same tool running twice produces one card entry
+                    tool_key = str(tool or "")
+                    if tool_key and tool_key in seen_raw_tools:
                         continue
 
                     s = _summary_for_finding(f, m)
@@ -457,6 +489,9 @@ async def run_agents_concurrent(
                     )
                     if human_summary is None:
                         continue
+
+                    if tool_key:
+                        seen_raw_tools.add(tool_key)
                     preview.append(
                         {
                             "tool": tool,
@@ -496,7 +531,9 @@ async def run_agents_concurrent(
                     if len(deduped) >= 8:
                         break
                 preview = deduped
-            if isinstance(synthesis, dict) and not preview:
+            if isinstance(synthesis, dict) and not preview and not initial_tool_names:
+                # Only show the narrative fallback for the initial phase.
+                # Deep-phase broadcasts suppress it to avoid showing initial analysis context.
                 summary = str(synthesis.get("narrative_summary") or "").strip()
                 if summary and not any(
                     p in summary.lower()
@@ -554,9 +591,13 @@ async def run_agents_concurrent(
                         "verdict_score": _verdict_score(
                             synthesis.get("verdict") if isinstance(synthesis, dict) else None
                         ),
-                        "summary": synthesis.get("narrative_summary")
-                        if isinstance(synthesis, dict)
-                        else None,
+                        # Suppress initial-phase narrative from deep-phase card summary
+                        "summary": (
+                            None if initial_tool_names
+                            else synthesis.get("narrative_summary")
+                            if isinstance(synthesis, dict)
+                            else None
+                        ),
                         "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None)
                         if agent_inst
                         else None,
@@ -797,12 +838,28 @@ async def run_agents_concurrent(
                     agent_inst=a_inst,
                 )
             else:
+                # Broadcast only findings produced in the deep pass.
+                # result.findings = initial + deep combined; slice off the initial prefix.
+                initial_count = len(a_init) if a_init else 0
+                deep_only = (result.findings or [])[initial_count:]
+                # Build initial tool set so synthesis dedup can suppress initial-phase items
+                initial_tool_names: set[str] = set()
+                for _f in a_init or []:
+                    _m = (
+                        _f.metadata if hasattr(_f, "metadata")
+                        else _f.get("metadata", {}) if isinstance(_f, dict)
+                        else {}
+                    )
+                    _t = _m.get("tool_name") if isinstance(_m, dict) else None
+                    if _t:
+                        initial_tool_names.add(str(_t))
                 await _broadcast_agent_status(
                     aid,
                     "complete",
-                    f"{aid} analysis complete.",
-                    findings=result.findings,
+                    f"{aid} deep analysis complete.",
+                    findings=deep_only if deep_only else None,
                     agent_inst=a_inst,
+                    initial_tool_names=initial_tool_names,
                 )
 
             if aid == producer_id:

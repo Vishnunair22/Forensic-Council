@@ -382,7 +382,8 @@ class SynthesisService:
         prompt = f"""
 [SYSTEM: FORENSIC ANALYST SYNTHESIS]
 You are a Senior Forensic Analyst at the National Cyber Forensics Institute.
-Your task is to synthesize raw tool findings from {agent_name} into a cohesive, technical, and court-defensible narrative.
+Synthesize raw tool findings from {agent_name} into a precise, court-defensible narrative.
+Every sentence must be specific and grounded in the actual tool data — no generalities.
 
 [EVIDENCE CONTEXT]
 Filename: {evidence_artifact.file_path}
@@ -392,30 +393,45 @@ Agent: {agent_name} ({agent_id})
 [RAW TOOL RESULTS]
 {json.dumps(grouped_sections_data, indent=2, default=str)}
 
-[INSTRUCTIONS]
-1. For each group, provide a 1-2 sentence "Forensic Opinion" that synthesizes the raw tool data into an actionable technical conclusion. Reference specific metric values.
-2. Determine an overall 'verdict' for this agent: AUTHENTIC, SUSPICIOUS, or TAMPERED.
-3. [EXECUTIVE SUMMARY]: The 'narrative_summary' MUST be 2-3 sentences, 60-80 words. Format: Sentence 1 — what forensic tests were applied and what was found. Sentence 2 — the primary forensic signal (with metric if available). Sentence 3 — what the verdict means for the integrity of this evidence. It MUST mention the primary technical indicator by name.
-4. [USER-FRIENDLY FINDINGS]: For each tool, write a 'user_friendly_summary' that is a specific, factual sentence. BAD example: "Neural Ela found a forensic warning signal at 85% confidence." GOOD example: "Error Level Analysis detected pixel re-compression artifacts in the upper-left quadrant — a pattern consistent with content pasting over an original background." Translate every metric into forensic meaning. Avoid jargon like 'ELA', 'FFT', 'PRNU' — spell them out.
-5. Use objective, technical language for the 'narrative_summary' and 'opinion', but accessible, specific language for 'user_friendly_summary'. Never write generic phrases like "found a forensic warning signal at X% confidence", "signal detected", or "produced a positive result".
-6. Tool failures, unavailable tools, degraded fallbacks, NOT_APPLICABLE results, and INCOMPLETE findings are coverage limitations only. Do NOT treat them as evidence of tampering or authenticity. Mention them as limitations and base SUSPICIOUS/TAMPERED verdicts only on successful POSITIVE forensic signals.
-7. For screenshots, do not claim camera authenticity. State what was actually checked: OCR text, screenshot layout, hash since intake, file structure, compression/platform footprints, timestamps, and any Gemini visual findings.
-8. Never say "expected hash", "expected content", "advanced neural analysis confirms authenticity", or "empty raw tool results". A hash only proves the uploaded artifact has not changed after intake.
+[STRICT INSTRUCTIONS]
+1. EXECUTIVE SUMMARY ('narrative_summary'): Exactly 2-3 sentences, 55-75 words total.
+   - Sentence 1: Name the key forensic methods applied and their direct finding (positive or negative signal with metric).
+   - Sentence 2: State the single most significant forensic indicator discovered (or confirm the absence of any indicator).
+   - Sentence 3: One-line integrity verdict — what this means for evidentiary value.
+   - MUST name at least one specific tool or technique by its full name.
+   - NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result".
 
-Return ONLY a JSON object in this format:
+2. GROUP OPINION ('opinion'): 1-2 sentences. Quote at least one specific metric value from the data.
+   State WHAT was found, WHERE (if applicable), and WHAT it means forensically.
+
+3. PER-TOOL SUMMARIES ('user_friendly_summary'): One precise sentence per tool.
+   - State the exact measurement or finding: dimensions, score, pixel region, timestamp value, etc.
+   - Translate the finding into its forensic implication in plain language.
+   - BAD: "Frequency domain analysis found a forensic warning at 0.234 anomaly score."
+   - GOOD: "Frequency-domain analysis found the image's spectral distribution deviates by 0.234 from camera-captured baselines — consistent with GAN or diffusion-model generation."
+   - Spell out abbreviations: "Error Level Analysis" not "ELA", "Photo Response Non-Uniformity" not "PRNU".
+   - For NEGATIVE/NOT_APPLICABLE results: state what was checked and what was confirmed absent.
+
+4. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals. Tool failures and NOT_APPLICABLE are coverage gaps only.
+
+5. Screenshots: State what was actually checked (OCR text content, layout structure, hash integrity since intake, binary container, compression codec). Do not claim camera authenticity.
+
+6. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result".
+
+Return ONLY a JSON object:
 {{
   "verdict": "AUTHENTIC|SUSPICIOUS|TAMPERED|INCONCLUSIVE",
-  "narrative_summary": "2-3 sentence executive summary, 60-80 words, specific and forensically grounded.",
+  "narrative_summary": "Precise 2-3 sentence executive summary, 55-75 words.",
   "sections": [
     {{
       "id": "group_id",
       "label": "Group Label",
-      "opinion": "Synthesized technical opinion referencing specific metric values.",
+      "opinion": "1-2 sentence technical opinion with specific metric reference.",
       "severity": "LOW|MEDIUM|HIGH|CRITICAL",
       "refined_findings": [
         {{
-          "tool": "tool_name",
-          "user_friendly_summary": "Specific, factual finding in plain English — what was measured and what it means for authenticity."
+          "tool": "exact_tool_name_from_data",
+          "user_friendly_summary": "One sentence: exact measurement → forensic implication."
         }}
       ]
     }}
@@ -783,7 +799,6 @@ Return ONLY a JSON object in this format:
 
         if "video" in name:
             flow = _tool_data(_first_row(tool_rows, "optical_flow_analysis", "optical_flow_analyze"))
-            frame = _first_row(tool_rows, "frame_consistency_analysis", "interframe_forgery_detector", "vfi_error_map")
             face = _tool_data(_first_row(tool_rows, "face_swap_detection"))
             media = _tool_data(_first_row(tool_rows, "mediainfo_profile", "av_file_identity", "video_metadata"))
             flow_score = flow.get("motion_anomaly_score") or flow.get("anomaly_score") or flow.get("mean_flow_error")
