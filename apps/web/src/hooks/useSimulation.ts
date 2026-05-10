@@ -75,6 +75,8 @@ export const useSimulation = ({
   const lastSessionIdRef = useRef<string | null>(null);
   /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
   const expectingPipelineCompleteRef = useRef(false);
+  /** Tracks pending reconnect delay timer so it can be cancelled on unmount. */
+  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // WebSocket reconnection config with exponential backoff
   const reconnectConfig = useRef({
@@ -595,11 +597,12 @@ export const useSimulation = ({
                 setReconnectStatusMessage(
                   `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
                 );
-                setTimeout(() => {
+                if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = setTimeout(() => {
+                  reconnectTimerRef.current = null;
                   const currentSessionId = storage.getItem(SESSION_ID_KEY);
                   if (currentSessionId === targetSessionId) {
-                    connectWebSocket(currentSessionId, true).catch(() => {
-                    });
+                    connectWebSocket(currentSessionId, true).catch(() => {});
                   }
                 }, delay);
                 return prev;
@@ -671,6 +674,10 @@ export const useSimulation = ({
   // created socket before it can connect (WebSocket closed before established).
   useEffect(() => {
     return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       if (arbiterPollRef.current) {
         clearInterval(arbiterPollRef.current);
         arbiterPollRef.current = null;
@@ -970,6 +977,20 @@ const resumeInvestigation = useCallback(
     },
     [],
   );
+
+  // ── Unmount cleanup: close WS and stop all polls ─────────────────────────
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close(1000, "Component unmounted");
+        wsRef.current = null;
+      }
+      if (arbiterPollRef.current) {
+        clearInterval(arbiterPollRef.current);
+        arbiterPollRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     status,

@@ -104,7 +104,7 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      aria-hidden={!isVisible}
+      {...(!isVisible ? { inert: true } : {})}
       className={`fixed top-4 left-4 sm:top-6 sm:left-6 z-[10001] transition-[transform,opacity] duration-300 ease-in-out ${
         isVisible ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
       }`}

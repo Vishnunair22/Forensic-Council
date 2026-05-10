@@ -161,13 +161,13 @@ Response time: 48 hours for acknowledgement, 7 days for triage.
 
 ### Python Backend
 - Run `pip-audit --desc` weekly to check for known vulnerabilities
-- Pin exact versions in `pyproject.toml` (managed via `uv.lock`)
-- Security updates applied via `uv lock --upgrade` then tested in CI
+- Pin exact versions in `pyproject.toml` when reproducibility is required
+- Security updates are applied through dependency manifest updates and Docker build verification
 - Critical CVEs block merges via the `security-scan` CI job
 
 ### Frontend
 - Run `npm audit` weekly to check for known vulnerabilities
-- `package-lock.json` ensures reproducible builds
+- Add and maintain npm/uv lockfiles before using frozen or `npm ci` installs
 - The `security-scan` CI job (Trivy) scans the entire filesystem for CRITICAL/HIGH CVEs
 - High-severity npm audit findings block merges
 

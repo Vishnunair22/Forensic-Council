@@ -704,6 +704,7 @@ class ReActLoopEngine:
         "anomaly_tracer": "ManTra-Net Universal Anomaly Tracer",
         "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
         "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
+        "synthid_watermark_detect": "SynthID / AI Watermark Detection",
         "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
         "voice_clone_detect": "Voice Clone Detection",
         "enf_analysis": "ENF Frequency Analysis",
@@ -1915,8 +1916,20 @@ class ReActLoopEngine:
             )
 
         # Match the task to the best available tool
+        # Uses the embedding-based TaskRouter (with YAML + keyword fallback)
         tools = tool_registry.list_tools()
-        best_tool = self._match_tool_to_task(pending_task.description, tools)
+        try:
+            from core.task_router import get_task_router
+            best_tool = get_task_router().route(
+                pending_task.description, tools, agent_id=self.agent_id
+            )
+        except Exception as _router_err:
+            logger.warning(
+                "TaskRouter failed, falling back to legacy matcher",
+                error=str(_router_err),
+                agent_id=self.agent_id,
+            )
+            best_tool = self._match_tool_to_task(pending_task.description, tools)
 
         if best_tool is None:
             # No matching tool — emit an INCOMPLETE finding so the gap is visible

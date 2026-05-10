@@ -80,3 +80,25 @@ dist/
 build/
 *.egg-info/
 *.whl
+
+# ─── Test & dev artifacts ─────────────────────────────────────────────────────
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+*.pyc
+__pycache__/
+
+# ─── Large model caches (mounted as Docker volumes in production) ──────────────
+.cache/
+*.bin
+*.safetensors
+*.pt
+*.onnx
+
+# ─── Secrets never in image ───────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key

@@ -27,14 +27,14 @@
     "sha256": null,
     "license": "MIT",
     "required": true,
-    "notes": "ViT-B/32 CLIP — default OpenCLIP model (~150MB). Mapped from SIGLIP_MODEL_NAME=ViT-B-32."
+    "notes": "ViT-B/32 CLIP \u2014 default OpenCLIP model (~150MB). Mapped from SIGLIP_MODEL_NAME=ViT-B-32."
   },
   "openai/clip-vit-large-patch14": {
     "revision": "main",
     "sha256": null,
     "license": "MIT",
     "required": false,
-    "notes": "ViT-L-14 CLIP — high-precision opt-in (~1.5GB). Set SIGLIP_MODEL_NAME=ViT-L-14."
+    "notes": "ViT-L-14 CLIP \u2014 high-precision opt-in (~1.5GB). Set SIGLIP_MODEL_NAME=ViT-L-14."
   },
   "microsoft/swinv2-tiny-patch4-window8-256": {
     "revision": "main",
@@ -55,5 +55,27 @@
     "required": true,
     "license": "BSD-3-Clause",
     "notes": "ResNet-50 torchvision weights DEFAULT. Leave sha256 null unless a verified full-file checksum is pinned."
-  }
+  },
+  "laion/CLIP-ViT-H-14-laion2B-s32B-b79K": {
+    "revision": "main",
+    "sha256": null,
+    "license": "MIT",
+    "required": false,
+    "notes": "Higher-accuracy CLIP model for image-text forensic matching. Opt-in upgrade from ViT-B/32."
+  },
+  "openai/whisper-base": {
+    "revision": "main",
+    "sha256": null,
+    "license": "MIT",
+    "required": false,
+    "notes": "Whisper base model for audio transcription verification. Requires ~150MB."
+  },
+  "microsoft/table-transformer-detection": {
+    "revision": "main",
+    "sha256": null,
+    "license": "MIT",
+    "required": false,
+    "notes": "Table/document structure detection for PDF forensics."
+  },
+  "_enforce_sha": false
 }

@@ -449,6 +449,26 @@ Do NOT use boilerplate such as "multi-agent forensic analysis was conducted".
 Do NOT use bullet points. Return only the 2-3 line summary text.
 Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — explain WHY based on the numbers."""
 
+        # --- RAG: Inject relevant forensic knowledge citations into user context ---
+        rag_context_block = ""
+        try:
+            from core.rag_forensic_knowledge import get_forensic_rag
+
+            rag = get_forensic_rag()
+            finding_types_for_rag = [f.get("type", "") for f in findings_digest if f.get("type")]
+            query = f"{overall_verdict} {' '.join(finding_types_for_rag[:5])}"
+            citations = rag.retrieve(
+                query=query,
+                finding_types=finding_types_for_rag,
+                top_k=3,
+                min_relevance=0.12,
+            )
+            if citations:
+                rag_context_block = "\n\n" + rag.build_arbiter_context(citations, max_chars=800)
+        except Exception as _rag_err:
+            logger.debug("RAG context retrieval failed (non-fatal)", error=str(_rag_err))
+        # -------------------------------------------------------------------------
+
         user_content = f"""Forensic analysis statistics:
 - Active agents: {num_agents} (skipped agents excluded from this summary)
 - Total findings from active agents: {num_findings}
@@ -458,7 +478,7 @@ Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — expla
 - Computed verdict: {overall_verdict}{verdict_line}
 
 Top findings by confidence (classical tools):
-{json.dumps(findings_digest, indent=2)}{gemini_section}{metrics_summary}
+{json.dumps(findings_digest, indent=2)}{gemini_section}{metrics_summary}{rag_context_block}
 
 Write the 2-3 line Executive Summary for this forensic report. Justify the {overall_verdict} verdict based on the data."""
 

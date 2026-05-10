@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
@@ -79,8 +79,18 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const { playSound } = useSound();
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Revoke object URL on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    };
+  }, [audioPreviewUrl]);
 
   useEffect(() => {
     setMounted(true);
@@ -120,10 +130,37 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       playSound("error");
       return;
     }
+    // Cross-validate MIME type against file extension to catch spoofed uploads
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const EXTENSION_MIME_MAP: Record<string, string[]> = {
+      jpg: ["image/jpeg"], jpeg: ["image/jpeg"], png: ["image/png"],
+      webp: ["image/webp"], gif: ["image/gif"],
+      mp4: ["video/mp4"], mov: ["video/quicktime"], avi: ["video/x-msvideo"], webm: ["video/webm"],
+      mp3: ["audio/mpeg"], wav: ["audio/wav", "audio/x-wav"], m4a: ["audio/mp4", "audio/x-m4a"],
+      pdf: ["application/pdf"],
+    };
+    const allowedMimesForExt = EXTENSION_MIME_MAP[ext];
+    if (allowedMimesForExt && !allowedMimesForExt.includes(file.type)) {
+      setError(`File extension ".${ext}" does not match the reported type "${file.type}".`);
+      playSound("error");
+      return;
+    }
+    if (isSubmitting) return; // Prevent double-submit
+    setIsSubmitting(true);
+
+    // Show audio preview for audio files before submitting
+    if (file.type.startsWith("audio/")) {
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+      setAudioPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setAudioPreviewUrl(null);
+    }
+
     setError(null);
     playSound("success-chime");
     onFileSelected(file);
-  }, [onFileSelected, playSound]);
+    // Note: isSubmitting stays true — modal will close via parent after upload starts
+  }, [onFileSelected, playSound, isSubmitting, audioPreviewUrl]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -140,18 +177,18 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="upload-modal-title"
-      initial={{ opacity: 0 }}
+      initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#020617]/85 backdrop-blur-xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.97, y: 12 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.985, y: 6 }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 6 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           className="horizon-card p-1 relative overflow-hidden"
         >
@@ -199,7 +236,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               </div>
 
               <div className="absolute bottom-4 right-4 text-[9px] font-mono text-primary/20 tracking-widest" aria-hidden="true">
-                WAITING_FOR_DATA
+                {isSubmitting ? "UPLOADING..." : "WAITING_FOR_DATA"}
               </div>
 
               <input
@@ -219,6 +256,24 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               <p role="alert" className="mt-4 text-sm font-semibold text-[var(--color-danger)]">
                 {error}
               </p>
+            )}
+
+            {isSubmitting && !error && (
+              <p role="status" aria-live="polite" className="mt-4 text-sm font-mono text-primary/60 tracking-widest animate-pulse">
+                Preparing secure upload channel…
+              </p>
+            )}
+
+            {audioPreviewUrl && (
+              <div className="mt-4 w-full" aria-label="Audio preview">
+                <p className="text-[10px] font-mono text-white/30 mb-2 text-center tracking-widest">AUDIO PREVIEW</p>
+                <audio
+                  controls
+                  src={audioPreviewUrl}
+                  className="w-full rounded-lg"
+                  aria-label="Selected audio file preview"
+                />
+              </div>
             )}
           </div>
         </motion.div>

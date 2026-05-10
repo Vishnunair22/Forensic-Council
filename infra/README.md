@@ -237,7 +237,7 @@ stable across dev and production overrides.
 | `hf_cache` | HuggingFace model weights | Re-downloads on next start (~several GB) |
 | `torch_cache` | PyTorch checkpoints | Re-downloads on next start |
 | `easyocr_cache` | EasyOCR model files | Re-downloads on next start |
-| `yolo_cache` | Ultralytics/YOLO weights | Re-downloads on next start |
+| `yolo_cache` | Ultralytics/YOLO weights when `ENABLE_AGPL_MODELS=true` | Re-downloads on next start |
 | `numba_cache` | Numba JIT-compiled kernels | Recompiled on next start (slow first run) |
 | `calibration_models_cache` | Platt scaling calibration files | Must be retrained via `scripts/train_calibration.py` |
 

@@ -171,6 +171,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (arbiterAbortControllerRef.current) {
         arbiterAbortControllerRef.current.abort();
       }
+      if (minOverlayTimerRef.current) {
+        clearTimeout(minOverlayTimerRef.current);
+        minOverlayTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -471,7 +475,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     // Keep autoStartBlocking=true until triggerAnalysis calls setAutoStartBlocking(false),
     // preventing the "No Evidence Queued" empty state from briefly flashing.
     triggerAnalysis(pending);
-  }, [triggerAnalysis]);
+  }, [router, triggerAnalysis]);
 
   // Effect B — Reconnect existing session
   useEffect(() => {

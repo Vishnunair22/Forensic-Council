@@ -7,12 +7,40 @@ interface ActionDockProps {
   onHome: () => void;
   onNew: () => void;
   onExport: () => void;
+  sessionId?: string;
 }
 
 /**
  * ActionDock: The high-fidelity forensic result action bar.
  */
-export function ActionDock({ onHome, onNew, onExport }: ActionDockProps) {
+export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockProps) {
+  const handleExport = async () => {
+    // Try PDF download from API if sessionId available; else call parent onExport
+    if (sessionId) {
+      try {
+        const token = typeof document !== "undefined"
+          ? document.cookie.split("; ").find(r => r.startsWith("access_token="))?.split("=")[1]
+          : undefined;
+        const res = await fetch(`/api/v1/sessions/${sessionId}/report/pdf`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include",
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `forensic-report-${sessionId.slice(0, 8)}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+          return;
+        }
+      } catch {
+        // Fall through to parent handler
+      }
+    }
+    onExport();
+  };
   return (
     <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-1000 w-full max-w-xl px-6 pointer-events-none">
       <div className="bg-surface-1/80 border border-white/5 rounded-full p-2 backdrop-blur-xl shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
@@ -39,7 +67,7 @@ export function ActionDock({ onHome, onNew, onExport }: ActionDockProps) {
           <div className="w-[1px] h-6 bg-white/5" />
 
           <button
-            onClick={onExport}
+            onClick={handleExport}
             className="flex-1 flex items-center justify-center gap-2 text-[10px] font-mono font-bold text-white/40 hover:text-primary transition-colors"
           >
             <Download className="w-3.5 h-3.5" />

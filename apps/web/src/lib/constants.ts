@@ -79,6 +79,7 @@ export const ALLOWED_MIME_TYPES = new Set([
   "audio/flac",
 ]);
 
+/** Maximum evidence file size — 50 MB. Must match backend MAX_EVIDENCE_SIZE_BYTES in config.py. */
 export const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
 
 export const HOW_IT_WORKS = [

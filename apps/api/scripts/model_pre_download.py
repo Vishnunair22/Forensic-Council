@@ -89,6 +89,10 @@ def _large_cached_files(directory: Path, min_size: int) -> list[Path]:
         return []
 
 
+def _has_large_file(directory: Path, min_size: int = 1_000_000) -> bool:
+    return bool(_large_cached_files(directory, min_size))
+
+
 def setup_dirs() -> None:
     for path in CACHE_DIRS.values():
         Path(path).mkdir(parents=True, exist_ok=True)
@@ -373,10 +377,10 @@ def _validate_lock_file() -> None:
         if config.get("required") and config.get("revision") == "main" and "/" in model_id:
             # Third-party repos must be pinned to a SHA in production/strict
             if os.environ.get("STRICT_MODEL_PIN") == "1":
-                 raise RuntimeError(
-                     f"Model {model_id} is pinned to 'main' in models.lock.json. "
-                     "Production builds require a specific commit SHA for reproducibility."
-                 )
+                raise RuntimeError(
+                    f"Model {model_id} is pinned to 'main' in models.lock.json. "
+                    "Production builds require a specific commit SHA for reproducibility."
+                )
 
     if missing_metadata:
         raise RuntimeError(
@@ -387,6 +391,75 @@ def _validate_lock_file() -> None:
             "models.lock.json has enforce_sha=true without sha256 for: "
             f"{enforced_without_checksum}"
         )
+
+
+def check_model_assets() -> bool:
+    """Verify each expected model family without downloading anything."""
+    print(f"\n{BOLD}Per-model cache status:{RESET}\n")
+    ok = True
+
+    hf_dir = Path(CACHE_DIRS["HF"])
+    torch_dir = Path(CACHE_DIRS["TORCH"])
+    easyocr_dir = Path(CACHE_DIRS["EASYOCR"])
+    yolo_dir = Path(CACHE_DIRS["YOLO"])
+
+    model_name = settings.yolo_model_name
+    use_agpl_yolo = "yolo" in model_name.lower() and settings.enable_agpl_models
+    if use_agpl_yolo:
+        yolo_path = yolo_dir / model_name
+        ready = yolo_path.exists() and yolo_path.stat().st_size > 1_000_000
+        print(f"  {GREEN if ready else YELLOW}[{'OK  ' if ready else 'MISS'}]{RESET}  YOLO weights: {yolo_path}")
+        ok = ok and ready
+    else:
+        detr_dirs = [
+            hf_dir / "models--facebook--detr-resnet-50",
+            hf_dir / "hub" / "models--facebook--detr-resnet-50",
+            hf_dir / "transformers" / "models--facebook--detr-resnet-50",
+        ]
+        ready = any(_has_large_file(path) for path in detr_dirs)
+        print(f"  {GREEN if ready else YELLOW}[{'OK  ' if ready else 'MISS'}]{RESET}  DETR object detector")
+        ok = ok and ready
+
+    easyocr_ready = _file_count(easyocr_dir) >= 2
+    print(f"  {GREEN if easyocr_ready else YELLOW}[{'OK  ' if easyocr_ready else 'MISS'}]{RESET}  EasyOCR")
+    ok = ok and easyocr_ready
+
+    clip_dirs = [
+        hf_dir / "open_clip",
+        hf_dir / "hub" / HF_MODEL_DIRS["open_clip"],
+        hf_dir / "transformers" / HF_MODEL_DIRS["open_clip"],
+    ]
+    clip_ready = any(_has_large_file(path, 50_000_000) for path in clip_dirs)
+    print(f"  {GREEN if clip_ready else YELLOW}[{'OK  ' if clip_ready else 'MISS'}]{RESET}  OpenCLIP/SigLIP")
+    ok = ok and clip_ready
+
+    resnet_dir = torch_dir / "hub" / "checkpoints"
+    resnet_ready = any(
+        path.name.startswith("resnet50") and path.stat().st_size > 1_000_000
+        for path in resnet_dir.glob("*.pth")
+    ) if resnet_dir.exists() else False
+    print(f"  {GREEN if resnet_ready else YELLOW}[{'OK  ' if resnet_ready else 'MISS'}]{RESET}  ResNet-50")
+    ok = ok and resnet_ready
+
+    speechbrain_dirs = [
+        hf_dir / "models--speechbrain--spkrec-ecapa-voxceleb",
+        hf_dir / "hub" / "models--speechbrain--spkrec-ecapa-voxceleb",
+        hf_dir / "transformers" / "models--speechbrain--spkrec-ecapa-voxceleb",
+    ]
+    speechbrain_ready = any(_has_large_file(path) for path in speechbrain_dirs)
+    print(f"  {GREEN if speechbrain_ready else YELLOW}[{'OK  ' if speechbrain_ready else 'MISS'}]{RESET}  SpeechBrain ECAPA")
+    ok = ok and speechbrain_ready
+
+    audio_dirs = [
+        hf_dir / HF_MODEL_DIRS["speechbrain_aasist"],
+        hf_dir / "hub" / HF_MODEL_DIRS["speechbrain_aasist"],
+        hf_dir / "transformers" / HF_MODEL_DIRS["speechbrain_aasist"],
+    ]
+    audio_ready = any(_has_large_file(path) for path in audio_dirs)
+    print(f"  {GREEN if audio_ready else YELLOW}[{'OK  ' if audio_ready else 'MISS'}]{RESET}  Audio deepfake detector")
+    ok = ok and audio_ready
+    print()
+    return ok
 
 
 def main() -> None:
@@ -433,6 +506,9 @@ def main() -> None:
             size = _dir_size_mb(path)
             marker = GREEN + "populated" if count > 0 else YELLOW + "empty"
             print(f"  {marker}{RESET}  {name:<10}  {size:>7.1f} MB  ({count} files)  {path}")
+        assets_ok = check_model_assets()
+        if args.strict and not assets_ok:
+            sys.exit(1)
         print()
         return
 

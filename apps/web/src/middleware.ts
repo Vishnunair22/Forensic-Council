@@ -4,6 +4,13 @@ export function middleware(request: NextRequest) {
   const isProd = process.env.NODE_ENV === "production";
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+  // Forward CSRF token on mutating requests to API routes
+  const csrfToken = request.cookies.get("csrf_token")?.value;
+  const requestHeaders = new Headers(request.headers);
+  if (csrfToken && ["POST", "PUT", "DELETE", "PATCH"].includes(request.method)) {
+    requestHeaders.set("X-CSRF-Token", csrfToken);
+  }
+
   // Derive WS origin from NEXT_PUBLIC_API_URL
   let wsOrigin = "";
   let httpOrigin = "";
@@ -32,10 +39,10 @@ export function middleware(request: NextRequest) {
     form-action 'self';
   `.replace(/\s{2,}/g, " ").trim();
 
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("Content-Security-Policy", cspHeader);
+  const cspHeaders = new Headers(requestHeaders);
+  cspHeaders.set("Content-Security-Policy", cspHeader);
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: cspHeaders } });
   response.headers.set("Content-Security-Policy", cspHeader);
   return response;
 }

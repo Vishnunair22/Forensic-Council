@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
  Dialog,
  DialogContent,
@@ -55,6 +55,16 @@ export function HITLCheckpointModal({
  const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(null);
  const [note, setNote] = useState("");
  const [decisionError, setDecisionError] = useState<string | null>(null);
+ const [isReady, setIsReady] = useState(false);
+ // Small delay before rendering content to prevent flash on rapid open/close
+ useEffect(() => {
+   if (!isOpen) {
+     setIsReady(false);
+     return;
+   }
+   const t = setTimeout(() => setIsReady(true), 50);
+   return () => clearTimeout(t);
+ }, [isOpen]);
 
  const handleSubmit = async () => {
   if (!selectedDecision) {
@@ -75,7 +85,7 @@ export function HITLCheckpointModal({
   <Dialog open={isOpen} onOpenChange={onDismiss}>
    <DialogContent className="sm:max-w-xl glass-panel border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.8)] border-t border-t-white/10">
 
-    {checkpoint ? (
+    {checkpoint && isReady ? (
      <div className="p-8 space-y-6">
       <DialogHeader className="text-left space-y-2">
        <div className="flex items-center gap-3">
@@ -108,13 +118,35 @@ export function HITLCheckpointModal({
 
        {/* Decision Grid */}
        <div className="space-y-3">
-        <h4 className="text-xs font-black text-white/40 tracking-wide px-1">Protocol Selection</h4>
-        <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Protocol Selection">
+        <h4 className="text-xs font-black text-white/40 tracking-wide px-1" id="protocol-selection-label">Protocol Selection</h4>
+        <div
+          className="grid grid-cols-2 gap-3"
+          role="radiogroup"
+          tabIndex={-1}
+          aria-labelledby="protocol-selection-label"
+          onKeyDown={(e) => {
+            const options = decisionOptions.map((o) => o.value);
+            const currentIndex = selectedDecision ? options.indexOf(selectedDecision) : -1;
+            if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+              e.preventDefault();
+              const next = options[(currentIndex + 1) % options.length];
+              setSelectedDecision(next);
+              (e.currentTarget.querySelectorAll('[role="radio"]')[options.indexOf(next)] as HTMLElement)?.focus();
+            } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const prev = options[(currentIndex - 1 + options.length) % options.length];
+              setSelectedDecision(prev);
+              (e.currentTarget.querySelectorAll('[role="radio"]')[options.indexOf(prev)] as HTMLElement)?.focus();
+            }
+          }}
+        >
           {decisionOptions.map((option) => (
            <button
             key={option.value}
+            type="button"
             role="radio"
             aria-checked={selectedDecision === option.value}
+            tabIndex={selectedDecision === option.value || (!selectedDecision && option.value === "APPROVE") ? 0 : -1}
             onClick={() => setSelectedDecision(option.value)}
             className={clsx(
               "p-5 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden group",

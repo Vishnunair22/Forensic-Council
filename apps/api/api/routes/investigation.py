@@ -566,4 +566,14 @@ async def start_investigation(
     except Exception as e:
         if not pipeline_started:
             tmp_path.unlink(missing_ok=True)
+        # If pipeline started but something went wrong after, schedule deferred cleanup
+        elif tmp_path.exists():
+            import asyncio as _asyncio
+            async def _deferred_cleanup(p=tmp_path):
+                await _asyncio.sleep(600)  # 10 min grace for pipeline to finish
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception as _cleanup_err:
+                    logger.debug("Deferred tmp file cleanup failed", path=str(p), error=str(_cleanup_err))
+            _asyncio.create_task(_deferred_cleanup())
         raise HTTPException(status_code=500, detail=str(e)) from e

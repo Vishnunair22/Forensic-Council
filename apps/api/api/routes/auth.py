@@ -250,6 +250,27 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     client_ip = request.client.host if request.client else "unknown"
     await _is_rate_limited(client_ip)
 
+    # Username-based rate limiting (distributed brute-force protection)
+    import hashlib as _hashlib
+    username_key = f"login_attempt_user:{_hashlib.sha256(form_data.username.encode()).hexdigest()[:16]}"
+    try:
+        from core.persistence.redis_client import get_redis_client as _get_redis
+        _redis = await _get_redis()
+        if _redis:
+            _attempts = int(await _redis.incr(username_key) or 0)
+            if _attempts == 1:
+                await _redis.expire(username_key, 900)  # 15-minute window
+            if _attempts > 10:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed attempts for this account. Try again in 15 minutes.",
+                    headers={"Retry-After": "900"},
+                )
+    except HTTPException:
+        raise
+    except Exception as _redis_err:
+        logger.debug("Redis rate-limit check failed (non-blocking)", error=str(_redis_err))
+
     # Try to fetch user from database first
     user = await get_user_from_db(form_data.username)
 

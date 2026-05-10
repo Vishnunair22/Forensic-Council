@@ -20,15 +20,15 @@ const TOOL_LABELS: Record<string, string> = {
 
 export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
  // Extract findings that occurred in the deep phase
- const allFindings = Object.values(report.per_agent_findings || {}).flat();
+ const allFindings = Object.values(report.per_agent_findings ?? {}).flat();
  const deepFindings = allFindings.filter(
-  (f) => (f.metadata as Record<string, unknown>)?.analysis_phase === "deep",
+  (f) => f != null && (f.metadata as Record<string, unknown>)?.analysis_phase === "deep",
  );
 
  if (deepFindings.length === 0) return null;
 
- // Extract unique "tools/models" from deep findings
- const models = Array.from(new Set(deepFindings.map((f) => f.finding_type)));
+ // Extract unique "tools/models" from deep findings — guard against null finding_type
+ const models = Array.from(new Set(deepFindings.map((f) => f.finding_type).filter(Boolean)));
 
  return (
   <div className="bg-[#070A12] border border-violet-500/20 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">

@@ -3,7 +3,7 @@
 import { useEffect, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Shield } from "lucide-react";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
@@ -29,6 +29,7 @@ const HITLCheckpointModal = dynamic(
 export default function EvidenceUploadPage() {
   const router = useRouter();
   const { playSound } = useSound();
+  const prefersReducedMotion = useReducedMotion();
   const investigation = useInvestigation(playSound);
 
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function EvidenceUploadPage() {
         ) : (
           <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
               className="text-center space-y-6"

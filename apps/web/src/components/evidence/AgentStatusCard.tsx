@@ -183,10 +183,7 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       {/* Severity indicator bar */}
       <div className={clsx(
         "w-[3px] self-stretch rounded-full shrink-0 min-h-[16px]",
-        sev === "CRITICAL" ? "bg-red-400/80" :
-        sev === "HIGH" ? "bg-danger/70" :
-        sev === "MEDIUM" ? "bg-amber-400/60" :
-        isAlert ? "bg-danger/50" : "bg-white/12"
+        dotColor
       )} />
 
       <div className="flex-1 min-w-0 space-y-1.5">

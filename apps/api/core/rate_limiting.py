@@ -112,6 +112,15 @@ async def check_investigation_rate_limit(user_id: str, settings: Settings | None
 
     entries = [ts for ts in user_investigation_times[user_id] if now - ts < USER_RATE_WINDOW_SECS]
     user_investigation_times[user_id] = entries
+    # Prune stale users to prevent unbounded memory growth
+    if len(user_investigation_times) > 10000:
+        window_start = now - USER_RATE_WINDOW_SECS
+        stale_users = [
+            uid for uid, ts_list in user_investigation_times.items()
+            if not ts_list or max(ts_list) < window_start
+        ]
+        for uid in stale_users[:1000]:  # prune in batches
+            del user_investigation_times[uid]
     if len(entries) >= MAX_INVESTIGATIONS_PER_USER:
         oldest = min(entries)
         raise _rate_limit_error(int(USER_RATE_WINDOW_SECS - (now - oldest)))

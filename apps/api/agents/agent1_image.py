@@ -117,6 +117,7 @@ class Agent1Image(ForensicAgent):
         """
         base = [
             "Run diffusion_artifact_detector for AI-generation signatures",
+            "Run synthid_watermark_detect for SynthID and AI watermark detection",
             "Run f3_net_frequency for AI-GAN artifact detection",
             "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
         ]
@@ -177,6 +178,34 @@ class Agent1Image(ForensicAgent):
             "gemini_deep_forensic",
             gemini_deep_forensic_handler,
             "Gemini multimodal visual forensic synthesis and evidence aggregation",
+        )
+
+        # ── SynthID / AI Watermark Detection ─────────────────────────────────
+        async def synthid_watermark_handler(input_data: dict) -> dict:
+            from core.ml_subprocess import run_ml_script_subprocess
+            file_path = str(getattr(self.evidence_artifact, "file_path", ""))
+            try:
+                result = await run_ml_script_subprocess(
+                    script_name="synthid_watermark_detector",
+                    input_path=file_path,
+                    timeout=30,
+                )
+                return result
+            except Exception:
+                # Fallback: run inline if subprocess unavailable
+                try:
+                    import os
+                    import sys
+                    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "ml_tools"))
+                    from synthid_watermark_detector import detect_ai_watermark
+                    return detect_ai_watermark(file_path)
+                except Exception as e2:
+                    return {"available": False, "error": str(e2), "verdict": "ERROR"}
+
+        registry.register(
+            "synthid_watermark_detect",
+            synthid_watermark_handler,
+            "Detect SynthID, C2PA ai_generated, and AI software watermarks",
         )
 
         return registry

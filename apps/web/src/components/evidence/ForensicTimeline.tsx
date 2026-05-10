@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
  History,
  BadgeCheck,
@@ -26,6 +26,7 @@ export function ForensicTimeline({
  agentUpdates: _agentUpdates,
  isInitializing
 }: ForensicTimelineProps) {
+  const shouldReduceMotion = useReducedMotion();
 
  // Aggregate all findings across all agents
  const allFindings = useMemo(() => {
@@ -80,8 +81,8 @@ export function ForensicTimeline({
 
     <div className="flex gap-2 items-center">
        <motion.div
-        animate={{ opacity: [0.4, 1, 0.4] }}
-        transition={{ duration: 2, repeat: Infinity }}
+        animate={shouldReduceMotion ? {} : { opacity: [0.4, 1, 0.4] }}
+        transition={shouldReduceMotion ? {} : { duration: 2, repeat: Infinity }}
         className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[10px] font-black tracking-wide flex items-center gap-1.5"
        >
         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -107,9 +108,9 @@ export function ForensicTimeline({
      <AnimatePresence mode="popLayout">
       {isInitializing && (
        <motion.div
-        initial={{ opacity: 0, x: -10 }}
+        initial={shouldReduceMotion ? {} : { opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, scale: 0.9 }}
+        exit={shouldReduceMotion ? {} : { opacity: 0, scale: 0.9 }}
         className="flex items-start gap-4"
        >
         <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
@@ -132,8 +133,8 @@ export function ForensicTimeline({
 
         return (
          <motion.div
-          layout
-          initial={{ opacity: 0, x: -20, scale: 0.95 }}
+          layout={!shouldReduceMotion}
+          initial={shouldReduceMotion ? {} : { opacity: 0, x: -20, scale: 0.95 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
           key={`${finding.agentId}-${finding.tool}-${idx}`}
           className="flex items-start gap-4"

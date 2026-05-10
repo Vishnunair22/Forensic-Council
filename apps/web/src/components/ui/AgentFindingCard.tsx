@@ -189,7 +189,7 @@ function SectionGroup({ section }: { section: Section }) {
         <span className={clsx("flex-1 text-[10px] font-black tracking-wide", flagCfg.color)}>
           {section.label}
         </span>
-        <span className="text-[10px] font-mono font-black text-white/20 mr-2">
+        <span className="text-[10px] font-mono font-black text-white/40 mr-2">
           {section.findings.length} Signals
         </span>
         {section.keySignal && (
@@ -197,7 +197,7 @@ function SectionGroup({ section }: { section: Section }) {
             {section.keySignal}
           </span>
         )}
-        <ChevronDown className={clsx("w-3.5 h-3.5 text-white/20 transition-transform duration-300 shrink-0", open && "rotate-180")} />
+        <ChevronDown className={clsx("w-3.5 h-3.5 text-white/40 transition-transform duration-300 shrink-0", open && "rotate-180")} />
       </button>
 
       {/* Tools in this section */}
@@ -217,10 +217,10 @@ function SectionGroup({ section }: { section: Section }) {
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.02] transition-all"
               >
                 <Activity className="w-3 h-3 text-primary/40 shrink-0" />
-                <span className="text-[10px] font-bold tracking-wide text-white/20 flex-1">
+                <span className="text-[10px] font-bold tracking-wide text-white/40 flex-1">
                   Section Analysis
                 </span>
-                <ChevronDown className={clsx("w-3 h-3 text-white/15 transition-transform duration-300", showAnalysis && "rotate-180")} />
+                <ChevronDown className={clsx("w-3 h-3 text-white/35 transition-transform duration-300", showAnalysis && "rotate-180")} />
               </button>
               {showAnalysis && (
                 <div className="px-4 pb-4 animate-in fade-in duration-200">
@@ -296,7 +296,7 @@ export function AgentFindingCard({
           </div>
           <div>
             <h3 className="text-xs font-bold text-white/50 tracking-wide">{meta.name}</h3>
-            <p className="text-[10px] font-mono font-bold text-white/20 mt-0.5">{meta.role} · Protocol Skip</p>
+            <p className="text-[10px] font-mono font-bold text-white/40 mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
         <span className="text-[10px] font-bold tracking-wide text-white/10 px-3 py-1 rounded-full border border-white/5">Not Applicable</span>
@@ -375,7 +375,7 @@ export function AgentFindingCard({
               </div>
               <div className={clsx(
                 "p-2 rounded-xl border transition-all duration-500",
-                open ? "bg-primary/10 border-primary/30 text-primary rotate-180" : "bg-surface-1 border-border-subtle text-white/20"
+                open ? "bg-primary/10 border-primary/30 text-primary rotate-180" : "bg-surface-1 border-border-subtle text-white/40"
               )}>
                 <ChevronDown className="w-4 h-4" />
               </div>
@@ -400,7 +400,7 @@ export function AgentFindingCard({
               <div className="relative p-4 rounded-2xl bg-[#000]/30 border border-white/5">
                 <div className="flex items-center gap-2 mb-2">
                   <Activity className="w-3 h-3 text-primary/50" />
-                  <span className="text-[10px] font-black tracking-wide text-white/20">Precise Overview</span>
+                  <span className="text-[10px] font-black tracking-wide text-white/40">Precise Overview</span>
                 </div>
                 <p className="text-[12px] text-white/60 leading-relaxed font-medium">
                   {overview}
@@ -412,8 +412,8 @@ export function AgentFindingCard({
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-white/5 pb-2">
                 <div className="flex items-center gap-2">
-                  <Cpu className="w-3 h-3 text-white/20" />
-                  <span className="text-[10px] font-black tracking-wide text-white/20">Tool Results by Section</span>
+                  <Cpu className="w-3 h-3 text-white/40" />
+                  <span className="text-[10px] font-black tracking-wide text-white/40">Tool Results by Section</span>
                 </div>
                 <span className="text-[10px] font-mono text-white/10 font-black">
                   {realFindings.length} tool{realFindings.length !== 1 ? "s" : ""} · {sections.length} group{sections.length !== 1 ? "s" : ""}

@@ -138,6 +138,8 @@ class ForensicReport(BaseModel):
     )
     cryptographic_signature: str = ""
     report_hash: str = ""
+    # Overall calibration status for the report — TRAINED only if ALL agents used trained models
+    overall_calibration_status: str = "UNCALIBRATED"
     signed_utc: datetime | None = None
     cross_modal_fusion: dict[str, Any] = Field(
         default_factory=dict,

@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Activity,
   Clock3,
+  Copy,
+  Check,
   Fingerprint,
   FileType,
   Gauge,
@@ -59,6 +61,15 @@ export function ResultHeader({
   const VerdictIcon = theme.icon;
   const displayName = cleanDisplayName(fileName, report);
   const signature = report.cryptographic_signature || report.report_hash || "";
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyHash = () => {
+    if (!signature) return;
+    navigator.clipboard.writeText(signature).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
 
   return (
     <section className="bg-surface-1 border border-white/8 rounded-2xl shadow-[0_18px_55px_rgba(0,0,0,0.35)] overflow-hidden">
@@ -152,9 +163,21 @@ export function ResultHeader({
                 {signature}
               </p>
             </div>
-            <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-success/70 uppercase tracking-widest">
-              <Fingerprint className="w-3.5 h-3.5" />
-              Verified
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCopyHash}
+                aria-label="Copy report hash to clipboard"
+                title="Copy hash"
+                className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-white/30 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded px-2 py-1"
+              >
+                {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-success/70 uppercase tracking-widest">
+                <Fingerprint className="w-3.5 h-3.5" />
+                Verified
+              </div>
             </div>
           </div>
         )}

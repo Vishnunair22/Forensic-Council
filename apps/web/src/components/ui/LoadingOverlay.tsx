@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Upload, Wifi, Zap } from "lucide-react";
 import type { SoundType } from "@/hooks/useSound";
 
@@ -54,6 +54,7 @@ export function LoadingOverlay({
 }: LoadingOverlayProps) {
   const sanitizedText = sanitizeLiveText(liveText || "");
   const targetIndex = resolvePhaseIndex(liveText || "", dispatchedCount);
+  const prefersReducedMotion = useReducedMotion();
 
   const [phaseIndex, setPhaseIndex] = useState(targetIndex);
   useEffect(() => {
@@ -85,9 +86,9 @@ export function LoadingOverlay({
         backdropFilter: "blur(32px)",
         WebkitBackdropFilter: "blur(32px)",
       }}
-      initial={{ opacity: 0 }}
+      initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: exitDuration, ease: "easeIn" } }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: exitDuration, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
     >
       {/* Ambient glow */}

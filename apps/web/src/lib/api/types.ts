@@ -18,6 +18,13 @@ export interface AgentFindingDTO {
   reasoning_summary: string;
   metadata: Record<string, unknown> | null;
   severity_tier?: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  /** RAG knowledge-base citations that informed this finding */
+  rag_citations?: Array<{
+    source: string;
+    title?: string;
+    excerpt?: string;
+    relevance_score?: number;
+  }>;
 }
 
 export interface AgentMetricsDTO {

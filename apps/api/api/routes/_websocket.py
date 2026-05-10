@@ -63,6 +63,10 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         or websocket.cookies.get("access_token")
     )
 
+    # Also check query param token (for clients that can't set cookies/subprotocols)
+    if not auth_token:
+        auth_token = websocket.query_params.get("token") or None
+
     if not auth_token:
         for protocol in websocket.scope.get("subprotocols", []):
             if protocol.startswith("token."):

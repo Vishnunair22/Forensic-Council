@@ -27,8 +27,6 @@ services:
       DEBUG: "false"
       USE_REDIS_WORKER: "true"
       PYTHONDONTWRITEBYTECODE: "1"
-    secrets:
-      - metrics_scrape_token
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw

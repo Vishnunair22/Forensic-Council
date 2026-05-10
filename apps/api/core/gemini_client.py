@@ -288,42 +288,65 @@ class GeminiVisionClient:
         removed from the fallback chain so the cascade doesn't hit avoidable 404s.
 
         Returns a dict mapping model name → available (bool).
-        Called once at API startup.
+        Called once at API startup. Retries up to 3 times on transient errors.
         """
         if not self._enabled:
             logger.info("Gemini not configured — skipping model availability check")
             return {}
 
         available_models: set[str] = set()
-        try:
-            url = f"{_GEMINI_API_BASE}/models?key={self.api_key}&pageSize=100"
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for m in data.get("models", []):
-                        # model name is like "models/gemini-2.5-flash"
-                        name = m.get("name", "").replace("models/", "")
-                        if name:
-                            available_models.add(name)
-                elif resp.status_code == 401:
-                    logger.warning(
-                        "Gemini API key is invalid — all Gemini grounding will be skipped"
-                    )
-                    self._enabled = False
-                    return {}
-                else:
-                    logger.warning(
-                        "Gemini models.list returned unexpected status", status=resp.status_code
-                    )
-                    return {}
-        except (httpx.TimeoutException, httpx.ConnectError) as e:
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                url = f"{_GEMINI_API_BASE}/models?key={self.api_key}&pageSize=100"
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for m in data.get("models", []):
+                            # model name is like "models/gemini-2.5-flash"
+                            name = m.get("name", "").replace("models/", "")
+                            if name:
+                                available_models.add(name)
+                        break  # success — exit retry loop
+                    elif resp.status_code == 401:
+                        logger.warning(
+                            "Gemini API key is invalid — all Gemini grounding will be skipped"
+                        )
+                        self._enabled = False
+                        return {}
+                    elif resp.status_code in (503, 429, 500, 502):
+                        wait = 2.0 ** attempt
+                        logger.warning(
+                            f"Gemini models.list returned {resp.status_code} — retrying in {wait:.0f}s "
+                            f"(attempt {attempt+1}/3)"
+                        )
+                        import asyncio as _asyncio
+                        await _asyncio.sleep(wait)
+                        continue
+                    else:
+                        logger.warning(
+                            "Gemini models.list returned unexpected status", status=resp.status_code
+                        )
+                        return {}
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_error = e
+                wait = 2.0 ** attempt
+                logger.warning(
+                    f"Gemini models.list unreachable at startup — retrying in {wait:.0f}s "
+                    f"(attempt {attempt+1}/3)", error=str(e)
+                )
+                import asyncio as _asyncio
+                await _asyncio.sleep(wait)
+            except Exception as e:
+                logger.warning("Gemini model validation failed", error=str(e))
+                return {}
+
+        if last_error and not available_models:
             logger.warning(
-                "Gemini models.list unreachable at startup (will retry at runtime)", error=str(e)
+                "Gemini models.list unreachable after 3 attempts (will retry at runtime)",
+                error=str(last_error)
             )
-            return {}
-        except Exception as e:
-            logger.warning("Gemini model validation failed", error=str(e))
             return {}
 
         # Validate configured cascade

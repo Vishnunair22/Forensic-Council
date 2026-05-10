@@ -28,6 +28,13 @@ from api.routes.metrics import (
 from api.schemas import BriefUpdate
 from core.session_persistence import get_session_persistence
 from core.structured_logging import get_logger
+
+# Webhook delivery — fire-and-forget on completion
+try:
+    from api.routes.webhooks import fire_investigation_complete_webhook as _fire_webhook
+    _WEBHOOKS_AVAILABLE = True
+except ImportError:
+    _WEBHOOKS_AVAILABLE = False
 from orchestration.pipeline import ForensicCouncilPipeline
 
 logger = get_logger(__name__)
@@ -94,6 +101,21 @@ async def run_investigation_task(
             },
         )
         increment_investigations_completed()
+
+        # Fire webhook callbacks (fire-and-forget, never blocks)
+        if _WEBHOOKS_AVAILABLE:
+            try:
+                await _fire_webhook(
+                    user_id=str(_investigator_id),
+                    session_id=session_id,
+                    case_id=case_id,
+                    verdict=str(getattr(report, "overall_verdict", "UNKNOWN")),
+                    manipulation_probability=float(getattr(report, "manipulation_probability", 0.0)),
+                    report_hash=str(getattr(report, "report_hash", "")),
+                )
+            except Exception as _wh_err:
+                logger.warning("Webhook fire failed (non-fatal)", error=str(_wh_err))
+
         await broadcast_update(
             session_id,
             BriefUpdate(

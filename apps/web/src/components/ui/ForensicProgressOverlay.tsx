@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
 interface ForensicProgressOverlayProps {
@@ -18,6 +18,7 @@ export function ForensicProgressOverlay({
   showElapsed,
 }: ForensicProgressOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -40,9 +41,9 @@ export function ForensicProgressOverlay({
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
       }}
-      initial={{ opacity: 0 }}
+      initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.4, ease: "easeOut" } }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.4, ease: "easeOut" } }}
       transition={{ duration: 0.12, ease: "easeOut" }}
     >
       <div className="relative z-10 flex flex-col items-center w-full max-w-md">

@@ -2,6 +2,26 @@
 # ============================================================================
 # Forensic Council - Docker Entrypoint
 # ============================================================================
+
+# ── Guard: fail fast if required vars are missing or still placeholders ──────
+REQUIRED_VARS="SIGNING_KEY JWT_SECRET_KEY"
+if [ "${1:-}" != "worker" ]; then
+  REQUIRED_VARS="$REQUIRED_VARS BOOTSTRAP_INVESTIGATOR_PASSWORD"
+fi
+if [ "${LLM_PROVIDER:-groq}" != "none" ]; then
+  REQUIRED_VARS="$REQUIRED_VARS LLM_API_KEY"
+fi
+
+for VAR in $REQUIRED_VARS; do
+  # Use eval to get variable value in POSIX sh (no ${!VAR} indirect expansion)
+  VAL=$(eval "echo \"\$$VAR\"")
+  case "$VAL" in
+    ""|*change*|*placeholder*|*replace*|*REPLACE*|*__REPLACE*)
+      echo "FATAL: $VAR is missing or still a placeholder. Copy .env.example to .env and fill all values." >&2
+      exit 1
+      ;;
+  esac
+done
 # Runs at container startup BEFORE the API server.
 # 1. On FIRST ever start (volumes empty): pre-downloads ML models IN BACKGROUND
 #    so the API starts immediately while models download concurrently.

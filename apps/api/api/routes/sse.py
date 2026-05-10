@@ -246,8 +246,9 @@ async def sse_progress(
         _event_generator(session_id, request),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",  # Disable nginx/Caddy buffering
+            "Transfer-Encoding": "chunked",
         },
     )

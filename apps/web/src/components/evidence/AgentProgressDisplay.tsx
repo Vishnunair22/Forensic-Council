@@ -158,11 +158,16 @@ export function AgentProgressDisplay({
   const visibleAgents = useMemo((): Agent[] => {
     return allValidAgents
       .filter((a): boolean => {
+        // Hide agents that returned NOT_APPLICABLE status (no media type match)
+        const completed = completedAgents?.find((c) => c.agent_id === a.id);
+        if (completed?.status === "skipped") return false;
+        const agentVerdict = (completed as unknown as { agent_verdict?: unknown })?.agent_verdict;
+        if (agentVerdict === "NOT_APPLICABLE") return false;
         if (phase === "deep") return initialAgentIds.includes(a.id);
         if (!mimeType) return false;
         return isAgentSupportedForMime(a.id, mimeType);
       });
-  }, [phase, initialAgentIds, mimeType, agentUpdates, completedAgents]);
+  }, [phase, initialAgentIds, mimeType, completedAgents]);
 
   const skippedAgents = useMemo(() => {
     if (!mimeType) return [];

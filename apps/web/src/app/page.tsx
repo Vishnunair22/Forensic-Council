@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
-import { motion, type Variants } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { Shield, Scale, Cpu } from "lucide-react";
 
 const HowWorksSection = dynamic(
@@ -26,15 +26,16 @@ const itemVariants: Variants = {
 };
 
 export default function Home() {
+  const prefersReducedMotion = useReducedMotion();
   return (
     <div className="relative min-h-screen selection:bg-primary/30 selection:text-primary-foreground">
 
       {/* --- Hero Section --- */}
       <section id="hero" className="relative w-full min-h-[92vh] flex flex-col items-center justify-center pt-28 pb-16 px-5 sm:px-6">
         <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
+          variants={prefersReducedMotion ? undefined : containerVariants}
+          initial={prefersReducedMotion ? false : "hidden"}
+          animate={prefersReducedMotion ? false : "show"}
           className="flex flex-col items-center text-center max-w-5xl mx-auto gap-8 z-10"
         >
           <div className="space-y-6">

@@ -23,8 +23,17 @@
         X-Robots-Tag "none"
         Referrer-Policy "strict-origin-when-cross-origin"
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        @no_csp not header Content-Security-Policy *
-        Content-Security-Policy "default-src 'self'; frame-ancestors 'none'"
+        # Isolate browsing context — required for SharedArrayBuffer (used by audio/video WASM tools)
+        # and hardens against Spectre-class side-channel attacks.
+        Cross-Origin-Opener-Policy "same-origin"
+        Cross-Origin-Embedder-Policy "require-corp"
+        # Restrict browser feature access beyond what the app requires
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        # NOTE: Content-Security-Policy is intentionally NOT set here.
+        # Next.js middleware (apps/web/src/middleware.ts) is the sole CSP authority.
+        # It sets 'unsafe-inline' for scripts/styles (required by Next.js) and
+        # derives the correct connect-src from NEXT_PUBLIC_API_URL.
+        # A Caddy-level CSP would conflict and silently break the application in production.
         -Server
         -X-Powered-By
     }
@@ -91,6 +100,14 @@
                 read_buffer 64KB
                 write_buffer 64KB
             }
+        }
+    }
+
+    # Next.js immutable static assets — content-hashed filenames, safe to cache forever
+    handle /_next/static/* {
+        header Cache-Control "public, max-age=31536000, immutable"
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
         }
     }
 

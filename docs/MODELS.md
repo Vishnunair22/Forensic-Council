@@ -37,7 +37,8 @@ Pins specific commits/hashes for reproducibility.
 
 | Model | License | Risk |
 |-------|---------|------|
-| YOLO (Ultralytics) | **AGPL-3.0** | HIGH — requires source disclosure for SaaS |
+| DETR (`facebook/detr-resnet-50`) | **Apache-2.0** | None |
+| YOLO (Ultralytics, opt-in) | **AGPL-3.0** | HIGH — requires source disclosure for SaaS |
 | OpenCLIP (ViT-L-14) | **MIT** | None |
 | TruFor (splicing) | **CC BY-NC 4.0** | MEDIUM — non-commercial |
 | BusterNet, F3-Net | **Research-only** | HIGH — not cleared for production |
@@ -89,7 +90,7 @@ volumes on first start.
 
 **First Run (5-20 min download if image seed is absent):**
 - Entrypoint seeds calibration models
-- `model_pre_download.py --strict` runs before the API/worker accepts traffic
+- `model_pre_download.py --strict` runs before the API/worker accepts traffic unless `SKIP_MODEL_DOWNLOAD=1`
 - Named volumes are populated and reused by later rebuilds
 
 **Subsequent Runs (30-60s):**
@@ -102,6 +103,10 @@ volumes on first start.
 ```bash
 # Check warm-up status
 curl http://localhost:8000/api/v1/health/ml-tools
+
+# Strict cache and per-model verification
+docker exec forensic_api python scripts/model_cache_check.py --strict
+docker exec forensic_api python scripts/model_pre_download.py --check --strict
 
 # Check cache size
 docker exec forensic_api du -sh /app/cache/*

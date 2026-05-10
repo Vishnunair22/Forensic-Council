@@ -25,6 +25,24 @@ import {
 const LIVE_SOCKET_CONNECT_TIMEOUT_MS = 20_000;
 
 /**
+ * Authenticated fetch wrapper that intercepts 401 responses.
+ * On 401, clears auth state and redirects to session-expired page.
+ */
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const response = await fetch(url, { credentials: "include", ...options });
+  if (response.status === 401) {
+    if (typeof document !== "undefined") {
+      document.cookie = "access_token=; Max-Age=0; path=/";
+      document.cookie = "fc_session=; Max-Age=0; path=/";
+    }
+    if (typeof window !== "undefined") {
+      window.location.href = "/?session_expired=true";
+    }
+  }
+  return response;
+}
+
+/**
  * Partial Validation Parser
  * Uses Zod but falls back to raw data on minor validation errors
  * to prevent complete UI failure during rapid schema evolution.

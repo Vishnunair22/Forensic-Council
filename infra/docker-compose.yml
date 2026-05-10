@@ -34,6 +34,7 @@ x-backend-env: &backend-env
   QDRANT_HOST: qdrant
   QDRANT_PORT: 6333
   QDRANT_GRPC_PORT: 6334
+  QDRANT_HTTPS: "false"
   POSTGRES_HOST: postgres
   POSTGRES_PORT: 5432
   POSTGRES_USER: ${POSTGRES_USER:-forensic_user}
@@ -289,10 +290,10 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 45s
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s
     mem_limit: 4g
     cpus: 2.0
     # SECURITY: Run with minimal privileges, no new privileges, read-only filesystem

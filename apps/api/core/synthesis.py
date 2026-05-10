@@ -439,6 +439,12 @@ Return ONLY a JSON object:
 }}
 """
         try:
+            # Truncate prompt to stay within safe context budget (~3000 tokens)
+            MAX_INPUT_CHARS = 12000
+            if len(prompt) > MAX_INPUT_CHARS:
+                prompt = prompt[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
+                logger.warning("Groq synthesis input truncated", original_len=len(prompt))
+
             raw = await llm_client.generate_synthesis(
                 system_prompt="You are a Senior Forensic Analyst. Return ONLY valid JSON.",
                 user_content=prompt,

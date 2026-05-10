@@ -21,6 +21,18 @@ logger = get_logger(__name__)
 
 ML_TOOLS_DIR = Path(__file__).parent.parent / "tools" / "ml_tools"
 
+def _get_ml_subprocess_timeout() -> float:
+    """Return the configured ML subprocess timeout, falling back to 120s default.
+
+    Uses a lazy import to avoid circular import at module load time. The setting
+    is read once per call so that test monkeypatching works without restart.
+    """
+    try:
+        from core.config import get_settings
+        return get_settings().ml_subprocess_timeout_s
+    except Exception:
+        return 120.0
+
 # ── Model warm-up registry ─────────────────────────────────────────────────
 # Tracks which scripts have been warmed up to avoid duplicate warm-up calls.
 _warmed_up: dict[str, bool] = {}
@@ -372,6 +384,11 @@ async def run_ml_tool(
                 }
             )
 
+    # Enforce the global ML subprocess timeout ceiling (ML_SUBPROCESS_TIMEOUT_S env var).
+    # This prevents a hung or OOM subprocess from blocking the agent indefinitely.
+    global_ceiling = _get_ml_subprocess_timeout()
+    effective_timeout = min(effective_timeout, global_ceiling)
+
     # Try persistent worker first (faster — no Python startup cost)
     try:
         worker = await _get_or_create_worker(script_name, script_path)
@@ -397,13 +414,26 @@ async def run_ml_tool(
     if extra_args:
         cmd.extend(extra_args)
 
+    def _set_ml_memory_limit():
+        """Limit subprocess memory to 2GB on Linux to prevent container OOM."""
+        try:
+            import resource
+            limit = 2 * 1024 * 1024 * 1024  # 2GB
+            _, hard = resource.getrlimit(resource.RLIMIT_AS)
+            resource.setrlimit(resource.RLIMIT_AS, (limit, hard))
+        except Exception as _rlimit_err:
+            logger.debug("setrlimit RLIMIT_AS failed (non-fatal)", error=str(_rlimit_err))
+
     t0 = time.monotonic()
     proc = None
+    import platform as _platform
+    _preexec = _set_ml_memory_limit if _platform.system() == "Linux" else None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=_preexec,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=effective_timeout)
 

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
 import { __pendingFileStore } from "@/lib/pendingFileStore";
@@ -18,6 +18,7 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 export function HeroAuthActions() {
   const router = useRouter();
   const { playSound } = useSound();
+  const prefersReducedMotion = useReducedMotion();
 
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -108,8 +109,8 @@ export function HeroAuthActions() {
       <motion.button
         type="button"
         data-testid="hero-cta-begin"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
+        whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
         onClick={handleCTAClick}
         aria-label="Upload a file to begin analysis"
         className="btn-horizon-primary group relative select-none overflow-hidden"

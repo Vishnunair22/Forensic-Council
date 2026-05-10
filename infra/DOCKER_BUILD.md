@@ -329,13 +329,13 @@ docker builder prune -f
 
 ## 6. Verifying Model Downloads
 
-After the stack starts, confirm that all six ML models loaded correctly. Run this against the backend or worker container:
+After the stack starts, confirm that the model cache directories, Python ML dependencies, and individual required model artifacts are present. Run this against the backend or worker container:
 
 ```bash
-docker exec forensic_api python scripts/model_cache_check.py
+docker exec forensic_api python scripts/model_cache_check.py --strict
 ```
 
-Expected output (all lines should show `populated`, not `empty`):
+Expected output should show cache directories as healthy and required model assets as `[OK]`. With the default commercial-safe configuration, the object detector is DETR (`facebook/detr-resnet-50`) and the Ultralytics/YOLO cache may be empty.
 
 ```
 =====================================================
@@ -346,17 +346,16 @@ Expected output (all lines should show `populated`, not `empty`):
   [OK]     HuggingFace  xxxx.x MB  (N files)  /app/cache/huggingface
   [OK]     PyTorch       xxx.x MB  (N files)  /app/cache/torch
   [OK]     EasyOCR        xx.x MB  (N files)  /app/cache/easyocr
-  [OK]     YOLO            x.x MB  (N files)  /app/cache/ultralytics
+  [OK]     YOLO            0.0 MB  (0 files)  /app/cache/ultralytics
 ```
 
-To check the six individual models (YOLO, EasyOCR, OpenCLIP, ResNet-50, SpeechBrain, audio deepfake detector):
+To check the individual model artifacts without downloading:
 
 ```bash
-# Prints per-model SKIP (cached) or WARN (missing) lines
-docker exec forensic_api python scripts/model_pre_download.py
+docker exec forensic_api python scripts/model_pre_download.py --check --strict
 ```
 
-If any model shows `WARN`, trigger a forced re-download:
+The default model set is DETR object detection, EasyOCR, OpenCLIP/SigLIP, ResNet-50, SpeechBrain ECAPA, and the configured audio deepfake detector. If any model shows `MISS`, trigger a forced re-download:
 
 ```bash
 docker exec forensic_api python scripts/model_pre_download.py --force
@@ -477,7 +476,7 @@ docker compose -f infra/docker-compose.yml restart worker
 | `hf_cache` | `/app/cache/huggingface` | HuggingFace models (~2–4 GB) | Triggers re-download |
 | `torch_cache` | `/app/cache/torch` | PyTorch checkpoints (~100 MB) | Triggers re-download |
 | `easyocr_cache` | `/app/cache/easyocr` | EasyOCR models (~50 MB) | Triggers re-download |
-| `yolo_cache` | `/app/cache/ultralytics` | YOLO weights (~6 MB) | Triggers re-download |
+| `yolo_cache` | `/app/cache/ultralytics` | Ultralytics/YOLO weights when `ENABLE_AGPL_MODELS=true` | Triggers re-download |
 | `numba_cache` | `/app/cache/numba_cache` | Compiled JIT cache | Safe — rebuilds on next use |
 | `calibration_models_cache` | `/app/cache/calibration_models` | Calibration JSON files | Safe — re-seeded from image on next start |
 

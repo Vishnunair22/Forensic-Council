@@ -89,9 +89,11 @@ export function ArcGauge({
           width={size}
           height={size / 2 + 10}
           viewBox={`0 0 ${size} ${size}`}
-          aria-hidden="true"
+          role="img"
+          aria-labelledby="arc-gauge-title"
           className="overflow-visible"
         >
+          <title id="arc-gauge-title">{`Confidence score: ${clampedValue}%`}</title>
           {/* Outer Decorative Dashed Ring */}
           <motion.circle
             cx={cx}

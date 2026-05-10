@@ -8,11 +8,13 @@ and other orchestration modules.
 
 from ._websocket import router as websocket_router
 from .auth import router as auth_router
+from .cases import cases_router
 from .hitl import router as hitl_router
 from .investigation import router as investigation_router
 from .metrics import router as metrics_router
 from .sessions import router as sessions_router
 from .sse import router as sse_router
+from .webhooks import webhooks_router
 
 __all__ = [
     "auth_router",
@@ -22,4 +24,6 @@ __all__ = [
     "sessions_router",
     "websocket_router",
     "sse_router",
+    "webhooks_router",
+    "cases_router",
 ]

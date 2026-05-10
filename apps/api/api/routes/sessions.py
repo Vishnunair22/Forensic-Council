@@ -63,13 +63,21 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
     from api.routes._session_state import SESSION_METADATA_KEY_PREFIX
     from core.persistence.redis_client import get_redis_client
 
-    redis = await get_redis_client()
-    keys = await redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
+    try:
+        redis = await get_redis_client()
+        keys = await redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
+    except Exception as e:
+        logger.warning("Redis unavailable in list_sessions — returning empty list", error=str(e))
+        return []
 
     sessions = []
     for key in keys:
         session_id = key.replace(SESSION_METADATA_KEY_PREFIX, "")
-        metadata = await redis.get_json(key)
+        try:
+            metadata = await redis.get_json(key)
+        except Exception as _meta_err:
+            logger.debug("Skipping malformed session metadata", key=key, error=str(_meta_err))
+            continue
         if metadata and isinstance(metadata, dict):
             sessions.append(
                 SessionInfo(
@@ -427,6 +435,67 @@ async def download_report(
             "Cache-Control": "no-cache, no-store, must-revalidate",
         },
     )
+
+
+# ============================================================================
+# PDF REPORT EXPORT ENDPOINT
+# ============================================================================
+
+
+@router.get("/{session_id}/report/pdf")
+async def download_report_pdf(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Download the forensic report as a PDF file.
+
+    Uses WeasyPrint (if installed) to generate a court-ready PDF.
+    Falls back to HTML if no PDF library is available.
+    Returns the report with proper Content-Disposition headers.
+    """
+    from fastapi.responses import Response
+
+    report_or_response = await get_session_report(session_id, current_user)
+
+    if isinstance(report_or_response, JSONResponse):
+        return report_or_response
+
+    report_dict = report_or_response.model_dump(mode="json")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+    try:
+        from core.pdf_report_exporter import export_report_html, export_report_pdf
+
+        pdf_bytes = await export_report_pdf(report_dict, session_id)
+
+        if pdf_bytes:
+            filename = f"forensic_report_{session_id}_{timestamp}.pdf"
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "X-Content-Type-Options": "nosniff",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                },
+            )
+        else:
+            # Fallback: return HTML
+            html = await export_report_html(report_dict, session_id)
+            filename = f"forensic_report_{session_id}_{timestamp}.html"
+            return Response(
+                content=html,
+                media_type="text/html",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "X-PDF-Fallback": "true",
+                    "X-PDF-Fallback-Reason": "Install weasyprint for PDF: pip install weasyprint",
+                },
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Report export failed: {str(e)}")
 
 
 # ============================================================================

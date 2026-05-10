@@ -56,9 +56,9 @@ RUN pip install --no-cache-dir "uv==${UV_VERSION}"
 
 WORKDIR /app
 
-# Copy only the dependency manifests first.
+# Copy only the dependency manifest first.
 # Source-code changes do NOT invalidate the uv sync layers below.
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -72,7 +72,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 FROM base AS deps-core
 
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --no-dev --no-install-project --extra observability --extra security
+    uv sync --no-dev --no-install-project --extra observability --extra security
 
 # Purge gcc after install - runtime code does not need the compiler.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -88,7 +88,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 FROM base AS deps-full
 
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --no-dev --no-install-project --extra ml --extra observability --extra security
+    uv sync --no-dev --no-install-project --extra ml --extra observability --extra security
 
 # Purge gcc after install (~60 MB saving).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -130,7 +130,8 @@ USER appuser
 
 HEALTHCHECK NONE
 
-CMD ["python", "scripts/init_db.py"]
+# Run alembic migrations before seeding to ensure schema is current
+CMD ["sh", "-c", "python -m alembic upgrade head && python scripts/init_db.py"]
 
 # -- Stage 4: app - shared source + dirs + bytecode (inherits deps-full) ------
 # This intermediate stage is the common ancestor of development and production.
@@ -252,7 +253,7 @@ FROM app AS development
 
 # Add dev + test dependencies on top of the full ML env
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv sync --frozen --extra ml --extra dev --extra observability --extra security
+    uv sync --extra ml --extra dev --extra observability --extra security
 
 ENV RELOAD=true \
     APP_ENV=development \

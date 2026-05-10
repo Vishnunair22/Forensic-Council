@@ -697,11 +697,12 @@ async def run_agents_concurrent(
     async def _run_one(agent, aid: str, supported: bool):
         if not supported:
             return agent, [], "unsupported"
+        agent_timeout = 300  # 5 minutes per agent maximum
         try:
             logger.info(f"Running {aid} initial investigation")
             initial_findings = await asyncio.wait_for(
                 agent.run_investigation(),
-                timeout=min(float(pipeline.config.investigation_timeout), 480.0),
+                timeout=min(float(pipeline.config.investigation_timeout), agent_timeout),
             )
             if pipeline.signal_bus:
                 await pipeline.signal_bus.signal_ready(aid, initial_findings)

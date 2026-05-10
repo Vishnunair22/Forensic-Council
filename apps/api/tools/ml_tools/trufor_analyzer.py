@@ -122,7 +122,15 @@ def _build_srm_filters() -> list[np.ndarray]:
     return out[:30]  # cap at exactly 30
 
 
-_SRM_FILTERS = _build_srm_filters()
+_SRM_FILTERS: list | None = None
+
+
+def _get_srm_filters() -> list:
+    """Return cached SRM filter bank, building it once per process."""
+    global _SRM_FILTERS
+    if _SRM_FILTERS is None:
+        _SRM_FILTERS = _build_srm_filters()
+    return _SRM_FILTERS
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +145,7 @@ def _apply_srm(gray: np.ndarray) -> np.ndarray:
     """
     residuals = []
     g = gray.astype(np.float32)
-    for filt in _SRM_FILTERS:
+    for filt in _get_srm_filters():
         res = cv2.filter2D(g, -1, filt)
         residuals.append(res)
     return np.stack(residuals, axis=2)  # (H, W, 30)

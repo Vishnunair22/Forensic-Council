@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 export {};
 
 declare global {
@@ -9,6 +11,16 @@ declare global {
     interface Matchers<R> {
       toHaveNoViolations(): R;
     }
+  }
+}
+
+// React 18 does not include the HTML `inert` attribute in its type definitions.
+// The attribute is now baseline-available in all modern browsers and is the
+// correct way to prevent both keyboard focus and AT access to off-screen content
+// (replacing the misuse of aria-hidden on interactive regions).
+declare module "react" {
+  interface HTMLAttributes<T> {
+    inert?: boolean | undefined;
   }
 }
 

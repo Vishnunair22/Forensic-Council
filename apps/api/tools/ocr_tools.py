@@ -610,11 +610,8 @@ If no text is visible, return empty lists."""
                 if isinstance(parsed, dict):
                     content_type = str(parsed.get("content_type") or "")
                     content_description = str(parsed.get("content_description") or "")
-        except Exception:
-            pass
-
-        if lines:
-            logger.info("Gemini OCR succeeded", word_count=len(full_text.split()), content_type=content_type)
+        except Exception as _parse_err:
+            logger.debug("OCR response JSON parse failed (non-fatal)", error=str(_parse_err))
 
         result = {
             "gemini_available": True,

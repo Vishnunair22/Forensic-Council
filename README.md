@@ -57,7 +57,7 @@ Agent 1 performs image and vision grounding first during deep analysis, then inj
 | --- | --- | --- |
 | Image | visual manipulation and generation signals | ELA, splicing, diffusion artifacts, noise residuals |
 | Audio | speech and signal integrity | diarization, splice detection, voice synthesis signals |
-| Object | scene and physical consistency | YOLO detection, lighting, object coherence |
+| Object | scene and physical consistency | DETR object detection, optional YOLO, lighting, object coherence |
 | Video | temporal integrity | frame consistency, rolling shutter, inter-frame forgery |
 | Metadata | provenance and container evidence | EXIF, GPS, C2PA/JUMBF, container metadata |
 
@@ -193,13 +193,13 @@ uv run python scripts/run_api.py
 ```bash
 # bash / zsh
 cd apps/web
-npm ci
+npm install
 npm run dev
 ```
 ```powershell
 # PowerShell
 cd apps/web
-npm.cmd ci
+npm.cmd install
 npm.cmd run dev
 ```
 

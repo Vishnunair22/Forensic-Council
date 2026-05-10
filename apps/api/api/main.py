@@ -95,6 +95,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Default is min(4, cpu_count) to prevent OOM on constrained Docker hosts;
     # raise via FORENSIC_MAX_WORKERS for bare-metal production deployments.
     settings = get_settings()
+    if settings is None:
+        raise RuntimeError(
+            "get_settings() returned None — check your .env file and ensure all required "
+            "environment variables are set. Run: cp .env.example .env and fill all values."
+        )
     app.state.settings = settings
     _env_max = int(os.environ.get("FORENSIC_MAX_WORKERS", "0"))
     max_workers = _env_max if _env_max > 0 else min(4, os.cpu_count() or 2)
@@ -192,9 +197,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.migrations_ok = False
     try:
         pg = await get_postgres_client()
-        # Check for critical tables that migrations create
+        # Check for critical tables that migrations create.
+        # The active in-app migration system creates chain_of_custody; older
+        # Alembic drafts used custody_log, so accept either during upgrades.
         table_exists = await pg.fetch_val(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'custody_log')"
+            """
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name IN ('chain_of_custody', 'custody_log')
+            )
+            """
         )
         if table_exists:
             app.state.migrations_ok = True
@@ -812,11 +825,13 @@ async def diagnostic_middleware(request: Request, call_next):
 if _settings_import_error is None:
     from api.routes import (  # noqa: E402
         auth_router,
+        cases_router,
         hitl_router,
         investigation_router,
         metrics_router,
         sessions_router,
         sse_router,
+        webhooks_router,
         websocket_router,
     )
 
@@ -827,6 +842,8 @@ if _settings_import_error is None:
     app.include_router(websocket_router)
     app.include_router(metrics_router)
     app.include_router(sse_router)
+    app.include_router(webhooks_router)
+    app.include_router(cases_router)
 
 
 @app.exception_handler(Exception)

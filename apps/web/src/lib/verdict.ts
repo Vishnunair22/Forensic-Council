@@ -9,8 +9,16 @@ export interface VerdictConfig {
   desc: string;
 }
 
+/**
+ * Normalize verdict strings — handles both "REVIEW REQUIRED" (space)
+ * and "REVIEW_REQUIRED" (underscore) from the backend.
+ */
+export function normalizeVerdict(v: string): string {
+  return (v ?? "").replace(/ /g, "_").toUpperCase();
+}
+
 export function getVerdictConfig(v: string): VerdictConfig {
-  const u = (v ?? "").toUpperCase();
+  const u = normalizeVerdict(v);
 
   if (u === "AUTHENTIC" || u === "CERTAIN") {
     return {

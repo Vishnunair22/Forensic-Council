@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Activity, FileSearch, History as HistoryIcon, Home as HomeIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -45,6 +45,15 @@ interface ResultLayoutProps {
 
 export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const rs = useResult(initialSessionId);
+
+  // Restore manual scroll position on back-navigation; scroll to top on new session
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [initialSessionId]);
 
   const activeAgentIds = useMemo(() => {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);

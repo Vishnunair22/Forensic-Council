@@ -10,6 +10,7 @@ interface VerdictGaugeProps {
   manipPct: number;
   errPct: number;
   discordPct: number;
+  calibrationStatus?: string; // "TRAINED" | "UNCALIBRATED"
 }
 
 export function VerdictGauge({
@@ -17,7 +18,9 @@ export function VerdictGauge({
   manipPct,
   errPct,
   discordPct,
+  calibrationStatus,
 }: VerdictGaugeProps) {
+  const isUncalibrated = calibrationStatus !== "TRAINED";
   return (
     <section className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
       <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/5">
@@ -28,6 +31,11 @@ export function VerdictGauge({
             <ArcGauge value={confPct} label="" sublabel="" color="#A7FFD2" />
           </div>
           <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.2em] mt-4">Consensus_Confidence</span>
+          {isUncalibrated && (
+            <span className="text-[8px] font-mono text-amber-400/70 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5 mt-1">
+              ⚠ UNCALIBRATED
+            </span>
+          )}
           <div className="text-xl font-mono font-bold text-white mt-1">{confPct}%</div>
         </div>
 

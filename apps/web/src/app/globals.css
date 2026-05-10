@@ -51,6 +51,15 @@
   --font-sans: var(--font-geist), system-ui, sans-serif;
   --font-heading: var(--font-heading-family), var(--font-geist), sans-serif;
   --font-mono: var(--font-mono-family), ui-monospace, monospace;
+
+  /* Calibration status */
+  --color-uncalibrated: #f59e0b;
+  --color-uncalibrated-bg: rgba(245, 158, 11, 0.1);
+  --color-uncalibrated-border: rgba(245, 158, 11, 0.2);
+
+  /* RAG citation highlight */
+  --color-rag-citation: rgba(99, 102, 241, 0.15);
+  --color-rag-citation-border: rgba(99, 102, 241, 0.4);
 }
 
 @layer base {

@@ -129,7 +129,14 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="w-24 h-2 rounded-full bg-muted-foreground/20 overflow-hidden">
+        <div
+          className="w-24 h-2 rounded-full bg-muted-foreground/20 overflow-hidden"
+          role="progressbar"
+          aria-label="Token usage"
+          aria-valuenow={Math.round(usagePercent)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <div
             className={`h-full rounded-full transition-all duration-300 ${getStatusColor()}`}
             style={{ width: `${usagePercent}%` }}

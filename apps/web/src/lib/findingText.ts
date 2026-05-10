@@ -1,6 +1,17 @@
 const INTERNAL_PATH_RE = /(?:\/app\/storage\/evidence|[A-Za-z]:\\[^.?!\n\r]{0,120}?storage\\evidence)[^\s,;)]+/gi;
 const UUID_FILE_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:png|jpe?g|webp|gif|mp4|mov|avi|wav|mp3|m4a|pdf)\b/gi;
 
+/**
+ * Add a visual prefix for non-court-defensible findings.
+ * Stubs and low-confidence findings should be visually distinguished.
+ */
+export function formatFindingTitle(findingType: string, courtDefensible?: boolean): string {
+  if (courtDefensible === false) {
+    return `⚠ ${findingType} (indicative only)`;
+  }
+  return findingType;
+}
+
 export function cleanFindingText(text: string | null | undefined, maxLen?: number) {
   let cleaned = String(text || "")
     .replace(INTERNAL_PATH_RE, "the submitted file")

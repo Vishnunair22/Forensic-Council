@@ -186,3 +186,35 @@ plugin_test_*.tmp
 test_*.ps1
 /test_*.ps1
 test_gemini_body.json
+
+# ─── Production & security ────────────────────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.pfx
+.secrets/
+infra/caddy_data/
+infra/caddy_config/
+
+# ─── ML model caches (can be very large) ─────────────────────────────────────
+apps/api/.cache/
+*.bin
+*.safetensors
+*.pt
+*.onnx
+
+# ─── Test artifacts ───────────────────────────────────────────────────────────
+.pytest_tmp/
+apps/api/tests/tmp/
+htmlcov/
+.coverage.*
+
+# Scratch directory — test artifacts and one-off scripts only
+scratch/*.txt
+scratch/*.png
+scratch/*.jpg
+scratch/*.py
+
+# CI artifacts — generated files, never committed
+ruff_errors.json
+*.ruff_errors.json

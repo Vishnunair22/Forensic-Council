@@ -10,7 +10,8 @@ Last updated: 2026-04-25 | Status: v1.7.0
 
 | Model | License | Commercial Use |
 |-------|---------|---------------|
-| YOLO (Ultralytics) | AGPL-3.0 | Requires source disclosure |
+| DETR (`facebook/detr-resnet-50`) | Apache-2.0 | Yes |
+| YOLO (Ultralytics, opt-in) | AGPL-3.0 | Requires source disclosure |
 | OpenCLIP (ViT-B-32) | MIT | No restrictions |
 | AST Anti-Spoofing | Apache-2.0 | No restrictions |
 | AASIST (opt-in) | Research-only | NOT cleared for production |

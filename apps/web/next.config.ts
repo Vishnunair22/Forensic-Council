@@ -32,6 +32,11 @@ const nextConfig: NextConfig = {
 
   outputFileTracingRoot: path.join(__dirname, "../../"),
 
+  // ── External packages (server-side) ─────────────────────────────────────
+  // sharp must be declared external to use the native binary for image optimization.
+  // Without this, Next.js falls back to slower unoptimized mode.
+  serverExternalPackages: ["sharp"],
+
   // ── Compression ──────────────────────────────────────────────────────────
   // Disabled: Caddy handles compression via `encode zstd gzip` in Caddyfile.
   // Enabling both causes double-compression (wasted CPU, slightly larger output).

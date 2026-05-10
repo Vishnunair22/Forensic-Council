@@ -8,7 +8,7 @@ All configuration is centralized and validated at startup.
 
 import logging
 import os
-from functools import lru_cache
+from functools import lru_cache  # noqa: F401 — kept for any external callers
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -79,6 +79,21 @@ class Settings(BaseSettings):
             raise ValueError(f"Environment must be one of {allowed}, got {v}")
         return v_lower
 
+    @field_validator("offline_mode")
+    @classmethod
+    def enforce_offline_in_production(cls, v: bool, info: object) -> bool:
+        """Warn when OFFLINE_MODE=false in production — models may download at runtime."""
+        try:
+            app_env = getattr(info, "data", {}).get("app_env", "development") if info else "development"
+        except Exception:
+            app_env = "development"
+        if app_env == "production" and not v:
+            _config_logger.warning(
+                "OFFLINE_MODE=false in production — models may download at runtime. "
+                "Set OFFLINE_MODE=true and pre-download models in Dockerfile."
+            )
+        return v
+
     debug: bool = Field(default=False, description="Debug mode flag")
     log_level: str = Field(default="INFO", description="Logging level")
     bootstrap_admin_password: str = Field(
@@ -121,6 +136,7 @@ class Settings(BaseSettings):
     qdrant_port: int = Field(default=6333, description="Qdrant REST API port")
     qdrant_grpc_port: int = Field(default=6334, description="Qdrant gRPC port")
     qdrant_api_key: str | None = Field(default=None, description="Qdrant API key")
+    qdrant_https: bool = Field(default=False, description="Use HTTPS for Qdrant REST API")
 
     # PostgreSQL Configuration
     postgres_host: str = Field(default="localhost", description="PostgreSQL server host")
@@ -661,6 +677,17 @@ class Settings(BaseSettings):
         le=300,
         description="Timeout for CLIP semantic content analysis.",
     )
+    ml_subprocess_timeout_s: float = Field(
+        default=120.0,
+        ge=30,
+        le=600,
+        description=(
+            "Maximum seconds a single ML subprocess (torch model inference) is allowed to run "
+            "before being forcibly killed. A subprocess that OOMs or deadlocks would otherwise "
+            "block the agent thread indefinitely. The circuit breaker opens after "
+            "CIRCUIT_BREAKER_FAILURE_THRESHOLD consecutive timeouts."
+        ),
+    )
 
     @field_validator("gemini_api_key")
     @classmethod
@@ -825,15 +852,26 @@ class Settings(BaseSettings):
         return bool(self.gemini_api_key and len(self.gemini_api_key) >= 20)
 
 
-@lru_cache
+_settings_cache: "Settings | None" = None
+
+
 def get_settings() -> Settings:
     """
-    Get cached application settings.
+    Return the application settings singleton.
 
-    Uses lru_cache to ensure settings are only loaded once.
-    Call settings.cache_clear() to reload settings (useful for testing).
+    Uses a module-level cache (not lru_cache) so the cache can be explicitly
+    cleared between tests via clear_settings_cache() to prevent env leakage.
     """
-    return Settings()
+    global _settings_cache
+    if _settings_cache is None:
+        _settings_cache = Settings()
+    return _settings_cache
+
+
+def clear_settings_cache() -> None:
+    """Clear the settings cache. Call in test teardown to reset settings between tests."""
+    global _settings_cache
+    _settings_cache = None
 
 
 def validate_production_settings() -> None:

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scale, ShieldCheck, Zap } from "lucide-react";
 
@@ -13,6 +13,16 @@ export function ArbiterDeliberationOverlay({
   isVisible,
   liveText,
 }: ArbiterDeliberationOverlayProps) {
+  const [isPageVisible, setIsPageVisible] = useState(true);
+
+  // Pause animations when the tab is backgrounded to save CPU
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(!document.hidden);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
   const cleanLiveText = React.useMemo(() => {
     if (!liveText) return "";
     return liveText
@@ -41,9 +51,9 @@ export function ArbiterDeliberationOverlay({
               {/* Animated Scales */}
               <div className="relative w-32 h-32 mb-10">
                 <motion.div
-                  animate={{ 
+                  animate={isPageVisible ? { 
                     rotate: [0, -5, 5, 0],
-                  }}
+                  } : {}}
                   transition={{ 
                     duration: 4, 
                     repeat: Infinity, 
@@ -55,10 +65,10 @@ export function ArbiterDeliberationOverlay({
                 </motion.div>
 
                 <motion.div
-                  animate={{ 
+                  animate={isPageVisible ? { 
                     scale: [1, 1.2, 1],
                     opacity: [0.3, 0.6, 0.3]
-                  }}
+                  } : {}}
                   transition={{ 
                     duration: 2, 
                     repeat: Infinity, 
