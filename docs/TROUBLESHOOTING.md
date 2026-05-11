@@ -1,7 +1,5 @@
 # Troubleshooting Guide
 
-> **Merged from:** `DEBUGGING.md`, `KNOWN_ISSUES.md`, and `ERROR_LOG.md`.
-
 ## WebSocket Connection Failures
 
 ### Symptom: "WebSocket connection failed (code 4001)"
@@ -60,11 +58,11 @@ docker exec forensic_api python scripts/model_pre_download.py --force
 # Manual migration
 docker exec forensic_api python scripts/init_db.py
 
-# Check migration status
-docker exec forensic_api python apps/api/core/migrations.py status
+# Check PostgreSQL connectivity
+docker exec forensic_api python -c "from core.persistence.postgres_client import get_postgres_client; import asyncio; print(asyncio.run(get_postgres_client().fetch_val('SELECT 1')))"
 
-# Force re-run migrations
-docker exec forensic_api python -c "from core.migrations import run_migrations; import asyncio; asyncio.run(run_migrations())"
+# Re-run user bootstrap
+docker exec forensic_api python -c "from scripts.init_db import bootstrap_users; import asyncio; from core.persistence.postgres_client import get_postgres_client; pg = asyncio.run(get_postgres_client()); asyncio.run(bootstrap_users(pg))"
 ```
 
 ### Symptom: "Migration validation failed"

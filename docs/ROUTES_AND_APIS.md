@@ -132,15 +132,26 @@ Backend API routes are registered under:
 
 **File:** `apps/api/api/routes/cases.py`
 
-**Purpose:** Case-oriented API for creating cases, adding artifacts, analyzing cases, and retrieving case state.
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/v1/cases | Create a multi-artifact case |
+| POST | /api/v1/cases/{case_id}/artifacts | Add an evidence artifact |
+| POST | /api/v1/cases/{case_id}/analyze | Start analysis of all pending artifacts |
+| GET | /api/v1/cases/{case_id} | Get case status and aggregated results |
 
----
+Usage pattern: create case → add artifacts (repeat) → analyze → poll results.
 
 ## Webhooks API
 
 **File:** `apps/api/api/routes/webhooks.py`
 
-**Purpose:** Webhook registration/list/delete/delivery and investigation-complete webhook dispatch.
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/v1/webhooks | Register a webhook URL |
+| GET | /api/v1/webhooks | List webhooks for current user |
+| DELETE | /api/v1/webhooks/{webhook_id} | Delete a registered webhook |
+
+Delivery: fires `investigation.complete` with session_id, verdict, manipulation_probability, and optional HMAC-SHA256 signature via `X-FC-Signature` header.
 
 ---
 

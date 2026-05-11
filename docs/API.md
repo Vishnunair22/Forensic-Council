@@ -177,14 +177,65 @@ Get the most recent thinking brief for a specific agent. **Auth required.**
 ---
 
 ### GET `/api/v1/sessions`
-List all active in-memory sessions. **Auth required.**
+List all active sessions from Redis. **Auth required.**
 
 **Response 200:** Array of `SessionInfo` objects.
 
 ---
 
+### GET `/api/v1/sessions/{session_id}`
+Get session metadata. **Auth required.**
+
+Returns `{"session_id": "...", "case_id": "...", "status": "...", "created_at": "..."}`.
+
+**Errors:** `400` invalid session ID format · `404` session not found
+
+---
+
+### GET `/api/v1/sessions/{session_id}/quota`
+Get per-session API usage data (tokens, calls, cost estimate). **Auth required.**
+
+**Response 200:**
+```json
+{
+  "tokens_used": 42000,
+  "tokens_limit": 100000,
+  "cost_estimate_usd": 0.0525,
+  "calls_total": 12,
+  "degraded": false
+}
+```
+
+---
+
+### GET `/api/v1/sessions/{session_id}/report/download`
+Download the report as a JSON file with `Content-Disposition: attachment` headers. **Auth required.**
+
+Same resolution order as `/report`. Returns `202` if investigation still in progress.
+
+---
+
+### GET `/api/v1/sessions/{session_id}/report/pdf`
+Download the report as a PDF (falls back to HTML if WeasyPrint unavailable). **Auth required.**
+
+Returns `X-PDF-Fallback: true` header if HTML was served instead.
+
+---
+
+### GET `/api/v1/sessions/{session_id}/brief`
+Get lightweight session metadata and brief. **Auth required.**
+
+---
+
+### GET `/api/v1/sessions/{session_id}/progress`
+SSE (Server-Sent Events) stream alternative to WebSocket for agent progress updates. **Auth required.**
+
+Yields the same event types as the WebSocket channel.
+
+---
+
 ### DELETE `/api/v1/sessions/{session_id}`
-Terminate a running session and cancel its background task. **Auth required.**
+Terminate a running session and close its WebSocket connections. **Auth required.**
 
 **Response 200:** `{"status": "terminated", "session_id": "..."}`
 
@@ -213,7 +264,7 @@ Submit a Human-in-the-Loop decision for an active checkpoint. **Auth required.**
 
 ---
 
-## Monitoring
+## Health
 
 ### GET `/health`
 Deep health check. Returns 200 only when all critical dependencies are healthy.
@@ -226,24 +277,178 @@ Deep health check. Returns 200 only when all critical dependencies are healthy.
     "migrations": "ok",
     "postgres": "ok",
     "redis": "ok",
-    "qdrant": "ok",
-    "ml_tools": {
-      "status": "ready",
-      "tools_ready": 12,
-      "tools_total": 12
-    }
+    "qdrant": "ok"
   }
 }
 ```
 
 **Response 503:** One or more dependencies degraded.
 
+### GET `/api/v1/health/ml-tools`
+ML tool warm-up status. Returns tools_present, tools_total, and per-tool presence status.
+
+### GET `/api/v1/health/tools`
+System tool availability (ffmpeg, exiftool, tesseract). Returns `{"status": "healthy" | "degraded"}`.
+
 ---
 
-### GET `/api/v1/metrics`
-Operational counters (Redis-backed, falls back to in-process). **Auth required (admin).**
+## Cases
+Create a new multi-artifact case. **Auth required.**
 
-**Response 200:** JSON with `request_count`, `error_count`, `active_sessions`, `investigations_started`, `investigations_completed`, `investigations_failed`, `uptime_seconds`.
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:** `label=Case+Description` (optional)
+
+**Response 201:**
+```json
+{
+  "case_id": "A1B2C3D4",
+  "label": "Case Description",
+  "status": "open",
+  "artifacts_url": "/api/v1/cases/A1B2C3D4/artifacts",
+  "analyze_url": "/api/v1/cases/A1B2C3D4/analyze"
+}
+```
+
+---
+
+### POST `/api/v1/cases/{case_id}/artifacts`
+Add an evidence artifact (file) to a case. **Auth required.** Max 10 artifacts per case.
+
+**Content-Type:** `multipart/form-data`
+
+**Body:** `file` (binary, required)
+
+**Response 201:**
+```json
+{
+  "artifact_id": "uuid",
+  "session_id": "uuid",
+  "case_id": "A1B2C3D4",
+  "filename": "evidence.jpg",
+  "status": "pending"
+}
+```
+
+**Errors:** `404` case not found · `409` case not in open state · `422` max artifacts reached
+
+---
+
+### POST `/api/v1/cases/{case_id}/analyze`
+Start forensic analysis for all pending artifacts. **Auth required.**
+
+**Response 200:**
+```json
+{
+  "case_id": "A1B2C3D4",
+  "status": "analyzing",
+  "dispatched_artifacts": 2,
+  "artifact_session_ids": ["uuid1", "uuid2"],
+  "results_url": "/api/v1/cases/A1B2C3D4"
+}
+```
+
+---
+
+### GET `/api/v1/cases/{case_id}`
+Get case status and aggregated results. **Auth required.**
+
+Poll this endpoint after calling `/analyze`.
+
+**Response 200:**
+```json
+{
+  "case_id": "A1B2C3D4",
+  "label": "...",
+  "status": "completed",
+  "combined_verdict": "SUSPICIOUS",
+  "combined_manipulation_probability": 0.72,
+  "artifacts": [...],
+  "created_at": "2026-05-09T...",
+  "completed_at": "2026-05-09T..."
+}
+```
+
+---
+
+## Webhooks
+
+### POST `/api/v1/webhooks`
+Register a webhook URL for investigation-complete callbacks. **Auth required.**
+
+**Body:**
+```json
+{
+  "url": "https://your-server.example.com/hook",
+  "secret": "optional-hmac-secret",
+  "events": ["investigation.complete"],
+  "description": "Optional label"
+}
+```
+
+**Response 201:** `{"webhook_id": "uuid", "status": "registered"}`
+
+---
+
+### GET `/api/v1/webhooks`
+List all webhooks registered by the current user. **Auth required.**
+
+**Response 200:** Array of webhook records (secrets never returned).
+
+---
+
+### DELETE `/api/v1/webhooks/{webhook_id}`
+Delete a registered webhook. **Auth required.** Returns `204 No Content`.
+
+**Errors:** `404` not found
+
+---
+
+## Metrics
+
+### GET `/api/v1/metrics`
+Operational counters (Redis-backed with in-process fallback). **Auth required (admin).**
+
+**Response 200:**
+```json
+{
+  "uptime_seconds": 3600.0,
+  "requests_total": 142,
+  "request_duration_avg_ms": 45.3,
+  "errors_total": 2,
+  "error_rate": 0.014,
+  "active_sessions": 3,
+  "investigations_started": 28,
+  "investigations_completed": 25,
+  "investigations_failed": 1,
+  "success_rate": 0.96,
+  "rate_limit_redis_bypasses": 0,
+  "db_pool_size": 5,
+  "db_pool_available": 3,
+  "db_pool_in_use": 2,
+  "db_pool_max": 10
+}
+```
+
+---
+
+### GET `/api/v1/metrics/prometheus`
+Prometheus exposition format. **Auth required (admin).**
+
+---
+
+### GET `/api/v1/metrics/public`
+Prometheus exposition for local smoke tests (no auth required in dev).
+
+---
+
+### GET `/api/v1/metrics/raw`
+Prometheus scrape endpoint protected by static bearer token. Configure via `METRICS_SCRAPE_TOKEN`. Returns `503` if not configured, `401` if token mismatched.
+
+---
+
+### GET `/api/v1/metrics/pool-status`
+Database connection pool statistics. **Auth required (admin).**
 
 ---
 

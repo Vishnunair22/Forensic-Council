@@ -5,7 +5,7 @@ Forensic Council is a multi-agent forensic analysis platform for digital media v
 [![Version](https://img.shields.io/badge/version-v1.7.0-blue.svg)](#)
 [![Status](https://img.shields.io/badge/status-production_hardening-yellow.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) Python 3.12 (tested/recommended); `pyproject.toml` supports 3.11–3.14
 [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 
 ## What It Does
