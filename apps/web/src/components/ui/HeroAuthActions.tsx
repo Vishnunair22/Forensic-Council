@@ -97,11 +97,19 @@ export function HeroAuthActions() {
     setSelectedFile(null);
     setIsHandingOff(false);
     // Kick off auth in parallel — evidence page will await this promise
-    __pendingFileStore.authPromise ||= autoLoginAsInvestigator().catch((err) => {
-      console.error("[HeroAuthActions] pre-auth failed:", err);
-      __pendingFileStore.authPromise = null;
-      throw err;
-    });
+    __pendingFileStore.authError = null;
+    __pendingFileStore.authPromise ||= autoLoginAsInvestigator()
+      .then((token) => {
+        __pendingFileStore.authError = null;
+        return token;
+      })
+      .catch((err) => {
+        const error = err instanceof Error ? err : new Error("Authentication failed");
+        console.warn("[HeroAuthActions] pre-auth failed; evidence page will retry:", error);
+        __pendingFileStore.authError = error;
+        __pendingFileStore.authPromise = null;
+        return Promise.resolve(null as never);
+      });
   }, [playSound]);
 
   return (

@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
 import { resetActiveInvestigation } from "@/lib/appReset";
+import { storage } from "@/lib/storage";
 
 export function GlobalNavbar() {
   const router = useRouter();

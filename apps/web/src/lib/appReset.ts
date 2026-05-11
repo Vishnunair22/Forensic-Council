@@ -49,9 +49,11 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
 
   __pendingFileStore.file = null;
   __pendingFileStore.authPromise = null;
+  __pendingFileStore.authError = null;
 
+  sessionOnlyStorage.removeItem("forensic_auto_start");
   sessionOnlyStorage.removeItem("fc_show_loading");
-  sessionOnlyStorage.removeItem("fc_no_reconnect");
+  sessionOnlyStorage.removeItem("fc_open_upload_once");
   sessionOnlyStorage.setItem("fc_no_reconnect", "1");
 
   window.dispatchEvent(new Event("fc:reset-home"));

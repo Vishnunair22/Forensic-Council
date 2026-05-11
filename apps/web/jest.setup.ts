@@ -72,6 +72,7 @@ jest.mock('framer-motion', () => {
     }),
     useScroll: () => ({ scrollYProgress: { get: () => 0 } }),
     useTransform: (_: unknown, __: unknown, output: unknown[]) => ({ get: () => output[0] }),
+    useReducedMotion: () => false,
     AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
   };
 });

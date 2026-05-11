@@ -31,6 +31,7 @@ jest.mock("framer-motion", () => ({
       ({ children, layout, layoutId, animate, exit, initial, transition, variants, whileHover, whileInView, whileTap, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
         React.createElement(tag, p, children),
   }),
+  useReducedMotion: () => false,
   AnimatePresence: ({ children }: React.PropsWithChildren<object>) => <>{children}</>,
   useAnimation: () => ({ start: jest.fn() }),
   useInView: () => true,

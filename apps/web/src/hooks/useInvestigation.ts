@@ -849,5 +849,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     allAgentsDone,
     awaitingDecision,
     mimeType,
+    handoffRecovering: autoStartBlocking || showLoadingOverlay,
   };
 }
