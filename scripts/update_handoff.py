@@ -66,8 +66,8 @@ def main() -> None:
 {diff_names}
 ```"""
     content = re.sub(
-        r"(## Exact Files Changed\n\n)```text\n[^`]*```",
-        rf"\1{diff_block}",
+        r"(## Exact Files Changed\s+)\n```text\n[^`]*```",
+        rf"\1\n{diff_block}",
         content,
         flags=re.DOTALL,
     )

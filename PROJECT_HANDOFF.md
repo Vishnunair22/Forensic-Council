@@ -8,7 +8,7 @@
 > 2. Read this file
 > 3. Check "What Changed Since Last AI/Remote Snapshot"
 > 4. Check "Known Issues"
-> 5. Check "Commands Run" and "Latest Command Results"
+> 5. Check "Commands Run" for verification results
 > 6. Do not assume tests pass unless this file shows they passed
 > 7. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
@@ -44,6 +44,12 @@ Documentation hygiene pass — second pass to fix remaining stale references, br
 | Test file header comment | apps/web/tests/unit/components/components.test.tsx | Fixed stale comment listing nonexistent components | completed |
 | Misnamed test file | ForensicResetOverlay.test.tsx -> LoadingOverlay.test.tsx | Test file imported LoadingOverlay but was named for a nonexistent component | completed |
 | Non-git state handling | scripts/update_handoff.py | Improved diff count logic to show 0 files for unknown state | completed |
+
+## Exact Files Changed
+
+```text
+# Populated by scripts/update_handoff.py
+```
 
 ## Important Local Decisions
 

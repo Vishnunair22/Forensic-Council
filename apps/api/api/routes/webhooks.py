@@ -146,8 +146,7 @@ async def list_webhooks(
             except Exception as _decode_err:
                 logger.debug("Skipping malformed webhook record", error=str(_decode_err))
 
-
-@webhooks_router.delete("/{webhook_id}", status_code=204)
+    return results
 async def delete_webhook(
     webhook_id: str,
     current_user: Any = Depends(get_current_user),
