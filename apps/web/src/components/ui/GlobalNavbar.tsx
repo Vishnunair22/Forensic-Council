@@ -18,7 +18,7 @@ export function GlobalNavbar() {
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollY = useRef(0);
 
-  // React to active session state changes via storage events or visibility
+  // React to active session state changes via storage events, focus, and visibility
   useEffect(() => {
     if (typeof window === "undefined") return;
     
@@ -26,14 +26,21 @@ export function GlobalNavbar() {
       setHasActiveSession(!!storage.getItem("forensic_session_id"));
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkSession();
+    };
+
     checkSession();
     window.addEventListener("fc_storage_update", checkSession);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") checkSession();
-    });
+    window.addEventListener("storage", checkSession);
+    window.addEventListener("focus", checkSession);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     
     return () => {
       window.removeEventListener("fc_storage_update", checkSession);
+      window.removeEventListener("storage", checkSession);
+      window.removeEventListener("focus", checkSession);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
