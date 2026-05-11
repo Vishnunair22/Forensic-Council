@@ -18,7 +18,7 @@ export function GlobalNavbar() {
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollY = useRef(0);
 
-  // Poll for active session to show destructive reset badge
+  // React to active session state changes via storage events or visibility
   useEffect(() => {
     if (typeof window === "undefined") return;
     
@@ -27,11 +27,12 @@ export function GlobalNavbar() {
     };
 
     checkSession();
-    const interval = setInterval(checkSession, 1500);
     window.addEventListener("fc_storage_update", checkSession);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkSession();
+    });
     
     return () => {
-      clearInterval(interval);
       window.removeEventListener("fc_storage_update", checkSession);
     };
   }, []);

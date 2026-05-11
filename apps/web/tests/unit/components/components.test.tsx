@@ -184,7 +184,7 @@ describe("AgentProgressDisplay", () => {
       expect(screen.queryByText(/4\/4/i)).not.toBeInTheDocument();
     });
 
-    it("shows skipped unsupported message before the card expires", () => {
+it("shows skipped unsupported message before the card expires", () => {
       render(
         <AgentProgressDisplay
           {...progressDefaults}

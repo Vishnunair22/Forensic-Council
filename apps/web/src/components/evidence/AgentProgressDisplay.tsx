@@ -158,16 +158,17 @@ export function AgentProgressDisplay({
   const visibleAgents = useMemo((): Agent[] => {
     return allValidAgents
       .filter((a): boolean => {
-        // Hide agents that returned NOT_APPLICABLE status (no media type match)
         const completed = completedAgents?.find((c) => c.agent_id === a.id);
-        if (completed?.status === "skipped") return false;
+        const liveStatus = agentUpdates[a.id]?.status;
+        if (completed?.status === "skipped" && liveStatus !== "skipped") return false;
         const agentVerdict = (completed as unknown as { agent_verdict?: unknown })?.agent_verdict;
         if (agentVerdict === "NOT_APPLICABLE") return false;
         if (phase === "deep") return initialAgentIds.includes(a.id);
-        if (!mimeType) return false;
+        if (!mimeType) return true;
+        if (liveStatus === "skipped") return true;
         return isAgentSupportedForMime(a.id, mimeType);
       });
-  }, [phase, initialAgentIds, mimeType, completedAgents]);
+  }, [phase, initialAgentIds, mimeType, completedAgents, agentUpdates]);
 
   const skippedAgents = useMemo(() => {
     if (!mimeType) return [];
@@ -191,9 +192,12 @@ export function AgentProgressDisplay({
     if (liveStatus === "complete") return "complete";
     if (liveStatus === "validating") return "validating";
     if (liveStatus === "running") return "running";
-    
+    if (liveStatus === "skipped") return "unsupported";
+
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
-    if (!isSupported) return "waiting"; // Should not happen for visible agents
+    if (!isSupported) {
+      return agentUpdates[agentId] ? "unsupported" : "waiting";
+    }
 
     if (agentUpdates[agentId]) return "running";
     if (isQueuePending) return "queued";

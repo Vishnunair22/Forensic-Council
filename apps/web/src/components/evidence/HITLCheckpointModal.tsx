@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
  Dialog,
  DialogContent,
@@ -52,19 +52,16 @@ export function HITLCheckpointModal({
  onDecision,
  onDismiss,
 }: HITLCheckpointModalProps) {
- const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(null);
- const [note, setNote] = useState("");
- const [decisionError, setDecisionError] = useState<string | null>(null);
- const [isReady, setIsReady] = useState(false);
- // Small delay before rendering content to prevent flash on rapid open/close
- useEffect(() => {
-   if (!isOpen) {
-     setIsReady(false);
-     return;
-   }
-   const t = setTimeout(() => setIsReady(true), 50);
-   return () => clearTimeout(t);
- }, [isOpen]);
+  const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(null);
+  const [note, setNote] = useState("");
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  const handleDismiss = useCallback(() => {
+    setSelectedDecision(null);
+    setNote("");
+    setDecisionError(null);
+    onDismiss();
+  }, [onDismiss]);
 
  const handleSubmit = async () => {
   if (!selectedDecision) {
@@ -82,10 +79,10 @@ export function HITLCheckpointModal({
  };
 
  return (
-  <Dialog open={isOpen} onOpenChange={onDismiss}>
+   <Dialog open={isOpen} onOpenChange={handleDismiss}>
    <DialogContent className="sm:max-w-xl glass-panel border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.8)] border-t border-t-white/10">
 
-    {checkpoint && isReady ? (
+     {checkpoint ? (
      <div className="p-8 space-y-6">
       <DialogHeader className="text-left space-y-2">
        <div className="flex items-center gap-3">
