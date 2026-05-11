@@ -19,7 +19,7 @@ $COMPOSE up -d
 
 echo "⏳ Waiting for API health (up to 120s)..."
 for i in $(seq 1 24); do
-  STATUS=$(curl -sf http://localhost:8000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+  STATUS=$(curl -sf http://localhost/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
   if [[ "$STATUS" == "ok" ]]; then
     echo "✅ API healthy"
     break
@@ -37,5 +37,5 @@ echo ""
 echo "════════════════════════════════════════"
 echo "  Forensic Council — PRODUCTION running"
 echo "  Web UI  → https://$(grep '^DOMAIN=' "$ROOT/.env" | cut -d= -f2 || echo 'localhost')"
-echo "  Health  → http://localhost:8000/health"
+echo "  Health  → http://localhost/health"
 echo "════════════════════════════════════════"

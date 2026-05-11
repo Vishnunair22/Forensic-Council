@@ -478,7 +478,7 @@ services:
       # NOTE: dev target. prod overlay flips this to `runner` (see docker-compose.prod.yml).
       # If you forget the prod overlay, a banner is logged at container start.
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         INTERNAL_API_URL: "http://backend:8000"
     container_name: forensic_ui
     restart: unless-stopped
@@ -498,7 +498,7 @@ services:
       - PORT=3000
       # NEXT_PUBLIC_API_URL: empty keeps browser requests same-origin.
       # Dev can use either Caddy on port 80 or the frontend on port 3000.
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       # DEMO_PASSWORD must be explicitly set and MUST equal BOOTSTRAP_INVESTIGATOR_PASSWORD.
       # No silent default — an unset value is caught early (P0-FE-001 fix, audit v6→v7).
       - DEMO_PASSWORD=${DEMO_PASSWORD:?DEMO_PASSWORD must be set and equal BOOTSTRAP_INVESTIGATOR_PASSWORD}

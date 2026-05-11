@@ -15,10 +15,10 @@ FROM node:22-alpine AS base
 
 WORKDIR /app
 
-COPY apps/web/package.json ./apps/web/
+COPY apps/web/package.json apps/web/package-lock.json ./apps/web/
 WORKDIR /app/apps/web
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --prefer-offline --no-audit --no-fund
+    npm ci --prefer-offline --no-audit --no-fund
 
 # Stage 1: Development - hot-reload server
 FROM base AS development

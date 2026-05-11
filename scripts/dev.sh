@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ── Forensic Council — One-Command Dev Boot ───────────────────────────────────
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE="docker compose -f $ROOT/infra/docker-compose.yml --env-file $ROOT/.env"
+COMPOSE="docker compose -f $ROOT/infra/docker-compose.yml -f $ROOT/infra/docker-compose.dev.yml --env-file $ROOT/.env"
 
 echo "🔍 Checking .env..."
 if [[ ! -f "$ROOT/.env" ]]; then
@@ -28,19 +28,30 @@ $COMPOSE build --parallel
 echo "🚀 Starting services..."
 $COMPOSE up -d
 
-echo "⏳ Waiting for API health (up to 120s)..."
+echo "⏳ Waiting for API health through direct dev port (up to 120s)..."
 for i in $(seq 1 24); do
   STATUS=$(curl -sf http://localhost:8000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
   if [[ "$STATUS" == "ok" ]]; then
-    echo "✅ API healthy"
+    echo "✅ API healthy on http://localhost:8000"
     break
   fi
   if [[ $i -eq 24 ]]; then
-    echo "❌ API did not become healthy in 120s."
-    echo "   Run: docker compose -f infra/docker-compose.yml logs backend"
+    echo "❌ API did not become healthy on localhost:8000."
+    echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env logs backend"
     exit 1
   fi
   echo "   Attempt $i/24 — waiting..."
+  sleep 5
+done
+echo "⏳ Waiting for Caddy health route..."
+for i in $(seq 1 12); do
+  if curl -sf http://localhost/health > /dev/null 2>&1; then
+    echo "✅ Caddy -> backend health route healthy"
+    break
+  fi
+  if [[ $i -eq 12 ]]; then
+    echo "⚠️  Caddy /health is not ready yet. Direct dev backend is healthy."
+  fi
   sleep 5
 done
 
