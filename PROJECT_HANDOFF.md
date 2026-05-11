@@ -23,7 +23,7 @@
 | Field | Value |
 |-------|-------|
 | Local branch | `main` |
-| Local commit | `66b5d08` |
+| Local commit | `9826cca` |
 | Remote synced? | not verified in this session |
 
 ## Current Local Goal
@@ -76,8 +76,9 @@ Documentation hygiene pass — third/final pass: rewrite Commands Run as verific
 | ForensicResetOverlay.test.tsx rename | passed | 2026-05-11 | Renamed to LoadingOverlay.test.tsx; imports LoadingOverlay |
 | CHANGELOG.md historical names | passed | 2026-05-11 | MetricsPanel/FileUploadSection are valid v1.3.0 records |
 | storage.test.ts location | passed | 2026-05-11 | Intentionally at tests/ root |
-| webhooks.py list_webhooks() return | passed | 2026-05-11 | Missing return statement added; GET /webhooks returns list |
-| webhooks.py deliver_webhook early return | passed | 2026-05-11 | Early return in scan_iter loop fixed (see Known Issues) |
+| webhooks.py list_webhooks() return | passed | 2026-05-11 | Missing return added; GET /webhooks returns list |
+| webhooks.py deliver_webhook scan_iter loop | passed | 2026-05-11 | except clause indented to pair with inner try; `continue` guard added |
+| webhooks.py delete route decorator | passed | 2026-05-11 | @webhooks_router.delete("/{webhook_id}", status_code=204) restored |
 
 ### Build/Test Status
 
@@ -94,9 +95,7 @@ Documentation hygiene pass — third/final pass: rewrite Commands Run as verific
 
 ## Known Bugs (Non-Doc)
 
-| Issue | Severity | Notes |
-|-------|----------|-------|
-| `deliver_webhook()` early return in `scan_iter` loop | medium | The `return` at line ~197 of webhooks.py exits after the first Redis scan batch instead of processing all matching webhooks. Only affects webhook delivery to multiple registered URLs. Fix: move `return` outside the `async for` loop. |
+(None currently — all identified bugs fixed as of 2026-05-11)
 
 ## Open Questions
 
@@ -127,13 +126,13 @@ All documentation hygiene issues across 3 passes are now resolved. No further do
 These values were placeholders before this rewrite:
 
 - Last Updated: `YYYY-MM-DD` → `2026-05-11`
-- Current Branch: `unknown` → `main` / `66b5d08`
+- Current Branch: `unknown` → `main` / `9826cca`
 
 Commit history for this hygiene work:
 - `35b0e68` docs: hygiene pass (first pass)
 - `290da9f` docs: second hygiene pass + fix handoff script + stale refs
 - `8d5bcc1` docs: final hygiene pass + test file rename
-- `66b5d08` fix: missing return in list_webhooks, handoff section polish, deliver_webhook early return noted
+- `9826cca` fix: webhooks.py scan_iter except indent + delete decorator + compile verified
 
 ---
 

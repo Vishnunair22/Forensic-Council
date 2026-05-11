@@ -147,6 +147,9 @@ async def list_webhooks(
                 logger.debug("Skipping malformed webhook record", error=str(_decode_err))
 
     return results
+
+
+@webhooks_router.delete("/{webhook_id}", status_code=204)
 async def delete_webhook(
     webhook_id: str,
     current_user: Any = Depends(get_current_user),
@@ -186,13 +189,18 @@ async def deliver_webhook(
         webhooks: list[dict[str, Any]] = []
         async for key in redis.scan_iter(match=pattern, count=100):
             raw = await redis.get(key)
-            if raw:
-                try:
-                    record = json.loads(raw)
-                    if event in record.get("events", []):
-                        webhooks.append(record)
-except Exception as _decode_err:
-                logger.debug("Skipping malformed webhook record in dispatch", error=str(_decode_err))
+            if not raw:
+                continue
+
+            try:
+                record = json.loads(raw)
+                if event in record.get("events", []):
+                    webhooks.append(record)
+            except Exception as _decode_err:
+                logger.debug(
+                    "Skipping malformed webhook record in dispatch",
+                    error=str(_decode_err),
+                )
 
         payload_str = json.dumps(payload, default=str)
 
