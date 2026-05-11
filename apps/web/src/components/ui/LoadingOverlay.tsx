@@ -95,7 +95,7 @@ export function LoadingOverlay({
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <motion.div
           className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[240px] rounded-full blur-[88px]"
-          style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.07) 0%, transparent 70%)" }}
+          style={{ background: "radial-gradient(ellipse, rgba(79,142,247,0.07) 0%, transparent 70%)" }}
           animate={{ opacity: [0.5, 1, 0.5] }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -138,8 +138,8 @@ export function LoadingOverlay({
               <div
                 className="relative rounded-2xl overflow-hidden"
                 style={{
-                  background: "linear-gradient(108deg, #060d1c 0%, #080f24 60%, rgba(59,130,246,0.055) 100%)",
-                  border: "1px solid rgba(59,130,246,0.11)",
+                  background: "linear-gradient(108deg, #060d1c 0%, #080f24 60%, rgba(79,142,247,0.055) 100%)",
+                  border: "1px solid rgba(79,142,247,0.11)",
                   boxShadow: "0 24px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03)",
                 }}
               >
@@ -148,7 +148,7 @@ export function LoadingOverlay({
                   <motion.div
                     className="h-full rounded-full"
                     style={{
-                      background: "linear-gradient(90deg, rgba(59,130,246,0.7) 0%, rgba(147,197,253,0.9) 100%)",
+                      background: "linear-gradient(90deg, rgba(79,142,247,0.7) 0%, rgba(165,200,255,0.9) 100%)",
                     }}
                     animate={{ width: `${progress}%` }}
                     transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1] }}
@@ -161,14 +161,14 @@ export function LoadingOverlay({
                     className="relative shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
                     aria-hidden="true"
                     style={{
-                      background: "rgba(59,130,246,0.08)",
-                      border: "1px solid rgba(59,130,246,0.14)",
+                      background: "rgba(79,142,247,0.08)",
+                      border: "1px solid rgba(79,142,247,0.14)",
                     }}
                   >
                     <PhaseIcon className="w-[18px] h-[18px] text-primary relative z-10" />
                     <motion.div
                       className="absolute inset-0 rounded-xl"
-                      style={{ border: "1px solid rgba(59,130,246,0.38)" }}
+                      style={{ border: "1px solid rgba(79,142,247,0.38)" }}
                       animate={{ opacity: [0.2, 0.65, 0.2], scale: [1, 1.05, 1] }}
                       transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
                     />
@@ -213,8 +213,8 @@ export function LoadingOverlay({
                   <motion.div
                     className="shrink-0 w-[18px] h-[18px] rounded-full border-[1.5px]"
                     style={{
-                      borderColor: "rgba(59,130,246,0.12)",
-                      borderTopColor: "rgba(59,130,246,0.72)",
+                      borderColor: "rgba(79,142,247,0.12)",
+                      borderTopColor: "rgba(79,142,247,0.72)",
                     }}
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
@@ -226,7 +226,7 @@ export function LoadingOverlay({
                 <div
                   className="absolute inset-y-0 right-0 w-2/5 pointer-events-none"
                   style={{
-                    background: "linear-gradient(270deg, rgba(59,130,246,0.045) 0%, transparent 100%)",
+                    background: "linear-gradient(270deg, rgba(79,142,247,0.045) 0%, transparent 100%)",
                   }}
                   aria-hidden="true"
                 />

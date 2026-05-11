@@ -66,7 +66,7 @@ export default function RouteError({
         </div>
 
         {process.env.NODE_ENV === "development" && (
-          <div className="mt-8 p-5 bg-surface-2 rounded-2xl border border-danger/20 w-full overflow-hidden text-left shadow-inner">
+          <div className="mt-8 p-5 rounded-2xl border border-danger/20 w-full overflow-hidden text-left shadow-inner">
             <p className="text-[10px] font-mono text-danger/80 break-all leading-relaxed tracking-tight">
               Diagnostic_Err: {error.message}
             </p>

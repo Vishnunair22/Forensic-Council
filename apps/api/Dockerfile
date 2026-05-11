@@ -102,11 +102,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # -- Stage 3: migration - lightweight DB init (no ML deps) --------------------
 FROM deps-core AS migration
 
-# Slim: only copy what init_db.py needs (scripts + core + api/schemas + config)
+# Slim: only copy what init_db.py and alembic need
+# alembic.ini + alembic/ are required for `python -m alembic upgrade head`
+# api/__init__.py is required so `from api import ...` resolves in alembic env.py
 COPY scripts/ scripts/
 COPY core/ core/
+COPY api/__init__.py api/__init__.py
 COPY api/schemas.py api/schemas.py
 COPY config/ config/
+COPY alembic.ini ./
+COPY alembic/ alembic/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
@@ -195,13 +200,10 @@ ARG AASIST_MODEL_NAME=Vansh180/deepfake-audio-wav2vec2
 ENV YOLO_MODEL_NAME="${YOLO_MODEL_NAME}" \
     AASIST_MODEL_NAME="${AASIST_MODEL_NAME}"
 
-# Verify ML runtime dependencies and script registry before downloading models.
-# Skip this step for air-gapped builds (PRELOAD_MODELS=0).
-RUN if [ "${PRELOAD_MODELS}" = "1" ]; then \
-        python scripts/validate_ml_tools.py ; \
-    else \
-        echo "Skipping ML tools validation (air-gapped build)" ; \
-    fi
+# Always validate ML runtime dependencies and script registry, regardless of
+# whether models are preloaded. This catches broken tool registrations in all
+# CI builds, not just those with PRELOAD_MODELS=1. (P1-DOCKER-004 fix, audit v6→v7)
+RUN python scripts/validate_ml_tools.py
 
 # Create valid default calibration models at build time if not pre-bundled.
 # These are used when no trained models are available. Use the application

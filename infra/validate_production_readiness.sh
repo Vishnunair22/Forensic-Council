@@ -52,6 +52,11 @@ SIGN=$(grep SIGNING_KEY= .env | cut -d= -f2-); JWT=$(grep JWT_SECRET_KEY= .env |
 INVESTIGATOR_PWD=$(grep BOOTSTRAP_INVESTIGATOR_PASSWORD= .env | cut -d= -f2-)
 DEMO_PWD=$(grep DEMO_PASSWORD= .env | cut -d= -f2-)
 [ "$INVESTIGATOR_PWD" = "$DEMO_PWD" ] || { echo "FAIL: BOOTSTRAP_INVESTIGATOR_PASSWORD must equal DEMO_PASSWORD"; exit 1; }
+
+# Research-only models must never run in production (non-commercial licences).
+# (P3-DOCS-001 fix, audit v6→v7)
+RESEARCH_MODELS=$(grep ENABLE_RESEARCH_MODELS= .env | cut -d= -f2-)
+[ "$RESEARCH_MODELS" = "false" ] || [ -z "$RESEARCH_MODELS" ] || { echo "FAIL: ENABLE_RESEARCH_MODELS must be false in production"; exit 1; }
 echo "OK"
 
 # 2. Validate Docker Compose configuration

@@ -187,7 +187,15 @@ uv run python scripts/init_db.py
 uv run python scripts/run_api.py
 ```
 
-> **Note:** The `model_pre_download.py --strict` step downloads all ML models (~2-4 GB) so the first investigation doesn't block for 5-20 minutes. Skip this step for CI/local testing without model downloads.
+> **One-time: Pre-download ML models (~2-4 GB)**
+> Run this step once before your first investigation to avoid a 5-20 minute
+> cold-start block. Skip it for CI or offline builds:
+> ```bash
+> cd apps/api
+> POSTGRES_HOST=localhost uv run python scripts/model_pre_download.py --strict
+> ```
+> This seeds the local model cache (`apps/api/cache/`). Subsequent runs skip
+> download if weights are already present.
 
 ### 3. Frontend
 ```bash
@@ -283,8 +291,6 @@ For horizontal scaling with the current docker compose setup, consider:
 - Running multiple backend replicas behind Caddy (configure via `backend` service `deploy.replicas` in docker-compose.prod.yml)
 - Using Redis cluster for pub/sub across replicas
 - Externalized PostgreSQL with connection pooling
-
-> **Note:** The Docker Swarm configuration example in Option 1 above is provided as a reference for future implementation but is not currently maintained.
 
 Generate secrets from `.env` for future K8s migration:
 ```bash

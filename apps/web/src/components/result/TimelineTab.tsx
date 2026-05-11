@@ -45,7 +45,7 @@ export function TimelineTab({
          <div className="h-px flex-1 bg-white/5" />
       </div>
 
-      <div className="bg-surface-1 border border-white/5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
+      <div className="rounded-2xl overflow-hidden" style={{ background: "rgba(5,9,18,0.9)", border: "1px solid rgba(165,200,255,0.07)", boxShadow: "0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
         <div className="bg-surface-2/40">
 
           {/* Header */}

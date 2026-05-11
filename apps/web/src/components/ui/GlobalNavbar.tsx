@@ -111,7 +111,14 @@ export function GlobalNavbar() {
     >
       <button
         type="button"
-        className="group flex items-center px-4 py-2.5 sm:px-5 sm:py-3 bg-surface-2/90 rounded-full border border-white/10 shadow-2xl backdrop-blur-xl hover:bg-surface-3 transition-[background-color,border-color,transform] active:scale-95 relative"
+        className="group flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full border transition-all duration-200 relative"
+        style={{
+          background: "rgba(6,10,20,0.92)",
+          borderColor: "rgba(165,200,255,0.10)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
+        }}
         onClick={handleLogoClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

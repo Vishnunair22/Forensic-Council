@@ -72,7 +72,14 @@ export function ResultHeader({
   };
 
   return (
-    <section className="bg-surface-1 border border-white/8 rounded-2xl shadow-[0_18px_55px_rgba(0,0,0,0.35)] overflow-hidden">
+    <section
+      className="overflow-hidden rounded-2xl"
+      style={{
+        background: "rgba(6,10,20,0.92)",
+        border: "1px solid rgba(165,200,255,0.08)",
+        boxShadow: "0 16px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
+      }}
+    >
       <div className="p-6 md:p-8 space-y-7">
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           <EvidenceThumbnail

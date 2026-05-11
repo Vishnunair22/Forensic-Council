@@ -41,13 +41,14 @@ export function ArbiterDeliberationOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#020617]/95 backdrop-blur-2xl"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+          style={{ background: "rgba(1,2,8,0.92)", backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)" }}
         >
           <div className="relative w-full max-w-lg">
             {/* Background Glow */}
             <div className="absolute inset-0 bg-[var(--color-primary)]/10 blur-[120px] rounded-full" />
 
-            <div className="relative z-10 w-full max-w-lg bg-[#070A12] border border-white/10 rounded-2xl p-10 shadow-[0_40px_100px_rgba(0,0,0,0.8)] flex flex-col items-center text-center">
+            <div className="relative z-10 w-full max-w-lg rounded-2xl p-10 flex flex-col items-center text-center" style={{ background: "rgba(5,9,18,0.98)", border: "1px solid rgba(165,200,255,0.10)", boxShadow: "0 40px 100px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.04)" }}>
               {/* Animated Scales */}
               <div className="relative w-32 h-32 mb-10">
                 <motion.div

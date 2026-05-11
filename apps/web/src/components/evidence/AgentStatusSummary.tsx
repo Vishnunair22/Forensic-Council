@@ -53,7 +53,7 @@ export function AgentStatusSummary({
   };
 
   return (
-    <div className="bg-[#070A12] border border-white/8 rounded-2xl overflow-hidden shadow-xl min-w-[200px] max-w-[260px]">
+    <div className="rounded-2xl overflow-hidden min-w-[200px] max-w-[260px]" style={{ background: "rgba(5,9,18,0.95)", border: "1px solid rgba(165,200,255,0.08)", boxShadow: "0 8px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
 
       {/* Active specialists row */}
       <button

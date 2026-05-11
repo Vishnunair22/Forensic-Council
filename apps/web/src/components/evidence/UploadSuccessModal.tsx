@@ -55,7 +55,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#020617]/85 backdrop-blur-xl p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#010208]/90 backdrop-blur-2xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onDismiss(); } }}
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>

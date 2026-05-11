@@ -70,7 +70,12 @@ export function IntelligenceBrief({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.035 }}
-                className="rounded-xl border border-white/8 bg-surface-1 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.22)]"
+                className="rounded-xl p-5"
+                style={{
+                  background: "rgba(6,10,20,0.85)",
+                  border: "1px solid rgba(165,200,255,0.07)",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+                }}
               >
                 <div className="flex items-start gap-4">
                   <FindingIcon severity={severity} />

@@ -175,3 +175,36 @@ Response time: 48 hours for acknowledgement, 7 days for triage.
 - GitHub Dependabot is recommended for automated dependency update PRs
 - Trivy runs on every push/PR via `.github/workflows/ci.yml` `security-scan` job
 - Docker images should be re-scanned before each production deployment
+
+---
+
+## bcrypt Shim Retention Rationale
+
+(P3-DOCS-003 fix, audit v6→v7 — see also `docs/adr/ADR-005-bcrypt-shim-retention.md`)
+
+`apps/api/core/_bcrypt_shim.py` pins `bcrypt>=3.2,<4.1` and re-exports `hashpw`/
+`checkpw` via the `passlib` compatibility shim. This is intentionally retained because:
+
+1. `passlib` 1.7.x's `bcrypt` backend makes private API calls removed in bcrypt 4.x.
+   The shim restores them without patching passlib itself.
+2. Upgrading to native `bcrypt>=4.1` requires replacing all `passlib.hash.bcrypt` call
+   sites — a broader change that warrants its own migration and testing cycle.
+3. The current pin has no known CVEs and is tested in CI.
+
+**Forward path**: when migrating off passlib, remove the shim and use
+`bcrypt.hashpw`/`bcrypt.checkpw` directly with `bcrypt>=4.1`.
+
+---
+
+## Caddy Security Header Decisions
+
+(P3-DOCS-003 fix, audit v6→v7)
+
+- **CSP is owned by Next.js middleware** (`apps/web/src/middleware.ts`), not Caddy.
+  Caddy previously set a conflicting CSP header that broke `'unsafe-inline'` styles;
+  that header was removed in v3→v4 audit (see `AUDIT_CHANGES.md` `DOCKER-004`).
+- **COOP / COEP**: Currently not set. SharedArrayBuffer is not used. If COOP/COEP are
+  added in future, they must be set in Next.js middleware (not Caddy) to avoid the same
+  double-header conflict.
+- **Permissions-Policy**: Not set by Caddy. If added, use Next.js middleware so the
+  policy is consistent across all routes including API proxying.

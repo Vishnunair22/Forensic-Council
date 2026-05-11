@@ -74,7 +74,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
         isReady ? "bg-emerald-500" : isSynthesizing ? "bg-blue-500" : "bg-primary"
       )} />
 
-      <div className="relative h-full bg-surface-1 border border-white/8 rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.3),_0_1px_0_rgba(255,255,255,0.03)_inset] flex flex-col">
+      <div className="relative h-full rounded-2xl overflow-hidden flex flex-col" style={{ background: "rgba(5,9,18,0.92)", border: "1px solid rgba(165,200,255,0.08)", boxShadow: "0 8px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
         <div className="px-5 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={clsx(

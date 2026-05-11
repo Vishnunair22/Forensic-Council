@@ -15,7 +15,7 @@ if [[ ! -f "$ROOT/.env" ]]; then
 fi
 
 # Quick check for placeholder values in critical keys
-for VAR in GROQ_API_KEY GEMINI_API_KEY SIGNING_KEY JWT_SECRET_KEY; do
+for VAR in LLM_API_KEY GEMINI_API_KEY SIGNING_KEY JWT_SECRET_KEY; do
   VAL=$(grep "^${VAR}=" "$ROOT/.env" 2>/dev/null | cut -d= -f2- || echo "")
   if [[ -z "$VAL" || "$VAL" == *"REPLACE"* || "$VAL" == *"placeholder"* ]]; then
     echo "  ⚠️  WARNING: $VAR may not be set in .env"

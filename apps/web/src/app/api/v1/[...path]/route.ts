@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { backendUrlFor, getBackendBaseUrls } from "@/lib/backendTargets";
 
+// In Docker, Caddy handles /api/v1/* routing. The Next.js proxy is only active
+// when the frontend runs directly on the host (outside Docker). Returning 404
+// in Docker prevents an accidental second auth/CSRF surface. (P2-FE-001 fix, audit v6→v7)
+const RUNNING_IN_DOCKER = process.env.RUNNING_IN_DOCKER === "1";
+
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "content-encoding",
@@ -85,7 +90,17 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
   return errResp;
 }
 
+function dockerGuard(): NextResponse | null {
+  if (RUNNING_IN_DOCKER) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+  return null;
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const guard = dockerGuard();
+  if (guard) return guard;
+
   const { path } = await ctx.params;
   const apiPath = `/api/v1/${path.join("/")}`;
 
@@ -100,17 +115,25 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const guard = dockerGuard();
+  if (guard) return guard;
   return forward(req, ctx);
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const guard = dockerGuard();
+  if (guard) return guard;
   return forward(req, ctx);
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const guard = dockerGuard();
+  if (guard) return guard;
   return forward(req, ctx);
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const guard = dockerGuard();
+  if (guard) return guard;
   return forward(req, ctx);
 }

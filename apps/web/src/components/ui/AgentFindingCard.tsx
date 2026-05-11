@@ -46,7 +46,7 @@ const AGENT_META: Record<string, { name: string; role: string; color: string; ic
 
 const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow: string }> = {
   cyan: { bg: "bg-primary/5", border: "border-primary/20", text: "text-primary", glow: "shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]" },
-  blue: { bg: "bg-blue-500/5", border: "border-blue-500/20", text: "text-blue-400", glow: "shadow-[0_0_30px_rgba(59,130,246,0.1)]" },
+  blue: { bg: "bg-blue-500/5", border: "border-blue-500/20", text: "text-blue-400", glow: "shadow-[0_0_30px_rgba(79,142,247,0.1)]" },
   amber: { bg: "bg-amber-500/5", border: "border-amber-500/20", text: "text-amber-400", glow: "shadow-[0_0_30px_rgba(245,158,11,0.1)]" },
   teal: { bg: "bg-teal-500/5", border: "border-teal-500/20", text: "text-teal-400", glow: "shadow-[0_0_30px_rgba(45,212,191,0.1)]" },
   violet: { bg: "bg-violet-500/5", border: "border-violet-500/20", text: "text-violet-400", glow: "shadow-[0_0_30px_rgba(139,92,246,0.1)]" },
@@ -305,11 +305,16 @@ export function AgentFindingCard({
   }
 
   return (
-    <motion.div className={clsx(
-      "rounded-2xl overflow-hidden border transition-all duration-500",
-      "bg-[#070A12] border border-white/8 shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset]",
-      open && "border-primary/40 shadow-[0_32px_64px_rgba(0,0,0,0.5)]"
-    )}>
+    <motion.div
+      className="rounded-2xl overflow-hidden transition-all duration-400"
+      style={{
+        background: "rgba(5,9,18,0.92)",
+        border: open ? "1px solid rgba(79,142,247,0.22)" : "1px solid rgba(165,200,255,0.07)",
+        boxShadow: open
+          ? "0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(79,142,247,0.06)"
+          : "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)",
+      }}
+    >
       {/* Header Button */}
       <button
         onClick={() => setOpen(!open)}

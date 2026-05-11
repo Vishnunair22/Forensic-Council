@@ -181,35 +181,48 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#020617]/85 backdrop-blur-xl p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ background: "rgba(1,2,8,0.88)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
-      <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97, y: 12 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 6 }}
-          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="horizon-card p-1 relative overflow-hidden"
+          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 8 }}
+          transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+          className="relative overflow-hidden rounded-2xl"
+          style={{
+            background: "rgba(5,9,18,0.97)",
+            border: "1px solid rgba(165,200,255,0.10)",
+            boxShadow: "0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(79,142,247,0.06), inset 0 1px 0 rgba(255,255,255,0.05)",
+          }}
         >
+          {/* Top gradient accent */}
           <div
-            className="rounded-[inherit] p-10 flex flex-col items-center text-center"
-            style={{ background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(59,130,246,0.05) 0%, #020617 60%)" }}
-          >
+            className="absolute inset-x-0 top-0 h-px"
+            style={{ background: "linear-gradient(90deg, transparent 10%, rgba(79,142,247,0.5) 50%, transparent 90%)" }}
+            aria-hidden="true"
+          />
+
+          <div className="p-8 sm:p-10 flex flex-col items-center text-center">
             <button
               ref={closeBtnRef}
               type="button"
               onClick={() => { playSound("click"); onClose(); }}
-              className="absolute top-6 right-6 text-white/25 hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              style={{ color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.04)" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.25)"; }}
               aria-label="Close upload dialog"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
-            <p className="text-[10px] font-mono font-bold tracking-[0.25em] text-primary/50 uppercase mb-3" aria-hidden="true">
+            <p className="text-[9px] font-mono font-bold tracking-[0.28em] uppercase mb-3" style={{ color: "rgba(79,142,247,0.45)" }} aria-hidden="true">
               Evidence Intake
             </p>
-            <h2 id="upload-modal-title" className="text-2xl font-heading font-bold text-white mb-8">
+            <h2 id="upload-modal-title" className="text-[22px] font-heading font-bold text-white/90 mb-7" style={{ letterSpacing: "-0.02em" }}>
               Upload Evidence
             </h2>
 
@@ -218,25 +231,39 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`w-full border border-dashed rounded-2xl p-12 transition-[border-color,background-color,box-shadow] duration-300 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden ${
-                isDragging
-                  ? "border-primary bg-primary/[0.06] shadow-[0_0_50px_rgba(59,130,246,0.12),inset_0_0_30px_rgba(59,130,246,0.04)]"
-                  : "border-white/[0.08] hover:border-primary/25 hover:bg-white/[0.018]"
-              }`}
+              className="w-full rounded-2xl p-10 cursor-pointer group flex flex-col items-center justify-center gap-5 relative overflow-hidden"
+              style={{
+                border: isDragging
+                  ? "1.5px solid rgba(79,142,247,0.45)"
+                  : "1.5px dashed rgba(165,200,255,0.10)",
+                background: isDragging
+                  ? "rgba(79,142,247,0.055)"
+                  : "rgba(255,255,255,0.015)",
+                boxShadow: isDragging
+                  ? "0 0 40px rgba(79,142,247,0.10), inset 0 0 24px rgba(79,142,247,0.04)"
+                  : "none",
+                transition: "border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease",
+              }}
             >
               <EnvelopeOpen isDragging={isDragging} />
 
-              <div className="flex flex-col items-center gap-2 pointer-events-none">
-                <span className={`text-xl font-heading font-bold tracking-tight transition-colors duration-200 ${isDragging ? "text-primary" : "text-white/75 group-hover:text-white"}`}>
-                  {isDragging ? "Release Payload" : "Drop Evidence File"}
+              <div className="flex flex-col items-center gap-1.5 pointer-events-none">
+                <span
+                  className="text-[17px] font-heading font-bold transition-colors duration-200"
+                  style={{
+                    color: isDragging ? "var(--color-primary)" : "rgba(255,255,255,0.70)",
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {isDragging ? "Release to Upload" : "Drop Evidence File"}
                 </span>
-                <p className="text-sm font-medium text-white/35 max-w-[240px] leading-relaxed">
-                  Select a forensic file for multi-agent neural verification.
+                <p className="text-[13px] text-white/30 max-w-[240px] leading-relaxed">
+                  or click to select · images, video, audio, PDF
                 </p>
               </div>
 
-              <div className="absolute bottom-4 right-4 text-[9px] font-mono text-primary/20 tracking-widest" aria-hidden="true">
-                {isSubmitting ? "UPLOADING..." : "WAITING_FOR_DATA"}
+              <div className="absolute bottom-3 right-4 text-[8px] font-mono tracking-[0.22em]" style={{ color: "rgba(79,142,247,0.18)" }} aria-hidden="true">
+                {isSubmitting ? "UPLOADING..." : "AWAITING_INPUT"}
               </div>
 
               <input
@@ -253,24 +280,24 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             </div>
 
             {error && (
-              <p role="alert" className="mt-4 text-sm font-semibold text-[var(--color-danger)]">
+              <p role="alert" className="mt-5 text-[13px] font-semibold" style={{ color: "var(--color-danger)" }}>
                 {error}
               </p>
             )}
 
             {isSubmitting && !error && (
-              <p role="status" aria-live="polite" className="mt-4 text-sm font-mono text-primary/60 tracking-widest animate-pulse">
-                Preparing secure upload channel…
+              <p role="status" aria-live="polite" className="mt-5 text-[11px] font-mono animate-pulse" style={{ color: "rgba(79,142,247,0.55)", letterSpacing: "0.18em" }}>
+                Preparing secure channel…
               </p>
             )}
 
             {audioPreviewUrl && (
-              <div className="mt-4 w-full" aria-label="Audio preview">
-                <p className="text-[10px] font-mono text-white/30 mb-2 text-center tracking-widest">AUDIO PREVIEW</p>
+              <div className="mt-5 w-full" aria-label="Audio preview">
+                <p className="text-[9px] font-mono mb-2 text-center tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>AUDIO PREVIEW</p>
                 <audio
                   controls
                   src={audioPreviewUrl}
-                  className="w-full rounded-lg"
+                  className="w-full rounded-xl"
                   aria-label="Selected audio file preview"
                 />
               </div>

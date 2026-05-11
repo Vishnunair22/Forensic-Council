@@ -25,9 +25,9 @@ const DialogOverlay = React.forwardRef<
       className,
     )}
     style={{
-      background: "rgba(0,0,0,0.85)",
-      backdropFilter: "blur(12px)",
-      WebkitBackdropFilter: "blur(12px)",
+      background: "rgba(1,2,8,0.88)",
+      backdropFilter: "blur(20px)",
+      WebkitBackdropFilter: "blur(20px)",
     }}
     {...props}
   />
@@ -47,12 +47,12 @@ const DialogContent = React.forwardRef<
         className,
       )}
       style={{
-        background: "rgba(255,255,255,0.03)",
+        background: "rgba(5,9,18,0.96)",
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        border: "1px solid rgba(165,200,255,0.09)",
         boxShadow:
-          "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
+          "0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(79,142,247,0.05), inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
       {...props}
     >

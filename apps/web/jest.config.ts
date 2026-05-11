@@ -13,6 +13,8 @@ const config: Config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
+  // testMatch covers src/ and tests/ (including tests/accessibility/**) via roots above.
+  // Explicit pattern ensures jest-axe unit specs are always picked up. (P2-A11Y-001 fix, audit v6→v7)
   testMatch: [
     '**/*.test.ts',
     '**/*.test.tsx',

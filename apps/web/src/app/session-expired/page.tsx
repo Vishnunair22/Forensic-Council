@@ -45,7 +45,7 @@ export default function SessionExpiredPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
-          <GlassPanel className="p-10 rounded-[2.5rem] border-2 border-white/5 bg-[#020203]/60 space-y-8 relative overflow-hidden">
+          <GlassPanel className="p-10 rounded-[2.5rem] border border-[rgba(165,200,255,0.08)] space-y-8 relative overflow-hidden">
              <div className="absolute top-4 right-4 opacity-[0.03]">
                 <Cpu className="w-12 h-12" />
              </div>

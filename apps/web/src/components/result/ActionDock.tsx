@@ -42,38 +42,59 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
     onExport();
   };
   return (
-    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-1000 w-full max-w-xl px-6 pointer-events-none">
-      <div className="bg-surface-1/80 border border-white/5 rounded-full p-2 backdrop-blur-xl shadow-[0_40px_100px_rgba(0,0,0,0.8)] pointer-events-auto">
-        <div className="flex items-center justify-between gap-2">
-
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-700 w-full max-w-lg px-5 pointer-events-none">
+      <div
+        className="rounded-full p-1.5 pointer-events-auto"
+        style={{
+          background: "rgba(5,9,18,0.92)",
+          border: "1px solid rgba(165,200,255,0.09)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          boxShadow: "0 32px 80px rgba(0,0,0,0.75), 0 0 0 1px rgba(79,142,247,0.05), inset 0 1px 0 rgba(255,255,255,0.04)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-1.5">
           <button
             onClick={onHome}
-            className="flex-1 flex items-center justify-center gap-2 text-[10px] font-mono font-bold text-white/40 hover:text-white transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] transition-all duration-200"
+            style={{ color: "rgba(255,255,255,0.35)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.75)";
+              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
+              (e.currentTarget as HTMLElement).style.background = "";
+            }}
           >
             <HomeIcon className="w-3.5 h-3.5" />
-            HOME
+            Home
           </button>
-
-          <div className="w-[1px] h-6 bg-white/5" />
 
           <button
             onClick={onNew}
-            className="flex-[2] btn-horizon-primary py-3 px-6 text-xs flex items-center justify-center gap-2"
+            className="flex-[2] btn-horizon-primary py-2.5 px-6 text-[11px] flex items-center justify-center gap-2"
           >
             <Activity className="w-3.5 h-3.5" />
-            NEW ANALYSIS
+            New Analysis
           </button>
-
-          <div className="w-[1px] h-6 bg-white/5" />
 
           <button
             onClick={handleExport}
-            className="flex-1 flex items-center justify-center gap-2 text-[10px] font-mono font-bold text-white/40 hover:text-primary transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] transition-all duration-200"
+            style={{ color: "rgba(255,255,255,0.35)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "var(--color-primary)";
+              (e.currentTarget as HTMLElement).style.background = "rgba(79,142,247,0.06)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
+              (e.currentTarget as HTMLElement).style.background = "";
+            }}
           >
             <Download className="w-3.5 h-3.5" />
-            EXPORT
+            Export
           </button>
-
         </div>
       </div>
     </div>

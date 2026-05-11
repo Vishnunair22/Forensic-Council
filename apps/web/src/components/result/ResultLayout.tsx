@@ -90,20 +90,36 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
         )}
       </AnimatePresence>
 
-      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
-        <div className="bg-surface-1/90 border border-white/8 rounded-2xl flex items-center justify-between gap-3 p-2 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
+        <div
+          className="flex items-center justify-between gap-2 p-1.5 rounded-2xl backdrop-blur-2xl"
+          style={{
+            background: "rgba(5,9,18,0.92)",
+            border: "1px solid rgba(165,200,255,0.08)",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)",
+          }}
+        >
           <button
             onClick={rs.handleHome}
-            className="px-4 py-3 text-[10px] font-mono font-bold text-white/45 hover:text-white transition-all uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl hover:bg-white/5"
+            className="px-4 py-2.5 text-[10px] font-mono font-bold uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl transition-all duration-200"
+            style={{ color: "rgba(255,255,255,0.35)" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.75)";
+              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
+              (e.currentTarget as HTMLElement).style.background = "";
+            }}
           >
             <HomeIcon className="w-3.5 h-3.5" />
-            HUB
+            Hub
           </button>
 
           <div
             role="tablist"
             aria-label="Report sections"
-            className="flex items-center gap-2 focus:outline-none"
+            className="flex items-center gap-1 focus:outline-none"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -120,15 +136,31 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 aria-selected={rs.activeTab === tab}
                 aria-controls={`tabpanel-${tab}`}
                 onClick={() => rs.setActiveTab(tab)}
-                className={clsx(
-                  "px-5 sm:px-7 py-3 text-[10px] font-mono font-bold transition-all duration-300 rounded-xl uppercase tracking-[0.16em] flex items-center gap-2",
+                className="px-4 sm:px-6 py-2.5 text-[10px] font-mono font-bold transition-all duration-250 rounded-xl uppercase tracking-[0.14em] flex items-center gap-2"
+                style={
                   rs.activeTab === tab
-                    ? "bg-[var(--color-primary)] text-[#020617] shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.3)]"
-                    : "text-white/30 hover:text-white/60 hover:bg-white/5",
-                )}
+                    ? {
+                        background: "var(--color-primary)",
+                        color: "#020810",
+                        boxShadow: `0 0 18px rgba(79,142,247,0.28)`,
+                      }
+                    : { color: "rgba(255,255,255,0.28)" }
+                }
+                onMouseEnter={(e) => {
+                  if (rs.activeTab !== tab) {
+                    (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.6)";
+                    (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (rs.activeTab !== tab) {
+                    (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.28)";
+                    (e.currentTarget as HTMLElement).style.background = "";
+                  }
+                }}
               >
                 {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
-                {tab === "analysis" ? "Current Analysis" : "History"}
+                {tab === "analysis" ? "Analysis" : "History"}
               </button>
             ))}
           </div>
@@ -274,25 +306,38 @@ function ResultSkeletonView() {
   return (
     <div className="min-h-screen" aria-busy="true" aria-label="Loading report">
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
-        <div className="bg-[#020203]/80 border border-white/10 rounded-2xl flex items-center justify-between gap-4 p-2 backdrop-blur-xl shadow-[0_32px_64px_rgba(0,0,0,0.6)]">
+        <div
+          className="flex items-center justify-between gap-4 p-1.5 rounded-2xl backdrop-blur-2xl"
+          style={{
+            background: "rgba(5,9,18,0.9)",
+            border: "1px solid rgba(165,200,255,0.07)",
+            boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
+          }}
+        >
           <div className="skeleton h-10 w-20 rounded-xl" />
-          <div className="skeleton h-10 w-80 rounded-xl" />
+          <div className="skeleton h-10 w-64 rounded-xl" />
         </div>
       </div>
-      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-8">
-        <div className="rounded-2xl border border-white/5 glass-panel p-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-6">
+        <div
+          className="rounded-2xl p-8 space-y-8"
+          style={{
+            background: "rgba(6,10,20,0.85)",
+            border: "1px solid rgba(165,200,255,0.06)",
+          }}
+        >
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="skeleton w-32 h-32 rounded-xl" />
             <div className="flex-1 space-y-4 w-full">
-              <div className="skeleton h-4 w-56 rounded-full" />
-              <div className="skeleton h-10 w-80 rounded-xl" />
-              <div className="skeleton h-20 w-full rounded-xl" />
+              <div className="skeleton h-3.5 w-44 rounded-full" />
+              <div className="skeleton h-9 w-72 rounded-xl" />
+              <div className="skeleton h-16 w-full rounded-xl" />
             </div>
             <div className="skeleton w-28 h-28 rounded-full" />
           </div>
         </div>
-        <div className="skeleton h-56 rounded-2xl" />
-        <div className="skeleton h-80 rounded-2xl" />
+        <div className="skeleton h-52 rounded-2xl" />
+        <div className="skeleton h-72 rounded-2xl" />
       </div>
     </div>
   );

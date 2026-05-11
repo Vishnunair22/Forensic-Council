@@ -57,18 +57,30 @@ export function ForensicErrorModal({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[20000] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-3xl"
+                className="fixed inset-0 z-[20000] flex items-center justify-center p-6"
+                style={{ background: "rgba(1,2,8,0.92)", backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)" }}
               />
             </Dialog.Overlay>
             <Dialog.Content asChild>
               <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 20 }}
+                initial={{ opacity: 0, scale: 0.97, y: 18 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 20 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="relative w-full max-w-2xl horizon-card p-1 border-danger/20 focus:outline-none"
+                exit={{ opacity: 0, scale: 0.97, y: 10 }}
+                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                className="relative w-full max-w-xl focus:outline-none overflow-hidden rounded-2xl"
+                style={{
+                  background: "rgba(6,10,20,0.98)",
+                  border: "1px solid rgba(239,68,105,0.18)",
+                  boxShadow: "0 32px 80px rgba(0,0,0,0.75), 0 0 0 1px rgba(239,68,105,0.06), inset 0 1px 0 rgba(255,255,255,0.04)",
+                }}
               >
-                <div className="bg-[#020617] rounded-[inherit] p-10">
+                {/* Top accent */}
+                <div
+                  className="absolute inset-x-0 top-0 h-px"
+                  style={{ background: "linear-gradient(90deg, transparent, rgba(239,68,105,0.5) 50%, transparent)" }}
+                />
+
+                <div className="p-8 sm:p-10">
 
                   {/* --- Header Identity --- */}
                   <div className="flex items-center gap-3 mb-10">

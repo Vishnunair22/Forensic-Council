@@ -146,3 +146,27 @@ docker exec forensic_api find /app/cache/ultralytics -name "*.pt"
 curl http://localhost:8000/api/v1/health/ml-tools
 docker compose restart backend
 ```
+
+---
+
+## Feature Flags — AGPL and Research Models
+
+The following table documents which models are gated by each feature flag.
+Both flags default to `false` (commercial-safe). Never enable `ENABLE_RESEARCH_MODELS`
+in production — `infra/validate_production_readiness.sh` asserts this.
+(P3-DOCS-001 fix, audit v6→v7)
+
+| Flag | Default | Models enabled when `true` | Production allowed? |
+|------|---------|---------------------------|---------------------|
+| `ENABLE_AGPL_MODELS` | `false` | Ultralytics YOLO (`yolo11n.pt`) — AGPL-3.0 | Yes, if open-source distribution obligations are met |
+| `ENABLE_RESEARCH_MODELS` | `false` | BusterNet, F3-Net, ManTra-Net, TruFor (CC BY-NC), AASIST (research-only) | **No** — non-commercial/research licences only |
+
+### Production assertion
+
+`infra/validate_production_readiness.sh` includes:
+
+```bash
+[ "${ENABLE_RESEARCH_MODELS}" = "false" ] || { echo "FAIL: ENABLE_RESEARCH_MODELS must be false in production"; exit 1; }
+```
+
+This prevents accidentally shipping research-only models to users.

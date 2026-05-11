@@ -14,7 +14,7 @@ export default function NotFound() {
     transition={{ duration: 0.5 }}
    >
     <motion.div
-     className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center shadow-[0_0_40px_rgba(59,130,246,0.15)]"
+     className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center shadow-[0_0_40px_rgba(79,142,247,0.15)]"
      animate={{ scale: [1, 1.05, 1] }}
      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
     >

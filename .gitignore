@@ -218,3 +218,4 @@ scratch/*.py
 # CI artifacts — generated files, never committed
 ruff_errors.json
 *.ruff_errors.json
+agents_ruff.txt

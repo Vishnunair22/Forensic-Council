@@ -117,7 +117,10 @@ jobs:
           QDRANT_URL: http://localhost:6333
         run: |
           cd apps/api
+          # Exclude ML tests that require model weights/network — those run in nightly.
+          # (P1-CI-001 fix, audit v6→v7)
           uv run pytest tests/ -v --tb=short \
+            -m "not requires_ml" \
             --cov=. \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
@@ -195,9 +198,14 @@ jobs:
           NEXT_PUBLIC_API_URL: ""
 
       - name: Start server and run a11y tests
+        # Use a process group so the Next.js server is always killed when the
+        # step exits (success or failure), preventing orphan node processes on
+        # CI runner. (P3-CI-004 fix, audit v6→v7)
         run: |
           cd apps/web
           npm run start &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
           npx wait-on http://localhost:3000 --timeout 60000
           npm run test:a11y
         env:
@@ -236,6 +244,10 @@ jobs:
           scan-ref: .
           format: table
           severity: CRITICAL,HIGH
+          # Block CI on CRITICAL/HIGH fixed vulns. ignore-unfixed avoids noise from
+          # upstream deps with no available fix. (P1-CI-002 fix, audit v6→v7)
+          exit-code: "1"
+          ignore-unfixed: true
 
   docker-build:
     name: Docker build
@@ -255,19 +267,35 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
-        run: docker buildx build --target production -t forensic-council-backend:test --build-arg PRELOAD_MODELS=0 apps/api/
+        run: |
+          docker buildx build \
+            --target production \
+            --cache-from type=gha,scope=backend-production \
+            --cache-to   type=gha,scope=backend-production,mode=max \
+            -t forensic-council-backend:test \
+            --build-arg PRELOAD_MODELS=0 \
+            apps/api/
 
       - name: Build backend migration image
-        run: docker buildx build --target migration -t forensic-council-migration:test --build-arg PRELOAD_MODELS=0 apps/api/
+        run: |
+          docker buildx build \
+            --target migration \
+            --cache-from type=gha,scope=backend-migration \
+            --cache-to   type=gha,scope=backend-migration,mode=max \
+            -t forensic-council-migration:test \
+            --build-arg PRELOAD_MODELS=0 \
+            apps/api/
 
       - name: Build frontend image
-        run: >
-          docker buildx build
-          -f apps/web/Dockerfile
-          --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
-          --build-arg INTERNAL_API_URL=http://backend:8000
-          -t forensic-council-frontend:test
-          .
+        run: |
+          docker buildx build \
+            --cache-from type=gha,scope=frontend \
+            --cache-to   type=gha,scope=frontend,mode=max \
+            -f apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }} \
+            --build-arg INTERNAL_API_URL=http://backend:8000 \
+            -t forensic-council-frontend:test \
+            .
 
       - name: Verify images exist
         run: |

@@ -347,3 +347,55 @@ After resolving any P0 or P1 incident:
 2. Update this runbook if a new failure mode was discovered
 3. Add a test case to prevent regression
 4. Update `docs/TROUBLESHOOTING.md` with a new entry if a previously unknown failure mode was encountered
+
+---
+
+## Migration Service — Manual Operations
+
+(P3-DOCS-002 fix, audit v6→v7)
+
+The migration service runs `alembic upgrade head && python scripts/init_db.py` on
+`docker compose up`. If you need to manage migrations manually:
+
+### Run migrations without docker compose
+
+```bash
+# From repo root, with .env loaded
+docker compose -f infra/docker-compose.yml run --rm migration
+```
+
+### Apply a specific revision
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm migration \
+  sh -c "python -m alembic upgrade <revision>"
+```
+
+### Roll back one revision
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm migration \
+  sh -c "python -m alembic downgrade -1"
+```
+
+### Show current revision
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm migration \
+  sh -c "python -m alembic current"
+```
+
+### Show migration history
+
+```bash
+docker compose -f infra/docker-compose.yml run --rm migration \
+  sh -c "python -m alembic history --verbose"
+```
+
+### When migrations fail at startup
+
+1. Check container logs: `docker compose logs migration`
+2. Verify `POSTGRES_HOST` and credentials in `.env`
+3. Run manually with the commands above to see the full traceback
+4. If a revision is corrupt, use `alembic downgrade` to retreat to a known-good
+   state before applying fixes

@@ -357,16 +357,25 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl border border-white/8 bg-surface-1",
-        (status === "running" || status === "checking") 
-          ? "shadow-[0_8px_40px_rgba(0,0,0,0.4),_0_0_0_1px_rgba(59,130,246,0.15),_0_1px_0_rgba(255,255,255,0.04)_inset]"
-          : "shadow-[0_8px_32px_rgba(0,0,0,0.3),_0_1px_0_rgba(255,255,255,0.03)_inset]",
+        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
+      style={{
+        background: "rgba(5,9,18,0.92)",
+        border: (status === "running" || status === "checking")
+          ? "1px solid rgba(79,142,247,0.18)"
+          : "1px solid rgba(165,200,255,0.08)",
+        boxShadow: (status === "running" || status === "checking")
+          ? "0 8px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(79,142,247,0.10), inset 0 1px 0 rgba(255,255,255,0.04)"
+          : "0 6px 28px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)",
+      }}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
-      <div className="p-8 pb-6 border-b border-white/5 rounded-t-2xl bg-surface-2 relative z-10">
+      <div
+        className="p-7 pb-5 border-b rounded-t-2xl relative z-10"
+        style={{ background: "rgba(9,14,26,0.6)", borderColor: "rgba(165,200,255,0.06)" }}
+      >
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Aperture Icon */}

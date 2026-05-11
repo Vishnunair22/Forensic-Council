@@ -22,7 +22,14 @@ export function VerdictGauge({
 }: VerdictGaugeProps) {
   const isUncalibrated = calibrationStatus !== "TRAINED";
   return (
-    <section className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
+    <section
+      className="overflow-hidden rounded-2xl"
+      style={{
+        background: "rgba(5,8,16,0.95)",
+        border: "1px solid rgba(165,200,255,0.07)",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03)",
+      }}
+    >
       <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/5">
         
         {/* Consensus Confidence (ArcGauge) */}

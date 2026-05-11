@@ -58,11 +58,11 @@ export default function GlobalError({
                 className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-[#04070F]"
                 style={{
                   background: "linear-gradient(135deg, #93C5FD 0%, #3B82F6 60%, #2563EB 100%)",
-                  boxShadow: "0 10px 30px -8px rgba(59,130,246,0.6), inset 0 1px 0 rgba(255,255,255,0.35)",
+                  boxShadow: "0 10px 30px -8px rgba(79,142,247,0.6), inset 0 1px 0 rgba(255,255,255,0.35)",
                 }}
                 whileHover={{
                   scale: 1.02,
-                  boxShadow: "0 0 32px rgba(59,130,246,0.35)",
+                  boxShadow: "0 0 32px rgba(79,142,247,0.35)",
                 }}
                 whileTap={{ scale: 0.98 }}
               >

@@ -42,8 +42,15 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
   return (
     <div className="w-full max-w-5xl mx-auto pb-32">
-      <div className="bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] overflow-hidden">
-        <div className="bg-[#020617]/40">
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{
+          background: "rgba(5,9,18,0.9)",
+          border: "1px solid rgba(165,200,255,0.07)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)",
+        }}
+      >
+        <div style={{ background: "rgba(3,6,14,0.3)" }}>
 
           {/* --- Header --- */}
           <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 border-b border-white/5 gap-6">
@@ -123,7 +130,21 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
                     onClick={() => onSelect(item.sessionId)}
-                    className="group relative bg-[#070A12] border border-white/8 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.04)_inset] p-6 cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+                    className="group relative rounded-2xl p-6 cursor-pointer transition-all duration-200"
+                    style={{
+                      background: "rgba(8,13,24,0.8)",
+                      border: "1px solid rgba(165,200,255,0.07)",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLElement;
+                      el.style.borderColor = "rgba(79,142,247,0.18)";
+                      el.style.boxShadow = "0 0 20px rgba(79,142,247,0.06)";
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLElement;
+                      el.style.borderColor = "rgba(165,200,255,0.07)";
+                      el.style.boxShadow = "";
+                    }}
                   >
                     <div className="flex flex-col md:flex-row gap-6 items-center">
 

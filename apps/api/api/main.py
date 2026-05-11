@@ -171,6 +171,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Startup
     await start_monitoring(app.state)
+    # Assertion: start_monitoring must populate heartbeat_monitor on app.state.
+    # If missing, log a warning but continue — monitoring loss is non-fatal.
+    # (P3-OBS-001 fix, audit v6→v7)
+    if not getattr(app.state, "heartbeat_monitor", None):
+        logger.warning(
+            "heartbeat_monitor was not set by start_monitoring — event loop "
+            "stall detection is disabled for this run."
+        )
     logger.info(
         "Starting Forensic Council API server...",
         debug=settings.debug,
@@ -464,12 +472,9 @@ if _settings_for_import is not None:
     app.state.settings = _settings_for_import
 
 
-@app.get("/metrics", include_in_schema=False)
-async def root_metrics():
-    """Compatibility scrape path used by local smoke tests."""
-    from api.routes.metrics import get_public_prometheus_metrics
-
-    return await get_public_prometheus_metrics()
+# NOTE: The root /metrics alias has been removed (P2-API-001 fix, audit v6→v7).
+# Prometheus scrapes /api/v1/metrics/raw (bearer-protected) via infra/prometheus.yml.
+# Local smoke tests should also use /api/v1/metrics/raw.
 
 # Configure observability (OpenTelemetry)
 if _settings_for_import is not None:
