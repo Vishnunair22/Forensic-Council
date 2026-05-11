@@ -20,9 +20,10 @@ services:
       - "${QDRANT_HOST_PORT:-6333}:6333"
       - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
 
-  # Expose the backend port directly when running the host-run dev workflow.
-  # In normal `docker compose up` the backend is only reachable via Caddy.
-  # (P1-DOCKER-002 fix, audit v6→v7)
   backend:
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
+    networks:
+      - infra_net
+      - external_net
+      - backend_net

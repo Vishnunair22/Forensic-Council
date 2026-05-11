@@ -385,7 +385,7 @@ class MigrationManager:
         try:
             assert self.client is not None, "Client not connected"
             # Check existence first to avoid a postgres ERROR log on first start
-            exists = await self.client.fetch_val(
+            exists = bool(await self.client.fetch_val(
                 """
                 SELECT EXISTS (
                     SELECT 1 FROM information_schema.tables
@@ -393,7 +393,7 @@ class MigrationManager:
                     AND table_name = 'schema_migrations'
                 )
                 """
-            )
+            ))
             if not exists:
                 return []
             result = await self.client.fetch(
@@ -428,7 +428,8 @@ class MigrationManager:
             if conn:
                 result = await conn.fetchval(migration.validation_sql)
             else:
-                result = await self.client.fetch_val(migration.validation_sql)
+                rows = await self.client.fetch(migration.validation_sql)
+                result = rows[0][0] if rows else None
 
             is_valid = bool(result)
             if not is_valid:
