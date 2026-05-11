@@ -143,7 +143,7 @@ export function useResult(initialSessionId?: string) {
       if (!sessionId) throw new Error("Missing session ID");
       return getReport(sessionId);
     },
-    enabled: !!sessionId && minOverlayDone,
+    enabled: !!sessionId && minOverlayDone && arbiterComplete,
     staleTime: 60_000, 
     retry: 3,
     refetchInterval: (query) => {
@@ -177,11 +177,11 @@ export function useResult(initialSessionId?: string) {
   }, [finalReportData]); // addToHistory removed — effect #2 owns all history writes
 
   useEffect(() => {
-    if (reportQueryError) {
+    if (reportQueryError && arbiterComplete) {
       setErrorMsg("Failed to retrieve report. Please refresh.");
       setState("error");
     }
-  }, [reportQueryError]);
+  }, [reportQueryError, arbiterComplete]);
 
   // ── Arbiter status polling ───────────────────────────────────────────────────
   // Polls getArbiterStatus until complete/error, then enables the report query.

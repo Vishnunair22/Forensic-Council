@@ -5,9 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
-import { storage, sessionOnlyStorage } from "@/lib/storage";
-import { __pendingFileStore } from "@/lib/pendingFileStore";
-import { arbiterControl } from "@/lib/arbiterControl";
+import { resetActiveInvestigation } from "@/lib/appReset";
 
 export function GlobalNavbar() {
   const router = useRouter();
@@ -62,37 +60,9 @@ export function GlobalNavbar() {
 
   const handleLogoClick = useCallback(() => {
     if (typeof window === "undefined") return;
+
     playSound(hasActiveSession && pathname !== "/" ? "reset" : "hum");
-
-    // Always perform full reset — navbar is universal reset button
-    arbiterControl.abort();
-    queryClient.clear();
-    storage.clearAllForensicKeys();
-    sessionOnlyStorage.clearAllForensicKeys();
-
-    // Expire the session cookie so the server-side /result redirect
-    // doesn't point back to the old session after a reset.
-    document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
-
-    // Clean up the CSS bridge attribute that handleAcceptAnalysis stamps
-    // on body before navigating to /result — prevents it from getting stuck
-    // if the user resets mid-transition.
-    document.body.removeAttribute("data-fc-loading");
-
-    // Also clear agent-keyed localStorage entries
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-        localStorage.removeItem(key);
-      }
-    });
-
-    __pendingFileStore.file = null;
-    __pendingFileStore.authPromise = null;
-
-    // Prevent auto-reconnect on any subsequent /evidence visit
-    sessionOnlyStorage.setItem("fc_no_reconnect", "1");
-
-    window.dispatchEvent(new Event("fc:reset-home"));
+    resetActiveInvestigation(queryClient);
 
     if (pathname === "/") {
       window.scrollTo({ top: 0, behavior: "smooth" });

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { TrendingUp, AlertTriangle, XCircle, DollarSign } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface QuotaData {
   tokens_used: number;
@@ -30,7 +31,8 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
     let pollInterval: NodeJS.Timeout | null = null;
 
     const fetchQuota = async () => {
-      if (!mounted) return;
+      if (!mounted || typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") return;
       setLoading(true);
 
       try {
@@ -39,7 +41,7 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
           .find((row) => row.startsWith("access_token="))
           ?.split("=")[1];
 
-        const response = await fetch(`/api/v1/sessions/${sessionId}/quota`, {
+        const response = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/quota`, {
           headers: {
             Authorization: token ? `Bearer ${token}` : "",
           },
@@ -68,7 +70,7 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
     // Initial fetch
     fetchQuota();
 
-    // Poll every 5 seconds during active analysis
+    // Poll every 5 seconds when visible, slow down when hidden
     pollInterval = setInterval(fetchQuota, 5000);
 
     return () => {

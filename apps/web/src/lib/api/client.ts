@@ -367,11 +367,26 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
 }
 
 export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatusResponse> {
-    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/arbiter-status`, {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/arbiter-status`,
+      {
         credentials: "include",
-    });
+        cache: "no-store",
+      },
+    );
+
     if (response.status === 404) return { status: "not_found" };
+
+    if (!response.ok) {
+      throw new Error(`Arbiter status failed (${response.status})`);
+    }
+
     return response.json();
+  } catch (error) {
+    dbg.warn("[api] getArbiterStatus error:", error);
+    return { status: "not_found" };
+  }
 }
 
 export async function pollForReport(

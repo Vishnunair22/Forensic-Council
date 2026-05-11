@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Home as HomeIcon, Activity, Download } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface ActionDockProps {
   onHome: () => void;
@@ -21,7 +22,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
         const token = typeof document !== "undefined"
           ? document.cookie.split("; ").find(r => r.startsWith("access_token="))?.split("=")[1]
           : undefined;
-        const res = await fetch(`/api/v1/sessions/${sessionId}/report/pdf`, {
+        const res = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report/pdf`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           credentials: "include",
         });

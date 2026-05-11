@@ -28,7 +28,8 @@ const nextConfig: NextConfig = {
   // ── Output ────────────────────────────────────────────────────────────────
   // Standalone mode: copies only required files into .next/standalone,
   // reducing the production Docker image from ~1 GB to ~150 MB.
-  output: "standalone",
+  // Set NEXT_OUTPUT_STANDALONE=0 in .env to disable (default: enabled).
+  output: process.env.NEXT_OUTPUT_STANDALONE === "0" ? undefined : "standalone",
 
   outputFileTracingRoot: path.join(__dirname, "../../"),
 
@@ -76,9 +77,9 @@ const nextConfig: NextConfig = {
     // Inline small CSS into JS bundle (saves one HTTP round-trip on first load).
     // Disabled in dev mode to improve stability.
     optimizeCss: false,
-    // Performance optimizations for large builds
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
+    // Performance optimizations for large builds (opt-in via env vars)
+    webpackBuildWorker: process.env.NEXT_EXPERIMENTAL_BUILD_WORKER === "1",
+    parallelServerBuildTraces: process.env.NEXT_PARALLEL_SERVER_BUILD_TRACES === "1",
   },
 
   // ── Dev-mode file watcher (Windows + Docker fallback) ────────────────────
