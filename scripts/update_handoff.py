@@ -72,6 +72,12 @@ def main() -> None:
         flags=re.DOTALL,
     )
 
+    # Handle non-git state (e.g., plain zip extraction)
+    if diff_names == "unknown":
+        changed_count = 0
+    else:
+        changed_count = len([line for line in diff_names.splitlines() if line.strip()])
+
     with open(TARGET, "w", encoding="utf-8") as f:
         f.write(content)
 
@@ -79,7 +85,7 @@ def main() -> None:
     print(f"  Branch: {branch}")
     print(f"  Commit: {commit}")
     print(f"  Date:   {NOW}")
-    print(f"  Diff: {diff_names.count(chr(10)) + 1} file(s) changed")
+    print(f"  Diff: {changed_count} file(s) changed")
 
 
 if __name__ == "__main__":
