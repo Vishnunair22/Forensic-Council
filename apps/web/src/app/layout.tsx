@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Geist, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
@@ -8,24 +7,6 @@ import { Toaster } from "@/components/ui/Toaster";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import { LandingBackground } from "@/components/ui/LandingBackground";
 import "./globals.css";
-
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist",
-  display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-heading-family",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono-family",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: { default: "Forensic Council", template: "%s | Forensic Council" },
@@ -43,9 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body
-        className={`${geist.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip`}
-      >
+      <body className="font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip">
         <LandingBackground />
         <Suspense fallback={null}>
           <RouteExperience />

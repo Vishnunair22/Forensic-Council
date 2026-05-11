@@ -4,7 +4,6 @@ import React, { useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Activity, FileSearch, History as HistoryIcon, Home as HomeIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import clsx from "clsx";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
 import type { AgentFindingDTO, ReportDTO } from "@/lib/api";

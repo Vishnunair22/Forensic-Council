@@ -62,14 +62,28 @@ The backend supports both in-process investigation execution and external worker
 
 ## Local Development
 
+Python 3.12 is required. Install it first if not available:
+
+```powershell
+python --version
+uv python install 3.12
+```
+
 From `apps/api`:
 
 ```powershell
-uv sync --all-extras --extra dev
+# Normal development - no ML extras
+uv sync --extra dev --extra security --extra observability
+
+# Full ML setup - only needed for model validation or forensic execution
+uv sync --extra dev --extra security --extra observability --extra ml
+
 $env:POSTGRES_HOST="localhost"; $env:REDIS_HOST="localhost"; $env:QDRANT_HOST="localhost"; $env:USE_REDIS_WORKER="false"
 uv run python scripts/init_db.py
 uv run python scripts/run_api.py
 ```
+
+Avoid `--all-extras` for routine host development because it installs heavy ML dependencies.
 
 To start only infrastructure from the repository root:
 
