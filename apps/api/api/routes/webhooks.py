@@ -191,9 +191,8 @@ async def deliver_webhook(
                     record = json.loads(raw)
                     if event in record.get("events", []):
                         webhooks.append(record)
-                except Exception as _decode_err:
-                    logger.debug("Skipping malformed webhook record in dispatch", error=str(_decode_err))
-            return
+except Exception as _decode_err:
+                logger.debug("Skipping malformed webhook record in dispatch", error=str(_decode_err))
 
         payload_str = json.dumps(payload, default=str)
 
