@@ -62,7 +62,7 @@ The backend supports both in-process investigation execution and external worker
 
 ## Local Development
 
-Python 3.12 is required. Install it first if not available:
+Python 3.12 is the tested/recommended runtime. `apps/api/pyproject.toml` allows Python `>=3.11,<3.15`; use 3.12 for parity with Docker and CI. Install it first if not available:
 
 ```powershell
 python --version

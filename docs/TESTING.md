@@ -54,7 +54,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | `accessibility.spec.ts` | Automated A11y Audit | `Playwright`, `axe-core` | Full-page runtime audits; verifies color contrast, heading hierarchy, and modal focus. |
 | `accessibility.test.tsx` | Component A11y | `RTL`, `jest-axe` | Keyboard navigation (Tab/Enter), ARIA labels, and screen-reader error announcements. |
-| `components.test.tsx` | UI Interactions | `React Testing Library` | Render states for `FileUploadSection` and `AgentProgressDisplay`. |
+| `components.test.tsx` | UI Interactions | `React Testing Library` | Render states for `AgentProgressDisplay` and `LoadingOverlay`. |
 
 ---
 

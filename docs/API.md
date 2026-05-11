@@ -293,6 +293,8 @@ System tool availability (ffmpeg, exiftool, tesseract). Returns `{"status": "hea
 ---
 
 ## Cases
+
+### POST `/api/v1/cases`
 Create a new multi-artifact case. **Auth required.**
 
 **Content-Type:** `application/x-www-form-urlencoded`

@@ -47,6 +47,7 @@ Located in `apps/web/src/components/result/`.
 
 | Component | Purpose |
 |-----------|---------|
+| `VerdictGauge.tsx` | Verdict probability/status gauge used in the result view |
 | `ActionDock.tsx` | Result actions (download, copy, etc.) |
 | `AgentAnalysisTab.tsx` | Per-agent findings tab |
 | `AgentFindingSubComponents.tsx` | Finding details and sub-sections |

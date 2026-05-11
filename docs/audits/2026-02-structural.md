@@ -1,4 +1,7 @@
-# Structural Audit 2026-Jan
+# Historical Structural Audit — 2026-02
+
+> **Historical record only.** Do not treat this as current repository truth.
+> Some referenced files have since been moved or removed.
 
 Date: 2026-02-05 | Status: Complete
 

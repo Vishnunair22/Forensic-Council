@@ -1,7 +1,7 @@
 /**
  * Frontend Unit Tests — Components
  * ==================================
- * FileUploadSection, AgentProgressDisplay, CompletionBanner, ErrorDisplay.
+ * AgentProgressDisplay, LoadingOverlay.
  * Tests rendering, props, interactions, loading/disabled states.
  *
  * Run: cd apps/web && npm test -- tests/unit/components/components.test.tsx

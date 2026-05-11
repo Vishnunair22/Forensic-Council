@@ -23,46 +23,49 @@
 | Field | Value |
 |-------|-------|
 | Local branch | `main` |
-| Local commit | `f0e53f7` |
+| Local commit | `35b0e68` |
 | Remote synced? | not verified in this session |
 
 ## Current Local Goal
 
-Documentation hygiene pass — rewrite stale placeholders, align docs with actual source files, fix broken cross-references.
+Documentation hygiene pass — second pass to fix remaining stale references, broken handoff script, and audit doc markers.
 
 ## What Changed Since Last AI/Remote Snapshot
 
 | Area | Files Changed | Summary | Status |
 |------|---------------|---------|--------|
-| Documentation audit | PROJECT_HANDOFF.md, docs/API.md, docs/COMPONENTS.md, docs/TROUBLESHOOTING.md, docs/adr/README.md, README.md, docs/ROUTES_AND_APIS.md | Identified stale/duplicate/missing docs; rewrote handoff; updated route and component inventories; added update_handoff.sh | completed |
-| Handoff script | scripts/update_handoff.sh (new) | Created helper script to refresh PROJECT_HANDOFF.md with current git state | completed |
-| COMPONENTS.md regeneration | docs/COMPONENTS.md | Removed 5 nonexistent components; added 8 missing actual components (46 total now listed) | completed |
-| API route documentation | docs/API.md, docs/ROUTES_AND_APIS.md | Added Cases, Webhooks, metrics subroutes, report/download, report/pdf, quota, session detail endpoints | completed |
-| ADR documentation | docs/adr/README.md | Created ADR template inline; removed reference to missing ADR-000-template.md; added ADR-005 entry | completed |
-| Troubleshooting cleanup | docs/TROUBLESHOOTING.md | Removed "merged from" header; replaced missing core/migrations.py reference with working commands | completed |
-| Python version clarity | README.md | Clarified 3.12 tested/recommended vs 3.11–3.14 supported range | completed |
+| Handoff script fix | scripts/update_handoff.sh, scripts/update_handoff.py (new) | Rewrote as pure Python (no bash string escaping issues); old shell/python hybrid was broken | completed |
+| Known issues accuracy | PROJECT_HANDOFF.md | Changed "none remaining" to reflect actual remaining issues (see Known Issues table) | completed |
+| COMPONENTS.md completeness | docs/COMPONENTS.md | Added missing VerdictGauge.tsx to Result Components | completed |
+| Python version parity | apps/api/README.md | Clarified Python 3.12 tested/recommended vs 3.11-3.14 supported range | completed |
+| API doc heading fix | docs/API.md | Added missing `### POST /api/v1/cases` heading; removed stale `## HITL` duplicate section | completed |
+| Test doc stale names | docs/TESTING.md | Replaced stale FileUploadSection/CompletionBanner with AgentProgressDisplay | completed |
+| Audit doc historical marker | docs/audits/2026-02-structural.md | Added "Historical record only" warning and fixed Jan/Feb title | completed |
+| Test file header comment | apps/web/tests/unit/components/components.test.tsx | Fixed stale comment listing nonexistent components | completed |
 
 ## Exact Files Changed
 
 ```text
-PROJECT_HANDOFF.md
-docs/COMPONENTS.md
-docs/API.md
-docs/ROUTES_AND_APIS.md
-docs/TROUBLESHOOTING.md
-docs/adr/README.md
-README.md
-scripts/update_handoff.sh (new)
+M	PROJECT_HANDOFF.md
+M	apps/api/README.md
+M	apps/web/tests/unit/components/components.test.tsx
+M	docs/API.md
+M	docs/COMPONENTS.md
+M	docs/TESTING.md
+M	docs/audits/2026-02-structural.md
+M	scripts/update_handoff.sh
 ```
 
 ## Important Local Decisions
 
 | Decision | Reason | Related Files | Status |
 |----------|--------|---------------|--------|
-| Merge docs/ROUTES_AND_APIS.md into docs/API.md where appropriate | ROUTES_AND_APIS.md is the ownership map; API.md is the contract — both are needed but must not duplicate payload details | docs/ROUTES_AND_APIS.md, docs/API.md | resolved — both kept,分工 clarified |
-| COMPONENTS.md must be regenerated from actual filesystem, not static analysis | Previous version listed 5 nonexistent components and missed 8 real ones | docs/COMPONENTS.md, apps/web/src/components/ | resolved — regenerated from 46 actual components |
-| TROUBLESHOOTING.md should not link to missing files | Remove or create DEBUGGING.md, KNOWN_ISSUES.md, ERROR_LOG.md references | docs/TROUBLESHOOTING.md | resolved — removed merged-from header, fixed commands |
-| ADR-000-template.md should be created or the reference removed | docs/adr/README.md says to copy it but it does not exist | docs/adr/ | resolved — inline template added to README, template reference removed |
+| Rewrite handoff script in pure Python | Bash shell/python hybrid had string escaping bugs and `sed` table-row collapse risk | scripts/update_handoff.sh, scripts/update_handoff.py | resolved |
+| Keep Both files for handoff script | Shell stub provides `bash` UX; Python script does the actual work | scripts/update_handoff.sh, scripts/update_handoff.py | resolved |
+| COMPONENTS.md must be regenerated from actual filesystem | Previous version listed 5 nonexistent components and missed 8 real ones | docs/COMPONENTS.md | resolved |
+| Python version must match across README files | Inconsistency between root README and apps/api/README confused contributors | README.md, apps/api/README.md | resolved |
+| Audit doc in docs/audits/ must be marked historical | Title said "2026-Jan" while filename said "2026-02" — source of truth unclear | docs/audits/2026-02-structural.md | resolved |
+| Test file header comments must match actual imports | components.test.tsx listed FileUploadSection/CompletionBanner which no longer exist | apps/web/tests/unit/components/components.test.tsx | resolved |
 
 ## Commands Run
 
@@ -70,35 +73,40 @@ scripts/update_handoff.sh (new)
 |---------|--------|------|-------|
 | git branch --show-current | main | 2026-05-11 | |
 | git rev-parse --short HEAD | f0e53f7 | 2026-05-11 | |
-| Glob: apps/web/src/components/**/*.tsx | 46 components found | 2026-05-11 | Used to regenerate COMPONENTS.md |
-| Glob: apps/api/api/routes/*.py | 14 route files found | 2026-05-11 | Used to cross-check API.md |
-| Read: main.py (1037 lines) | — | 2026-05-11 | Verified route registration and middleware |
-| Read: sessions.py (883 lines) | — | 2026-05-11 | Found session detail, quota, report/download, report/pdf endpoints |
-| Read: cases.py (388 lines) | — | 2026-05-11 | Found 4 case endpoints |
-| Read: webhooks.py (279 lines) | — | 2026-05-11 | Found webhook register/list/delete/deliver |
-| Read: metrics.py (473 lines) | — | 2026-05-11 | Found 5 metrics subroutes |
-| Frontend build | not run | — | Pending after component updates |
+| Glob: apps/web/src/components/**/*.tsx | 46 components found | 2026-05-11 | Includes VerdictGauge.tsx |
+| Glob: apps/api/api/routes/*.py | 14 route files found | 2026-05-11 | |
+| Read: apps/api/README.md | — | 2026-05-11 | Found "Python 3.12 is required" needs clarification |
+| Read: docs/TESTING.md | — | 2026-05-11 | Found stale FileUploadSection/CompletionBanner references |
+| Read: docs/audits/2026-02-structural.md | — | 2026-05-11 | Found missing historical marker and title mismatch |
+| Read: components.test.tsx | — | 2026-05-11 | Found stale header comment |
+| python3 scripts/update_handoff.py | not run | — | Script updated; run manually after future changes |
+| Frontend build | not run | — | Pending verification pass |
 | Backend tests | not run | — | Pending verification pass |
 
 ## Known Issues
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| (none remaining — all identified issues resolved in this session) | — | — |
+| scripts/update_handoff.sh rewritten but not tested end-to-end | medium | Python script replaces broken shell/python hybrid; test with `python3 scripts/update_handoff.py` after future changes |
+| Historical audit docs may still exist in docs/ not in docs/audits/ | low | docs/audits/ exists but other audit docs may remain in docs/ root |
+| docs/CHANGELOG.md may reference removed components | low | Not verified in this pass |
+| apps/web/tests/storage.test.ts moved status from audit | low | Audit said this was "not yet done" — verify if still needs doing |
 
 ## Open Questions
 
-1. Should historical audit docs be moved to docs/audits/ subdirectory with a "historical only" marker?
-2. Should the ADR-000 file be created as a standalone template file, or is the inline template in docs/adr/README.md sufficient?
-3. Should we add a doc validation script that checks local links, referenced paths, route inventory, component inventory, and version consistency?
+1. Should test file `ForensicResetOverlay.test.tsx` be renamed to `LoadingOverlay.test.tsx` (it tests LoadingOverlay, not ForensicResetOverlay)?
+2. Should docs/CHANGELOG.md be verified for stale component name references?
+3. Should `apps/web/tests/storage.test.ts` move be completed?
 
 ## Next Best Action for AI
 
-All primary documentation fixes from the audit have been completed. The three open questions above need human/AI decisions before the next pass. Suggested next steps when ready:
+This is the second hygiene pass. Remaining items are small and scoped. Suggested next steps:
 
-1. Move historical audit docs to docs/audits/ subdirectory with "historical only" markers
-2. Consider adding a doc validation script for automated link/path/route/component verification
-3. Run frontend and backend verification commands and record results in this file
+1. Rename or clarify `ForensicResetOverlay.test.tsx` → `LoadingOverlay.test.tsx`
+2. Verify docs/CHANGELOG.md for stale references
+3. Check if `storage.test.ts` move is still pending
+4. Run `python3 scripts/update_handoff.py` after any future changes to test the script
+5. Run frontend and backend verification commands and record results in this file
 
 ## Do Not Break
 
@@ -124,5 +132,6 @@ These values were placeholders before this rewrite:
 
 ## Handoff Update Script
 
-Run `scripts/update_handoff.sh` to refresh this file with current git state.
-The script updates: branch, commit, changed files, git diff summary, and timestamp.
+Run `python3 scripts/update_handoff.py` (or `bash scripts/update_handoff.sh`) to refresh this
+file with current git state. The script updates: branch, commit, changed files, git diff summary,
+and timestamp.
