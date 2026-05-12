@@ -209,9 +209,18 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
             <div
               data-testid="upload-dropzone"
+              role="button"
+              tabIndex={0}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  const input = e.currentTarget.querySelector<HTMLInputElement>("input[type='file']");
+                  input?.click();
+                }
+              }}
               className="w-full rounded-2xl p-10 cursor-pointer group flex flex-col items-center justify-center gap-5 relative overflow-hidden"
               style={{
                 border: isDragging
@@ -238,8 +247,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 >
                   {isDragging ? "Release to Upload" : "Drop Evidence File"}
                 </span>
-                <p className="text-[13px] text-white/30 max-w-[240px] leading-relaxed">
-                  or click to select · images, video, or audio
+                <p id="upload-file-help" className="text-[13px] text-white/30 max-w-[240px] leading-relaxed">
+                  or press Enter to select · images, video, and audio · max 50 MB
                 </p>
               </div>
 
@@ -249,7 +258,9 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
               <input
                 type="file"
-                aria-label="Upload evidence file"
+                id="evidence-file-input"
+                aria-label="Choose evidence file"
+                aria-describedby={error ? "upload-file-help upload-error" : "upload-file-help"}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
                 onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
@@ -261,7 +272,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             </div>
 
             {error && (
-              <p role="alert" className="mt-5 text-[13px] font-semibold" style={{ color: "var(--color-danger)" }}>
+              <p id="upload-error" role="alert" className="mt-5 text-[13px] font-semibold" style={{ color: "var(--color-danger)" }}>
                 {error}
               </p>
             )}
