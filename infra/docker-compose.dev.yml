@@ -27,3 +27,7 @@ services:
       - infra_net
       - external_net
       - backend_net
+
+  frontend:
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}

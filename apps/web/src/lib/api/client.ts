@@ -59,7 +59,7 @@ function _parseReportDTO(raw: unknown): ReportDTO {
   console.error("[telemetry] schema_validation_error:", {
     schema: "ReportDTO",
     error: result.error.errors,
-    url: window.location.href,
+    url: typeof window !== "undefined" ? window.location.href : "server",
   });
 
   // Log strictly but allow the UI to try and render whatever matches the interface.

@@ -377,6 +377,41 @@ describe("live socket", () => {
   });
 });
 
+describe("getReport schema fallback", () => {
+  it("getReport falls back gracefully on schema mismatch without crashing", async () => {
+    respondJson({ status: "complete", report: { foo: "bar" } });
+
+    let consoleErrorCalled = false;
+    const origError = console.error;
+    console.error = jest.fn(() => { consoleErrorCalled = true; });
+    try {
+      const result = await getReport("sess");
+      expect(result.status).toBe("complete");
+      expect(result.report).toEqual({ foo: "bar" });
+      expect(consoleErrorCalled).toBe(true);
+    } finally {
+      console.error = origError;
+    }
+  });
+
+  it("getReport returns valid parsed report on success", async () => {
+    respondJson({
+      status: "complete",
+      report: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        report_id: "22222222-2222-4222-8222-222222222222",
+        case_id: "CASE-1",
+        overall_verdict: "LIKELY_MANIPULATED",
+        overall_confidence: 0.9,
+      },
+    });
+
+    const result = await getReport("sess");
+    expect(result.status).toBe("complete");
+    expect(result.report?.report_id).toBe("22222222-2222-4222-8222-222222222222");
+  });
+});
+
 describe("pollForReport", () => {
   beforeEach(() => {
     jest.useFakeTimers();

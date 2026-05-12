@@ -2,6 +2,7 @@
 """Worker healthcheck — verifies Redis connectivity and recent heartbeat."""
 import os
 import sys
+import time
 
 import redis
 
@@ -22,10 +23,16 @@ def main() -> int:
             socket_timeout=timeout,
             decode_responses=True,
         )
-        if not r.exists(key):
+        value = r.get(key)
+        if not value:
             print(f"Worker heartbeat missing ({key})", file=sys.stderr)
             return 1
-        print(f"Worker heartbeat present: {key}")
+
+        try:
+            age = max(0.0, time.time() - float(value))
+            print(f"Worker heartbeat present: {key}, age={age:.1f}s")
+        except ValueError:
+            print(f"Worker heartbeat present: {key}, value={value!r}")
         return 0
     except redis.RedisError as e:
         print(f"Redis connectivity failed: {e}", file=sys.stderr)
