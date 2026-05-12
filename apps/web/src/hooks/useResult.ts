@@ -294,19 +294,34 @@ export function useResult(initialSessionId?: string) {
 
   const handleNew = useCallback(() => {
     playSound("reset");
+    const savedHistory = (() => {
+      try {
+        return storage.getItem<HistoryItem[]>("forensic_history", true, []) ?? [];
+      } catch { return [] as HistoryItem[]; }
+    })();
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
+    if (savedHistory.length > 0) {
+      storage.setItem("forensic_history", savedHistory, true);
+    }
     document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
 
     window.dispatchEvent(new Event("fc:reset-home"));
-    // Route to home with upload param which HeroAuthActions handles
     router.push("/?upload=1");
   }, [playSound, router]);
 
   const handleHome = useCallback(() => {
     playSound("reset");
+    const savedHistory = (() => {
+      try {
+        return storage.getItem<HistoryItem[]>("forensic_history", true, []) ?? [];
+      } catch { return [] as HistoryItem[]; }
+    })();
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
+    if (savedHistory.length > 0) {
+      storage.setItem("forensic_history", savedHistory, true);
+    }
     document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
 
     window.dispatchEvent(new Event("fc:reset-home"));

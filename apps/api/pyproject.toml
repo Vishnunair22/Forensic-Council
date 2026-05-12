@@ -134,10 +134,13 @@ markers = [
     "regression: marks tests as regression tests (deselect with -m 'not regression')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
-    "requires_docker: requires a running Docker stack",
-    "requires_network: requires internet access",
+    "requires_docker: requires a running Docker daemon",
+    "requires_network: requires internet access (live provider API calls)",
     "slow: slow tests",
     "requires_ml: needs the optional [ml] extras (torch, yolo, easyocr, speechbrain)",
+    "system: full system integration tests requiring all services",
+    "live_provider: uses real external LLM/Gemini/Groq provider APIs",
+    "requires_services: requires Postgres/Redis/Qdrant services to be running",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

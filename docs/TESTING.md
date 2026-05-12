@@ -92,7 +92,8 @@ graph TD
 | File | Aspect Tested | Dependencies | Coverage |
 | :--- | :--- | :--- | :--- |
 | `test_api_routes.py` | REST Endpoint Health | `FastAPI TestClient`, `magic` | 200/4xx/5xx status codes, MIME-type allow-lists, and CORS header reflection. |
-| `websocket_flow.test.ts` | Real-time Analysis | `Playwright`, `WS-Mocks` | State machine transitions for the live analysis dashboard (8 distinct message types). |
+| `websocket_flow.test.ts` | Real-time WebSocket & report polling contracts | `Jest`, WS-Mocks | Unit tests for `createLiveSocket` connect/resolve/reject paths. Lives in `tests/unit/lib/`. |
+| `accessibility.spec.ts` | Automated A11y Audit | `Playwright`, `axe-core` | Full-page runtime audits; verifies color contrast, heading hierarchy, and modal focus. |
 | `useForensicData.test.ts` | Data Transformation | `Jest` | Mapping backend DTOs to UI models; calibration and court-statement formatting. |
 
 ### ♿ UI & Accessibility (WCAG 2.1 AA)
@@ -132,11 +133,26 @@ Run from `apps/web`:
 # Jest (Unit & Component A11y)
 npm test
 
-# Playwright (E2E & A11y Audit)
-npx playwright test
+# Playwright E2E — fast mocked journey (PR gate, no backend needed)
+npm run test:e2e:journey
+
+# Playwright E2E — all tests including accessibility
+npm run test:e2e
+
+# Playwright E2E — Chromium only
+npm run test:e2e:chromium
 
 # Playwright UI Mode (Visual Debugging)
 npx playwright test --ui
+
+# Unit accessibility tests (jest-axe)
+npm run test:a11y:unit
+
+# E2E accessibility tests (Playwright axe)
+npm run test:a11y:e2e
+
+# Both accessibility test suites
+npm run test:a11y
 ```
 
 On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`:

@@ -22,17 +22,49 @@
 
 | Field | Value |
 |-------|-------|
-| Local branch | `phase-6-agents-models-api-config` (feature branch from `main`) |
-| Local commit | `1276405` (Phase 6 complete) |
+| Local branch | `phase-7-workflow-state-fixes` (feature branch from `phase-6-agents-models-api-config`) |
+| Local commit | (working) |
 | Tag | — |
 
 ## Current Local Goal
 
-Phase 6 (agents, models, LLM client, API config cleanup) — committed to `phase-6-agents-models-api-config` branch.
+Phase 7 (workflow/state fixes) — working in `phase-7-workflow-state-fixes` branch.
+
+Phase 6 (agents, models, LLM client, API config cleanup) — committed to `phase-6-agents-models-api-config` branch (`1276405`).
 
 Phase 5 (backend core logic fixes) — committed to `phase-5-backend-core-logic` branch (`c423b5d`).
 
-Both phases complete. Next: merge to `main` once Phase 5 verification completes.
+## What Changed Since Last AI/Remote Snapshot
+
+### Phase 7 — Workflow & State Fixes (in progress)
+
+#### Fix #1 — docs/WORKFLOW_TRACE.md (NEW)
+- `docs/WORKFLOW_TRACE.md`: New document mapping all route/state ownership. Documents global storage keys, Effect A/B behavior, state machine, storage key ownership table, known edge cases, and rules for future changes.
+
+#### Fix #2 — Expired upload handoff
+- `apps/web/src/hooks/useInvestigation.ts` Effect A: Now sets `fc_open_upload_once=1` before routing home with `?upload=1`. Home reads it and reopens upload modal once, then consumes flag. Also removed stale comment about `autoStartBlocking` since that was handled by the cleared `__pendingFileStore.file`.
+
+#### Fix #3 — Duplicate upload 409 reconnect
+- `apps/web/src/lib/api/client.ts`: `DuplicateInvestigationError` already exported; frontend catches it in `triggerAnalysis`.
+- `apps/web/src/hooks/useInvestigation.ts`: Catches `DuplicateInvestigationError` in `triggerAnalysis`. When `isDuplicateSession=true`, skips upload UI flow, restores saved agent state, reconnects WebSocket as reconnect, restores phase from saved agents, and clears `investigationInFlightRef` before reconnect flow.
+
+#### Fix #4 — Route /evidence reconnect by arbiter status
+- `apps/web/src/hooks/useInvestigation.ts` Effect B: `not_found` now clears session, shows toast, sets `fc_open_upload_once=1`, routes home with `?upload=1`. `complete` now sets `fc_report_ready=1` before navigating to result (bridges Accept Analysis state). `unreachable` path merged with default — always reconnects WS (backend is reachable via WS even when REST polling fails).
+
+#### Fix #5 — Accept Analysis bridge
+- `apps/web/src/hooks/useInvestigation.ts`: `handleAcceptAnalysis` sets `sessionOnlyStorage.setItem("fc_report_ready", "1")` before navigating. `useResult` already reads this flag on mount to skip the min-overlay delay (already implemented — no code change needed).
+- Effect B reconnect now also sets `fc_report_ready` before navigating to result.
+
+#### Fix #6 — Prevent duplicate Accept/Deep decisions
+- `apps/web/src/hooks/useInvestigation.ts`: Added `resumeInFlightRef` guard. `handleAcceptAnalysis` checks `resumeInFlightRef.current` at entry; sets it before `resumeInvestigation` call, clears in `finally`. `handleDeepAnalysis` also guards against `resumeInFlightRef.current` being true.
+
+#### Fix #7 — Preserve forensic_history across New Upload/Home
+- `apps/web/src/lib/investigationStorage.ts`: `clearInvestigationPersistence()` now saves `forensic_history` before clearing and restores it after.
+- `apps/web/src/hooks/useResult.ts`: `handleNew` and `handleHome` now save history before `clearAllForensicKeys()` and restore after.
+
+#### Fix #8 — Full journey E2E and backend contract tests
+- `apps/web/tests/e2e/full_journey_phase7.spec.ts`: New Playwright test file covering: expired handoff, duplicate 409 reconnect, reconnect complete/not_found, duplicate Accept/Deep decisions, forensic_history preservation.
+- `apps/api/tests/contracts/test_api_contracts.py`: Added Phase 7 test classes: `TestDuplicateInvestigation409`, `TestResumeIdempotency`, `TestArbiterStatusUnreachable`.
 
 ## What Changed Since Last AI/Remote Snapshot
 
@@ -148,6 +180,35 @@ Phase 5 (on phase-5-backend-core-logic, commit c423b5d):
  apps/api/api/routes/_authz.py                  — 5.6
  apps/api/api/routes/hitl.py                    — 5.17
  apps/api/api/routes/_session_state.py          — 5.16
+ apps/orchestration/investigation_queue.py      — 5.7, 5.8
+ apps/orchestration/investigation_runner.py    — 5.15
+ apps/orchestration/worker.py                  — 5.15 (import ordering fix)
+ apps/orchestration/session_finalization.py    — 5.15 (NEW)
+ apps/core/session_persistence.py              — 5.9
+ apps/tests/integration/test_investigation_start_flow.py — 5.18
+
+Phase 6 (on phase-6-agents-models-api-config, commit 1276405):
+ apps/api/core/config.py                        — free_tier_mode setting + validators
+ apps/api/core/llm_client.py                   — Groq key routing, nested loop removal, quota guard
+ apps/api/core/gemini_client.py               — policy flag enforcement, quota guard wiring
+ apps/api/core/provider_quota_guard.py         — NEW: quota enforcement module
+ apps/api/api/main.py                          — quota guard initialization in lifespan, whitespace fix
+ apps/api/scripts/verify_llm_keys.py           — rewrite using /models endpoints only
+
+Phase 7 (on phase-7-workflow-state-fixes, working):
+ apps/web/src/hooks/useInvestigation.ts        — Fix #2, #3, #4, #5, #6
+ apps/web/src/hooks/useResult.ts               — Fix #7 (handleNew, handleHome)
+ apps/web/src/lib/investigationStorage.ts     — Fix #7 (clearInvestigationPersistence)
+ apps/web/tests/e2e/full_journey_phase7.spec.ts — Fix #8 (NEW)
+ apps/api/tests/contracts/test_api_contracts.py — Fix #8 (Phase 7 contract tests)
+ docs/WORKFLOW_TRACE.md                        — Fix #1 (NEW)
+```
+Phase 5 (on phase-5-backend-core-logic, commit c423b5d):
+ apps/api/api/routes/investigation.py            — 5.1, 5.2, 5.10, 5.11, 5.12
+ apps/api/api/routes/sessions.py                — 5.3, 5.4, 5.5, 5.13, 5.14
+ apps/api/api/routes/_authz.py                  — 5.6
+ apps/api/api/routes/hitl.py                    — 5.17
+ apps/api/api/routes/_session_state.py          — 5.16
  apps/api/orchestration/investigation_queue.py — 5.7, 5.8
  apps/api/orchestration/investigation_runner.py — 5.15
  apps/api/orchestration/worker.py              — 5.15 (import ordering fix)
@@ -224,25 +285,18 @@ Phase 6 (on phase-6-agents-models-api-config, commit 1276405):
 
 ## Next Best Action for AI
 
-Both Phase 5 and Phase 6 are committed to separate feature branches. Remaining actions:
+Phase 7 in progress. Remaining Phase 7 actions:
 
-1. Merge Phase 5 branch `phase-5-backend-core-logic` to `main` (review Phase 5 changes first)
-2. Merge Phase 6 branch `phase-6-agents-models-api-config` to `main` (review Phase 6 changes first)
-3. Run full test suite to confirm Phase 5 pytest results (977/978 passed):
-   `cd apps/api && uv run pytest tests/ -q --ignore=tests/unit/test_auth_unit.py --ignore=tests/unit/test_config_validation.py`
-4. Add unit tests for `ProviderQuotaGuard` (not yet covered):
-   - Test RPM limit enforcement
-   - Test RPD limit enforcement
-   - Test cleanup of stale timestamps
-   - Test provider not configured returns True
-   - Test concurrent recording is thread-safe
-5. Add config validation test for `free_tier_mode`:
-   - Test blocks openai/anthropic in free_tier_mode
-   - Test blocks gpt-4/claude models in Groq when free_tier_mode=True
-   - Test allows groq/gemini in free_tier_mode
-6. Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`:
-   - Replace `get_settings.cache_clear()` with `clear_settings_cache()` from core/config.py
-7. Investigate `test_investigation_queue_unit.py` 4 pre-existing failures
+1. Run frontend typecheck: `cd apps/web && npm run type-check`
+2. Run backend contract tests: `cd apps/api && uv run pytest tests/contracts/ -v`
+3. Run Playwright E2E tests: `cd apps/web && npx playwright test tests/e2e/full_journey_phase7.spec.ts`
+4. Commit Phase 7 to branch `phase-7-workflow-state-fixes`
+5. Merge Phase 5, 6, 7 to `main` (in order)
+
+After Phase 7 merge, continue with Phase 6 remaining actions:
+
+6. Add unit tests for `ProviderQuotaGuard`
+7. Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`
 
 ## Do Not Break
 

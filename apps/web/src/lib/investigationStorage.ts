@@ -1,4 +1,19 @@
 import { sessionOnlyStorage, storage } from "@/lib/storage";
+import type { HistoryItem } from "@/lib/types";
+
+function _saveHistory(): HistoryItem[] {
+  try {
+    return storage.getItem<HistoryItem[]>("forensic_history", true, []) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function _restoreHistory(history: HistoryItem[]) {
+  if (history.length > 0) {
+    storage.setItem("forensic_history", history, true);
+  }
+}
 
 export function clearAgentSnapshots() {
   if (typeof window === "undefined") return;
@@ -19,6 +34,8 @@ export function expireSessionCookie() {
 }
 
 export function clearInvestigationPersistence() {
+  const savedHistory = _saveHistory();
+
   [
     "forensic_session_id",
     "forensic_investigation_ctx",
@@ -36,4 +53,5 @@ export function clearInvestigationPersistence() {
 
   clearAgentSnapshots();
   expireSessionCookie();
+  _restoreHistory(savedHistory);
 }

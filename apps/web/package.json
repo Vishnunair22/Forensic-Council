@@ -24,6 +24,11 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:a11y": "playwright test --project=chromium tests/e2e/accessibility.spec.ts",
+    "test:a11y:unit": "jest tests/accessibility --runInBand",
+    "test:a11y:e2e": "playwright test --project=chromium tests/e2e/accessibility.spec.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:chromium": "playwright test --project=chromium",
+    "test:e2e:journey": "playwright test --project=chromium tests/e2e/full_journey.spec.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

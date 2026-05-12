@@ -31,8 +31,11 @@ const config: Config = {
       lines: 60,
       statements: 60,
     },
-    // Critical modules keep modest branch gates until the E2E suite covers the live stream.
     "./src/lib/api/": { branches: 45, lines: 75 },
+    "./src/hooks/useInvestigation.ts": { branches: 45, lines: 70 },
+    "./src/hooks/useSimulation.ts": { branches: 45, lines: 70 },
+    "./src/hooks/useResult.ts": { branches: 45, lines: 70 },
+    "./src/lib/investigationStorage.ts": { branches: 70, lines: 85 },
   },
   coverageReporters: ["text", "lcov", "html", "json-summary"],
   coverageDirectory: "coverage",

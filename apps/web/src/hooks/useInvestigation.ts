@@ -10,6 +10,7 @@ import {
   getReport,
   getAuthToken,
   autoLoginAsInvestigator,
+  DuplicateInvestigationError,
   type ArbiterStatusResponse,
   type HITLDecision
 } from "@/lib/api";
@@ -166,6 +167,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
   const minOverlayTimerRef = useRef<NodeJS.Timeout | null>(null);
   const overlayStartTimeRef = useRef<number>(0);
+  const resumeInFlightRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -374,20 +376,26 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
 
       let sessionIdToUse: string | undefined;
+      let isDuplicateSession = false;
       try {
         const investigationRes = await startInvestigation(targetFile, caseId, investigatorId);
         sessionIdToUse = investigationRes.session_id;
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
-        setIsUploading(false);
-        setShowLoadingOverlay(false);
-        resetSimulation();
-        playSound("error");
-        toast.destructive({ title: "Investigation Failed", description: errorMsg });
-        investigationInFlightRef.current = false;
-        return;
+        if (err instanceof DuplicateInvestigationError) {
+          sessionIdToUse = err.existingSessionId;
+          isDuplicateSession = true;
+        } else {
+          const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
+          setIsUploading(false);
+          setShowLoadingOverlay(false);
+          resetSimulation();
+          playSound("error");
+          toast.destructive({ title: "Investigation Failed", description: errorMsg });
+          investigationInFlightRef.current = false;
+          return;
+        }
       } finally {
-        if (!sessionIdToUse) {
+        if (!sessionIdToUse || isDuplicateSession) {
           investigationInFlightRef.current = false;
         }
       }
@@ -424,10 +432,40 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (thumbnailDataUrl) {
         storage.setItem(`forensic_thumbnail:${sessionIdToUse}`, thumbnailDataUrl);
       }
-      setIsUploading(false);
-      setUploadPhaseText("Connecting to analysis stream…");
 
       lastSessionIdRef.current = sessionIdToUse;
+
+      if (isDuplicateSession) {
+        const savedDeepAgents = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${sessionIdToUse}`, true, []);
+        const savedInitialAgents = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sessionIdToUse}`, true, []);
+        const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
+        const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
+        setPhase(restoredPhase as "initial" | "deep");
+        if (savedAgents.length > 0) {
+          restoreSimulationState(savedAgents, "awaiting_decision");
+        }
+        connectWebSocket(sessionIdToUse, true)
+          .then(() => {
+            setAnalysisStreamReady(true);
+            setIsUploading(false);
+            setUploadPhaseText("Reconnected to existing analysis...");
+          })
+          .catch((wsErr: unknown) => {
+            const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to reconnect to stream";
+            setIsUploading(false);
+            setShowLoadingOverlay(false);
+            setWsConnectionError(wsErrMsg);
+          })
+          .finally(() => {
+            investigationInFlightRef.current = false;
+            __pendingFileStore.file = null;
+            sessionExistsRef.current = true;
+          });
+        return;
+      }
+
+      setIsUploading(false);
+      setUploadPhaseText("Connecting to analysis stream…");
 
       connectWebSocket(sessionIdToUse)
         .then(() => {
@@ -483,8 +521,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.removeItem("forensic_auto_start");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     setShowLoadingOverlay(true);
-    // Keep autoStartBlocking=true until triggerAnalysis calls setAutoStartBlocking(false),
-    // preventing the "No Evidence Queued" empty state from briefly flashing.
     triggerAnalysis(pending);
   }, [router, triggerAnalysis]);
 
@@ -531,19 +567,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           storage.removeItem("forensic_session_id");
           storage.removeItem("forensic_investigation_ctx");
           resetSimulation();
-          return;
-        }
-        if (st.status === "unreachable") {
-          connectWebSocket(existingSessionId, true)
-            .then(() => setAnalysisStreamReady(true))
-            .catch((wsErr: unknown) => {
-              const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
-              setWsConnectionError(wsErrMsg);
-              setShowLoadingOverlay(false);
-            });
+          setShowLoadingOverlay(false);
+          toast.destructive({
+            title: "Session expired",
+            description: "This investigation session is no longer available. Please start a new analysis.",
+          });
+          sessionOnlyStorage.setItem("fc_open_upload_once", "1");
+          router.replace("/?upload=1");
           return;
         }
         if (st.status === "complete") {
+          sessionOnlyStorage.setItem("fc_report_ready", "1");
           router.push(`/result/${existingSessionId}`, { scroll: true });
           return;
         }
@@ -580,7 +614,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   };
 
   const handleAcceptAnalysis = useCallback(async () => {
-    if (isNavigating) return;
+    if (isNavigating || resumeInFlightRef.current) return;
+    resumeInFlightRef.current = true;
     playSound("click");
     playSound("arbiter_start");
     storage.setItem("forensic_is_deep", "false");
@@ -605,10 +640,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         description: err instanceof Error ? err.message : "Could not finalize verdict.",
       });
     } finally {
+      resumeInFlightRef.current = false;
       setIsNavigating(false);
-      // Only clear the overlay if we did NOT navigate — if we navigated, the
-      // result page will handle clearing it. Clearing it here when navigated
-      // causes the overlay to flicker off before the result page mounts.
       if (!navigated) {
         setArbiterDeliberating(false);
       }
@@ -616,7 +649,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
   const handleDeepAnalysis = useCallback(async () => {
-    if (investigationInFlightRef.current) return;
+    if (investigationInFlightRef.current || resumeInFlightRef.current) return;
     investigationInFlightRef.current = true;
     playSound("click");
     playSound("think");

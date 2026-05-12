@@ -3,6 +3,17 @@ import os
 import sys
 import uuid
 
+import pytest
+
+pytestmark = [
+    pytest.mark.requires_ml,
+    pytest.mark.system,
+    pytest.mark.skipif(
+        os.getenv("RUN_SYSTEM_ML_TESTS") != "1",
+        reason="Set RUN_SYSTEM_ML_TESTS=1 to run Agent3 full system smoke test.",
+    ),
+]
+
 # Add apps/api to path
 sys.path.append("/app/apps/api")
 

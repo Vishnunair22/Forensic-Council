@@ -3,9 +3,17 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+import os
 import pytest
 
-pytestmark = pytest.mark.skip(reason="Standalone ML smoke test; run manually with model cache")
+pytestmark = [
+    pytest.mark.requires_ml,
+    pytest.mark.system,
+    pytest.mark.skipif(
+        os.getenv("RUN_SYSTEM_ML_TESTS") != "1",
+        reason="Set RUN_SYSTEM_ML_TESTS=1 to run Agent1 full system smoke test.",
+    ),
+]
 
 # Add apps/api to path
 sys.path.append(str(Path(__file__).parent.parent))

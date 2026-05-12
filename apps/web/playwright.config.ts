@@ -8,7 +8,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: '**/*.spec.ts',
-  testIgnore: process.env.RUN_LIVE_E2E === '1' ? [] : ['**/full_journey.spec.ts'],
+  testIgnore: process.env.RUN_LIVE_E2E === '1' ? [] : ['**/*.live.spec.ts'],
   /* Maximum time one test can run for. */
   timeout: 60 * 1000,
   expect: {

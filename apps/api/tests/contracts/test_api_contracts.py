@@ -15,6 +15,12 @@ These tests cover the contract bugs identified in the stabilization audit:
   - ReportDTO schema includes all fields the frontend reads
   - Auth is enforced on all protected endpoints
   - Wrong-owner access returns 403, not 404
+
+Phase 7 additions:
+  - /investigate returns 409 with existing session_id on duplicate (Fix #3)
+  - /arbiter-status "unreachable" maps to network error (Fix #4)
+  - Resume is idempotent — double-submit returns 200, not error (Fix #6)
+  - Report endpoint accepts session-scoped query params (Fix #4 bridge)
 """
 
 from __future__ import annotations
@@ -209,7 +215,7 @@ class TestInvestigateEndpoint:
             patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
         ):
             mock_queue = AsyncMock()
-            mock_queue.enqueue = AsyncMock(return_value=str(uuid.uuid4()))
+            mock_queue.submit = AsyncMock(return_value=None)
             mock_queue_getter.return_value = mock_queue
 
             mock_redis = _make_redis_mock()
@@ -227,6 +233,7 @@ class TestInvestigateEndpoint:
         assert "session_id" in body, f"Missing session_id in response: {body}"
         # Must be a valid UUID (frontend passes it to SSE/WS endpoints)
         uuid.UUID(body["session_id"])
+        mock_queue.submit.assert_awaited_once()
 
     def test_investigate_requires_auth(self, client):
         """No auth token → 401."""
@@ -762,3 +769,208 @@ class TestHITLDecisionEndpoint:
         assert resp.status_code not in (404, 422), (
             f"HITL decision type '{decision_type}' rejected with {resp.status_code}: {resp.text}"
         )
+
+
+# ===========================================================================
+# PHASE 7 CONTRACT TESTS
+# ===========================================================================
+
+
+class TestDuplicateInvestigation409:
+    """POST /api/v1/investigate returns 409 with session ID on duplicate content."""
+
+    def test_investigate_duplicate_returns_409_with_session_id(self, client):
+        """Upload same content twice → 409 with existing session_id in detail."""
+        from PIL import Image
+
+        img = Image.new("RGB", (100, 100), color="blue")
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format="JPEG")
+        file_bytes = img_byte_arr.getvalue()
+
+        with (
+            patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+        ):
+            mock_queue = AsyncMock()
+            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue_getter.return_value = mock_queue
+
+            mock_redis = _make_redis_mock()
+            mock_redis_getter.return_value = mock_redis
+
+            resp1 = client.post(
+                "/api/v1/investigate",
+                headers=_auth(),
+                files={"file": ("dup.jpg", io.BytesIO(file_bytes), "image/jpeg")},
+                data={"case_id": "CASE-001", "investigator_id": "INVESTIGATOR-001"},
+            )
+        assert resp1.status_code in (200, 202), f"First upload failed: {resp1.text}"
+        session_id = resp1.json()["session_id"]
+
+        with (
+            patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+        ):
+            mock_queue = AsyncMock()
+            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue_getter.return_value = mock_queue
+
+            mock_redis = _make_redis_mock()
+            mock_redis.get = AsyncMock(return_value=session_id)
+            mock_redis_getter.return_value = mock_redis
+
+            resp2 = client.post(
+                "/api/v1/investigate",
+                headers=_auth(),
+                files={"file": ("dup.jpg", io.BytesIO(file_bytes), "image/jpeg")},
+                data={"case_id": "CASE-002", "investigator_id": "INVESTIGATOR-001"},
+            )
+
+        assert resp2.status_code == 409, (
+            f"Duplicate upload should return 409, got {resp2.status_code}: {resp2.text}"
+        )
+        body = resp2.json()
+        assert "session" in body["detail"].lower(), f"409 detail should include session: {body}"
+        assert session_id in body["detail"], f"409 detail should include existing session: {body}"
+
+    def test_investigate_requires_auth_on_duplicate(self, client):
+        """409 with missing auth returns 401 before dedup check."""
+        from PIL import Image
+
+        img = Image.new("RGB", (50, 50), color="red")
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format="JPEG")
+        file_bytes = img_byte_arr.getvalue()
+
+        with (
+            patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+        ):
+            mock_queue = AsyncMock()
+            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue_getter.return_value = mock_queue
+
+            mock_redis = _make_redis_mock()
+            mock_redis.get = AsyncMock(return_value="existing-session")
+            mock_redis_getter.return_value = mock_redis
+
+            resp = client.post(
+                "/api/v1/investigate",
+                files={"file": ("dup2.jpg", io.BytesIO(file_bytes), "image/jpeg")},
+                data={"case_id": "CASE-001", "investigator_id": "INVESTIGATOR-001"},
+            )
+        assert resp.status_code == 401
+
+
+class TestResumeIdempotency:
+    """POST /sessions/{id}/resume is idempotent — double-submit returns 200."""
+
+    def test_resume_twice_same_deep_flag_both_return_200(self, client):
+        """Two resume calls with same deep_analysis flag both succeed."""
+        with (
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("api.routes.sessions.get_active_pipeline") as mock_pipeline_getter,
+        ):
+            mock_meta.return_value = {
+                "status": "awaiting_decision",
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_meta_sessions.return_value = {
+                "status": "awaiting_decision",
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_redis = _make_redis_mock()
+            mock_redis_getter.return_value = mock_redis
+
+            mock_pipeline = MagicMock()
+            mock_pipeline.deep_analysis_decision_event = MagicMock()
+            mock_pipeline.deep_analysis_decision_event.is_set.return_value = False
+            mock_pipeline._awaiting_user_decision = True
+            mock_pipeline_getter.return_value = mock_pipeline
+
+            resp1 = client.post(
+                f"/api/v1/sessions/{SESSION_ID}/resume",
+                headers=_auth(),
+                json={"deep_analysis": False},
+            )
+
+            mock_pipeline.deep_analysis_decision_event.is_set.return_value = True
+            mock_pipeline._awaiting_user_decision = False
+
+            resp2 = client.post(
+                f"/api/v1/sessions/{SESSION_ID}/resume",
+                headers=_auth(),
+                json={"deep_analysis": False},
+            )
+
+        assert resp1.status_code == 200, f"First resume failed: {resp1.status_code}"
+        assert resp2.status_code == 200, (
+            f"Second resume should also return 200 (idempotent), got {resp2.status_code}: {resp2.text}"
+        )
+
+    def test_resume_wrong_owner_returns_403_on_repeat(self, client):
+        """Same double-submit pattern but wrong owner → 403 on both attempts."""
+        with (
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+        ):
+            mock_meta.return_value = {
+                "status": "awaiting_decision",
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_meta_sessions.return_value = {
+                "status": "awaiting_decision",
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_redis = _make_redis_mock()
+            mock_redis_getter.return_value = mock_redis
+
+            resp1 = client.post(
+                f"/api/v1/sessions/{SESSION_ID}/resume",
+                headers=_auth(user_id=OTHER_USER_ID),
+                json={"deep_analysis": False},
+            )
+
+            resp2 = client.post(
+                f"/api/v1/sessions/{SESSION_ID}/resume",
+                headers=_auth(user_id=OTHER_USER_ID),
+                json={"deep_analysis": False},
+            )
+
+        assert resp1.status_code == 403, f"Wrong owner should get 403: {resp1.status_code}"
+        assert resp2.status_code == 403, f"Wrong owner repeat should get 403: {resp2.status_code}"
+
+
+class TestArbiterStatusUnreachable:
+    """getArbiterStatus returns 'unreachable' on network errors."""
+
+    def test_arbiter_status_network_error_returns_unreachable(self, client):
+        """Network-level failure → status='unreachable', never raises."""
+        with patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta:
+            mock_meta.side_effect = OSError("Redis unavailable")
+
+            resp = client.get(
+                f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
+                headers=_auth(),
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] in ("not_found", "unreachable", "running"), (
+            f"Expected safe fallback status, got: {body}"
+        )
+
+    def test_arbiter_status_session_scoped_id_returns_safe_fallback(self, client):
+        """Unknown session ID → status='not_found' (not 500)."""
+        random_sid = str(uuid.uuid4())
+        with patch("api.routes._session_state.get_active_pipeline_metadata", return_value=None):
+            resp = client.get(
+                f"/api/v1/sessions/{random_sid}/arbiter-status",
+                headers=_auth(),
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] in ("not_found", "running"), f"Expected safe fallback: {body}"

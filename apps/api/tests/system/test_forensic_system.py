@@ -17,11 +17,17 @@ import traceback
 from pathlib import Path
 from uuid import uuid4
 
+import os
 import pytest
 
 pytestmark = [
-    pytest.mark.skip(reason="Standalone system test — run with Docker stack directly"),
     pytest.mark.requires_ml,
+    pytest.mark.system,
+    pytest.mark.requires_network,
+    pytest.mark.skipif(
+        os.getenv("RUN_SYSTEM_ML_TESTS") != "1",
+        reason="Set RUN_SYSTEM_ML_TESTS=1 to run the full forensic system smoke test.",
+    ),
 ]
 
 # Identify API root (works for both local and Docker)

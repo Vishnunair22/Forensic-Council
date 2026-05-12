@@ -39,6 +39,9 @@ jobs:
           cd apps/api
           uv sync --extra dev
 
+      - name: Run test hygiene checker
+        run: python scripts/check_test_hygiene.py
+
       - name: Lint with ruff
         run: cd apps/api && uv run ruff check .
 
@@ -117,10 +120,10 @@ jobs:
           QDRANT_URL: http://localhost:6333
         run: |
           cd apps/api
-          # Exclude ML tests that require model weights/network — those run in nightly.
-          # (P1-CI-001 fix, audit v6→v7)
+          # Exclude ML, network, and Docker tests that require extra services.
+          # (P1-CI-001 fix, audit v6→v7; Phase 8.5 alignment)
           uv run pytest tests/ -v --tb=short \
-            -m "not requires_ml" \
+            -m "not requires_ml and not requires_network and not requires_docker" \
             --cov=. \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
@@ -154,6 +157,9 @@ jobs:
 
       - name: Type check
         run: cd apps/web && npm run type-check
+
+      - name: Run test hygiene checker
+        run: python scripts/check_test_hygiene.py
 
   frontend-test:
     name: Frontend tests
@@ -198,15 +204,30 @@ jobs:
           NEXT_PUBLIC_API_URL: ""
 
       - name: Start server and run a11y tests
-        # Use a process group so the Next.js server is always killed when the
-        # step exits (success or failure), preventing orphan node processes on
-        # CI runner. (P3-CI-004 fix, audit v6→v7)
         run: |
           cd apps/web
           npm run start &
           SERVER_PID=$!
           trap "kill $SERVER_PID 2>/dev/null || true" EXIT
-          npx wait-on http://localhost:3000 --timeout 60000
+          # Wait for server without requiring undeclared npx wait-on dependency.
+          node - <<'NODE'
+          const http = require("http");
+          const deadline = Date.now() + 60_000;
+          function check() {
+            http.get("http://localhost:3000", (res) => {
+              if (res.statusCode && res.statusCode < 500) process.exit(0);
+              retry();
+            }).on("error", retry);
+          }
+          function retry() {
+            if (Date.now() > deadline) {
+              console.error("Timed out waiting for http://localhost:3000");
+              process.exit(1);
+            }
+            setTimeout(check, 1000);
+          }
+          check();
+          NODE
           npm run test:a11y
         env:
           PORT: 3000
@@ -259,6 +280,7 @@ jobs:
       - frontend-lint
       - frontend-test
       - frontend-build
+      - frontend-a11y
       - security-scan
     steps:
       - uses: actions/checkout@v4
