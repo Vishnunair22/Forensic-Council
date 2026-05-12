@@ -209,7 +209,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
               <Activity className="w-8 h-8 text-primary animate-pulse" />
               <p className="font-mono text-xs font-semibold tracking-wide text-white/60">
-                Arbiter is compiling agent findings...
+                {rs.arbiterMsg || "Arbiter is compiling agent findings..."}
               </p>
             </div>
           )}

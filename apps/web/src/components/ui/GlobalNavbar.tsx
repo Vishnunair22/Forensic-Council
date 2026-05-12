@@ -71,14 +71,20 @@ export function GlobalNavbar() {
     if (typeof window === "undefined") return;
 
     playSound(hasActiveSession && pathname !== "/" ? "reset" : "hum");
-    resetActiveInvestigation(queryClient);
 
     if (pathname === "/") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       router.push("/", { scroll: true });
     }
-  }, [pathname, router, playSound, hasActiveSession, queryClient]);
+  }, [pathname, router, playSound, hasActiveSession]);
+
+  const handleResetClick = useCallback(() => {
+    if (typeof window === "undefined") return;
+    playSound("reset");
+    resetActiveInvestigation(queryClient);
+    router.push("/", { scroll: true });
+  }, [queryClient, router, playSound]);
 
   return (
     <nav
@@ -106,15 +112,27 @@ export function GlobalNavbar() {
       >
         <BrandLogo size="sm" isHovered={isHovered} />
 
-        {/* Fix D: Destructive Reset indicator (pulsing red dot) */}
-        {hasActiveSession && pathname !== "/" && (
-          <div className="absolute -top-1 -right-1 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-          </div>
-        )}
+        <button
+        type="button"
+        onClick={handleResetClick}
+        className="ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em] rounded-full border transition-all duration-200"
+        style={{
+          color: "rgba(255,255,255,0.55)",
+          background: "rgba(239,68,68,0.12)",
+          borderColor: "rgba(239,68,68,0.25)",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.9)";
+          (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.22)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.55)";
+          (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)";
+        }}
+        aria-label="Reset active investigation"
+      >
+        Reset
       </button>
-
     </nav>
   );
 }

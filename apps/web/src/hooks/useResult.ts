@@ -19,6 +19,29 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 export type Tab = "analysis" | "history";
 export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
 
+interface SessionContext {
+  session_id: string;
+  file_name?: string;
+  case_id?: string;
+  investigator_id?: string;
+  mime_type?: string;
+  pipeline_start?: string;
+}
+
+function readSessionContext(sid: string | null): SessionContext | null {
+  if (!sid) return null;
+  return storage.getItem<SessionContext>(`forensic_investigation_ctx:${sid}`, true) ?? null;
+}
+
+function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): AgentUpdate[] {
+  if (!sid) return [];
+  const deep = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${sid}`, true);
+  const initial = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
+  if (isDeep && Array.isArray(deep) && deep.length) return deep;
+  if (Array.isArray(initial) && initial.length) return initial;
+  return [];
+}
+
 /**
  * Hook for managing the result page state and polling logic.
  * Optimized for performance and flicker-free transitions.
@@ -26,13 +49,14 @@ export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
 export function useResult(initialSessionId?: string) {
   const router = useRouter();
 
-  // Initialize states from sessionStorage immediately if in browser to avoid flickers
   const getInitial = (key: string) => storage.getItem(key);
+  const getInitialSid = () => initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
+
+  const initialSid = getInitialSid();
+  const initialCtx = readSessionContext(initialSid);
 
   const [mounted, setMounted] = useState(false);
-  // If fc_report_ready is set, the report is already synthesized (coming from handleAcceptAnalysis).
-  // Skip the arbiter polling phase and go straight to loading the report.
-  const [reportAlreadyReady] = useState(() => 
+  const [reportAlreadyReady] = useState(() =>
     typeof window !== "undefined" && sessionOnlyStorage.getItem("fc_report_ready") === "1"
   );
   const [state, setState] = useState<PageState>(() => reportAlreadyReady ? "loading" : "arbiter");
@@ -43,37 +67,27 @@ export function useResult(initialSessionId?: string) {
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
 
-  // Investigation Meta
-  const [isDeepPhase, setIsDeepPhase] = useState(() => getInitial("forensic_is_deep") === "true");
-  const [thumbnail, setThumbnail] = useState(() => getInitial("forensic_thumbnail"));
-  const [mimeType, setMimeType] = useState(() => getInitial("forensic_mime_type"));
-  const [pipelineStartAt, setPipelineStartAt] = useState(() => getInitial("forensic_pipeline_start"));
-  const [fileName] = useState(() => getInitial("forensic_file_name"));
-  const [agentTimeline] = useState<AgentUpdate[]>(() => {
-    try {
-      const sid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
-      const isDeep = getInitial("forensic_is_deep") === "true";
-
-      if (sid) {
-        const scopedKey = isDeep ? `forensic_deep_agents:${sid}` : `forensic_initial_agents:${sid}`;
-        const scopedData = storage.getItem<AgentUpdate[]>(scopedKey, true);
-        if (scopedData && Array.isArray(scopedData)) return scopedData;
-
-        if (isDeep) {
-          const scopedFallback = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
-          if (scopedFallback && Array.isArray(scopedFallback)) return scopedFallback;
-        }
-      }
-
-      return [];
-    } catch { return []; }
+  // Investigation Meta — initialized from session-scoped keys (falls back to global for backward compat)
+  const initialIsDeep = storage.getItem("forensic_is_deep") === "true";
+  const [isDeepPhase, setIsDeepPhase] = useState(initialIsDeep);
+  const [thumbnail, setThumbnail] = useState<string | null>(() => {
+    if (initialSid) return storage.getItem(`forensic_thumbnail:${initialSid}`) ?? storage.getItem("forensic_thumbnail");
+    return storage.getItem("forensic_thumbnail");
   });
-
-  const [sessionId, setSessionId] = useState<string | null>(() =>
-    initialSessionId ?? (typeof window !== "undefined"
-      ? storage.getItem("forensic_session_id")
-      : null)
+  const [mimeType, setMimeType] = useState<string | null>(() =>
+    initialCtx?.mime_type ?? storage.getItem("forensic_mime_type")
   );
+  const [pipelineStartAt, setPipelineStartAt] = useState<string | null>(() =>
+    initialCtx?.pipeline_start ?? storage.getItem("forensic_pipeline_start")
+  );
+  const [fileName, setFileName] = useState<string | null>(() =>
+    initialCtx?.file_name ?? storage.getItem("forensic_file_name")
+  );
+  const [agentTimeline, setAgentTimeline] = useState<AgentUpdate[]>(() =>
+    loadAgentTimelineForSession(initialSid, initialIsDeep)
+  );
+
+  const [sessionId, setSessionId] = useState<string | null>(() => initialSid);
 
   // Transition smoothness: ensure overlay shows for at least 800ms.
   // Skipped if report is already ready (fc_report_ready was set by handleAcceptAnalysis).
@@ -93,29 +107,41 @@ export function useResult(initialSessionId?: string) {
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {
     if (initialSessionId && initialSessionId !== sessionId) {
+      const ctx = readSessionContext(initialSessionId);
       setSessionId(initialSessionId);
       setReport(null);
       setArbiterComplete(false);
-      setMinOverlayDone(false); // restart overlay timer
+      setMinOverlayDone(false);
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
-      
-      // Also sync metadata
-      setIsDeepPhase(getInitial("forensic_is_deep") === "true");
-      setThumbnail(getInitial("forensic_thumbnail"));
-      setMimeType(getInitial("forensic_mime_type"));
-      setPipelineStartAt(getInitial("forensic_pipeline_start"));
+      setIsDeepPhase(storage.getItem("forensic_is_deep") === "true");
+      setThumbnail(
+        storage.getItem(`forensic_thumbnail:${initialSessionId}`) ??
+        storage.getItem("forensic_thumbnail")
+      );
+      setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
+      setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
+      setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
+      setAgentTimeline(loadAgentTimelineForSession(initialSessionId, storage.getItem("forensic_is_deep") === "true"));
     }
   }, [initialSessionId, sessionId]);
 
   const selectSession = useCallback((sid: string) => {
     storage.setItem("forensic_session_id", sid);
+    const ctx = readSessionContext(sid);
+    const nextIsDeep = storage.getItem("forensic_is_deep") === "true";
     setSessionId(sid);
     setArbiterComplete(false);
     setMinOverlayDone(false);
     setReport(null);
     setState("arbiter");
     setArbiterMsg("Council deliberating on evidence...");
+    setIsDeepPhase(nextIsDeep);
+    setThumbnail(storage.getItem(`forensic_thumbnail:${sid}`) ?? storage.getItem("forensic_thumbnail"));
+    setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
+    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
+    setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
+    setAgentTimeline(loadAgentTimelineForSession(sid, nextIsDeep));
   }, []);
 
   // Set to true when the arbiter status polling confirms the investigation is done
@@ -245,9 +271,10 @@ export function useResult(initialSessionId?: string) {
   useEffect(() => {
     if (state === "ready" && report && !historySavedRef.current) {
       historySavedRef.current = true;
+      const ctx = readSessionContext(sessionId);
       const hItem: HistoryItem = {
         sessionId: report.session_id,
-        fileName: storage.getItem("forensic_file_name") || "Unknown File",
+        fileName: ctx?.file_name ?? fileName ?? "Unknown File",
         verdict: report.overall_verdict || "INCONCLUSIVE",
         timestamp: Date.now(),
         type: isDeepPhase ? "Deep" : "Initial",
@@ -263,7 +290,7 @@ export function useResult(initialSessionId?: string) {
         dbg.error("SessionStorage persistence failed", e);
       }
     }
-  }, [state, report, isDeepPhase, thumbnail, mimeType]);
+  }, [state, report, isDeepPhase, thumbnail, mimeType, sessionId, fileName]);
 
   const handleNew = useCallback(() => {
     playSound("reset");

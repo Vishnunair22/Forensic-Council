@@ -344,6 +344,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
 
       // Capture image thumbnail before upload so it's available on the result page
+      let thumbnailDataUrl: string | null = null;
       if (targetFile.type.startsWith("image/")) {
         try {
           const thumbUrl = URL.createObjectURL(targetFile);
@@ -361,7 +362,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            storage.setItem("forensic_thumbnail", canvas.toDataURL("image/jpeg", 0.72));
+            thumbnailDataUrl = canvas.toDataURL("image/jpeg", 0.72);
+            storage.setItem("forensic_thumbnail", thumbnailDataUrl);
           }
           URL.revokeObjectURL(thumbUrl);
         } catch {
@@ -403,17 +405,25 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         pipeline_start: pipelineStart,
       };
       storage.setItem("forensic_investigation_ctx", investigationCtx, true);
+      storage.setItem(`forensic_investigation_ctx:${sessionIdToUse}`, investigationCtx, true);
       // Individual keys kept for hooks that read them directly
       storage.setItem("forensic_session_id", sessionIdToUse);
       if (typeof document !== "undefined") {
         document.cookie = `forensic_session_id=${sessionIdToUse}; path=/; max-age=3600; SameSite=Lax`;
       }
       storage.setItem("forensic_file_name", targetFile.name);
+      storage.setItem(`forensic_file_name:${sessionIdToUse}`, targetFile.name);
       storage.setItem("forensic_case_id", caseId);
       storage.setItem("forensic_investigator_id", investigatorId);
       storage.setItem("forensic_mime_type", targetFile.type);
+      storage.setItem(`forensic_mime_type:${sessionIdToUse}`, targetFile.type);
 
       storage.setItem("forensic_pipeline_start", pipelineStart);
+      storage.setItem(`forensic_pipeline_start:${sessionIdToUse}`, pipelineStart);
+
+      if (thumbnailDataUrl) {
+        storage.setItem(`forensic_thumbnail:${sessionIdToUse}`, thumbnailDataUrl);
+      }
       setIsUploading(false);
       setUploadPhaseText("Connecting to analysis stream…");
 

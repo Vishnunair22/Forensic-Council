@@ -8,10 +8,6 @@ import {
   UploadCloud,
   Cpu,
   FileSignature,
-  FileImage,
-  FileText,
-  FileAudio,
-  FileVideo,
 } from "lucide-react";
 
 export const AGENTS = [
@@ -108,16 +104,6 @@ export const HOW_IT_WORKS = [
     desc: "You receive a fully secured, tamper-proof forensic report that clearly explains the final results.",
   },
 ] as const;
-
-export const REPORT_TABS = ["Image", "Text", "Audio", "Video"] as const;
-export type ReportTab = (typeof REPORT_TABS)[number];
-
-export const TAB_ICONS: Record<ReportTab, typeof FileImage> = {
-  Image: FileImage,
-  Text: FileText,
-  Audio: FileAudio,
-  Video: FileVideo,
-};
 
 // start at 1.5 s
 export const ARBITER_POLL_INTERVAL_MS = 1500;
