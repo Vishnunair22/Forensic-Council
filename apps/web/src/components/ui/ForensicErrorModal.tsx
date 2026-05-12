@@ -134,6 +134,7 @@ export function ForensicErrorModal({
                       <div className="flex gap-4">
                         {onRetry && (
                           <button
+                            type="button"
                             onClick={onRetry}
                             className="flex-1 btn-horizon-primary py-4 text-xs border-danger/40 bg-danger/10 text-danger hover:bg-danger/20 flex items-center justify-center gap-3"
                           >
@@ -143,6 +144,7 @@ export function ForensicErrorModal({
                         )}
                         {onHome && (
                           <button
+                            type="button"
                             onClick={onHome}
                             className="flex-1 btn-horizon-outline py-4 text-xs flex items-center justify-center gap-3"
                           >

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Activity, FileSearch, History as HistoryIcon, Home as HomeIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -71,6 +71,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   }, [rs.report]);
 
   const keyFindings = useMemo(() => buildKeyFindings(rs.report), [rs.report]);
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
 
   if (!rs.mounted) {
     return <ResultSkeletonView />;
@@ -119,13 +120,13 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           <div
             role="tablist"
             aria-label="Report sections"
-            className="flex items-center gap-1 focus:outline-none"
-            tabIndex={0}
+            className="flex items-center gap-1"
             onKeyDown={(e) => {
-              if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                e.preventDefault();
-                rs.setActiveTab(rs.activeTab === "analysis" ? "history" : "analysis");
-              }
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+              e.preventDefault();
+              const next = rs.activeTab === "analysis" ? "history" : "analysis";
+              rs.setActiveTab(next);
+              requestAnimationFrame(() => tabRefs.current[next]?.focus());
             }}
           >
             {(["analysis", "history"] as Tab[]).map((tab) => (
@@ -136,6 +137,8 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 id={`tab-${tab}`}
                 aria-selected={rs.activeTab === tab}
                 aria-controls={`tabpanel-${tab}`}
+                tabIndex={rs.activeTab === tab ? 0 : -1}
+                ref={(node) => { tabRefs.current[tab] = node; }}
                 onClick={() => rs.setActiveTab(tab)}
                 className="px-4 sm:px-6 py-2.5 text-[10px] font-mono font-bold transition-all duration-250 rounded-xl uppercase tracking-[0.14em] flex items-center gap-2"
                 style={
@@ -145,7 +148,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                         color: "#020810",
                         boxShadow: `0 0 18px rgba(79,142,247,0.28)`,
                       }
-                    : { color: "rgba(255,255,255,0.28)" }
+                    : { color: "rgba(237,242,248,0.64)" }
                 }
                 onMouseEnter={(e) => {
                   if (rs.activeTab !== tab) {
@@ -155,7 +158,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 }}
                 onMouseLeave={(e) => {
                   if (rs.activeTab !== tab) {
-                    (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.28)";
+                    (e.currentTarget as HTMLElement).style.color = "rgba(237,242,248,0.64)";
                     (e.currentTarget as HTMLElement).style.background = "";
                   }
                 }}

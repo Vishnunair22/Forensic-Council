@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Scale, ShieldCheck, Zap } from "lucide-react";
 
 interface ArbiterDeliberationOverlayProps {
@@ -14,6 +14,7 @@ export function ArbiterDeliberationOverlay({
   liveText,
 }: ArbiterDeliberationOverlayProps) {
   const [isPageVisible, setIsPageVisible] = useState(true);
+  const prefersReducedMotion = useReducedMotion();
 
   // Pause animations when the tab is backgrounded to save CPU
   useEffect(() => {
@@ -38,6 +39,9 @@ export function ArbiterDeliberationOverlay({
     <AnimatePresence>
       {isVisible && (
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="arbiter-overlay-title"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -52,29 +56,32 @@ export function ArbiterDeliberationOverlay({
               {/* Animated Scales */}
               <div className="relative w-32 h-32 mb-10">
                 <motion.div
-                  animate={isPageVisible ? { 
-                    rotate: [0, -5, 5, 0],
-                  } : {}}
-                  transition={{ 
-                    duration: 4, 
-                    repeat: Infinity, 
-                    ease: "easeInOut" 
-                  }}
+                  animate={
+                    isPageVisible && !prefersReducedMotion
+                      ? { rotate: [0, -5, 5, 0] }
+                      : {}
+                  }
+                  transition={
+                    prefersReducedMotion
+                      ? {}
+                      : { duration: 4, repeat: Infinity, ease: "easeInOut" }
+                  }
                   className="absolute inset-0 flex items-center justify-center text-[var(--color-primary)]"
                 >
                   <Scale className="w-24 h-24 stroke-[1.5]" />
                 </motion.div>
 
                 <motion.div
-                  animate={isPageVisible ? { 
-                    scale: [1, 1.2, 1],
-                    opacity: [0.3, 0.6, 0.3]
-                  } : {}}
-                  transition={{ 
-                    duration: 2, 
-                    repeat: Infinity, 
-                    ease: "easeInOut" 
-                  }}
+                  animate={
+                    isPageVisible && !prefersReducedMotion
+                      ? { scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }
+                      : {}
+                  }
+                  transition={
+                    prefersReducedMotion
+                      ? {}
+                      : { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                  }
                   className="absolute inset-0 flex items-center justify-center"
                 >
                   <div className="w-32 h-32 rounded-full border border-[var(--color-primary)]/20" />
@@ -86,7 +93,7 @@ export function ArbiterDeliberationOverlay({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <h2 className="text-3xl font-heading font-bold text-white mb-4 tracking-tight">
+                <h2 id="arbiter-overlay-title" className="text-3xl font-heading font-bold text-white mb-4 tracking-tight">
                   Arbiter Deliberation
                 </h2>
                 
@@ -110,16 +117,16 @@ export function ArbiterDeliberationOverlay({
                     The Council Arbiter is synthesizing per-agent findings into the signed result report.
                   </p>
                   
-                  <div className="h-6 flex items-center justify-center">
-                    <motion.p
-                      key={cleanLiveText}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-[11px] font-mono font-bold text-[var(--color-primary)] tracking-[0.08em]"
-                    >
-                      {cleanLiveText || "Compiling agent findings into the final report."}
-                    </motion.p>
-                  </div>
+<div className="h-6 flex items-center justify-center" aria-live="polite" aria-atomic="true">
+                      <motion.p
+                        key={cleanLiveText}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-[11px] font-mono font-bold text-[var(--color-primary)] tracking-[0.08em]"
+                      >
+                        {cleanLiveText || "Compiling agent findings into the final report."}
+                      </motion.p>
+                    </div>
                 </div>
               </motion.div>
             </div>
@@ -128,14 +135,16 @@ export function ArbiterDeliberationOverlay({
           {/* Indeterminate Progress Bar (Bottom) */}
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5 overflow-hidden">
             <motion.div
-              animate={{ 
-                x: ["-100%", "200%"],
-              }}
-              transition={{ 
-                duration: 2.2, 
-                repeat: Infinity, 
-                ease: "easeInOut" 
-              }}
+              animate={
+                !prefersReducedMotion
+                  ? { x: ["-100%", "200%"] }
+                  : {}
+              }
+              transition={
+                prefersReducedMotion
+                  ? {}
+                  : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }
+              }
               className="absolute top-0 bottom-0 w-1/3 bg-[var(--color-primary)] rounded-full shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.5)]"
             />
           </div>

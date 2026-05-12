@@ -419,18 +419,30 @@
   transform: translateY(-1px);
 }
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  FOCUS                                                          */
-/* ─────────────────────────────────────────────────────────────── */
-:where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22);
-  border-radius: 4px;
-}
+  /* ── Contrast tiers for functional HUD text ── */
+  .text-muted-readable {
+    color: rgba(237, 242, 248, 0.68);
+  }
 
-:where([data-focus-contained="true"]):focus-visible {
-  outline-offset: -2px;
+  .text-muted-secondary {
+    color: rgba(237, 242, 248, 0.56);
+  }
+
+  .text-muted-decorative {
+    color: rgba(237, 242, 248, 0.35);
+  }
+
+  /* ── Global focus ring ── */
+  :where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22);
+    border-radius: 4px;
+  }
+
+  :where([data-focus-contained="true"]):focus-visible {
+    outline-offset: -2px;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────── */

@@ -23,7 +23,7 @@
 | Field | Value |
 |-------|-------|
 | Local branch | `phase-4-a11y-ux` (feature branch from `main`) |
-| Local commit | `bce9980` (Phase 4.5) |
+| Local commit | `4622020` (Phase 4 docs) |
 | Tag | — |
 
 ## Current Local Goal

@@ -168,39 +168,42 @@ export function HITLCheckpointModal({
         </div>
        </div>
 
-       {/* Note input */}
-       <div className="space-y-3">
-        <h4 className="text-xs font-black text-white/40 tracking-wide px-1">Supplemental Documentation</h4>
-        <textarea
-         id="hitl-notes"
-         value={note}
-         onChange={(e) => setNote(e.target.value)}
-         placeholder="Enter forensic notes for this intervention..."
-         className="w-full px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder:text-white/10 focus:outline-none focus:border-primary/30 transition-all min-h-[100px] resize-none"
-         disabled={isSubmitting}
+{/* Note input */}
+        <div className="space-y-3">
+         <h4 className="text-xs font-black text-white/40 tracking-wide px-1" id="hitl-notes-label">Supplemental Documentation</h4>
+         <textarea
+          id="hitl-notes"
+          aria-labelledby="hitl-notes-label"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Enter forensic notes for this intervention..."
+          className="w-full px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder:text-white/10 focus:outline-none focus:border-primary/30 transition-all min-h-[100px] resize-none"
+          disabled={isSubmitting}
         />
-       </div>
-
-       {decisionError && (
-        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold text-center tracking-wide">
-         {decisionError}
         </div>
-       )}
+
+        {decisionError && (
+         <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold text-center tracking-wide">
+          {decisionError}
+         </div>
+        )}
       </div>
 
-      <DialogFooter className="sm:justify-between border-t border-white/5 p-8 pt-6 gap-4">
-       <button
-        onClick={onDismiss}
-        disabled={isSubmitting}
-        className="px-8 py-4 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/[0.05] transition-all text-sm font-bold tracking-wide"
-       >
-        Cancel
-       </button>
-       <button
-        onClick={handleSubmit}
-        disabled={!selectedDecision || isSubmitting}
-        className="px-10 py-4 rounded-full bg-primary text-black font-bold text-sm tracking-wide hover:bg-primary/90 active:scale-[0.98] transition-all duration-300 shadow-[0_0_30px_rgba(0,255,65,0.25)] hover:shadow-[0_0_50px_rgba(0,255,65,0.4)] flex items-center gap-2"
-       >
+<DialogFooter className="sm:justify-between border-t border-white/5 p-8 pt-6 gap-4">
+        <button
+         type="button"
+         onClick={onDismiss}
+         disabled={isSubmitting}
+         className="px-8 py-4 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/[0.05] transition-all text-sm font-bold tracking-wide"
+        >
+         Cancel
+        </button>
+        <button
+         type="button"
+         onClick={handleSubmit}
+         disabled={!selectedDecision || isSubmitting}
+         className="px-10 py-4 rounded-full bg-primary text-black font-bold text-sm tracking-wide hover:bg-primary/90 active:scale-[0.98] transition-all duration-300 shadow-[0_0_30px_rgba(0,255,65,0.25)] hover:shadow-[0_0_50px_rgba(0,255,65,0.4)] flex items-center gap-2"
+        >
         {isSubmitting ? (
          <>
           <Loader2 className="w-4 h-4 animate-spin" />

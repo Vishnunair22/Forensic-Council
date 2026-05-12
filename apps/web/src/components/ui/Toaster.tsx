@@ -91,7 +91,7 @@ function ToastCard({
           </p>
         )}
         {t.description && (
-          <p className="text-[11px] font-mono text-white/35 leading-relaxed mt-1">
+          <p className="text-[11px] font-mono text-muted-secondary leading-relaxed mt-1">
             {t.description}
           </p>
         )}

@@ -96,8 +96,8 @@ export function LoadingOverlay({
         <motion.div
           className="absolute top-[42%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[240px] rounded-full blur-[88px]"
           style={{ background: "radial-gradient(ellipse, rgba(79,142,247,0.07) 0%, transparent 70%)" }}
-          animate={{ opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          animate={prefersReducedMotion ? {} : { opacity: [0.5, 1, 0.5] }}
+          transition={prefersReducedMotion ? {} : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
@@ -112,16 +112,16 @@ export function LoadingOverlay({
         >
           <motion.div
             className="w-1.5 h-1.5 rounded-full bg-primary"
-            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.35, 1] }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+            animate={prefersReducedMotion ? {} : { scale: [1, 1.5, 1], opacity: [1, 0.35, 1] }}
+            transition={prefersReducedMotion ? {} : { duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-[10px] font-mono font-bold tracking-[0.28em] uppercase text-white/25">
+          <span className="text-[10px] font-mono font-bold tracking-[0.28em] uppercase text-muted-decorative">
             Forensic Protocol Active
           </span>
           <motion.div
             className="w-1.5 h-1.5 rounded-full bg-primary"
-            animate={{ scale: [1, 1.5, 1], opacity: [0.35, 1, 0.35] }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
+            animate={prefersReducedMotion ? {} : { scale: [1, 1.5, 1], opacity: [0.35, 1, 0.35] }}
+            transition={prefersReducedMotion ? {} : { duration: 1.4, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
           />
         </motion.div>
 
@@ -169,8 +169,8 @@ export function LoadingOverlay({
                     <motion.div
                       className="absolute inset-0 rounded-xl"
                       style={{ border: "1px solid rgba(79,142,247,0.38)" }}
-                      animate={{ opacity: [0.2, 0.65, 0.2], scale: [1, 1.05, 1] }}
-                      transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                      animate={prefersReducedMotion ? {} : { opacity: [0.2, 0.65, 0.2], scale: [1, 1.05, 1] }}
+                      transition={prefersReducedMotion ? {} : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
                     />
                   </div>
 
@@ -216,8 +216,8 @@ export function LoadingOverlay({
                       borderColor: "rgba(79,142,247,0.12)",
                       borderTopColor: "rgba(79,142,247,0.72)",
                     }}
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
+                    animate={prefersReducedMotion ? {} : { rotate: 360 }}
+                    transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "linear" }}
                     aria-hidden="true"
                   />
                 </div>

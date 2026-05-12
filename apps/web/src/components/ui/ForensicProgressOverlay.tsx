@@ -32,6 +32,7 @@ export function ForensicProgressOverlay({
 
   return (
     <motion.div
+      aria-busy="true"
       className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent"
       style={{
         background: "rgba(0, 0, 0, 0.88)",
@@ -53,10 +54,10 @@ export function ForensicProgressOverlay({
           <motion.div
             className="w-1.5 h-1.5 rounded-full"
             style={{ background: "var(--color-primary)" }}
-            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.4, 1] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+            animate={prefersReducedMotion ? {} : { scale: [1, 1.5, 1], opacity: [1, 0.4, 1] }}
+            transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-[10px] font-mono font-bold tracking-[0.26em] uppercase" style={{ color: "rgba(255,255,255,0.35)" }}>
+          <span className="text-[10px] font-mono font-bold tracking-[0.26em] uppercase text-muted-secondary">
             Forensic Analysis
           </span>
         </motion.div>
@@ -71,8 +72,8 @@ export function ForensicProgressOverlay({
                 border: "1.5px solid rgba(79,142,247,0.12)",
                 borderTopColor: "rgba(79,142,247,0.75)",
               }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
+              animate={prefersReducedMotion ? {} : { rotate: 360 }}
+              transition={prefersReducedMotion ? {} : { duration: 1.4, repeat: Infinity, ease: "linear" }}
             />
             <div
               className="absolute inset-1.5 rounded-full"
@@ -90,10 +91,12 @@ export function ForensicProgressOverlay({
             {title}
           </motion.h1>
           <p
+            id="forensic-live-text"
             className="text-[12px] font-mono font-semibold tracking-wide text-center px-4"
             style={{ color: "rgba(79,142,247,0.65)" }}
             role="status"
             aria-live="polite"
+            aria-atomic="true"
           >
             {liveText}
           </p>
@@ -104,7 +107,7 @@ export function ForensicProgressOverlay({
           <div className="flex items-center justify-between mb-2.5 text-[9px] font-mono uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.22)" }}>
             <span>{telemetryLabel}</span>
             {showElapsed && (
-              <span style={{ color: "var(--color-primary)" }}>{formatTime(elapsed)}</span>
+              <span aria-hidden="true" style={{ color: "var(--color-primary)" }}>{formatTime(elapsed)}</span>
             )}
           </div>
           <div className="h-[3px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
@@ -112,8 +115,8 @@ export function ForensicProgressOverlay({
               className="h-full rounded-full"
               style={{ background: "linear-gradient(90deg, rgba(79,142,247,0.8), rgba(165,200,255,0.95))" }}
               initial={{ width: 0 }}
-              animate={{ width: "100%" }}
-              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              animate={prefersReducedMotion ? {} : { width: "100%" }}
+              transition={prefersReducedMotion ? {} : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
             />
           </div>
         </div>

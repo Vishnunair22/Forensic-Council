@@ -247,7 +247,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                 >
                   {isDragging ? "Release to Upload" : "Drop Evidence File"}
                 </span>
-                <p id="upload-file-help" className="text-[13px] text-white/30 max-w-[240px] leading-relaxed">
+                <p id="upload-file-help" className="text-[13px] text-muted-readable max-w-[260px] leading-relaxed">
                   or press Enter to select · images, video, and audio · max 50 MB
                 </p>
               </div>
