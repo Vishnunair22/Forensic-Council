@@ -1,5 +1,7 @@
 # ML Models Documentation
 
+> **Deprecated / reference-only.** Current source of truth: `docs/MODEL_REGISTRY.md`
+
 This document covers model pinning, licensing, and caching for the Forensic Council system.
 
 > **Note:** This document supersedes `MODEL_LICENSING.md`. All licensing information is now consolidated here.

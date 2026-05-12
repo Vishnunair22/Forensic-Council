@@ -1,5 +1,7 @@
 # Troubleshooting Guide
 
+> **Deprecated / reference-only.** Operational guidance lives in `docs/OPERATIONAL_RUNBOOK.md`.
+
 ## WebSocket Connection Failures
 
 ### Symptom: "WebSocket connection failed (code 4001)"

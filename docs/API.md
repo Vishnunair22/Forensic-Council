@@ -1,6 +1,8 @@
 # Forensic Council — API Reference
 
-**Version:** v1.7.0 | **Base URL:** `http://localhost:8000`
+> **Deprecated / reference-only.** Current source of truth: `docs/API_CONTRACT.md`
+>
+> This file is retained for reference only. Do not use as a contributor guide.
 
 All REST endpoints are prefixed with `/api/v1`. Authentication uses JWT Bearer tokens. Obtain a token via `POST /api/v1/auth/login`.
 

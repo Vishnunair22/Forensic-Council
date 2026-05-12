@@ -30,6 +30,30 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 _tracer = get_tracer("forensic-council.llm")
 
+# Shared placeholder detection across all secret fields
+PLACEHOLDER_SIGNALS = (
+    "your_",
+    "_here",
+    "placeholder",
+    "changeme",
+    "replace_me",
+    "__paste_",
+    "paste_",
+    "sk-xxx",
+    "replace_me",
+    "change_me",
+    "changeme",
+)
+
+
+def is_placeholder_secret(value: str | None) -> bool:
+    """True if value is null/empty or contains placeholder signals."""
+    if not value:
+        return True
+    lower = value.strip().lower()
+    return not lower or any(sig in lower for sig in PLACEHOLDER_SIGNALS)
+
+
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _MAX_RETRIES = 3
 _BASE_BACKOFF = 2.0
@@ -144,9 +168,7 @@ class LLMClient:
         """True if the LLM client has a real (non-placeholder) API key configured."""
         if not self.api_key or self.provider == "none":
             return False
-        _placeholder_signals = ("your_", "_here", "placeholder", "changeme", "sk-xxx")
-        key_lower = self.api_key.lower()
-        if any(sig in key_lower for sig in _placeholder_signals):
+        if is_placeholder_secret(self.api_key):
             return False
         # Gemini calls require policy acknowledgment
         if self.provider == "gemini" and not getattr(self.config, "gemini_api_key_policy_ok", False):
@@ -223,7 +245,13 @@ class LLMClient:
                         if self.provider == "gemini":
                             self.api_key = self.gemini_api_key
                         elif self.provider == "groq":
-                            self.api_key = self.config.llm_api_key
+                            # Use arbiter key when in arbiter tier, agent key otherwise.
+                            # This prevents arbiter Groq synthesis calls from burning agent-tier quota.
+                            self.api_key = (
+                                self.config.arbiter_llm_api_key
+                                if self.use_arbiter_tier and self.config.arbiter_llm_api_key
+                                else self.config.llm_api_key
+                            )
                     else:
                         self.model = model_spec
 

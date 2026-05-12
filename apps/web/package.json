@@ -23,7 +23,7 @@
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:a11y": "playwright test --project=chromium tests/e2e/accessibility.spec.ts",
+    "test:a11y": "npm run test:a11y:unit && npm run test:a11y:e2e",
     "test:a11y:unit": "jest tests/accessibility --runInBand",
     "test:a11y:e2e": "playwright test --project=chromium tests/e2e/accessibility.spec.ts",
     "test:e2e": "playwright test",

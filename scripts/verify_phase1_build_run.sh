@@ -25,14 +25,16 @@ case "$MODE" in
   static)
     echo "==> [static] Shell syntax checks..."
     FAILED=0
-    for f in scripts/*.sh infra/*.sh apps/api/scripts/*.sh 2>/dev/null; do
-      if [[ -f "$f" ]]; then
-        if ! bash -n "$f" 2>&1; then
-          echo "  FAIL: bash -n failed for $f"
-          FAILED=1
-        fi
+    shopt -s nullglob
+    for f in scripts/*.sh infra/*.sh apps/api/scripts/*.sh; do
+      if bash -n "$f" 2>&1; then
+        : # pass
+      else
+        echo "  FAIL: bash -n failed for $f"
+        FAILED=1
       fi
     done
+    shopt -u nullglob
     if [[ $FAILED -ne 0 ]]; then
       echo "FAIL: shell syntax errors found"
       exit 1

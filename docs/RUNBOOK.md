@@ -1,5 +1,7 @@
 # Production Incident Runbook
 
+> **Deprecated / reference-only.** Current source of truth: `docs/OPERATIONAL_RUNBOOK.md`
+
 ## Triage Checklist
 
 When an alert fires or a user reports an issue:

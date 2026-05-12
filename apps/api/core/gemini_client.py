@@ -42,6 +42,7 @@ from typing import Any
 import httpx
 
 from core.config import Settings
+from core.llm_client import is_placeholder_secret
 from core.observability import get_tracer
 from core.provider_quota_guard import ProviderQuotaGuard
 from core.retry import CircuitBreaker
@@ -274,9 +275,8 @@ class GeminiVisionClient:
         self.fallback_chain: list[str] = _chain
         self.timeout: float = min(getattr(config, "gemini_timeout", 25.0), 25.0)
 
-        # Check if key is missing or is the default placeholder from .env.example
-        is_placeholder = self.api_key and "your_gemini_key" in self.api_key
-        self._enabled = bool(self.api_key) and not is_placeholder and self._policy_ok
+        # Check if key is missing or is a placeholder
+        self._enabled = bool(self.api_key) and not is_placeholder_secret(self.api_key) and self._policy_ok
 
         # Circuit breaker: opens after 3 consecutive failures, recovers after 120s
         self._circuit_breaker = CircuitBreaker(

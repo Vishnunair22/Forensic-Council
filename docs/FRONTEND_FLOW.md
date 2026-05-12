@@ -1,5 +1,7 @@
 # Frontend Flow
 
+> **Deprecated / reference-only.** Route/state ownership lives in `docs/WORKFLOW_TRACE.md`.
+
 ## Frontend Root
 
 ```text

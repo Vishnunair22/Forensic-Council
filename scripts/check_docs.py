@@ -152,11 +152,39 @@ def check_scripts_exist() -> list[str]:
     errors = []
     scripts = [
         SCRIPTS_DIR / "check_test_hygiene.py",
+        SCRIPTS_DIR / "check_docs.py",
         SCRIPTS_DIR / "verify_phase8_tests.sh",
+        SCRIPTS_DIR / "verify_project.sh",
+        SCRIPTS_DIR / "verify_phase1_build_run.sh",
     ]
     for s in scripts:
         if not s.exists():
             errors.append(f"Missing: {s.relative_to(ROOT)}")
+    return errors
+
+
+def check_shell_scripts_syntax() -> list[str]:
+    errors = []
+    import os, shutil, subprocess
+    if not shutil.which("bash"):
+        return []
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(str(ROOT))
+        for pattern in ["scripts/*.sh", "infra/*.sh", "apps/api/scripts/*.sh"]:
+            for f in Path(".").glob(pattern):
+                result = subprocess.run(
+                    ["bash", "-n", str(f)],
+                    capture_output=True, text=True,
+                    cwd=str(ROOT),
+                )
+                if result.returncode != 0:
+                    stderr = result.stderr.strip()
+                    if "WSL" in stderr or "no such file" in stderr.lower() or "not recognized" in stderr.lower():
+                        continue
+                    errors.append(f"shell syntax error in {f}: {stderr}")
+    finally:
+        os.chdir(old_cwd)
     return errors
 
 
@@ -171,6 +199,7 @@ def main() -> int:
     all_errors.extend(check_no_archived_doc_references())
     all_errors.extend(check_project_handoff_has_phases())
     all_errors.extend(check_scripts_exist())
+    all_errors.extend(check_shell_scripts_syntax())
 
     if all_errors:
         print("Documentation checks FAILED:")

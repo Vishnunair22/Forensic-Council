@@ -1,5 +1,7 @@
 # Routes and APIs
 
+> **Deprecated / reference-only.** Current source of truth: `docs/API_CONTRACT.md`
+
 ## Frontend Routes
 
 | URL | File | Purpose |

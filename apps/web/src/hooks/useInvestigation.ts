@@ -287,6 +287,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setArbiterLiveText("");
     setWsConnectionError(null);
     sessionOnlyStorage.removeItem("fc_show_loading");
+    const sid = storage.getItem("forensic_session_id");
+    if (sid) {
+      sessionOnlyStorage.removeItem(`fc_resume_requested:${sid}`);
+    }
     clearInvestigationPersistence();
     lastSessionIdRef.current = null;
     completedAgentsRef.current = [];
@@ -499,7 +503,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         clearInvestigationPersistence();
         sessionOnlyStorage.removeItem("forensic_auto_start");
         sessionOnlyStorage.removeItem("fc_show_loading");
-        sessionOnlyStorage.setItem("fc_open_upload_once", "1");
         setAutoStartBlocking(false);
         setShowLoadingOverlay(false);
         toast.destructive({
@@ -520,6 +523,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setFile(pending);
     sessionOnlyStorage.removeItem("forensic_auto_start");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
+    sessionOnlyStorage.setItem("fc_pending_file_meta", JSON.stringify({
+      name: pending.name,
+      type: pending.type,
+      size: pending.size,
+      updatedAt: Date.now(),
+    }), true);
     setShowLoadingOverlay(true);
     triggerAnalysis(pending);
   }, [router, triggerAnalysis]);
@@ -572,7 +581,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             title: "Session expired",
             description: "This investigation session is no longer available. Please start a new analysis.",
           });
-          sessionOnlyStorage.setItem("fc_open_upload_once", "1");
           router.replace("/?upload=1");
           return;
         }
@@ -620,7 +628,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("arbiter_start");
     storage.setItem("forensic_is_deep", "false");
     const sid = storage.getItem("forensic_session_id");
-    if (sid) storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
+    if (sid) {
+      storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
+      sessionOnlyStorage.setItem(`fc_resume_requested:${sid}`, "initial");
+    }
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText("Final report synthesis requested. Compiling initial agent findings.");
@@ -661,6 +672,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         (a) => a.status !== "skipped",
       );
       storage.setItem(`forensic_initial_agents:${sid}`, nonSkipped, true);
+      sessionOnlyStorage.setItem(`fc_resume_requested:${sid}`, "deep");
     }
     analysisCompleteSoundedRef.current = false;
     clearCompletedAgents();

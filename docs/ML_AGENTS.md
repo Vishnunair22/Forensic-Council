@@ -1,5 +1,7 @@
 # ML Agents
 
+> **Deprecated / reference-only.** Agent capabilities documented in `docs/AGENT_CAPABILITIES.md` and agent source code.
+
 ## Overview
 
 Forensic Council uses five specialist forensic agents plus one Council Arbiter.
