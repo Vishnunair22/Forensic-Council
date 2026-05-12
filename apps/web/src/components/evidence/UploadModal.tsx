@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // Envelope icon — shows open state with drag-reactive document card
 function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
@@ -82,23 +83,19 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const prefersReducedMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { playSound } = useSound();
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Mount focus guard
+  const closeModal = useCallback(() => {
+    playSound("click");
+    onClose();
+  }, [playSound, onClose]);
+
+  useFocusTrap(dialogRef, mounted, closeModal);
+
+  // Mount focus guard — focus trap handles first-focus; focus stays in modal
   useEffect(() => {
     setMounted(true);
-    // Move focus into the dialog after mount
-    closeBtnRef.current?.focus();
   }, []);
-
-  // Escape key closes the dialog
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { playSound("click"); onClose(); }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, playSound]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -170,7 +167,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       style={{ background: "rgba(1,2,8,0.88)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
-      <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
         <motion.div
           initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -192,9 +189,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
           <div className="p-8 sm:p-10 flex flex-col items-center text-center">
             <button
-              ref={closeBtnRef}
               type="button"
-              onClick={() => { playSound("click"); onClose(); }}
+              onClick={closeModal}
               className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               style={{ color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.04)" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)"; }}

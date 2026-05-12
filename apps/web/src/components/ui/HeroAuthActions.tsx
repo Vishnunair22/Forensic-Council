@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
@@ -23,6 +23,7 @@ export function HeroAuthActions() {
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
+  const ctaRef = useRef<HTMLButtonElement>(null);
 
   // Prefetch the evidence route once on mount
   useEffect(() => {
@@ -112,9 +113,16 @@ export function HeroAuthActions() {
       });
   }, [playSound]);
 
+  const closeUpload = useCallback(() => {
+    setShowUpload(false);
+    setSelectedFile(null);
+    requestAnimationFrame(() => ctaRef.current?.focus());
+  }, []);
+
   return (
     <>
       <motion.button
+        ref={ctaRef}
         type="button"
         data-testid="hero-cta-begin"
         whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
@@ -137,7 +145,7 @@ export function HeroAuthActions() {
         {showUpload && !selectedFile && !isHandingOff && (
           <UploadModal
             key="upload-modal"
-            onClose={() => setShowUpload(false)}
+            onClose={closeUpload}
             onFileSelected={(file) => setSelectedFile(file)}
           />
         )}
@@ -147,7 +155,7 @@ export function HeroAuthActions() {
             key="success-modal"
             file={selectedFile}
             onNewUpload={() => setSelectedFile(null)}
-            onDismiss={() => { setShowUpload(false); setSelectedFile(null); }}
+            onDismiss={closeUpload}
             onStartAnalysis={async () => {
               if (isHandingOff) return;
               playSound("envelope-close");

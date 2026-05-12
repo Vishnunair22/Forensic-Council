@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, FileText, X, Loader2 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export interface UploadSuccessModalProps {
   file: File;
@@ -18,11 +19,17 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
   const [mounted, setMounted] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  const closeModal = () => {
+    playSound("click");
+    onDismiss();
+  };
+
+  useFocusTrap(dialogRef, mounted, closeModal);
 
   useEffect(() => {
     setMounted(true);
-    closeBtnRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -36,14 +43,6 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       return () => URL.revokeObjectURL(url);
     }
   }, [file]);
-
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { playSound("click"); onDismiss(); }
-    };
-    window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [onDismiss, playSound]);
 
   if (!mounted) return null;
 
@@ -63,7 +62,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#010208]/90 backdrop-blur-2xl p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onDismiss(); } }}
     >
-      <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
         <motion.div
           initial={{ opacity: 0, scale: 0.97, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -76,9 +75,8 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
             style={{ background: "radial-gradient(ellipse 70% 40% at 50% 0%, rgba(52,211,153,0.05) 0%, #020617 55%)" }}
           >
             <button
-              ref={closeBtnRef}
               type="button"
-              onClick={() => { playSound("click"); onDismiss(); }}
+              onClick={closeModal}
               aria-label="Close evidence dialog"
               data-testid="success-modal-close"
               className="absolute top-6 right-6 text-white/25 hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
