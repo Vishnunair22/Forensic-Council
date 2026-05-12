@@ -22,13 +22,15 @@
 
 | Field | Value |
 |-------|-------|
-| Local branch | `phase-7-workflow-state-fixes` (feature branch from `phase-6-agents-models-api-config`) |
+| Local branch | `phase-8-test-suite-refinement` (feature branch from `phase-7-workflow-state-fixes`) |
 | Local commit | (working) |
 | Tag | — |
 
 ## Current Local Goal
 
-Phase 7 (workflow/state fixes) — working in `phase-7-workflow-state-fixes` branch.
+Phase 8 (test suite audit and refinement) — in progress on `phase-8-test-suite-refinement`.
+
+Phase 7 (workflow/state fixes) — completed in previous checkpoint.
 
 Phase 6 (agents, models, LLM client, API config cleanup) — committed to `phase-6-agents-models-api-config` branch (`1276405`).
 
@@ -65,6 +67,72 @@ Phase 5 (backend core logic fixes) — committed to `phase-5-backend-core-logic`
 #### Fix #8 — Full journey E2E and backend contract tests
 - `apps/web/tests/e2e/full_journey_phase7.spec.ts`: New Playwright test file covering: expired handoff, duplicate 409 reconnect, reconnect complete/not_found, duplicate Accept/Deep decisions, forensic_history preservation.
 - `apps/api/tests/contracts/test_api_contracts.py`: Added Phase 7 test classes: `TestDuplicateInvestigation409`, `TestResumeIdempotency`, `TestArbiterStatusUnreachable`.
+
+### Phase 8 — Test Suite Audit & Refinement (in progress)
+
+#### Fix #1 — docs/WORKFLOW_TRACE.md
+- `docs/WORKFLOW_TRACE.md`: Created from Phase 7, documenting route/state ownership, storage key maps, Effect A/B behavior, state machine, edge cases, and rules for future changes.
+
+#### Phase 8.1 — Canonical Playwright E2E scripts
+- `apps/web/package.json`: Added `test:e2e`, `test:e2e:chromium`, `test:e2e:journey` scripts.
+- `docs/TESTING.md`: Updated test running instructions with explicit npm scripts.
+
+#### Phase 8.2 — WebSocket Jest test moved out of e2e folder
+- `apps/web/tests/e2e/websocket_flow.test.ts` → `apps/web/tests/unit/lib/websocket_flow.test.ts`
+- Updated `docs/TESTING.md` to reflect correct location.
+
+#### Phase 8.3 — Split full_journey into fast mocked PR test and opt-in live test
+- `apps/web/tests/e2e/full_journey.spec.ts`: Rewritten as fast mocked journey (API mocks via `page.route()`, no backend needed).
+- `apps/web/tests/e2e/full_journey.live.spec.ts`: Renamed from old live journey.
+- `apps/web/playwright.config.ts`: `testIgnore` now matches `*.live.spec.ts` instead of `full_journey.spec.ts`.
+- Tests cover: landing → upload → evidence → agent cards → accept → result → history.
+
+#### Phase 8.4 — Remove undeclared npx wait-on from CI
+- `.github/workflows/ci.yml`: Replaced `npx wait-on http://localhost:3000 --timeout 60000` with a Node.js inline wait loop (no new dependency, no lockfile change).
+
+#### Phase 8.5 — Align backend pytest marker filters with default
+- `.github/workflows/ci.yml`: Backend CI job now uses `-m "not requires_ml and not requires_network and not requires_docker"`.
+- `apps/api/pyproject.toml`: Added `system`, `live_provider`, `requires_services` markers.
+- Pyproject default already had correct filters; CI was the only inconsistency.
+
+#### Phase 8.6 — Replace unconditional system-test skips with opt-in markers
+- `apps/api/tests/system/test_agent1_full.py`: `pytestmark` → `requires_ml`, `system`, `skipif(RUN_SYSTEM_ML_TESTS=1)`.
+- `apps/api/tests/system/test_agent2_full.py`: Same pattern.
+- `apps/api/tests/system/test_agent3_full.py`: Same pattern (also added `import os`).
+- `apps/api/tests/system/test_forensic_system.py`: `requires_ml`, `system`, `requires_network`, `skipif(RUN_SYSTEM_ML_TESTS=1)`.
+
+#### Phase 8.7 — Replace skipped useInvestigation placeholder with real tests
+- `apps/web/tests/unit/hooks/useInvestigation.test.ts`: Replaced empty `test.skip("triggerAnalysis starts the investigation flow", async () => {})` with 8 real tests covering: default state, handleFile validation, handleNewUpload routing, double-click guards, investigationInFlightRef, DuplicateInvestigationError reconnect, pending file auto-start, handleDeepAnalysis re-entry, handleHITLDecision.
+
+#### Phase 8.8 — Update API contract queue mock from enqueue to submit
+- `apps/api/tests/contracts/test_api_contracts.py`: All `mock_queue.enqueue = AsyncMock(...)` → `mock_queue.submit = AsyncMock(return_value=None)`. Added `mock_queue.submit.assert_awaited_once()` assertion to the primary investigate test.
+
+#### Phase 8.9 — Add stale test hygiene checker
+- `scripts/check_test_hygiene.py`: New script detecting: `.only` in tests, `mock_queue.enqueue`, Jest tests in e2e folder, empty test.skip placeholders, unconditional pytest.mark.skip without skipif/env guard, missing E2E package.json scripts, undeclared npx wait-on in CI.
+- `scripts/verify_phase8_tests.sh`: New verification script with `static`, `frontend-unit`, `frontend-e2e`, `backend-unit`, `backend-integration`, `all` modes.
+- CI now runs hygiene checker in both `backend-lint` and `frontend-lint` jobs.
+
+#### Phase 8.10 — Split unit/e2e accessibility commands
+- `apps/web/package.json`: Added `test:a11y:unit` (Jest tests/accessibility) and `test:a11y:e2e` (Playwright axe). `test:a11y` now runs both.
+- `docs/TESTING.md`: Updated with all a11y scripts documented.
+
+#### Phase 8.11 — Frontend coverage gates for workflow-critical modules
+- `apps/web/jest.config.ts`: Added per-module thresholds for `useInvestigation.ts`, `useSimulation.ts`, `useResult.ts`, `investigationStorage.ts`.
+
+#### Phase 8.12 — Backend critical coverage enforcement
+- `apps/api/scripts/check_critical_coverage.py`: New script enforcing minimum coverage on lifecycle-critical modules: investigation.py (70%), sessions.py (70%), _authz.py (80%), _session_state.py (70%), investigation_queue.py (75%), session_persistence.py (75%), llm_client.py (65%), gemini_client.py (65%).
+
+#### Phase 8.13 — Deterministic media fixtures (not yet implemented)
+- Deferred.
+
+#### Phase 8.14 — Shared test helpers (not yet implemented)
+- Deferred.
+
+#### Phase 8.15 — Hygiene checker integrated into CI
+- `.github/workflows/ci.yml`: `backend-lint` now runs `python scripts/check_test_hygiene.py` after ruff; `frontend-lint` runs it after type-check.
+
+#### Phase 8.16 — Phase verification script
+- `scripts/verify_phase8_tests.sh`: Added (see Phase 8.9).
 
 ## What Changed Since Last AI/Remote Snapshot
 
@@ -202,6 +270,27 @@ Phase 7 (on phase-7-workflow-state-fixes, working):
  apps/web/tests/e2e/full_journey_phase7.spec.ts — Fix #8 (NEW)
  apps/api/tests/contracts/test_api_contracts.py — Fix #8 (Phase 7 contract tests)
  docs/WORKFLOW_TRACE.md                        — Fix #1 (NEW)
+
+Phase 8 (on phase-8-test-suite-refinement, in progress):
+ apps/web/package.json                       — 8.1 (test:e2e scripts)
+ apps/web/playwright.config.ts              — 8.3 (testIgnore → .live.spec.ts)
+ apps/web/tests/e2e/full_journey.spec.ts    — 8.3 (fast mocked journey, NEW)
+ apps/web/tests/e2e/full_journey.live.spec.ts — 8.3 (renamed from old live spec)
+ apps/web/tests/e2e/full_journey_phase7.spec.ts — (Phase 7, carried)
+ apps/web/tests/unit/lib/websocket_flow.test.ts — 8.2 (moved from e2e/)
+ apps/web/tests/unit/hooks/useInvestigation.test.ts — 8.7 (replaced placeholder)
+ apps/web/jest.config.ts                    — 8.11 (coverage gates)
+ docs/TESTING.md                            — 8.1, 8.2, 8.10 (updated scripts)
+ apps/api/pyproject.toml                    — 8.5, 8.6 (markers)
+ apps/api/tests/system/test_agent1_full.py   — 8.6 (opt-in markers)
+ apps/api/tests/system/test_agent2_full.py  — 8.6 (opt-in markers)
+ apps/api/tests/system/test_agent3_full.py  — 8.6 (opt-in markers)
+ apps/api/tests/system/test_forensic_system.py — 8.6 (opt-in markers)
+ apps/api/tests/contracts/test_api_contracts.py — 8.8 (queue.submit mock)
+ apps/api/scripts/check_critical_coverage.py — 8.12 (NEW)
+ scripts/check_test_hygiene.py              — 8.9, 8.15 (NEW)
+ scripts/verify_phase8_tests.sh            — 8.9, 8.16 (NEW)
+ .github/workflows/ci.yml                  — 8.4, 8.5, 8.15 (wait-on, marker filter, hygiene)
 ```
 Phase 5 (on phase-5-backend-core-logic, commit c423b5d):
  apps/api/api/routes/investigation.py            — 5.1, 5.2, 5.10, 5.11, 5.12
@@ -285,18 +374,17 @@ Phase 6 (on phase-6-agents-models-api-config, commit 1276405):
 
 ## Next Best Action for AI
 
-Phase 7 in progress. Remaining Phase 7 actions:
+Phase 8 in progress. Remaining Phase 8 actions:
 
-1. Run frontend typecheck: `cd apps/web && npm run type-check`
-2. Run backend contract tests: `cd apps/api && uv run pytest tests/contracts/ -v`
-3. Run Playwright E2E tests: `cd apps/web && npx playwright test tests/e2e/full_journey_phase7.spec.ts`
-4. Commit Phase 7 to branch `phase-7-workflow-state-fixes`
-5. Merge Phase 5, 6, 7 to `main` (in order)
+1. Run hygiene checker: `python scripts/check_test_hygiene.py` ✓ (passed)
+2. Run Phase 8 verification script: `./scripts/verify_phase8_tests.sh static`
+3. Commit Phase 8 to branch `phase-8-test-suite-refinement`
+4. Merge Phases 5, 6, 7, 8 to `main` (in order)
 
-After Phase 7 merge, continue with Phase 6 remaining actions:
-
-6. Add unit tests for `ProviderQuotaGuard`
-7. Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`
+After Phase 8 merge, continue with Phase 6 remaining actions:
+5. Add unit tests for `ProviderQuotaGuard`
+6. Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`
+7. Add Phase 8 deferred items (8.13 fixtures, 8.14 helpers) as separate tasks
 
 ## Do Not Break
 
