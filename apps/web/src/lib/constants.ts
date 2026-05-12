@@ -128,3 +128,7 @@ export const ARBITER_POLL_MAX_ATTEMPTS = 400;
 
 // 30 s permits 50MB uploads and slow Redis/Docker cold starts without timing out.
 export const INVESTIGATION_REQUEST_TIMEOUT_MS = 30_000;
+
+// Permits cold-analysis, slow ML startup, and first-investigation warm-up without
+// treating a quiet stream as a failure. Must exceed the backend healthcheck start_period.
+export const ANALYSIS_STARTUP_GRACE_MS = 30_000;

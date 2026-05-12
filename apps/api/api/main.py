@@ -48,6 +48,15 @@ _mem_http_rate: OrderedDict[str, list[float]] = OrderedDict()
 _MEM_RATE_MAX_ENTRIES = 10_000
 
 
+def _settings_from_app(request: Request):
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        raise RuntimeError(
+            "Application settings are unavailable; startup configuration validation failed."
+        )
+    return settings
+
+
 def _app_env_from_env() -> str:
     return os.environ.get("APP_ENV", "development").strip().lower() or "development"
 
@@ -391,10 +400,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.accepting_requests = False
 
     # 2. Wait for in-flight investigations to complete
-    # Use investigation_timeout + buffer to allow longer investigations to complete
-    GRACEFUL_SHUTDOWN_TIMEOUT = (
-        settings.investigation_timeout + 30
-    )  # Allow up to 10min + 30s buffer
+    # Cap at GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS env override to stay within
+    # Docker's stop_grace_period (default 150s). Prevents SIGKILL mid-shutdown.
+    _shutdown_cap = int(os.environ.get("GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS", "120"))
+    GRACEFUL_SHUTDOWN_TIMEOUT = min(
+        settings.investigation_timeout + 30, _shutdown_cap
+    )  # Allow up to 10min + 30s buffer, capped at env override
     try:
         from api.routes._session_state import _active_tasks
 
@@ -508,7 +519,7 @@ app.add_middleware(
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     """Add security headers to every response."""
-    settings = request.app.state.settings
+    settings = _settings_from_app(request)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -537,7 +548,7 @@ _CSRF_EXEMPT_PATHS = {
 
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
-    settings = request.app.state.settings
+    settings = _settings_from_app(request)
 
     """CSRF protection via the double-submit cookie pattern.
 
@@ -623,7 +634,7 @@ async def rate_limit_middleware(request: Request, call_next):
         # Strip "Bearer " prefix if present for consistent hashing
         raw_token = auth_header[7:] if auth_header.lower().startswith("bearer ") else auth_header
         # Use HMAC with JWT secret as salt to avoid storing token hashes in Redis
-        settings = request.app.state.settings
+        settings = _settings_from_app(request)
         jwt_secret_key = getattr(settings, "jwt_secret_key", None)
         if not isinstance(jwt_secret_key, str):
             jwt_secret_key = get_settings().jwt_secret_key
@@ -633,7 +644,7 @@ async def rate_limit_middleware(request: Request, call_next):
             hashlib.sha256,
         ).hexdigest()[:32]
     elif session_cookie:
-        settings = request.app.state.settings
+        settings = _settings_from_app(request)
         jwt_secret_key = getattr(settings, "jwt_secret_key", None)
         if not isinstance(jwt_secret_key, str):
             jwt_secret_key = get_settings().jwt_secret_key
@@ -865,12 +876,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     4xx errors are not silently promoted to 5xx.
     """
     logger.error("Global exception caught", error=str(exc), exc_info=True)
-    settings = request.app.state.settings
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        app_env = "production"
+    else:
+        app_env = settings.app_env
 
     # If an HTTPException somehow leaked here, preserve its status code and detail.
     if isinstance(exc, HTTPException):
         content: dict = {"detail": exc.detail}
-        if settings.app_env != "production":
+        if app_env != "production":
             content["message"] = str(exc)
         return JSONResponse(
             status_code=exc.status_code,
@@ -880,7 +895,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     content = {"detail": "An internal server error occurred."}
     # Only expose error details in non-production environments
-    if settings.app_env != "production":
+    if app_env != "production":
         content["message"] = str(exc)
     return JSONResponse(status_code=500, content=content)
 
@@ -888,13 +903,26 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/")
 async def root(request: Request):
     """Root endpoint."""
-    settings = request.app.state.settings
+    settings = _settings_from_app(request)
     return {
         "name": "Forensic Council API",
         "version": core.__version__,
         "status": "running",
         "docs": "/docs" if settings.app_env != "production" else None,
     }
+
+
+@app.get("/live")
+@app.get("/api/v1/live")
+async def liveness_check():
+    """
+    Lightweight liveness probe — returns 200 immediately.
+    
+    Does NOT check dependencies (Redis, Postgres, Qdrant).
+    Used by Docker healthcheck and load balancers to determine
+    if the container is alive and accepting requests.
+    """
+    return JSONResponse(content={"status": "alive"}, status_code=200)
 
 
 @app.get("/health")
@@ -907,7 +935,7 @@ async def health_check(request: Request):
     Returns 200 only when the API and all dependencies are healthy.
     Returns 503 if any dependency is unavailable.
     """
-    settings = request.app.state.settings
+    settings = _settings_from_app(request)
     checks: dict = {}
     overall_healthy = True
 

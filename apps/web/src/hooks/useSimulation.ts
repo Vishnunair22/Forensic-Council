@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 const HITL_CHECKPOINT_KEY = "forensic_hitl_checkpoint";
 const SESSION_ID_KEY = "forensic_session_id";
@@ -559,6 +559,8 @@ export const useSimulation = ({
           const terminalCodes = [4001, 4003, 4004, 4010];
           if (terminalCodes.includes(event.code)) {
             dbg.warn("[WebSocket] Terminal close code received. Clearing session state.");
+            setIsReconnecting(false);
+            setReconnectStatusMessage(null);
             setSessionId(null);
             try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
             try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
@@ -628,6 +630,7 @@ export const useSimulation = ({
           .then(async () => {
             wsConnectionReady = true;
             reconnectAttemptsRef.current = 0; // Reset backoff on successful connect
+            setIsReconnecting(false);
             setReconnectStatusMessage(null);
             resolve();
             // Rehydrate: if the arbiter reached a terminal state while the socket
@@ -694,7 +697,7 @@ export const useSimulation = ({
   useEffect(() => {
     let tokenExpiryTimeout: NodeJS.Timeout;
     const scheduleTokenExpiryCheck = () => {
-      const expiryStr = storage.getItem(AUTH_TOKEN_EXPIRY_KEY);
+      const expiryStr = sessionOnlyStorage.getItem(AUTH_TOKEN_EXPIRY_KEY);
       if (!expiryStr) return;
       const expiry = parseInt(expiryStr);
       const now = Date.now();
@@ -709,7 +712,7 @@ export const useSimulation = ({
         })
           .then((response) => {
             if (!response.ok) {
-              storage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+              sessionOnlyStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
               setErrorMessage("Session refresh failed. Re-authentication will be attempted on the next API request.");
               return;
             }
@@ -722,7 +725,7 @@ export const useSimulation = ({
             scheduleTokenExpiryCheck();
           })
           .catch(() => {
-            storage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+            sessionOnlyStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
             setErrorMessage("Session refresh could not reach the backend. Keeping the current analysis view open.");
           });
       }, checkDelay);

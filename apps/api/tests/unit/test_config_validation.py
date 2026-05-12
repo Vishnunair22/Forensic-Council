@@ -78,3 +78,36 @@ def test_validate_weak_jwt_secret(monkeypatch):
     _strong_env(monkeypatch, JWT_SECRET_KEY="tooshort")
     with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
         validate_production_settings()
+
+
+# ── Phase 2.15: Settings failure clarity ─────────────────────────────────────
+
+
+def test_missing_signing_key_exits_with_code_2(monkeypatch):
+    """Invalid env with missing SIGNING_KEY produces clear message, not AttributeError."""
+    _clear_settings_cache()
+    monkeypatch.delenv("SIGNING_KEY", raising=False)
+    _strong_env(
+        monkeypatch,
+        SIGNING_KEY="",
+        BOOTSTRAP_ADMIN_PASSWORD="admin_test_123!",
+        BOOTSTRAP_INVESTIGATOR_PASSWORD="inv_test_123!",
+    )
+    monkeypatch.setenv("SIGNING_KEY", "")
+    try:
+        get_settings()
+        pytest.fail("Expected ValidationError")
+    except Exception as exc:
+        assert "SIGNING_KEY" in str(exc)
+
+
+def test_missing_jwt_secret_key_exits_with_code_2(monkeypatch):
+    """Missing JWT_SECRET_KEY produces clear config error."""
+    _clear_settings_cache()
+    _strong_env(monkeypatch, JWT_SECRET_KEY="", BOOTSTRAP_ADMIN_PASSWORD="admin_test_123!", BOOTSTRAP_INVESTIGATOR_PASSWORD="inv_test_123!")
+    monkeypatch.setenv("JWT_SECRET_KEY", "")
+    try:
+        get_settings()
+        pytest.fail("Expected ValidationError")
+    except Exception as exc:
+        assert "JWT_SECRET_KEY" in str(exc)

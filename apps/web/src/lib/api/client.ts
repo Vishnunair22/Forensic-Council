@@ -308,12 +308,14 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
 
   const connected = new Promise<void>((resolve, reject) => {
     let settled = false;
+    let receivedBootstrap = false;
 
     const handleError = () => settle(() => reject(new Error("WebSocket connection error")));
     const handleMessage = (event: MessageEvent) => {
       try {
         const payload = JSON.parse(event.data) as { type?: unknown };
         if (payload.type === "CONNECTED" || payload.type === "AGENT_UPDATE") {
+          receivedBootstrap = true;
           settle(resolve);
         }
       } catch {
@@ -322,11 +324,11 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
       }
     };
     const handleClose = (event: CloseEvent) => {
-      if (event.code === 1000) {
+      if (event.code === 1000 && receivedBootstrap) {
         settle(resolve);
         return;
       }
-      settle(() => reject(new Error(event.reason || `WebSocket closed unexpectedly (${event.code})`)));
+      settle(() => reject(new Error(event.reason || `WebSocket closed before connection was ready (${event.code})`)));
     };
 
     const settle = (fn: () => void) => {
@@ -385,7 +387,10 @@ export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatus
     return response.json();
   } catch (error) {
     dbg.warn("[api] getArbiterStatus error:", error);
-    return { status: "not_found" };
+    return {
+      status: "unreachable",
+      message: error instanceof Error ? error.message : "Backend unreachable",
+    };
   }
 }
 

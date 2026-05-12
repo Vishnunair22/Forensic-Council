@@ -20,6 +20,7 @@ import {
   ARBITER_POLL_INTERVAL_MS,
   ALLOWED_MIME_TYPES,
   MAX_UPLOAD_SIZE_BYTES,
+  ANALYSIS_STARTUP_GRACE_MS,
 } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
@@ -90,8 +91,8 @@ async function waitForFinalReport(
           /* report may not be ready yet — keep polling */
         }
       }
-      if (st.status === "not_found") {
-        consecutiveNotFound++;
+      if (st.status === "not_found" || st.status === "unreachable") {
+        if (st.status === "not_found") consecutiveNotFound++;
         if (consecutiveNotFound >= 5) {
           throw new Error("Investigation session not found. The session may have expired.");
         }
@@ -522,6 +523,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           resetSimulation();
           return;
         }
+        if (st.status === "unreachable") {
+          connectWebSocket(existingSessionId, true)
+            .then(() => setAnalysisStreamReady(true))
+            .catch((wsErr: unknown) => {
+              const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+              setWsConnectionError(wsErrMsg);
+              setShowLoadingOverlay(false);
+            });
+          return;
+        }
         if (st.status === "complete") {
           router.push(`/result/${existingSessionId}`, { scroll: true });
           return;
@@ -808,7 +819,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           description: "The analysis stream did not start in time. Please refresh and try again.",
         });
       }
-    }, 8000);
+    }, ANALYSIS_STARTUP_GRACE_MS);
     return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady, status]);
 

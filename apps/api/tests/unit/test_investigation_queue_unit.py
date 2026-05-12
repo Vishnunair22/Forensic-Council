@@ -405,3 +405,53 @@ class TestGetInvestigationQueue:
         iq_mod._queue = None
         q = get_investigation_queue()
         assert isinstance(q, InvestigationQueue)
+
+
+# ── Phase 2.15: Worker heartbeat ────────────────────────────────────────────────
+
+
+class TestWorkerHeartbeat:
+    def test_worker_start_writes_heartbeat(self):
+        """InvestigationWorker.start() writes forensic:worker:heartbeat."""
+        redis = _make_redis_mock()
+        heartbeat_written = False
+        original_hset = redis.hset
+
+        def mock_hset(name, key, value):
+            nonlocal heartbeat_written
+            if "heartbeat" in key:
+                heartbeat_written = True
+            return original_hset(name, key, value)
+
+        redis.hset = mock_hset
+        queue = InvestigationQueue()
+        queue._redis = redis
+        worker = InvestigationWorker(queue, worker_id=99)
+        worker.set_handler(AsyncMock())
+
+        import asyncio
+        asyncio.run(worker.start())
+
+        assert heartbeat_written, "Worker.start() should write forensic:worker:heartbeat"
+
+    def test_worker_heartbeat_key_format(self):
+        """Heartbeat key follows the expected naming convention."""
+        redis = _make_redis_mock()
+        keys_written: list = []
+
+        def capture_hset(name, key, value):
+            keys_written.append(key)
+            return AsyncMock()(name, key, value)
+
+        redis.hset = capture_hset
+        queue = InvestigationQueue()
+        queue._redis = redis
+        worker = InvestigationWorker(queue, worker_id=42)
+        worker.set_handler(AsyncMock())
+
+        import asyncio
+        asyncio.run(worker.start())
+
+        heartbeat_keys = [k for k in keys_written if "heartbeat" in k]
+        assert len(heartbeat_keys) > 0, "At least one heartbeat key should be written"
+        assert any("forensic:worker:heartbeat" in k for k in heartbeat_keys)

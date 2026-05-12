@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { logApiTargetDiagnostics } from "@/lib/api/utils";
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !("matchMedia" in window)) return true;
@@ -24,6 +25,8 @@ export function RouteExperience() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    logApiTargetDiagnostics();
 
     const behavior = prefersReducedMotion() ? "auto" : "smooth";
     const raf = window.requestAnimationFrame(() => {

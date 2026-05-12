@@ -161,7 +161,7 @@ export interface UserInfo {
 }
 
 export interface ArbiterStatusResponse {
-  status: "running" | "complete" | "error" | "not_found";
+  status: "running" | "complete" | "error" | "not_found" | "unreachable";
   message?: string;
   report_id?: string;
 }

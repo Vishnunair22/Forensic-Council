@@ -132,3 +132,13 @@ export function isAuthenticated(): boolean {
   }
   return false;
 }
+
+// ── Dev-only startup diagnostics ─────────────────────────────────────────────
+// Helps diagnose frontend/backend target mismatches in local development.
+
+export function logApiTargetDiagnostics(): void {
+  if (!isDev || typeof window === "undefined") return;
+  dbg.log("[FC startup] API_BASE", API_BASE);
+  dbg.log("[FC startup] WS_BASE", getWSBase());
+  dbg.log("[FC startup] location", window.location.origin);
+}

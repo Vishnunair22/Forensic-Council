@@ -133,6 +133,22 @@ class TestRootAndHealth:
         data = r.json()
         assert "checks" in data or "services" in data
 
+    def test_live_returns_200(self, client):
+        """GET /live returns 200 even without deep dependency mocks."""
+        r = client.get("/live")
+        assert r.status_code == 200
+
+    def test_live_returns_alive_status(self, client):
+        r = client.get("/live")
+        data = r.json()
+        assert data.get("status") == "alive"
+
+    def test_api_v1_live_alias(self, client):
+        r = client.get("/api/v1/live")
+        assert r.status_code == 200
+        data = r.json()
+        assert data.get("status") == "alive"
+
     def test_404_returns_json(self, client):
         r = client.get("/this-path-does-not-exist-at-all")
         assert r.headers.get("content-type", "").startswith("application/json")

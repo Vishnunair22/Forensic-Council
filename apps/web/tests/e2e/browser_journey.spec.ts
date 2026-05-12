@@ -539,4 +539,66 @@ test.describe('Forensic Analyst Journey', () => {
 
     expect(pageErrors).toEqual([]);
   });
+
+  // ── Phase 2.14: Hard-refresh and startup stability ─────────────────────────
+
+  test("landing hard refresh shows hero with no errors", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    await page.goto("/");
+    await expect(page.locator("h1")).toContainText(/Multi-Agent Forensic/i);
+
+    await page.reload();
+    await expect(page.locator("h1")).toContainText(/Multi-Agent Forensic/i);
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("evidence page without pending file shows no-evidence state", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.clear();
+    });
+
+    await page.goto("/evidence");
+    await expect(page.getByText(/No Evidence Queued|Select Evidence/i)).toBeVisible({ timeout: 10_000 });
+
+    const homeBtn = page.getByRole("button", { name: /Return Home|Back|Home/i });
+    if (await homeBtn.isVisible()) {
+      await homeBtn.click();
+      await expect(page).toHaveURL(/\/$/);
+    }
+  });
+
+  test("result page with fake session id shows stable error state", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    await page.goto("/result/fake-session-id-12345");
+
+    await expect(
+      page.getByText(/session expired|not found|arbiter timeout|error/i).first(),
+      { timeout: 15_000 },
+    ).toBeVisible();
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("api target does not go to localhost:8000 in Caddy mode", async ({ page }) => {
+    const interceptedRequests: string[] = [];
+    page.on("request", (req) => {
+      const url = req.url();
+      if (url.includes("localhost:8000")) {
+        interceptedRequests.push(url);
+      }
+    });
+
+    await page.goto("/");
+    await expect(page.locator("h1")).toBeVisible();
+
+    const restCallsTo8000 = interceptedRequests.filter(
+      (u) => !u.includes("/live") && !u.includes("/ws") && !u.includes("websocket"),
+    );
+    expect(restCallsTo8000).toHaveLength(0);
+  });
 });
