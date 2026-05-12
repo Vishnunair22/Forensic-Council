@@ -176,7 +176,13 @@ uv sync --all-extras --extra dev
 POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/init_db.py
 
 POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/run_api.py
+
+# Verify backend health
+curl -fsS http://localhost:8000/health
 ```
+
+Expected: `{"status":"ok"}` or similar 200 with healthy status field.
+
 ```powershell
 # PowerShell
 cd apps/api
@@ -204,6 +210,11 @@ uv run python scripts/run_api.py
 cd apps/web
 npm ci
 npm run dev
+
+# Verify frontend is responding
+curl -fsS http://localhost:3000/
+# Verify API proxy (returns 200 if backend is up, 503 if not)
+curl -fsS http://localhost:3000/api/v1/health
 ```
 ```powershell
 # PowerShell

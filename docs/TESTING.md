@@ -4,6 +4,52 @@
 
 ---
 
+## 🏃 Non-Docker Local Build/Run Verification
+
+These commands verify the application starts and responds correctly without Docker for the app layer.
+
+### Backend (Docker infra only)
+
+Start only the infrastructure services (Postgres, Redis, Qdrant) in Docker, then run the API directly on the host:
+
+```bash
+# 1. Start infra in Docker (exposes host ports 5432, 6379, 6333)
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d postgres redis qdrant
+
+# 2. Run backend on host (requires .env with real secrets)
+cd apps/api
+uv sync --extra dev --extra security --extra observability
+
+# 3. One-time: init database schema and bootstrap users
+POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false \
+  uv run python scripts/init_db.py
+
+# 4. Start API server
+POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false \
+  uv run python scripts/run_api.py
+
+# 5. Verify health
+curl -fsS http://localhost:8000/health
+# Expected: {"status": "ok"} (or similar 200 with healthy status)
+```
+
+### Frontend (host-run)
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+
+# Verify frontend responds
+curl -fsS http://localhost:3000/
+# Expected: HTTP 200 with HTML
+
+# Verify API proxy reaches backend (200 if backend up, 503 if not)
+curl -fsS http://localhost:3000/api/v1/health
+```
+
+---
+
 ## 🏗️ Test Architecture
 
 The Forensic Council testing suite is designed for **Legal Admissibility**. Every layer, from mathematical forensic invariants to the UI's cryptographic verification, is covered by a multi-modal testing strategy.
