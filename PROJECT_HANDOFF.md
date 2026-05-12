@@ -32,22 +32,27 @@ See `docs/WORKFLOW_TRACE.md` for the canonical route/state flow.
 
 ## Phase Inventory
 
-### Phase 9 (in progress) — Project Documentation Refinement
+### Phase 9 (committed, `phase-9-docs-refinement`, commit `525f4d0`)
+
+Project documentation refinement. All items complete:
 
 | Item | Status |
 |------|--------|
-| Documentation inventory | ✅ complete |
-| Project handoff refinement | ✅ in progress |
-| README streamlining | 🔄 pending |
-| Architecture update | 🔄 pending |
-| API contract update | 🔄 pending |
-| Testing guide update | 🔄 pending |
-| Model registry update | 🔄 pending |
-| Security doc update | 🔄 pending |
-| Operational runbook update | 🔄 pending |
-| App README updates | 🔄 pending |
-| Docs consistency checker | 🔄 pending |
-| Cleanup script | 🔄 pending |
+| Documentation inventory | ✅ |
+| Project handoff refinement | ✅ |
+| README streamlining | ✅ |
+| Architecture update | ✅ (no changes needed — already current) |
+| API contract update | ✅ (new: docs/API_CONTRACT.md) |
+| Testing guide update | ✅ (no changes needed — already current) |
+| Model registry update | ✅ (new: docs/MODEL_REGISTRY.md) |
+| Security doc update | ✅ (no changes needed — already current) |
+| Operational runbook update | ✅ (new: docs/OPERATIONAL_RUNBOOK.md) |
+| App README updates | ✅ |
+| Docs consistency checker | ✅ (new: scripts/check_docs.py) |
+| Cleanup script | ✅ (new: scripts/clean_project.sh) |
+| Verify project script | ✅ (new: scripts/verify_project.sh) |
+| .gitignore/.dockerignore audit | ✅ (updated .dockerignore) |
+| Dead code scan | ✅ |
 | Verify project script | 🔄 pending |
 | .gitignore / .dockerignore audit | 🔄 pending |
 | Dead code scan | 🔄 pending |
@@ -202,23 +207,22 @@ Backend core logic fixes. Key changes:
 
 ## Next Best Action
 
-Phase 9 in progress. Commit Phase 9.1 (documentation inventory), then continue with remaining Phase 9 items:
+Phase 9 complete. All phases 5–9 committed. Ready to merge to `main`:
 
-1. ✅ Commit Phase 9.1: docs/DOCUMENTATION_INVENTORY.md
-2. 🔄 Commit Phase 9.3: Refined PROJECT_HANDOFF.md (this file)
-3. 🔄 Commit Phase 9.4: Streamlined README.md
-4. 🔄 Commit Phase 9.5: Updated docs/ARCHITECTURE.md
-5. 🔄 Commit Phase 9.6: docs/API_CONTRACT.md
-6. 🔄 Commit Phase 9.7: Updated docs/TESTING.md
-7. 🔄 Commit Phase 9.8: docs/MODEL_REGISTRY.md
-8. 🔄 Commit Phase 9.9: Updated docs/SECURITY.md
-9. 🔄 Commit Phase 9.10: docs/OPERATIONAL_RUNBOOK.md
-10. 🔄 Commit Phase 9.11: App READMEs
-11. 🔄 Commit Phase 9.12–9.15: Scripts
-12. 🔄 Commit Phase 9.16: Dead code scan
-13. 🔄 Tag `phase-9-documentation-clean`
+1. Merge Phase 5 → `main` (`phase-5-backend-core-logic`, commit `c423b5d`)
+2. Merge Phase 6 → `main` (`phase-6-agents-models-api-config`, commit `1276405`)
+3. Merge Phase 7 → `main` (`phase-7-workflow-state-fixes`)
+4. Merge Phase 8 → `main` (`phase-8-test-suite-refinement`, commit `bd5433d`)
+5. Merge Phase 9 → `main` (`phase-9-docs-refinement`, commit `525f4d0`)
+6. Tag `phase-9-documentation-clean`
 
-After Phase 9: merge Phases 5→6→7→8→9 to `main` in sequence.
+After merge, deferred Phase 8 items remain:
+- Phase 8.13 — Deterministic media fixtures
+- Phase 8.14 — Shared test helpers
+
+And Phase 6 remaining actions:
+- Add unit tests for `ProviderQuotaGuard`
+- Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`
 
 ---
 
