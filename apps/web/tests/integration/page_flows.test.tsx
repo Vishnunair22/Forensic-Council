@@ -387,3 +387,46 @@ describe("Auth Token Lifecycle", () => {
     expect(getAuthToken()).toBe("second");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SESSION-SCOPED METADATA (Phase 3.5 fix)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Session-scoped metadata", () => {
+  const lsStore: Record<string, string> = {};
+  Object.defineProperty(window, "localStorage", {
+    value: {
+      getItem: jest.fn((k: string) => lsStore[k] ?? null),
+      setItem: jest.fn((k: string, v: string) => { lsStore[k] = v; }),
+      removeItem: jest.fn((k: string) => { delete lsStore[k]; }),
+      clear: jest.fn(() => Object.keys(lsStore).forEach(k => delete lsStore[k])),
+    },
+    writable: true,
+  });
+
+  function makeCtx(sid: string, fileName: string) {
+    return JSON.stringify({ session_id: sid, file_name: fileName, mime_type: "image/png" });
+  }
+
+  beforeEach(() => Object.keys(lsStore).forEach(k => delete lsStore[k]));
+
+  it("writes scoped context alongside global context when session starts", () => {
+    const investigationCtx = { session_id: "sess-b", file_name: "file-b.png", mime_type: "image/png" };
+    lsStore["forensic_investigation_ctx"] = JSON.stringify({ session_id: "sess-a", file_name: "file-a.png" });
+    lsStore[`forensic_investigation_ctx:sess-b`] = JSON.stringify(investigationCtx);
+    lsStore["forensic_session_id"] = "sess-b";
+
+    const scoped = JSON.parse(lsStore[`forensic_investigation_ctx:sess-b`] ?? "{}");
+    expect(scoped.file_name).toBe("file-b.png");
+    expect(scoped.session_id).toBe("sess-b");
+  });
+
+  it("history item fileName can differ per session", () => {
+    lsStore["forensic_history"] = JSON.stringify([
+      { sessionId: "sess-a", fileName: "file-a.png", verdict: "LIKELY", timestamp: 1, type: "Initial" },
+    ]);
+    const history = JSON.parse(lsStore["forensic_history"]);
+    expect(history).toHaveLength(1);
+    expect(history[0].fileName).toBe("file-a.png");
+  });
+});
