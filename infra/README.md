@@ -24,8 +24,8 @@ git clone https://github.com/Vishnunair22/Forensic-Council.git && cd Forensic-Co
 # 2. Generate the .env from the template
 cp .env.example .env
 
-# 3. Generate strong secrets (paste output into .env)
-bash infra/generate_production_keys.sh
+# 3. Generate strong secrets and update .env automatically
+bash infra/generate_production_keys.sh --update
 
 # 4. Add LLM keys to .env
 #    LLM_API_KEY=<groq key from https://console.groq.com/keys>
@@ -89,13 +89,13 @@ DOCKER_USE_REDIS_WORKER=true    # Docker API + worker mode
 
 ### Generating secrets
 
-Run the key generation script to produce cryptographically strong values for all local secrets:
+Run the key generation script to produce cryptographically strong values and update your `.env` file automatically:
 
 ```bash
-bash infra/generate_production_keys.sh
+bash infra/generate_production_keys.sh --update
 ```
 
-The script outputs the following variables — paste them into your `.env`:
+The script updates `SIGNING_KEY`, `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `QDRANT_API_KEY`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_INVESTIGATOR_PASSWORD`, `DEMO_PASSWORD`, and `METRICS_SCRAPE_TOKEN` directly.
 
 | Variable | Format | Used for |
 | --- | --- | --- |

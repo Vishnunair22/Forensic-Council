@@ -403,15 +403,13 @@ uv run python scripts/validate_ml_tools.py
 ### Docker development
 
 ```bash
-cd infra
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build
 ```
 
 ### Docker production-style
 
 ```bash
-cd infra
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up --build
 ```
 
 ---

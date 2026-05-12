@@ -63,8 +63,7 @@ uv run python scripts/validate_ml_tools.py
 **Command:**
 
 ```bash
-cd infra
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build
 ```
 
 **Status:** not run
@@ -74,8 +73,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 **Command:**
 
 ```bash
-cd infra
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up --build
 ```
 
 **Status:** not run
@@ -248,8 +246,7 @@ Before marking production-ready, all of the following should be true:
 **Command:**
 
 ```bash
-cd infra
-bash validate_production_readiness.sh
+./infra/validate_production_readiness.sh
 ```
 
 **Status:** not run

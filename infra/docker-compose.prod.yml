@@ -57,7 +57,6 @@ services:
     # Without this, the host source tree overwrites the compiled standalone app.
     volumes: !override []
     working_dir: /app
-    command: ["node", "/app/apps/web/server.js"]
     environment:
       NODE_ENV: production
     logging:

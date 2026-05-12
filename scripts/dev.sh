@@ -15,13 +15,38 @@ if [[ ! -f "$ROOT/.env" ]]; then
   exit 1
 fi
 
-# Quick check for placeholder values in critical keys
-for VAR in LLM_API_KEY GEMINI_API_KEY SIGNING_KEY JWT_SECRET_KEY; do
+# Fail-fast check for required local environment variables
+REQUIRED_DEV_VARS=(
+  SIGNING_KEY
+  JWT_SECRET_KEY
+  POSTGRES_PASSWORD
+  REDIS_PASSWORD
+  BOOTSTRAP_ADMIN_PASSWORD
+  BOOTSTRAP_INVESTIGATOR_PASSWORD
+  DEMO_PASSWORD
+  METRICS_SCRAPE_TOKEN
+  GEMINI_API_KEY_POLICY_OK
+)
+
+for VAR in "${REQUIRED_DEV_VARS[@]}"; do
   VAL=$(grep "^${VAR}=" "$ROOT/.env" 2>/dev/null | cut -d= -f2- || echo "")
-  if [[ -z "$VAL" || "$VAL" == *"REPLACE"* || "$VAL" == *"placeholder"* ]]; then
-    echo "  ⚠️  WARNING: $VAR may not be set in .env"
+  if [[ -z "$VAL" || "$VAL" == *"REPLACE"* || "$VAL" == *"placeholder"* || "$VAL" == __PASTE_* ]]; then
+    echo "  ❌ $VAR is missing or still a placeholder in .env"
+    echo "     Run: ./infra/generate_production_keys.sh --update"
+    echo "     Then add free-tier LLM/Gemini keys or set LLM_PROVIDER=none and GEMINI_API_KEY_POLICY_OK=false for local fallback mode."
+    exit 1
   fi
 done
+
+LLM_PROVIDER_VALUE=$(grep "^LLM_PROVIDER=" "$ROOT/.env" | cut -d= -f2- || echo "groq")
+LLM_KEY_VALUE=$(grep "^LLM_API_KEY=" "$ROOT/.env" | cut -d= -f2- || echo "")
+if [[ "$LLM_PROVIDER_VALUE" != "none" && ( -z "$LLM_KEY_VALUE" || "$LLM_KEY_VALUE" == __PASTE_* ) ]]; then
+  echo "  ❌ LLM_PROVIDER=$LLM_PROVIDER_VALUE but LLM_API_KEY is not set"
+  echo "     Set LLM_API_KEY in .env, or set LLM_PROVIDER=none for local fallback mode."
+  exit 1
+fi
+
+echo "✅ .env validation passed."
 
 echo "🐳 Building images..."
 $COMPOSE build --parallel

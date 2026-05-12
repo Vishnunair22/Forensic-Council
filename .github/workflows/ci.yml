@@ -43,7 +43,7 @@ jobs:
         run: cd apps/api && uv run ruff check .
 
       - name: Type check with pyright
-        run: cd apps/api && uv run pyright core/ agents/ api/ tools/ orchestration/
+        run: cd apps/api && uv run pyright
 
   backend-test:
     name: Backend tests

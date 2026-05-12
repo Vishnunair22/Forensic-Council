@@ -104,11 +104,12 @@ Copy-Item .env.example .env
 ```
 
 ### 2. Generate Secure Secrets
-Run the provided script to generate high-entropy keys for forensic signing, JWT sessions, and database passwords:
+Run the provided script to generate high-entropy keys and update your `.env` file automatically:
 ```bash
-./infra/generate_production_keys.sh
+cp .env.example .env
+./infra/generate_production_keys.sh --update
 ```
-**Important**: Manually paste the output values for `SIGNING_KEY`, `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, etc., into your `.env` file.
+The script updates `SIGNING_KEY`, `JWT_SECRET_KEY`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `QDRANT_API_KEY`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_INVESTIGATOR_PASSWORD`, `DEMO_PASSWORD`, and `METRICS_SCRAPE_TOKEN` directly in `.env`.
 
 ### 3. Configure External APIs
 Edit `.env` and provide your API keys for the analysis engines:
