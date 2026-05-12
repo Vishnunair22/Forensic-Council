@@ -23,7 +23,7 @@
 | Field | Value |
 |-------|-------|
 | Local branch | `phase-3-frontend-ui-workflow` (feature branch from `main`) |
-| Local commit | `8951d2d` (Phase 3.4) |
+| Local commit | `19095e4` (Phase 3.10) |
 | Remote synced? | not verified in this session |
 
 ## Current Local Goal
@@ -71,6 +71,23 @@ Phase 3 frontend UI/workflow fixes — committed to `phase-3-frontend-ui-workflo
 - `apps/web/src/components/result/ResultLayout.tsx`: added `sessionId={rs.sessionId ?? undefined}` to `ActionDock`
 - `apps/web/src/components/result/ActionDock.tsx`: removed dead `document.cookie` token lookup from `handleExport`; fetch now uses `credentials: "include"` only
 
+#### Phase 3.5 — Session-scoped result metadata (Phase 3.6 combined)
+- `apps/web/src/hooks/useInvestigation.ts`: writes scoped context `{sid}` alongside global context; thumbnail scoped by session
+- `apps/web/src/hooks/useResult.ts`: `readSessionContext()` helper; `loadAgentTimelineForSession()`; all metadata state now mutable; `selectSession` updates all state fields
+- `fileName`, `mimeType`, `pipelineStartAt`, `thumbnail`, `agentTimeline`, `isDeepPhase` all update on session change
+
+#### Phase 3.7 — Navbar logo navigation separated from investigation reset
+- `apps/web/src/components/ui/GlobalNavbar.tsx`: `handleLogoClick` no longer calls `resetActiveInvestigation`; separate `handleResetClick` added; red-dot indicator replaced with visible "Reset" button (only shown when `hasActiveSession && pathname !== "/"`)
+
+#### Phase 3.8 — Stale REPORT_TABS constants removed
+- `apps/web/src/lib/constants.ts`: removed `REPORT_TABS`, `ReportTab`, `TAB_ICONS`; removed unused `FileImage`, `FileText`, `FileAudio`, `FileVideo` imports; `ARBITER_POLL_INTERVAL_MS` and `ARBITER_POLL_MAX_ATTEMPTS` preserved (still used by `useResult` and `useInvestigation`)
+
+#### Phase 3.9 — Live arbiter progress text surfaced on result page
+- `apps/web/src/components/result/ResultLayout.tsx`: arbiter body placeholder now uses `rs.arbiterMsg` instead of hardcoded "Arbiter is compiling agent findings..."
+
+#### Phase 3.10 — Route-flow integration tests added
+- `apps/web/tests/integration/page_flows.test.tsx`: new "Session-scoped metadata" describe block with 3 tests covering scoped context storage and history fileName per session
+
 ## Exact Files Changed
 
 ```
@@ -92,10 +109,15 @@ Phase 2 (on phase-2-startup-stability):
 
 Phase 3 (on phase-3-frontend-ui-workflow):
  apps/web/src/app/api/v1/[...path]/route.ts         — DISABLE_NEXT_API_PROXY
- apps/web/src/components/evidence/UploadModal.tsx   — PDF copy fix, audio preview removed
+ apps/web/src/components/evidence/UploadModal.tsx   — PDF copy fix, audio preview removed, TIFF/BMP added
  apps/web/src/components/evidence/UploadSuccessModal.tsx — audio preview added
  apps/web/src/components/result/ActionDock.tsx      — sessionId wired, cookie token removed
- apps/web/src/components/result/ResultLayout.tsx    — sessionId prop added
+ apps/web/src/components/result/ResultLayout.tsx    — sessionId prop, live arbiter text
+ apps/web/src/components/ui/GlobalNavbar.tsx      — logo/nav separation, explicit reset button
+ apps/web/src/lib/constants.ts                    — removed REPORT_TABS, TAB_ICONS, unused imports
+ apps/web/src/hooks/useResult.ts                  — session-scoped metadata, mutable state, timeline refresh
+ apps/web/src/hooks/useInvestigation.ts           — scoped context writes, thumbnail scoped
+ apps/web/tests/integration/page_flows.test.tsx    — session-scoped metadata tests
  infra/docker-compose.yml                           — DISABLE_NEXT_API_PROXY env
 ```
 
@@ -103,11 +125,15 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 
 | Decision | Reason | Related Files | Status |
 |----------|--------|---------------|--------|
-| Phase 3 committed as partial batches | All 4 phases included in 2 commits (3.1+3.2+3.3, then 3.4) | various | resolved |
+| Phase 3 committed in 3 batches | 3.1+3.2+3.3, 3.4, then 3.5-3.10 combined | various | resolved |
 | `DISABLE_NEXT_API_PROXY` for prod Docker | Explicit vs implicit; dev keeps proxy enabled | route.ts | resolved |
 | Audio preview in UploadSuccessModal | Unreachable in UploadModal (parent closes it on selection) | UploadModal.tsx, UploadSuccessModal.tsx | resolved |
 | PDF not added to supported types | Phase 3 is frontend-only; backend and agent routing unchanged | constants.ts | resolved |
 | sessionId via `credentials: "include"` | httpOnly cookie set by backend; document.cookie cannot read it | ActionDock.tsx | resolved |
+| Scoped metadata with global fallback | Backward compat for direct result page loads; scoped for history navigation | useResult.ts, useInvestigation.ts | resolved |
+| Navbar logo navigates, reset is explicit | Prevent accidental session wipe when clicking logo mid-analysis | GlobalNavbar.tsx | resolved |
+| `fileName` mutable state | Enables history session switching to update header filename | useResult.ts | resolved |
+| `ARBITER_POLL_INTERVAL_MS` / `MAX_ATTEMPTS` preserved | Still used by useResult and useInvestigation; not part of Phase 3.8 scope | constants.ts | resolved |
 
 ## Commands Run
 
@@ -121,6 +147,11 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | `document.cookie` token in ActionDock | removed | 2026-05-12 | Replaced with `credentials: "include"` |
 | `audioPreviewUrl` state in UploadModal | removed | 2026-05-12 | Audio preview now in UploadSuccessModal |
 | `pdf` extension in UploadModal EXTENSION_MIME_MAP | removed | 2026-05-12 | TIFF/BMP added instead |
+| `REPORT_TABS` / `TAB_ICONS` in constants.ts | removed | 2026-05-12 | FileImage/FileText/FileAudio/FileVideo imports also removed |
+| `ARBITER_POLL_INTERVAL_MS` in constants.ts | preserved | 2026-05-12 | Still imported by useResult and useInvestigation |
+| Scoped storage keys in useInvestigation.ts | all 5 scoped writes added | 2026-05-12 | forensic_investigation_ctx:{sid}, file_name:{sid}, mime_type:{sid}, pipeline_start:{sid}, thumbnail:{sid} |
+| `resetActiveInvestigation` in GlobalNavbar handleLogoClick | removed | 2026-05-12 | Replaced with router.push; explicit handleResetClick added |
+| rs.arbiterMsg in ResultLayout arbiter body | added | 2026-05-12 | Replaced hardcoded "Arbiter is compiling..." placeholder |
 
 ### Build/Test Status
 
@@ -129,6 +160,7 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | Python compileall backend | passed | 2026-05-12 | All .py files compile cleanly |
 | Docker compose config (with env) | passes syntax | 2026-05-12 | Env variable warnings are expected |
 | TypeScript type-check frontend | not run in this environment | — | WSL2 not available |
+| Jest unit tests | not run in this environment | — | WSL2 not available |
 | Playwright tests | not run in this environment | — | WSL2 not available |
 | pytest backend tests | not run in this environment | — | WSL2 not available |
 
@@ -137,8 +169,9 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | Issue | Severity | Notes |
 |-------|----------|-------|
 | Cannot run Docker/npm/pytest in this environment (WSL2 not available) | medium | All verification is static (compileall, compose config, grep) |
-| Phase 2.14 and 2.15 tests not run | — | Test files modified but execution blocked by environment |
-| Phase 3 e2e tests not added | — | Scope was 4 frontend fixes; new tests deferred |
+| Phase 2.14/2.15 tests not run | — | Test files modified but execution blocked by environment |
+| Phase 3.5-3.10 tests not run | — | Test files modified but execution blocked by environment |
+| `forensic_is_deep` not scoped by session | Deep phase flag shared across sessions | Could be addressed in future session scoping pass |
 
 ## Known Bugs (Non-Doc)
 
@@ -152,10 +185,11 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 
 1. Run `npm run type-check && npm run lint` in `apps/web`
 2. Run `uv run pytest tests/integration/test_api_routes.py tests/unit/test_config_validation.py tests/unit/test_investigation_queue_unit.py -q` in `apps/api`
-3. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts` in `apps/web`
-4. Merge `phase-2-startup-stability` and `phase-3-frontend-ui-workflow` into `main` (or keep separate if staged release)
-5. Tag `phase-2-startup-stability-clean` on `phase-2-startup-stability`
-6. Tag `phase-3-frontend-ui-workflow-clean` on `phase-3-frontend-ui-workflow`
+3. Run `npm test -- tests/integration/page_flows.test.tsx --runInBand` in `apps/web`
+4. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts tests/e2e/upload-route-flow.spec.ts` in `apps/web`
+5. Run Docker: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d`
+6. Run `./scripts/_wait_healthy.sh dev && ./scripts/_smoke.sh dev`
+7. Tag both branches after all tests pass: `phase-2-startup-stability-clean` and `phase-3-frontend-ui-workflow-clean`
 
 ## Do Not Break
 
@@ -170,6 +204,7 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 - WebSocket reconnect logic (Phase 2)
 - Worker cold-start heartbeat tolerance (Phase 2)
 - PDF as unsupported (Phase 3 — backend not ready for PDF support)
+- Scoped metadata backward compat (global fallback still works for direct result loads)
 
 ---
 
