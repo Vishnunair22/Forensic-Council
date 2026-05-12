@@ -1,116 +1,71 @@
+# Root Docker ignore — keeps build context lean
+
 # Git
-.git
+.git/
 .gitignore
-.github
 .gitattributes
 
-# Assistant / local tool metadata
-.agent/
-.claude/
-.cursor/
-.planning/
-.uv-cache/
-.uv_cache/
-.mcp.json
-.opencode.json
-CLAUDE.md
-MASTER_FIX_*.md
+# Docs (not needed in container)
+*.md
+docs/
+README*
+LICENSE
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*$py.class
-*.egg-info/
-.venv/
-venv/
-*.log
-.pytest_cache/
-.coverage
-coverage.xml
-
-# Node / Frontend
-node_modules/
-npm-debug.log
-yarn-error.log
-pnpm-debug.log
-apps/web/.next/
-apps/web/out/
-apps/web/.turbo/
-apps/web/node_modules/
-apps/web/coverage/
-apps/web/test-results/
-apps/web/playwright-report/
-*.tsbuildinfo
-
-# Build artifacts
-dist/
-build/
-*.tar.gz
-*.zip
-
-# Environment files
-.env
-.env.local
-.env.*.local
-*.env
-
-# Test
-test-results/
-tests/output/
-playwright-report/
-playwright/.cache/
+# IDE
+.vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
+nul
 
-# IDE / Editor
-.idea/
-.vscode/
-*.swp
-*.swo
+# Environment (secrets)
+.env
+.env.*
+!.env.example
+.env.local
 
-# Storage (note: dirs are excluded but .gitkeep files are preserved in git — ensure Dockerfile creates them)
-/apps/api/storage/evidence/*
-!/apps/api/storage/evidence/.gitkeep
-/apps/api/storage/keys/*
-!/apps/api/storage/keys/.gitkeep
-/apps/api/reports/*
-!/apps/api/reports/.gitkeep
+# Test/fixtures (run in CI, not inside container)
+**/tests/
+**/fixtures/
+test_*
 
-# Backend tree should not enter the frontend build context (when using repo root context)
-apps/api/.venv/
-apps/api/.pytest_cache/
-apps/api/.pytest_tmp/
-apps/api/.pytest_tmp_run/
-apps/api/.ruff_cache/
-apps/api/.pyright/
-apps/api/tmp*/
-apps/api/cache/
-apps/api/storage/evidence/
-apps/api/storage/keys/
-apps/api/storage/calibration_models/
-!apps/api/storage/calibration_models/.gitkeep
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+htmlcov/
+.coverage
+coverage.xml
+coverage.json
 
-# ML Caches
-/apps/api/cache/
-*.pt
-*.pth
-*.onnx
-*.bin
-*.h5
-*.weights
-
-# Additional symmetry with .gitignore
-.eslintcache
-.pnpm-store/
-*.tsbuildinfo
+# Frontend build artifacts
+apps/web/node_modules/
+apps/web/.next/
 apps/web/coverage/
 apps/web/playwright-report/
-apps/web/.swc/
-apps/api/tests/fixtures/*.mp4
-apps/api/tests/fixtures/*.wav
-apps/api/tests/fixtures/*.avi
-.history/
+apps/web/test-results/
+
+# Node caches
+node_modules/
+.npm/
+.cache/
+.turbo/
+
+# Logs
+*.log
+logs/
+
+# Scratch/temp
+tmp/
+temp/
+scratch/
+
+# Lock files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock

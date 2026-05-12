@@ -202,16 +202,18 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --en
 |---|---|---|
 | AGENTS.md exists | not verified | |
 | PROJECT_HANDOFF.md exists | not verified | |
-| docs/AI_CONTEXT.md exists | not verified | |
-| docs/FRONTEND_FLOW.md exists | not verified | |
-| docs/BACKEND_FLOW.md exists | not verified | |
-| docs/ROUTES_AND_APIS.md exists | not verified | |
-| docs/ML_AGENTS.md exists | not verified | |
+| docs/WORKFLOW_TRACE.md exists | not verified | |
+| docs/ARCHITECTURE.md exists | not verified | |
+| docs/API_CONTRACT.md exists | not verified | |
+| docs/TESTING.md exists | not verified | |
+| docs/MODEL_REGISTRY.md exists | not verified | |
+| docs/SECURITY.md exists | not verified | |
+| docs/OPERATIONAL_RUNBOOK.md exists | not verified | |
+| docs/PRODUCTION_CHECKLIST.md exists | not verified | |
+| docs/DOCUMENTATION_INVENTORY.md exists | not verified | |
 | README is current | not verified | |
-| API docs are current | not verified | |
-| Architecture docs are current | not verified | |
-| Security docs are current | not verified | |
-| Runbook is current | not verified | |
+| Infra README is current | not verified | |
+| App READMEs are current | not verified | |
 
 ---
 
