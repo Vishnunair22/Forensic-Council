@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useReducedMotion } from "framer-motion";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
 import { resetActiveInvestigation } from "@/lib/appReset";
@@ -12,10 +13,12 @@ export function GlobalNavbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { playSound } = useSound();
+  const prefersReducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
+  const [isKeyboardUser, setIsKeyboardUser] = useState(false);
   const lastScrollY = useRef(0);
 
   // React to active session state changes via storage events, focus, and visibility
@@ -45,19 +48,21 @@ export function GlobalNavbar() {
   }, []);
 
   // Hide navbar on scroll down, show on scroll up
+  // Skip auto-hide for users who prefer reduced motion — they need predictable focus behavior
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (prefersReducedMotion) {
+      setIsVisible(true);
+      return;
+    }
 
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       if (currentScrollY < 60) {
-        // Always show near top of page
         setIsVisible(true);
       } else if (currentScrollY > lastScrollY.current) {
-        // Scrolling down — hide
         setIsVisible(false);
       } else {
-        // Scrolling up — show
         setIsVisible(true);
       }
       lastScrollY.current = currentScrollY;
@@ -65,6 +70,23 @@ export function GlobalNavbar() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
+  }, [prefersReducedMotion]);
+
+  // Detect keyboard navigation and force navbar visible while user tabs through
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Tab") setIsKeyboardUser(true);
+    };
+    const onMouseDown = () => setIsKeyboardUser(false);
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onMouseDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onMouseDown);
+    };
   }, []);
 
   const handleLogoClick = useCallback(() => {
@@ -89,9 +111,15 @@ export function GlobalNavbar() {
   return (
     <nav
       aria-label="Main navigation"
-      {...(!isVisible ? { inert: true } : {})}
+      onFocusCapture={() => { setIsVisible(true); setIsKeyboardUser(true); }}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setIsKeyboardUser(false);
+        }
+      }}
+      {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
       className={`fixed top-4 left-4 sm:top-6 sm:left-6 z-[10001] transition-[transform,opacity] duration-300 ease-in-out ${
-        isVisible ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+        isVisible || isKeyboardUser ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
       }`}
     >
       <button
