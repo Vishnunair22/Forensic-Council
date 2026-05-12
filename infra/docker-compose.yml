@@ -506,6 +506,7 @@ services:
       # Inside Docker, the frontend container CANNOT reach "localhost:8000" — it must
       # use the Docker-internal service name "backend".
       - INTERNAL_API_URL=http://backend:8000
+      - DISABLE_NEXT_API_PROXY=${DISABLE_NEXT_API_PROXY:-}
     command: ["npm", "run", "dev"]
     depends_on:
       backend:

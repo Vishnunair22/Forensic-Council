@@ -81,17 +81,10 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const [error, setError] = useState<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const { playSound } = useSound();
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Revoke object URL on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
-    };
-  }, [audioPreviewUrl]);
-
+  // Mount focus guard
   useEffect(() => {
     setMounted(true);
     // Move focus into the dialog after mount
@@ -134,10 +127,10 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     const EXTENSION_MIME_MAP: Record<string, string[]> = {
       jpg: ["image/jpeg"], jpeg: ["image/jpeg"], png: ["image/png"],
-      webp: ["image/webp"], gif: ["image/gif"],
+      webp: ["image/webp"], gif: ["image/gif"], bmp: ["image/bmp"],
+      tif: ["image/tiff"], tiff: ["image/tiff"],
       mp4: ["video/mp4"], mov: ["video/quicktime"], avi: ["video/x-msvideo"], webm: ["video/webm"],
       mp3: ["audio/mpeg"], wav: ["audio/wav", "audio/x-wav"], m4a: ["audio/mp4", "audio/x-m4a"],
-      pdf: ["application/pdf"],
     };
     const allowedMimesForExt = EXTENSION_MIME_MAP[ext];
     if (allowedMimesForExt && !allowedMimesForExt.includes(file.type)) {
@@ -148,19 +141,11 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     if (isSubmitting) return; // Prevent double-submit
     setIsSubmitting(true);
 
-    // Show audio preview for audio files before submitting
-    if (file.type.startsWith("audio/")) {
-      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
-      setAudioPreviewUrl(URL.createObjectURL(file));
-    } else {
-      setAudioPreviewUrl(null);
-    }
-
     setError(null);
     playSound("success-chime");
     onFileSelected(file);
     // Note: isSubmitting stays true — modal will close via parent after upload starts
-  }, [onFileSelected, playSound, isSubmitting, audioPreviewUrl]);
+  }, [onFileSelected, playSound, isSubmitting]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -258,7 +243,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   {isDragging ? "Release to Upload" : "Drop Evidence File"}
                 </span>
                 <p className="text-[13px] text-white/30 max-w-[240px] leading-relaxed">
-                  or click to select · images, video, audio, PDF
+                  or click to select · images, video, or audio
                 </p>
               </div>
 
@@ -289,18 +274,6 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               <p role="status" aria-live="polite" className="mt-5 text-[11px] font-mono animate-pulse" style={{ color: "rgba(79,142,247,0.55)", letterSpacing: "0.18em" }}>
                 Preparing secure channel…
               </p>
-            )}
-
-            {audioPreviewUrl && (
-              <div className="mt-5 w-full" aria-label="Audio preview">
-                <p className="text-[9px] font-mono mb-2 text-center tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>AUDIO PREVIEW</p>
-                <audio
-                  controls
-                  src={audioPreviewUrl}
-                  className="w-full rounded-xl"
-                  aria-label="Selected audio file preview"
-                />
-              </div>
             )}
           </div>
         </motion.div>

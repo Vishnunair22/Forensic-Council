@@ -26,7 +26,11 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
   }, []);
 
   useEffect(() => {
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+    if (
+      file.type.startsWith("image/") ||
+      file.type.startsWith("video/") ||
+      file.type.startsWith("audio/")
+    ) {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       return () => URL.revokeObjectURL(url);
@@ -45,6 +49,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
 
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/");
+  const isAudio = file.type.startsWith("audio/");
 
   return createPortal(
     <motion.div
@@ -109,7 +114,17 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-primary/30 z-20 rounded-bl" aria-hidden="true" />
                   <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-primary/30 z-20 rounded-br" aria-hidden="true" />
 
-                  {isImage && previewUrl ? (
+                  {isAudio && previewUrl ? (
+                    <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
+                      <FileText className="w-10 h-10 text-white/20" aria-hidden="true" />
+                      <audio
+                        controls
+                        src={previewUrl}
+                        className="w-full rounded-xl"
+                        aria-label={`Audio preview of ${file.name}`}
+                      />
+                    </div>
+                  ) : isImage && previewUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={previewUrl}

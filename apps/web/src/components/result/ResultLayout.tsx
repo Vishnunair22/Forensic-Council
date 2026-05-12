@@ -295,6 +295,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           onHome={rs.handleHome}
           onNew={rs.handleNew}
           onExport={rs.handleExport}
+          sessionId={rs.sessionId ?? undefined}
         />
       )}
     </div>

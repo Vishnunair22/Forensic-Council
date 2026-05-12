@@ -16,14 +16,9 @@ interface ActionDockProps {
  */
 export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockProps) {
   const handleExport = async () => {
-    // Try PDF download from API if sessionId available; else call parent onExport
     if (sessionId) {
       try {
-        const token = typeof document !== "undefined"
-          ? document.cookie.split("; ").find(r => r.startsWith("access_token="))?.split("=")[1]
-          : undefined;
         const res = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report/pdf`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
           credentials: "include",
         });
         if (res.ok) {
