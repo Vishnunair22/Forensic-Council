@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.routes import _session_state
 from api.schemas import HITLDecisionRequest
 from core.auth import User, get_current_user
+from core.config import get_settings
 from core.react_loop import HumanDecision
 from core.structured_logging import get_logger
 
@@ -63,6 +64,12 @@ async def submit_decision(
                     "decision": decision.decision,
                 }
     except Exception as e:
+        logger.error("Redis idempotency check failed", error=str(e), exc_info=True)
+        if get_settings().app_env == "production":
+            raise HTTPException(
+                status_code=503,
+                detail="Decision idempotency service unavailable. Please retry shortly.",
+            ) from e
         logger.warning("Redis idempotency check failed, proceeding anyway", error=str(e))
 
     # Look up the active pipeline for this session
@@ -97,7 +104,12 @@ async def submit_decision(
             if redis:
                 await redis.set(cache_key, "1", ex=3600)
         except Exception as e:
-            logger.warning("Failed to cache idempotency token", error=str(e))
+            logger.error(
+                "Failed to cache idempotency token after decision processed",
+                checkpoint_id=decision.checkpoint_id,
+                error=str(e),
+                exc_info=True,
+            )
 
         logger.info(
             "HITL decision processed successfully",

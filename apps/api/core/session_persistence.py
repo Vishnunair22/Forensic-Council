@@ -261,33 +261,24 @@ class SessionPersistence:
         Returns:
             True if updated successfully
         """
-        await self._ensure_client()
-        if self.client is None:
-            logger.warning(
-                "SessionPersistence.update_session_status: database client not available"
-            )
-            return False
-
         try:
+            await self._ensure_client()
+            if self.client is None:
+                logger.warning(
+                    "SessionPersistence.update_session_status: database client not available"
+                )
+                return False
+
             if error_message:
                 await self.client.execute(
                     """
-                    UPDATE investigation_state
-                    SET status = $2, updated_at = NOW()
+                    INSERT INTO session_reports (session_id, case_id, investigator_id, status, error_message)
+                    SELECT session_id, case_id, investigator_id, $2, $3
+                    FROM investigation_state
                     WHERE session_id = $1
-                    """,
-                    UUID(session_id),
-                    status,
-                )
-
-                # Update session_reports if a row already exists (error status + message)
-                # We use UPDATE not INSERT to avoid NOT NULL violations on case_id/investigator_id
-                # (those fields are only available at investigation start, not in the error callback)
-                await self.client.execute(
-                    """
-                    UPDATE session_reports
-                    SET status = $2, error_message = $3
-                    WHERE session_id = $1
+                    ON CONFLICT (session_id) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        error_message = EXCLUDED.error_message
                     """,
                     UUID(session_id),
                     status,

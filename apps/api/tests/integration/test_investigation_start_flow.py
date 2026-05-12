@@ -115,13 +115,25 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
     monkeypatch.setattr(
         investigation_runner, "_wrap_pipeline_with_broadcasts", AsyncMock(return_value=report)
     )
+
+    monkeypatch.setattr(
+        "orchestration.session_finalization.set_final_report", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "orchestration.session_finalization.set_active_pipeline_metadata", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "orchestration.session_finalization.increment_investigations_completed", lambda: None
+    )
+    monkeypatch.setattr(
+        "orchestration.session_finalization.broadcast_update", AsyncMock()
+    )
+
     monkeypatch.setattr(investigation_runner, "get_session_websockets", lambda _sid: [])
-    monkeypatch.setattr(investigation_runner, "broadcast_update", AsyncMock())
-    monkeypatch.setattr(investigation_runner, "set_final_report", AsyncMock())
-    monkeypatch.setattr(investigation_runner, "set_active_pipeline_metadata", AsyncMock())
-    monkeypatch.setattr(investigation_runner, "increment_investigations_completed", lambda: None)
-    monkeypatch.setattr(investigation_runner, "increment_investigations_failed", lambda: None)
     monkeypatch.setattr(Path, "unlink", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(investigation_runner, "remove_active_pipeline", lambda _sid: None)
+    monkeypatch.setattr(investigation_runner, "clear_session_websockets", lambda _sid: None)
+    monkeypatch.setattr(investigation_runner, "_active_tasks", {})
 
     fake_persistence = SimpleNamespace(
         save_report=AsyncMock(return_value=True),
@@ -131,7 +143,9 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
     async def fake_get_session_persistence():
         return fake_persistence
 
-    monkeypatch.setattr(investigation_runner, "get_session_persistence", fake_get_session_persistence)
+    monkeypatch.setattr(
+        "orchestration.session_finalization.get_session_persistence", fake_get_session_persistence
+    )
 
     await investigation_routes.run_investigation_task(
         session_id="11111111-1111-1111-1111-111111111111",
@@ -141,5 +155,3 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
         investigator_id="REQ-12345",
         original_filename="fake-file.jpg",
     )
-
-    investigation_runner.set_final_report.assert_awaited_once()

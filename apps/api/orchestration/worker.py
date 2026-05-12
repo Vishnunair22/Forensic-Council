@@ -22,15 +22,9 @@ from api.routes._session_state import (  # noqa: E402
     clear_session_websockets,
     get_active_pipeline_metadata,
     set_active_pipeline_metadata,
-    set_final_report,
-)
-from api.routes.metrics import (  # noqa: E402
-    increment_investigations_completed,
-    increment_investigations_failed,
 )
 from api.schemas import BriefUpdate  # noqa: E402
 from core.config import get_settings  # noqa: E402
-from core.session_persistence import get_session_persistence  # noqa: E402
 from core.structured_logging import get_logger  # noqa: E402
 from orchestration.investigation_queue import (  # noqa: E402
     InvestigationWorker,
@@ -38,6 +32,10 @@ from orchestration.investigation_queue import (  # noqa: E402
 )
 from orchestration.pipeline import ForensicCouncilPipeline  # noqa: E402
 from orchestration.pipeline_registry import register_pipeline, unregister_pipeline  # noqa: E402
+from orchestration.session_finalization import (  # noqa: E402
+    mark_investigation_completed,
+    mark_investigation_failed,
+)
 from scripts.cleanup_storage import cleanup_evidence  # noqa: E402
 
 logger = get_logger("worker")
@@ -143,90 +141,27 @@ async def main() -> None:
                 session_id=session_id,
             )
 
-            await broadcast_update(
-                session_str,
-                BriefUpdate(
-                    type="PIPELINE_COMPLETE",
-                    session_id=session_str,
-                    message="Investigation concluded.",
-                    data={"report_id": str(report.report_id)},
-                ),
+            await mark_investigation_completed(
+                session_id=session_str,
+                case_id=case_id,
+                investigator_id=investigator_id,
+                evidence_file_path=evidence_file_path,
+                original_filename=original_filename,
+                report=report,
             )
-            await set_final_report(session_str, report)
-            # Refresh metadata to get the latest UUID/label
-            existing_meta = await get_active_pipeline_metadata(session_str) or {}
-            _investigator_id = existing_meta.get("investigator_id", investigator_id)
-            _investigator_role = existing_meta.get("investigator_role")
-            _case_label = existing_meta.get("case_investigator_label")
-
-            await set_active_pipeline_metadata(
-                session_str,
-                {
-                    "status": "completed",
-                    "brief": "Investigation complete.",
-                    "case_id": case_id,
-                    "investigator_id": _investigator_id,
-                    "investigator_role": _investigator_role,
-                    "case_investigator_label": _case_label,
-                    "file_path": evidence_file_path,
-                    "original_filename": original_filename,
-                    "created_at": existing_meta.get("created_at"),
-                    "completed_at": datetime.now(UTC).isoformat(),
-                    "report_id": str(report.report_id),
-                },
-            )
-            increment_investigations_completed()
-
-            try:
-                persistence = await get_session_persistence()
-                await persistence.save_report(
-                    session_id=session_str,
-                    case_id=case_id,
-                    investigator_id=investigator_id,
-                    report_data=report.model_dump(mode="json"),
-                )
-                await persistence.update_session_status(session_str, "completed")
-            except Exception as exc:
-                logger.error(f"DB persistence fail: {exc}")
 
             return report
 
         except Exception as exc:
             error_msg = str(exc)
-            logger.error(f"Investigation failed: {exc}", exc_info=True)
-            increment_investigations_failed()
-            await broadcast_update(
-                session_str,
-                BriefUpdate(
-                    type="ERROR",
-                    session_id=session_str,
-                    message="Internal error. Please try again.",
-                    data={"error": error_msg},
-                ),
+            await mark_investigation_failed(
+                session_id=session_str,
+                case_id=case_id,
+                investigator_id=investigator_id,
+                evidence_file_path=evidence_file_path,
+                original_filename=original_filename,
+                error=error_msg,
             )
-            try:
-                # Refresh metadata to get the latest UUID/label
-                existing_meta = await get_active_pipeline_metadata(session_str) or {}
-                _investigator_id = existing_meta.get("investigator_id", investigator_id)
-                _investigator_role = existing_meta.get("investigator_role")
-                _case_label = existing_meta.get("case_investigator_label")
-
-                await set_active_pipeline_metadata(
-                    session_str,
-                    {
-                        "status": "error",
-                        "brief": error_msg,
-                        "case_id": case_id,
-                        "investigator_id": _investigator_id,
-                        "investigator_role": _investigator_role,
-                        "case_investigator_label": _case_label,
-                        "file_path": evidence_file_path,
-                        "original_filename": original_filename,
-                        "error": error_msg,
-                    },
-                )
-            except Exception:
-                pass  # Redis may be down in the error path; outer exception is re-raised regardless.
             raise
         finally:
             try:

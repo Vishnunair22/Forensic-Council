@@ -87,6 +87,30 @@ _ALLOWED_EXTENSIONS = frozenset(
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-\.]{1,128}$")
 
 
+async def _detect_mime_from_head(head: bytes) -> str:
+    try:
+        import magic
+    except ImportError as exc:
+        logger.error("python-magic is not installed", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Evidence MIME detection service is unavailable.",
+        ) from exc
+    try:
+        return await asyncio.to_thread(magic.from_buffer, head, mime=True)
+    except Exception as exc:
+        logger.error("libmagic MIME detection failed", error=str(exc), exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Evidence MIME detection service is unavailable.",
+        ) from exc
+
+
+def _append_chunk(path: Path, chunk: bytes) -> None:
+    with path.open("ab") as f:
+        f.write(chunk)
+
+
 def _validate_safe_id(value: str, field_name: str) -> None:
     """Raise 422 if value contains unsafe characters."""
     if not _SAFE_ID_RE.match(value):
@@ -120,6 +144,26 @@ async def run_investigation_task(
         investigator_id=investigator_id,
         original_filename=original_filename,
     )
+
+
+async def _register_session_before_dispatch(
+    *,
+    session_id: str,
+    case_id: str,
+    investigator_id: str,
+) -> None:
+    from core import session_persistence
+
+    p = await session_persistence.get_session_persistence()
+    ok = await p.save_session_state(
+        session_id=session_id,
+        case_id=case_id,
+        investigator_id=investigator_id,
+        pipeline_state={"status": "running"},
+        status="running",
+    )
+    if not ok:
+        raise RuntimeError("session persistence returned false")
 
 
 async def _cleanup_stale_investigation_session(
@@ -262,9 +306,7 @@ async def start_investigation(
     head = await file.read(2048)
     await file.seek(0)
 
-    import magic
-
-    actual_mime = await asyncio.to_thread(magic.from_buffer, head, mime=True)
+    actual_mime = await _detect_mime_from_head(head)
 
     # Validate against ALLOWED_MIME_TYPES
     if actual_mime not in ALLOWED_MIME_TYPES:
@@ -313,18 +355,17 @@ async def start_investigation(
     try:
         hasher = hashlib.sha256()
         total_size = 0
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                total_size += len(chunk)
-                if total_size > MAX_FILE_SIZE:
-                    f.close()
-                    tmp_path.unlink(missing_ok=True)
-                    raise HTTPException(status_code=400, detail="File size exceeds limit.")
-                hasher.update(chunk)
-                f.write(chunk)
+        tmp_path.write_bytes(b"")
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_FILE_SIZE:
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="File size exceeds limit.")
+            hasher.update(chunk)
+            await asyncio.to_thread(_append_chunk, tmp_path, chunk)
 
         if total_size == 0:
             tmp_path.unlink(missing_ok=True)
@@ -460,10 +501,43 @@ async def start_investigation(
             },
         )
 
-        await _supersede_prior_investigations(
-            investigator_user_id=current_user.user_id,
-            keep_session_id=session_id,
-        )
+        if settings.app_env == "production":
+            try:
+                await _register_session_before_dispatch(
+                    session_id=session_id,
+                    case_id=case_id,
+                    investigator_id=current_user.user_id,
+                )
+            except Exception as exc:
+                await _cleanup_stale_investigation_session(
+                    dedup_key=dedup_key,
+                    session_id=session_id,
+                    reason="initial persistence failure",
+                )
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to register investigation before dispatch.",
+                ) from exc
+        else:
+            try:
+                await _register_session_before_dispatch(
+                    session_id=session_id,
+                    case_id=case_id,
+                    investigator_id=current_user.user_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Session persistence registration skipped in non-production",
+                    session_id=session_id,
+                    error=str(exc),
+                )
+
+        if getattr(settings, "supersede_prior_investigations_on_upload", False):
+            await _supersede_prior_investigations(
+                investigator_user_id=current_user.user_id,
+                keep_session_id=session_id,
+            )
 
         if settings.use_redis_worker:
             from api.routes._session_state import broadcast_update
@@ -534,24 +608,6 @@ async def start_investigation(
 
         increment_investigations_started()
 
-        try:
-            from core import session_persistence
-
-            p = await session_persistence.get_session_persistence()
-            await p.save_session_state(
-                session_id=session_id,
-                case_id=case_id,
-                investigator_id=current_user.user_id,
-                pipeline_state={"status": "running"},
-                status="running",
-            )
-        except Exception as exc:
-            logger.error("Session persistence registration failed", error=str(exc))
-            if settings.app_env == "production":
-                raise HTTPException(
-                    status_code=500, detail="Failed to write chain-of-custody ledger."
-                ) from exc
-
         return InvestigationResponse(
             session_id=session_id,
             case_id=case_id,
@@ -564,16 +620,30 @@ async def start_investigation(
             tmp_path.unlink(missing_ok=True)
         raise
     except Exception as e:
+        logger.error(
+            "Investigation start failed",
+            session_id=session_id,
+            error=str(e),
+            exc_info=True,
+        )
         if not pipeline_started:
             tmp_path.unlink(missing_ok=True)
-        # If pipeline started but something went wrong after, schedule deferred cleanup
         elif tmp_path.exists():
             import asyncio as _asyncio
+
             async def _deferred_cleanup(p=tmp_path):
-                await _asyncio.sleep(600)  # 10 min grace for pipeline to finish
+                await _asyncio.sleep(600)
                 try:
                     p.unlink(missing_ok=True)
                 except Exception as _cleanup_err:
-                    logger.debug("Deferred tmp file cleanup failed", path=str(p), error=str(_cleanup_err))
+                    logger.debug(
+                        "Deferred tmp file cleanup failed", path=str(p), error=str(_cleanup_err)
+                    )
+
             _asyncio.create_task(_deferred_cleanup())
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        if settings.app_env != "production":
+            raise HTTPException(status_code=500, detail=f"Failed to start investigation: {type(e).__name__}") from e
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to start investigation. Please retry or contact support with the session timestamp.",
+        ) from e

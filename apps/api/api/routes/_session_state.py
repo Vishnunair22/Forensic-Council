@@ -153,6 +153,19 @@ async def set_final_report(session_id: str, report: Any) -> None:
     await redis.set(ts_key, datetime.now(UTC).isoformat(), ex=_REPORT_TTL_SECONDS)
 
 
+def _parse_cached_report_timestamp(value: str | None) -> datetime:
+    if not value:
+        return datetime.now(UTC)
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        logger.warning("Invalid cached report timestamp", value=value)
+        return datetime.now(UTC)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
 async def get_final_report(session_id: str) -> tuple[Any, datetime] | None:
     """Retrieve final report from Redis with real creation timestamp."""
     redis = await _get_redis()
@@ -160,15 +173,8 @@ async def get_final_report(session_id: str) -> tuple[Any, datetime] | None:
     ts_key = f"{REPORT_CACHE_KEY_PREFIX}{session_id}:created_at"
     data = await redis.get_json(key)
     if data:
-        # Issue 9.2: Return the real creation timestamp instead of datetime.now()
         ts_raw = await redis.get(ts_key)
-        if ts_raw:
-            try:
-                created_at = datetime.fromisoformat(ts_raw)
-            except ValueError:
-                created_at = datetime.now(UTC)
-        else:
-            created_at = datetime.now(UTC)
+        created_at = _parse_cached_report_timestamp(ts_raw)
         return (data, created_at)
     return None
 

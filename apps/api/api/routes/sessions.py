@@ -1,16 +1,9 @@
 """
 Sessions Routes
-===============
+==============
 
 Routes for managing investigation sessions.
 """
-
-# WebSocket constants live in api.routes._websocket; keep these literals here for
-# legacy static infrastructure tests that inspect sessions.py directly.
-# MAX_MESSAGES_PER_MINUTE = 100
-# IDLE_TIMEOUT = 300
-# finally:
-#     await pubsub.close()
 
 import json
 from datetime import UTC, datetime
@@ -29,7 +22,7 @@ from api.routes._session_state import (
     set_active_pipeline_metadata,
 )
 from api.schemas import ReportDTO, ReportStatusDTO, SessionInfo
-from core.auth import User, get_current_user
+from core.auth import User, UserRole, get_current_user
 from core.config import get_settings
 from core.structured_logging import get_logger
 
@@ -79,6 +72,10 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
             logger.debug("Skipping malformed session metadata", key=key, error=str(_meta_err))
             continue
         if metadata and isinstance(metadata, dict):
+            owner = metadata.get("investigator_id")
+            if current_user.role not in (UserRole.ADMIN, UserRole.AUDITOR):
+                if owner != current_user.user_id:
+                    continue
             sessions.append(
                 SessionInfo(
                     session_id=session_id,
@@ -95,19 +92,77 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
     """Terminate a running session. Requires authentication and session ownership."""
     await assert_session_access(session_id, current_user)
 
-    # Close local WebSocket connections
+    from api.routes._session_state import (
+        broadcast_update,
+        clear_session_websockets,
+        get_active_pipeline,
+        pop_active_task,
+        remove_active_pipeline,
+    )
+    from api.schemas import BriefUpdate
+    from core.session_persistence import get_session_persistence
+
+    task = pop_active_task(session_id)
+    if task and not task.done():
+        task.cancel()
+
+    pipeline = get_active_pipeline(session_id)
+    if pipeline is not None:
+        try:
+            if hasattr(pipeline, "_handle_global_abort"):
+                await pipeline._handle_global_abort({"reason": "terminated"})
+        except Exception:
+            logger.debug("Pipeline abort hook failed", session_id=session_id, exc_info=True)
+        remove_active_pipeline(session_id)
+
+    redis = await get_redis_client()
+    await redis.delete(
+        f"forensic:session:metadata:{session_id}",
+        f"forensic:replay:{session_id}",
+        f"forensic:session:resume_decision:{session_id}",
+    )
+    await redis.hdel("forensic:investigation:tasks", session_id)
+
+    try:
+        queued = await redis.client.lrange("forensic:investigation:queue", 0, -1)
+        remaining = [
+            item
+            for item in queued
+            if (item.decode() if isinstance(item, bytes) else str(item)) != session_id
+        ]
+        async with redis.client.pipeline(transaction=True) as pipe:
+            pipe.delete("forensic:investigation:queue")
+            if remaining:
+                pipe.rpush("forensic:investigation:queue", *remaining)
+            await pipe.execute()
+    except Exception as exc:
+        logger.debug("Failed to prune terminated session from queue", session_id=session_id, error=str(exc))
+
     for ws in get_session_websockets(session_id):
         try:
             await ws.close()
         except Exception:
             pass
-    # register_websocket/unregister_websocket and get_session_websockets
-    # are still needed for local broadcast, so we don't clear them entirely here.
+    clear_session_websockets(session_id)
 
-    from core.persistence.redis_client import get_redis_client
+    try:
+        await broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="ERROR",
+                session_id=session_id,
+                message="Investigation terminated by user.",
+                data={"status": "terminated"},
+            ),
+        )
+    except Exception as exc:
+        logger.debug("Failed to broadcast termination", session_id=session_id, error=str(exc))
 
-    redis = await get_redis_client()
-    await redis.delete(f"forensic:session:metadata:{session_id}")
+    try:
+        persistence = await get_session_persistence()
+        await persistence.update_session_status(session_id, "terminated", "Terminated by user")
+    except Exception as exc:
+        logger.warning("Failed to persist termination", session_id=session_id, error=str(exc))
 
     return {"status": "terminated", "session_id": session_id}
 
@@ -495,7 +550,23 @@ async def download_report_pdf(
                 },
             )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report export failed: {str(e)}")
+        logger.error(
+            "PDF export failed; returning JSON fallback",
+            session_id=session_id,
+            error=str(e),
+            exc_info=True,
+        )
+        filename = f"forensic_report_{session_id}_{timestamp}.json"
+        return JSONResponse(
+            content=report_dict,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "X-PDF-Fallback": "true",
+                "X-PDF-Fallback-Reason": "pdf_export_error",
+            },
+        )
 
 
 # ============================================================================
@@ -683,8 +754,10 @@ async def resume_investigation(
         )
 
     # Verify ownership (non-admins can't resume other users' investigations)
+    from core.auth import UserRole
+
     owner = metadata.get("investigator_id")
-    if current_user.role not in ("admin", "auditor") and owner != current_user.user_id:
+    if current_user.role is not UserRole.ADMIN and owner != current_user.user_id:
         raise HTTPException(
             status_code=403,
             detail="You do not have access to this investigation",

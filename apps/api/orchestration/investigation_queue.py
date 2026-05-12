@@ -61,8 +61,6 @@ class InvestigationQueue:
 
     QUEUE_KEY = "forensic:investigation:queue"
     METADATA_KEY = "forensic:investigation:tasks"
-    # Worker writes this key on every BLPOP loop iteration (TTL 30s).
-    # If absent, no worker has been alive for at least 30 seconds.
     WORKER_HEARTBEAT_KEY = "forensic:worker:heartbeat"
     WORKER_HEARTBEAT_TTL = 30
 
@@ -74,6 +72,54 @@ class InvestigationQueue:
             self._redis = await get_redis_client()
         return self._redis
 
+    async def _mark_session_failed(self, task: InvestigationTask, error: str) -> None:
+        try:
+            from api.routes._session_state import (
+                broadcast_update,
+                get_active_pipeline_metadata,
+                set_active_pipeline_metadata,
+            )
+            from api.schemas import BriefUpdate
+
+            session_id = str(task.session_id)
+            existing = await get_active_pipeline_metadata(session_id) or {}
+            await set_active_pipeline_metadata(
+                session_id,
+                {
+                    **existing,
+                    "status": "error",
+                    "brief": error,
+                    "error": error,
+                    "completed_at": time.time(),
+                },
+            )
+            await broadcast_update(
+                session_id,
+                BriefUpdate(
+                    type="ERROR",
+                    session_id=session_id,
+                    message="Investigation failed.",
+                    data={"error": error, "status": "error"},
+                ),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to mark session failed after worker error",
+                session_id=str(task.session_id),
+                error=str(exc),
+            )
+        try:
+            from core.session_persistence import get_session_persistence
+
+            persistence = await get_session_persistence()
+            await persistence.update_session_status(str(task.session_id), "error", error)
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist worker failure",
+                session_id=str(task.session_id),
+                error=str(exc),
+            )
+
     async def submit(
         self,
         session_id: UUID,
@@ -82,9 +128,7 @@ class InvestigationQueue:
         evidence_file_path: str,
         original_filename: str | None = None,
     ) -> InvestigationTask:
-        """
-        Submit a new investigation to the Redis queue.
-        """
+        """Submit a new investigation to the Redis queue."""
         redis = await self._get_redis()
         task = InvestigationTask(
             session_id=session_id,
@@ -95,15 +139,16 @@ class InvestigationQueue:
         )
 
         try:
-            # Store metadata
-            await redis.hset(self.METADATA_KEY, str(session_id), task.model_dump_json())
-            # Push to queue
-            await redis.client.rpush(self.QUEUE_KEY, str(session_id))
+            async with redis.client.pipeline(transaction=True) as pipe:
+                pipe.hset(self.METADATA_KEY, str(session_id), task.model_dump_json())
+                pipe.rpush(self.QUEUE_KEY, str(session_id))
+                await pipe.execute()
         except Exception as e:
             logger.error(
-                "Failed to submit investigation to Redis", session_id=str(session_id), error=str(e)
+                "Failed to submit investigation to Redis",
+                session_id=str(session_id),
+                error=str(e),
             )
-            # Attempt to clean up metadata if queue push failed
             await redis.hdel(self.METADATA_KEY, str(session_id))
             raise
 
@@ -130,7 +175,7 @@ class InvestigationQueue:
     async def update_task(self, task: InvestigationTask) -> None:
         """Update task metadata in Redis."""
         redis = await self._get_redis()
-        await redis.hset(self.METADATA_KEY, str(task.session_id), task.to_dict())
+        await redis.hset(self.METADATA_KEY, str(task.session_id), task.model_dump_json())
 
 
 class InvestigationWorker:
@@ -257,6 +302,7 @@ class InvestigationWorker:
                         session_id=str(task.session_id),
                         timeout_seconds=self._task_timeout_seconds(),
                     )
+                    await self.queue._mark_session_failed(task, task.error)
                 except Exception as e:
                     task.status = InvestigationStatus.FAILED
                     task.error = str(e)
@@ -267,6 +313,7 @@ class InvestigationWorker:
                         error=str(e),
                         exc_info=True,
                     )
+                    await self.queue._mark_session_failed(task, task.error)
 
                 await self.queue.update_task(task)
             except asyncio.CancelledError:

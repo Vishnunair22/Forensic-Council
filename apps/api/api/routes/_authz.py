@@ -26,6 +26,27 @@ def validate_session_id(session_id: str) -> None:
         )
 
 
+async def _load_session_metadata_from_db(session_id: str) -> dict | None:
+    try:
+        from core.session_persistence import get_session_persistence
+
+        persistence = await get_session_persistence()
+        state = await persistence.get_session_state(session_id)
+        if state:
+            return state
+        report = await persistence.get_report(session_id)
+        if report:
+            return {
+                "session_id": report["session_id"],
+                "case_id": report["case_id"],
+                "investigator_id": report["investigator_id"],
+                "status": report["status"],
+            }
+    except Exception as exc:
+        logger.warning("Session DB fallback failed", session_id=session_id, error=str(exc))
+    return None
+
+
 async def assert_session_access(session_id: str, user: User) -> dict:
     """
     Verify the user has access to the specified session.
@@ -47,7 +68,8 @@ async def assert_session_access(session_id: str, user: User) -> dict:
 
     try:
         metadata = await get_active_pipeline_metadata(session_id)
-    except (AttributeError, TypeError):
+    except Exception as exc:
+        logger.warning("Session metadata lookup failed", session_id=session_id, error=str(exc))
         metadata = None
 
     from core.config import get_settings
@@ -58,6 +80,9 @@ async def assert_session_access(session_id: str, user: User) -> dict:
             metadata = {"session_id": session_id, "investigator_id": getattr(user, "user_id", None)}
         else:
             metadata = None
+
+    if not metadata:
+        metadata = await _load_session_metadata_from_db(session_id)
 
     if not metadata:
         from api.routes._session_state import get_active_pipeline
