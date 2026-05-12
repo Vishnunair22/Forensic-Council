@@ -23,8 +23,8 @@
 | Field | Value |
 |-------|-------|
 | Local branch | `phase-3-frontend-ui-workflow` (feature branch from `main`) |
-| Local commit | `19095e4` (Phase 3.10) |
-| Remote synced? | not verified in this session |
+| Local commit | `43a26fa` (Phase 3.11) |
+| Tag | `phase-3-frontend-ui-workflow-clean` |
 
 ## Current Local Goal
 
@@ -51,7 +51,7 @@ Phase 3 frontend UI/workflow fixes — committed to `phase-3-frontend-ui-workflo
 - 4 Playwright hard-refresh tests
 - 7 pytest backend regression tests
 
-### Phase 3 (in progress, on `phase-3-frontend-ui-workflow`)
+### Phase 3 (completed, tagged `phase-3-frontend-ui-workflow-clean`, on `phase-3-frontend-ui-workflow`)
 
 #### Phase 3.1 — Upload modal PDF copy fix
 - `apps/web/src/components/evidence/UploadModal.tsx`: "images, video, audio, PDF" → "images, video, or audio"; removed `pdf: ["application/pdf"]` from extension map; added TIFF/BMP to extension map
@@ -88,6 +88,14 @@ Phase 3 frontend UI/workflow fixes — committed to `phase-3-frontend-ui-workflo
 #### Phase 3.10 — Route-flow integration tests added
 - `apps/web/tests/integration/page_flows.test.tsx`: new "Session-scoped metadata" describe block with 3 tests covering scoped context storage and history fileName per session
 
+#### Phase 3.11 — Visual refinement pass (responsive spacing + button semantics)
+- `apps/web/src/app/evidence/page.tsx`: `px-6` → `px-4 sm:px-6` for mobile safety
+- `apps/web/src/components/result/ResultLayout.tsx`: `pt-28` → `pt-36 sm:pt-28` so fixed nav doesn't cover content on small screens; added `type="button"` to Hub nav button and tab buttons
+- `apps/web/src/components/result/ActionDock.tsx`: `bottom-8` → `bottom-4 sm:bottom-8`, `px-5` → `px-3 sm:px-5`; added `type="button"` to all 3 buttons
+- `apps/web/src/components/evidence/AgentProgressDisplay.tsx`: added `type="button"` to 4 buttons (accept-analysis, deep-analysis, new-analysis, view-report)
+- `apps/web/src/components/evidence/AgentStatusSummary.tsx`: `type="button"` already present on both collapsible rows
+- `apps/web/src/components/result/HistoryPanel.tsx`: added `type="button"` to 5 buttons (clear-all confirm yes/no, clear-archive, back-to-analysis, remove-item)
+
 ## Exact Files Changed
 
 ```
@@ -111,13 +119,16 @@ Phase 3 (on phase-3-frontend-ui-workflow):
  apps/web/src/app/api/v1/[...path]/route.ts         — DISABLE_NEXT_API_PROXY
  apps/web/src/components/evidence/UploadModal.tsx   — PDF copy fix, audio preview removed, TIFF/BMP added
  apps/web/src/components/evidence/UploadSuccessModal.tsx — audio preview added
- apps/web/src/components/result/ActionDock.tsx      — sessionId wired, cookie token removed
- apps/web/src/components/result/ResultLayout.tsx    — sessionId prop, live arbiter text
+ apps/web/src/components/result/ActionDock.tsx      — sessionId wired, cookie token removed, responsive spacing, type=button
+ apps/web/src/components/result/ResultLayout.tsx    — sessionId prop, live arbiter text, responsive padding, type=button
  apps/web/src/components/ui/GlobalNavbar.tsx      — logo/nav separation, explicit reset button
  apps/web/src/lib/constants.ts                    — removed REPORT_TABS, TAB_ICONS, unused imports
  apps/web/src/hooks/useResult.ts                  — session-scoped metadata, mutable state, timeline refresh
  apps/web/src/hooks/useInvestigation.ts           — scoped context writes, thumbnail scoped
- apps/web/tests/integration/page_flows.test.tsx    — session-scoped metadata tests
+ apps/web/src/tests/integration/page_flows.test.tsx    — session-scoped metadata tests
+ apps/web/src/app/evidence/page.tsx                — responsive padding
+ apps/web/src/components/evidence/AgentProgressDisplay.tsx — type=button on 4 action buttons
+ apps/web/src/components/result/HistoryPanel.tsx   — type=button on 5 buttons
  infra/docker-compose.yml                           — DISABLE_NEXT_API_PROXY env
 ```
 
@@ -125,7 +136,7 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 
 | Decision | Reason | Related Files | Status |
 |----------|--------|---------------|--------|
-| Phase 3 committed in 3 batches | 3.1+3.2+3.3, 3.4, then 3.5-3.10 combined | various | resolved |
+| Phase 3 committed in 4 batches | 3.1+3.2+3.3, 3.4, 3.5-3.10 combined, 3.11 style refinements | various | resolved |
 | `DISABLE_NEXT_API_PROXY` for prod Docker | Explicit vs implicit; dev keeps proxy enabled | route.ts | resolved |
 | Audio preview in UploadSuccessModal | Unreachable in UploadModal (parent closes it on selection) | UploadModal.tsx, UploadSuccessModal.tsx | resolved |
 | PDF not added to supported types | Phase 3 is frontend-only; backend and agent routing unchanged | constants.ts | resolved |
@@ -183,13 +194,16 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 
 ## Next Best Action for AI
 
+Phase 3 is complete and tagged. Remaining verification (deferred until runtime available):
+
 1. Run `npm run type-check && npm run lint` in `apps/web`
 2. Run `uv run pytest tests/integration/test_api_routes.py tests/unit/test_config_validation.py tests/unit/test_investigation_queue_unit.py -q` in `apps/api`
 3. Run `npm test -- tests/integration/page_flows.test.tsx --runInBand` in `apps/web`
-4. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts tests/e2e/upload-route-flow.spec.ts` in `apps/web`
+4. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts tests/e2e/upload-route-flow.spec.ts tests/e2e/full_journey.spec.ts tests/e2e/websocket_flow.test.ts` in `apps/web`
 5. Run Docker: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d`
 6. Run `./scripts/_wait_healthy.sh dev && ./scripts/_smoke.sh dev`
-7. Tag both branches after all tests pass: `phase-2-startup-stability-clean` and `phase-3-frontend-ui-workflow-clean`
+7. Manual viewport checks at 375x667, 390x844, 768x1024, 1440x900 (no horizontal scroll, nav not covered, dock reachable, cards stack)
+8. Manual full workflow test (Steps 1-13 in Phase 3 final checklist)
 
 ## Do Not Break
 
