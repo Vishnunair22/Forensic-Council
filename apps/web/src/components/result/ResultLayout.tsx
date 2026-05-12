@@ -77,7 +77,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   }
 
   return (
-    <div className="min-h-screen pb-48 pt-28 relative">
+    <div className="min-h-screen pb-48 pt-36 sm:pt-28 relative">
       <AnimatePresence initial={false}>
         {(rs.state === "arbiter" || rs.state === "loading") && (
           <ForensicProgressOverlay
@@ -99,6 +99,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           }}
         >
           <button
+            type="button"
             onClick={rs.handleHome}
             className="px-4 py-2.5 text-[10px] font-mono font-bold uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl transition-all duration-200"
             style={{ color: "rgba(255,255,255,0.35)" }}
@@ -129,6 +130,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           >
             {(["analysis", "history"] as Tab[]).map((tab) => (
               <button
+                type="button"
                 key={tab}
                 role="tab"
                 id={`tab-${tab}`}

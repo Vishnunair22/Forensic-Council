@@ -69,7 +69,7 @@ export default function EvidenceUploadPage() {
         )}
       </AnimatePresence>
 
-      <div className="relative min-h-screen px-6 py-32">
+      <div className="relative min-h-screen px-4 sm:px-6 py-24 sm:py-32">
         {investigation.wsConnectionError && !investigation.isReconnecting && (
           <ForensicErrorModal
             isVisible

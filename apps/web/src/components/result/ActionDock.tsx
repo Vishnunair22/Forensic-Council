@@ -38,7 +38,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
     onExport();
   };
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-700 w-full max-w-lg px-5 pointer-events-none">
+    <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-700 w-full max-w-lg px-3 sm:px-5 pointer-events-none">
       <div
         className="rounded-full p-1.5 pointer-events-auto"
         style={{
@@ -51,6 +51,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
       >
         <div className="flex items-center justify-between gap-1.5">
           <button
+            type="button"
             onClick={onHome}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] transition-all duration-200"
             style={{ color: "rgba(255,255,255,0.35)" }}
@@ -68,6 +69,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
           </button>
 
           <button
+            type="button"
             onClick={onNew}
             className="flex-[2] btn-horizon-primary py-2.5 px-6 text-[11px] flex items-center justify-center gap-2"
           >
@@ -76,6 +78,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
           </button>
 
           <button
+            type="button"
             onClick={handleExport}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] transition-all duration-200"
             style={{ color: "rgba(255,255,255,0.35)" }}

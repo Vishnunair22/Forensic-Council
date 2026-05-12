@@ -71,12 +71,14 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     <div className="flex items-center gap-3 bg-danger/10 p-2 rounded-xl border border-danger/20">
                       <span className="text-[9px] font-mono text-danger font-bold uppercase tracking-wider px-2">Confirm?</span>
                       <button
+                        type="button"
                         onClick={clearAll}
                         className="py-1 px-3 text-[9px] font-mono font-bold text-[#05070D] bg-danger rounded-md uppercase"
                       >
                         Yes
                       </button>
                       <button
+                        type="button"
                         onClick={() => setShowConfirm(false)}
                         className="py-1 px-3 text-[9px] font-mono font-bold text-white/60 bg-white/5 rounded-md uppercase"
                       >
@@ -84,16 +86,17 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                       </button>
                     </div>
                   ) : (
-                    <button
+<button
+                      type="button"
                       onClick={() => setShowConfirm(true)}
                       className="btn-horizon-outline py-2 px-4 text-[10px] text-danger border-danger/20 hover:bg-danger/5"
                     >
                       Clear Archive
                     </button>
-                  )}
-                </>
-              )}
+                  </>
+                )}
               <button
+                type="button"
                 onClick={onDismiss}
                 className="text-[10px] font-mono font-bold text-white/40 hover:text-primary tracking-widest uppercase transition-colors"
               >
@@ -192,6 +195,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                             </div>
                         </div>
                         <button
+                          type="button"
                           onClick={(e) => removeItem(e, item.sessionId)}
                           className="p-3 rounded-lg border border-white/5 text-white/20 hover:text-danger hover:border-danger/30 transition-all"
                         >

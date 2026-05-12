@@ -335,6 +335,7 @@ export function AgentProgressDisplay({
             <div className="glass-panel p-2 rounded-full border-white/5">
               <div className="bg-surface-1/50 rounded-full p-2 flex items-center gap-3">
                 <button
+                  type="button"
                   data-testid="accept-analysis-btn"
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
@@ -344,6 +345,7 @@ export function AgentProgressDisplay({
                   <span>Accept Result</span>
                 </button>
                 <button
+                  type="button"
                   data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating || (phase as string) === "deep"}
@@ -372,6 +374,7 @@ export function AgentProgressDisplay({
             <div className="glass-panel p-2 rounded-full border-white/5">
               <div className="bg-surface-1/50 rounded-full p-2 flex items-center gap-3">
                 <button
+                  type="button"
                   data-testid="new-analysis-btn"
                   aria-label="New investigation"
                   onClick={onNewUpload}
@@ -380,6 +383,7 @@ export function AgentProgressDisplay({
                   New Analysis
                 </button>
                 <button
+                  type="button"
                   data-testid="view-report-btn"
                   onClick={onViewResults}
                   disabled={isNavigating}
