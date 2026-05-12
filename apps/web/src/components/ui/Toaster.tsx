@@ -97,6 +97,7 @@ function ToastCard({
         )}
       </div>
       <button
+        type="button"
         onClick={onDismiss}
         className="p-1 rounded-lg text-white/18 hover:text-white/60 transition-colors duration-150 shrink-0 mt-0.5"
         aria-label="Dismiss"
