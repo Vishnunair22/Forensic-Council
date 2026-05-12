@@ -201,7 +201,7 @@ uv run python scripts/run_api.py
 ```bash
 # bash / zsh
 cd apps/web
-npm install
+npm ci
 npm run dev
 ```
 ```powershell
@@ -272,7 +272,7 @@ Never commit `.env` or real secrets.
 Run `uv sync --all-extras` from the `apps/api/` directory. The virtualenv is managed by uv.
 
 ### Frontend `EACCES` permission error
-Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
+Delete `node_modules` and reinstall from the lockfile: `rm -rf node_modules && npm ci`
 
 ### Docker port conflict (5432/6379)
 Another Postgres or Redis instance is running. Stop it or change ports in `.env`.

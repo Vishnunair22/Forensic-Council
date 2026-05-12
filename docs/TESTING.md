@@ -107,11 +107,11 @@ Run from Project Root:
 
 ```bash
 # Static Infra Audit
-docker compose -f infra/docker-compose.yml --env-file .env config --quiet
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env config --quiet
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env config --quiet
 
 # Live Stack Integration (Requires 'docker compose up')
-docker compose -f infra/docker-compose.yml --env-file .env ps
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env ps
 ```
 
 ---

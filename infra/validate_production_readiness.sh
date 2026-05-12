@@ -4,7 +4,10 @@ set -euo pipefail
 # Forensic Council - Production Readiness Validator
 # This script ensures that the environment and configuration are ready for production.
 
-echo "--- Forensic Council: Production Readiness Check ---"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+echo "--- Forensic Council: Production Readiness Check ($ROOT) ---"
 
 # 0. Check for required binaries (hard requirement)
 echo "[0/3] Verifying required tools..."

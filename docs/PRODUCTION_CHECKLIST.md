@@ -24,7 +24,7 @@ Not yet verified.
 
 ```bash
 cd apps/web
-npm install
+npm ci
 npm run type-check
 npm run lint
 npm run test

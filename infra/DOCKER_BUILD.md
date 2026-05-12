@@ -83,11 +83,12 @@ git status .env
 
 Developer mode targets the `development` Docker stage for the backend and worker (uvicorn `--reload` enabled, dev dependencies installed) and `next dev` for the frontend (Turbopack HMR). Source code is bind-mounted so every saved file is reflected instantly without rebuilding.
 
-### Step 1 — Build and start
+### Step 1 — Build and start (dev overlay provides direct host ports 8000, 5432, 6379, 6333)
 
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build
 ```
@@ -98,6 +99,7 @@ The first build downloads OS packages, Python dependencies, and ML model weights
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build -d
 ```
@@ -110,13 +112,14 @@ Open a second terminal while the build runs:
 # All services
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   logs -f
 
 # Single service
-docker compose -f infra/docker-compose.yml logs -f backend
-docker compose -f infra/docker-compose.yml logs -f worker
-docker compose -f infra/docker-compose.yml logs -f frontend
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env logs -f backend
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env logs -f worker
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env logs -f frontend
 ```
 
 Key log lines to watch for:
@@ -135,6 +138,7 @@ Key log lines to watch for:
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   ps
 ```
@@ -154,10 +158,10 @@ See [Section 6](#6-verifying-model-downloads).
 
 | URL | What |
 |-----|------|
-| `http://localhost:80` | Caddy proxy — recommended entry point (frontend + API) |
+| `http://localhost` | Caddy proxy — recommended entry point (frontend + API) |
 | `http://localhost:3000` | Frontend direct |
-| `http://localhost:8000` | Backend API direct |
-| `http://localhost:8000/docs` | FastAPI interactive docs (Swagger UI) |
+| `http://localhost:8000` | Backend API direct (only with dev overlay) |
+| `http://localhost:8000/docs` | FastAPI interactive docs (Swagger UI, only with dev overlay) |
 | `http://localhost:16686` | Jaeger distributed tracing UI |
 | `http://localhost:9090` | Prometheus metrics UI |
 
@@ -277,11 +281,13 @@ Use this when Docker layer cache is stale (e.g. base image updated, dependency v
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build --no-cache
 
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d
 ```
@@ -397,8 +403,11 @@ done
 ### Manual health checks
 
 ```bash
-# Backend API
+# Backend API (direct port — only works with dev overlay)
 curl -s http://localhost:8000/health | python -m json.tool
+
+# Backend API via Caddy (works without dev overlay)
+curl -s http://localhost/health | python -m json.tool
 
 # Frontend
 curl -sI http://localhost:3000/ | head -1
@@ -438,27 +447,31 @@ Rebuild and restart one service without stopping the rest of the stack:
 # Developer — rebuild backend only
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build backend
 
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d --no-deps backend
 
 # Developer — rebuild frontend only
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build frontend
 
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up -d --no-deps frontend
 
 # Restart worker (picks up bind-mounted code changes)
-docker compose -f infra/docker-compose.yml restart worker
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env restart worker
 ```
 
 ---
@@ -628,7 +641,7 @@ The base compose file uses `:?` syntax for required variables. Ensure your `.env
 
 ### Backend hot-reload not picking up changes
 
-Use the base compose file (`-f infra/docker-compose.yml`) for development. It mounts the backend source subdirectories and sets `WATCHFILES_FORCE_POLLING=true`, which lets uvicorn detect file changes on Windows Docker bind mounts.
+Use the dev overlay (`-f infra/docker-compose.dev.yml`) for development. It mounts the backend source subdirectories and sets `WATCHFILES_FORCE_POLLING=true`, which lets uvicorn detect file changes on Windows Docker bind mounts.
 
 ### Prometheus cannot scrape backend metrics
 

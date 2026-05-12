@@ -31,14 +31,22 @@ bash infra/generate_production_keys.sh
 #    LLM_API_KEY=<groq key from https://console.groq.com/keys>
 #    GEMINI_API_KEY=<gemini key from https://aistudio.google.com/apikey>
 
-# 5. Build and start (development)
-docker compose -f infra/docker-compose.yml --env-file .env up --build -d
+# 5. Build and start (development — includes dev overlay for direct host ports)
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  up --build -d
 
 # 6. Wait for healthy state (~15-40 min on first build for ML downloads)
-docker compose -f infra/docker-compose.yml --env-file .env ps
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  ps
 
-# 7. Verify backend
-curl http://localhost:8000/health
+# 7. Verify backend via Caddy (works without dev overlay) or direct port (with dev overlay)
+curl http://localhost/health
 
 # 8. Open the app
 #    Frontend (via Caddy):  http://localhost
@@ -120,11 +128,12 @@ The script does **not** generate `LLM_API_KEY` or `GEMINI_API_KEY` — obtain th
 > ```
 > Git Bash and WSL2 bash both accept the Unix `\` syntax without modification.
 
-Development:
+Development (use dev overlay for direct host ports 5432, 6379, 6333, 8000):
 
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build
 ```
@@ -158,20 +167,21 @@ CI and local tests use the same base compose file unless a test-specific overrid
 
 ## Ports
 
-Base/development stack:
+Base/development stack (via Caddy only — no direct host ports):
 
 | Service | Host Port | Notes |
 | --- | --- | --- |
-| Caddy | 80, 443 | Public reverse proxy |
-| Frontend | 3000 | Direct local access |
-| Backend | 8000 | Direct local API access |
+| Caddy | 80, 443 | Public reverse proxy (recommended entry point) |
+| Frontend | 3000 | Direct local access (dev overlay not required) |
+| Backend | — | Not exposed directly in base stack; route through Caddy at port 80 |
 | Jaeger | 16686 | Local tracing UI |
 | Prometheus | 9090 | Local metrics UI |
 
-Host-run development override (`-f infra/docker-compose.dev.yml`):
+Host-run development override (`-f infra/docker-compose.dev.yml`) adds direct host ports:
 
 | Service | Host Port | Notes |
 | --- | --- | --- |
+| Backend | 8000 | Direct backend API access |
 | Postgres | 5432 | Enables `uv run` API on host |
 | Redis | 6379 | Enables `uv run` API on host |
 | Qdrant | 6333, 6334 | Enables `uv run` API on host |

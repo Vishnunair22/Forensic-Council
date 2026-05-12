@@ -3,6 +3,7 @@ set -euo pipefail
 
 # ── Forensic Council — One-Command Dev Boot ───────────────────────────────────
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 COMPOSE="docker compose -f $ROOT/infra/docker-compose.yml -f $ROOT/infra/docker-compose.dev.yml --env-file $ROOT/.env"
 
 echo "🔍 Checking .env..."

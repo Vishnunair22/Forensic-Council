@@ -373,7 +373,7 @@ Be careful when changing:
 
 ```bash
 cd apps/web
-npm install
+npm ci
 npm run dev
 npm run type-check
 npm run lint
