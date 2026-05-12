@@ -36,6 +36,39 @@ export function HeroAuthActions() {
     return () => { document.body.style.overflow = ""; };
   }, [showUpload, isHandingOff]);
 
+  // Hide app shell from assistive technologies when modals are open
+  useEffect(() => {
+    const appRoot = document.getElementById("main-content");
+    const nav = document.querySelector("nav[aria-label='Main navigation']");
+    const footer = document.querySelector("footer");
+
+    const active = showUpload || isHandingOff;
+    for (const el of [appRoot, nav, footer]) {
+      if (!el) continue;
+      if (active) {
+        el.setAttribute("aria-hidden", "true");
+        if ("inert" in el) {
+          (el as HTMLElement & { inert?: boolean }).inert = true;
+        }
+      } else {
+        el.removeAttribute("aria-hidden");
+        if ("inert" in el) {
+          (el as HTMLElement & { inert?: boolean }).inert = false;
+        }
+      }
+    }
+
+    return () => {
+      for (const el of [appRoot, nav, footer]) {
+        if (!el) continue;
+        el.removeAttribute("aria-hidden");
+        if ("inert" in el) {
+          (el as HTMLElement & { inert?: boolean }).inert = false;
+        }
+      }
+    };
+  }, [showUpload, isHandingOff]);
+
   // Listen for global reset and open-upload events dispatched by navbar / session-expired
   useEffect(() => {
     const handleReset = () => {
