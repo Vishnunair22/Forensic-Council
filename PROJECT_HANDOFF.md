@@ -22,13 +22,13 @@
 
 | Field | Value |
 |-------|-------|
-| Local branch | `phase-3-frontend-ui-workflow` (feature branch from `main`) |
-| Local commit | `43a26fa` (Phase 3.11) |
-| Tag | `phase-3-frontend-ui-workflow-clean` |
+| Local branch | `phase-4-a11y-ux` (feature branch from `main`) |
+| Local commit | `bce9980` (Phase 4.5) |
+| Tag | — |
 
 ## Current Local Goal
 
-Phase 3 frontend UI/workflow fixes — committed to `phase-3-frontend-ui-workflow` branch.
+Phase 4 accessibility and UX polish — committed to `phase-4-a11y-ux` branch.
 
 ## What Changed Since Last AI/Remote Snapshot
 
@@ -96,6 +96,27 @@ Phase 3 frontend UI/workflow fixes — committed to `phase-3-frontend-ui-workflo
 - `apps/web/src/components/evidence/AgentStatusSummary.tsx`: `type="button"` already present on both collapsible rows
 - `apps/web/src/components/result/HistoryPanel.tsx`: added `type="button"` to 5 buttons (clear-all confirm yes/no, clear-archive, back-to-analysis, remove-item)
 
+### Phase 4 (in progress, on `phase-4-a11y-ux`)
+
+#### Phase 4.1 — Focus trap and focus restoration for custom modals
+- `apps/web/src/hooks/useFocusTrap.ts`: new hook implementing keyboard focus trap + escape handling for custom portal modals
+- `apps/web/src/components/evidence/UploadModal.tsx`: `useFocusTrap` with `dialogRef` replaces mount focus + Escape listener; `closeModal` callback replaces inline `onClose`; removed `closeBtnRef`
+- `apps/web/src/components/evidence/UploadSuccessModal.tsx`: `useFocusTrap` with `dialogRef`; `closeModal` replaces `closeBtnRef` + 3 effects; `dialogRef` placed on inner panel wrapper
+- `apps/web/src/components/ui/HeroAuthActions.tsx`: `ctaRef` added to Begin Analysis button; `closeUpload` helper restores focus after modal close; `closeUpload` passed to both modals' `onClose`/`onDismiss`
+
+#### Phase 4.2 — Upload dropzone keyboard-operability and semantic labels
+- `apps/web/src/components/evidence/UploadModal.tsx`: dropzone div gains `role="button"` + `tabIndex={0}` + `onKeyDown` for Enter/Space; help text gains `id="upload-file-help"` with updated copy ("or press Enter to select · images, video, and audio · max 50 MB"); error gains `id="upload-error"`; file input gains `id="evidence-file-input"` and `aria-describedby` linking help + error
+
+#### Phase 4.3 — Hide app shell from assistive tech during upload modals
+- `apps/web/src/components/ui/HeroAuthActions.tsx`: new effect sets `aria-hidden="true"` and `inert` on `#main-content`, `nav[aria-label='Main navigation']`, and `footer` when `showUpload || isHandingOff`; cleanup removes both attributes on unmount and effect teardown
+
+#### Phase 4.4 — Navbar keyboard accessibility and reduced-motion guard
+- `apps/web/src/components/ui/GlobalNavbar.tsx`: `useReducedMotion` disables auto-hide; `isKeyboardUser` state tracks Tab vs mousedown; scroll effect skips hide when `prefersReducedMotion`; `onFocusCapture` and `onBlurCapture` handlers keep navbar visible during keyboard navigation; `inert` only applied when `!isVisible && !isKeyboardUser`
+
+#### Phase 4.5 — Consistent global focus-visible treatment
+- `apps/web/src/app/globals.css`: `:focus-visible` expanded to `:where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"]))` with outer glow `box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22)`
+- `apps/web/src/components/ui/Toaster.tsx`: added `type="button"` to dismiss button
+
 ## Exact Files Changed
 
 ```
@@ -115,7 +136,7 @@ Phase 2 (on phase-2-startup-stability):
  infra/docker-compose.yml                — /live healthcheck, GRACEFUL_SHUTDOWN env, YAML indent fix
  scripts/_wait_healthy.sh               — docker inspect for missing/exited containers
 
-Phase 3 (on phase-3-frontend-ui-workflow):
+Phase 3 (on phase-3-frontend-ui-workflow, tag `phase-3-frontend-ui-workflow-clean`):
  apps/web/src/app/api/v1/[...path]/route.ts         — DISABLE_NEXT_API_PROXY
  apps/web/src/components/evidence/UploadModal.tsx   — PDF copy fix, audio preview removed, TIFF/BMP added
  apps/web/src/components/evidence/UploadSuccessModal.tsx — audio preview added
@@ -130,6 +151,15 @@ Phase 3 (on phase-3-frontend-ui-workflow):
  apps/web/src/components/evidence/AgentProgressDisplay.tsx — type=button on 4 action buttons
  apps/web/src/components/result/HistoryPanel.tsx   — type=button on 5 buttons
  infra/docker-compose.yml                           — DISABLE_NEXT_API_PROXY env
+
+Phase 4 (on phase-4-a11y-ux):
+ apps/web/src/hooks/useFocusTrap.ts              — new reusable focus-trap hook
+ apps/web/src/components/evidence/UploadModal.tsx — useFocusTrap, dialogRef, closeModal, keyboard dropzone, aria labels
+ apps/web/src/components/evidence/UploadSuccessModal.tsx — useFocusTrap, dialogRef, closeModal
+ apps/web/src/components/ui/HeroAuthActions.tsx  — ctaRef, closeUpload, inert/aria-hidden effect
+ apps/web/src/components/ui/GlobalNavbar.tsx      — isKeyboardUser, prefersReducedMotion, focus/blur capture
+ apps/web/src/app/globals.css                     — :where focus-visible with outer glow
+ apps/web/src/components/ui/Toaster.tsx          — type=button on dismiss
 ```
 
 ## Important Local Decisions
@@ -137,6 +167,7 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | Decision | Reason | Related Files | Status |
 |----------|--------|---------------|--------|
 | Phase 3 committed in 4 batches | 3.1+3.2+3.3, 3.4, 3.5-3.10 combined, 3.11 style refinements | various | resolved |
+| Phase 4 committed in 5 batches | 4.1-4.5 each as separate commit | various | resolved |
 | `DISABLE_NEXT_API_PROXY` for prod Docker | Explicit vs implicit; dev keeps proxy enabled | route.ts | resolved |
 | Audio preview in UploadSuccessModal | Unreachable in UploadModal (parent closes it on selection) | UploadModal.tsx, UploadSuccessModal.tsx | resolved |
 | PDF not added to supported types | Phase 3 is frontend-only; backend and agent routing unchanged | constants.ts | resolved |
@@ -145,6 +176,11 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | Navbar logo navigates, reset is explicit | Prevent accidental session wipe when clicking logo mid-analysis | GlobalNavbar.tsx | resolved |
 | `fileName` mutable state | Enables history session switching to update header filename | useResult.ts | resolved |
 | `ARBITER_POLL_INTERVAL_MS` / `MAX_ATTEMPTS` preserved | Still used by useResult and useInvestigation; not part of Phase 3.8 scope | constants.ts | resolved |
+| useFocusTrap for custom modals | Custom portal modals need keyboard trap + escape; no Radix Dialog in this stack | useFocusTrap.ts | resolved |
+| `ctaRef` in HeroAuthActions for focus restoration | Modal close needs to return focus to the button that opened it | HeroAuthActions.tsx | resolved |
+| `inert` on app shell during modals | `aria-modal` alone is insufficient across all AT/browser combinations | HeroAuthActions.tsx | resolved |
+| `isKeyboardUser` tracking in navbar | Auto-hiding navbar is hostile to keyboard/screen-reader users | GlobalNavbar.tsx | resolved |
+| `:where` selector for focus-visible | Minimizes specificity; allows Tailwind/base styles to layer cleanly | globals.css | resolved |
 
 ## Commands Run
 
@@ -163,6 +199,11 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | Scoped storage keys in useInvestigation.ts | all 5 scoped writes added | 2026-05-12 | forensic_investigation_ctx:{sid}, file_name:{sid}, mime_type:{sid}, pipeline_start:{sid}, thumbnail:{sid} |
 | `resetActiveInvestigation` in GlobalNavbar handleLogoClick | removed | 2026-05-12 | Replaced with router.push; explicit handleResetClick added |
 | rs.arbiterMsg in ResultLayout arbiter body | added | 2026-05-12 | Replaced hardcoded "Arbiter is compiling..." placeholder |
+| useFocusTrap hook | created | 2026-05-12 | Focus trap + escape for custom portal modals; filters disabled and aria-hidden elements |
+| ctaRef in HeroAuthActions | added | 2026-05-12 | Focus restoration after modal close via requestAnimationFrame |
+| inert on app shell during modals | added | 2026-05-12 | Sets aria-hidden + inert on main-content, nav, footer when upload modal open |
+| isKeyboardUser in GlobalNavbar | added | 2026-05-12 | Tracks Tab vs mousedown; prevents nav hide for keyboard users |
+| :where focus-visible in globals.css | added | 2026-05-12 | Low-specificity global focus ring with outer glow for all interactive elements |
 
 ### Build/Test Status
 
@@ -182,6 +223,7 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 | Cannot run Docker/npm/pytest in this environment (WSL2 not available) | medium | All verification is static (compileall, compose config, grep) |
 | Phase 2.14/2.15 tests not run | — | Test files modified but execution blocked by environment |
 | Phase 3.5-3.10 tests not run | — | Test files modified but execution blocked by environment |
+| Phase 4 tests not run | — | Test files updated but execution blocked by environment |
 | `forensic_is_deep` not scoped by session | Deep phase flag shared across sessions | Could be addressed in future session scoping pass |
 
 ## Known Bugs (Non-Doc)
@@ -194,16 +236,19 @@ Phase 3 (on phase-3-frontend-ui-workflow):
 
 ## Next Best Action for AI
 
-Phase 3 is complete and tagged. Remaining verification (deferred until runtime available):
+Phase 4 is complete on `phase-4-a11y-ux`. Remaining verification (deferred until runtime available):
 
 1. Run `npm run type-check && npm run lint` in `apps/web`
 2. Run `uv run pytest tests/integration/test_api_routes.py tests/unit/test_config_validation.py tests/unit/test_investigation_queue_unit.py -q` in `apps/api`
 3. Run `npm test -- tests/integration/page_flows.test.tsx --runInBand` in `apps/web`
-4. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts tests/e2e/upload-route-flow.spec.ts tests/e2e/full_journey.spec.ts tests/e2e/websocket_flow.test.ts` in `apps/web`
-5. Run Docker: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d`
-6. Run `./scripts/_wait_healthy.sh dev && ./scripts/_smoke.sh dev`
-7. Manual viewport checks at 375x667, 390x844, 768x1024, 1440x900 (no horizontal scroll, nav not covered, dock reachable, cards stack)
-8. Manual full workflow test (Steps 1-13 in Phase 3 final checklist)
+4. Run `npm test -- tests/unit/components/HeroAuthActions.test.tsx --runInBand` in `apps/web`
+5. Run `npm test -- tests/accessibility/accessibility.test.tsx --runInBand` in `apps/web`
+6. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts tests/e2e/upload-route-flow.spec.ts tests/e2e/full_journey.spec.ts tests/e2e/websocket_flow.test.ts tests/e2e/accessibility.spec.ts` in `apps/web`
+7. Run Docker: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d`
+8. Run `./scripts/_wait_healthy.sh dev && ./scripts/_smoke.sh dev`
+9. Manual keyboard sweep: Tab through /, upload modal, /evidence, /result/<session>, history panel, toast dismiss (every focused element needs visible ring)
+10. Manual focus trap test: Open modal, Tab through controls, press Escape, verify focus returns to Begin Analysis
+11. Manual navbar keyboard test: Scroll down to hide navbar, press Shift+Tab, verify navbar reappears
 
 ## Do Not Break
 
