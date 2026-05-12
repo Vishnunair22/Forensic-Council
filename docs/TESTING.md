@@ -106,9 +106,15 @@ npm.cmd run build
 Run from Project Root:
 
 ```bash
-# Static Infra Audit
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env config --quiet
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env config --quiet
+# Static build/run verification (no tools needed)
+./scripts/verify_phase1_build_run.sh static
+
+# Docker compose validation (requires Docker)
+./scripts/verify_phase1_build_run.sh docker-dev
+./scripts/verify_phase1_build_run.sh docker-prod
+
+# Full all-targets pass (static + docker-dev + docker-prod)
+./scripts/verify_phase1_build_run.sh all
 
 # Live Stack Integration (Requires 'docker compose up')
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env ps

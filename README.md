@@ -217,6 +217,8 @@ npm.cmd run dev
 ### Local Checks
 There is no root workspace package. Run backend checks from `apps/api` and frontend checks from `apps/web`. See [apps/api/README.md](apps/api/README.md) and [apps/web/README.md](apps/web/README.md) for per-package development instructions.
 
+A standalone build/run verification script is available at `scripts/verify_phase1_build_run.sh`. It validates shell syntax, Python compilation, and Docker compose configuration without requiring containers to be running.
+
 ## Common Commands
 
 Backend and frontend are in separate directories. Run backend commands from `apps/api/` and frontend commands from `apps/web/`:

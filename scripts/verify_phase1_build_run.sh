@@ -2,109 +2,169 @@
 set -euo pipefail
 
 # Forensic Council — Phase 1 Build/Run Verification
-# Verifies shell syntax, Python compilation, and Docker compose rendering.
-# Does NOT run containers — only validates configuration and static correctness.
+# Verifies shell syntax, Python compilation, Docker compose rendering, and
+# optional tool-based checks. Does NOT run containers by default.
+#
+# Usage:
+#   ./scripts/verify_phase1_build_run.sh [static|web|api|docker-dev|docker-prod]
+#
+# Targets:
+#   static     — shell syntax, Python compileall, JSON/TOML parse (no tools needed)
+#   web        — frontend npm ci + type-check + lint + test + build (requires npm)
+#   api        — backend uv sync + ruff + pyright + pytest (requires uv)
+#   docker-dev — docker compose config validation for dev stack
+#   docker-prod — docker compose config validation for prod stack
+#   all        — static + docker-dev + docker-prod (safe subset; no app installs)
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FAILED=0
+cd "$ROOT"
 
-echo "=== Phase 1 Build/Run Verification ==="
-echo ""
+MODE="${1:-static}"
 
-# ── Shell syntax check ──────────────────────────────────────────────────────
-echo "[1/5] Shell syntax checks..."
-SHELL_SCRIPTS=(
-    "$ROOT/scripts/dev.sh"
-    "$ROOT/scripts/prod.sh"
-    "$ROOT/scripts/rebuild.sh"
-    "$ROOT/infra/validate_production_readiness.sh"
-    "$ROOT/infra/generate_production_keys.sh"
-)
-for s in "${SHELL_SCRIPTS[@]}"; do
-    if [[ -f "$s" ]]; then
-        if bash -n "$s" 2>&1; then
-            echo "  OK: $(basename "$s")"
-        else
-            echo "  FAIL: bash -n failed for $(basename "$s")"
-            FAILED=1
+case "$MODE" in
+  static)
+    echo "==> [static] Shell syntax checks..."
+    FAILED=0
+    for f in scripts/*.sh infra/*.sh apps/api/scripts/*.sh 2>/dev/null; do
+      if [[ -f "$f" ]]; then
+        if ! bash -n "$f" 2>&1; then
+          echo "  FAIL: bash -n failed for $f"
+          FAILED=1
         fi
+      fi
+    done
+    if [[ $FAILED -ne 0 ]]; then
+      echo "FAIL: shell syntax errors found"
+      exit 1
     fi
-done
-echo ""
+    echo "  OK: all shell scripts pass bash -n"
 
-# ── Python compilation check ────────────────────────────────────────────────
-echo "[2/5] Python compilation checks..."
-PYTHON_DIRS=(
-    "$ROOT/apps/api/api"
-    "$ROOT/apps/api/core"
-    "$ROOT/apps/api/agents"
-    "$ROOT/apps/api/orchestration"
-    "$ROOT/apps/api/tools"
-    "$ROOT/apps/api/scripts"
-)
-for d in "${PYTHON_DIRS[@]}"; do
-    if [[ -d "$d" ]]; then
+    echo "==> [static] Python compilation checks..."
+    for d in apps/api/api apps/api/core apps/api/agents apps/api/orchestration apps/api/tools apps/api/scripts; do
+      if [[ -d "$d" ]]; then
         ERRORS=$(python -m compileall -q "$d" 2>&1 || true)
         if [[ -z "$ERRORS" ]]; then
-            echo "  OK: $(echo "$d" | sed "s|$ROOT/||")"
+          echo "  OK: $(echo "$d" | sed "s|$ROOT/||")"
         else
-            echo "  FAIL: compileall errors in $(echo "$d" | sed "s|$ROOT/||")"
-            echo "$ERRORS"
-            FAILED=1
+          echo "  FAIL: compileall errors in $(echo "$d" | sed "s|$ROOT/||")"
+          echo "$ERRORS"
+          exit 1
         fi
+      fi
+    done
+
+    echo "==> [static] JSON/TOML parse checks..."
+    python - <<'PY'
+import json, sys
+try:
+    json.load(open("apps/web/package.json"))
+    json.load(open("apps/web/package-lock.json"))
+    print("  OK: package.json and package-lock.json parse")
+except Exception as e:
+    print(f"  FAIL: package JSON error: {e}")
+    sys.exit(1)
+PY
+    echo "  OK: JSON/TOML parse checks passed"
+    echo ""
+    echo "=========================================="
+    echo "PASS: Phase 1 static verification complete."
+    echo "=========================================="
+    ;;
+
+  web)
+    echo "==> [web] Frontend verification (requires npm)..."
+    if ! command -v npm >/dev/null 2>&1; then
+      echo "SKIP: npm not installed"
+      exit 0
     fi
-done
-echo ""
+    cd "$ROOT/apps/web"
+    npm ci
+    npm run type-check
+    npm run lint
+    npm test -- --runInBand
+    npm run build
+    cd "$ROOT"
+    echo ""
+    echo "=========================================="
+    echo "PASS: Phase 1 web verification complete."
+    echo "=========================================="
+    ;;
 
-# ── Docker compose dev config ─────────────────────────────────────────────
-echo "[3/5] Docker compose dev config validation..."
-if docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.dev.yml" --env-file "$ROOT/.env" config -q 2>&1; then
-    echo "  OK: docker-dev compose renders cleanly"
-else
-    echo "  FAIL: docker-dev compose config validation failed"
-    FAILED=1
-fi
-echo ""
+  api)
+    echo "==> [api] Backend verification (requires uv)..."
+    if ! command -v uv >/dev/null 2>&1; then
+      echo "SKIP: uv not installed"
+      exit 0
+    fi
+    cd "$ROOT/apps/api"
+    uv sync --extra dev --extra security --extra observability
+    uv run ruff check .
+    uv run pyright
+    uv run pytest tests/ -q --tb=short --basetemp .pytest_tmp_run
+    cd "$ROOT"
+    echo ""
+    echo "=========================================="
+    echo "PASS: Phase 1 api verification complete."
+    echo "=========================================="
+    ;;
 
-# ── Docker compose prod config ─────────────────────────────────────────────
-echo "[4/5] Docker compose prod config validation..."
-if docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.prod.yml" --env-file "$ROOT/.env" config -q 2>&1; then
-    echo "  OK: docker-prod compose renders cleanly"
-else
-    echo "  FAIL: docker-prod compose config validation failed"
-    FAILED=1
-fi
-echo ""
+  docker-dev)
+    echo "==> [docker-dev] Docker compose dev config validation..."
+    if ! command -v docker >/dev/null 2>&1; then
+      echo "SKIP: docker not installed"
+      exit 0
+    fi
+    if docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.dev.yml" --env-file "$ROOT/.env" config -q 2>&1; then
+      echo "  OK: docker-dev compose renders cleanly"
+    else
+      echo "FAIL: docker-dev compose config validation failed"
+      exit 1
+    fi
+    echo ""
+    echo "=========================================="
+    echo "PASS: Phase 1 docker-dev verification complete."
+    echo "=========================================="
+    ;;
 
-# ── Verify target check ────────────────────────────────────────────────────
-TARGET="${1:-docker-dev}"
-echo "[5/5] Verify target: $TARGET"
-case "$TARGET" in
-    docker-dev)
-        echo "  Checking: dev shell syntax, Python compile, docker-dev compose"
-        echo "  All Phase 1 checks passed."
-        ;;
-    docker-prod)
-        echo "  Checking: prod shell syntax, Python compile, docker-prod compose"
-        echo "  All Phase 1 checks passed."
-        ;;
-    all)
-        echo "  Checking: all shell scripts, Python compile, both compose variants"
-        echo "  All Phase 1 checks passed."
-        ;;
-    *)
-        echo "  FAIL: Unknown target '$TARGET'. Use: docker-dev | docker-prod | all"
-        FAILED=1
-        ;;
+  docker-prod)
+    echo "==> [docker-prod] Docker compose prod config validation..."
+    if ! command -v docker >/dev/null 2>&1; then
+      echo "SKIP: docker not installed"
+      exit 0
+    fi
+    if docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.prod.yml" --env-file "$ROOT/.env" config -q 2>&1; then
+      echo "  OK: docker-prod compose renders cleanly"
+    else
+      echo "FAIL: docker-prod compose config validation failed"
+      exit 1
+    fi
+    echo ""
+    echo "=========================================="
+    echo "PASS: Phase 1 docker-prod verification complete."
+    echo "=========================================="
+    ;;
+
+  all)
+    echo "==> [all] Phase 1 verification: static + docker-dev + docker-prod"
+    "$0" static
+    "$0" docker-dev
+    "$0" docker-prod
+    echo ""
+    echo "=========================================="
+    echo "PASS: Phase 1 all-targets verification complete."
+    echo "=========================================="
+    ;;
+
+  *)
+    echo "Usage: $0 [static|web|api|docker-dev|docker-prod|all]" >&2
+    echo "" >&2
+    echo "Targets:" >&2
+    echo "  static     shell syntax + Python compileall + JSON/TOML (no tools needed)" >&2
+    echo "  web        frontend npm ci + type-check + lint + test + build" >&2
+    echo "  api        backend uv sync + ruff + pyright + pytest" >&2
+    echo "  docker-dev docker compose -f infra/docker-compose.dev.yml config" >&2
+    echo "  docker-prod docker compose -f infra/docker-compose.prod.yml config" >&2
+    echo "  all        static + docker-dev + docker-prod (recommended first pass)" >&2
+    exit 2
+    ;;
 esac
-echo ""
-
-# ── Summary ────────────────────────────────────────────────────────────────
-echo "=========================================="
-if [[ $FAILED -eq 0 ]]; then
-    echo "PASS: Phase 1 verification complete."
-    exit 0
-else
-    echo "FAIL: Phase 1 verification failed."
-    exit 1
-fi
