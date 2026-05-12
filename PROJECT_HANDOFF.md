@@ -32,7 +32,7 @@ See `docs/WORKFLOW_TRACE.md` for the canonical route/state flow.
 
 ## Phase Inventory
 
-### Phase 9 (committed, `phase-9-docs-refinement`, commit `525f4d0`)
+### Phase 9 (committed, `phase-9-docs-refinement`, commits `525f4d0` + `b18dde4`)
 
 Project documentation refinement. All items complete:
 
@@ -53,6 +53,7 @@ Project documentation refinement. All items complete:
 | Verify project script | ✅ (new: scripts/verify_project.sh) |
 | .gitignore/.dockerignore audit | ✅ (updated .dockerignore) |
 | Dead code scan | ✅ |
+| Phase 9 cleanup (post-merge fixes) | ✅ (commit `b18dde4`) |
 | Verify project script | 🔄 pending |
 | .gitignore / .dockerignore audit | 🔄 pending |
 | Dead code scan | 🔄 pending |
@@ -207,22 +208,23 @@ Backend core logic fixes. Key changes:
 
 ## Next Best Action
 
-Phase 9 complete. All phases 5–9 committed. Ready to merge to `main`:
+Phase 9 complete (both `525f4d0` and cleanup `b18dde4`). All phases 1–9 on `main`.
 
-1. Merge Phase 5 → `main` (`phase-5-backend-core-logic`, commit `c423b5d`)
-2. Merge Phase 6 → `main` (`phase-6-agents-models-api-config`, commit `1276405`)
-3. Merge Phase 7 → `main` (`phase-7-workflow-state-fixes`)
-4. Merge Phase 8 → `main` (`phase-8-test-suite-refinement`, commit `bd5433d`)
-5. Merge Phase 9 → `main` (`phase-9-docs-refinement`, commit `525f4d0`)
-6. Tag `phase-9-documentation-clean`
+**Verification gates now passing:**
+- `python scripts/check_docs.py` → passed ✅
+- `python scripts/check_test_hygiene.py` → passed ✅
+- `python -m compileall` → no errors ✅
+- `scripts/verify_phase1_build_run.sh static` → shell syntax fixed (`shopt -s nullglob`) ✅
+- `scripts/verify_phase8_tests.sh` → fail-on-failure, skip-only-when-missing ✅
+- `npm run test:a11y` → now runs both unit and e2e ✅
 
-After merge, deferred Phase 8 items remain:
-- Phase 8.13 — Deterministic media fixtures
-- Phase 8.14 — Shared test helpers
-
-And Phase 6 remaining actions:
+**Deferred items (Phase 6 remaining):**
 - Add unit tests for `ProviderQuotaGuard`
 - Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`
+
+**Deferred items (Phase 8):**
+- Phase 8.13 — Deterministic media fixtures
+- Phase 8.14 — Shared test helpers
 
 ---
 
