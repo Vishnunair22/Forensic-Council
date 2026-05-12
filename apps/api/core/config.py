@@ -508,6 +508,27 @@ class Settings(BaseSettings):
         description="Daily API cost quota in USD for admin role. Set to 0 for unlimited.",
     )
 
+    # Free-tier mode — restricts providers to open-source options and
+    # forbids paid OpenAI/Anthropic defaults when running in cost-constrained mode.
+    free_tier_mode: bool = Field(
+        default=False,
+        description=(
+            "When True, restricts LLM_PROVIDER to: none, groq, or gemini. "
+            "OpenAI and Anthropic are blocked. Arbiter chain is also limited "
+            "to groq/gemini only. Prevents accidental paid-tier costs in dev."
+        ),
+    )
+
+    @field_validator("free_tier_mode", mode="before")
+    @classmethod
+    def parse_free_tier_mode(cls, v):
+        """Parse free_tier_mode from string or boolean."""
+        if isinstance(v, str):
+            v = v.strip().lower()
+            return v in ("true", "1", "yes", "on")
+        return bool(v)
+
+    # ─── Free-tier restricted providers (updated by validator below) ─────────
     # LLM Configuration (Global / Agents)
     llm_provider: str = Field(
         default="none",
@@ -722,6 +743,7 @@ class Settings(BaseSettings):
         """Validate LLM API key when LLM provider is enabled."""
         data = info.data if hasattr(info, "data") else {}
         provider = data.get("llm_provider", "none")
+        free_tier = data.get("free_tier_mode", False)
 
         valid_providers = {"groq", "openai", "anthropic", "none"}
         if provider not in valid_providers:
@@ -737,6 +759,25 @@ class Settings(BaseSettings):
 
         if v and provider != "none" and len(v) < 20:
             raise ValueError("LLM_API_KEY appears invalid (too short)")
+
+        # In free_tier_mode, block paid-tier providers
+        if free_tier and provider in ("openai", "anthropic"):
+            raise ValueError(
+                f"free_tier_mode=True — LLM_PROVIDER='{provider}' is blocked. "
+                "Use 'groq' (free tier) or 'gemini' (free tier) instead. "
+                "To use {provider}, set FREE_TIER_MODE=false."
+            )
+
+        # In free_tier_mode, forbid paid-tier default model strings
+        if free_tier and provider == "groq":
+            model = data.get("llm_model", "")
+            _paid_prefixes = ("gpt-4", "gpt-3.5", "claude")
+            if any(p.lower() in model.lower() for p in _paid_prefixes):
+                raise ValueError(
+                    f"free_tier_mode=True — model '{model}' is a paid-tier model. "
+                    "Use Groq's free-tier models (llama-3.3-70b-versatile, llama-3.1-8b-instant). "
+                    "Set FREE_TIER_MODE=false to use paid models."
+                )
 
         return v
 

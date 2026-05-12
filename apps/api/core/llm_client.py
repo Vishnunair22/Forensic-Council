@@ -23,6 +23,7 @@ import httpx
 
 from core.config import Settings
 from core.observability import get_tracer
+from core.provider_quota_guard import ProviderQuotaGuard
 from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
 
@@ -145,7 +146,12 @@ class LLMClient:
             return False
         _placeholder_signals = ("your_", "_here", "placeholder", "changeme", "sk-xxx")
         key_lower = self.api_key.lower()
-        return not any(sig in key_lower for sig in _placeholder_signals)
+        if any(sig in key_lower for sig in _placeholder_signals):
+            return False
+        # Gemini calls require policy acknowledgment
+        if self.provider == "gemini" and not getattr(self.config, "gemini_api_key_policy_ok", False):
+            return False
+        return True
 
     async def health_check(self) -> bool:
         """Quick probe to verify LLM service is reachable (3s timeout)."""
@@ -231,6 +237,19 @@ class LLMClient:
                             "Circuit breaker OPEN — skipping candidate",
                             provider=self.provider,
                             model=self.model,
+                        )
+                        continue
+
+                    # Check provider quota before the API call
+                    allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                        self.provider, self.model
+                    )
+                    if not allowed:
+                        logger.warning(
+                            "Provider quota guard blocked call",
+                            provider=self.provider,
+                            model=self.model,
+                            reason=quota_result.reason,
                         )
                         continue
 
@@ -360,7 +379,7 @@ class LLMClient:
         messages: list[dict[str, str]],
         available_tools: list[dict[str, Any]],
     ) -> LLMResponse:
-        """Call Groq API using model candidates, skipping cross-provider specs."""
+        """Call Groq API using the current self.model (already resolved by outer loop)."""
         if not self.is_available:
             raise RuntimeError("Groq API key is placeholder or missing")
 
@@ -370,37 +389,22 @@ class LLMClient:
             "Content-Type": "application/json",
         }
         tools = self._tools_to_openai_format(available_tools)
-        base_payload: dict[str, Any] = {
+        payload: dict[str, Any] = {
             "messages": messages,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
+            "model": self.model,
         }
         if tools:
-            base_payload["tools"] = tools
-            base_payload["tool_choice"] = "auto"
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         client = await self._get_client()
-        last_exc: Exception | None = None
-
-        for model in self._get_model_candidates():
-            # Skip candidates that specify a different provider (e.g. "gemini/...")
-            if "/" in model and not model.startswith("groq/"):
-                continue
-
-            target_model = model.split("/", 1)[1] if "/" in model else model
-            payload = {**base_payload, "model": target_model}
-
-            try:
-                response = await self._with_retry(
-                    lambda p=payload: client.post(url, headers=headers, json=p)
-                )
-                response.raise_for_status()
-                return self._parse_openai_response(response.json())
-            except Exception as exc:
-                last_exc = exc
-                logger.warning(f"Groq candidate {model} failed: {exc}")
-
-        raise RuntimeError("All Groq candidates failed") from last_exc
+        response = await self._with_retry(
+            lambda c=payload: client.post(url, headers=headers, json=c)
+        )
+        response.raise_for_status()
+        return self._parse_openai_response(response.json())
 
     async def _call_gemini(
         self,
@@ -681,13 +685,29 @@ class LLMClient:
                     parts = model_spec.split("/", 1)
                     target_provider = parts[0].lower()
                     target_model = parts[1]
-                    # Route to correct key if switching providers
                     if target_provider == "gemini":
                         target_api_key = self.gemini_api_key
-                    elif target_provider == "groq":
-                        target_api_key = self.config.llm_api_key
+                    else:
+                        target_api_key = self.api_key
+                else:
+                    target_provider = self.provider
+                    target_model = model_spec
+                    target_api_key = self.api_key
 
                 if not target_api_key or target_api_key.startswith("REPLACE_"):
+                    continue
+
+                # Check quota guard before making the call
+                allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                    target_provider, target_model
+                )
+                if not allowed:
+                    logger.warning(
+                        "Provider quota guard blocked synthesis call",
+                        provider=target_provider,
+                        model=target_model,
+                        reason=quota_result.reason,
+                    )
                     continue
 
                 try:

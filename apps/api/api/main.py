@@ -281,13 +281,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # pruned from the cascade so investigations never hit avoidable 404s.
     try:
         from core.gemini_client import GeminiVisionClient
+        from core.provider_quota_guard import ProviderQuotaGuard
 
         _gemini_client = GeminiVisionClient(settings)
-        # Configure process-wide quota pool before any agent is created.
-        # This bounds concurrent Gemini requests across all 5 agents so the
-        # free-tier RPM quota (10 RPM) is not saturated when agents run in parallel.
         GeminiVisionClient.configure_quota_pool(settings.gemini_max_concurrent)
         await _gemini_client.validate_model_availability()
+
+        # Configure provider quota guards from settings
+        ProviderQuotaGuard.configure(
+            "groq",
+            rpm_limit=settings.groq_rpm_limit,
+            rpd_limit=15000,
+        )
+        ProviderQuotaGuard.configure(
+            "gemini",
+            rpm_limit=settings.gemini_rpm_limit,
+            rpd_limit=settings.gemini_rpd_limit,
+        )
+        if settings.free_tier_mode:
+            ProviderQuotaGuard.configure("openai", rpm_limit=30, rpd_limit=1500)
+            ProviderQuotaGuard.configure("anthropic", rpm_limit=30, rpd_limit=1500)
+
     except Exception as e:
         logger.warning("Gemini model validation skipped", error=str(e))
 
@@ -917,7 +931,7 @@ async def root(request: Request):
 async def liveness_check():
     """
     Lightweight liveness probe — returns 200 immediately.
-    
+
     Does NOT check dependencies (Redis, Postgres, Qdrant).
     Used by Docker healthcheck and load balancers to determine
     if the container is alive and accepting requests.

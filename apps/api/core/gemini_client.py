@@ -43,6 +43,7 @@ import httpx
 
 from core.config import Settings
 from core.observability import get_tracer
+from core.provider_quota_guard import ProviderQuotaGuard
 from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
 
@@ -251,10 +252,17 @@ class GeminiVisionClient:
         return cls._quota_semaphore
 
     def __init__(self, config: Settings):
+        # Policy flag: Gemini API key cannot be used without explicit policy acknowledgment.
+        # See https://ai.google.dev/terms — operators must opt in before production use.
+        self._policy_ok: bool = getattr(config, "gemini_api_key_policy_ok", False)
+        if not self._policy_ok:
+            logger.warning(
+                "gemini_api_key_policy_ok=False — Gemini calls are disabled. "
+                "Set GEMINI_API_KEY_POLICY_OK=true after reading https://ai.google.dev/terms"
+            )
+
         self.api_key: str | None = config.gemini_api_key
         self.model: str = getattr(config, "gemini_model", _DEFAULT_MODEL)
-        # Build ordered fallback chain from comma-separated config string.
-        # Duplicates and the primary model itself are removed; order is preserved.
         _chain_str: str = getattr(config, "gemini_fallback_models", _DEFAULT_FALLBACK_CHAIN)
         seen: set[str] = {self.model}
         _chain: list[str] = []
@@ -268,7 +276,7 @@ class GeminiVisionClient:
 
         # Check if key is missing or is the default placeholder from .env.example
         is_placeholder = self.api_key and "your_gemini_key" in self.api_key
-        self._enabled = bool(self.api_key) and not is_placeholder
+        self._enabled = bool(self.api_key) and not is_placeholder and self._policy_ok
 
         # Circuit breaker: opens after 3 consecutive failures, recovers after 120s
         self._circuit_breaker = CircuitBreaker(
@@ -715,6 +723,16 @@ class GeminiVisionClient:
         if self._circuit_breaker.state == "OPEN":
             logger.warning(
                 f"Gemini circuit breaker is OPEN — falling back to local analysis for {analysis_type}"
+            )
+            finding = await self._local_forensic_fallback(file_path)
+            finding.analysis_type = analysis_type
+            return finding
+
+        # Check provider quota guard before making any API call
+        allowed, quota_result = await ProviderQuotaGuard.check_and_record("gemini", self.model)
+        if not allowed:
+            logger.warning(
+                f"Gemini quota guard blocked {analysis_type}: {quota_result.reason} — using local fallback"
             )
             finding = await self._local_forensic_fallback(file_path)
             finding.analysis_type = analysis_type
