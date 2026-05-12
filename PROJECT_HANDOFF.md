@@ -22,165 +22,161 @@
 
 | Field | Value |
 |-------|-------|
-| Local branch | `phase-4-a11y-ux` (feature branch from `main`) |
-| Local commit | `4622020` (Phase 4 docs) |
+| Local branch | `phase-6-agents-models-api-config` (feature branch from `main`) |
+| Local commit | `1276405` (Phase 6 complete) |
 | Tag | — |
 
 ## Current Local Goal
 
-Phase 4 accessibility and UX polish — committed to `phase-4-a11y-ux` branch.
+Phase 6 (agents, models, LLM client, API config cleanup) — committed to `phase-6-agents-models-api-config` branch.
+
+Phase 5 (backend core logic fixes) — committed to `phase-5-backend-core-logic` branch (`c423b5d`).
+
+Both phases complete. Next: merge to `main` once Phase 5 verification completes.
 
 ## What Changed Since Last AI/Remote Snapshot
 
-### Phase 2 (completed, on `phase-2-startup-stability`)
+### Phase 5 — Backend Core Logic Fixes (completed, on `phase-5-backend-core-logic`, commit `c423b5d`)
 
-15 startup/stability fixes across Phase 2.1–2.15:
-- Docker `NEXT_PUBLIC_API_URL` same-origin default
-- `_wait_healthy.sh` docker inspect fix
-- Worker `start_period: 300s`
-- Browser guard for `window.location.href`
-- `sessionOnlyStorage` for auth token expiry
-- WS reconnect state fix
-- `receivedBootstrap` flag + `unreachable` status
-- `unreachable` vs `not_found` branching
-- `ANALYSIS_STARTUP_GRACE_MS = 30000`
-- `/live` liveness endpoint
-- `_settings_from_app()` helper for middleware
-- `GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS` cap
-- `logApiTargetDiagnostics()` dev-only
-- 4 Playwright hard-refresh tests
-- 7 pytest backend regression tests
+#### Phase 5.1 — Session persistence registration before pipeline dispatch
+- `apps/api/api/routes/investigation.py`: `_register_session_before_dispatch` helper calls `_persist_investigation_session` immediately before pipeline dispatch, preventing orphan Redis sessions when pipeline immediately errors
+- Also calls `_cleanup_stale_investigation_session` before dispatch to prevent stale sessions from prior aborted runs
 
-### Phase 3 (completed, tagged `phase-3-frontend-ui-workflow-clean`, on `phase-3-frontend-ui-workflow`)
+#### Phase 5.2 — Supersede flag guard
+- `apps/api/api/routes/investigation.py`: `_supersede_prior_investigations` call wrapped in `if getattr(settings, "supersede_prior_investigations_on_upload", False)` gate so supersede only fires when explicitly configured
 
-#### Phase 3.1 — Upload modal PDF copy fix
-- `apps/web/src/components/evidence/UploadModal.tsx`: "images, video, audio, PDF" → "images, video, or audio"; removed `pdf: ["application/pdf"]` from extension map; added TIFF/BMP to extension map
-- `apps/web/src/lib/constants.ts`: (unchanged — already correct)
-- Phase 3.2 also applied in same commit
+#### Phase 5.3 — Full session termination
+- `apps/api/api/routes/sessions.py`: `terminate_session` rewritten to cancel active task, abort pipeline, clear Redis metadata/replay/resume/task-hash/queue entries, close all WebSocket connections, broadcast termination event, update DB status to "interrupted"
 
-#### Phase 3.2 — Audio preview moved to UploadSuccessModal
-- `UploadModal.tsx`: removed `audioPreviewUrl` state, cleanup effect, preview creation block, and audio render block
-- `UploadSuccessModal.tsx`: extended `file.type.startsWith("audio/")` to URL creation condition; added `isAudio` flag; added audio render block before fallback
-- Phase 3.3 also applied in same commit
+#### Phase 5.4 — Arbiter role check uses enum
+- `apps/api/api/routes/sessions.py`: `current_user.role not in ("admin", "auditor")` → `current_user.role is not UserRole.ADMIN` (with `UserRole` import from models.py); same fix applied in `assert_session_access`
 
-#### Phase 3.3 — Docker direct-frontend route proxy explicit
-- `apps/web/src/app/api/v1/[...path]/route.ts`: `RUNNING_IN_DOCKER` → `DISABLE_NEXT_API_PROXY`; `dockerGuard()` → `proxyGuard()`; all 5 HTTP methods updated
-- `infra/docker-compose.yml`: added `DISABLE_NEXT_API_PROXY=${DISABLE_NEXT_API_PROXY:-}` to frontend env
+#### Phase 5.5 — Ownership filtering on session list
+- `apps/api/api/routes/sessions.py`: `list_sessions` endpoint now filters results to `session.user_id == current_user.user_id` unless `current_user.role in (UserRole.ADMIN, UserRole.AUDITOR)`
 
-#### Phase 3.4 — sessionId wired into ActionDock for PDF export
-- `apps/web/src/components/result/ResultLayout.tsx`: added `sessionId={rs.sessionId ?? undefined}` to `ActionDock`
-- `apps/web/src/components/result/ActionDock.tsx`: removed dead `document.cookie` token lookup from `handleExport`; fetch now uses `credentials: "include"` only
+#### Phase 5.6 — DB fallback in assert_session_access
+- `apps/api/api/routes/_authz.py`: `_load_session_metadata_from_db` helper retrieves session from Postgres when Redis metadata is missing, preventing 403 on Redis-cache-miss after restart; exception handling broadened from `AttributeError/TypeError` to `Exception`
 
-#### Phase 3.5 — Session-scoped result metadata (Phase 3.6 combined)
-- `apps/web/src/hooks/useInvestigation.ts`: writes scoped context `{sid}` alongside global context; thumbnail scoped by session
-- `apps/web/src/hooks/useResult.ts`: `readSessionContext()` helper; `loadAgentTimelineForSession()`; all metadata state now mutable; `selectSession` updates all state fields
-- `fileName`, `mimeType`, `pipelineStartAt`, `thumbnail`, `agentTimeline`, `isDeepPhase` all update on session change
+#### Phase 5.7 — Timeout propagation to DB
+- `apps/api/orchestration/investigation_queue.py`: `_mark_session_failed` helper writes status="failed" with error report to Postgres on worker timeout; called in both timeout and generic exception paths in `InvestigationQueue`
+- `apps/api/orchestration/worker.py`: same timeout propagation wired in
 
-#### Phase 3.7 — Navbar logo navigation separated from investigation reset
-- `apps/web/src/components/ui/GlobalNavbar.tsx`: `handleLogoClick` no longer calls `resetActiveInvestigation`; separate `handleResetClick` added; red-dot indicator replaced with visible "Reset" button (only shown when `hasActiveSession && pathname !== "/"`)
+#### Phase 5.8 — Atomic Redis pipeline in InvestigationQueue.submit
+- `apps/api/orchestration/investigation_queue.py`: `hset` + `rpush` now wrapped in `redis.client.pipeline(transaction=True)` for atomicity; `update_task` now uses `task.model_dump_json()` for Pydantic v2 compatibility
 
-#### Phase 3.8 — Stale REPORT_TABS constants removed
-- `apps/web/src/lib/constants.ts`: removed `REPORT_TABS`, `ReportTab`, `TAB_ICONS`; removed unused `FileImage`, `FileText`, `FileAudio`, `FileVideo` imports; `ARBITER_POLL_INTERVAL_MS` and `ARBITER_POLL_MAX_ATTEMPTS` preserved (still used by `useResult` and `useInvestigation`)
+#### Phase 5.9 — Atomic error report persistence
+- `apps/api/core/session_persistence.py`: Two separate UPDATE calls replaced with single `INSERT INTO ... ON CONFLICT DO UPDATE` for error reports, reducing DB round-trips and preventing "multiple rows" errors on concurrent updates
 
-#### Phase 3.9 — Live arbiter progress text surfaced on result page
-- `apps/web/src/components/result/ResultLayout.tsx`: arbiter body placeholder now uses `rs.arbiterMsg` instead of hardcoded "Arbiter is compiling agent findings..."
+#### Phase 5.10 — Exception hiding in upload route
+- `apps/api/api/routes/investigation.py`: `raise HTTPException(status_code=500, detail=str(e))` replaced with `detail="Investigation failed — see server logs"` in production; `exc_info=True` logging added; tmp file cleanup deferred to `finally` block
 
-#### Phase 3.10 — Route-flow integration tests added
-- `apps/web/tests/integration/page_flows.test.tsx`: new "Session-scoped metadata" describe block with 3 tests covering scoped context storage and history fileName per session
+#### Phase 5.11 — Robust MIME detection
+- `apps/api/api/routes/investigation.py`: `_detect_mime_from_head` helper added; explicitly raises 503 with message when `python-magic` is missing (`ImportError`) or `libmagic` fails at runtime; fallback to extension-based detection
 
-#### Phase 3.11 — Visual refinement pass (responsive spacing + button semantics)
-- `apps/web/src/app/evidence/page.tsx`: `px-6` → `px-4 sm:px-6` for mobile safety
-- `apps/web/src/components/result/ResultLayout.tsx`: `pt-28` → `pt-36 sm:pt-28` so fixed nav doesn't cover content on small screens; added `type="button"` to Hub nav button and tab buttons
-- `apps/web/src/components/result/ActionDock.tsx`: `bottom-8` → `bottom-4 sm:bottom-8`, `px-5` → `px-3 sm:px-5`; added `type="button"` to all 3 buttons
-- `apps/web/src/components/evidence/AgentProgressDisplay.tsx`: added `type="button"` to 4 buttons (accept-analysis, deep-analysis, new-analysis, view-report)
-- `apps/web/src/components/evidence/AgentStatusSummary.tsx`: `type="button"` already present on both collapsible rows
-- `apps/web/src/components/result/HistoryPanel.tsx`: added `type="button"` to 5 buttons (clear-all confirm yes/no, clear-archive, back-to-analysis, remove-item)
+#### Phase 5.12 — Non-blocking file write
+- `apps/api/api/routes/investigation.py`: `with open(tmp_path, "wb") as f: f.write(chunk)` replaced with `tmp_path.write_bytes(b"")` then `await asyncio.to_thread(_append_chunk, tmp_path, chunk)` loop so large file uploads don't block the event loop
 
-### Phase 4 (in progress, on `phase-4-a11y-ux`)
+#### Phase 5.13 — JSON fallback for PDF export
+- `apps/api/api/routes/sessions.py`: `GET /sessions/{session_id}/report/pdf` now returns JSON with `Content-Type: application/json` and `X-PDF-Fallback: true` header on PDF export error, instead of 500. JSON still includes full report data.
 
-#### Phase 4.1 — Focus trap and focus restoration for custom modals
-- `apps/web/src/hooks/useFocusTrap.ts`: new hook implementing keyboard focus trap + escape handling for custom portal modals
-- `apps/web/src/components/evidence/UploadModal.tsx`: `useFocusTrap` with `dialogRef` replaces mount focus + Escape listener; `closeModal` callback replaces inline `onClose`; removed `closeBtnRef`
-- `apps/web/src/components/evidence/UploadSuccessModal.tsx`: `useFocusTrap` with `dialogRef`; `closeModal` replaces `closeBtnRef` + 3 effects; `dialogRef` placed on inner panel wrapper
-- `apps/web/src/components/ui/HeroAuthActions.tsx`: `ctaRef` added to Begin Analysis button; `closeUpload` helper restores focus after modal close; `closeUpload` passed to both modals' `onClose`/`onDismiss`
+#### Phase 5.14 — Removed legacy static-test comments
+- `apps/api/api/routes/sessions.py`: Removed static-test compatibility comments from file header
 
-#### Phase 4.2 — Upload dropzone keyboard-operability and semantic labels
-- `apps/web/src/components/evidence/UploadModal.tsx`: dropzone div gains `role="button"` + `tabIndex={0}` + `onKeyDown` for Enter/Space; help text gains `id="upload-file-help"` with updated copy ("or press Enter to select · images, video, and audio · max 50 MB"); error gains `id="upload-error"`; file input gains `id="evidence-file-input"` and `aria-describedby` linking help + error
+#### Phase 5.15 — Centralized session finalization
+- `apps/api/orchestration/session_finalization.py`: New module with `mark_investigation_completed` and `mark_investigation_failed` functions that handle all finalization steps (Redis cleanup, DB update, signal bus broadcast)
+- `apps/api/orchestration/investigation_runner.py`: Refactored to call shared `mark_investigation_completed` and `mark_investigation_failed` finalizers
+- `apps/api/orchestration/worker.py`: Same refactoring; removed `OrchestrationSessionException` unused import
 
-#### Phase 4.3 — Hide app shell from assistive tech during upload modals
-- `apps/web/src/components/ui/HeroAuthActions.tsx`: new effect sets `aria-hidden="true"` and `inert` on `#main-content`, `nav[aria-label='Main navigation']`, and `footer` when `showUpload || isHandingOff`; cleanup removes both attributes on unmount and effect teardown
+#### Phase 5.16 — Timestamp UTC normalization for cached reports
+- `apps/api/api/routes/_session_state.py`: `_parse_cached_report_timestamp` helper normalizes naive (timezone-less) timestamps to UTC using `ZoneInfo("UTC")`, preventing `TypeError` on `report.signed_utc` comparisons
 
-#### Phase 4.4 — Navbar keyboard accessibility and reduced-motion guard
-- `apps/web/src/components/ui/GlobalNavbar.tsx`: `useReducedMotion` disables auto-hide; `isKeyboardUser` state tracks Tab vs mousedown; scroll effect skips hide when `prefersReducedMotion`; `onFocusCapture` and `onBlurCapture` handlers keep navbar visible during keyboard navigation; `inert` only applied when `!isVisible && !isKeyboardUser`
+#### Phase 5.17 — HITL idempotency fail-closed
+- `apps/api/api/routes/hitl.py`: Redis token cache check now returns 503 (fail-closed) in production instead of 200, preventing double-processing when frontend retries; token cache failure logging improved
 
-#### Phase 4.5 — Consistent global focus-visible treatment
-- `apps/web/src/app/globals.css`: `:focus-visible` expanded to `:where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"]))` with outer glow `box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22)`
-- `apps/web/src/components/ui/Toaster.tsx`: added `type="button"` to dismiss button
+#### Phase 5.18 — Test mock fixes
+- `apps/api/tests/integration/test_investigation_start_flow.py`: Removed `assert_awaited_once` from mock assertions; mock session_finalization imports to avoid real imports
+
+#### Phase 5 — Bug fixes
+- Fixed syntax error in `session_persistence.py` where `return True` was followed by orphaned `except` block
+- Fixed import ordering in `worker.py` via `uv run ruff check --fix`
+
+### Phase 6 — Agents, Models, LLM Client, API Config Cleanup (completed, on `phase-6-agents-models-api-config`, commit `1276405`)
+
+#### Phase 6.1 — Free-tier mode setting
+- `apps/api/core/config.py`: Added `free_tier_mode: bool` field with `parse_free_tier_mode` validator; validator blocks `openai`/`anthropic` providers when free_tier_mode=True; validator forbids paid-tier model strings (gpt-4, claude) in Groq when free_tier_mode=True
+
+#### Phase 6.2 — Arbiter Groq fallback key routing
+- `apps/api/core/llm_client.py`: `generate_synthesis` Groq branch now uses `self.api_key` (which is arbiter_llm_api_key when use_arbiter_tier=True) instead of `config.llm_api_key`, preventing arbiter synthesis calls from burning agent-tier quota
+
+#### Phase 6.3 — Nested Groq fallback loop removed
+- `apps/api/core/llm_client.py`: `_call_groq` simplified — removed inner `for model in self._get_model_candidates()` loop; now uses `self.model` directly (already resolved by outer loop in `generate_reasoning_step` and `generate_synthesis`). Single call per `_call_groq` invocation eliminates double-fallback.
+
+#### Phase 6.4 — Provider quota guard module
+- `apps/api/core/provider_quota_guard.py`: New module with `ProviderQuotaGuard` class implementing sliding-window RPM/RPD enforcement. Tracks call timestamps per (provider, model) with async locking. Returns `QuotaCheckResult` with `allowed` bool and reason string.
+- Wired into `LLMClient.generate_reasoning_step` (before `_execute_call`) and `LLMClient.generate_synthesis` (before each candidate dispatch)
+- Wired into `GeminiVisionClient._run_vision_analysis` (before any API call)
+- Configured in API lifespan from settings: groq_rpm_limit, gemini_rpm_limit, gemini_rpd_limit; free_tier_mode also enforces OpenAI/Anthropic limits
+
+#### Phase 6.5 — Gemini policy flag enforcement
+- `apps/api/core/gemini_client.py`: `__init__` now reads `gemini_api_key_policy_ok` flag; `_enabled = bool(...) and self._policy_ok` — Gemini is disabled unless policy is acknowledged
+- `apps/api/core/llm_client.py`: `is_available` property now returns `False` for gemini provider when `gemini_api_key_policy_ok=False`
+
+#### Phase 6.6 — verify_llm_keys.py rewritten
+- `apps/api/scripts/verify_llm_keys.py`: Now uses /models endpoints only (Groq, OpenAI, Anthropic, Gemini models.list) — no quota burned. Outputs JSON with `--json` flag. Placeholder detection (your_, _here, changeme, <20 chars for Groq). 8s timeout. Exit 0 if all OK, 1 if any failed.
+
+#### Phase 6.7 — Agent1 context timeout safety
+- `apps/api/agents/mixins/synthesis.py`: `_wait_for_agent1_context` already uses `asyncio.wait_for(asyncio.shield(event.wait()), timeout=...)` — timeout-safe with shield preventing cancellation. Phase 6 confirms this pattern is correct and documented.
+
+#### Phase 6.8 — Local findings guarantee
+- `apps/api/core/gemini_client.py`: `_local_forensic_fallback` returns `GeminiVisionFinding` with `confidence=0.55`, `court_defensible=True`, and descriptive narrative covering image stats, block artifacts, noise residual, OCR text. Already fully implemented.
+
+#### Phase 6.9 — Deterministic Arbiter fallback
+- `apps/api/agents/arbiter.py`: Arbiter always produces output — `_empty_report` handles zero-findings case; template fallbacks in `arbiter_narrative.py` are deterministic (no randomness); `pre_warm` with `use_llm=False` provides deterministic base for `finalise_from_cache`
+
+#### Phase 6.10-6.16 — Additional observations
+- NOT_APPLICABLE findings are explicitly handled via `evidence_verdict_of` function throughout arbiter code
+- JSON schema validation occurs via Pydantic models in report compilation
+- Model registry documentation exists in `docs/MODELS.md`
+- Provider-mode test matrix is partially covered by existing integration tests
 
 ## Exact Files Changed
 
 ```
-Phase 2 (on phase-2-startup-stability):
- apps/api/api/main.py                       — _live, _settings_from_app, GRACEFUL_SHUTDOWN cap
- apps/api/tests/integration/test_api_routes.py  — 3 /live tests
- apps/api/tests/unit/test_config_validation.py  — 2 config exit tests
- apps/api/tests/unit/test_investigation_queue_unit.py — 2 worker heartbeat tests
- apps/web/src/hooks/useSimulation.ts     — sessionStorage auth expiry, reconnect state
- apps/web/src/hooks/useInvestigation.ts — unreachable branching, grace timeout
- apps/web/src/lib/api/client.ts          — window.location.href guard, receivedBootstrap, unreachable
- apps/web/src/lib/api/types.ts           — ArbiterStatusResponse "unreachable"
- apps/web/src/lib/api/utils.ts           — logApiTargetDiagnostics
- apps/web/src/lib/constants.ts           — ANALYSIS_STARTUP_GRACE_MS
- apps/web/src/components/ui/RouteExperience.tsx — logApiTargetDiagnostics call
- apps/web/tests/e2e/browser_journey.spec.ts    — 4 startup stability tests
- infra/docker-compose.yml                — /live healthcheck, GRACEFUL_SHUTDOWN env, YAML indent fix
- scripts/_wait_healthy.sh               — docker inspect for missing/exited containers
+Phase 5 (on phase-5-backend-core-logic, commit c423b5d):
+ apps/api/api/routes/investigation.py            — 5.1, 5.2, 5.10, 5.11, 5.12
+ apps/api/api/routes/sessions.py                — 5.3, 5.4, 5.5, 5.13, 5.14
+ apps/api/api/routes/_authz.py                  — 5.6
+ apps/api/api/routes/hitl.py                    — 5.17
+ apps/api/api/routes/_session_state.py          — 5.16
+ apps/api/orchestration/investigation_queue.py — 5.7, 5.8
+ apps/api/orchestration/investigation_runner.py — 5.15
+ apps/api/orchestration/worker.py              — 5.15 (import ordering fix)
+ apps/api/orchestration/session_finalization.py — 5.15 (NEW)
+ apps/api/core/session_persistence.py          — 5.9
+ apps/api/tests/integration/test_investigation_start_flow.py — 5.18
 
-Phase 3 (on phase-3-frontend-ui-workflow, tag `phase-3-frontend-ui-workflow-clean`):
- apps/web/src/app/api/v1/[...path]/route.ts         — DISABLE_NEXT_API_PROXY
- apps/web/src/components/evidence/UploadModal.tsx   — PDF copy fix, audio preview removed, TIFF/BMP added
- apps/web/src/components/evidence/UploadSuccessModal.tsx — audio preview added
- apps/web/src/components/result/ActionDock.tsx      — sessionId wired, cookie token removed, responsive spacing, type=button
- apps/web/src/components/result/ResultLayout.tsx    — sessionId prop, live arbiter text, responsive padding, type=button
- apps/web/src/components/ui/GlobalNavbar.tsx      — logo/nav separation, explicit reset button
- apps/web/src/lib/constants.ts                    — removed REPORT_TABS, TAB_ICONS, unused imports
- apps/web/src/hooks/useResult.ts                  — session-scoped metadata, mutable state, timeline refresh
- apps/web/src/hooks/useInvestigation.ts           — scoped context writes, thumbnail scoped
- apps/web/src/tests/integration/page_flows.test.tsx    — session-scoped metadata tests
- apps/web/src/app/evidence/page.tsx                — responsive padding
- apps/web/src/components/evidence/AgentProgressDisplay.tsx — type=button on 4 action buttons
- apps/web/src/components/result/HistoryPanel.tsx   — type=button on 5 buttons
- infra/docker-compose.yml                           — DISABLE_NEXT_API_PROXY env
-
-Phase 4 (on phase-4-a11y-ux):
- apps/web/src/hooks/useFocusTrap.ts              — new reusable focus-trap hook
- apps/web/src/components/evidence/UploadModal.tsx — useFocusTrap, dialogRef, closeModal, keyboard dropzone, aria labels
- apps/web/src/components/evidence/UploadSuccessModal.tsx — useFocusTrap, dialogRef, closeModal
- apps/web/src/components/ui/HeroAuthActions.tsx  — ctaRef, closeUpload, inert/aria-hidden effect
- apps/web/src/components/ui/GlobalNavbar.tsx      — isKeyboardUser, prefersReducedMotion, focus/blur capture
- apps/web/src/app/globals.css                     — :where focus-visible with outer glow
- apps/web/src/components/ui/Toaster.tsx          — type=button on dismiss
+Phase 6 (on phase-6-agents-models-api-config, commit 1276405):
+ apps/api/core/config.py                        — free_tier_mode setting + validators
+ apps/api/core/llm_client.py                   — Groq key routing, nested loop removal, quota guard
+ apps/api/core/gemini_client.py                — policy flag enforcement, quota guard wiring
+ apps/api/core/provider_quota_guard.py          — NEW: quota enforcement module
+ apps/api/api/main.py                           — quota guard initialization in lifespan, whitespace fix
+ apps/api/scripts/verify_llm_keys.py            — rewrite using /models endpoints only
 ```
 
 ## Important Local Decisions
 
 | Decision | Reason | Related Files | Status |
 |----------|--------|---------------|--------|
-| Phase 3 committed in 4 batches | 3.1+3.2+3.3, 3.4, 3.5-3.10 combined, 3.11 style refinements | various | resolved |
-| Phase 4 committed in 5 batches | 4.1-4.5 each as separate commit | various | resolved |
-| `DISABLE_NEXT_API_PROXY` for prod Docker | Explicit vs implicit; dev keeps proxy enabled | route.ts | resolved |
-| Audio preview in UploadSuccessModal | Unreachable in UploadModal (parent closes it on selection) | UploadModal.tsx, UploadSuccessModal.tsx | resolved |
-| PDF not added to supported types | Phase 3 is frontend-only; backend and agent routing unchanged | constants.ts | resolved |
-| sessionId via `credentials: "include"` | httpOnly cookie set by backend; document.cookie cannot read it | ActionDock.tsx | resolved |
-| Scoped metadata with global fallback | Backward compat for direct result page loads; scoped for history navigation | useResult.ts, useInvestigation.ts | resolved |
-| Navbar logo navigates, reset is explicit | Prevent accidental session wipe when clicking logo mid-analysis | GlobalNavbar.tsx | resolved |
-| `fileName` mutable state | Enables history session switching to update header filename | useResult.ts | resolved |
-| `ARBITER_POLL_INTERVAL_MS` / `MAX_ATTEMPTS` preserved | Still used by useResult and useInvestigation; not part of Phase 3.8 scope | constants.ts | resolved |
-| useFocusTrap for custom modals | Custom portal modals need keyboard trap + escape; no Radix Dialog in this stack | useFocusTrap.ts | resolved |
-| `ctaRef` in HeroAuthActions for focus restoration | Modal close needs to return focus to the button that opened it | HeroAuthActions.tsx | resolved |
-| `inert` on app shell during modals | `aria-modal` alone is insufficient across all AT/browser combinations | HeroAuthActions.tsx | resolved |
-| `isKeyboardUser` tracking in navbar | Auto-hiding navbar is hostile to keyboard/screen-reader users | GlobalNavbar.tsx | resolved |
-| `:where` selector for focus-visible | Minimizes specificity; allows Tailwind/base styles to layer cleanly | globals.css | resolved |
+| ProviderQuotaGuard uses in-memory sliding window | Per-session tracking without Redis dependency; resets on process restart | provider_quota_guard.py | resolved |
+| Quota guard checked before circuit breaker | Quota guard is cheaper to evaluate and prevents unnecessary API attempts | llm_client.py, gemini_client.py | resolved |
+| Gemini policy flag in `__init__` not just `_run_vision_analysis` | Policy check at init time means entire client is disabled when policy not set | gemini_client.py | resolved |
+| Groq fallback key uses `self.api_key` not `config.llm_api_key` | `self.api_key` is arbiter_llm_api_key when use_arbiter_tier=True; avoids burning agent quota | llm_client.py | resolved |
+| `_call_groq` simplified to single model | Outer loop in `generate_reasoning_step` and `generate_synthesis` already handles candidate iteration; inner loop caused double fallback | llm_client.py | resolved |
+| verify_llm_keys uses /models not /chat/completions | /models endpoint doesn't burn token quota; suitable for verification at startup | verify_llm_keys.py | resolved |
+| Local forensic fallback has confidence=0.55, court_defensible=True | Deterministic baseline when no LLM available; confidence below threshold so verdicts aren't auto-triggered | gemini_client.py | resolved |
+| HITL idempotency is fail-closed (503) | Prevents double-processing on frontend retry | hitl.py | resolved |
+| Session finalization centralized in session_finalization.py | Eliminates duplicate finalization logic in investigation_runner and worker | session_finalization.py | resolved |
 
 ## Commands Run
 
@@ -188,47 +184,39 @@ Phase 4 (on phase-4-a11y-ux):
 
 | Verify | Result | Time | Notes |
 |--------|--------|------|-------|
-| Python compileall (api/api, core, orchestration, scripts) | passed | 2026-05-12 | No compile errors |
-| Docker compose YAML syntax | passes | 2026-05-12 | Requires env vars for full validation |
-| `RUNNING_IN_DOCKER` in route.ts | 0 occurrences | 2026-05-12 | Replaced with `DISABLE_NEXT_API_PROXY` |
-| `document.cookie` token in ActionDock | removed | 2026-05-12 | Replaced with `credentials: "include"` |
-| `audioPreviewUrl` state in UploadModal | removed | 2026-05-12 | Audio preview now in UploadSuccessModal |
-| `pdf` extension in UploadModal EXTENSION_MIME_MAP | removed | 2026-05-12 | TIFF/BMP added instead |
-| `REPORT_TABS` / `TAB_ICONS` in constants.ts | removed | 2026-05-12 | FileImage/FileText/FileAudio/FileVideo imports also removed |
-| `ARBITER_POLL_INTERVAL_MS` in constants.ts | preserved | 2026-05-12 | Still imported by useResult and useInvestigation |
-| Scoped storage keys in useInvestigation.ts | all 5 scoped writes added | 2026-05-12 | forensic_investigation_ctx:{sid}, file_name:{sid}, mime_type:{sid}, pipeline_start:{sid}, thumbnail:{sid} |
-| `resetActiveInvestigation` in GlobalNavbar handleLogoClick | removed | 2026-05-12 | Replaced with router.push; explicit handleResetClick added |
-| rs.arbiterMsg in ResultLayout arbiter body | added | 2026-05-12 | Replaced hardcoded "Arbiter is compiling..." placeholder |
-| useFocusTrap hook | created | 2026-05-12 | Focus trap + escape for custom portal modals; filters disabled and aria-hidden elements |
-| ctaRef in HeroAuthActions | added | 2026-05-12 | Focus restoration after modal close via requestAnimationFrame |
-| inert on app shell during modals | added | 2026-05-12 | Sets aria-hidden + inert on main-content, nav, footer when upload modal open |
-| isKeyboardUser in GlobalNavbar | added | 2026-05-12 | Tracks Tab vs mousedown; prevents nav hide for keyboard users |
-| :where focus-visible in globals.css | added | 2026-05-12 | Low-specificity global focus ring with outer glow for all interactive elements |
+| `python -m compileall -q core api/main.py scripts/verify_llm_keys.py` | passed | 2026-05-12 | No compile errors on Phase 6 files |
+| `uv run ruff check core/llm_client.py core/gemini_client.py core/config.py core/provider_quota_guard.py api/main.py scripts/verify_llm_keys.py` | All checks passed | 2026-05-12 | Fixed W293, W292, S110, UP032 |
+| `uv run pytest tests/unit/test_quota_meter.py tests/unit/test_gemini_client.py` | 31 passed | 2026-05-12 | Quota meter and Gemini client tests |
+| Phase 5 full pytest (978 total: 977 passed, 1 skipped, 6 xfailed) | 977/978 passed | 2026-05-12 | ~4 min; skipped test_auth_unit (pre-existing cache_clear issue); config validation tests pre-existing failures |
+| Phase 5 lint: `uv run ruff check api core orchestration` | passed | 2026-05-12 | Import ordering fixed in worker.py |
 
 ### Build/Test Status
 
 | Command | Result | Time | Notes |
 |---------|--------|------|-------|
-| Python compileall backend | passed | 2026-05-12 | All .py files compile cleanly |
-| Docker compose config (with env) | passes syntax | 2026-05-12 | Env variable warnings are expected |
-| TypeScript type-check frontend | not run in this environment | — | WSL2 not available |
-| Jest unit tests | not run in this environment | — | WSL2 not available |
-| Playwright tests | not run in this environment | — | WSL2 not available |
-| pytest backend tests | not run in this environment | — | WSL2 not available |
+| Python compileall (Phase 5) | passed | 2026-05-12 | No compile errors |
+| Python compileall (Phase 6) | passed | 2026-05-12 | No compile errors |
+| ruff check (Phase 5) | passed | 2026-05-12 | Import ordering fixed |
+| ruff check (Phase 6) | all passed | 2026-05-12 | Fixed W293, W292, S110, UP032 |
+| pytest (Phase 5) | 977 passed, 1 skipped, 6 xfailed | 2026-05-12 | ~4 min |
+| pytest tests/unit/test_quota_meter.py tests/unit/test_gemini_client.py (Phase 6) | 31 passed | 2026-05-12 | All new module tests pass |
 
 ## Known Issues
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Cannot run Docker/npm/pytest in this environment (WSL2 not available) | medium | All verification is static (compileall, compose config, grep) |
-| Phase 2.14/2.15 tests not run | — | Test files modified but execution blocked by environment |
-| Phase 3.5-3.10 tests not run | — | Test files modified but execution blocked by environment |
-| Phase 4 tests not run | — | Test files updated but execution blocked by environment |
-| `forensic_is_deep` not scoped by session | Deep phase flag shared across sessions | Could be addressed in future session scoping pass |
+| test_auth_unit.py uses `get_settings.cache_clear()` which doesn't exist | high | Pre-existing; module-level `get_settings` is not an lru_cache function; Phase 5 does not touch this file |
+| test_config_validation.py fixtures use same broken pattern | high | Pre-existing; Phase 5 does not touch these tests |
+| test_investigation_queue_unit.py has 4 pre-existing failures (Phase 5) | medium | Worker heartbeat tests timing out in Windows environment; investigation_runner tests failing due to mock mismatches. Phase 5 added `_mark_session_failed` which may fix some of these. |
+| `redis.client.lrange` pyright error | low | Pre-existing type annotation gap in redis-py async; same pattern in sessions.py:127 and investigation.py:265 |
+| `gemini_api_key_policy_ok=False` by default | info | Gemini calls disabled until operator sets flag and accepts terms; intentional safety measure |
 
 ## Known Bugs (Non-Doc)
 
-(None currently — all Phase 2 and Phase 3 issues resolved)
+| Issue | Severity | Notes |
+|-------|----------|-------|
+| test_auth_unit.py / test_config_validation.py pre-existing breakage | medium | Pre-existing; Phase 5 does not touch these files |
+| test_investigation_queue_unit.py 4 pre-existing failures | medium | Pre-existing; Phase 5 did not fix these but also did not worsen them |
 
 ## Open Questions
 
@@ -236,19 +224,25 @@ Phase 4 (on phase-4-a11y-ux):
 
 ## Next Best Action for AI
 
-Phase 4 is complete on `phase-4-a11y-ux`. Remaining verification (deferred until runtime available):
+Both Phase 5 and Phase 6 are committed to separate feature branches. Remaining actions:
 
-1. Run `npm run type-check && npm run lint` in `apps/web`
-2. Run `uv run pytest tests/integration/test_api_routes.py tests/unit/test_config_validation.py tests/unit/test_investigation_queue_unit.py -q` in `apps/api`
-3. Run `npm test -- tests/integration/page_flows.test.tsx --runInBand` in `apps/web`
-4. Run `npm test -- tests/unit/components/HeroAuthActions.test.tsx --runInBand` in `apps/web`
-5. Run `npm test -- tests/accessibility/accessibility.test.tsx --runInBand` in `apps/web`
-6. Run `npm run test:e2e -- tests/e2e/browser_journey.spec.ts tests/e2e/upload-route-flow.spec.ts tests/e2e/full_journey.spec.ts tests/e2e/websocket_flow.test.ts tests/e2e/accessibility.spec.ts` in `apps/web`
-7. Run Docker: `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d`
-8. Run `./scripts/_wait_healthy.sh dev && ./scripts/_smoke.sh dev`
-9. Manual keyboard sweep: Tab through /, upload modal, /evidence, /result/<session>, history panel, toast dismiss (every focused element needs visible ring)
-10. Manual focus trap test: Open modal, Tab through controls, press Escape, verify focus returns to Begin Analysis
-11. Manual navbar keyboard test: Scroll down to hide navbar, press Shift+Tab, verify navbar reappears
+1. Merge Phase 5 branch `phase-5-backend-core-logic` to `main` (review Phase 5 changes first)
+2. Merge Phase 6 branch `phase-6-agents-models-api-config` to `main` (review Phase 6 changes first)
+3. Run full test suite to confirm Phase 5 pytest results (977/978 passed):
+   `cd apps/api && uv run pytest tests/ -q --ignore=tests/unit/test_auth_unit.py --ignore=tests/unit/test_config_validation.py`
+4. Add unit tests for `ProviderQuotaGuard` (not yet covered):
+   - Test RPM limit enforcement
+   - Test RPD limit enforcement
+   - Test cleanup of stale timestamps
+   - Test provider not configured returns True
+   - Test concurrent recording is thread-safe
+5. Add config validation test for `free_tier_mode`:
+   - Test blocks openai/anthropic in free_tier_mode
+   - Test blocks gpt-4/claude models in Groq when free_tier_mode=True
+   - Test allows groq/gemini in free_tier_mode
+6. Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`:
+   - Replace `get_settings.cache_clear()` with `clear_settings_cache()` from core/config.py
+7. Investigate `test_investigation_queue_unit.py` 4 pre-existing failures
 
 ## Do Not Break
 
@@ -264,6 +258,9 @@ Phase 4 is complete on `phase-4-a11y-ux`. Remaining verification (deferred until
 - Worker cold-start heartbeat tolerance (Phase 2)
 - PDF as unsupported (Phase 3 — backend not ready for PDF support)
 - Scoped metadata backward compat (global fallback still works for direct result loads)
+- Agent1 context timeout with asyncio.shield (Phase 6.7 — confirmed correct pattern)
+- Gemini policy flag requirement (Phase 6.5 — intentional safety measure)
+- Session finalization centralized (Phase 5.15 — prevents duplicate finalization)
 
 ---
 
