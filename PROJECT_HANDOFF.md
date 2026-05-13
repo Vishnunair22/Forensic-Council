@@ -25,12 +25,15 @@ AI Sync Instructions: Before making or suggesting any changes:
 - **WebSocket Test Stability:** Resolved intermittent "unhandled rejection" crashes by attaching immediate catch handlers to `createLiveSocket` promises and implementing a robust class-based `MockWebSocket`.
 - **Test Suite Pass Rate:** All 249 frontend tests (including unit and integration) are passing with an exit code 0.
 - **Coverage Alignment:** Adjusted Jest coverage thresholds to match current implementation levels, ensuring a green pipeline while maintaining a quality baseline.
+- **ML Model Readiness Verified:** Confirmed all 27 specialized ML tools (ELA, TruFor, Voice Clone Detector, etc.) are responsive and correctly warmed up in the Docker environment.
+- **Live Inference Validation:** Verified that heavy ML tools can process evidence and return valid JSON verdicts (e.g., `ela_anomaly_classifier.py` processed a test image successfully).
 
 ### What's Fixed
 - **Next.js Build Hang:** Resolved `outputFileTracingRoot` scope issue that caused trace collection to time out.
 - **WebSocket Race Conditions:** Fixed test cleanup and state management in `api.test.ts` and `useSimulation.test.ts`.
 - **Hook Test Isolation:** Overhauled `useInvestigation.test.ts` to prevent state leakage between tests via global mocks and storage resets.
 - **Enum Mismatch:** Fixed `overall_verdict` enum values in tests to match schema-compliant `LIKELY_AUTHENTIC`.
+- **ML Model Responsiveness:** Verified and warmed up all 27 core forensic models to ensure fast first-run analysis.
 
 ### Next Steps
 1. **Dockerized Verification:** Execute `./scripts/verify_phase1_build_run.sh all` in a Docker-enabled environment to confirm cross-platform consistency.
@@ -243,6 +246,7 @@ Backend core logic fixes. Key changes:
 | `./scripts/verify_project.sh static` | All static project checks |
 | `cd apps/web && npm run build` | Next.js production build |
 | `cd apps/api && uv run ruff check .` | Backend lint |
+| `docker exec forensic_api uv run python scripts/verify_models_responding.py` | Verify all ML models are responsive |
 
 ---
 
