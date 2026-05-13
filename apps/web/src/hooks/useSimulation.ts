@@ -31,6 +31,8 @@ type SimulationStatus =
   | "complete"
   | "error";
 
+type SimulationPhase = "initial" | "deep";
+
 type UseSimulationProps = {
   onAgentComplete?: (result: AgentUpdate) => void;
   onComplete?: () => void;
@@ -69,6 +71,11 @@ export const useSimulation = ({
   const [arbiterThinking, setArbiterThinking] = useState<string | null>(null);
   const [revealQueue, setRevealQueue] = useState<AgentUpdate[]>([]);
   const isRevealingRef = useRef(false);
+  const activePhaseRef = useRef<SimulationPhase>("initial");
+
+  const setSimulationPhase = useCallback((phase: SimulationPhase) => {
+    activePhaseRef.current = phase;
+  }, []);
 
   const wsRef = useRef<WebSocket | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
@@ -149,6 +156,14 @@ export const useSimulation = ({
               incoming: update.session_id,
               type: update.type,
             });
+            return;
+          }
+
+          if (
+            activePhaseRef.current === "deep" &&
+            update.type === "PIPELINE_PAUSED" &&
+            /initial analysis complete/i.test(update.message || "")
+          ) {
             return;
           }
 
@@ -1012,6 +1027,9 @@ const resumeInvestigation = useCallback(
     dismissCheckpoint,
     clearCompletedAgents,
     restoreSimulationState,
+    handleExport,
+    selectSession,
+    setSimulationPhase,
     hitlCheckpoint,
     errorMessage,
     revealQueue,

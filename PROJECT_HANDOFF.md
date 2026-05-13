@@ -14,6 +14,32 @@ AI Sync Instructions: Before making or suggesting any changes:
 
 ---
 
+### Phase 14: Pipeline Resilience & Design Refinement (Final)
+
+**Status:** ✅ COMPLETE
+**Date:** 2026-05-13
+
+### What's New
+- **Hard-Refresh Resilience:** Implemented `fc_pending_file_meta` storage to allow for non-destructive recovery after a hard refresh during the upload handoff. Users now see a clear recovery message instead of a destructive "handoff expired" toast.
+- **WebSocket Phase Guarding:** Added explicit phase tracking (`initial` vs `deep`) to the investigation simulation. The frontend now correctly ignores replayed "initial analysis complete" messages during deep analysis transitions, eliminating state flickering.
+- **Premium Design System:** Introduced `fc-transition`, `fc-hover-lift`, `fc-focus-ring`, and `fc-surface-crisp` tokens to `globals.css`. Standardized these styles across the Navbar, Agent Cards, Loading Overlays, and Action Docks, resolving inconsistent hover jitter and Micro-UI gaps.
+- **Universal Reset Button:** The navbar logo now universally triggers `resetActiveInvestigation` and clears all forensic state if an active session exists, consistent with the dedicated Reset button.
+- **Enhanced File Validation:** Centralized extension-aware validation in `apps/web/src/lib/fileValidation.ts` to complement MIME-type checks, ensuring robust handling of browser-specific MIME variants.
+- **Agent Support Correctness:** Fixed the fallback for unknown MIME types to only show the metadata agent (`Agent5`), aligning frontend card display with backend forensic capabilities.
+
+### What's Fixed
+- **History Save Race Condition:** Reset `historySavedRef` in `useResult.ts` when switching sessions to ensure subsequent reports are correctly saved to the user's history.
+- **API URL Safety:** Encoded `sessionId` in `getReport` calls in `client.ts` to prevent URI injection and handle malformed IDs gracefully.
+- **Double Overlay Bug:** Added a safety cleanup in `RouteExperience.tsx` to remove the `data-fc-loading` attribute when navigating away from the result page, preventing permanent full-screen loading bridges.
+- **Navbar Layout Shifting:** Replaced inline styles and manual hover mutations in `GlobalNavbar.tsx` with centralized CSS classes, eliminating pixel-shifting during interaction.
+
+### Next Steps
+1. **Full Production Smoke Test:** Run `./scripts/prod.sh` and perform a multi-file batch upload (Image, Audio, Video) to verify agent support mapping and deep analysis transitions.
+2. **Stress Test Refreshes:** Perform multiple hard-refreshes at each stage (Upload, Simulation, Result) to verify state recovery and history persistence.
+3. **Phase 15: Deployment Finalization:** Proceed to final deployment and monitoring setup.
+
+---
+
 ### Phase 12: Production Hardening & Build Verification (Final)
 
 **Status:** ✅ COMPLETE
@@ -43,6 +69,15 @@ AI Sync Instructions: Before making or suggesting any changes:
 ---
 
 ## Current Status
+- **Phase 14: Pipeline Resilience & Design Refinement** (Complete)
+    - [x] Implement recoverable upload handoff (HeroAuthActions.tsx, useInvestigation.ts)
+    - [x] Add websocket phase guards for deep analysis (useSimulation.ts, useInvestigation.ts)
+    - [x] Standardize premium design tokens (globals.css)
+    - [x] Universal logo reset button (GlobalNavbar.tsx)
+    - [x] Centralized extension-aware file validation (fileValidation.ts, UploadModal.tsx)
+    - [x] Fix history save ref reset on session change (useResult.ts)
+    - [x] Fix agent support fallback for unknown types (agentSupport.ts)
+
 - **Phase 13: Navigation & Refresh Behavior** (Complete)
     - [x] Add beforeunload warning on /evidence during active investigation (EvidenceUploadClient.tsx)
     - [x] Fix "Return Home" button on /evidence empty state to call resetActiveInvestigation

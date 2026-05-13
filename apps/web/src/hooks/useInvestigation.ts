@@ -30,6 +30,7 @@ import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
+import { validateEvidenceFile } from "@/lib/fileValidation";
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -201,6 +202,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     isReconnecting,
     arbiterStatus,
     arbiterThinking,
+    setSimulationPhase,
   } = useSimulation({
     playSound,
   });
@@ -327,6 +329,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setUploadPhaseText("Uploading evidence to secure pipeline…");
       setArbiterLiveText("");
       setArbiterDeliberating(false);
+      setSimulationPhase("initial");
       startSimulation();
 
       const investigatorId = investigatorIdRef.current;
@@ -463,6 +466,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           .finally(() => {
             investigationInFlightRef.current = false;
             __pendingFileStore.file = null;
+            sessionOnlyStorage.removeItem("fc_pending_file_meta");
             sessionExistsRef.current = true;
           });
         return;
@@ -487,6 +491,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .finally(() => {
           investigationInFlightRef.current = false;
           __pendingFileStore.file = null;
+          sessionOnlyStorage.removeItem("fc_pending_file_meta");
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
@@ -505,9 +510,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         sessionOnlyStorage.removeItem("fc_show_loading");
         setAutoStartBlocking(false);
         setShowLoadingOverlay(false);
+        const pendingMeta = sessionOnlyStorage.getItem("fc_pending_file_meta", true, null) as { name: string } | null;
         toast.destructive({
-          title: "Upload handoff expired",
-          description: "Please select the evidence file again to start a fresh analysis.",
+          title: "File selection was lost after refresh",
+          description: pendingMeta?.name
+            ? `Please reselect "${pendingMeta.name}" to continue. Browsers do not allow restoring file handles after a hard refresh.`
+            : "Please select the evidence file again to continue.",
         });
         router.replace("/?upload=1");
         return;
@@ -682,6 +690,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       // message queue (which still holds initial-phase AGENT_UPDATE / AGENT_COMPLETE
       // messages) is discarded. The new socket starts with an empty queue and will
       // only receive deep-phase messages.
+      setSimulationPhase("deep");
       if (sid) await connectWebSocket(sid, true);
       await resumeInvestigation(true);
     } catch {
@@ -715,15 +724,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [file, triggerAnalysis, startSimulation, connectWebSocket, resetSimulation]);
 
   const handleFile = useCallback((targetFile: File) => {
-    if (targetFile.size > MAX_UPLOAD_SIZE_BYTES) {
-      setValidationError("File exceeds 50MB limit.");
-      setFile(null);
-      playSound("error");
-      return;
-    }
-
-    if (!ALLOWED_MIME_TYPES.has(targetFile.type)) {
-      setValidationError(`File type "${targetFile.type || "unknown"}" is not supported.`);
+    const error = validateEvidenceFile(targetFile);
+    if (error) {
+      setValidationError(error);
       setFile(null);
       playSound("error");
       return;

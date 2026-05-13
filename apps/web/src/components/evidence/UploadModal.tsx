@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { validateEvidenceFile } from "@/lib/fileValidation";
 
 // Envelope icon — shows open state with drag-reactive document card
 function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
@@ -110,31 +111,13 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   }, []);
 
   const selectFile = useCallback((file: File) => {
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      setError("File must be 50MB or smaller.");
+    const error = validateEvidenceFile(file);
+    if (error) {
+      setError(error);
       playSound("error");
       return;
     }
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      setError(`File type "${file.type || "unknown"}" is not supported.`);
-      playSound("error");
-      return;
-    }
-    // Cross-validate MIME type against file extension to catch spoofed uploads
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const EXTENSION_MIME_MAP: Record<string, string[]> = {
-      jpg: ["image/jpeg"], jpeg: ["image/jpeg"], png: ["image/png"],
-      webp: ["image/webp"], gif: ["image/gif"], bmp: ["image/bmp"],
-      tif: ["image/tiff"], tiff: ["image/tiff"],
-      mp4: ["video/mp4"], mov: ["video/quicktime"], avi: ["video/x-msvideo"], webm: ["video/webm"],
-      mp3: ["audio/mpeg"], wav: ["audio/wav", "audio/x-wav"], m4a: ["audio/mp4", "audio/x-m4a"],
-    };
-    const allowedMimesForExt = EXTENSION_MIME_MAP[ext];
-    if (allowedMimesForExt && !allowedMimesForExt.includes(file.type)) {
-      setError(`File extension ".${ext}" does not match the reported type "${file.type}".`);
-      playSound("error");
-      return;
-    }
+
     if (isSubmitting) return; // Prevent double-submit
     setIsSubmitting(true);
 

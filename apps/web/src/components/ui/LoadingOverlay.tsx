@@ -135,14 +135,7 @@ export function LoadingOverlay({
               exit={{ opacity: 0, x: -52, scale: 0.97 }}
               transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
             >
-              <div
-                className="relative rounded-2xl overflow-hidden"
-                style={{
-                  background: "linear-gradient(108deg, #060d1c 0%, #080f24 60%, rgba(79,142,247,0.055) 100%)",
-                  border: "1px solid rgba(79,142,247,0.11)",
-                  boxShadow: "0 24px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03)",
-                }}
-              >
+              <div className="relative rounded-2xl overflow-hidden fc-surface-crisp">
                 {/* Top progress strip — gradient */}
                 <div className="h-[1.5px] w-full" style={{ background: "rgba(255,255,255,0.04)" }}>
                   <motion.div

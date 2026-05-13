@@ -357,7 +357,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
 
 export async function getReport(sessionId: string): Promise<ReportResponse> {
   return handleAuthError(async () => {
-    const response = await fetch(`${API_BASE}/api/v1/sessions/${sessionId}/report`, {
+    const response = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report`, {
       credentials: "include",
     });
 

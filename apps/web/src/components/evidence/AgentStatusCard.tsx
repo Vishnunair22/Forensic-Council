@@ -357,7 +357,7 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden transition-all duration-500 min-h-[480px] max-h-[720px] rounded-2xl",
+        "relative flex flex-col overflow-hidden fc-transition fc-hover-lift fc-focus-ring min-h-[480px] max-h-[720px] rounded-2xl",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       style={{

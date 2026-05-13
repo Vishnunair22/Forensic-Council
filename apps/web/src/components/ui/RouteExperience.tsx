@@ -24,11 +24,24 @@ export function RouteExperience() {
   }, []);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    if (!pathname.startsWith("/result")) {
+      document.body.removeAttribute("data-fc-loading");
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     logApiTargetDiagnostics();
 
-    const behavior = prefersReducedMotion() ? "auto" : "smooth";
+    const behavior =
+      pathname === "/evidence" || pathname.startsWith("/result")
+        ? "auto"
+        : prefersReducedMotion()
+          ? "auto"
+          : "smooth";
     const raf = window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, left: 0, behavior });
     });

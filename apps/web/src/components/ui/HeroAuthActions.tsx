@@ -119,6 +119,16 @@ export function HeroAuthActions() {
     __pendingFileStore.file = selectedFile;
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
+    sessionOnlyStorage.setItem(
+      "fc_pending_file_meta",
+      JSON.stringify({
+        name: selectedFile.name,
+        type: selectedFile.type,
+        size: selectedFile.size,
+        updatedAt: Date.now(),
+      }),
+      true,
+    );
 
     // Brief pause so the loading overlay is visible before navigation
     await new Promise<void>((resolve) => setTimeout(resolve, 200));

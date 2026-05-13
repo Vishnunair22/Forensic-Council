@@ -39,30 +39,13 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
   };
   return (
     <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-6 duration-700 w-full max-w-lg px-3 sm:px-5 pointer-events-none">
-      <div
-        className="rounded-full p-1.5 pointer-events-auto"
-        style={{
-          background: "rgba(5,9,18,0.92)",
-          border: "1px solid rgba(165,200,255,0.09)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          boxShadow: "0 32px 80px rgba(0,0,0,0.75), 0 0 0 1px rgba(79,142,247,0.05), inset 0 1px 0 rgba(255,255,255,0.04)",
-        }}
-      >
+      <div className="rounded-full p-1.5 pointer-events-auto fc-surface-crisp backdrop-blur-[24px]">
+
         <div className="flex items-center justify-between gap-1.5">
           <button
             type="button"
             onClick={onHome}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] transition-all duration-200"
-            style={{ color: "rgba(255,255,255,0.35)" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.75)";
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
-              (e.currentTarget as HTMLElement).style.background = "";
-            }}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] fc-transition fc-focus-ring text-white/35 hover:text-white/75 hover:bg-white/5"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             Home
@@ -80,16 +63,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
           <button
             type="button"
             onClick={handleExport}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] transition-all duration-200"
-            style={{ color: "rgba(255,255,255,0.35)" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "var(--color-primary)";
-              (e.currentTarget as HTMLElement).style.background = "rgba(79,142,247,0.06)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
-              (e.currentTarget as HTMLElement).style.background = "";
-            }}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] fc-transition fc-focus-ring text-white/35 hover:text-primary hover:bg-primary/5"
           >
             <Download className="w-3.5 h-3.5" />
             Export

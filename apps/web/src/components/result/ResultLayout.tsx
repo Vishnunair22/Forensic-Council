@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect, useRef } from "react";
+import { clsx } from "clsx";
 import dynamic from "next/dynamic";
 import { Activity, FileSearch, History as HistoryIcon, Home as HomeIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -91,27 +92,12 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
-        <div
-          className="flex items-center justify-between gap-2 p-1.5 rounded-2xl backdrop-blur-2xl"
-          style={{
-            background: "rgba(5,9,18,0.92)",
-            border: "1px solid rgba(165,200,255,0.08)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
+        <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl fc-surface-crisp backdrop-blur-2xl">
+
           <button
             type="button"
             onClick={rs.handleHome}
-            className="px-4 py-2.5 text-[10px] font-mono font-bold uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl transition-all duration-200"
-            style={{ color: "rgba(255,255,255,0.35)" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.75)";
-              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
-              (e.currentTarget as HTMLElement).style.background = "";
-            }}
+            className="px-4 py-2.5 text-[10px] font-mono font-bold uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl fc-transition fc-focus-ring text-white/35 hover:text-white/75 hover:bg-white/5"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             Hub
@@ -141,28 +127,13 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 tabIndex={rs.activeTab === tab ? 0 : -1}
                 ref={(node) => { tabRefs.current[tab] = node; }}
                 onClick={() => rs.setActiveTab(tab)}
-                className="px-4 sm:px-6 py-2.5 text-[10px] font-mono font-bold transition-all duration-250 rounded-xl uppercase tracking-[0.14em] flex items-center gap-2"
-                style={
+                className={clsx(
+                  "px-4 sm:px-6 py-2.5 text-[10px] font-mono font-bold fc-transition rounded-xl uppercase tracking-[0.14em] flex items-center gap-2",
                   rs.activeTab === tab
-                    ? {
-                        background: "var(--color-primary)",
-                        color: "#020810",
-                        boxShadow: `0 0 18px rgba(79,142,247,0.28)`,
-                      }
-                    : { color: "rgba(237,242,248,0.64)" }
-                }
-                onMouseEnter={(e) => {
-                  if (rs.activeTab !== tab) {
-                    (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.6)";
-                    (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (rs.activeTab !== tab) {
-                    (e.currentTarget as HTMLElement).style.color = "rgba(237,242,248,0.64)";
-                    (e.currentTarget as HTMLElement).style.background = "";
-                  }
-                }}
+                    ? "bg-primary text-black shadow-[0_0_18px_rgba(var(--color-primary-rgb),0.28)]"
+                    : "text-white/60 hover:text-white/80 hover:bg-white/5"
+                )}
+
               >
                 {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
                 {tab === "analysis" ? "Analysis" : "History"}

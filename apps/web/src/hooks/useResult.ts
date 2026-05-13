@@ -111,6 +111,7 @@ export function useResult(initialSessionId?: string) {
       setReport(null);
       setArbiterComplete(false);
       setMinOverlayDone(false);
+      historySavedRef.current = false;
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
       setIsDeepPhase(storage.getItem("forensic_is_deep") === "true");
@@ -134,6 +135,7 @@ export function useResult(initialSessionId?: string) {
     setMinOverlayDone(false);
     setReport(null);
     setState("arbiter");
+    historySavedRef.current = false;
     setArbiterMsg("Council deliberating on evidence...");
     setIsDeepPhase(nextIsDeep);
     setThumbnail(storage.getItem(`forensic_thumbnail:${sid}`) ?? storage.getItem("forensic_thumbnail"));

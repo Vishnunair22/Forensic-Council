@@ -92,14 +92,18 @@ export function GlobalNavbar() {
   const handleLogoClick = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    playSound(hasActiveSession && pathname !== "/" ? "reset" : "hum");
+    const shouldReset = hasActiveSession || pathname !== "/";
 
-    if (pathname === "/") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
+    playSound(shouldReset ? "reset" : "hum");
+
+    if (shouldReset) {
+      resetActiveInvestigation(queryClient);
       router.push("/", { scroll: true });
+      return;
     }
-  }, [pathname, router, playSound, hasActiveSession]);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [pathname, router, playSound, hasActiveSession, queryClient]);
 
   const handleResetClick = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -123,23 +127,16 @@ export function GlobalNavbar() {
       }`}
     >
       <div
-        className="group flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full border transition-all duration-200 relative"
-        style={{
-          background: "rgba(6,10,20,0.92)",
-          borderColor: "rgba(165,200,255,0.10)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
-        }}
+        className="group flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full fc-surface-crisp transition-all duration-200 relative"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
         <button
           type="button"
           onClick={handleLogoClick}
-          aria-label="Return to Forensic Council home"
+          aria-label={hasActiveSession || pathname !== "/" ? "Reset and return to Forensic Council home" : "Return to top"}
           aria-current={pathname === "/" ? "page" : undefined}
-          className="flex items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+          className="flex items-center rounded-full fc-transition fc-focus-ring"
         >
           <BrandLogo size="sm" isHovered={isHovered} />
         </button>
@@ -148,20 +145,12 @@ export function GlobalNavbar() {
           <button
             type="button"
             onClick={handleResetClick}
-            className="ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em] rounded-full border transition-all duration-200"
-            style={{
-              color: "rgba(255,255,255,0.55)",
-              background: "rgba(239,68,68,0.12)",
-              borderColor: "rgba(239,68,68,0.25)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "rgba(255,255,255,0.9)";
-              e.currentTarget.style.background = "rgba(239,68,68,0.22)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "rgba(255,255,255,0.55)";
-              e.currentTarget.style.background = "rgba(239,68,68,0.12)";
-            }}
+            className="
+              ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em]
+              rounded-full border fc-transition fc-focus-ring
+              text-white/55 bg-danger/10 border-danger/25
+              hover:text-white/90 hover:bg-danger/20
+            "
             aria-label="Reset active investigation"
           >
             Reset
