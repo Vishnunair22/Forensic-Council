@@ -364,7 +364,15 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const rawData = await response.json();
-    return { status: "complete", report: _parseReportDTO(rawData) };
+
+    const reportPayload =
+      rawData &&
+      typeof rawData === "object" &&
+      "report" in rawData
+        ? (rawData as { report: unknown }).report
+        : rawData;
+
+    return { status: "complete", report: _parseReportDTO(reportPayload) };
   });
 }
 

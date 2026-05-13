@@ -19,6 +19,23 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+REQUIRE_TOOLS="${REQUIRE_TOOLS:-0}"
+
+require_tool_or_skip() {
+  local tool="$1"
+  if command -v "$tool" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "$REQUIRE_TOOLS" == "1" ]]; then
+    echo "FAIL: required tool '$tool' is not installed"
+    exit 1
+  fi
+
+  echo "SKIP: $tool not installed"
+  exit 0
+}
+
 MODE="${1:-static}"
 
 case "$MODE" in
@@ -75,10 +92,7 @@ PY
 
   web)
     echo "==> [web] Frontend verification (requires npm)..."
-    if ! command -v npm >/dev/null 2>&1; then
-      echo "SKIP: npm not installed"
-      exit 0
-    fi
+    require_tool_or_skip npm
     cd "$ROOT/apps/web"
     npm ci
     npm run type-check
@@ -94,10 +108,7 @@ PY
 
   api)
     echo "==> [api] Backend verification (requires uv)..."
-    if ! command -v uv >/dev/null 2>&1; then
-      echo "SKIP: uv not installed"
-      exit 0
-    fi
+    require_tool_or_skip uv
     cd "$ROOT/apps/api"
     uv sync --extra dev --extra security --extra observability
     uv run ruff check .
@@ -112,10 +123,7 @@ PY
 
   docker-dev)
     echo "==> [docker-dev] Docker compose dev config validation..."
-    if ! command -v docker >/dev/null 2>&1; then
-      echo "SKIP: docker not installed"
-      exit 0
-    fi
+    require_tool_or_skip docker
     if docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.dev.yml" --env-file "$ROOT/.env" config -q 2>&1; then
       echo "  OK: docker-dev compose renders cleanly"
     else
@@ -130,10 +138,7 @@ PY
 
   docker-prod)
     echo "==> [docker-prod] Docker compose prod config validation..."
-    if ! command -v docker >/dev/null 2>&1; then
-      echo "SKIP: docker not installed"
-      exit 0
-    fi
+    require_tool_or_skip docker
     if docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.prod.yml" --env-file "$ROOT/.env" config -q 2>&1; then
       echo "  OK: docker-prod compose renders cleanly"
     else

@@ -49,7 +49,6 @@ function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): Agent
 export function useResult(initialSessionId?: string) {
   const router = useRouter();
 
-  const getInitial = (key: string) => storage.getItem(key);
   const getInitialSid = () => initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
 
   const initialSid = getInitialSid();

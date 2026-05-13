@@ -122,8 +122,7 @@ export function GlobalNavbar() {
         isVisible || isKeyboardUser ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
       }`}
     >
-      <button
-        type="button"
+      <div
         className="group flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full border transition-all duration-200 relative"
         style={{
           background: "rgba(6,10,20,0.92)",
@@ -132,35 +131,41 @@ export function GlobalNavbar() {
           WebkitBackdropFilter: "blur(16px)",
           boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
         }}
-        onClick={handleLogoClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        aria-label="Return to Forensic Council home"
-        aria-current={pathname === "/" ? "page" : undefined}
       >
-        <BrandLogo size="sm" isHovered={isHovered} />
+        <button
+          type="button"
+          onClick={handleLogoClick}
+          aria-label="Return to Forensic Council home"
+          aria-current={pathname === "/" ? "page" : undefined}
+          className="flex items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+        >
+          <BrandLogo size="sm" isHovered={isHovered} />
+        </button>
 
         <button
-        type="button"
-        onClick={handleResetClick}
-        className="ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em] rounded-full border transition-all duration-200"
-        style={{
-          color: "rgba(255,255,255,0.55)",
-          background: "rgba(239,68,68,0.12)",
-          borderColor: "rgba(239,68,68,0.25)",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.9)";
-          (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.22)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.55)";
-          (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.12)";
-        }}
-        aria-label="Reset active investigation"
-      >
-        Reset
-      </button>
+          type="button"
+          onClick={handleResetClick}
+          className="ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em] rounded-full border transition-all duration-200"
+          style={{
+            color: "rgba(255,255,255,0.55)",
+            background: "rgba(239,68,68,0.12)",
+            borderColor: "rgba(239,68,68,0.25)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "rgba(255,255,255,0.9)";
+            e.currentTarget.style.background = "rgba(239,68,68,0.22)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "rgba(255,255,255,0.55)";
+            e.currentTarget.style.background = "rgba(239,68,68,0.12)";
+          }}
+          aria-label="Reset active investigation"
+        >
+          Reset
+        </button>
+      </div>
     </nav>
   );
 }

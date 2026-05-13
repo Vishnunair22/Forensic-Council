@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import {
   History as HistoryIcon,
   X,
@@ -87,15 +87,16 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                       </button>
                     </div>
                   ) : (
-<button
+                    <button
                       type="button"
                       onClick={() => setShowConfirm(true)}
                       className="btn-horizon-outline py-2 px-4 text-[10px] text-danger border-danger/20 hover:bg-danger/5"
                     >
                       Clear Archive
                     </button>
-                  </>
-                )}
+                  )}
+                </>
+              )}
               <button
                 type="button"
                 onClick={onDismiss}

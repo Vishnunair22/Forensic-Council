@@ -40,7 +40,7 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env
 # Verify: curl http://localhost:8000/health
 ```
 
-### No Docker (infra only, app on host)
+### Host app development with Docker infrastructure
 
 ```bash
 # Start infrastructure services
@@ -53,6 +53,64 @@ POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WOR
 
 # Frontend
 cd apps/web && npm ci && npm run dev
+```
+
+### Fully non-Docker development
+
+For a fully non-Docker run, install and run these services on the host:
+
+- PostgreSQL 17+
+- Redis 7+
+- Qdrant 1.16.x
+- Python 3.12
+- Node.js 22
+- uv
+- ffmpeg
+- tesseract
+- exiftool
+- libmagic
+- mediainfo
+
+Then create a local env file:
+
+```bash
+cp .env.local.example .env
+```
+
+Start backend:
+
+```bash
+cd apps/api
+uv sync --locked --extra dev --extra security --extra observability --extra ml
+
+POSTGRES_HOST=localhost \
+REDIS_HOST=localhost \
+QDRANT_HOST=localhost \
+USE_REDIS_WORKER=false \
+uv run python scripts/init_db.py
+
+POSTGRES_HOST=localhost \
+REDIS_HOST=localhost \
+QDRANT_HOST=localhost \
+USE_REDIS_WORKER=false \
+uv run python scripts/run_api.py
+```
+
+Start frontend in a second terminal:
+
+```bash
+cd apps/web
+npm ci
+NEXT_PUBLIC_API_URL=http://localhost:8000 \
+INTERNAL_API_URL=http://localhost:8000 \
+npm run dev
+```
+
+Verify:
+
+```bash
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:3000/
 ```
 
 ## Testing

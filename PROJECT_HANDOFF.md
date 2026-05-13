@@ -14,6 +14,24 @@ AI Sync Instructions: Before making or suggesting any changes:
 
 ---
 
+## Current Status
+- **Phase 11: Production Hardening** (Complete)
+    - [x] Fix .dockerignore lock-file inconsistencies
+    - [x] Fix HistoryPanel syntax error and fragments
+    - [x] Fix GlobalNavbar nested buttons (already patched)
+    - [x] Enforce `uv.lock` reproducibility in backend Docker (already patched)
+    - [x] Resolve frontend type-check/lint blockers (already patched)
+    - [x] Fix getReport() response shape mismatch (already patched)
+    - [x] Restore executable bits for all shell scripts
+    - [x] Finalize verification scripts with require_tool_or_skip
+
+### Next Actions
+1. **Verification Run**: Run `./scripts/verify_phase1_build_run.sh` to confirm environment stability.
+2. **Production Smoke Test**: Execute `./scripts/prod.sh` on a clean environment to verify end-to-end flow.
+3. **Phase 12: Deployment Readiness**: Finalize CI/CD pipeline integration and security scanning.
+
+---
+
 ## Current Architecture
 
 - `apps/web`: Next.js 15 frontend (React 19, Tailwind CSS, TanStack Query, Playwright, Jest)
@@ -31,6 +49,12 @@ See `docs/WORKFLOW_TRACE.md` for the canonical route/state flow.
 ---
 
 ## Phase Inventory
+
+### Phase 10 — Repo hygiene cleanup (Complete)
+- Deleted 8 deprecated/superseded docs: `API.md`, `ROUTES_AND_APIS.md`, `RUNBOOK.md`, `TROUBLESHOOTING.md`, `MODELS.md`, `ML_AGENTS.md`, `FRONTEND_FLOW.md`, `BACKEND_FLOW.md`
+- Rewrote `.gitignore`: deduplicated 7 duplicate rules, added `/scratch/`, `.coverage`, `.hypothesis/`, `infra/caddy_*`, CI artifact patterns
+- Removed stale duplicate rows from Phase 9 inventory table
+- Updated `DOCUMENTATION_INVENTORY.md` to reflect deletions
 
 ### Phase 9 (committed, `phase-9-docs-refinement`, commits `525f4d0` + `b18dde4`)
 
@@ -202,33 +226,6 @@ Backend core logic fixes. Key changes:
 - **No paid defaults** — OpenAI/Anthropic blocked when `FREE_TIER_MODE=true`
 - **Verification**: `cd apps/api && uv run python scripts/verify_llm_keys.py --json`
 - **Fallback**: No keys → local agent findings with deterministic Arbiter report
-
----
-
-## Next Best Action
-
-Phase 10 repository cleanup complete. All phases 1–9 on `main`; cleanup applied on top.
-
-**Phase 10 — Repo hygiene cleanup:**
-- Deleted 8 deprecated/superseded docs: `API.md`, `ROUTES_AND_APIS.md`, `RUNBOOK.md`, `TROUBLESHOOTING.md`, `MODELS.md`, `ML_AGENTS.md`, `FRONTEND_FLOW.md`, `BACKEND_FLOW.md`
-- Rewrote `.gitignore`: deduplicated 7 duplicate rules, added `/scratch/`, `.coverage`, `.hypothesis/`, `infra/caddy_*`, CI artifact patterns
-- Removed stale duplicate rows from Phase 9 inventory table
-- Updated `DOCUMENTATION_INVENTORY.md` to reflect deletions
-
-**Verification gates still expected to pass:**
-- `python scripts/check_docs.py` — update after deletions if it references removed docs
-- `python scripts/check_test_hygiene.py` → should pass ✅
-- `python -m compileall` → no errors ✅
-- Frontend: `npm run type-check && npm run lint && npm test && npm run build`
-- Backend: `uv run ruff check .`
-
-**Deferred items (Phase 6 remaining):**
-- Add unit tests for `ProviderQuotaGuard`
-- Fix pre-existing test failures in `test_auth_unit.py` and `test_config_validation.py`
-
-**Deferred items (Phase 8):**
-- Phase 8.13 — Deterministic media fixtures
-- Phase 8.14 — Shared test helpers
 
 ---
 

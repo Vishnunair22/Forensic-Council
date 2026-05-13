@@ -120,6 +120,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           <div
             role="tablist"
             aria-label="Report sections"
+            tabIndex={-1}
             className="flex items-center gap-1"
             onKeyDown={(e) => {
               if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;

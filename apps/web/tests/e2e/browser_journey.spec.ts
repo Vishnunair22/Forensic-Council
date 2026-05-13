@@ -578,8 +578,7 @@ test.describe('Forensic Analyst Journey', () => {
 
     await expect(
       page.getByText(/session expired|not found|arbiter timeout|error/i).first(),
-      { timeout: 15_000 },
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     expect(pageErrors).toEqual([]);
   });

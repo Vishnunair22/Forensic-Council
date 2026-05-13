@@ -490,7 +490,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
-    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook]
+    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, restoreSimulationState]
   );
 
 

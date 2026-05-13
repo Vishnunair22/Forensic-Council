@@ -18,9 +18,20 @@ $COMPOSE build --parallel
 echo "🚀 Starting production services..."
 $COMPOSE up -d
 
+DOMAIN_VALUE="$(grep '^DOMAIN=' "$ROOT/.env" | cut -d= -f2- || echo 'localhost')"
+CADDY_SITE_ADDRESS_VALUE="$(grep '^CADDY_SITE_ADDRESS=' "$ROOT/.env" | cut -d= -f2- || true)"
+
+if [[ -n "$CADDY_SITE_ADDRESS_VALUE" ]]; then
+  HEALTH_URL="${CADDY_SITE_ADDRESS_VALUE%/}/health"
+elif [[ "$DOMAIN_VALUE" == "localhost" ]]; then
+  HEALTH_URL="http://localhost/health"
+else
+  HEALTH_URL="https://${DOMAIN_VALUE}/health"
+fi
+
 echo "⏳ Waiting for API health (up to 120s)..."
 for i in $(seq 1 24); do
-  STATUS=$(curl -sf http://localhost/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+  STATUS=$(curl -sf "$HEALTH_URL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
   if [[ "$STATUS" == "ok" ]]; then
     echo "✅ API healthy"
     break
@@ -37,6 +48,6 @@ done
 echo ""
 echo "════════════════════════════════════════"
 echo "  Forensic Council — PRODUCTION running"
-echo "  Web UI  → https://$(grep '^DOMAIN=' "$ROOT/.env" | cut -d= -f2 || echo 'localhost')"
-echo "  Health  → http://localhost/health"
+echo "  Web UI  → https://${DOMAIN_VALUE}"
+echo "  Health  → $HEALTH_URL"
 echo "════════════════════════════════════════"
