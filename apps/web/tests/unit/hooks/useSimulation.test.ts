@@ -10,14 +10,11 @@ jest.mock("@/lib/api", () => ({
 }));
 
 describe("useSimulation Hook", () => {
-  const mockPlaySound = jest.fn();
   const mockOnAgentComplete = jest.fn();
-  const mockOnComplete = jest.fn();
 
   let mockWs: any;
   let mockConnected: Promise<void>;
   let resolveConnected: () => void;
-  let rejectConnected: (err: any) => void;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -70,7 +67,7 @@ describe("useSimulation Hook", () => {
     // Simulate successful connection
     await act(async () => {
       resolveConnected();
-      await connectionPromise!;
+      await connectionPromise;
     });
 
     expect(result.current.status).toBe("initiating");

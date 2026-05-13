@@ -352,7 +352,7 @@ describe("live socket", () => {
 
   it("resolves connected on CONNECTED", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance._simulate!("message",
+    socketInstance._simulate("message",
       new MessageEvent("message", {
         data: JSON.stringify({ type: "CONNECTED" }),
       }),
@@ -362,7 +362,7 @@ describe("live socket", () => {
 
   it("resolves connected on first AGENT_UPDATE", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance._simulate!("message",
+    socketInstance._simulate("message",
       new MessageEvent("message", {
         data: JSON.stringify({ type: "AGENT_UPDATE" }),
       }),
@@ -372,7 +372,7 @@ describe("live socket", () => {
 
   it("rejects on websocket error", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance._simulate!("error", new Event("error"));
+    socketInstance._simulate("error", new Event("error"));
     await expect(connected).rejects.toThrow("WebSocket connection error");
   });
 });

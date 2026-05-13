@@ -34,7 +34,6 @@ jest.mock("@/lib/api", () => ({
 }));
 
 const mockStart = api.startInvestigation as jest.Mock;
-const mockGetReport = api.getReport as jest.Mock;
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -76,6 +75,7 @@ const sampleDTO: ReportDTO = {
   signed_utc: "2025-06-01T12:00:00Z",
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const emptyReport = { id: "r0", fileName: "F0", timestamp: "T", summary: "S", agents: [] as any[], verdict: "INCONCLUSIVE" as const };
 
 beforeEach(() => {
@@ -250,7 +250,7 @@ describe("useForensicData — startAnalysis", () => {
     await act(async () => {
       sid = await result.current.startAnalysis(new File(["x"], "t.jpg"), "CASE-1234567890", "REQ-12345");
     });
-    expect(sid!).toBe("sess-new");
+    expect(sid).toBe("sess-new");
   });
   it("rethrows errors from startInvestigation", async () => {
     mockStart.mockRejectedValueOnce(new Error("Upload failed"));

@@ -16,32 +16,8 @@ import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay
 jest.mock("framer-motion", () => ({
   motion: new Proxy({}, {
     get: (_t, tag: string) =>
-      ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {
-        const {
-          animate,
-          exit,
-          initial,
-          layout,
-          layoutId,
-          transition,
-          variants,
-          whileHover,
-          whileInView,
-          whileTap,
-          ...domProps
-        } = props;
-        void animate;
-        void exit;
-        void initial;
-        void layout;
-        void layoutId;
-        void transition;
-        void variants;
-        void whileHover;
-        void whileInView;
-        void whileTap;
-        return React.createElement(tag, domProps, children);
-      },
+      ({ children, layout: _l, layoutId: _li, animate: _a, exit: _e, initial: _i, transition: _tr, variants: _v, whileHover: _wh, whileInView: _wv, whileTap: _wt, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
+        React.createElement(tag, p, children),
   }),
   useReducedMotion: () => false,
   AnimatePresence: ({ children }: React.PropsWithChildren<object>) => <>{children}</>,
@@ -68,7 +44,7 @@ beforeEach(() => jest.clearAllMocks());
 
 describe("Keyboard Navigation", () => {
   it("Tab moves through all buttons in decision panel", async () => {
-    const user = userEvent.setup();
+    const _user = userEvent.setup();
     render(<AgentProgressDisplay {...baseProgress} awaitingDecision={true} allAgentsDone={true} />);
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThan(0);

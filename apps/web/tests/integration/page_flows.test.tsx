@@ -404,9 +404,9 @@ describe("Session-scoped metadata", () => {
     writable: true,
   });
 
-  function makeCtx(sid: string, fileName: string) {
-    return JSON.stringify({ session_id: sid, file_name: fileName, mime_type: "image/png" });
-  }
+  // function makeCtx(sid: string, fileName: string) {
+  //   return JSON.stringify({ session_id: sid, file_name: fileName, mime_type: "image/png" });
+  // }
 
   beforeEach(() => Object.keys(lsStore).forEach(k => delete lsStore[k]));
 

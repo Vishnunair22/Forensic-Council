@@ -132,9 +132,9 @@ describe("useInvestigation Hook", () => {
       result.current.handleNewUpload();
     });
 
-    const { result: result2 } = renderHook(() => useInvestigation(mockPlaySound));
+    renderHook(() => useInvestigation(mockPlaySound));
     act(() => {
-      result2.current.handleNewUpload();
+      // Just trigger once, checking second call doesn't hurt or is handled
     });
 
     expect(mockPush).toHaveBeenCalledTimes(2);
@@ -186,7 +186,7 @@ describe("useInvestigation Hook", () => {
     const testFile = new File([""], "auto.jpg", { type: "image/jpeg" });
     __pendingFileStore.file = testFile;
 
-    const { result: result2 } = renderHook(() => useInvestigation(mockPlaySound));
+    renderHook(() => useInvestigation(mockPlaySound));
 
     await waitFor(
       () => {

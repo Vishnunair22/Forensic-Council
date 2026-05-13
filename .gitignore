@@ -20,6 +20,7 @@
 *_scan.txt
 tracked_files.txt
 test_gemini_body.json
+infra/secrets/
 
 
 # ── Python ──────────────────────────────────────────────────────────────────

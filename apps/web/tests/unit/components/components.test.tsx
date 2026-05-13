@@ -9,7 +9,6 @@
 
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { AgentProgressDisplay } from "@/components/evidence/AgentProgressDisplay";
 
 // Mock URL.createObjectURL
@@ -20,7 +19,8 @@ if (typeof window !== "undefined") {
 
 jest.mock("next/image", () => ({
   __esModule: true,
-  default: ({ fill, unoptimized, priority, ...props }: any) => <img {...props} />,
+  // eslint-disable-next-line @next/next/no-img-element, @typescript-eslint/no-explicit-any
+  default: ({ fill: _f, unoptimized: _u, priority: _p, ...props }: any) => <img alt="" {...props} />,
 }));
 
 // ── Silence framer-motion animations ─────────────────────────────────────────
@@ -28,7 +28,7 @@ jest.mock("next/image", () => ({
 jest.mock("framer-motion", () => ({
   motion: new Proxy({}, {
     get: (_t, tag: string) =>
-      ({ children, layout, layoutId, animate, exit, initial, transition, variants, whileHover, whileInView, whileTap, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
+      ({ children, layout: _l, layoutId: _li, animate: _a, exit: _e, initial: _i, transition: _tr, variants: _v, whileHover: _wh, whileInView: _wv, whileTap: _wt, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
         React.createElement(tag, p, children),
   }),
   useReducedMotion: () => false,

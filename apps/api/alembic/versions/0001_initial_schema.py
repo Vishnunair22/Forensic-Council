@@ -17,93 +17,128 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Users table
+    # 0. Enable UUID extensions
+    op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto"')
+    op.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"')
+
+    # 1. users table
     op.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            username VARCHAR(255) UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role VARCHAR(50) NOT NULL DEFAULT 'investigator',
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            last_login TIMESTAMPTZ,
-            is_active BOOLEAN DEFAULT TRUE
+            user_id VARCHAR(64) PRIMARY KEY,
+            username VARCHAR(255) NOT NULL UNIQUE,
+            email VARCHAR(255) UNIQUE,
+            hashed_password VARCHAR(255) NOT NULL,
+            role VARCHAR(64) NOT NULL DEFAULT 'investigator',
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            is_disabled BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_login_at TIMESTAMPTZ,
+            metadata JSONB NOT NULL DEFAULT '{}'
         )
     """)
 
-    # Sessions table
+    # 2. session_reports table
     op.execute("""
-        CREATE TABLE IF NOT EXISTS investigation_sessions (
+        CREATE TABLE IF NOT EXISTS session_reports (
             session_id UUID PRIMARY KEY,
             case_id VARCHAR(255) NOT NULL,
             investigator_id VARCHAR(255) NOT NULL,
-            status VARCHAR(50) NOT NULL DEFAULT 'queued',
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            status VARCHAR(64) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             completed_at TIMESTAMPTZ,
-            pipeline_state JSONB,
-            report JSONB
+            report_data JSONB,
+            error_message TEXT,
+            metadata JSONB NOT NULL DEFAULT '{}'
         )
     """)
 
-    # Custody log table
+    # 3. investigation_state table
     op.execute("""
-        CREATE TABLE IF NOT EXISTS custody_log (
-            log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            session_id UUID NOT NULL,
-            agent_id VARCHAR(100) NOT NULL,
-            entry_type VARCHAR(50) NOT NULL,
-            content JSONB NOT NULL,
-            timestamp_utc TIMESTAMPTZ DEFAULT NOW(),
-            signature TEXT,
-            FOREIGN KEY (session_id) REFERENCES investigation_sessions(session_id) ON DELETE CASCADE
+        CREATE TABLE IF NOT EXISTS investigation_state (
+            session_id UUID PRIMARY KEY,
+            case_id VARCHAR(255) NOT NULL,
+            investigator_id VARCHAR(255) NOT NULL,
+            pipeline_state JSONB NOT NULL,
+            agent_results JSONB NOT NULL DEFAULT '{}',
+            checkpoints JSONB NOT NULL DEFAULT '[]',
+            status VARCHAR(64) NOT NULL DEFAULT 'running',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours')
         )
     """)
 
-    # Evidence store table
+    # 4. user_sessions table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            session_token VARCHAR(255) PRIMARY KEY,
+            user_id VARCHAR(64) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL,
+            ip_address INET,
+            user_agent TEXT
+        )
+    """)
+
+    # 5. audit_log table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(64) REFERENCES users(user_id),
+            action VARCHAR(255) NOT NULL,
+            resource_type VARCHAR(128) NOT NULL,
+            resource_id VARCHAR(255),
+            details JSONB NOT NULL DEFAULT '{}',
+            ip_address INET,
+            user_agent TEXT,
+            timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+
+    # 6. chain_of_custody table
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS chain_of_custody (
+            entry_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            entry_type      VARCHAR(64) NOT NULL,
+            agent_id        VARCHAR(64) NOT NULL,
+            session_id      UUID NOT NULL,
+            timestamp_utc   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            content         JSONB NOT NULL,
+            content_hash    VARCHAR(64) NOT NULL,
+            signature       TEXT NOT NULL,
+            prior_entry_ref VARCHAR(64)
+        )
+    """)
+
+    # 7. evidence_artifacts table
     op.execute("""
         CREATE TABLE IF NOT EXISTS evidence_artifacts (
-            artifact_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            session_id UUID NOT NULL,
-            original_filename VARCHAR(500),
-            mime_type VARCHAR(200),
-            file_size_bytes BIGINT,
-            sha256_hash VARCHAR(64),
-            storage_path TEXT,
-            uploaded_at TIMESTAMPTZ DEFAULT NOW(),
-            FOREIGN KEY (session_id) REFERENCES investigation_sessions(session_id) ON DELETE CASCADE
+            artifact_id   UUID PRIMARY KEY,
+            parent_id     UUID REFERENCES evidence_artifacts(artifact_id),
+            root_id       UUID NOT NULL,
+            artifact_type VARCHAR(64) NOT NULL,
+            file_path     TEXT NOT NULL,
+            content_hash  VARCHAR(64) NOT NULL,
+            action        TEXT NOT NULL,
+            agent_id      VARCHAR(64) NOT NULL,
+            session_id    UUID NOT NULL,
+            timestamp_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            metadata      JSONB NOT NULL DEFAULT '{}'
         )
     """)
 
-    # Findings table
-    op.execute("""
-        CREATE TABLE IF NOT EXISTS agent_findings (
-            finding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            session_id UUID NOT NULL,
-            agent_id VARCHAR(100) NOT NULL,
-            finding_type VARCHAR(500) NOT NULL,
-            evidence_verdict VARCHAR(50) NOT NULL DEFAULT 'INCONCLUSIVE',
-            confidence_raw FLOAT,
-            calibration_status VARCHAR(50) DEFAULT 'UNCALIBRATED',
-            status VARCHAR(50) NOT NULL DEFAULT 'CONFIRMED',
-            reasoning_summary TEXT,
-            metadata JSONB,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            FOREIGN KEY (session_id) REFERENCES investigation_sessions(session_id) ON DELETE CASCADE
-        )
-    """)
-
-    # Indexes for performance
-    op.execute("CREATE INDEX IF NOT EXISTS idx_custody_log_session ON custody_log(session_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_custody_log_timestamp ON custody_log(timestamp_utc)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_findings_session ON agent_findings(session_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_findings_agent ON agent_findings(agent_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_sessions_investigator ON investigation_sessions(investigator_id)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_sessions_status ON investigation_sessions(status)")
+    # Indexes
+    op.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_session_reports_case ON session_reports(case_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_coc_session ON chain_of_custody(session_id)")
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS agent_findings CASCADE")
     op.execute("DROP TABLE IF EXISTS evidence_artifacts CASCADE")
-    op.execute("DROP TABLE IF EXISTS custody_log CASCADE")
-    op.execute("DROP TABLE IF EXISTS investigation_sessions CASCADE")
+    op.execute("DROP TABLE IF EXISTS chain_of_custody CASCADE")
+    op.execute("DROP TABLE IF EXISTS audit_log CASCADE")
+    op.execute("DROP TABLE IF EXISTS user_sessions CASCADE")
+    op.execute("DROP TABLE IF EXISTS investigation_state CASCADE")
+    op.execute("DROP TABLE IF EXISTS session_reports CASCADE")
     op.execute("DROP TABLE IF EXISTS users CASCADE")

@@ -5,8 +5,9 @@ import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay
 
 jest.mock("framer-motion", () => ({
   motion: new Proxy({}, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: (_t: any, tag: string) =>
-      ({ children, layout, layoutId, animate, exit, initial, transition, variants, whileHover, whileInView, whileTap, ...p }: React.PropsWithChildren<Record<string, unknown>>) =>
+      ({ children, layout: _l, layoutId: _li, animate: _a, exit: _e, initial: _i, transition: _tr, variants: _v, whileHover: _wh, whileInView: _wv, whileTap: _wt, ...p }: any) =>
         React.createElement(tag, p, children),
   }),
   useReducedMotion: () => false,

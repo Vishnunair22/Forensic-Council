@@ -443,7 +443,6 @@
   :where([data-focus-contained="true"]):focus-visible {
     outline-offset: -2px;
   }
-}
 
 /* ─────────────────────────────────────────────────────────────── */
 /*  ANIMATIONS                                                     */

@@ -37,6 +37,7 @@ class MockWS {
       : protocols
       ? [protocols]
       : [];
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     wsInstance = this;
   }
 

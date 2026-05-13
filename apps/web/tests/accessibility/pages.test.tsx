@@ -24,6 +24,7 @@ jest.mock("@/components/evidence/UploadSuccessModal", () => ({
 }));
 
 jest.mock("lucide-react", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require("react");
   return new Proxy(
     {},
