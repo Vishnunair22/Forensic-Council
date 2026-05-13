@@ -32,6 +32,18 @@ const nextConfig: NextConfig = {
   output: process.env.NEXT_OUTPUT_STANDALONE === "0" ? undefined : "standalone",
 
   outputFileTracingRoot: __dirname,
+  outputFileTracingExcludes: {
+    "*": [
+      "../**/.git/**",
+      "../**/.next/**",
+      "../**/coverage/**",
+      "../**/test-results/**",
+      "../**/playwright-report/**",
+      "../**/.pytest_cache/**",
+      "../**/__pycache__/**",
+      "../**/*.zip",
+    ],
+  },
 
   // ── External packages (server-side) ─────────────────────────────────────
   // sharp must be declared external to use the native binary for image optimization.
