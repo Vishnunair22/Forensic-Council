@@ -22,7 +22,7 @@ const config: Config = {
   // Ignore the standalone Next.js bundle to avoid Jest haste map
   // collisions on the app's package name.
   modulePathIgnorePatterns: ['<rootDir>/.next/standalone'],
-  collectCoverage: true,
+  collectCoverage: process.env.JEST_COVERAGE === "1",
   coverageProvider: 'v8',
   coverageThreshold: {
     global: {
