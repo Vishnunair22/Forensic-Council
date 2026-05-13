@@ -54,9 +54,8 @@ Project documentation refinement. All items complete:
 | .gitignore/.dockerignore audit | ✅ (updated .dockerignore) |
 | Dead code scan | ✅ |
 | Phase 9 cleanup (post-merge fixes) | ✅ (commit `b18dde4`) |
-| Verify project script | 🔄 pending |
-| .gitignore / .dockerignore audit | 🔄 pending |
-| Dead code scan | 🔄 pending |
+| Deprecated docs removal (8 files) | ✅ (Phase 10 cleanup) |
+| .gitignore deduplication & tightening | ✅ (Phase 10 cleanup) |
 
 ### Phase 8 (committed, branch `phase-8-test-suite-refinement`, commit `bd5433d`)
 
@@ -208,15 +207,20 @@ Backend core logic fixes. Key changes:
 
 ## Next Best Action
 
-Phase 9 complete (both `525f4d0` and cleanup `b18dde4`). All phases 1–9 on `main`.
+Phase 10 repository cleanup complete. All phases 1–9 on `main`; cleanup applied on top.
 
-**Verification gates now passing:**
-- `python scripts/check_docs.py` → passed ✅
-- `python scripts/check_test_hygiene.py` → passed ✅
+**Phase 10 — Repo hygiene cleanup:**
+- Deleted 8 deprecated/superseded docs: `API.md`, `ROUTES_AND_APIS.md`, `RUNBOOK.md`, `TROUBLESHOOTING.md`, `MODELS.md`, `ML_AGENTS.md`, `FRONTEND_FLOW.md`, `BACKEND_FLOW.md`
+- Rewrote `.gitignore`: deduplicated 7 duplicate rules, added `/scratch/`, `.coverage`, `.hypothesis/`, `infra/caddy_*`, CI artifact patterns
+- Removed stale duplicate rows from Phase 9 inventory table
+- Updated `DOCUMENTATION_INVENTORY.md` to reflect deletions
+
+**Verification gates still expected to pass:**
+- `python scripts/check_docs.py` — update after deletions if it references removed docs
+- `python scripts/check_test_hygiene.py` → should pass ✅
 - `python -m compileall` → no errors ✅
-- `scripts/verify_phase1_build_run.sh static` → shell syntax fixed (`shopt -s nullglob`) ✅
-- `scripts/verify_phase8_tests.sh` → fail-on-failure, skip-only-when-missing ✅
-- `npm run test:a11y` → now runs both unit and e2e ✅
+- Frontend: `npm run type-check && npm run lint && npm test && npm run build`
+- Backend: `uv run ruff check .`
 
 **Deferred items (Phase 6 remaining):**
 - Add unit tests for `ProviderQuotaGuard`

@@ -2,9 +2,7 @@
 
 **Version:** v1.7.0
 
-This runbook covers triage, severity levels, common failures, recovery commands, and observability for the Forensic Council stack. It supersedes `docs/RUNBOOK.md`.
-
-> **Note:** `docs/RUNBOOK.md` is retained for reference but deprecated in favor of this document.
+This runbook covers triage, severity levels, common failures, recovery commands, and observability for the Forensic Council stack. It supersedes the removed `docs/RUNBOOK.md`.
 
 ---
 

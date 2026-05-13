@@ -35,34 +35,38 @@
 
 ---
 
-## Historical / Archived Docs
+## Deleted Docs (removed Phase 10 cleanup)
 
-| Doc | Status | Reason | Current Home |
-|-----|--------|--------|--------------|
-| `docs/DOCKER_BUILD_FIXES.md` | Does not exist | No historical Docker fix doc was ever created in this repo | N/A |
+The following docs were deprecated stubs explicitly superseded by newer documents.
+They have been **deleted** from the repository. Do not recreate them.
+
+| Deleted Doc | Superseded By |
+|-------------|--------------|
+| `docs/API.md` | `docs/API_CONTRACT.md` |
+| `docs/ROUTES_AND_APIS.md` | `docs/API_CONTRACT.md` |
+| `docs/RUNBOOK.md` | `docs/OPERATIONAL_RUNBOOK.md` |
+| `docs/TROUBLESHOOTING.md` | `docs/OPERATIONAL_RUNBOOK.md` |
+| `docs/MODELS.md` | `docs/MODEL_REGISTRY.md` |
+| `docs/ML_AGENTS.md` | `docs/AGENT_CAPABILITIES.md` + agent source |
+| `docs/FRONTEND_FLOW.md` | `docs/WORKFLOW_TRACE.md` |
+| `docs/BACKEND_FLOW.md` | `docs/WORKFLOW_TRACE.md` + `docs/ARCHITECTURE.md` |
 
 ---
 
-## Docs Intentionally Not Listed (excluded)
+## Docs Intentionally Not Listed (reference-only)
+
+These files exist in the repo but are not primary contributor references.
 
 | Doc | Reason Not Listed |
 |-----|-------------------|
-| `docs/API.md` | Superseded by `docs/API_CONTRACT.md` (phase 9). Kept in place but deprecated. |
-| `docs/ROUTES_AND_APIS.md` | Superseded by `docs/API_CONTRACT.md` (phase 9). Kept in place but deprecated. |
-| `docs/MODELS.md` | Superseded by `docs/MODEL_REGISTRY.md` (phase 9). Kept in place but deprecated. |
-| `docs/RUNBOOK.md` | Superseded by `docs/OPERATIONAL_RUNBOOK.md` (phase 9). Kept in place but deprecated. |
-| `docs/CHAIN_OF_CUSTODY.md` | Architectural reference only; not a source of truth for contributors |
-| `docs/AGENT_CAPABILITIES.md` | Reference only; superseded by agent code and workflow doc |
-| `docs/COMPONENTS.md` | Reference only; superseded by component code |
-| `docs/MONITORING.md` | Reference only; ops team owns this directly |
-| `docs/SCHEMAS.md` | Reference only; superseded by Pydantic source and API contract |
-| `docs/ML_AGENTS.md` | Reference only; superseded by agent code |
-| `docs/FRONTEND_FLOW.md` | Reference only; superseded by workflow doc |
-| `docs/BACKEND_FLOW.md` | Reference only; superseded by workflow and architecture docs |
+| `docs/CHAIN_OF_CUSTODY.md` | Architectural reference only; not a contributor source of truth |
+| `docs/AGENT_CAPABILITIES.md` | Reference only; canonical source is agent code |
+| `docs/COMPONENTS.md` | Reference only; canonical source is component code |
+| `docs/MONITORING.md` | Reference only; ops team owns directly |
+| `docs/SCHEMAS.md` | Reference only; canonical source is Pydantic models and API contract |
 | `docs/AI_CONTEXT.md` | Reference only; not a contributor handoff doc |
-| `docs/TROUBLESHOOTING.md` | Reference only; ops team owns directly |
 | `docs/CHANGELOG.md` | Version history; maintained by release process |
-| `docs/MODEL_LICENSING.md` | Superseded by `docs/MODELS.md` → `docs/MODEL_REGISTRY.md` |
+| `docs/MODEL_LICENSING.md` | Licensing reference; canonical source is `docs/MODEL_REGISTRY.md` |
 | `docs/ADR-*.md` | Decision records; architectural only |
 | `docs/audits/` | Audit records; reference only |
 

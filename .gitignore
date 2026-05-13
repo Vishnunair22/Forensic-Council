@@ -10,55 +10,62 @@
 *.pfx
 *.jks
 *.keystore
+*.private.key
+*.crt
+.secrets/
 /secrets/
 /keys/
-*.private.key
 *_report.json
 *_report.txt
 *_scan.txt
 tracked_files.txt
+test_gemini_body.json
 
 
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*.sqlite
-*.sqlite3
-*.db
 *$py.class
 *.egg-info/
 dist/
 build/
 .eggs/
 *.so
+*.sqlite
+*.sqlite3
+*.db
 .venv/
 venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .pyright/
+.hypothesis/
 htmlcov/
+.coverage
+.coverage.*
 .overlay/coverage.xml
+ruff_errors.json
+*.ruff_errors.json
+agents_ruff.txt
 
 
 # ── Node / Next.js ───────────────────────────────────────────────────────────
 node_modules/
 .next/
-apps/web/node_modules/
-apps/web/.next/
 apps/web/out/
 apps/web/.npm
 apps/web/.cache
 .cache/
 .turbo/
-apps/web/.turbo/
 .nyc_output/
 .eslintcache
 apps/web/coverage/
 apps/web/playwright-report/
-apps/web/apps/
 apps/web/test-results/
 apps/web/lint_output*.txt
+apps/web/tsc_errors.txt
+apps/web/.swc/
 *.tsbuildinfo
 .pnpm-store/
 .yarn/
@@ -76,13 +83,14 @@ bun.lockb
 !/apps/api/storage/keys/.gitkeep
 /apps/api/reports/*
 !/apps/api/reports/.gitkeep
-apps/web/.swc/
+infra/caddy_data/
+infra/caddy_config/
 
 
 # ── ML model caches (large binary files) ─────────────────────────────────────
 /apps/api/cache/
-/apps/api/storage/calibration_models/
-!/apps/api/storage/calibration_models/
+apps/api/.cache/
+/apps/api/storage/calibration_models/*
 !/apps/api/storage/calibration_models/.gitkeep
 apps/api/.venv/
 apps/api/.pytest_cache/
@@ -93,9 +101,10 @@ apps/api/.pyright/
 *.pt
 *.pth
 *.onnx
+*.bin
+*.safetensors
 apps/api/cache/**/*.bin
 apps/api/storage/**/*.bin
-*.safetensors
 
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
@@ -112,8 +121,11 @@ nul
 
 # ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
 pytest-cache-files-*
+.pytest_tmp/
 tmp_*
 apps/api/tmp*/
+apps/api/tests/tmp/
+apps/api/baseline_results.txt
 
 
 # ── Test fixtures ─────────────────────────────────────────────────────────────
@@ -122,18 +134,6 @@ apps/api/tmp*/
 **/tests/fixtures/*.mp4
 **/tests/fixtures/*.wav
 **/tests/fixtures/*.avi
-
-
-# ── Auditing / Test Artifacts ─────────────────────────────────────────────
-apps/web/tsc_errors.txt
-apps/api/baseline_results.txt
-
-
-# ── Designated Junk/Temp Dirs (Rules in AGENTS.md) ───────────────────────────
-/apps/api/scratch/*
-!/apps/api/scratch/.gitkeep
-/apps/web/public/temp/*
-!/apps/web/public/temp/.gitkeep
 
 
 # ── IDEs, Editors & Tooling ──────────────────────────────────────────────────
@@ -163,6 +163,7 @@ apps/api/baseline_results.txt
 CLAUDE.md
 MASTER_FIX_*.md
 .ipynb_checkpoints/
+.code-review-graph/
 
 
 # ── Agent & Plugin Local State ───────────────────────────────────────────────
@@ -178,44 +179,18 @@ agent_interaction_*.json
 plugin_test_*.tmp
 
 
-# Added by code-review-graph
-.code-review-graph/
-
-
 # ── Test Scripts (never commit) ────────────────────────────────────────────────
 test_*.ps1
 /test_*.ps1
-test_gemini_body.json
 
-# ─── Production & security ────────────────────────────────────────────────────
-*.pem
-*.key
-*.crt
-*.pfx
-.secrets/
-infra/caddy_data/
-infra/caddy_config/
 
-# ─── ML model caches (can be very large) ─────────────────────────────────────
-apps/api/.cache/
-*.bin
-*.safetensors
-*.pt
-*.onnx
+# ── Scratch / temp directories ────────────────────────────────────────────────
+/scratch/
+/apps/api/scratch/*
+!/apps/api/scratch/.gitkeep
+/apps/web/public/temp/*
+!/apps/web/public/temp/.gitkeep
 
-# ─── Test artifacts ───────────────────────────────────────────────────────────
-.pytest_tmp/
-apps/api/tests/tmp/
-htmlcov/
-.coverage.*
 
-# Scratch directory — test artifacts and one-off scripts only
-scratch/*.txt
-scratch/*.png
-scratch/*.jpg
-scratch/*.py
-
-# CI artifacts — generated files, never committed
-ruff_errors.json
-*.ruff_errors.json
-agents_ruff.txt
+# ── CI artifacts — generated files, never committed ──────────────────────────
+check_critical_coverage_*.txt

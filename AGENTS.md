@@ -417,15 +417,15 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --en
 ## Important Documentation Files
 
 - README.md
-- docs/API.md
 - docs/ARCHITECTURE.md
-- docs/COMPONENTS.md
-- docs/MODELS.md
-- docs/MODEL_LICENSING.md
+- docs/WORKFLOW_TRACE.md
+- docs/API_CONTRACT.md
+- docs/OPERATIONAL_RUNBOOK.md
+- docs/MODEL_REGISTRY.md
 - docs/SECURITY.md
 - docs/TESTING.md
-- docs/TROUBLESHOOTING.md
-- docs/RUNBOOK.md
+- docs/PRODUCTION_CHECKLIST.md
+- docs/MODEL_LICENSING.md
 - PROJECT_HANDOFF.md
 
 ---

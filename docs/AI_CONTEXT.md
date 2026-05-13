@@ -191,8 +191,7 @@ Do not:
 
 - AGENTS.md
 - PROJECT_HANDOFF.md
-- docs/FRONTEND_FLOW.md
-- docs/BACKEND_FLOW.md
-- docs/ROUTES_AND_APIS.md
-- docs/ML_AGENTS.md
+- docs/WORKFLOW_TRACE.md
+- docs/ARCHITECTURE.md
+- docs/API_CONTRACT.md
 - docs/PRODUCTION_CHECKLIST.md

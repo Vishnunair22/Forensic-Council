@@ -2,9 +2,7 @@
 
 **Version:** v1.7.0 | **Source-of-truth:** `apps/api/config/models.lock.json`
 
-This document covers model pinning, provider setup, licensing, and verification for the Forensic Council system. It supersedes `docs/MODELS.md`.
-
-> **Note:** `docs/MODELS.md` is retained for reference but deprecated in favor of this document.
+This document covers model pinning, provider setup, licensing, and verification for the Forensic Council system. It supersedes the removed `docs/MODELS.md`.
 
 ---
 
