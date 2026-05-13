@@ -40,6 +40,12 @@ AI Sync Instructions: Before making or suggesting any changes:
 ---
 
 ## Current Status
+- **Phase 13: Navigation & Refresh Behavior** (Complete)
+    - [x] Add beforeunload warning on /evidence during active investigation (EvidenceUploadClient.tsx)
+    - [x] Fix "Return Home" button on /evidence empty state to call resetActiveInvestigation
+    - [x] Hide navbar Reset button on / when no active session (GlobalNavbar.tsx)
+    - [x] Update not-found.tsx "New Investigation" link to /?upload=1
+
 - **Phase 12: Production Hardening** (Complete)
     - [x] Fix .dockerignore lock-file inconsistencies
     - [x] Fix HistoryPanel syntax error and fragments

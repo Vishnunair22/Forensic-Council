@@ -144,27 +144,29 @@ export function GlobalNavbar() {
           <BrandLogo size="sm" isHovered={isHovered} />
         </button>
 
-        <button
-          type="button"
-          onClick={handleResetClick}
-          className="ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em] rounded-full border transition-all duration-200"
-          style={{
-            color: "rgba(255,255,255,0.55)",
-            background: "rgba(239,68,68,0.12)",
-            borderColor: "rgba(239,68,68,0.25)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "rgba(255,255,255,0.9)";
-            e.currentTarget.style.background = "rgba(239,68,68,0.22)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "rgba(255,255,255,0.55)";
-            e.currentTarget.style.background = "rgba(239,68,68,0.12)";
-          }}
-          aria-label="Reset active investigation"
-        >
-          Reset
-        </button>
+        {(hasActiveSession || pathname !== "/") && (
+          <button
+            type="button"
+            onClick={handleResetClick}
+            className="ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em] rounded-full border transition-all duration-200"
+            style={{
+              color: "rgba(255,255,255,0.55)",
+              background: "rgba(239,68,68,0.12)",
+              borderColor: "rgba(239,68,68,0.25)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "rgba(255,255,255,0.9)";
+              e.currentTarget.style.background = "rgba(239,68,68,0.22)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "rgba(255,255,255,0.55)";
+              e.currentTarget.style.background = "rgba(239,68,68,0.12)";
+            }}
+            aria-label="Reset active investigation"
+          >
+            Reset
+          </button>
+        )}
       </div>
     </nav>
   );

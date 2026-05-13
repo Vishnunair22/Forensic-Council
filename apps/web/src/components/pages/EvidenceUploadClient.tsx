@@ -3,6 +3,7 @@
 import { useEffect, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Shield } from "lucide-react";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
@@ -13,6 +14,7 @@ import { useSound } from "@/hooks/useSound";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { AgentProgressSkeleton } from "@/components/evidence/AgentProgressSkeleton";
+import { resetActiveInvestigation } from "@/lib/appReset";
 
 const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
@@ -28,6 +30,7 @@ const HITLCheckpointModal = dynamic(
 
 export function EvidenceUploadClient() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { playSound } = useSound();
   const prefersReducedMotion = useReducedMotion();
   const investigation = useInvestigation(playSound);
@@ -47,6 +50,29 @@ export function EvidenceUploadClient() {
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
   }, [router]);
+
+  useEffect(() => {
+    const hasPendingFile = !!__pendingFileStore.file;
+    const hasSessionId = !!storage.getItem("forensic_session_id");
+    const isRunning = investigation.status === "running";
+
+    const shouldWarn = hasPendingFile && !hasSessionId && isRunning;
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (shouldWarn) {
+        e.preventDefault();
+        return "";
+      }
+    };
+
+    if (shouldWarn) {
+      window.addEventListener("beforeunload", onBeforeUnload);
+    }
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [investigation.status]);
 
   const showAgentProgress = investigation.hasStartedAnalysis;
 

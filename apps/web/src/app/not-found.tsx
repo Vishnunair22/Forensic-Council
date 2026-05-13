@@ -45,10 +45,10 @@ export default function NotFound() {
       <Home className="w-4 h-4" aria-hidden="true" />
       Dashboard
      </Link>
-     <Link
-      href="/evidence"
-      className="flex-1 py-3 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
-     >
+<Link
+        href="/?upload=1"
+        className="flex-1 py-3 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
+      >
       <ArrowLeft className="w-4 h-4" aria-hidden="true" />
       New Investigation
      </Link>
