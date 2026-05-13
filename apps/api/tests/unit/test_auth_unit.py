@@ -61,8 +61,6 @@ from core.auth import (
 )
 from core.config import get_settings
 
-get_settings.cache_clear()  # Force reload with environment variables
-
 
 class TestRS256Auth:
     @pytest.mark.asyncio

@@ -5,6 +5,7 @@ import { useSimulation } from "@/hooks/useSimulation";
 import { useRouter } from "next/navigation";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
+import type { HITLCheckpoint } from "@/lib/api/types";
 
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
@@ -36,7 +37,10 @@ const mockStartSimulation = jest.fn();
 const mockRestoreSimulationState = jest.fn();
 const mockResumeInvestigation = jest.fn().mockResolvedValue(undefined);
 
-function setupSimulationMock(initialStatus = "idle", hitl = null) {
+function setupSimulationMock(
+  initialStatus = "idle",
+  hitl: HITLCheckpoint | null = null,
+) {
   (useSimulation as jest.Mock).mockReturnValue({
     status: initialStatus,
     agentUpdates: {},

@@ -1,9 +1,9 @@
 import asyncio
+import os
 import sys
 from pathlib import Path
 from uuid import uuid4
 
-import os
 import pytest
 
 pytestmark = [
