@@ -161,10 +161,10 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       aria-labelledby="upload-modal-title"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.18, ease: "easeIn" } }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background: "rgba(1,2,8,0.88)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
+      style={{ background: "rgba(1,2,8,0.96)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
       <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()} ref={dialogRef}>

@@ -163,9 +163,8 @@ export function AgentProgressDisplay({
         if (completed?.status === "skipped" && liveStatus !== "skipped") return false;
         const agentVerdict = (completed as unknown as { agent_verdict?: unknown })?.agent_verdict;
         if (agentVerdict === "NOT_APPLICABLE") return false;
-        if (phase === "deep") return initialAgentIds.includes(a.id);
+if (phase === "deep") return initialAgentIds.includes(a.id);
         if (!mimeType) return true;
-        if (liveStatus === "skipped") return true;
         return isAgentSupportedForMime(a.id, mimeType);
       });
   }, [phase, initialAgentIds, mimeType, completedAgents, agentUpdates]);
@@ -192,7 +191,6 @@ export function AgentProgressDisplay({
     if (liveStatus === "complete") return "complete";
     if (liveStatus === "validating") return "validating";
     if (liveStatus === "running") return "running";
-    if (liveStatus === "skipped") return "unsupported";
 
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
     if (!isSupported) {

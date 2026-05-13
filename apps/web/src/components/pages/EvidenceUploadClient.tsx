@@ -54,7 +54,7 @@ export function EvidenceUploadClient() {
   useEffect(() => {
     const hasPendingFile = !!__pendingFileStore.file;
     const hasSessionId = !!storage.getItem("forensic_session_id");
-    const isRunning = investigation.status === "running";
+    const isRunning = investigation.status === "analyzing" || investigation.status === "initiating" || investigation.status === "processing";
 
     const shouldWarn = hasPendingFile && !hasSessionId && isRunning;
 
@@ -164,7 +164,10 @@ export function EvidenceUploadClient() {
                 Return to the home page to upload evidence and begin a new investigation.
               </p>
               <button
-                onClick={() => router.push("/")}
+                onClick={() => {
+                  resetActiveInvestigation(queryClient);
+                  router.push("/");
+                }}
                 className="btn-horizon-primary mt-4"
               >
                 Return Home

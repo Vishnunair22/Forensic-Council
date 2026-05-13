@@ -121,7 +121,7 @@ export function HeroAuthActions() {
     sessionOnlyStorage.setItem("fc_show_loading", "true");
 
     // Brief pause so the loading overlay is visible before navigation
-    await new Promise<void>((resolve) => setTimeout(resolve, 560));
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
     router.push("/evidence", { scroll: true });
   }, [selectedFile, router]);
 
@@ -174,7 +174,7 @@ export function HeroAuthActions() {
         </span>
       </motion.button>
 
-      <AnimatePresence>
+      <AnimatePresence mode="wait" initial={false}>
         {showUpload && !selectedFile && !isHandingOff && (
           <UploadModal
             key="upload-modal"
