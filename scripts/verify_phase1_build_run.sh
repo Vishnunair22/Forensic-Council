@@ -110,7 +110,7 @@ PY
     echo "==> [api] Backend verification (requires uv)..."
     require_tool_or_skip uv
     cd "$ROOT/apps/api"
-    uv sync --extra dev --extra security --extra observability
+    uv sync --locked --extra dev --extra security --extra observability
     uv run ruff check .
     uv run pyright
     uv run pytest tests/ -q --tb=short --basetemp .pytest_tmp_run

@@ -350,6 +350,7 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
     ws.addEventListener("error", handleError);
     ws.addEventListener("close", handleClose);
   });
+  connected.catch(() => {});
 
   return { ws, connected };
 }

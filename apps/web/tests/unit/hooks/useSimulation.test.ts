@@ -15,6 +15,7 @@ describe("useSimulation Hook", () => {
   let mockWs: any;
   let mockConnected: Promise<void>;
   let resolveConnected: () => void;
+  let rejectConnected: (reason?: unknown) => void;
 
   beforeEach(() => {
     jest.clearAllMocks();

@@ -73,6 +73,16 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+afterEach(() => {
+  if (wsInstance) {
+    (wsInstance as any).listeners = {};
+    wsInstance.onopen = null;
+    wsInstance.onmessage = null;
+    wsInstance.onerror = null;
+    wsInstance.onclose = null;
+  }
+});
+
 describe("WebSocket lifecycle", () => {
   it("resolves when the backend confirms connection", async () => {
     const { connected } = createLiveSocket("sess-conn");
@@ -125,7 +135,7 @@ describe("report polling contract", () => {
       per_agent_analysis: {},
       overall_confidence: 0.9,
       overall_error_rate: 0,
-      overall_verdict: "LIKELY",
+      overall_verdict: "LIKELY_AUTHENTIC",
       cross_modal_confirmed: [],
       contested_findings: [],
       tribunal_resolved: [],

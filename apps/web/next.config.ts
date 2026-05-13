@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   // Set NEXT_OUTPUT_STANDALONE=0 in .env to disable (default: enabled).
   output: process.env.NEXT_OUTPUT_STANDALONE === "0" ? undefined : "standalone",
 
-  outputFileTracingRoot: path.join(__dirname, "../../"),
+  outputFileTracingRoot: __dirname,
 
   // ── External packages (server-side) ─────────────────────────────────────
   // sharp must be declared external to use the native binary for image optimization.

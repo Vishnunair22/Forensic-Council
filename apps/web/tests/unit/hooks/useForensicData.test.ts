@@ -246,7 +246,7 @@ describe("useForensicData — startAnalysis", () => {
   it("calls startInvestigation with correct args and returns session ID", async () => {
     mockStart.mockResolvedValueOnce({ session_id: "sess-new", case_id: "C", status: "started", message: "OK" });
     const { result } = renderHook(() => useForensicData());
-    let sid: string;
+    let sid: string | undefined;
     await act(async () => {
       sid = await result.current.startAnalysis(new File(["x"], "t.jpg"), "CASE-1234567890", "REQ-12345");
     });

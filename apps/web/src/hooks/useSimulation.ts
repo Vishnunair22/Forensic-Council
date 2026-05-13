@@ -536,6 +536,8 @@ export const useSimulation = ({
 
         // Create socket and get the connection promise
         const { ws, connected } = createLiveSocket(targetSessionId);
+        // Suppress unhandled rejection warning if the socket closes before we attach the real handler.
+        connected.catch(() => {});
         wsRef.current = ws;
 
         // Wire up message handler.

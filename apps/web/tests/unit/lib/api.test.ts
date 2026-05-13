@@ -76,49 +76,92 @@ function respondJson(body: unknown, status = 200) {
   } as unknown as Response);
 }
 
-let socketInstance: {
-  send: jest.Mock;
-  close: jest.Mock;
-  onopen: ((e: Event) => void) | null;
-  onmessage: ((e: MessageEvent) => void) | null;
-  onerror: ((e: Event) => void) | null;
-  onclose: ((e: CloseEvent) => void) | null;
-  _simulate?: (type: string, data: unknown) => void;
-};
+class MockWebSocket {
+  static instances: MockWebSocket[] = [];
 
-global.WebSocket = jest.fn().mockImplementation(() => {
-  const listeners: Record<string, Array<(e: any) => void>> = {};
-  socketInstance = {
-    send: jest.fn(),
-    close: jest.fn(),
-    onopen: null,
-    onmessage: null,
-    onerror: null,
-    onclose: null,
-    addEventListener: jest.fn((type, listener) => {
-      if (!listeners[type]) listeners[type] = [];
-      listeners[type].push(listener);
-    }),
-    removeEventListener: jest.fn((type, listener) => {
-      if (!listeners[type]) return;
-      listeners[type] = listeners[type].filter(l => l !== listener);
-    }),
-    // Helper to simulate events in tests
-    _simulate: (type: string, event: any) => {
-      if (type === "message") socketInstance.onmessage?.(event);
-      if (type === "open") socketInstance.onopen?.(event);
-      if (type === "error") socketInstance.onerror?.(event);
-      if (type === "close") socketInstance.onclose?.(event);
-      listeners[type]?.forEach(l => l(event));
+  url: string;
+  protocols?: string | string[];
+  readyState: number = WebSocket.CONNECTING;
+
+  send = jest.fn();
+  close = jest.fn(() => {
+    this.readyState = WebSocket.CLOSED;
+    this.onclose?.(new CloseEvent("close", { code: 1000 }));
+    for (const listener of this.listeners["close"] || []) {
+      listener(new CloseEvent("close", { code: 1000 }));
     }
-  } as any;
-  return socketInstance;
-}) as unknown as typeof WebSocket;
+  });
+
+  onopen: ((event: Event) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+
+  private listeners: Record<string, Array<(event: any) => void>> = {};
+
+  constructor(url: string, protocols?: string | string[]) {
+    this.url = url;
+    this.protocols = protocols;
+    MockWebSocket.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: any) => void) {
+    this.listeners[type] ||= [];
+    this.listeners[type].push(listener);
+  }
+
+  removeEventListener(type: string, listener: (event: any) => void) {
+    this.listeners[type] = (this.listeners[type] || []).filter((l) => l !== listener);
+  }
+
+  _simulate(type: string, event: any) {
+    if (type === "open") {
+      this.readyState = WebSocket.OPEN;
+      this.onopen?.(event);
+    }
+
+    if (type === "message") {
+      this.onmessage?.(event as MessageEvent);
+    }
+
+    if (type === "error") {
+      this.onerror?.(event);
+    }
+
+    if (type === "close") {
+      this.readyState = WebSocket.CLOSED;
+      this.onclose?.(event as CloseEvent);
+    }
+
+    for (const listener of this.listeners[type] || []) {
+      listener(event);
+    }
+  }
+}
+
+global.WebSocket = MockWebSocket as any;
+let socketInstance: MockWebSocket;
 
 beforeEach(() => {
   jest.clearAllMocks();
   Object.keys(store).forEach((k) => delete store[k]);
   document.cookie = "";
+  // In the createLiveSocket tests, we need to capture the instance
+  jest.spyOn(global, 'WebSocket').mockImplementation((url, protocols) => {
+    socketInstance = new MockWebSocket(url as string, protocols as string | string[]);
+    return socketInstance as any;
+  });
+});
+
+afterEach(() => {
+  for (const socket of MockWebSocket.instances) {
+    socket.onopen = null;
+    socket.onclose = null;
+    socket.onerror = null;
+    socket.onmessage = null;
+    (socket as any).listeners = {};
+  }
+  MockWebSocket.instances = [];
 });
 
 describe("token helpers", () => {
@@ -277,7 +320,7 @@ describe("investigation API", () => {
       per_agent_analysis: {},
       overall_confidence: 0.9,
       overall_error_rate: 0,
-      overall_verdict: "LIKELY",
+      overall_verdict: "LIKELY_AUTHENTIC",
       cross_modal_confirmed: [],
       contested_findings: [],
       tribunal_resolved: [],
@@ -337,7 +380,8 @@ describe("investigation API", () => {
 
 describe("live socket", () => {
   it("creates a session-scoped websocket URL", () => {
-    createLiveSocket("sess-live");
+    const { connected } = createLiveSocket("sess-live");
+    connected.catch(() => {});
     expect(global.WebSocket).toHaveBeenCalledWith(
       expect.stringContaining("sess-live/live"),
       ["forensic-v1"],
@@ -345,14 +389,15 @@ describe("live socket", () => {
   });
 
   it("does not send an AUTH message on open", () => {
-    const { ws } = createLiveSocket("sess-live");
+    const { ws, connected } = createLiveSocket("sess-live");
+    connected.catch(() => {});
     socketInstance.onopen?.(new Event("open"));
     expect(ws.send).not.toHaveBeenCalled();
   });
 
   it("resolves connected on CONNECTED", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance._simulate("message",
+    socketInstance!._simulate("message",
       new MessageEvent("message", {
         data: JSON.stringify({ type: "CONNECTED" }),
       }),
@@ -362,7 +407,7 @@ describe("live socket", () => {
 
   it("resolves connected on first AGENT_UPDATE", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance._simulate("message",
+    socketInstance!._simulate("message",
       new MessageEvent("message", {
         data: JSON.stringify({ type: "AGENT_UPDATE" }),
       }),
@@ -372,7 +417,7 @@ describe("live socket", () => {
 
   it("rejects on websocket error", async () => {
     const { connected } = createLiveSocket("sess-live");
-    socketInstance._simulate("error", new Event("error"));
+    socketInstance!._simulate("error", new Event("error"));
     await expect(connected).rejects.toThrow("WebSocket connection error");
   });
 });
