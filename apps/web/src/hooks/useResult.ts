@@ -42,69 +42,80 @@ function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): Agent
   return [];
 }
 
-/**
- * Hook for managing the result page state and polling logic.
- * Optimized for performance and flicker-free transitions.
- */
 export function useResult(initialSessionId?: string) {
   const router = useRouter();
 
-  const getInitialSid = () => initialSessionId ?? (typeof window !== "undefined" ? storage.getItem("forensic_session_id") : null);
-
-  const initialSid = getInitialSid();
-  const initialCtx = readSessionContext(initialSid);
-
+  // All storage-dependent state initialized to SSR-safe defaults.
+  // Hydration from storage happens once after mount (see effect below) to
+  // avoid server/client mismatch on first paint.
   const [mounted, setMounted] = useState(false);
-  const [reportAlreadyReady] = useState(() =>
-    typeof window !== "undefined" && sessionOnlyStorage.getItem("fc_report_ready") === "1"
-  );
-  const [state, setState] = useState<PageState>(() => reportAlreadyReady ? "loading" : "arbiter");
+  const [reportAlreadyReady, setReportAlreadyReady] = useState(false);
+  const [state, setState] = useState<PageState>("arbiter");
   const [report, setReport] = useState<ReportDTO | null>(null);
-  const [arbiterMsg, setArbiterMsg] = useState(() =>
-    reportAlreadyReady ? "Decrypting forensic ledger..." : "Council deliberating on evidence..."
-  );
+  const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
+  const [isDeepPhase, setIsDeepPhase] = useState(false);
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(null);
+  const [pipelineStartAt, setPipelineStartAt] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [agentTimeline, setAgentTimeline] = useState<AgentUpdate[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId ?? null);
+  const [minOverlayDone, setMinOverlayDone] = useState(false);
+  const [arbiterComplete, setArbiterComplete] = useState(false);
 
-  // Investigation Meta — initialized from session-scoped keys (falls back to global for backward compat)
-  const initialIsDeep = storage.getItem("forensic_is_deep") === "true";
-  const [isDeepPhase, setIsDeepPhase] = useState(initialIsDeep);
-  const [thumbnail, setThumbnail] = useState<string | null>(() => {
-    if (initialSid) return storage.getItem(`forensic_thumbnail:${initialSid}`) ?? storage.getItem("forensic_thumbnail");
-    return storage.getItem("forensic_thumbnail");
-  });
-  const [mimeType, setMimeType] = useState<string | null>(() =>
-    initialCtx?.mime_type ?? storage.getItem("forensic_mime_type")
-  );
-  const [pipelineStartAt, setPipelineStartAt] = useState<string | null>(() =>
-    initialCtx?.pipeline_start ?? storage.getItem("forensic_pipeline_start")
-  );
-  const [fileName, setFileName] = useState<string | null>(() =>
-    initialCtx?.file_name ?? storage.getItem("forensic_file_name")
-  );
-  const [agentTimeline, setAgentTimeline] = useState<AgentUpdate[]>(() =>
-    loadAgentTimelineForSession(initialSid, initialIsDeep)
-  );
+  const historySavedRef = useRef(false);
+  const { playSound } = useSound();
+  const soundRef = useRef(playSound);
 
-  const [sessionId, setSessionId] = useState<string | null>(() => initialSid);
+  // Mount + hydrate from storage (client only). Runs once.
+  useEffect(() => {
+    const ready = sessionOnlyStorage.getItem("fc_report_ready") === "1";
+    const sid = initialSessionId ?? storage.getItem("forensic_session_id");
+    const ctx = readSessionContext(sid);
+    const deep = storage.getItem("forensic_is_deep") === "true";
+
+    setReportAlreadyReady(ready);
+    if (sid) setSessionId(sid);
+    setIsDeepPhase(deep);
+    if (sid) {
+      setThumbnail(storage.getItem(`forensic_thumbnail:${sid}`) ?? storage.getItem("forensic_thumbnail"));
+    } else {
+      setThumbnail(storage.getItem("forensic_thumbnail"));
+    }
+    setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
+    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
+    setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
+    setAgentTimeline(loadAgentTimelineForSession(sid, deep));
+
+    if (ready) {
+      setState("loading");
+      setArbiterMsg("Decrypting forensic ledger...");
+      setMinOverlayDone(true);
+      setArbiterComplete(true);
+    }
+
+    setMounted(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Transition smoothness: ensure overlay shows for at least 800ms.
-  // Skipped if report is already ready (fc_report_ready was set by handleAcceptAnalysis).
-  const [minOverlayDone, setMinOverlayDone] = useState(reportAlreadyReady);
   useEffect(() => {
-    // Remove the CSS bridge overlay — React overlay takes over now.
+    if (!mounted) return;
     document.body.removeAttribute("data-fc-loading");
     if (reportAlreadyReady) {
-      // Clear the flag so refresh doesn't skip polling incorrectly.
       sessionOnlyStorage.removeItem("fc_report_ready");
       return;
     }
+    if (minOverlayDone) return;
     const timer = setTimeout(() => setMinOverlayDone(true), 800);
     return () => clearTimeout(timer);
-  }, [sessionId, reportAlreadyReady]); // reset on session change
+  }, [mounted, sessionId, reportAlreadyReady, minOverlayDone]);
 
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {
+    if (!mounted) return;
     if (initialSessionId && initialSessionId !== sessionId) {
       const ctx = readSessionContext(initialSessionId);
       setSessionId(initialSessionId);
@@ -124,7 +135,7 @@ export function useResult(initialSessionId?: string) {
       setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
       setAgentTimeline(loadAgentTimelineForSession(initialSessionId, storage.getItem("forensic_is_deep") === "true"));
     }
-  }, [initialSessionId, sessionId]);
+  }, [mounted, initialSessionId, sessionId]);
 
   const selectSession = useCallback((sid: string) => {
     storage.setItem("forensic_session_id", sid);
@@ -145,22 +156,10 @@ export function useResult(initialSessionId?: string) {
     setAgentTimeline(loadAgentTimelineForSession(sid, nextIsDeep));
   }, []);
 
-  // Set to true when the arbiter status polling confirms the investigation is done
-  const [arbiterComplete, setArbiterComplete] = useState(reportAlreadyReady);
-
-  const historySavedRef = useRef(false);
-  const { playSound } = useSound();
-  const soundRef = useRef(playSound);
-
-  // Lifecycle
   useEffect(() => {
-    setMounted(true);
     soundRef.current = playSound;
   }, [playSound]);
 
-  // ── Report fetch via TanStack Query ─────────────────────────────────────────
-  // Probe the report endpoint as soon as the result page mounts. Arbiter status
-  // is useful progress text, but the signed report is the real readiness signal.
   const {
     data: reportQueryData,
     error: reportQueryError,
@@ -171,7 +170,7 @@ export function useResult(initialSessionId?: string) {
       return getReport(sessionId);
     },
     enabled: !!sessionId && minOverlayDone && arbiterComplete,
-    staleTime: 60_000, 
+    staleTime: 60_000,
     retry: 3,
     refetchInterval: (query) => {
       const data = query.state.data as ReportResponse | undefined;
@@ -180,28 +179,25 @@ export function useResult(initialSessionId?: string) {
     },
   });
 
-  // Derived state to check if we actually have the report data
   const finalReportData = useMemo(() => {
     if (!reportQueryData) return null;
-    // The API returns ReportDTO directly when ready, or {status:"in_progress"} as 202.
-    // ReportDTO has report_id; the in-progress wrapper has status = "in_progress".
     const asAny = reportQueryData as unknown as Record<string, unknown>;
     if (typeof asAny.report_id === "string") return reportQueryData as unknown as ReportDTO;
     if (asAny.status === "complete" && asAny.report) return asAny.report as ReportDTO;
     return null;
   }, [reportQueryData]);
 
-  // React to the report query resolving
   useEffect(() => {
     if (!finalReportData) return;
     setArbiterComplete(true);
     setReport(finalReportData);
     setState("ready");
-    setTimeout(() => {
+    const id = setTimeout(() => {
       soundRef.current("arbiter_done");
       soundRef.current("result_reveal");
     }, 200);
-  }, [finalReportData]); // addToHistory removed — effect #2 owns all history writes
+    return () => clearTimeout(id);
+  }, [finalReportData]);
 
   useEffect(() => {
     if (reportQueryError && arbiterComplete) {
@@ -211,7 +207,6 @@ export function useResult(initialSessionId?: string) {
   }, [reportQueryError, arbiterComplete]);
 
   // ── Arbiter status polling ───────────────────────────────────────────────────
-  // Polls getArbiterStatus until complete/error, then enables the report query.
   useEffect(() => {
     if (!mounted) return;
 
@@ -237,7 +232,7 @@ export function useResult(initialSessionId?: string) {
         if (s.status === "complete") {
           setArbiterComplete(true);
           setArbiterMsg("Decrypting forensic ledger...");
-          setState("loading"); 
+          setState("loading");
           return;
         } else if (s.status === "error") {
           setErrorMsg(s.message || "Investigation failed");
@@ -269,9 +264,11 @@ export function useResult(initialSessionId?: string) {
   }, [mounted, sessionId]);
 
   // History Persistence (Client Side Only)
+  // F-H-10: mark historySavedRef true only AFTER the storage write succeeds,
+  // so a thrown setItem (quota / JSON corruption) doesn't silently mark
+  // history as saved without actually persisting.
   useEffect(() => {
     if (state === "ready" && report && !historySavedRef.current) {
-      historySavedRef.current = true;
       const ctx = readSessionContext(sessionId);
       const hItem: HistoryItem = {
         sessionId: report.session_id,
@@ -287,6 +284,7 @@ export function useResult(initialSessionId?: string) {
         const stored = storage.getItem<HistoryItem[]>("forensic_history", true, []);
         const filtered = (stored ?? []).filter((h) => !(h.sessionId === hItem.sessionId && h.type === hItem.type));
         storage.setItem("forensic_history", [hItem, ...filtered], true);
+        historySavedRef.current = true;
       } catch (e: unknown) {
         dbg.error("SessionStorage persistence failed", e);
       }

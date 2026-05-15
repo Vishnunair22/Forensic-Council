@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { AlertTriangle, RotateCcw, Home, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ZodError } from "zod";
+import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 
 /** True when the error originated from Zod schema validation (malformed report). */
 function isZodError(err: unknown): err is ZodError {
@@ -86,7 +87,15 @@ export default function ResultError({
           <RotateCcw className="w-4 h-4" /> Retry
         </button>
         <button
-          onClick={() => router.push("/")}
+          onClick={() => {
+            // F-M-5: mirror evidence/error.tsx — clear persistence + notify
+            // home so the user starts cleanly after a result-page error.
+            clearInvestigationPersistence();
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("fc:reset-home"));
+            }
+            router.push("/");
+          }}
           className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-wide text-foreground/50 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] transition-all cursor-pointer"
         >
           <Home className="w-4 h-4" /> Home

@@ -101,10 +101,13 @@ export function TimelineTab({
                       const theme = AGENT_THEMES[agentId] || { color: "#00FFFF" };
                       const completionTime = "completed_at" in update ? update.completed_at : null;
                       const duration = (pipelineStartAt && completionTime) ? fmtDuration(pipelineStartAt, completionTime) : null;
+                      // F-L-3: stable key derived from agentId + completion time,
+                      // falling back to idx only when neither is available.
+                      const stableKey = `${agentId}-${completionTime ?? idx}`;
 
                       return (
                         <motion.div
-                          key={idx}
+                          key={stableKey}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           className="flex items-center gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02] group"

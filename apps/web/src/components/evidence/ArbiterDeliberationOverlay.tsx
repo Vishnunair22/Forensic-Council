@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ArbiterDeliberationOverlayProps {
   isVisible: boolean;
@@ -12,17 +12,6 @@ export function ArbiterDeliberationOverlay({
   isVisible,
   liveText,
 }: ArbiterDeliberationOverlayProps) {
-  const [isPageVisible, setIsPageVisible] = useState(true);
-  const prefersReducedMotion = useReducedMotion();
-
-  // Pause animations when the tab is backgrounded to save CPU
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsPageVisible(!document.hidden);
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, []);
   const cleanLiveText = React.useMemo(() => {
     if (!liveText) return "";
     return liveText

@@ -99,10 +99,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             <button
               type="button"
               onClick={closeModal}
-              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              style={{ color: "rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.04)" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.25)"; }}
+              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-xl bg-white/[0.04] text-white/25 hover:text-white/70 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               aria-label="Close upload dialog"
             >
               <X className="w-4 h-4" />

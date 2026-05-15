@@ -53,8 +53,13 @@ function _tryUnlock() {
   }
 }
 
-// Register once — removes itself after the first gesture.
-if (typeof window !== "undefined") {
+// F-L-2: defer listener registration until first `useSound()` invocation so
+// importing this module has no top-level side effects (cleaner for tree-shaking
+// and SSR safety).
+let _unlockListenersAttached = false;
+function _ensureUnlockListeners() {
+  if (_unlockListenersAttached || typeof window === "undefined") return;
+  _unlockListenersAttached = true;
   const _unlock = () => {
     _tryUnlock();
     window.removeEventListener("pointerdown", _unlock, true);
@@ -84,6 +89,8 @@ function createSoftGain(
 }
 
 export function useSound() {
+  // Lazy-attach gesture listeners on first hook call so import is side-effect free.
+  _ensureUnlockListeners();
   const playSound = useCallback((type: SoundType) => {
     try {
       if (typeof window === "undefined") return;

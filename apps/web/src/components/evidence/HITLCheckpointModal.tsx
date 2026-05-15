@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
  Dialog,
  DialogContent,
@@ -55,6 +55,16 @@ export function HITLCheckpointModal({
   const [selectedDecision, setSelectedDecision] = useState<HITLDecision | null>(null);
   const [note, setNote] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  // F-H-7 (forensic-critical): reset local state when a NEW checkpoint arrives
+  // in the same mounted instance. Without this, the previously-selected
+  // decision/note from the prior checkpoint persist and the investigator could
+  // inadvertently submit them against a different checkpoint.
+  useEffect(() => {
+    setSelectedDecision(null);
+    setNote("");
+    setDecisionError(null);
+  }, [checkpoint?.checkpoint_id]);
 
   const handleDismiss = useCallback(() => {
     setSelectedDecision(null);

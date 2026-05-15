@@ -33,14 +33,21 @@ export function ForensicErrorModal({
   onHome
 }: ForensicErrorModalProps) {
   const [mounted, setMounted] = useState(false);
+  // F-L-4: pin the displayed UTC time at mount instead of recomputing every
+  // render. Prevents drift on re-renders while the modal is open.
+  const [utcStamp, setUtcStamp] = useState<string>("");
   const { playSound } = useSound();
 
   useEffect(() => {
     setMounted(true);
+    setUtcStamp(new Date().toISOString().split("T")[1].slice(0, 8));
   }, []);
 
   useEffect(() => {
     if (isVisible && mounted) {
+      // Refresh stamp each time the modal becomes visible so a re-opened
+      // error reflects when *this* error happened, not the prior one.
+      setUtcStamp(new Date().toISOString().split("T")[1].slice(0, 8));
       playSound("alert-error");
     }
   }, [isVisible, mounted, playSound]);
@@ -126,7 +133,7 @@ export function ForensicErrorModal({
                         </div>
                         <div className="flex justify-between items-center text-[11px] font-mono">
                           <span className="text-white/30">UTC Time</span>
-                          <span className="text-white/60">{new Date().toISOString().split('T')[1].slice(0, 8)}</span>
+                          <span className="text-white/60">{utcStamp}</span>
                         </div>
                       </div>
 

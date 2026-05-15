@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, Suspense } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,11 +13,14 @@ import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
-import { AgentProgressSkeleton } from "@/components/evidence/AgentProgressSkeleton";
 import { resetActiveInvestigation } from "@/lib/appReset";
 
+// F-H-5: dynamic() loading prop handles chunk-fetch fallback. A React
+// Suspense wrapper around `next/dynamic` lazy components is dead code
+// because `next/dynamic` does not suspend by default.
 const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
+  { loading: () => null },
 );
 const ArbiterDeliberationOverlay = dynamic(
   () => import("@/components/evidence/ArbiterDeliberationOverlay").then((mod) => mod.ArbiterDeliberationOverlay),
@@ -52,23 +55,20 @@ export function EvidenceUploadClient() {
   }, [router]);
 
   useEffect(() => {
-    const hasPendingFile = !!__pendingFileStore.file;
-    const hasSessionId = !!storage.getItem("forensic_session_id");
-    const isRunning = investigation.status === "analyzing" || investigation.status === "initiating" || investigation.status === "processing";
-
-    const shouldWarn = hasPendingFile && !hasSessionId && isRunning;
-
+    // F-C-3: compute shouldWarn INSIDE the handler so the latest pending-file
+    // and session state are read at unload time. The previous closure captured
+    // stale values from effect-run time.
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (shouldWarn) {
+      const hasPendingFile = !!__pendingFileStore.file;
+      const hasSessionId = !!storage.getItem("forensic_session_id");
+      const s = investigation.status;
+      const isRunning = s === "analyzing" || s === "initiating" || s === "processing";
+      if (hasPendingFile && !hasSessionId && isRunning) {
         e.preventDefault();
         return "";
       }
     };
-
-    if (shouldWarn) {
-      window.addEventListener("beforeunload", onBeforeUnload);
-    }
-
+    window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
@@ -110,7 +110,6 @@ export function EvidenceUploadClient() {
 
         {showAgentProgress ? (
           <>
-          <Suspense fallback={<AgentProgressSkeleton mimeType={investigation.mimeType} />}>
             <AgentProgressDisplay
               agentUpdates={investigation.agentUpdates}
               completedAgents={investigation.validCompletedAgents}
@@ -133,7 +132,6 @@ export function EvidenceUploadClient() {
               arbiterThinking={investigation.arbiterThinking}
               hasStartedAnalysis={investigation.hasStartedAnalysis}
             />
-          </Suspense>
 
             <HITLCheckpointModal
               checkpoint={investigation.hitlCheckpoint}
@@ -144,6 +142,7 @@ export function EvidenceUploadClient() {
             />
           </>
         ) : (
+
           <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
             <motion.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}

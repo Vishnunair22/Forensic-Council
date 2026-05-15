@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { CheckCircle2, FileText, Music2, X, Loader2 } from "lucide-react";
+import { FileText, Music2, X, Loader2 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 

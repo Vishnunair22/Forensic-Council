@@ -660,8 +660,21 @@ export const useSimulation = ({
               if (currentSid) {
                 const st = await getArbiterStatus(currentSid);
                 if (st.status === "complete") {
-                  expectingPipelineCompleteRef.current = true;
-                  setStatus("complete");
+                  // F-H-4: do NOT trample awaiting_decision on reconnect. If the
+                  // user is mid-Accept/Deep decision, the WS rehydrate path must
+                  // not yank them into the result page. Only flip to "complete"
+                  // when status is already processing (resume in flight) or when
+                  // expectingPipelineCompleteRef was previously set.
+                  setStatus((prev: SimulationStatus) => {
+                    if (
+                      prev === "awaiting_decision" &&
+                      !expectingPipelineCompleteRef.current
+                    ) {
+                      return prev;
+                    }
+                    expectingPipelineCompleteRef.current = true;
+                    return "complete";
+                  });
                 } else if (st.status === "error") {
                   setErrorMessage(st.message || "Investigation failed");
                   setStatus("error");
@@ -875,31 +888,40 @@ const resumeInvestigation = useCallback(
         arbiterPollRef.current = null;
       }
       const startedAt = Date.now();
+      // F-C-6: closure-local cancel flag so the in-flight async tick can't
+      // dispatch setState on an unmounted/reset component after clearInterval.
+      let cancelled = false;
+      const guarded = (fn: () => void) => { if (!cancelled) fn(); };
       arbiterPollRef.current = setInterval(async () => {
+        if (cancelled) return;
         try {
           const st = await getArbiterStatus(targetId);
+          if (cancelled) return;
           if (st.status === "complete") {
+            cancelled = true;
             if (arbiterPollRef.current) {
               clearInterval(arbiterPollRef.current);
               arbiterPollRef.current = null;
             }
             expectingPipelineCompleteRef.current = false;
-            setStatus((prev: SimulationStatus) => {
+            guarded(() => setStatus((prev: SimulationStatus) => {
               if (prev !== "complete") {
                 playSoundRef.current?.("complete");
                 onCompleteRef.current?.();
               }
               return "complete";
-            });
+            }));
           } else if (st.status === "error") {
+            cancelled = true;
             if (arbiterPollRef.current) {
               clearInterval(arbiterPollRef.current);
               arbiterPollRef.current = null;
             }
             expectingPipelineCompleteRef.current = false;
-            setErrorMessage(st.message || "Investigation failed");
-            setStatus("error");
+            guarded(() => setErrorMessage(st.message || "Investigation failed"));
+            guarded(() => setStatus("error"));
           } else if (Date.now() - startedAt > 300_000 && arbiterPollRef.current) {
+            cancelled = true;
             clearInterval(arbiterPollRef.current);
             arbiterPollRef.current = null;
           }
@@ -998,19 +1020,10 @@ const resumeInvestigation = useCallback(
     [],
   );
 
-  // ── Unmount cleanup: close WS and stop all polls ─────────────────────────
-  useEffect(() => {
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close(1000, "Component unmounted");
-        wsRef.current = null;
-      }
-      if (arbiterPollRef.current) {
-        clearInterval(arbiterPollRef.current);
-        arbiterPollRef.current = null;
-      }
-    };
-  }, []);
+  // F-C-2: removed duplicate unmount cleanup. The single source of truth is
+  // the unmount-only effect near `connectWebSocket` above (closes WS, clears
+  // reconnect timer + arbiter poll). Keeping two cleanup effects made the
+  // teardown order ambiguous in Strict Mode dev and could double-close.
 
   return {
     status,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { logApiTargetDiagnostics } from "@/lib/api/utils";
 
@@ -11,34 +11,42 @@ function prefersReducedMotion(): boolean {
 
 export function RouteExperience() {
   const pathname = usePathname();
+  // F-H-3: track whether the latest navigation was a popstate (browser back/
+  // forward). On popstate we let the browser restore the previous scroll
+  // position instead of forcing scroll-to-top.
+  const isPopRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const previous = window.history.scrollRestoration;
-    window.history.scrollRestoration = "manual";
-
-    return () => {
-      window.history.scrollRestoration = previous;
-    };
+    const onPop = () => { isPopRef.current = true; };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-
     if (!pathname.startsWith("/result")) {
       document.body.removeAttribute("data-fc-loading");
     }
   }, [pathname]);
 
-  // Dev-only diagnostics — print once per page load, not per route change.
+  // F-M-9: dev-only diagnostics — gated so production bundles tree-shake it.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    logApiTargetDiagnostics();
+    if (process.env.NODE_ENV !== "production") {
+      logApiTargetDiagnostics();
+    }
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Skip forced scroll-to-top on browser back/forward so the previous scroll
+    // position is preserved (e.g. returning from a History entry).
+    if (isPopRef.current) {
+      isPopRef.current = false;
+      return;
+    }
 
     const behavior =
       pathname === "/evidence" || pathname.startsWith("/result")

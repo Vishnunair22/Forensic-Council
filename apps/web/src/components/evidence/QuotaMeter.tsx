@@ -111,12 +111,6 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
   const isWarning = usagePercent >= 80;
   const isCritical = usagePercent >= 100;
 
-  const getStatusColor = () => {
-    if (isCritical) return "bg-red-500";
-    if (isWarning) return "bg-amber-500";
-    return "bg-emerald-500";
-  };
-
   const getStatusTextColor = () => {
     if (isCritical) return "text-red-700";
     if (isWarning) return "text-amber-700";

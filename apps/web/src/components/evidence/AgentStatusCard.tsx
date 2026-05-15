@@ -191,13 +191,6 @@ const FALLBACK_PHRASES: Record<string, string[]> = {
   ],
 };
 
-const SEV_DOT: Record<string, string> = {
-  CRITICAL: "bg-red-400",
-  HIGH:     "bg-danger",
-  MEDIUM:   "bg-amber-400",
-  LOW:      "bg-white/30",
-};
-
 const SEV_LABEL: Record<string, string> = {
   CRITICAL: "text-red-400",
   HIGH:     "text-danger",
@@ -212,7 +205,6 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const verdict = normalizeVerdict(f.verdict);
   const elapsed = formatElapsed(f.elapsed_s);
 
-  const sevAccent = SEV_DOT[sev] ?? (isAlert ? "bg-danger/80" : "bg-white/15");
   const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger" : "text-white/45");
 
   const headline = extractHeadline(f);

@@ -53,6 +53,9 @@ export function LoadingOverlay({
     }
   }, [displayText, playSound]);
 
+  // F-M-6: SSR guard so a stray server import can't crash on document access.
+  if (typeof document === "undefined") return null;
+
   return createPortal(
     <motion.div
       className="fixed inset-0 z-[10000] flex items-center justify-center px-5 select-none bg-black"

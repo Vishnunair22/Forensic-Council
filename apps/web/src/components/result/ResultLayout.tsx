@@ -151,20 +151,24 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 pt-16 space-y-10">
-        <div
-          role="tabpanel"
-          id="tabpanel-history"
-          aria-labelledby="tab-history"
-          hidden={rs.activeTab !== "history"}
-        >
-          <HistoryPanel
-            onDismiss={() => rs.setActiveTab("analysis")}
-            onSelect={(sid) => {
-              rs.selectSession(sid);
-              rs.setActiveTab("analysis");
-            }}
-          />
-        </div>
+        {/* F-H-8: only mount HistoryPanel when the History tab is active.
+            Previously we used `hidden={...}` which still mounts the panel
+            and triggers its sessionStorage reads on every result-page visit. */}
+        {rs.activeTab === "history" && (
+          <div
+            role="tabpanel"
+            id="tabpanel-history"
+            aria-labelledby="tab-history"
+          >
+            <HistoryPanel
+              onDismiss={() => rs.setActiveTab("analysis")}
+              onSelect={(sid) => {
+                rs.selectSession(sid);
+                rs.setActiveTab("analysis");
+              }}
+            />
+          </div>
+        )}
 
         <div
           role="tabpanel"

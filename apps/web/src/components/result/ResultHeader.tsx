@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Activity,
   Clock3,
@@ -62,12 +62,22 @@ export function ResultHeader({
   const displayName = cleanDisplayName(fileName, report);
   const signature = report.cryptographic_signature || report.report_hash || "";
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // F-L-5: clear the copy-flash timer on unmount so it can't setState on a
+  // torn-down component after navigation.
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const handleCopyHash = () => {
     if (!signature) return;
     navigator.clipboard.writeText(signature).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
   };
 
