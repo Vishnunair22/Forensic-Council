@@ -60,8 +60,8 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                  <HistoryIcon className="w-6 h-6 text-primary" />
                  Investigation Archive
                </h3>
-               <p className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.3em]">
-                 Forensic_Registry // SECURE_STORAGE_V2
+               <p className="text-[10px] font-mono font-bold text-white/20 tracking-[0.3em]">
+                 Forensic Registry // Secure Storage V2
                </p>
             </div>
 
@@ -70,18 +70,18 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                 <>
                   {showConfirm ? (
                     <div className="flex items-center gap-3 bg-danger/10 p-2 rounded-xl border border-danger/20">
-                      <span className="text-[9px] font-mono text-danger font-bold uppercase tracking-wider px-2">Confirm?</span>
+                      <span className="text-[9px] font-mono text-danger font-bold tracking-wider px-2">Confirm?</span>
                       <button
                         type="button"
                         onClick={clearAll}
-                        className="py-1 px-3 text-[9px] font-mono font-bold text-[#05070D] bg-danger rounded-md uppercase"
+                        className="py-1 px-3 text-[9px] font-mono font-bold text-[#05070D] bg-danger rounded-md"
                       >
                         Yes
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowConfirm(false)}
-                        className="py-1 px-3 text-[9px] font-mono font-bold text-white/60 bg-white/5 rounded-md uppercase"
+                        className="py-1 px-3 text-[9px] font-mono font-bold text-white/60 bg-white/5 rounded-md"
                       >
                         No
                       </button>
@@ -100,7 +100,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
               <button
                 type="button"
                 onClick={onDismiss}
-                className="text-[10px] font-mono font-bold text-white/40 hover:text-primary tracking-widest uppercase transition-colors"
+                className="text-[10px] font-mono font-bold text-white/40 hover:text-primary tracking-widest transition-colors"
               >
                 Back To Analysis
               </button>
@@ -120,7 +120,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                   <HistoryIcon className="w-10 h-10 text-white/5" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-heading font-bold text-white/40 mb-2 uppercase tracking-widest">Archive Empty</p>
+                  <p className="text-sm font-heading font-bold text-white/40 mb-2 tracking-widest">Archive Empty</p>
                   <p className="text-[10px] font-mono text-white/20 max-w-xs leading-relaxed">
                     System awaiting initial analysis payloads for registry sync.
                   </p>
@@ -128,7 +128,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
               </div>
 ) : (
               <div className="grid gap-6" role="list" aria-label="Investigation archive">
-                {history.sort((a,b) => b.timestamp - a.timestamp).map((item, i) => (
+                {[...history].sort((a,b) => b.timestamp - a.timestamp).map((item, i) => (
                   <motion.div
                     key={item.sessionId}
                     initial={shouldReduceMotion ? {} : { opacity: 0, x: -20 }}
@@ -170,8 +170,8 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center gap-3 mb-2">
-                              <span className="text-[9px] font-mono font-bold text-primary/40 tracking-widest">SESSION_{item.sessionId.slice(-6)}</span>
-                              <span className="text-[9px] font-mono text-white/20 uppercase tracking-tighter">[{item.type}_ANALYSIS]</span>
+                              <span className="text-[9px] font-mono font-bold text-primary/40 tracking-widest">Session {item.sessionId.slice(-6)}</span>
+                              <span className="text-[9px] font-mono text-white/20 tracking-tighter">[{item.type} Analysis]</span>
                            </div>
                            <h4 className="text-lg font-heading font-bold text-white/80 truncate group-hover:text-white transition-colors">
                              {item.fileName}
@@ -179,7 +179,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                         </div>
 
                         <div className={clsx(
-                          "px-4 py-1.5 rounded border text-[10px] font-mono font-bold uppercase tracking-widest",
+                          "px-4 py-1.5 rounded border text-[10px] font-mono font-bold tracking-widest",
                           getVerdictStyle(item.verdict)
                         )}>
                           {item.verdict?.replace(/_/g, " ")}
@@ -187,7 +187,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden lg:block">
-                             <div className="text-[10px] font-mono text-white/20">TIMESTAMP</div>
+                             <div className="text-[10px] font-mono text-white/20">Timestamp</div>
                              <div className="text-[10px] font-mono text-white/60">
                                {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                              </div>
@@ -196,7 +196,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                             type="button"
                             onClick={(e) => removeItem(e, item.sessionId)}
                             aria-label={`Remove ${item.fileName} from archive`}
-                            className="p-3 rounded-lg border border-white/5 text-white/20 hover:text-danger hover:border-danger/30 transition-all"
+                            className="relative z-10 p-3 rounded-lg border border-white/5 text-white/20 hover:text-danger hover:border-danger/30 transition-all"
                           >
                             <X className="w-4 h-4" />
                           </button>

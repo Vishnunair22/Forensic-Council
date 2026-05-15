@@ -2,17 +2,10 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, SkipForward, Activity, type LucideIcon, ScanEye, AudioWaveform, Boxes, Film, Database } from "lucide-react";
+import { ChevronRight, SkipForward, Activity } from "lucide-react";
 import { clsx } from "clsx";
 import type { AgentUpdate } from "./AgentProgressDisplay";
-
-const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string }> = {
-  "Agent1": { icon: ScanEye,       color: "text-[#60A5FA]" },
-  "Agent2": { icon: AudioWaveform, color: "text-[#38BDF8]" },
-  "Agent3": { icon: Boxes,         color: "text-[#818CF8]" },
-  "Agent4": { icon: Film,          color: "text-[#22D3EE]" },
-  "Agent5": { icon: Database,      color: "text-[#93C5FD]" },
-};
+import { AGENT_GRAPHICS } from "./AgentStatusCard";
 
 interface AgentStatusSummaryProps {
   visibleAgents: Array<{ id: string; name: string }>;
@@ -63,7 +56,7 @@ export function AgentStatusSummary({
       >
         <div className="flex items-center gap-3">
           <Activity className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform shrink-0" />
-          <span className="text-[10px] font-mono font-bold text-white uppercase tracking-[0.18em]">
+          <span className="text-[10px] font-mono font-bold text-white tracking-[0.18em]">
             Active Specialists
           </span>
         </div>
@@ -117,7 +110,7 @@ export function AgentStatusSummary({
           >
             <div className="flex items-center gap-3">
               <SkipForward className="w-3.5 h-3.5 text-white/40 group-hover:scale-110 transition-transform shrink-0" />
-              <span className="text-[10px] font-mono font-bold text-white/50 uppercase tracking-[0.18em]">
+              <span className="text-[10px] font-mono font-bold text-white/50 tracking-[0.18em]">
                 Skipped
               </span>
             </div>

@@ -10,6 +10,7 @@ import { getVerdictConfig } from "@/lib/verdict";
 import type { AgentFindingDTO, ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
+import { fmtDuration } from "@/lib/fmt";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ReportFooter } from "./ReportFooter";
@@ -46,13 +47,19 @@ interface ResultLayoutProps {
 export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const rs = useResult(initialSessionId);
 
-  // Restore manual scroll position on back-navigation; scroll to top on new session
+  // Scroll-to-top on session change is owned by RouteExperience for the
+  // initial /result/{sid} mount. We only need to handle the case where
+  // initialSessionId changes WITHIN the same mounted ResultLayout (e.g.
+  // selectSession from the History panel switching between session ids).
+  // RouteExperience already sets scrollRestoration = "manual" globally.
+  const sessionChangeRef = useRef<string | undefined>(initialSessionId);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if ("scrollRestoration" in history) {
-      history.scrollRestoration = "manual";
-    }
-    window.scrollTo({ top: 0, behavior: "instant" });
+    // Skip the first run (RouteExperience handles initial mount scroll).
+    if (sessionChangeRef.current === initialSessionId) return;
+    sessionChangeRef.current = initialSessionId;
+    // Synchronous scroll — we're inside the same mount, no animation needed.
+    window.scrollTo(0, 0);
   }, [initialSessionId]);
 
   const activeAgentIds = useMemo(() => {
@@ -92,12 +99,12 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
-        <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl fc-surface-crisp backdrop-blur-2xl">
+        <div className="flex items-center justify-between gap-2 p-2 bg-[#06090E] border border-[#333333]">
 
           <button
             type="button"
             onClick={rs.handleHome}
-            className="px-4 py-2.5 text-[10px] font-mono font-bold uppercase tracking-[0.18em] flex items-center gap-2 rounded-xl fc-transition fc-focus-ring text-white/35 hover:text-white/75 hover:bg-white/5"
+            className="px-6 py-3 text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-2 transition-colors text-white/50 hover:text-white hover:bg-[#111111]"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             Hub
@@ -128,10 +135,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 ref={(node) => { tabRefs.current[tab] = node; }}
                 onClick={() => rs.setActiveTab(tab)}
                 className={clsx(
-                  "px-4 sm:px-6 py-2.5 text-[10px] font-mono font-bold fc-transition rounded-xl uppercase tracking-[0.14em] flex items-center gap-2",
+                  "px-6 py-3 text-[10px] font-mono font-bold transition-colors tracking-widest flex items-center gap-2 uppercase",
                   rs.activeTab === tab
-                    ? "bg-primary text-black shadow-[0_0_18px_rgba(var(--color-primary-rgb),0.28)]"
-                    : "text-white/60 hover:text-white/80 hover:bg-white/5"
+                    ? "bg-white text-black"
+                    : "text-white/50 hover:text-white hover:bg-[#111111]"
                 )}
 
               >
@@ -284,54 +291,31 @@ function ResultSkeletonView() {
     <div className="min-h-screen" aria-busy="true" aria-label="Loading report">
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
         <div
-          className="flex items-center justify-between gap-4 p-1.5 rounded-2xl backdrop-blur-2xl"
-          style={{
-            background: "rgba(5,9,18,0.9)",
-            border: "1px solid rgba(165,200,255,0.07)",
-            boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
-          }}
+          className="flex items-center justify-between gap-4 p-4 bg-[#06090E] border border-[#333333]"
         >
-          <div className="skeleton h-10 w-20 rounded-xl" />
-          <div className="skeleton h-10 w-64 rounded-xl" />
+          <div className="skeleton h-10 w-20 rounded-none" />
+          <div className="skeleton h-10 w-64 rounded-none" />
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-6 pt-16 space-y-6">
-        <div
-          className="rounded-2xl p-8 space-y-8"
-          style={{
-            background: "rgba(6,10,20,0.85)",
-            border: "1px solid rgba(165,200,255,0.06)",
-          }}
-        >
+        <div className="p-8 space-y-8 bg-[#06090E] border border-[#333333]">
           <div className="flex flex-col md:flex-row gap-6 items-center">
-            <div className="skeleton w-32 h-32 rounded-xl" />
+            <div className="skeleton w-32 h-32 rounded-none" />
             <div className="flex-1 space-y-4 w-full">
-              <div className="skeleton h-3.5 w-44 rounded-full" />
-              <div className="skeleton h-9 w-72 rounded-xl" />
-              <div className="skeleton h-16 w-full rounded-xl" />
+              <div className="skeleton h-3.5 w-44 rounded-none" />
+              <div className="skeleton h-9 w-72 rounded-none" />
+              <div className="skeleton h-16 w-full rounded-none" />
             </div>
-            <div className="skeleton w-28 h-28 rounded-full" />
+            <div className="skeleton w-28 h-28 rounded-none" />
           </div>
         </div>
-        <div className="skeleton h-52 rounded-2xl" />
-        <div className="skeleton h-72 rounded-2xl" />
+        <div className="skeleton h-52 rounded-none bg-[#06090E] border border-[#333333]" />
+        <div className="skeleton h-72 rounded-none bg-[#06090E] border border-[#333333]" />
       </div>
     </div>
   );
 }
 
-function fmtDuration(from: string | null, to?: string): string {
-  if (!from || !to) return "-";
-  try {
-    const ms = new Date(to).getTime() - new Date(from).getTime();
-    if (ms < 0) return "-";
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
-  } catch {
-    return "-";
-  }
-}
 
 function toPct(value: number | null | undefined): number {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? 0) * 100)));
@@ -341,8 +325,10 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   if (!report) return [];
 
   const findings: string[] = [];
-  const push = (value: string | null | undefined, maxLen = 230) => {
-    const cleaned = cleanFindingText(value, maxLen);
+  // Don't truncate the key-findings paragraphs. Arbiter-produced narratives
+  // are already concise; mid-sentence "..." cuts hide critical signals.
+  const push = (value: string | null | undefined) => {
+    const cleaned = cleanFindingText(value);
     if (!cleaned || isLowValueFinding(cleaned)) return;
     if (!findings.some((existing) => sameFinding(existing, cleaned))) {
       findings.push(cleaned);
@@ -351,13 +337,13 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   (report.key_findings ?? []).forEach((finding) => push(finding));
 
-  if (findings.length < 4) push(report.verdict_sentence, 260);
-  if (findings.length < 4) push(report.executive_summary, 260);
+  if (findings.length < 4) push(report.verdict_sentence);
+  if (findings.length < 4) push(report.executive_summary);
 
   const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
     .map(([agentId, text]) => ({
       agentId,
-      text: cleanFindingText(text, 240),
+      text: cleanFindingText(text),
       priority: agentPriority(agentId),
     }))
     .filter((item) => item.text && !isLowValueFinding(item.text))
@@ -365,7 +351,7 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   for (const item of agentNarratives) {
     if (findings.length >= 5) break;
-    push(item.text, 240);
+    push(item.text);
   }
 
   const toolFindings = Object.values(report.per_agent_findings ?? {})
@@ -381,7 +367,7 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   for (const item of toolFindings) {
     if (findings.length >= 6) break;
-    push(item.text, 220);
+    push(item.text);
   }
 
   return findings.slice(0, 6);
@@ -391,7 +377,7 @@ function cleanToolSummary(finding: AgentFindingDTO): string {
   const metadata = finding.metadata ?? {};
   const llmSummary = typeof metadata.llm_refined_summary === "string" ? metadata.llm_refined_summary : "";
   const details = typeof metadata.details === "string" ? metadata.details : "";
-  return cleanFindingText(llmSummary || finding.reasoning_summary || finding.court_statement || details, 220);
+  return cleanFindingText(llmSummary || finding.reasoning_summary || finding.court_statement || details);
 }
 
 function sameFinding(a: string, b: string): boolean {

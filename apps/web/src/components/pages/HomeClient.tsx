@@ -1,10 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { GlassPanel } from "@/components/ui/GlassPanel";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { Shield, Scale, Cpu } from "lucide-react";
 
 const HowWorksSection = dynamic(
   () => import("@/components/ui/HowWorksSection").then((mod) => mod.HowWorksSection),
@@ -36,38 +34,30 @@ export function HomeClient() {
           variants={prefersReducedMotion ? undefined : containerVariants}
           initial={prefersReducedMotion ? false : "hidden"}
           animate={prefersReducedMotion ? false : "show"}
-          className="flex flex-col items-center text-center max-w-5xl mx-auto gap-10 z-10"
+          className="flex flex-col items-start w-full max-w-7xl mx-auto z-10"
         >
           {/* Eyebrow */}
-          <motion.div variants={itemVariants} className="flex items-center gap-3">
-            <div
-              className="h-px w-8 opacity-40"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(79,142,247,0.8))" }}
-            />
-            <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-primary/60 uppercase">
-              System_Overview
+          <motion.div variants={itemVariants} className="flex items-center gap-3 mb-8">
+            <span className="text-xs font-mono font-semibold tracking-[0.2em] text-slate-500 uppercase">
+              [ System Overview ]
             </span>
-            <div
-              className="h-px w-8 opacity-40"
-              style={{ background: "linear-gradient(90deg, rgba(79,142,247,0.8), transparent)" }}
-            />
           </motion.div>
 
           {/* Headline */}
-          <div className="space-y-4">
+          <div className="space-y-6 mb-12 max-w-4xl">
             <motion.h1
               variants={itemVariants}
-              className="text-4xl sm:text-5xl md:text-[68px] font-extrabold leading-[1.04] text-white text-glow"
+              className="text-5xl sm:text-6xl md:text-[80px] font-extrabold leading-[1.02] text-white"
               style={{ letterSpacing: "-0.03em" }}
             >
               Multi-Agent Forensic
               <br />
-              <span className="text-hero-gradient">Evidence Analysis</span>
+              Evidence Analysis
             </motion.h1>
 
             <motion.p
               variants={itemVariants}
-              className="text-base md:text-lg text-slate-200/65 max-w-2xl mx-auto font-medium leading-relaxed"
+              className="text-lg md:text-xl text-slate-400 font-medium leading-relaxed max-w-2xl"
             >
               Forensic Council deploys specialized AI agents to analyze digital evidence,
               synthesizing cohesive, cryptographically-signed reports with chain-of-custody integrity.
@@ -75,29 +65,10 @@ export function HomeClient() {
           </div>
 
           {/* CTA */}
-          <motion.div variants={itemVariants}>
+          <motion.div variants={itemVariants} className="mt-4">
             <HeroAuthActions />
           </motion.div>
 
-          {/* Metadata strip */}
-          <motion.div
-            variants={itemVariants}
-            className="flex flex-wrap items-center justify-center gap-5 sm:gap-7"
-          >
-            {[
-              { icon: Cpu, label: "Neural Processing" },
-              { icon: Scale, label: "Arbiter Protocol" },
-              { icon: Shield, label: "Chain of Custody" },
-            ].map(({ icon: Icon, label }, i) => (
-              <div key={label} className="flex items-center gap-2">
-                {i > 0 && (
-                  <span className="hidden sm:block w-1 h-1 rounded-full bg-white/15 mr-3" />
-                )}
-                <Icon className="w-3.5 h-3.5" style={{ color: "rgba(165,200,255,0.55)" }} />
-                <span className="text-[10px] uppercase tracking-[0.2em] font-mono text-white/35">{label}</span>
-              </div>
-            ))}
-          </motion.div>
         </motion.div>
 
         {/* Bottom fade */}
@@ -108,14 +79,14 @@ export function HomeClient() {
       </section>
 
       {/* ── Content sections ── */}
-      <section className="relative w-full px-4 sm:px-6 pb-28 max-w-7xl mx-auto space-y-14">
-        <GlassPanel className="relative overflow-hidden no-hover-lift">
+      <section className="relative w-full px-4 sm:px-6 pb-32 max-w-7xl mx-auto space-y-32">
+        <div>
           <HowWorksSection />
-        </GlassPanel>
+        </div>
 
-        <GlassPanel className="relative overflow-hidden no-hover-lift">
+        <div>
           <AgentsSection />
-        </GlassPanel>
+        </div>
       </section>
 
     </div>

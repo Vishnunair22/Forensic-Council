@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TARGET = Path("PROJECT_HANDOFF.md")
+TARGET = Path(__file__).parent.parent / "PROJECT_HANDOFF.md"
 NOW = datetime.date.today().isoformat()
 
 

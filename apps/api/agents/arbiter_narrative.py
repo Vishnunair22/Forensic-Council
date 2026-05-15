@@ -588,7 +588,7 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
             )
             context_bits.append(
                 f"{method} OCR read {words} word(s)"
-                + (f": {preview[:90]}" if preview else "")
+                + (f": {preview[:200]}" if preview else "")
             )
         if layout:
             meta = _tool_meta(layout)
@@ -631,9 +631,12 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
                 "Screenshot provenance remains limited because camera/device EXIF is absent; clean hash, layout, and binary checks do not prove pre-upload authenticity."
             )
         line_three = " ".join(line_three_bits).strip()
-        lines = [line_one[:360], line_two[:360] + "."]
+        # Cap each line at ~1200 chars as a safety net (was 360, which was
+        # cutting OCR previews mid-sentence in the UI). The frontend no longer
+        # truncates the agent overview, so the full line is now displayed.
+        lines = [line_one[:1200], line_two[:1200] + "."]
         if line_three:
-            lines.append(line_three[:360] + ("." if not line_three.endswith(".") else ""))
+            lines.append(line_three[:1200] + ("." if not line_three.endswith(".") else ""))
         return "\n".join(lines)
 
     async def _generate_uncertainty_statement(

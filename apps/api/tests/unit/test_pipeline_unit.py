@@ -223,7 +223,7 @@ class TestForensicCouncilPipelineInitializeComponents:
                                 except Exception:
                                     pass
         # All failures → degradation flags set
-        assert any("Redis" in f for f in pipeline._degradation_flags) or True
+        assert any("Redis" in f for f in pipeline._degradation_flags)
 
     @pytest.mark.asyncio
     async def test_initialize_with_all_mocked(self):
@@ -253,7 +253,7 @@ class TestForensicCouncilPipelineInitializeComponents:
                                         await pipeline._initialize_components(uuid4())
                                     except Exception:
                                         pass
-        assert pipeline._redis is mock_redis or pipeline._redis is not None or True
+        assert pipeline._redis is mock_redis or pipeline._redis is not None
 
 
 class TestNormalizeAgentResults:

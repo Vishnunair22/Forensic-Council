@@ -414,6 +414,8 @@ class InMemoryRedisClient:
 
     async def get(self, key: str) -> str | None:
         value = self._fallback_store.get(key)
+        if value is None:
+            return None
         return value.decode("utf-8") if isinstance(value, bytes) else value
 
     async def get_json(self, key: str) -> Any | None:

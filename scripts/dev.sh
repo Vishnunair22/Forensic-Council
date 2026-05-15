@@ -29,14 +29,24 @@ REQUIRED_DEV_VARS=(
 )
 
 for VAR in "${REQUIRED_DEV_VARS[@]}"; do
-  VAL=$(grep "^${VAR}=" "$ROOT/.env" 2>/dev/null | cut -d= -f2- || echo "")
-  if [[ -z "$VAL" || "$VAL" == *"REPLACE"* || "$VAL" == *"placeholder"* || "$VAL" == __PASTE_* ]]; then
+  VAL=$(grep "^$VAR=" "$ROOT/.env" | cut -d= -f2- || echo "")
+  if [[ -z "$VAL" || "$VAL" == __REPLACE_ME* || "$VAL" == __PASTE_* ]]; then
     echo "  ❌ $VAR is missing or still a placeholder in .env"
-    echo "     Run: ./infra/generate_production_keys.sh --update"
-    echo "     Then add free-tier LLM/Gemini keys or set LLM_PROVIDER=none and GEMINI_API_KEY_POLICY_OK=false for local fallback mode."
     exit 1
   fi
 done
+
+# GEMINI_API_KEY_POLICY_OK must be exactly 'true' or 'false'. Docker compose
+# enforces presence via :? but not shape — fail here with a clear message.
+POLICY_VAL=$(grep "^GEMINI_API_KEY_POLICY_OK=" "$ROOT/.env" | cut -d= -f2- || echo "")
+case "$POLICY_VAL" in
+  true|false) ;;
+  *)
+    echo "  ❌ GEMINI_API_KEY_POLICY_OK must be exactly 'true' or 'false' (got: '$POLICY_VAL')"
+    echo "     See .env.example — set to 'true' only after reading https://ai.google.dev/terms."
+    exit 1
+    ;;
+esac
 
 LLM_PROVIDER_VALUE=$(grep "^LLM_PROVIDER=" "$ROOT/.env" | cut -d= -f2- || echo "groq")
 LLM_KEY_VALUE=$(grep "^LLM_API_KEY=" "$ROOT/.env" | cut -d= -f2- || echo "")
@@ -54,21 +64,36 @@ $COMPOSE build --parallel
 echo "🚀 Starting services..."
 $COMPOSE up -d
 
-echo "⏳ Waiting for API health through direct dev port (up to 120s)..."
-for i in $(seq 1 24); do
-  STATUS=$(curl -sf http://localhost:8000/health | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+# PRELOAD_MODELS=1 (default) bakes models into the image. When the build
+# cache is cold or volumes are empty, first-start can download several GB.
+# Default budget is 30 min; we surface a banner if download is detected.
+echo "⏳ Waiting for API health through direct dev port (up to 30 min on first run)..."
+TIMEOUT_SEC=1800
+SLEEP_SEC=10
+ELAPSED=0
+DOWNLOAD_NOTED=0
+STATUS=""
+while [ $ELAPSED -lt $TIMEOUT_SEC ]; do
+  STATUS=$(curl -sf http://localhost:8000/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
   if [[ "$STATUS" == "ok" ]]; then
-    echo "✅ API healthy on http://localhost:8000"
+    echo "✅ API healthy on http://localhost:8000 (after ${ELAPSED}s)"
     break
   fi
-  if [[ $i -eq 24 ]]; then
-    echo "❌ API did not become healthy on localhost:8000."
-    echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env logs backend"
-    exit 1
+  if [ "$DOWNLOAD_NOTED" -eq 0 ] && $COMPOSE logs --tail 50 backend 2>/dev/null | grep -q "ML cache incomplete - downloading models"; then
+    echo "ℹ  Backend is downloading ML models on first run — this can take 15–40 min."
+    DOWNLOAD_NOTED=1
   fi
-  echo "   Attempt $i/24 — waiting..."
-  sleep 5
+  ELAPSED=$((ELAPSED + SLEEP_SEC))
+  if [ $((ELAPSED % 60)) -eq 0 ]; then
+    echo "   …waited ${ELAPSED}s; still not healthy."
+  fi
+  sleep $SLEEP_SEC
 done
+if [[ "$STATUS" != "ok" ]]; then
+  echo "❌ API did not become healthy in ${TIMEOUT_SEC}s."
+  echo "   Run: $COMPOSE logs backend"
+  exit 1
+fi
 echo "⏳ Waiting for Caddy health route..."
 for i in $(seq 1 12); do
   if curl -sf http://localhost/health > /dev/null 2>&1; then

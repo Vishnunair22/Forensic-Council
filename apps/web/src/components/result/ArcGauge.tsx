@@ -163,12 +163,12 @@ export function ArcGauge({
 
       <div className="mt-2 flex flex-col items-center">
         {label && (
-          <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.2em]">
+          <span className="text-[10px] font-mono font-bold text-white/30 tracking-[0.2em]">
             {label}
           </span>
         )}
         {sublabel && (
-          <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest mt-0.5">
+          <span className="text-[9px] font-mono text-white/20 tracking-widest mt-0.5">
             {sublabel}
           </span>
         )}

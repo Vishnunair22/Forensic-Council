@@ -30,20 +30,29 @@ See [docs/WORKFLOW_TRACE.md](docs/WORKFLOW_TRACE.md) for the canonical route/sta
 
 ## Fast start
 
-### Docker (all services)
+### Docker — development (one command)
 
 ```bash
-cp .env.example .env
+[ -f .env ] || cp .env.example .env
 bash infra/generate_production_keys.sh --update
-# Add LLM_API_KEY and GEMINI_API_KEY to .env
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build -d
-# Verify: curl http://localhost:8000/health
+# Add LLM_API_KEY and GEMINI_API_KEY to .env, then:
+bash scripts/dev.sh
 ```
+
+`scripts/dev.sh` validates `.env`, builds all images in parallel, starts the stack, and polls health before returning.
+
+### Docker — production (one command)
+
+```bash
+bash scripts/prod.sh
+```
+
+`scripts/prod.sh` runs `validate_production_readiness.sh` first (gates on failures), then builds and starts.
 
 ### Host app development with Docker infrastructure
 
 ```bash
-# Start infrastructure services
+# Start infrastructure services only
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d postgres redis qdrant
 
 # Backend
@@ -51,7 +60,7 @@ cd apps/api && uv sync --extra dev --extra security --extra observability
 POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/init_db.py
 POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/run_api.py
 
-# Frontend
+# Frontend (separate terminal)
 cd apps/web && npm ci && npm run dev
 ```
 
@@ -74,8 +83,10 @@ For a fully non-Docker run, install and run these services on the host:
 Then create a local env file:
 
 ```bash
-cp .env.local.example .env
+[ -f .env ] || cp .env.example .env
 ```
+
+> If `.env` already exists, neither command overwrites it. Delete `.env` first if you intentionally want to reset.
 
 Start backend:
 

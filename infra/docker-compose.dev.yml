@@ -23,10 +23,6 @@ services:
   backend:
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
-    networks:
-      - infra_net
-      - external_net
-      - backend_net
 
   frontend:
     environment:

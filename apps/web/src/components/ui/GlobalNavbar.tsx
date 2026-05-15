@@ -105,13 +105,6 @@ export function GlobalNavbar() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [pathname, router, playSound, hasActiveSession, queryClient]);
 
-  const handleResetClick = useCallback(() => {
-    if (typeof window === "undefined") return;
-    playSound("reset");
-    resetActiveInvestigation(queryClient);
-    router.push("/", { scroll: true });
-  }, [queryClient, router, playSound]);
-
   return (
     <nav
       aria-label="Main navigation"
@@ -122,12 +115,12 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
-      className={`fixed top-4 left-4 sm:top-6 sm:left-6 z-[10001] transition-[transform,opacity] duration-300 ease-in-out ${
-        isVisible || isKeyboardUser ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+      className={`fixed top-0 inset-x-0 w-full z-[10001] transition-[transform,opacity] duration-300 ease-in-out border-b border-white/5 bg-transparent ${
+        isVisible || isKeyboardUser ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       }`}
     >
       <div
-        className="group flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full fc-surface-crisp transition-all duration-200 relative"
+        className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -136,26 +129,11 @@ export function GlobalNavbar() {
           onClick={handleLogoClick}
           aria-label={hasActiveSession || pathname !== "/" ? "Reset and return to Forensic Council home" : "Return to top"}
           aria-current={pathname === "/" ? "page" : undefined}
-          className="flex items-center rounded-full fc-transition fc-focus-ring"
+          className="flex items-center rounded-sm fc-transition fc-focus-ring outline-none"
         >
           <BrandLogo size="sm" isHovered={isHovered} />
         </button>
 
-        {(hasActiveSession || pathname !== "/") && (
-          <button
-            type="button"
-            onClick={handleResetClick}
-            className="
-              ml-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-[0.15em]
-              rounded-full border fc-transition fc-focus-ring
-              text-white/55 bg-danger/10 border-danger/25
-              hover:text-white/90 hover:bg-danger/20
-            "
-            aria-label="Reset active investigation"
-          >
-            Reset
-          </button>
-        )}
       </div>
     </nav>
   );

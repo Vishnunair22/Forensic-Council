@@ -18,6 +18,19 @@ export function cleanFindingText(text: string | null | undefined, maxLen?: numbe
     .replace(UUID_FILE_RE, "the submitted file")
     .replace(/\bThe image file\s+the submitted file\s+/gi, "The submitted file ")
     .replace(/\bwas analyzed using\s+Agent\d_[^.]+\.?\s*/gi, "")
+    // Strip backend metric/audit fragments that leak into summaries
+    .replace(/[.,]?\s*Key metrics:[\s\S]*$/i, "")
+    .replace(/[.,]?\s*Reliability impact:[^.]*\.?/gi, "")
+    .replace(/[.,]?\s*Penalty factor:[^.]*\.?/gi, "")
+    // Strip redundant "Final Verdict: X" and "Confidence: N%" labels from LLM synthesis
+    .replace(/\bFinal [Vv]erdict:\s*[A-Za-z_]+[.,]?\s*/g, "")
+    .replace(/\b[Cc]onfidence:\s*\d+(?:\.\d+)?%[.,]?\s*/g, "")
+    // Strip pipeline state tokens that leak into OCR/LLM output
+    .replace(/\bWAITING[_\s]FOR[_\s]DATA(?:\s+[A-Z])?\.?/g, "")
+    .replace(/\b(?:IDLE|QUEUED|RUNNING|PENDING|COMPLETED?|FAILED|ERROR_STATE)\.?(?=\s|$)/g, "")
+    .replace(/\b(?:STATUS|STATE):\s*[A-Z_]+\.?/g, "")
+    // Fix double/triple periods left by stripping
+    .replace(/\.{2,}/g, ".")
     .replace(/\s+/g, " ")
     .trim();
 

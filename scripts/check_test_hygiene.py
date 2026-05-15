@@ -61,7 +61,7 @@ def check_file(path: Path) -> None:
 
     # 3. Jest tests in e2e folder
     if "/tests/e2e/" in str(path) or "\\tests\\e2e\\" in str(path):
-        if path.suffix in (".test.ts", ".test.tsx"):
+        if path.name.endswith((".test.ts", ".test.tsx")):
             FAILURES.append(
                 f"{path.relative_to(ROOT)}: Jest test in e2e folder — "
                 "move to tests/unit/ or tests/integration/"

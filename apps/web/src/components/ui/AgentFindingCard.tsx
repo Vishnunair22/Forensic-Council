@@ -16,13 +16,15 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { clsx } from "clsx";
-import { motion } from "framer-motion";
 import { AgentFindingDTO, AgentMetricsDTO, ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
+import { fmtTool } from "@/lib/fmtTool";
 import {
   ConfidenceBar,
-  ToolRow
+  ToolRow,
+  deriveSummary,
+  summaryRichness,
 } from "@/components/result/AgentFindingSubComponents";
 
 export interface AgentFindingCardProps {
@@ -39,24 +41,24 @@ export interface AgentFindingCardProps {
 const AGENT_META: Record<string, { name: string; role: string; color: string; icon: LucideIcon }> = {
   "Agent1": { name: "Image Forensics", role: "Pixel Integrity & AI Detection", color: "cyan", icon: ShieldCheck },
   "Agent2": { name: "Audio Forensics", role: "Acoustic Integrity", color: "blue", icon: Activity },
-  "Agent3": { name: "Object Detection", role: "Scene & Context Analysis", color: "amber", icon: Shield },
+  "Agent3": { name: "Contextual Analysis", role: "Scene & Object Verification", color: "amber", icon: Shield },
   "Agent4": { name: "Video Forensics", role: "Temporal Analysis", color: "teal", icon: ShieldAlert },
   "Agent5": { name: "Metadata Expert", role: "Digital Provenance", color: "violet", icon: Cpu },
 };
 
-const COLOR_MAP: Record<string, { bg: string; border: string; text: string; glow: string }> = {
-  cyan: { bg: "bg-primary/5", border: "border-primary/20", text: "text-primary", glow: "shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.1)]" },
-  blue: { bg: "bg-blue-500/5", border: "border-blue-500/20", text: "text-blue-400", glow: "shadow-[0_0_30px_rgba(79,142,247,0.1)]" },
-  amber: { bg: "bg-amber-500/5", border: "border-amber-500/20", text: "text-amber-400", glow: "shadow-[0_0_30px_rgba(245,158,11,0.1)]" },
-  teal: { bg: "bg-teal-500/5", border: "border-teal-500/20", text: "text-teal-400", glow: "shadow-[0_0_30px_rgba(45,212,191,0.1)]" },
-  violet: { bg: "bg-violet-500/5", border: "border-violet-500/20", text: "text-violet-400", glow: "shadow-[0_0_30px_rgba(139,92,246,0.1)]" },
+const COLOR_MAP: Record<string, { bg: string; border: string; text: string; ring: string }> = {
+  cyan:   { bg: "bg-primary/8",     border: "border-primary/30",     text: "text-primary",      ring: "ring-primary/25" },
+  blue:   { bg: "bg-blue-500/8",    border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
+  amber:  { bg: "bg-amber-500/8",   border: "border-amber-500/30",   text: "text-amber-300",    ring: "ring-amber-500/25" },
+  teal:   { bg: "bg-teal-500/8",    border: "border-teal-500/30",    text: "text-teal-300",     ring: "ring-teal-500/25" },
+  violet: { bg: "bg-violet-500/8",  border: "border-violet-500/30",  text: "text-violet-300",   ring: "ring-violet-500/25" },
 };
 
 const FLAG_CONFIG = {
-  bad: { color: "text-danger", bg: "bg-danger/10", border: "border-danger/20", icon: AlertTriangle, label: "Anomaly Detected" },
-  warn: { color: "text-warning", bg: "bg-warning/10", border: "border-warning/20", icon: AlertTriangle, label: "Warning" },
-  ok: { color: "text-primary", bg: "bg-primary/10", border: "border-primary/20", icon: CheckCircle2, label: "Clean" },
-  info: { color: "text-white/40", bg: "bg-white/5", border: "border-border-subtle", icon: Info, label: "Info" },
+  bad:  { color: "text-danger",  bg: "bg-danger/10",   border: "border-danger/25",  icon: AlertTriangle, label: "Anomaly" },
+  warn: { color: "text-warning", bg: "bg-warning/10",  border: "border-warning/25", icon: AlertTriangle, label: "Warning" },
+  ok:   { color: "text-primary", bg: "bg-primary/10",  border: "border-primary/25", icon: CheckCircle2,  label: "Clean"   },
+  info: { color: "text-white/55",bg: "bg-white/[0.04]",border: "border-white/[0.08]",icon: Info,         label: "Info"    },
 };
 
 interface Section {
@@ -66,6 +68,52 @@ interface Section {
   keySignal: string;
   analysis: string;
   findings: AgentFindingDTO[];
+}
+
+// ─── Dedup + stale/template filter ───────────────────────────────────────────
+// Many runs leak duplicate tool entries (re-runs append new findings without
+// retiring the prior ones) and stub findings whose entire content is a
+// generic template. We pick the richest version per tool, then drop anything
+// that has no actionable signal left.
+function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] {
+  const byKey = new Map<string, AgentFindingDTO>();
+  for (const f of findings) {
+    const key =
+      (f.metadata?.tool_name as string) ||
+      f.finding_type ||
+      f.finding_id;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, f);
+      continue;
+    }
+    // Keep the richer entry. Ties go to the later one (assumed freshest).
+    const newScore = summaryRichness(f);
+    const oldScore = summaryRichness(existing);
+    if (newScore >= oldScore) byKey.set(key, f);
+  }
+
+  const deduped = Array.from(byKey.values());
+
+  return deduped.filter((f) => {
+    const verdict = String(f.evidence_verdict || "").toUpperCase();
+    // Keep flagged/error/NA regardless — those are informative even without text.
+    if (verdict === "POSITIVE" || verdict === "ERROR" || verdict === "NOT_APPLICABLE") return true;
+    const summary = deriveSummary(f);
+    const hasReal =
+      (summary && summary.length > 32) ||
+      Object.keys(f.metadata || {}).some(
+        (k) =>
+          !k.startsWith("_") &&
+          k !== "tool_name" &&
+          k !== "execution_time_ms" &&
+          k !== "analysis_phase" &&
+          k !== "section_id" &&
+          k !== "section_label" &&
+          k !== "section_flag",
+      );
+    return hasReal;
+  });
 }
 
 function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
@@ -93,24 +141,28 @@ function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
     group.findings.push(f);
   }
 
-  // Sort: bad → warn → ok → info → other
   const flagOrder: Record<string, number> = { bad: 0, warn: 1, ok: 2, info: 3 };
-  return Array.from(groupMap.values()).sort(
+  const sorted = Array.from(groupMap.values()).sort(
     (a, b) => (flagOrder[a.flag] ?? 4) - (flagOrder[b.flag] ?? 4)
   );
+  // Within each section, surface richer findings first.
+  for (const sec of sorted) {
+    sec.findings.sort((a, b) => summaryRichness(b) - summaryRichness(a));
+  }
+  return sorted;
 }
 
-function cleanSummary(text: string, maxLen = 210) {
+function cleanSummary(text: string, maxLen = 320) {
   const stripped = cleanFindingText(text.replace(/^[^:]{1,55}:\s*/, "").trim());
   if (stripped.length <= maxLen) return stripped;
   const clipped = stripped.slice(0, maxLen);
   const lastSpace = clipped.lastIndexOf(" ");
-  return (lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped) + "...";
+  return (lastSpace > 60 ? clipped.slice(0, lastSpace) : clipped) + "...";
 }
 
 function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsDTO, narrative?: string) {
   if (narrative && narrative.trim().length > 0) {
-    return cleanSummary(narrative.trim(), 520);
+    return cleanFindingText(narrative.trim());
   }
 
   const active = findings.filter((f) => f.evidence_verdict !== "NOT_APPLICABLE");
@@ -132,13 +184,12 @@ function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsD
         : "The agent found no decisive manipulation signal";
 
   const highlights = top
-    .map((f) => cleanSummary((f.metadata?.llm_refined_summary as string) || f.reasoning_summary || "", 120))
+    .map((f) => cleanSummary((f.metadata?.llm_refined_summary as string) || f.reasoning_summary || "", 220))
     .filter(Boolean)
     .join(" ");
 
   return cleanFindingText(
     `${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`,
-    520,
   );
 }
 
@@ -147,93 +198,117 @@ function normalizeVerdict(verdict?: string) {
 }
 
 function verdictClasses(verdict: string) {
-  if (["AUTHENTIC", "LIKELY_AUTHENTIC"].includes(verdict)) {
-    return "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400";
+  if (["AUTHENTIC", "LIKELY_AUTHENTIC", "VERIFIED"].includes(verdict)) {
+    return "bg-emerald-500/15 border border-emerald-500/35 text-emerald-300";
   }
   if (["SUSPICIOUS", "LIKELY_MANIPULATED", "INCONCLUSIVE", "ABSTAIN"].includes(verdict)) {
-    return "bg-amber-500/10 border border-amber-500/20 text-amber-400";
+    return "bg-amber-500/15 border border-amber-500/35 text-amber-300";
   }
   if (["MANIPULATED", "TAMPERED"].includes(verdict)) {
-    return "bg-red-500/10 border border-red-500/20 text-red-400";
+    return "bg-red-500/15 border border-red-500/35 text-red-300";
   }
-  return "bg-white/5 border border-white/10 text-white/40";
+  return "bg-white/8 border border-white/15 text-white/55";
 }
 
-function SectionGroup({ section }: { section: Section }) {
-  const [open, setOpen] = useState(section.flag === "bad" || section.flag === "warn");
-  const [showAnalysis, setShowAnalysis] = useState(false);
+const INITIAL_TOOLS_PER_SECTION = 4;
+
+function SectionGroup({ section, defaultExpanded }: { section: Section; defaultExpanded: boolean }) {
+  const [open, setOpen] = useState(defaultExpanded);
+  const [showAll, setShowAll] = useState(false);
   const flagCfg = FLAG_CONFIG[section.flag as keyof typeof FLAG_CONFIG] ?? FLAG_CONFIG.info;
   const FlagIcon = flagCfg.icon;
 
+  const visibleFindings = showAll
+    ? section.findings
+    : section.findings.slice(0, INITIAL_TOOLS_PER_SECTION);
+  const hiddenCount = section.findings.length - visibleFindings.length;
+
   return (
-    <motion.div
-      layout
-      className={clsx(
-        "rounded-[1.25rem] border overflow-hidden transition-all duration-500 relative group premium-card",
-        open && "bg-surface-3",
-        !open && flagCfg.bg,
-        flagCfg.border
-      )}
-      whileHover={{ scale: 1.002, borderColor: open ? "rgba(255,255,255,0.15)" : undefined }}
-    >
-      <div className={clsx(
-        "absolute inset-0 opacity-0 group-hover:opacity-10 pointer-events-none transition-opacity duration-700 bg-grid-small",
-      )} />
-      {/* Section Header */}
+    <div className={clsx(
+      "rounded-2xl border-2 overflow-hidden transition-colors duration-300",
+      open
+        ? clsx("bg-surface-3", flagCfg.border)
+        : clsx(flagCfg.bg, flagCfg.border),
+    )}>
+      {/* Section header */}
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left transition-all z-10 relative"
+        className="w-full flex items-center gap-3 px-5 py-4 text-left transition-all hover:bg-white/[0.03] group/section"
         aria-expanded={open}
       >
-        <FlagIcon className={clsx("w-3.5 h-3.5 shrink-0", flagCfg.color)} />
-        <span className={clsx("flex-1 text-[10px] font-black tracking-wide", flagCfg.color)}>
+        <span className={clsx("w-8 h-8 rounded-lg flex items-center justify-center border", flagCfg.bg, flagCfg.border)}>
+          <FlagIcon className={clsx("w-4 h-4", flagCfg.color)} />
+        </span>
+        <span className={clsx("flex-1 text-sm font-black tracking-wide", flagCfg.color)}>
           {section.label}
         </span>
-        <span className="text-[10px] font-mono font-black text-white/40 mr-2">
-          {section.findings.length} Signals
-        </span>
         {section.keySignal && (
-          <span className="hidden sm:block text-[9px] font-mono font-black text-white/40 truncate max-w-[200px] mr-2">
+          <span className="hidden md:block text-[12px] font-mono text-white/55 truncate max-w-[260px]">
             {section.keySignal}
           </span>
         )}
-        <ChevronDown className={clsx("w-3.5 h-3.5 text-white/40 transition-transform duration-300 shrink-0", open && "rotate-180")} />
+        <span className="text-[12px] font-mono font-black text-white/55 shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
+          {section.findings.length} {section.findings.length === 1 ? "tool" : "tools"}
+        </span>
+        <span
+          className="flex items-center gap-1.5 text-[11px] font-black tracking-wide text-white/60 group-hover/section:text-white transition-colors"
+          aria-hidden="true"
+        >
+          {open ? "Hide" : "Show"}
+          <ChevronDown
+            className={clsx(
+              "w-4 h-4 transition-transform duration-300",
+              open && "rotate-180"
+            )}
+          />
+        </span>
       </button>
 
-      {/* Tools in this section */}
+      {/* Tools */}
       {open && (
-        <div className="border-t border-white/[0.04]">
-          <div className="bg-[#000]/10">
-            {section.findings.map((f, i) => (
-              <ToolRow key={f.finding_id ?? `${f.finding_type}-${i}`} finding={f} isLast={i === section.findings.length - 1} />
-            ))}
-          </div>
+        <div className="border-t border-white/[0.06] bg-black/15">
+          {visibleFindings.map((f, i) => (
+            <ToolRow
+              key={f.finding_id ?? `${f.finding_type}-${i}`}
+              finding={f}
+              isLast={i === visibleFindings.length - 1 && hiddenCount === 0}
+            />
+          ))}
 
-          {/* Section-level LLM analysis (collapsed by default) */}
-          {section.analysis && section.analysis.length > 20 && (
-            <div className="border-t border-white/[0.03]">
-              <button
-                onClick={() => setShowAnalysis(!showAnalysis)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.02] transition-all"
-              >
-                <Activity className="w-3 h-3 text-primary/40 shrink-0" />
-                <span className="text-[10px] font-bold tracking-wide text-white/40 flex-1">
-                  Section Analysis
-                </span>
-                <ChevronDown className={clsx("w-3 h-3 text-white/35 transition-transform duration-300", showAnalysis && "rotate-180")} />
-              </button>
-              {showAnalysis && (
-                <div className="px-4 pb-4 animate-in fade-in duration-200">
-                  <p className="text-[12px] text-white/50 leading-relaxed font-medium italic border-l-2 border-white/10 pl-3">
-                    {section.analysis}
-                  </p>
-                </div>
-              )}
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="w-full px-5 py-3.5 text-[12px] font-black tracking-wide text-primary/90 hover:text-primary hover:bg-primary/[0.06] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+            >
+              Show {hiddenCount} more tool finding{hiddenCount === 1 ? "" : "s"}
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {showAll && section.findings.length > INITIAL_TOOLS_PER_SECTION && (
+            <button
+              type="button"
+              onClick={() => setShowAll(false)}
+              className="w-full px-5 py-3 text-[11px] font-black tracking-wide text-white/45 hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+            >
+              Collapse to top {INITIAL_TOOLS_PER_SECTION}
+              <ChevronDown className="w-3 h-3 rotate-180" />
+            </button>
+          )}
+
+          {section.analysis && section.analysis.length > 30 && (
+            <div className="px-5 py-4 border-t border-white/[0.06] flex items-start gap-2.5 bg-white/[0.02]">
+              <Activity className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
+              <p className="text-[14px] text-white/70 leading-relaxed font-medium italic">
+                {section.analysis}
+              </p>
             </div>
           )}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -251,11 +326,24 @@ export function AgentFindingCard({
   const meta = AGENT_META[agentId] || { name: agentId, role: "Unknown", color: "cyan", icon: ShieldX };
   const theme = COLOR_MAP[meta.color];
 
-  const findings = phase === "deep" ? [...initialFindings, ...deepFindings] : initialFindings;
+  const rawFindings = phase === "deep" ? [...initialFindings, ...deepFindings] : initialFindings;
   const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
-  const realFindings = findings.filter((f: Finding) => !SKIP_TYPES.has(String(f?.finding_type || "").toLowerCase()));
+  const preBypassed = rawFindings.filter((f: Finding) => SKIP_TYPES.has(String(f?.finding_type || "").toLowerCase()));
+  const preReal = rawFindings.filter((f: Finding) => !SKIP_TYPES.has(String(f?.finding_type || "").toLowerCase()));
 
-  const isSkipped = realFindings.length === 0 && findings.some((f: Finding) => SKIP_TYPES.has(String(f?.finding_type || "").toLowerCase()));
+  // Dedupe + drop stale/template noise BEFORE rendering.
+  const realFindings = useMemo(() => dedupeAndFilter(preReal), [preReal]);
+  const bypassedFindings = useMemo(() => {
+    const seen = new Set<string>();
+    return preBypassed.filter((f) => {
+      const key = (f.metadata?.tool_name as string) || f.finding_type || f.finding_id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [preBypassed]);
+
+  const isSkipped = realFindings.length === 0 && bypassedFindings.length > 0;
   const confidence = metrics?.confidence_score ?? 0;
 
   const totalTimingMs = useMemo(() => {
@@ -268,7 +356,6 @@ export function AgentFindingCard({
     [realFindings, metrics, narrative]
   );
 
-  // Count anomalies for the header badge
   const anomalyCount = useMemo(
     () => realFindings.filter(f =>
       f.evidence_verdict === "POSITIVE" ||
@@ -289,102 +376,111 @@ export function AgentFindingCard({
 
   if (isSkipped) {
     return (
-      <div className="rounded-3xl p-6 border border-white/[0.03] bg-white/[0.01] opacity-30 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-700">
+      <div className="rounded-3xl p-6 border border-white/[0.05] bg-white/[0.015] opacity-40 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-700">
         <div className="flex items-center gap-4">
-          <div className="w-11 h-11 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
             <meta.icon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-white/50 tracking-wide">{meta.name}</h3>
-            <p className="text-[10px] font-mono font-bold text-white/40 mt-0.5">{meta.role} · Protocol Skip</p>
+            <h3 className="text-sm font-bold text-white/65 tracking-wide">{meta.name}</h3>
+            <p className="text-[11px] font-mono font-bold text-white/45 mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
-        <span className="text-[10px] font-bold tracking-wide text-white/10 px-3 py-1 rounded-full border border-white/5">Not Applicable</span>
+        <span className="text-[11px] font-bold tracking-wide text-white/30 px-3 py-1.5 rounded-full border border-white/10">Not Applicable</span>
       </div>
     );
   }
 
   return (
-    <motion.div
-      className="rounded-2xl overflow-hidden transition-all duration-400"
+    <div
+      className={clsx(
+        "rounded-2xl overflow-hidden transition-all duration-300 border-2",
+        open
+          ? clsx(theme.border, "shadow-[0_12px_40px_rgba(0,0,0,0.55)] ring-1", theme.ring)
+          : "border-white/[0.10] shadow-[0_4px_18px_rgba(0,0,0,0.4)] hover:border-white/[0.16]"
+      )}
       style={{
-        background: "rgba(5,9,18,0.92)",
-        border: open ? "1px solid rgba(79,142,247,0.22)" : "1px solid rgba(165,200,255,0.07)",
-        boxShadow: open
-          ? "0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(79,142,247,0.06)"
-          : "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)",
+        background:
+          "linear-gradient(180deg, rgba(15,23,45,0.92) 0%, rgba(6,10,20,0.96) 100%)",
       }}
     >
       {/* Header Button */}
       <button
         onClick={() => setOpen(!open)}
         className={clsx(
-          "w-full p-6 text-left transition-all relative overflow-hidden group",
-          open ? "bg-white/[0.04]" : "hover:bg-white/[0.02]"
+          "w-full px-6 py-5 text-left transition-all relative overflow-hidden group",
+          open ? "bg-white/[0.04]" : "hover:bg-white/[0.025]"
         )}
         aria-expanded={open}
         aria-controls={`agent-content-${agentId}`}
         aria-label={`${open ? "Collapse" : "Expand"} ${meta.name} findings`}
       >
-        <div className="flex items-start justify-between gap-6 relative z-10">
-          <div className="flex items-center gap-5">
-            <div className={clsx(
-              "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
-              theme.bg, theme.border, theme.text, open && "scale-105 shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.1)]"
-            )}>
-              <meta.icon className="w-7 h-7" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-black text-white tracking-tighter">{meta.name}</h3>
-                <span className="text-[10px] text-white/40 font-black tracking-wide">{meta.role}</span>
-                {anomalyCount > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black">
-                    <AlertTriangle className="w-2.5 h-2.5" /> {anomalyCount} Flags
-                  </span>
-                )}
-                {/* Agent Verdict Badge */}
-                {metrics && (
-                   <span className={clsx(
-                     "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider",
-                     verdictClasses(displayVerdict)
-                   )}>
-                     {displayVerdict.replace(/_/g, " ")}
-                   </span>
-                )}
-              </div>
-              <p className="text-[10px] font-mono font-black text-white/40 flex items-center gap-2 tracking-tight">
-                {sections.length} Sectors
-                <span className="text-white/10">·</span>
-                {realFindings.length} Signals
-                <span className="text-white/10">·</span>
-                <Clock className="w-3 h-3" /> {totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}
-              </p>
-              
-              {/* Surfaced Narrative Preview */}
-              {!open && overview && (
-                <div className="mt-4 animate-in fade-in slide-in-from-left-2 duration-700">
-                  <p className="text-[11px] text-white/30 leading-relaxed font-medium line-clamp-2 max-w-xl border-l border-white/10 pl-3 italic">
-                    {overview}
-                  </p>
-                </div>
-              )}
-            </div>
+        <div className="flex items-center gap-4 relative z-10">
+          {/* Agent icon */}
+          <div className={clsx(
+            "w-[52px] h-[52px] rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all duration-500",
+            theme.bg, theme.border, theme.text
+          )}>
+            <meta.icon className="w-6 h-6" />
           </div>
 
-          <div className="flex flex-col items-end gap-3 text-right shrink-0">
-            <ConfidenceBar value={confidence} />
-            <div className="flex items-center gap-2">
-              <div className="px-3 py-1 rounded-full border border-border-subtle bg-surface-1 text-[9px] font-black tracking-wide text-white/40">
-                {phase === 'deep' ? 'Deep Analysis' : 'Intake Scan'}
-              </div>
-              <div className={clsx(
-                "p-2 rounded-xl border transition-all duration-500",
-                open ? "bg-primary/10 border-primary/30 text-primary rotate-180" : "bg-surface-1 border-border-subtle text-white/40"
-              )}>
-                <ChevronDown className="w-4 h-4" />
-              </div>
+          {/* Name + meta */}
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-[18px] font-black text-white tracking-tight">{meta.name}</h3>
+              {metrics && (
+                <span className={clsx("px-2.5 py-1 rounded-full text-[11px] font-black tracking-wider", verdictClasses(displayVerdict))}>
+                  {displayVerdict.replace(/_/g, " ")}
+                </span>
+              )}
+              {anomalyCount > 0 && (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-danger/15 border border-danger/35 text-danger text-[11px] font-black">
+                  <AlertTriangle className="w-3.5 h-3.5" /> {anomalyCount}
+                </span>
+              )}
             </div>
+            <div className="flex items-center gap-2.5 text-[12px] font-mono font-bold text-white/55 flex-wrap">
+              <span>{meta.role}</span>
+              <span className="text-white/25">·</span>
+              <span>{realFindings.length} checks</span>
+              {totalTimingMs > 0 && (
+                <>
+                  <span className="text-white/25">·</span>
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}</span>
+                </>
+              )}
+            </div>
+            {!open && overview && (
+              <p className="text-[13px] text-white/55 leading-relaxed font-medium line-clamp-3 italic">
+                {overview}
+              </p>
+            )}
+          </div>
+
+          {/* Right: confidence + show/hide pill */}
+          <div className="flex items-center gap-3 shrink-0">
+            <ConfidenceBar value={confidence} />
+            <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-[11px] font-black tracking-wide text-white/65">
+              {phase === 'deep' ? 'Deep' : 'Initial'}
+            </div>
+            <span
+              className={clsx(
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-black tracking-wide border transition-colors",
+                open
+                  ? "border-white/20 bg-white/[0.06] text-white/85"
+                  : "border-primary/40 bg-primary/[0.12] text-primary group-hover:bg-primary/[0.18]"
+              )}
+              aria-hidden="true"
+            >
+              {open ? "Hide details" : "Show details"}
+              <ChevronDown
+                className={clsx(
+                  "w-4 h-4 transition-transform duration-300",
+                  open && "rotate-180"
+                )}
+              />
+            </span>
           </div>
         </div>
       </button>
@@ -398,42 +494,69 @@ export function AgentFindingCard({
         )}
       >
         <div className="overflow-hidden">
-          <div className="p-6 pt-3 space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="px-6 pb-6 pt-3 space-y-4 animate-in fade-in duration-300">
 
-            {/* Agent narrative (court_notes / reliability note) — concise, not primary */}
+            {/* Agent overview narrative — full text, no clamp */}
             {overview && (
-              <div className="relative p-4 rounded-2xl bg-[#000]/30 border border-white/5">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="w-3 h-3 text-primary/50" />
-                  <span className="text-[10px] font-black tracking-wide text-white/40">Precise Overview</span>
-                </div>
-                <p className="text-[12px] text-white/60 leading-relaxed font-medium">
+              <div className="flex items-start gap-3 p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
+                <Activity className="w-4 h-4 text-primary/65 mt-1 shrink-0" />
+                <p className="text-[15px] text-white/80 leading-relaxed font-medium">
                   {overview}
                 </p>
               </div>
             )}
 
-            {/* Sections — one per tool group */}
+            {/* Section groups */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-3 h-3 text-white/40" />
-                  <span className="text-[10px] font-black tracking-wide text-white/40">Tool Results by Section</span>
-                </div>
-                <span className="text-[10px] font-mono text-white/10 font-black">
-                  {realFindings.length} tool{realFindings.length !== 1 ? "s" : ""} · {sections.length} group{sections.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                {sections.map(section => (
-                  <SectionGroup key={section.id} section={section} />
-                ))}
-              </div>
+              {sections.map((section, idx) => (
+                <SectionGroup
+                  key={section.id}
+                  section={section}
+                  // Open the first two sections; let users opt in to the rest.
+                  defaultExpanded={idx < 2 || section.flag === "bad" || section.flag === "warn"}
+                />
+              ))}
             </div>
+
+            {bypassedFindings.length > 0 && (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Info className="w-4 h-4 text-white/45" />
+                  <span className="text-[12px] font-black tracking-wide text-white/55 uppercase">
+                    Bypassed Tools ({bypassedFindings.length})
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {bypassedFindings.map((f, i) => {
+                    const toolName = (f.metadata?.tool_name as string) || f.finding_type || "Unknown";
+                    return (
+                      <span
+                        key={`${toolName}-${i}`}
+                        className="text-[12px] font-mono text-white/55 px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.08]"
+                        title="Not applicable to this file type"
+                      >
+                        {fmtTool(toolName)}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {phase === "initial" && realFindings.length > 0 && (
+              <div className="rounded-2xl border border-primary/25 bg-primary/[0.06] px-5 py-4 flex items-start gap-3">
+                <Info className="w-4 h-4 text-primary/85 mt-0.5 shrink-0" />
+                <p className="text-[13px] text-white/75 leading-relaxed font-medium">
+                  <span className="font-black text-primary">Initial Analysis</span>{" "}
+                  ran {realFindings.length} core check{realFindings.length === 1 ? "" : "s"} for fast triage.
+                  Run <span className="font-black text-primary">Deep Analysis</span> to dispatch
+                  the full neural suite (anomaly tracing, frequency artifacts, PRNU, splicing, copy-move, etc.).
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

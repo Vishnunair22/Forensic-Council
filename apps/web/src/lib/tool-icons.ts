@@ -27,8 +27,10 @@ import {
 } from "lucide-react";
 
 export const TOOL_ICONS: Record<string, LucideIcon> = {
+  // ── Image integrity (Agent 1) ──────────────────────────────────────────────
   ela_full_image: ImageIcon,
   ela_anomaly_classify: Scan,
+  neural_ela: Scan,
   jpeg_ghost_detect: Eye,
   frequency_domain_analysis: Activity,
   deepfake_frequency_check: Brain,
@@ -38,58 +40,103 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   extract_text_from_image: Camera,
   extract_evidence_text: Camera,
   noise_fingerprint: Gauge,
+  noiseprint_cluster: Gauge,
+  neural_fingerprint: Fingerprint,
   copy_move_detect: Crosshair,
+  neural_copy_move: Crosshair,
   splicing_detect: Layers,
+  neural_splicing: Layers,
+  anomaly_tracer: Brain,
+  f3_net_frequency: Activity,
+  diffusion_artifact_detector: Zap,
+  synthid_watermark_detect: Shield,
   adversarial_robustness_check: Shield,
+  adversarial_robustness: Shield,
+  roi_extract: Crosshair,
   sensor_db_query: Database,
   prnu_analysis: Fingerprint,
   cfa_demosaicing: Scan,
+
+  // ── Gemini synthesis (all agents) ─────────────────────────────────────────
   gemini_deep_forensic: Brain,
+
+  // ── Object/scene (Agent 3) ────────────────────────────────────────────────
   object_detection: Search,
   secondary_classification: Cpu,
   scale_validation: Gauge,
   lighting_consistency: Zap,
+  lighting_correlation_initial: Zap,
   scene_incongruence: Eye,
   contraband_database: Database,
+  vector_contraband_search: Database,
+  screenshot_scene_applicability: Search,
+  screenshot_layout_forensics: FileSearch,
   object_text_ocr: Camera,
   document_authenticity: FileSearch,
   image_splice_check: Layers,
+
+  // ── Inter-agent ────────────────────────────────────────────────────────────
   inter_agent_call: Wifi,
+
+  // ── Metadata / provenance (Agent 5) ───────────────────────────────────────
   exif_extract: Hash,
   metadata_anomaly_score: Brain,
+  metadata_anomaly_scorer: Brain,
+  exif_isolation_forest: Brain,
   gps_timezone_validate: Globe,
   steganography_scan: Binary,
   file_structure_analysis: Layers,
   hex_signature_scan: Binary,
   timestamp_analysis: Clock,
   astronomical_api: Globe,
+  astro_grounding: Globe,
   reverse_image_search: Search,
   device_fingerprint_db: Fingerprint,
   c2pa_verify: Shield,
+  c2pa_validator: Shield,
   thumbnail_mismatch: ImageIcon,
   extract_deep_metadata: Hash,
   get_physical_address: Globe,
+  camera_profile_match: Database,
+  provenance_chain_verify: Shield,
+  prnu_sensor_verification: Fingerprint,
+  compression_risk_audit: Layers,
+
+  // ── Audio/video container (Agents 2, 5) ───────────────────────────────────
   mediainfo_profile: Activity,
   av_file_identity: Activity,
+
+  // ── Audio authenticity (Agent 2) ──────────────────────────────────────────
   speaker_diarize: Speaker,
   anti_spoofing_detect: Speaker,
+  anti_spoofing_deep_ensemble: Speaker,
   voice_clone_detect: Speaker,
   voice_clone_deep_ensemble: Speaker,
-  anti_spoofing_deep_ensemble: Speaker,
+  neural_prosody: AudioWaveform,
   prosody_analyze: AudioWaveform,
+  audio_gen_signature: AudioWaveform,
   audio_splice_detect: AudioWaveform,
   background_noise_analysis: AudioWaveform,
   codec_fingerprinting: AudioWaveform,
   enf_analysis: AudioWaveform,
   audio_visual_sync: Video,
+  av_sync_verify: Video,
+
+  // ── Video temporal (Agent 4) ──────────────────────────────────────────────
   optical_flow_analysis: Video,
   optical_flow_analyze: Video,
   frame_consistency_analysis: Video,
   frame_window_extract: Video,
-  face_swap_detection: ImageIcon,
+  frame_extraction: Camera,
+  face_swap_detection: Eye,
+  face_swap_detect: Eye,
   video_metadata: Video,
   video_metadata_extract: Video,
   rolling_shutter_validation: Video,
+  vfi_error_map: Video,
+  thumbnail_coherence: ImageIcon,
+  interframe_forgery_detector: Layers,
+  compression_artifact_analysis: Layers,
 };
 
 export function getToolIcon(toolName: string): LucideIcon {

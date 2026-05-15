@@ -6,7 +6,18 @@ import { RouteExperience } from "@/components/ui/RouteExperience";
 import { Toaster } from "@/components/ui/Toaster";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import { LandingBackground } from "@/components/ui/LandingBackground";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-mono-family",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: { default: "Forensic Council", template: "%s | Forensic Council" },
@@ -24,7 +35,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body className="font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip">
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip`}>
         <LandingBackground />
         <Suspense fallback={null}>
           <RouteExperience />

@@ -86,13 +86,10 @@ case "$MODE" in
 
   workflow)
     echo "=== Workflow checks ==="
-    if [[ -f scripts/verify_phase7_workflow.sh ]]; then
-      ./scripts/verify_phase7_workflow.sh static || fail "workflow static failed"
-      pass "workflow static"
-    fi
-    if [[ -f scripts/verify_phase7_workflow.sh ]]; then
-      ./scripts/verify_phase7_workflow.sh api 2>/dev/null || true
-    fi
+    python scripts/check_docs.py || fail "docs check failed"
+    pass "docs consistency"
+    python scripts/check_test_hygiene.py || fail "test hygiene failed"
+    pass "test hygiene"
     echo "Project verification passed: workflow"
     ;;
 

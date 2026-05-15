@@ -14,6 +14,60 @@ AI Sync Instructions: Before making or suggesting any changes:
 
 ---
 
+### 2026-05-16: Analysis Pipeline Agent Findings UI Refinement
+
+**Status:** Complete
+
+### What Changed
+- Refined completed agent cards on the Analysis Pipeline page so the top summary is now a concise derived **Agent Brief** instead of a long raw backend summary.
+- Kept the full backend summary available behind a "Show source summary" disclosure.
+- Made per-tool findings denser and clearer with verdict, severity, confidence, finding index, section, elapsed time, and a stronger visual priority treatment.
+- Improved hidden findings discovery with an explicit "Show all N tool findings (X hidden)" control at the end of each agent card.
+- Continued filtering/deduplicating sparse template findings so placeholder tool output does not dominate the card.
+
+### Files Touched
+- `apps/web/src/components/evidence/AgentStatusCard.tsx`
+- `PROJECT_HANDOFF.md`
+
+### What Works
+- `cmd /c npm run type-check` passes from `apps/web`.
+- `cmd /c npm run lint` passes from `apps/web`.
+
+### Commands Failed
+- `npm run type-check` failed under PowerShell because local execution policy blocks `npm.ps1`; reran successfully through `cmd /c`.
+
+### Still Broken / Risks
+- No known issue from this change. Visual polish should still be reviewed in-browser with a completed investigation containing more than three tool findings.
+
+### Next Action
+- Run the app and inspect the Analysis Pipeline cards against real backend findings, especially agents with sparse tool output.
+
+---
+
+### Phase 1: Infrastructure & Build Verification (Final)
+
+**Status:** ✅ COMPLETE
+**Date:** 2026-05-14
+
+### What's New
+- **Docker Network Hardening:** Implemented a strict 4-network segmentation model (`infra_net`, `external_net`, `backend_net`, `frontend_net`). Infrastructure services (Postgres, Redis, Qdrant) are now entirely internal and isolated from outbound internet.
+- **Calibration Seeding:** Introduced `apps/api/scripts/preseed_calibration.py` to bake identity calibration models into the image build, ensuring fresh volumes start with valid forensic probability models.
+- **Hardened Dev Boot:** Updated `scripts/dev.sh` with strict `.env` validation, a 30-minute health-check window for model downloads, and a policy check for `GEMINI_API_KEY_POLICY_OK`.
+- **Environment Parity:** Removed hardcoded `USE_REDIS_WORKER` values from the production compose override, allowing the base environment configuration to flow through correctly.
+- **Qdrant Config Realignment:** Updated `.env.example` to match the actual Pydantic schema used by the backend (`QDRANT_HOST`, `QDRANT_PORT`, etc.) instead of the generic `QDRANT_URL`.
+- **Documentation Overhaul:** Updated `infra/README.md` to accurately reflect the network architecture and port access patterns.
+
+### What's Fixed
+- **Placeholder Detection:** Tightened the Docker entrypoint and `validate_production_readiness.sh` to prevent startup if incomplete environment placeholders (e.g. `__REPLACE_ME__`) are detected.
+- **Dockerfile Deduplication:** Removed redundant health-checks and stale worker comments from the multi-stage Dockerfile.
+- **Port Clarity:** Clarified that the base stack does NOT expose direct host ports for the backend; all traffic must flow through Caddy for production parity.
+
+### Next Steps
+1. **Full Stack Smoke Test:** Perform a clean `docker compose down -v` followed by `./scripts/dev.sh` to verify the seed-and-download recovery flow.
+2. **Phase 15: CI/CD Finalization:** Integrate the new validation checks into the GitHub Actions pipeline.
+
+---
+
 ### Phase 14: Pipeline Resilience & Design Refinement (Final)
 
 **Status:** ✅ COMPLETE
@@ -69,6 +123,14 @@ AI Sync Instructions: Before making or suggesting any changes:
 ---
 
 ## Current Status
+- **Phase 1: Infrastructure & Build Verification** (Complete)
+    - [x] Implement 4-network isolation model (docker-compose.yml)
+    - [x] Create build-time calibration seeder (preseed_calibration.py)
+    - [x] Harden dev boot script validation and timeouts (dev.sh)
+    - [x] Align .env.example with backend Pydantic schema
+    - [x] Remove hardcoded production overrides (docker-compose.prod.yml)
+    - [x] Update infrastructure documentation (infra/README.md)
+
 - **Phase 14: Pipeline Resilience & Design Refinement** (Complete)
     - [x] Implement recoverable upload handoff (HeroAuthActions.tsx, useInvestigation.ts)
     - [x] Add websocket phase guards for deep analysis (useSimulation.ts, useInvestigation.ts)
@@ -239,8 +301,8 @@ Backend core logic fixes. Key changes:
 
 ### Phase 8 — Test Suite
 - Hygiene checker: `python scripts/check_test_hygiene.py` passes
-- Static verification: `python scripts/verify_phase8_tests.sh static` passes
-- Backend unit/integration: `python scripts/verify_phase8_tests.sh backend-unit` + `backend-integration`
+- Static verification: `bash scripts/verify_phase8_tests.sh static` passes
+- Backend unit/integration: `bash scripts/verify_phase8_tests.sh backend-unit` + `backend-integration`
 - Frontend: `npm run type-check` + `npm run lint` + `npm test` + `npm run build`
 - `mock_queue.enqueue` replaced with `mock_queue.submit` throughout
 
@@ -324,3 +386,77 @@ Every time architecture, routing, model config, or verification commands change:
 1. Update this file (Phase Inventory, Phase-Complete Invariants, Verification Matrix)
 2. Update the relevant source-of-truth doc in `docs/`
 3. Update `docs/DOCUMENTATION_INVENTORY.md` if doc structure changes
+
+---
+
+## Phase 1 — Docker + Non-Docker Build/Run + Setup Docs (completed)
+
+**Date:** 2026-05-15
+**Tags:** `checkpoint/phase-1-pre`, `checkpoint/phase-1-verified`
+
+### What changed
+- `infra/README.md` — Network Segmentation now correctly documents 4 networks (was 3, missing `external_net`); diagram updated; `yolo_cache` row corrected; quick-start ports clarified for dev vs production.
+- `infra/docker-compose.yml` — Removed dead `SKIP_MODEL_DOWNLOAD=1` and `SKIP_CACHE_CHECK=1` from migration service env.
+- `infra/docker-compose.prod.yml` — Removed `USE_REDIS_WORKER: "true"` hardcode from backend + worker env. Value now resolves from base `x-backend-env`.
+- `infra/validate_production_readiness.sh` — Enforces `CADDY_SITE_ADDRESS` is set, has http(s):// prefix, and is not localhost in production.
+- `apps/api/Dockerfile` — Deduplicated HEALTHCHECK; replaced inline calibration RUN with `scripts/preseed_calibration.py`; removed stale orchestration comment.
+- `apps/api/scripts/preseed_calibration.py` — **NEW.** Pre-seeds calibration models at build, fails fast on import errors.
+- `apps/api/scripts/docker_entrypoint.sh` — Tightened placeholder regex (anchored prefixes, dropped loose `*change*` glob).
+- `scripts/dev.sh` — Added `GEMINI_API_KEY_POLICY_OK` shape check; extended API-health wait to 30 min with first-run download heuristic.
+- `.env.example` — Qdrant section now defines `QDRANT_HOST/PORT/GRPC_PORT/HTTPS` (the keys backend actually reads). Removed unused `QDRANT_URL`/`QDRANT_COLLECTION`.
+- `README.md` — `.env` copy commands guarded with `[ -f .env ] ||`.
+
+### Next action
+Operator picks Phase 2.
+
+---
+
+## Phase 2 — Runtime Behavior, Transitions, Scroll, Refresh (completed)
+
+**Date:** 2026-05-15
+**Tags:** `checkpoint/phase-2-pre`, `checkpoint/phase-2-verified`
+
+### What changed
+- `apps/web/src/components/result/ResultLayout.tsx` — Removed duplicate scrollRestoration write; ResultLayout now only re-scrolls when initialSessionId changes WITHIN the same mount (history-panel switch). RouteExperience owns the initial route-mount scroll.
+- `apps/web/src/app/globals.css` — Added the missing `body[data-fc-loading="1"]::before` CSS rule that backs the JS bridge written by useInvestigation.handleAcceptAnalysis. Closes the brief flash gap between unmounting the evidence loading overlay and mounting the ForensicProgressOverlay on /result/{sid}.
+- `apps/web/src/components/pages/SessionExpiredClient.tsx` — "Return to Hub" now dispatches fc:reset-home when already on /, matching WORKFLOW_TRACE.md contract.
+- `apps/web/src/app/evidence/error.tsx` — Replaced manual storage.removeItem loop with clearInvestigationPersistence (preserves forensic_history, also clears forensic_initial_agents:*, forensic_deep_agents:*, forensic_is_deep, forensic_hitl_checkpoint, and forensic_investigation_ctx:*). Both Retry and Home now dispatch fc:reset-home.
+- `apps/web/src/components/ui/RouteExperience.tsx` — Hoisted logApiTargetDiagnostics into a mount-only effect so dev console isn't spammed on every route change.
+- `apps/web/src/hooks/useInvestigation.ts` — Guarded the fresh-mount cleanup useEffect against Strict Mode double-fire with freshMountDoneRef. Behavior is unchanged in production; dev no longer pays clearInvestigationPersistence twice on the same mount pass.
+
+### Next action
+Operator picks Phase 3.
+
+---
+
+## Phase 3.0 — Design System Audit (completed)
+
+**Date:** 2026-05-15
+**Tags:** `checkpoint/phase-3-0-pre`, `checkpoint/phase-3-0-verified`
+
+### What changed
+- `docs/DESIGN_SYSTEM.md` — **NEW.** Inventory of every font size, color, opacity, radius, motion duration, and glass surface in use as of v1.7.0. Documents drift, proposes canonical tokens, lists the 56 files that subsequent Phase 3.x sub-phases will touch.
+
+### What did NOT change
+No UI, no CSS, no component file. This phase is documentation only. Phase 3.1 begins the actual UI changes against the tokens proposed here.
+
+### Next action
+Operator reviews docs/DESIGN_SYSTEM.md. Push back on any token choice (text contrast floor, glass surface model, font loading proposal, motion timing) BEFORE Phase 3.1 is written.
+
+---
+
+## Phase 3.1 — Global CSS Consolidation + Font Loading (completed)
+
+**Date:** 2026-05-15
+**Tags:** `checkpoint/phase-3-1-pre`, `checkpoint/phase-3-1-verified`
+
+### What changed
+- `apps/web/src/app/layout.tsx` — Integrated **Geist Sans** and **Geist Mono** via `next/font/google`. CSS variables `--font-geist` and `--font-mono-family` are now correctly populated and applied to the body.
+- `apps/web/src/app/globals.css` — Consolidated Design System tokens. 
+    - Lifted `--color-warning` to `#F0B14B` to clear WCAG AA.
+    - Updated `font-heading` to use Geist Sans.
+    - Added canonical utility classes: `fc-text-primary/secondary/muted/faint`, `fc-surface-quiet/elevated/overlay`, and `fc-motion-fast/base/slow`.
+    - Legacy aliases (`glass-panel`, `horizon-card`, `text-muted-*`) now point to canonical property sets to ensure compatibility while maintaining backward support for Phase 3.2+ migrations.
+
+### Next action
+Proceed to Phase 3.2 (Hero + Landing Layout density). This will involve applying the new tokens to the landing page components.

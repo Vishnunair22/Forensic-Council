@@ -23,7 +23,7 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
   // Flatten per-agent findings with deduplication transparency
   const seenKeys = new Set<string>();
 
-  for (const [agentId, findings] of Object.entries(dto.per_agent_findings)) {
+  for (const [agentId, findings] of Object.entries(dto.per_agent_findings ?? {})) {
     for (const finding of findings) {
       const phase =
         ((finding.metadata as Record<string, unknown>)
@@ -66,7 +66,7 @@ export function mapReportDtoToReport(dto: ReportDTO): Report {
     id: dto.report_id,
     fileName: dto.case_id,
     timestamp: dto.signed_utc ?? new Date().toISOString(),
-    summary: dto.executive_summary,
+    summary: dto.executive_summary ?? "",
     agents: agentResults,
     verdict: (dto.overall_verdict ?? "INCONCLUSIVE") as Report["verdict"],
   };

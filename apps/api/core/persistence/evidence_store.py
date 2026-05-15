@@ -494,8 +494,6 @@ class EvidenceStore:
             for row in rows
         ]
 
-        # Build tree
-        {a.artifact_id: a for a in artifacts}
         tree_map: dict[UUID, VersionTree] = {}
 
         # Find root (parent_id is None)

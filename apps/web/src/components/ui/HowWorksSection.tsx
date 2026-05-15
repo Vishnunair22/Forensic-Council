@@ -12,7 +12,7 @@ export function HowWorksSection() {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="text-[10px] font-mono font-bold tracking-[0.28em] text-primary/50 uppercase mb-4"
+          className="text-[10px] font-mono font-bold tracking-[0.28em] text-primary/50 mb-4"
         >
           Process
         </motion.p>

@@ -74,7 +74,6 @@ const nextConfig: NextConfig = {
   // Windows Docker bind mounts.
   turbopack: {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
-    // Removed redundant class-variance-authority alias
   },
 
   // ── Bundle optimisation ───────────────────────────────────────────────────
@@ -100,8 +99,6 @@ const nextConfig: NextConfig = {
   // avoids Chrome "illegal path" errors for host paths with spaces.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   webpack: (config: any, { dev }: { dev: boolean }) => {
-    // Removed redundant class-variance-authority alias
-
     if (dev) {
       config.watchOptions = {
         poll: 2000, // Increased from 500ms to 2000ms for stability on Windows

@@ -134,8 +134,8 @@ describe("mapReportDtoToReport()", () => {
     const dto: ReportDTO = {
       ...sampleDTO,
       per_agent_findings: {
-        "agent-img": [sampleDTO.per_agent_findings["agent-img"][0], {
-          ...sampleDTO.per_agent_findings["agent-img"][0],
+        "agent-img": [sampleDTO.per_agent_findings!["agent-img"][0], {
+          ...sampleDTO.per_agent_findings!["agent-img"][0],
           finding_id: "f1b", metadata: { analysis_phase: "deep" },
         }],
       },

@@ -1,6 +1,6 @@
 # Model Licensing Reference
 
-This file documents ML model licensing for the Forensic Council system. For detailed information, see [MODELS.md](MODELS.md).
+This file documents ML model licensing for the Forensic Council system. For detailed information, see [MODEL_REGISTRY.md](MODEL_REGISTRY.md).
 
 Last updated: 2026-04-25 | Status: v1.7.0
 
@@ -46,4 +46,4 @@ If the model lacks a commercial-use license, the system will fall back to heuris
 
 ---
 
-For full details, see [MODELS.md](MODELS.md).
+For full details, see [MODEL_REGISTRY.md](MODEL_REGISTRY.md).

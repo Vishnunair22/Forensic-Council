@@ -39,8 +39,6 @@ NEVER_USE_NPM_INSTALL_IN = [
     ROOT / "infra" / "README.md",
 ]
 
-NEVER_LINK_INTO_SUBDIRS = ["docs/"]
-
 STALE_PATTERNS = ["TODO: update later", "TODO: fix this", "update this doc later"]
 
 STALE_ALLOWLIST = ["TBD"]
@@ -89,11 +87,6 @@ def check_no_npm_install() -> list[str]:
                 continue
             if "npm install" in line and "npm ci" not in line:
                 errors.append(f"{doc.name}:{i}: contains 'npm install' — use 'npm ci'")
-    for subdir in NEVER_LINK_INTO_SUBDIRS:
-        path = ROOT / subdir
-        if path.exists():
-            for md in path.glob("*.md"):
-                pass
     return errors
 
 

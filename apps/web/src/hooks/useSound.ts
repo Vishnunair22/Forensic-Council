@@ -460,16 +460,16 @@ export function useSound() {
           o.stop(t + 0.85);
         });
       } else if (type === "hum") {
-        const masterGain = ctx.createGain();
-        masterGain.gain.setValueAtTime(0, t);
-        masterGain.gain.linearRampToValueAtTime(0.08, t + 0.05);
-        masterGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-        masterGain.connect(out);
+        const humEnvelope = ctx.createGain();
+        humEnvelope.gain.setValueAtTime(0, t);
+        humEnvelope.gain.linearRampToValueAtTime(0.08, t + 0.05);
+        humEnvelope.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        humEnvelope.connect(out);
         const osc = ctx.createOscillator();
         osc.type = "sine";
         osc.frequency.setValueAtTime(65.41, t);
         osc.frequency.exponentialRampToValueAtTime(40, t + 0.3);
-        osc.connect(masterGain);
+        osc.connect(humEnvelope);
         osc.start(t);
         osc.stop(t + 0.35);
         const pingGain = ctx.createGain();

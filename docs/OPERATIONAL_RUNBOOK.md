@@ -221,10 +221,10 @@ cd apps/api
 uv run python scripts/verify_llm_keys.py --json
 ```
 
-### Run workflow verification script
+### Run verification scripts
 ```bash
-./scripts/verify_phase7_workflow.sh static
-./scripts/verify_phase7_workflow.sh api
+./scripts/verify_project.sh static
+./scripts/verify_project.sh backend
 ```
 
 ---

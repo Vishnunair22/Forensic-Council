@@ -31,31 +31,41 @@ bash infra/generate_production_keys.sh --update
 #    LLM_API_KEY=<groq key from https://console.groq.com/keys>
 #    GEMINI_API_KEY=<gemini key from https://aistudio.google.com/apikey>
 
-# 5. Build and start (development — includes dev overlay for direct host ports)
+# 5. Start (one command — validates .env, builds, starts, polls health)
+bash scripts/dev.sh
+
+# 6. Open the app
+#    Frontend (via Caddy):  http://localhost
+#    Frontend (direct):     http://localhost:3000
+#    API docs (via Caddy):  http://localhost/docs
+#    API docs (direct):     http://localhost:8000/docs  (dev overlay exposes 8000)
+```
+
+### Production (one command)
+
+```bash
+# Validates .env invariants and compose config BEFORE building, then boots
+bash scripts/prod.sh
+```
+
+### Manual docker compose (if you need fine-grained control)
+
+```bash
+# Development — validate, build, start
+bash infra/validate_production_readiness.sh   # optional pre-flight for dev
 docker compose \
   -f infra/docker-compose.yml \
   -f infra/docker-compose.dev.yml \
   --env-file .env \
   up --build -d
 
-# 6. Wait for healthy state (~15-40 min on first build for ML downloads)
+# Production — ALWAYS validate BEFORE building/starting
+bash infra/validate_production_readiness.sh
 docker compose \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
+  -f infra/docker-compose.prod.yml \
   --env-file .env \
-  ps
-
-# 7. Verify backend via Caddy (works without dev overlay) or direct port (with dev overlay)
-curl http://localhost/health
-
-# 8. Open the app
-#    Frontend (via Caddy):  http://localhost
-#    Frontend (direct):     http://localhost:3000
-#    API docs:              http://localhost:8000/docs
-
-# PRODUCTION (replace step 5):
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up --build -d
-bash infra/validate_production_readiness.sh
+  up --build -d
 ```
 
 ## Required Environment
@@ -247,7 +257,7 @@ stable across dev and production overrides.
 | `hf_cache` | HuggingFace model weights | Re-downloads on next start (~several GB) |
 | `torch_cache` | PyTorch checkpoints | Re-downloads on next start |
 | `easyocr_cache` | EasyOCR model files | Re-downloads on next start |
-| `yolo_cache` | Ultralytics/YOLO weights when `ENABLE_AGPL_MODELS=true` | Re-downloads on next start |
+| `yolo_cache` | DETR (Apache-2.0, default) or Ultralytics YOLO (AGPL, when `ENABLE_AGPL_MODELS=true`) weights | Re-downloads on next start |
 | `numba_cache` | Numba JIT-compiled kernels | Recompiled on next start (slow first run) |
 | `calibration_models_cache` | Platt scaling calibration files | Must be retrained via `scripts/train_calibration.py` |
 
@@ -270,22 +280,20 @@ The script checks key repository files, Docker Compose rendering, basic syntax, 
 
 ## Common Commands
 
-All examples below show the base development stack. For production, add `-f infra/docker-compose.prod.yml` after the base compose file.
-
 ```bash
 # Render the effective merged compose config (useful for debugging)
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env config
 
-# Rebuild and restart a single service without touching dependencies
-docker compose \
-  -f infra/docker-compose.yml \
-  --env-file .env build backend
+# No-cache rebuild and restart a single service (dev or prod)
+bash scripts/rebuild.sh dev backend
+bash scripts/rebuild.sh prod backend
 
-docker compose \
-  -f infra/docker-compose.yml \
-  --env-file .env up -d --no-deps backend
+# Rebuild all services from scratch
+bash scripts/rebuild.sh dev
+bash scripts/rebuild.sh prod
 
 # Tail logs for all services
 docker compose \
@@ -310,7 +318,7 @@ docker compose \
 
 ## Network Segmentation
 
-The stack uses three bridge networks to enforce least-privilege service-to-service access.
+The stack uses four bridge networks to enforce least-privilege service-to-service access.
 
               ┌─────────────┐
               │    Caddy    │ (frontend_net + backend_net)
@@ -320,27 +328,24 @@ The stack uses three bridge networks to enforce least-privilege service-to-servi
   frontend_net   backend_net   backend_net
          │           │           │
     ┌────┴────┐  ┌───┴────┐     │
-    │Frontend │  │Backend │◄────┘
-    └─────────┘  │Worker  │
+    │Frontend │  │Backend │◄────┘ ← also on external_net
+    └─────────┘  │Worker  │   ← also on external_net
                  └────┬───┘
                       │ infra_net
           ┌───────────┼───────────┐
           ▼           ▼           ▼
        Redis       Postgres    Qdrant
+                  (+ jaeger, migration)
 
-| Network | Members | Purpose |
-| --- | --- | --- |
-| `infra_net` | backend, worker, migration, redis, postgres, qdrant, jaeger, prometheus | Backend ↔ infrastructure communication |
-| `backend_net` | backend, caddy, frontend | Caddy and frontend reach the backend API |
-| `frontend_net` | frontend, caddy | Caddy proxies to the Next.js server |
+| Network | Members | Internal? | Purpose |
+| --- | --- | --- | --- |
+| `infra_net` | redis, postgres, qdrant, jaeger, migration, backend, worker | yes (no internet) | Backend ↔ infrastructure communication. `internal: true` so infra services have no outbound. |
+| `external_net` | backend, worker | no | Outbound internet for Groq, Gemini, and HuggingFace model downloads. |
+| `backend_net` | backend, caddy, frontend, prometheus | no | Caddy and frontend reach the backend API. Prometheus scrapes `backend:8000/api/v1/metrics/raw`. |
+| `frontend_net` | frontend, caddy | no | Caddy proxies to the Next.js server. |
 
-**Key isolation guarantees:**
-- The frontend container cannot reach Redis, Postgres, or Qdrant directly.
-- Caddy cannot reach Redis, Postgres, or Qdrant directly.
-- Infrastructure services are not exposed to the frontend network.
-
-When adding a new service, explicitly assign it to only the networks it requires.
 Do not attach new services to `infra_net` unless they genuinely need database access.
+New services that need outbound internet (e.g. additional LLM providers) must be attached to `external_net` rather than relying on `infra_net` egress, which is disabled.
 
 ## Production Notes
 

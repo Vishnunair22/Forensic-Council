@@ -99,7 +99,7 @@ export function ResultHeader({
             <h1 className="text-2xl md:text-3xl font-heading font-bold text-white/90 tracking-tight truncate">
               {displayName}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-mono uppercase tracking-[0.16em] text-white/25">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-mono tracking-[0.16em] text-white/25">
               <span>Case {shortId(report.case_id)}</span>
               <span>Session {shortId(report.session_id)}</span>
               <span>{activeAgentIds.length} active agent{activeAgentIds.length === 1 ? "" : "s"}</span>
@@ -118,13 +118,13 @@ export function ResultHeader({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <span
-                  className="text-[10px] font-mono font-bold uppercase tracking-[0.2em]"
+                  className="text-[10px] font-mono font-bold tracking-[0.2em]"
                   style={{ color: theme.color }}
                 >
                   Final Verdict
                 </span>
-                <span className={clsx("px-2.5 py-1 rounded-md border text-[9px] font-mono font-bold uppercase tracking-widest", theme.tone)}>
-                  Arbiter signed
+                <span className={clsx("px-2.5 py-1 rounded-md border text-[9px] font-mono font-bold tracking-widest", theme.tone)}>
+                  Arbiter Signed
                 </span>
               </div>
               <motion.h2
@@ -136,14 +136,14 @@ export function ResultHeader({
                 {vc.label}
               </motion.h2>
               <p className="mt-3 max-w-3xl text-sm text-white/52 leading-relaxed">
-                {cleanFindingText(report.verdict_sentence || report.executive_summary || vc.desc, 300)}
+                {cleanFindingText(report.verdict_sentence || report.executive_summary || vc.desc)}
               </p>
             </div>
           </div>
 
           <div className="flex items-center justify-between lg:justify-end gap-5 border border-white/8 rounded-2xl bg-white/[0.025] px-5 py-4">
             <div>
-              <div className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-[0.18em]">Confidence</div>
+              <div className="text-[10px] font-mono font-bold text-white/30 tracking-[0.18em]">Confidence</div>
               <div className="mt-1 text-4xl font-mono font-bold tracking-tight" style={{ color: theme.color }}>
                 {confPct}%
               </div>
@@ -163,7 +163,7 @@ export function ResultHeader({
         {signature && (
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
             <div className="min-w-0">
-              <div className="text-[9px] font-mono font-bold text-white/25 uppercase tracking-[0.2em]">
+              <div className="text-[9px] font-mono font-bold text-white/25 tracking-[0.2em]">
                 Report Integrity
               </div>
               <p className="mt-1 text-[10px] font-mono text-white/30 truncate">
@@ -181,7 +181,7 @@ export function ResultHeader({
                 {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
                 {copied ? "Copied" : "Copy"}
               </button>
-              <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-success/70 uppercase tracking-widest">
+              <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-success/70 tracking-widest">
                 <Fingerprint className="w-3.5 h-3.5" />
                 Verified
               </div>
@@ -195,7 +195,7 @@ export function ResultHeader({
 
 function Pill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-md border border-white/8 bg-white/[0.025] px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-[0.14em] text-white/35">
+    <span className="inline-flex items-center gap-2 rounded-md border border-white/8 bg-white/[0.025] px-2.5 py-1.5 text-[9px] font-mono font-bold tracking-[0.14em] text-white/35">
       <Icon className="w-3 h-3 text-white/25" />
       {label}
     </span>
@@ -208,7 +208,7 @@ function Metric({ label, value, color, icon: Icon }: { label: string; value: num
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Icon className="w-3.5 h-3.5 shrink-0 text-white/25" />
-          <span className="text-[10px] font-mono font-bold text-white/35 uppercase tracking-[0.14em] truncate">
+          <span className="text-[10px] font-mono font-bold text-white/35 tracking-[0.14em] truncate">
             {label}
           </span>
         </div>
@@ -238,5 +238,5 @@ function cleanDisplayName(fileName: string, report: ReportDTO): string {
 
 function shortId(value: string | null | undefined): string {
   if (!value) return "Unavailable";
-  return value.length > 12 ? value.slice(-8).toUpperCase() : value.toUpperCase();
+  return value.length > 12 ? value.slice(-8) : value;
 }

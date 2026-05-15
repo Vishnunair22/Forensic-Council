@@ -417,6 +417,7 @@ class AgentInvestigationMixin:
             custody_logger=self.custody_logger,
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             agent=self,
+            hitl_timeout=540.0,
         )
 
         llm_generator = None
@@ -496,6 +497,7 @@ class AgentInvestigationMixin:
             custody_logger=self.custody_logger,
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             agent=self,
+            hitl_timeout=540.0,
         )
 
         loop_result = await loop_engine.run(
@@ -558,6 +560,7 @@ class AgentInvestigationMixin:
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
             heavy_tool_semaphore=self.heavy_tool_semaphore,
+            hitl_timeout=540.0,
         )
 
         llm_generator = None

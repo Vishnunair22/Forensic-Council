@@ -238,8 +238,8 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse shadow-[0_0_15px_rgba(var(--color-primary-rgb),0.5)]" />
-              <p className="text-[10px] font-mono font-bold text-[var(--color-primary)] tracking-[0.3em] uppercase">
-                {phase === "initial" ? "Initial_Verification" : "Deep_Analysis"}
+              <p className="text-[10px] font-mono font-bold text-[var(--color-primary)] tracking-[0.3em]">
+                {phase === "initial" ? "Initial Verification" : "Deep Analysis"}
               </p>
             </div>
             <div className="w-[1px] h-3 bg-white/10" />

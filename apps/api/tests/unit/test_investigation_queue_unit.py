@@ -232,7 +232,7 @@ class TestInvestigationWorker:
         worker.set_handler(handler)
         # Should exit cleanly on CancelledError
         await worker.start()
-        assert worker._running is False or True  # loop breaks on CancelledError
+        assert worker._running is False
 
     @pytest.mark.asyncio
     async def test_start_processes_task_successfully(self):

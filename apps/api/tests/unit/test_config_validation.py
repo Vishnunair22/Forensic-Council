@@ -94,11 +94,8 @@ def test_missing_signing_key_exits_with_code_2(monkeypatch):
         BOOTSTRAP_INVESTIGATOR_PASSWORD="inv_test_123!",
     )
     monkeypatch.setenv("SIGNING_KEY", "")
-    try:
+    with pytest.raises(Exception, match="SIGNING_KEY"):
         get_settings()
-        pytest.fail("Expected ValidationError")
-    except Exception as exc:
-        assert "SIGNING_KEY" in str(exc)
 
 
 def test_missing_jwt_secret_key_exits_with_code_2(monkeypatch):
@@ -106,8 +103,5 @@ def test_missing_jwt_secret_key_exits_with_code_2(monkeypatch):
     _clear_settings_cache()
     _strong_env(monkeypatch, JWT_SECRET_KEY="", BOOTSTRAP_ADMIN_PASSWORD="admin_test_123!", BOOTSTRAP_INVESTIGATOR_PASSWORD="inv_test_123!")
     monkeypatch.setenv("JWT_SECRET_KEY", "")
-    try:
+    with pytest.raises(Exception, match="JWT_SECRET_KEY"):
         get_settings()
-        pytest.fail("Expected ValidationError")
-    except Exception as exc:
-        assert "JWT_SECRET_KEY" in str(exc)

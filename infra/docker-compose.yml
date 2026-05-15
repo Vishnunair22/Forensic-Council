@@ -243,8 +243,6 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
       - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD must be set}
       - BOOTSTRAP_INVESTIGATOR_PASSWORD=${BOOTSTRAP_INVESTIGATOR_PASSWORD:?BOOTSTRAP_INVESTIGATOR_PASSWORD must be set}
-      - SKIP_MODEL_DOWNLOAD=1
-      - SKIP_CACHE_CHECK=1
     depends_on:
       postgres:
         condition: service_healthy
@@ -497,6 +495,14 @@ services:
       # and external traffic can reach it from outside the container.
       - HOSTNAME=0.0.0.0
       - PORT=3000
+      # Force webpack/chokidar polling for HMR. inotify events from Windows host →
+      # WSL2 → container are unreliable; without polling, edits to files in
+      # apps/web/src/* on the host never trigger Next.js recompilation and the
+      # browser keeps serving stale chunks. Mirrors WATCHFILES_FORCE_POLLING
+      # already set for the Python backend.
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=500
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
       # DEMO_PASSWORD must be explicitly set and MUST equal BOOTSTRAP_INVESTIGATOR_PASSWORD.
       # No silent default — an unset value is caught early (P0-FE-001 fix, audit v6→v7).

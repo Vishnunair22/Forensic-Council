@@ -318,7 +318,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         _redis = await get_redis_client()
         _interrupted_count = 0
-        async for _key in _redis.scan_iter(match=f"{SESSION_METADATA_KEY_PREFIX}*", count=100):
+        for _key in await _redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*"):
             try:
                 _raw = await _redis.get(_key)
                 if not _raw:

@@ -6,7 +6,6 @@ Lightweight observers for monitoring event loop health and forensic tool perform
 """
 
 import asyncio
-from typing import NoReturn
 
 from core.structured_logging import get_logger
 
@@ -19,7 +18,7 @@ class HeartbeatMonitor:
     Essential for ensuring forensic analysis doesn't block critical WebSocket/API I/O.
     """
 
-    def __init__(self, interval: float = 0.05, threshold: float = 0.1):
+    def __init__(self, interval: float = 0.05, threshold: float = 0.5):
         """
         Initialize the monitor.
 
@@ -31,7 +30,7 @@ class HeartbeatMonitor:
         self.threshold = threshold
         self._stop_event = asyncio.Event()
 
-    async def start(self) -> NoReturn:
+    async def start(self) -> None:
         """Start the heartbeat monitoring loop."""
         logger.info(
             "Starting event loop heartbeat sentinel",

@@ -80,14 +80,14 @@ export function HITLCheckpointModal({
 
  return (
    <Dialog open={isOpen} onOpenChange={handleDismiss}>
-   <DialogContent className="sm:max-w-xl glass-panel border-white/10 p-0 overflow-hidden rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.8)] border-t border-t-white/10">
+    <DialogContent className="sm:max-w-xl bg-[#06090E] border border-[#333333] p-0 overflow-hidden shadow-2xl rounded-none">
 
      {checkpoint ? (
      <div className="p-8 space-y-6">
       <DialogHeader className="text-left space-y-2">
        <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-         <ShieldAlert className="w-6 h-6 text-primary" />
+        <div className="w-12 h-12 bg-white flex items-center justify-center">
+         <ShieldAlert className="w-7 h-7 text-black" />
         </div>
         <div>
          <DialogTitle className="text-2xl font-extrabold text-white px-0 tracking-tight drop-shadow-md">
@@ -103,13 +103,13 @@ export function HITLCheckpointModal({
       <div className="space-y-4">
        {/* Context Panels */}
        <div className="grid grid-cols-1 gap-4">
-        <div className="p-5 rounded-2xl glass-panel bg-white/[0.02] border-white/5 space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-white/20 tracking-wide">Evidence Brief</h4>
-         <p className="text-sm text-white/70 leading-relaxed">{checkpoint.brief_text}</p>
+        <div className="p-5 bg-[#111111] border border-[#333333] space-y-2">
+         <h4 className="text-[10px] font-black font-mono text-white/50 tracking-wide uppercase">Evidence Brief</h4>
+         <p className="text-sm text-white/80 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
-        <div className="p-5 rounded-2xl bg-primary/[0.03] border border-primary/10 space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-primary/50 tracking-wide">Decision Required</h4>
-         <p className="text-sm text-primary-200/80 leading-relaxed font-medium">{checkpoint.decision_needed}</p>
+        <div className="p-5 bg-white border border-white space-y-2">
+         <h4 className="text-[10px] font-black font-mono text-black/60 tracking-wide uppercase">Decision Required</h4>
+         <p className="text-sm text-black leading-relaxed font-bold">{checkpoint.decision_needed}</p>
         </div>
        </div>
 
@@ -146,20 +146,23 @@ export function HITLCheckpointModal({
             tabIndex={selectedDecision === option.value || (!selectedDecision && option.value === "APPROVE") ? 0 : -1}
             onClick={() => setSelectedDecision(option.value)}
             className={clsx(
-              "p-5 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden group",
+              "p-5 border text-left transition-colors duration-200 relative",
               selectedDecision === option.value
-                ? "bg-primary/10 border-primary shadow-[0_0_20px_rgba(0,255,65,0.2)]"
-                : "border-white/10 bg-white/[0.02] hover:bg-primary/[0.03] hover:border-primary/40"
+                ? "bg-white border-white text-black"
+                : "border-[#333333] bg-[#111111] hover:bg-[#1A1A1A]"
             )}
           >
            <div className="flex flex-col gap-1 relative z-10">
             <span className={clsx(
               "text-sm font-bold tracking-tight transition-colors",
-              selectedDecision === option.value ? "text-primary" : "text-white/80 group-hover:text-white"
+              selectedDecision === option.value ? "text-black" : "text-white"
             )}>
              {option.label}
             </span>
-            <span className="text-[10px] text-white/30 font-medium leading-tight group-hover:text-white/50 transition-colors">
+            <span className={clsx(
+              "text-[10px] font-medium leading-tight transition-colors",
+              selectedDecision === option.value ? "text-black/70" : "text-white/50"
+            )}>
              {option.description}
             </span>
            </div>
@@ -177,7 +180,7 @@ export function HITLCheckpointModal({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Enter forensic notes for this intervention..."
-          className="w-full px-5 py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-sm text-white/80 placeholder:text-white/10 focus:outline-none focus:border-primary/30 transition-all min-h-[100px] resize-none"
+          className="w-full px-5 py-4 bg-[#111111] border border-[#333333] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white transition-colors min-h-[100px] resize-none"
           disabled={isSubmitting}
         />
         </div>
@@ -189,12 +192,12 @@ export function HITLCheckpointModal({
         )}
       </div>
 
-<DialogFooter className="sm:justify-between border-t border-white/5 p-8 pt-6 gap-4">
+<DialogFooter className="sm:justify-between border-t border-[#333333] p-8 pt-6 gap-4 bg-[#06090E]">
         <button
          type="button"
          onClick={onDismiss}
          disabled={isSubmitting}
-         className="px-8 py-4 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/[0.05] transition-all text-sm font-bold tracking-wide"
+         className="px-8 py-4 border border-[#333333] text-white/60 hover:text-white hover:bg-[#111111] transition-colors text-sm font-bold tracking-wide uppercase"
         >
          Cancel
         </button>
@@ -202,7 +205,7 @@ export function HITLCheckpointModal({
          type="button"
          onClick={handleSubmit}
          disabled={!selectedDecision || isSubmitting}
-         className="px-10 py-4 rounded-full bg-primary text-black font-bold text-sm tracking-wide hover:bg-primary/90 active:scale-[0.98] transition-all duration-300 shadow-[0_0_30px_rgba(0,255,65,0.25)] hover:shadow-[0_0_50px_rgba(0,255,65,0.4)] flex items-center gap-2"
+         className="px-10 py-4 bg-white text-black font-bold text-sm tracking-widest uppercase hover:bg-gray-200 active:bg-gray-300 transition-colors flex items-center gap-2 disabled:opacity-50"
         >
         {isSubmitting ? (
          <>

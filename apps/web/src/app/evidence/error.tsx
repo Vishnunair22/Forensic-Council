@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle, RotateCcw, Home } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { storage } from "@/lib/storage";
+import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 
 export default function EvidenceError({
   error,
@@ -21,13 +21,21 @@ export default function EvidenceError({
   }, [error]);
 
   const handleReset = () => {
-    storage.removeItem("forensic_session_id");
-    storage.removeItem("forensic_investigation_ctx");
-    storage.removeItem("forensic_case_id");
-    storage.removeItem("forensic_file_name");
-    storage.removeItem("forensic_mime_type");
-    storage.removeItem("forensic_pipeline_start");
+    // Canonical clear (preserves forensic_history per WORKFLOW_TRACE.md).
+    clearInvestigationPersistence();
+    // Notify home page to reset its modal state if the user navigates back.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("fc:reset-home"));
+    }
     reset();
+  };
+
+  const handleHome = () => {
+    clearInvestigationPersistence();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("fc:reset-home"));
+    }
+    router.push("/");
   };
 
   return (
@@ -52,7 +60,7 @@ export default function EvidenceError({
           <RotateCcw className="w-4 h-4" /> Retry
         </button>
         <button
-          onClick={() => router.push("/")}
+          onClick={handleHome}
           className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-wide text-foreground/50 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] transition-all cursor-pointer"
         >
           <Home className="w-4 h-4" /> Home

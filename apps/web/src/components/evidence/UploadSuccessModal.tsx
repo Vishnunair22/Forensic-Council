@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
-import { CheckCircle2, FileText, X, Loader2 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { CheckCircle2, FileText, Music2, X, Loader2 } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 
@@ -16,15 +16,16 @@ export interface UploadSuccessModalProps {
 
 export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismiss }: UploadSuccessModalProps) {
   const { playSound } = useSound();
+  const prefersReducedMotion = useReducedMotion();
   const [mounted, setMounted] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     playSound("click");
     onDismiss();
-  };
+  }, [playSound, onDismiss]);
 
   useFocusTrap(dialogRef, mounted, closeModal);
 
@@ -60,66 +61,45 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#010208]/96 backdrop-blur-2xl p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onDismiss(); } }}
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.97, y: 14 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.985, y: 6 }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 6 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="horizon-card p-1 relative overflow-hidden"
+          className="relative overflow-hidden bg-[#06090E] w-full"
         >
-          <div
-            className="rounded-[inherit] p-10 flex flex-col items-center text-center"
-            style={{ background: "radial-gradient(ellipse 70% 40% at 50% 0%, rgba(52,211,153,0.05) 0%, #020617 55%)" }}
-          >
+          <div className="p-10 flex flex-col items-center text-center">
             <button
               type="button"
               onClick={closeModal}
               aria-label="Close evidence dialog"
               data-testid="success-modal-close"
-              className="absolute top-6 right-6 text-white/25 hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+              className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded"
             >
               <X className="w-5 h-5" />
             </button>
 
-            {/* Status icon */}
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
-              className="w-16 h-16 rounded-full bg-success/10 border border-success/20 text-success flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
-              aria-hidden="true"
-            >
-              <CheckCircle2 className="w-8 h-8" />
-            </motion.div>
-
             <div className="space-y-6 w-full mb-8">
               <div>
-                <p className="text-[10px] font-mono font-bold tracking-[0.25em] text-[var(--color-success)]/60 uppercase mb-1.5" aria-hidden="true">
-                  Evidence Secured
+                <p className="text-[10px] font-mono font-bold tracking-[0.25em] text-slate-400 mb-1.5 uppercase" aria-hidden="true">
+                  Status: Secured
                 </p>
-                <h2 id="success-modal-title" className="text-2xl font-heading font-bold text-white">Evidence Ready</h2>
+                <h2 id="success-modal-title" className="text-2xl font-bold text-white">Evidence Ready</h2>
               </div>
 
-              {/* Preview with HUD frame */}
-              <div className="relative rounded-xl overflow-hidden border border-white/[0.07] bg-white/[0.02]" aria-label={`Preview of ${file.name}`}>
+              <div className="relative overflow-hidden border border-[#333333] bg-[#0A0A0C]" aria-label={`Preview of ${file.name}`}>
                 <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
-                  {/* HUD corners */}
-                  <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-primary/30 z-20 rounded-tl" aria-hidden="true" />
-                  <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-primary/30 z-20 rounded-tr" aria-hidden="true" />
-                  <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-primary/30 z-20 rounded-bl" aria-hidden="true" />
-                  <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-primary/30 z-20 rounded-br" aria-hidden="true" />
-
                   {isAudio && previewUrl ? (
                     <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
-                      <FileText className="w-10 h-10 text-white/20" aria-hidden="true" />
+                      <Music2 className="w-10 h-10 text-slate-600" aria-hidden="true" />
                       <audio
                         controls
                         src={previewUrl}
-                        className="w-full rounded-xl"
+                        className="w-full rounded-none"
                         aria-label={`Audio preview of ${file.name}`}
                       />
                     </div>
@@ -141,26 +121,26 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                       aria-label={file.name}
                     />
                   ) : (
-                    <div className="flex flex-col items-center gap-3 text-white/20" aria-hidden="true">
+                    <div className="flex flex-col items-center gap-3 text-slate-600" aria-hidden="true">
                       <FileText className="w-12 h-12" strokeWidth={1} />
-                      <span className="text-[10px] font-mono tracking-widest uppercase">DATA_SECURED</span>
+                      <span className="text-xs font-mono tracking-widest uppercase">Data Secured</span>
                     </div>
                   )}
+                </div>
+              </div>
 
-                  {/* File metadata HUD */}
-                  <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/70 via-black/40 to-transparent backdrop-blur-[2px] border-t border-white/5 flex items-center justify-between" aria-hidden="true">
-                    <div className="text-left">
-                      <p className="text-xs font-mono text-white/80 truncate max-w-[200px]">{file.name}</p>
-                      <span className="text-[9px] font-mono text-white/30 uppercase tracking-tighter">
-                        {file.type || "binary/octet-stream"}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-mono font-bold text-primary border border-primary/20 px-2 py-0.5 rounded bg-primary/5">
-                        {(file.size / (1024 * 1024)).toFixed(2)} MB
-                      </span>
-                    </div>
-                  </div>
+              {/* File metadata */}
+              <div className="flex items-center justify-between px-2 pt-2 text-left" aria-hidden="true">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-mono text-white truncate max-w-[300px]">{file.name}</p>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                    {file.type || "binary/octet-stream"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-mono font-bold text-white">
+                    {(file.size / (1024 * 1024)).toFixed(2)} MB
+                  </span>
                 </div>
               </div>
             </div>
@@ -170,7 +150,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                 type="button"
                 onClick={() => { playSound("click"); onNewUpload(); }}
                 disabled={isStarting}
-                className="btn-horizon-outline flex-1 py-4 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-4 text-sm font-semibold tracking-wide uppercase transition-colors hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed border border-[#333333]"
               >
                 Reselect File
               </button>
@@ -186,7 +166,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   }
                 }}
                 disabled={isStarting}
-                className="btn-horizon-primary flex-1 py-4 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-4 text-sm font-bold tracking-widest uppercase flex items-center justify-center gap-2 transition-colors bg-white text-black hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isStarting ? (
                   <>

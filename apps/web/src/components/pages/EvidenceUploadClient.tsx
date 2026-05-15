@@ -88,7 +88,7 @@ export function EvidenceUploadClient() {
       <AnimatePresence initial={false}>
         {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
           <LoadingOverlay
-            liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing Workspace..."}
+            liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing workspace"}
             dispatchedCount={Math.min(Object.keys(investigation.agentUpdates).filter(k => k !== "Arbiter").length, 5)}
             playSound={playSound}
           />
@@ -153,7 +153,7 @@ export function EvidenceUploadClient() {
             >
               <div className="flex items-center justify-center gap-2 opacity-40 mb-2">
                 <Shield className="w-4 h-4 text-primary" />
-                <span className="text-[10px] uppercase tracking-[0.3em] font-mono font-black">
+                <span className="text-[10px] tracking-[0.3em] font-mono font-black">
                   Intake Protocol
                 </span>
               </div>

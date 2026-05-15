@@ -186,7 +186,7 @@ export function useResult(initialSessionId?: string) {
     // The API returns ReportDTO directly when ready, or {status:"in_progress"} as 202.
     // ReportDTO has report_id; the in-progress wrapper has status = "in_progress".
     const asAny = reportQueryData as unknown as Record<string, unknown>;
-    if (asAny.report_id) return reportQueryData as unknown as ReportDTO;
+    if (typeof asAny.report_id === "string") return reportQueryData as unknown as ReportDTO;
     if (asAny.status === "complete" && asAny.report) return asAny.report as ReportDTO;
     return null;
   }, [reportQueryData]);

@@ -2,7 +2,6 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { ArcGauge } from "./ArcGauge";
 import { Activity, ShieldAlert, Zap } from "lucide-react";
 
 interface VerdictGaugeProps {
@@ -22,33 +21,27 @@ export function VerdictGauge({
 }: VerdictGaugeProps) {
   const isUncalibrated = calibrationStatus !== "TRAINED";
   return (
-    <section
-      className="overflow-hidden rounded-2xl"
-      style={{
-        background: "rgba(5,8,16,0.95)",
-        border: "1px solid rgba(165,200,255,0.07)",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03)",
-      }}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/5">
+    <section className="overflow-hidden border border-[#333333] bg-[#06090E]">
+      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[#333333]">
         
-        {/* Consensus Confidence (ArcGauge) */}
+        {/* Consensus Confidence */}
         <div className="p-8 flex flex-col items-center justify-center text-center">
-          <div className="w-32 h-32 flex items-center justify-center">
-            <ArcGauge value={confPct} label="" sublabel="" color="#A7FFD2" />
+          <span className="text-[10px] font-mono font-bold text-white/50 tracking-[0.2em] mb-4 uppercase">Consensus Confidence</span>
+          
+          <div className="text-6xl font-black text-white tracking-tighter">
+            {confPct}%
           </div>
-          <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.2em] mt-4">Consensus_Confidence</span>
+
           {isUncalibrated && (
-            <span className="text-[8px] font-mono text-amber-400/70 bg-amber-400/10 border border-amber-400/20 rounded px-1.5 py-0.5 mt-1">
-              ⚠ UNCALIBRATED
+            <span className="text-[8px] font-mono text-amber-500 bg-[#111111] border border-[#333333] px-2 py-1 mt-6 uppercase tracking-widest">
+              Uncalibrated
             </span>
           )}
-          <div className="text-xl font-mono font-bold text-white mt-1">{confPct}%</div>
         </div>
 
         {/* Integrity Risk */}
         <StatCard 
-          label="Integrity_Risk" 
+          label="Integrity Risk"
           value={manipPct} 
           unit="%" 
           subtext="Manipulation Prob." 
@@ -58,7 +51,7 @@ export function VerdictGauge({
 
         {/* System Noise */}
         <StatCard 
-          label="System_Noise" 
+          label="System Noise"
           value={errPct} 
           unit="%" 
           subtext="Error Variance" 
@@ -68,7 +61,7 @@ export function VerdictGauge({
 
         {/* Agent Spread */}
         <StatCard 
-          label="Agent_Spread" 
+          label="Agent Spread"
           value={discordPct} 
           unit="%" 
           subtext="Neural Discord" 
@@ -95,7 +88,7 @@ function StatCard({ label, value, unit, subtext, icon: Icon, color }: StatCardPr
     <div className="p-8 flex flex-col items-center justify-center text-center group">
       <div className="flex items-center gap-3 mb-6">
         <Icon className="w-3.5 h-3.5 text-white/10 group-hover:text-white/30 transition-colors" />
-        <span className="text-[10px] font-mono font-bold text-white/20 uppercase tracking-[0.2em]">{label}</span>
+        <span className="text-[10px] font-mono font-bold text-white/20 tracking-[0.2em]">{label}</span>
       </div>
       
       <div className="text-4xl font-mono font-bold text-white mb-4 tracking-tighter" style={{ color }}>
@@ -107,14 +100,11 @@ function StatCard({ label, value, unit, subtext, icon: Icon, color }: StatCardPr
           initial={{ width: 0 }}
           animate={{ width: `${value}%` }}
           className="h-full"
-          style={{ 
-            backgroundColor: color, 
-            boxShadow: `0 0 15px ${color}80` 
-          }}
+          style={{ backgroundColor: color }}
         />
       </div>
       
-      <span className="text-[9px] font-mono text-white/10 mt-4 uppercase tracking-widest">{subtext}</span>
+      <span className="text-[9px] font-mono text-white/10 mt-4 tracking-widest">{subtext}</span>
     </div>
   );
 }

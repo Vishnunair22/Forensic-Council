@@ -598,8 +598,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             err = m.get("error_rate", 0)
 
             agent_findings = findings.get(aid, [])
-            from agents.arbiter_verdict import confidence_of
-
             positive = sum(
                 1
                 for f in agent_findings

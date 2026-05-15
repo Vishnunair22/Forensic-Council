@@ -19,8 +19,6 @@ import {
   AGENTS as AGENTS_DATA,
   INVESTIGATION_REQUEST_TIMEOUT_MS,
   ARBITER_POLL_INTERVAL_MS,
-  ALLOWED_MIME_TYPES,
-  MAX_UPLOAD_SIZE_BYTES,
   ANALYSIS_STARTUP_GRACE_MS,
 } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
@@ -228,7 +226,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   // Fresh-mount guard: if we arrived here with a pending file in the store,
   // it is always a new investigation — reset the autoStart ref and purge any
   // stale session so Effect A always fires triggerAnalysis cleanly.
+  // Guarded against Strict Mode double-mount (Next 15 dev) so we don't
+  // pay clearInvestigationPersistence twice on the same render pass.
+  const freshMountDoneRef = useRef(false);
   useEffect(() => {
+    if (freshMountDoneRef.current) return;
+    freshMountDoneRef.current = true;
     if (__pendingFileStore.file) {
       autoStartFiredRef.current = false;
       clearInvestigationPersistence();
@@ -326,7 +329,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setPhase("initial");
       setAnalysisStreamReady(false);
       setAutoStartBlocking(false);
-      setUploadPhaseText("Uploading evidence to secure pipeline…");
+      setUploadPhaseText("Uploading evidence to secure pipeline");
       setArbiterLiveText("");
       setArbiterDeliberating(false);
       setSimulationPhase("initial");
@@ -455,7 +458,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           .then(() => {
             setAnalysisStreamReady(true);
             setIsUploading(false);
-            setUploadPhaseText("Reconnected to existing analysis...");
+            setUploadPhaseText("Reconnected to existing analysis");
           })
           .catch((wsErr: unknown) => {
             const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to reconnect to stream";
@@ -473,12 +476,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
 
       setIsUploading(false);
-      setUploadPhaseText("Connecting to analysis stream…");
+      setUploadPhaseText("Connecting to analysis stream");
 
       connectWebSocket(sessionIdToUse)
         .then(() => {
           setAnalysisStreamReady(true);
-          setUploadPhaseText("Agents dispatching…");
+          setUploadPhaseText("Agents dispatching");
           // Overlay dismissal is handled by the status-tracking effect below,
           // which enforces a 2.5s minimum display duration.
         })
@@ -495,7 +498,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
-    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, restoreSimulationState]
+    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, restoreSimulationState, setSimulationPhase]
   );
 
 
@@ -573,7 +576,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       restoreSimulationState(savedAgents, "awaiting_decision");
     }
     setAnalysisStreamReady(false);
-    setUploadPhaseText("Reconnecting to analysis stream...");
+    setUploadPhaseText("Reconnecting to analysis stream");
     setShowLoadingOverlay(false);
     sessionOnlyStorage.removeItem("fc_show_loading");
 
@@ -698,7 +701,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       investigationInFlightRef.current = false;
     }
-  }, [playSound, resumeInvestigation, clearCompletedAgents, connectWebSocket]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents, connectWebSocket, setSimulationPhase]);
 
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem("forensic_session_id");
@@ -712,7 +715,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     connectWebSocket(sid)
       .then(() => {
         setAnalysisStreamReady(true);
-        setUploadPhaseText("Agents dispatching…");
+        setUploadPhaseText("Agents dispatching");
         setShowLoadingOverlay(false);
         sessionOnlyStorage.removeItem("fc_show_loading");
       })

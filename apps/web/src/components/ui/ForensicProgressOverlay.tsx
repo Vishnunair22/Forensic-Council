@@ -53,7 +53,7 @@ export function ForensicProgressOverlay({
             animate={prefersReducedMotion ? {} : { scale: [1, 1.5, 1], opacity: [1, 0.4, 1] }}
             transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className="text-[10px] font-mono font-bold tracking-[0.26em] uppercase text-muted-secondary">
+          <span className="text-[10px] font-mono font-bold tracking-[0.26em] text-muted-secondary">
             Forensic Analysis
           </span>
         </motion.div>
@@ -100,7 +100,7 @@ export function ForensicProgressOverlay({
 
         {/* Progress bar */}
         <div className="w-full">
-          <div className="flex items-center justify-between mb-2.5 text-[9px] font-mono uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.22)" }}>
+          <div className="flex items-center justify-between mb-2.5 text-[9px] font-mono tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.22)" }}>
             <span>{telemetryLabel}</span>
             {showElapsed && (
               <span aria-hidden="true" style={{ color: "var(--color-primary)" }}>{formatTime(elapsed)}</span>

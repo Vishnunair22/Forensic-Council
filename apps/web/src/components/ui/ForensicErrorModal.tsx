@@ -50,7 +50,7 @@ export function ForensicErrorModal({
   return (
     <AnimatePresence>
       {isVisible && (
-        <Dialog.Root open={isVisible} onOpenChange={(open) => { if (!open) onHome?.(); }}>
+        <Dialog.Root open={isVisible} onOpenChange={(open) => { if (!open) (onHome ?? onRetry)?.(); }}>
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild>
               <motion.div
@@ -85,8 +85,8 @@ export function ForensicErrorModal({
                   {/* --- Header Identity --- */}
                   <div className="flex items-center gap-3 mb-10">
                     <ShieldAlert className="w-4 h-4 text-danger" />
-                    <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-danger/60 uppercase">
-                      {isTransient ? "Stream_Synchronization_Lost" : "Quarantine_Protocol_Active"}
+                    <span className="text-[10px] font-mono font-bold tracking-[0.3em] text-danger/60">
+                      {isTransient ? "Stream Synchronization Lost" : "Quarantine Protocol Active"}
                     </span>
                   </div>
 
@@ -118,14 +118,14 @@ export function ForensicErrorModal({
                       <div className="bg-white/[0.02] border border-white/5 rounded-xl p-6 space-y-3">
                         <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-white/20 mb-2">
                           <Terminal className="w-3 h-3" />
-                          <span>DIAGNOSTIC_TRACE</span>
+                          <span>Diagnostic Trace</span>
                         </div>
                         <div className="flex justify-between items-center text-[11px] font-mono">
-                          <span className="text-white/30">ERROR_ID</span>
+                          <span className="text-white/30">Error ID</span>
                           <span className="text-danger font-bold">{errorCode}</span>
                         </div>
                         <div className="flex justify-between items-center text-[11px] font-mono">
-                          <span className="text-white/30">UTC_TIME</span>
+                          <span className="text-white/30">UTC Time</span>
                           <span className="text-white/60">{new Date().toISOString().split('T')[1].slice(0, 8)}</span>
                         </div>
                       </div>
@@ -167,12 +167,12 @@ export function ForensicErrorModal({
                   </Dialog.Close>
 
                   {/* Footer Metadata */}
-                  <div className="mt-12 pt-8 border-t border-white/5 flex items-center justify-between text-[9px] font-mono text-white/20 uppercase tracking-widest">
+                  <div className="mt-12 pt-8 border-t border-white/5 flex items-center justify-between text-[9px] font-mono text-white/20 tracking-widest">
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-1 rounded-full bg-danger animate-pulse" />
-                      <span>Pipeline_Halted</span>
+                      <span>Pipeline Halted</span>
                     </div>
-                    <span>Secured_Session // VOID</span>
+                    <span>Secured Session // Void</span>
                   </div>
 
                 </div>

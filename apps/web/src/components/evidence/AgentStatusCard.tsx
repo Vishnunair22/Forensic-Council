@@ -13,15 +13,43 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
+import { cleanFindingText } from "@/lib/findingText";
 import {
   getDefaultProgressTotal,
   getLiveProgressDescriptor,
 } from "@/lib/tool-progress";
 import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
+
+const TEMPLATE_SUMMARY_RE = [
+  /^analysis (?:complete|completed|finished)\.?$/i,
+  /^tool (?:execution )?(?:complete|completed|finished)(?:\s+successfully)?\.?$/i,
+  /^checked:?\s*$/i,
+  /^no diagnostic output\.?$/i,
+  /^[^.]{0,80}completed\.?$/i,
+  /^[^.]{0,80}completed;\s*review detailed tool metrics\.?$/i,
+  /^(?:check|scan|run)\s+(?:ok|complete|finished)\.?$/i,
+];
+
+function isTemplateSummary(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (t.length < 18) return true;
+  return TEMPLATE_SUMMARY_RE.some((re) => re.test(t));
+}
+
+function summaryFingerprint(text: string): string {
+  return cleanFindingText(text || "")
+    .toLowerCase()
+    .replace(/\d+(?:\.\d+)?/g, "#")
+    .replace(/\s+/g, " ")
+    .slice(0, 120)
+    .trim();
+}
 
 export interface AgentStatusCardProps {
   agentId: string;
@@ -37,7 +65,6 @@ export interface AgentStatusCardProps {
     tool_name?: string;
   };
   completedData?: AgentUpdate;
-  onComplete?: () => void;
   phase?: "initial" | "deep";
   isExpanded?: boolean;
   onToggleExpand?: () => void;
@@ -84,18 +111,38 @@ function rankFinding(f: FindingPreview): number {
 }
 
 function extractHeadline(f: FindingPreview): string {
-  if (f.key_signal?.trim()) return f.key_signal.trim();
-  const summary = (f.summary || "").trim();
+  const ks = cleanFindingText(f.key_signal || "").trim();
+  if (ks) return ks;
+  const summary = cleanFindingText(f.summary || "").trim();
   const firstSentence = summary.split(/(?<=\.)\s+/)[0];
-  return firstSentence.length <= 180 ? firstSentence : firstSentence.slice(0, 160) + "…";
+  if (firstSentence) return firstSentence;
+  if (f.verdict && f.verdict !== "INCONCLUSIVE") return `${normalizeVerdict(f.verdict)} signal reported.`;
+  if (f.tool) return `${fmtTool(f.tool)} completed without a detailed narrative.`;
+  return "Tool completed without a detailed narrative.";
 }
 
 function extractDetail(f: FindingPreview, headline: string): string {
-  const summary = (f.summary || "").trim();
+  const summary = cleanFindingText(f.summary || "").trim();
   if (!summary || summary === headline) return "";
-  if (f.key_signal?.trim() === headline) return summary;
-  const after = summary.slice(headline.replace(/…$/, "").length).replace(/^[.\s]+/, "").trim();
+  if (cleanFindingText(f.key_signal || "").trim() === headline) return summary;
+  const after = summary.slice(headline.length).replace(/^[.\s]+/, "").trim();
   return after;
+}
+
+function compactText(text: string, maxLen = 190): string {
+  const cleaned = cleanFindingText(text || "").trim();
+  if (!cleaned || cleaned.length <= maxLen) return cleaned;
+  const clipped = cleaned.slice(0, maxLen);
+  const sentenceMatch = clipped.match(/^(.{80,}?[.!?])\s/);
+  if (sentenceMatch?.[1]) return sentenceMatch[1];
+  const lastSpace = clipped.lastIndexOf(" ");
+  return `${lastSpace > 80 ? clipped.slice(0, lastSpace) : clipped}...`;
+}
+
+function formatElapsed(seconds?: number | null): string | null {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+  return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`;
 }
 
 export const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
@@ -158,17 +205,19 @@ const SEV_LABEL: Record<string, string> = {
   LOW:      "text-white/35",
 };
 
-function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
+function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: number }) {
   const [expanded, setExpanded] = useState(false);
   const isAlert = isAlertFinding(f);
   const sev = (f.severity || "").toUpperCase();
+  const verdict = normalizeVerdict(f.verdict);
+  const elapsed = formatElapsed(f.elapsed_s);
 
-  const dotColor = SEV_DOT[sev] ?? (isAlert ? "bg-danger/80" : "bg-white/20");
-  const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger/70" : "text-white/40");
+  const sevAccent = SEV_DOT[sev] ?? (isAlert ? "bg-danger/80" : "bg-white/15");
+  const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger" : "text-white/45");
 
   const headline = extractHeadline(f);
   const detail = extractDetail(f, headline);
-  const MAX = 200;
+  const MAX = 180;
   const needsExpand = detail.length > MAX;
   const visibleDetail = needsExpand && !expanded ? detail.slice(0, MAX).trimEnd() + "…" : detail;
 
@@ -178,83 +227,169 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.05, duration: 0.25 }}
-      className="flex gap-3 py-3.5"
+      className={clsx(
+        "relative border-l-4 bg-[#111111] hover:bg-[#1A1A1A] transition-colors border-y border-r border-[#333333]",
+        "px-4 py-3",
+        isAlert
+          ? "border-l-red-500"
+          : "border-l-[#555555]"
+      )}
     >
-      {/* Severity indicator bar */}
-      <div className={clsx(
-        "w-[3px] self-stretch rounded-full shrink-0 min-h-[16px]",
-        dotColor
-      )} />
 
-      <div className="flex-1 min-w-0 space-y-1.5">
-        {/* Top row: tool name chip + severity badge + confidence */}
+
+      <div className="flex flex-col gap-2.5 min-w-0">
+        {/* Top row */}
         <div className="flex items-center gap-2 flex-wrap">
           {f.tool && (
             <span className={clsx(
-              "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wide",
+              "inline-flex items-center max-w-full px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide",
               isAlert
-                ? "bg-danger/10 text-danger/80 border border-danger/20"
-                : "bg-white/6 text-white/60 border border-white/10"
+                ? "bg-danger/15 text-danger border border-danger/30"
+                : "bg-white/[0.06] text-white/80 border border-white/[0.12]"
             )}>
               {fmtTool(f.tool)}
             </span>
           )}
+          {f.verdict && (
+            <span className={clsx(
+              "text-[10px] font-mono font-black tracking-wide px-1.5 py-0.5 rounded border",
+              isAlert
+                ? "bg-danger/10 border-danger/25 text-danger"
+                : "bg-emerald-400/10 border-emerald-400/20 text-emerald-200/80"
+            )}>
+              {verdict}
+            </span>
+          )}
           {sev && SEV_LABEL[sev] && (
-            <span className={clsx("text-[10px] font-mono font-semibold uppercase tracking-wide", sevLabelColor)}>
+            <span className={clsx(
+              "text-[11px] font-mono font-black tracking-wide px-1.5 py-0.5 rounded",
+              sevLabelColor,
+              sev === "CRITICAL" || sev === "HIGH" ? "bg-danger/10 border border-danger/25" :
+              sev === "MEDIUM" ? "bg-amber-500/10 border border-amber-500/25" :
+              "bg-white/[0.04] border border-white/10"
+            )}>
               {sev}
             </span>
           )}
           {f.degraded && (
-            <span className="text-[10px] font-mono text-amber-400/60 uppercase" title={f.fallback_reason || ""}>
-              degraded
+            <span className="text-[11px] font-mono font-bold text-amber-400 border border-amber-400/30 bg-amber-400/10 rounded px-1.5 py-0.5" title={f.fallback_reason || ""}>
+              DEGRADED
             </span>
           )}
           {typeof f.confidence === "number" && (
             <span className={clsx(
-              "ml-auto text-[11px] font-mono font-bold tabular-nums shrink-0",
-              isAlert ? "text-danger/90" : "text-white/50"
+              "ml-auto text-[12px] font-mono font-black tabular-nums shrink-0",
+              isAlert ? "text-danger" :
+              f.confidence >= 0.75 ? "text-[var(--color-primary)]" :
+              f.confidence >= 0.5 ? "text-warning" :
+              "text-white/60"
             )}>
               {Math.round(f.confidence * 100)}%
             </span>
           )}
         </div>
 
-        {/* Headline — primary finding statement */}
-        <p className={clsx(
-          "text-[13px] font-medium leading-snug",
-          isAlert ? "text-white" : "text-white/85"
-        )}>
-          {headline}
-        </p>
+        {/* Headline — full text, two-line clamp until expanded */}
+        {headline && (
+          <p className={clsx(
+            "text-[14px] font-semibold leading-snug",
+            isAlert ? "text-white" : "text-white/90",
+            !expanded && "line-clamp-2",
+          )}>
+            {headline}
+          </p>
+        )}
 
-        {/* Detail — supporting evidence */}
+        {/* Detail */}
         {detail && (
-          <div className="space-y-1">
-            <p className="text-[12px] text-white/55 leading-relaxed">{visibleDetail}</p>
+          <div className="space-y-1.5">
+            <p className="text-[13px] text-white/65 leading-relaxed">{visibleDetail}</p>
             {needsExpand && (
               <button
                 type="button"
                 onClick={() => setExpanded(e => !e)}
-                className="inline-flex items-center gap-1 text-[10px] font-mono text-[var(--color-primary)]/60 hover:text-[var(--color-primary)] transition-colors"
+                className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
               >
                 {expanded
-                  ? <><ChevronUp className="w-3 h-3" /><span>less</span></>
-                  : <><ChevronDown className="w-3 h-3" /><span>more</span></>
+                  ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
+                  : <><ChevronDown className="w-3.5 h-3.5" /><span>Show more</span></>
                 }
               </button>
             )}
           </div>
         )}
 
-        {/* Trailing meta: section label */}
-        {f.section && (
-          <span className="text-[10px] font-mono text-white/25 uppercase tracking-wide">
-            {f.section}
-          </span>
-        )}
+        <div className="flex items-center gap-2 pt-1 text-[10px] font-mono font-bold text-white/32 tracking-widest uppercase">
+          <span>Finding {i + 1}/{total}</span>
+          {f.section && <span className="truncate">/ {f.section}</span>}
+          {elapsed && <span className="ml-auto text-white/38 normal-case tracking-normal">{elapsed}</span>}
+        </div>
       </div>
     </motion.div>
   );
+}
+
+function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const cleaned = compactText(text || "", 220);
+  const source = cleanFindingText(sourceText || "").trim();
+  const hasSource = source && summaryFingerprint(source) !== summaryFingerprint(cleaned);
+  if (!cleaned) return null;
+  return (
+    <div className="border-t border-white/[0.07] pt-3.5 space-y-2.5">
+      <div className="flex items-center gap-2 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-white/35">
+        <ListChecks className="w-3.5 h-3.5 text-[var(--color-primary)]/70" />
+        Agent Brief
+      </div>
+      <p className="text-[13px] text-white/76 leading-relaxed font-medium">
+        {cleaned}
+      </p>
+      {hasSource && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[var(--color-primary)]/80 hover:text-[var(--color-primary)] transition-colors"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="w-3.5 h-3.5" />
+              <span>Hide source summary</span>
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span>Show source summary</span>
+            </>
+          )}
+        </button>
+      )}
+      {expanded && hasSource && (
+        <p className="rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-[12px] leading-relaxed text-white/55">
+          {source}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function buildAgentBrief(completedData: AgentUpdate | undefined, findings: FindingPreview[], toolsRan: number): string {
+  if (!completedData) return "";
+  const verdict = normalizeVerdict(completedData.agent_verdict);
+  const confidence = Math.round((completedData.confidence || 0) * 100);
+  const alertFindings = findings.filter(isAlertFinding);
+  const topFinding = findings[0];
+  const topSignal = topFinding ? compactText(extractHeadline(topFinding), 120) : "";
+  const toolText = toolsRan === 1 ? "1 tool check" : `${toolsRan} tool checks`;
+
+  if (alertFindings.length > 0) {
+    return `${verdict} at ${confidence}% confidence after ${toolText}. Highest-priority signal: ${topSignal || "review the flagged tool output below."}`;
+  }
+
+  if (findings.length > 0) {
+    return `${verdict} at ${confidence}% confidence after ${toolText}. No high-severity tool signal surfaced; most relevant note: ${topSignal}`;
+  }
+
+  return `${verdict} at ${confidence}% confidence after ${toolText}. The backend did not return detailed tool findings for this specialist.`;
 }
 
 export function AgentStatusCard({
@@ -284,7 +419,12 @@ export function AgentStatusCard({
   const thinkingStaleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
-    if (status !== "running") return;
+    if (status !== "running") {
+      // Reset so the next run starts from the first phrase, not wherever the
+      // last run was when the interval cleared.
+      setFallbackPhraseIndex(0);
+      return;
+    }
     const currentThinking = liveUpdate?.thinking || "";
     if (currentThinking !== lastThinkingRef.current) {
       lastThinkingRef.current = currentThinking;
@@ -318,13 +458,20 @@ export function AgentStatusCard({
     const deduped: FindingPreview[] = [];
     const seen = new Set<string>();
     for (const f of raw) {
-      const key = f.tool || (f.summary || "").slice(0, 90).toLowerCase().trim();
+      const summaryText = (f.summary || "").trim();
+      // Skip stub/template findings entirely.
+      if (!f.key_signal?.trim() && isTemplateSummary(summaryText)) continue;
+      // Dedup on tool + verdict + severity + a normalised summary fingerprint,
+      // so two emits of the same finding (re-runs, partial updates) collapse,
+      // but a real shift (ELA NEGATIVE → ELA SUSPICIOUS) still surfaces.
+      const toolPart = f.tool || summaryText.slice(0, 90).toLowerCase().trim();
+      const fp = summaryFingerprint(summaryText || f.key_signal || "");
+      const key = `${toolPart}::${(f.verdict || "").toUpperCase()}::${(f.severity || "").toUpperCase()}::${fp}`;
       if (!seen.has(key)) {
         deduped.push(f);
         seen.add(key);
       }
     }
-    // Highest-severity / alert findings first
     return deduped.sort((a, b) => rankFinding(a) - rankFinding(b));
   }, [completedData]);
   const verdictScore = completedData?.verdict_score;
@@ -333,6 +480,7 @@ export function AgentStatusCard({
     (typeof verdictScore === "number" && verdictScore > 0.6) ||
     ALERT_VERDICTS.has(agentVerdict || "");
   const toolsRan = completedData?.tools_ran || findings.length || 0;
+  const agentBrief = buildAgentBrief(completedData, findings, toolsRan);
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
   // Once the backend has emitted a concrete tool, trust that progress instead
@@ -357,36 +505,23 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden fc-transition fc-hover-lift fc-focus-ring min-h-[480px] max-h-[720px] rounded-2xl",
+        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-[#06090E] border border-[#333333]",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
-      style={{
-        background: "rgba(5,9,18,0.92)",
-        border: (status === "running" || status === "checking")
-          ? "1px solid rgba(79,142,247,0.18)"
-          : "1px solid rgba(165,200,255,0.08)",
-        boxShadow: (status === "running" || status === "checking")
-          ? "0 8px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(79,142,247,0.10), inset 0 1px 0 rgba(255,255,255,0.04)"
-          : "0 6px 28px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)",
-      }}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
-      <div
-        className="p-7 pb-5 border-b rounded-t-2xl relative z-10"
-        style={{ background: "rgba(9,14,26,0.6)", borderColor: "rgba(165,200,255,0.06)" }}
-      >
+      <div className="p-7 pb-5 border-b border-[#333333] relative z-10 bg-[#06090E]">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
-            {/* Aperture Icon */}
-            <div className="relative w-16 h-16 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border border-[var(--color-primary)]/20 border-dashed [animation:spin_15s_linear_infinite]" />
+            {/* Agent Icon */}
+            <div className="relative w-16 h-16 flex items-center justify-center bg-[#111111] border border-[#333333]">
               <Icon className={clsx("w-7 h-7 relative z-10", agentGraphic.color)} />
             </div>
 
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-xl font-heading font-bold text-white tracking-tight">{name}</h3>
+              <div className="flex items-center gap-2 mb-1.5">
+                <h3 className="text-2xl font-heading font-bold text-white tracking-tight">{name}</h3>
                 {completedData?.degraded && (
                   <motion.div
                     initial={{ scale: 0 }}
@@ -394,24 +529,24 @@ export function AgentStatusCard({
                     className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30"
                     title={completedData.fallback_reason || "Analysis degraded"}
                   >
-                    <AlertTriangle className="w-3 h-3 text-amber-500" />
-                    <span className="text-[8px] font-mono font-bold text-amber-500 uppercase tracking-widest">
-                      Degraded_Mode
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="text-[10px] font-mono font-bold text-amber-500 tracking-widest">
+                      Degraded
                     </span>
                   </motion.div>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-3 py-0.5 rounded text-[10px] font-mono font-bold border",
-                  (status === "complete" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/30 text-[var(--color-primary)]" :
-                  status === "error" ? "bg-danger/10 border-danger/30 text-danger" :
-                  "bg-white/5 border-white/10 text-white/40"
+                  "px-3 py-1 rounded-md text-[11px] font-mono font-bold border",
+                  (status === "complete" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40 text-[var(--color-primary)]" :
+                  status === "error" ? "bg-danger/12 border-danger/40 text-danger" :
+                  "bg-white/[0.06] border-white/15 text-white/55"
                 )}>
-                  {cfg.label.toUpperCase()}
+                  {cfg.label}
                 </span>
-                <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">
-                  {badge || `NODE_${agentId}`}
+                <span className="text-[11px] font-mono font-semibold text-white/50 tracking-wider">
+                  {badge || `Node ${agentId}`}
                 </span>
               </div>
             </div>
@@ -445,14 +580,13 @@ export function AgentStatusCard({
                       )}
                 </span>
               </div>
-              <div className="relative w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
+              <div className="relative w-full h-[4px] bg-[#222222] overflow-hidden">
                 <motion.div
-                  className="absolute top-0 bottom-0 bg-[var(--color-primary)] shadow-[0_0_15px_rgba(var(--color-primary-rgb),0.5)]"
+                  className="absolute top-0 bottom-0 bg-white"
                   animate={{
-                    width: status === "checking" ? "60%" : `${(currentToolIndex / liveTotal) * 100}%`,
-                    opacity: status === "checking" ? [0.3, 1, 0.3] : 1,
+                    width: status === "checking" ? "100%" : `${(currentToolIndex / liveTotal) * 100}%`,
                   }}
-                  transition={status === "checking" ? { duration: 1.5, repeat: Infinity } : undefined}
+                  transition={{ duration: 0.2 }}
                 />
               </div>
 
@@ -467,59 +601,56 @@ export function AgentStatusCard({
             >
               <div className="flex items-end justify-between">
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest block mb-1">Final Verdict</span>
+                  <span className="text-[11px] font-mono font-bold text-white/45 tracking-widest block mb-1.5">Final Verdict</span>
                   <span className={clsx(
-                    "text-xl font-heading font-bold tracking-tight",
+                    "text-2xl font-heading font-bold tracking-tight",
                     isAgentAlert ? "text-danger" : agentVerdict === "INCONCLUSIVE" ? "text-warning" : "text-success"
                   )}>
                     {normalizeVerdict(completedData.agent_verdict)}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest block mb-1">Confidence</span>
-                  <span className="text-xl font-mono font-bold text-white">
+                  <span className="text-[11px] font-mono font-bold text-white/45 tracking-widest block mb-1.5">Confidence</span>
+                  <span className="text-2xl font-mono font-bold text-white tabular-nums">
                     {Math.round(completedData.confidence * 100)}%
                   </span>
                 </div>
               </div>
-              {(completedData.summary || completedData.message) && (
-                <p className="text-[12px] text-white/60 leading-relaxed border-t border-white/5 pt-3">
-                  {(completedData.summary || completedData.message || "").slice(0, 280)}
-                  {(completedData.summary || completedData.message || "").length > 280 ? "…" : ""}
-                </p>
-              )}
+              <AgentSummaryText
+                text={agentBrief}
+                sourceText={completedData.summary || completedData.message || ""}
+              />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* --- Findings Surface --- */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar scroll-smooth p-8 pt-4 relative z-10">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar scroll-smooth px-6 py-5 relative z-10">
         <AnimatePresence mode="wait">
           {status === "complete" && findings.length > 0 ? (
-            <div>
-              <div className="divide-y divide-white/[0.05]">
-                {(isExpanded ? findings : findings.slice(0, 3)).map((f, i) => (
-                  <FindingRow key={`${f.tool}-${i}`} f={f} i={i} />
-                ))}
-              </div>
+            <div className="space-y-3">
+              {(isExpanded ? findings : findings.slice(0, 3)).map((f, i) => (
+                <FindingRow key={`${f.tool}-${i}`} f={f} i={i} total={findings.length} />
+              ))}
 
               {findings.length > 3 && (
                 <button
                   type="button"
                   onClick={() => onToggleExpand?.()}
                   className={clsx(
-                    "mt-4 w-full py-2.5 rounded-lg flex items-center justify-center gap-1.5",
-                    "text-[11px] font-mono font-semibold uppercase tracking-wider",
-                    "border transition-all duration-200",
+                    "mt-3 w-full py-3.5 rounded-lg flex items-center justify-center gap-2",
+                    "text-[12px] font-black tracking-wide",
+                    "border transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
                     isExpanded
-                      ? "bg-white/[0.04] border-white/10 text-white/40 hover:text-white/60 hover:border-white/20"
-                      : "bg-[var(--color-primary)]/6 border-[var(--color-primary)]/20 text-[var(--color-primary)]/70 hover:bg-[var(--color-primary)]/10 hover:border-[var(--color-primary)]/35 hover:text-[var(--color-primary)]"
+                      ? "bg-white/[0.04] border-white/15 text-white/65 hover:text-white hover:border-white/25"
+                      : "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/18 hover:border-[var(--color-primary)]/60"
                   )}
+                  aria-expanded={isExpanded}
                 >
                   {isExpanded
-                    ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
-                    : <><ChevronDown className="w-3.5 h-3.5" /><span>{findings.length - 3} more {findings.length - 3 === 1 ? "signal" : "signals"}</span></>
+                    ? <><ChevronUp className="w-4 h-4" /><span>Collapse to top 3 findings</span></>
+                    : <><ChevronDown className="w-4 h-4" /><span>Show all {findings.length} tool findings ({findings.length - 3} hidden)</span></>
                   }
                 </button>
               )}
@@ -571,16 +702,13 @@ export function AgentStatusCard({
                   completedData?.message ||
                   "This specialist does not support the submitted file type."}
               </p>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-white/25">
+              <span className="text-[10px] font-mono tracking-widest text-white/25">
                 Hidden after 10s
               </span>
             </div>
           ) : null}
         </AnimatePresence>
       </div>
-
-      {/* Decorative Bezel Highlight */}
-      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
     </motion.div>
   );
 }

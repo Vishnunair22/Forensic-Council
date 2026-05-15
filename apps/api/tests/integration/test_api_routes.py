@@ -12,10 +12,6 @@ import uuid
 
 import pytest
 
-try:
-    pass
-except Exception:
-    pytest.skip("grpc not installed; skipping integration tests", allow_module_level=True)
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # â”€â”€ Import guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -182,13 +178,13 @@ class TestSecurityHeaders:
     def test_x_request_id_present(self, client):
         r = client.get("/health")
         # Request ID header is added by middleware
-        assert "x-request-id" in r.headers or True  # Optional but desired
+        assert "x-request-id" in r.headers
 
     def test_no_server_version_leak(self, client):
         r = client.get("/health")
         server = r.headers.get("server", "")
         # Should not expose exact version numbers
-        assert "uvicorn/" not in server.lower() or True  # Soft check
+        assert "uvicorn/" not in server.lower()
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

@@ -195,3 +195,7 @@ test_*.ps1
 
 # ── CI artifacts — generated files, never committed ──────────────────────────
 check_critical_coverage_*.txt
+
+
+# ── Audit plan (session-local) ───────────────────────────────────────────────
+FULL_APP_AUDIT.md

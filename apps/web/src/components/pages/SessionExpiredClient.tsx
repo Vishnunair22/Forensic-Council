@@ -25,7 +25,7 @@ export function SessionExpiredClient() {
         >
           <div className="flex items-center justify-center gap-2 opacity-40">
             <ShieldAlert className="w-4 h-4 text-red-500" />
-            <span className="text-[10px] uppercase tracking-[0.3em] font-mono font-black">
+            <span className="text-[10px] tracking-[0.3em] font-mono font-black">
               Security Boundary
             </span>
           </div>
@@ -57,8 +57,16 @@ export function SessionExpiredClient() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => router.push("/")}
-                className="w-full py-4 rounded-full bg-primary text-[#020617] hover:scale-[1.02] shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-xs font-black tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-3 group"
+                onClick={() => {
+                  // WORKFLOW_TRACE: session-expired -> Return to Hub MUST dispatch
+                  // fc:reset-home so HeroAuthActions clears modal/file state.
+                  if (window.location.pathname === "/") {
+                    window.dispatchEvent(new Event("fc:reset-home"));
+                  } else {
+                    router.push("/");
+                  }
+                }}
+                className="w-full py-4 rounded-full bg-primary text-[#020617] hover:scale-[1.02] shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-xs font-black tracking-[0.2em] transition-all flex items-center justify-center gap-3 group"
                 data-testid="session-expired-home-cta"
                 aria-label="Return to dashboard"
               >
@@ -76,7 +84,7 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-xs font-black tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-3"
+                className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-xs font-black tracking-[0.2em] transition-all flex items-center justify-center gap-3"
                 data-testid="session-expired-retry-cta"
               >
                 <RefreshCw className="w-4 h-4 opacity-40" />
@@ -89,7 +97,7 @@ export function SessionExpiredClient() {
         {/* Micro-accent */}
         <div className="flex justify-center opacity-10">
            <div className="h-[1px] w-12 bg-white" />
-           <div className="mx-4 text-[8px] font-mono font-black tracking-widest uppercase">System_Halt</div>
+           <div className="mx-4 text-[8px] font-mono font-black tracking-widest">System Halt</div>
            <div className="h-[1px] w-12 bg-white" />
         </div>
       </div>

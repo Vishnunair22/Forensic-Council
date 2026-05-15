@@ -124,52 +124,46 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1.5 rounded-md bg-muted/50 text-xs">
-      <div className="flex items-center gap-1.5">
-        <TrendingUp className={`h-3.5 w-3.5 ${getStatusTextColor()}`} />
-        <span className="font-medium text-muted-foreground">Quota:</span>
-      </div>
-
+    <div className="flex items-center gap-4 px-4 py-2 border border-[#333333] bg-[#06090E] text-[10px] font-mono tracking-widest uppercase">
       <div className="flex items-center gap-2">
-        <div
-          className="w-24 h-2 rounded-full bg-muted-foreground/20 overflow-hidden"
-          role="progressbar"
-          aria-label="Token usage"
-          aria-valuenow={Math.round(usagePercent)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${getStatusColor()}`}
-            style={{ width: `${usagePercent}%` }}
-          />
-        </div>
+        <TrendingUp className={`h-3.5 w-3.5 ${getStatusTextColor()}`} />
+        <span className="text-white/50">Quota:</span>
         <span className={getStatusTextColor()}>
           {quota.tokens_used.toLocaleString()} / {quota.tokens_limit.toLocaleString()}
         </span>
       </div>
 
-      <div className="flex items-center gap-1 text-muted-foreground">
+      <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
+
+      <div className="flex items-center gap-1 text-white/50">
         <DollarSign className="h-3 w-3" />
         <span>${quota.cost_estimate_usd.toFixed(4)}</span>
       </div>
 
-      <div className="flex items-center gap-1 text-muted-foreground">
+      <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
+
+      <div className="flex items-center gap-1 text-white/50">
         <span>{quota.calls_total} calls</span>
       </div>
 
       {isCritical && (
-        <div className="flex items-center gap-1 text-red-600">
-          <XCircle className="h-3 w-3" />
-          <span className="font-medium">Limit reached</span>
-        </div>
+        <>
+          <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
+          <div className="flex items-center gap-1 text-red-500 font-bold">
+            <XCircle className="h-3 w-3" />
+            <span>Limit reached</span>
+          </div>
+        </>
       )}
 
       {isWarning && !isCritical && (
-        <div className="flex items-center gap-1 text-amber-600">
-          <AlertTriangle className="h-3 w-3" />
-          <span className="font-medium">High usage</span>
-        </div>
+        <>
+          <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
+          <div className="flex items-center gap-1 text-amber-500 font-bold">
+            <AlertTriangle className="h-3 w-3" />
+            <span>High usage</span>
+          </div>
+        </>
       )}
     </div>
   );

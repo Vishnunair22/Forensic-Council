@@ -155,7 +155,7 @@ COPY storage/ /tmp/__storage_seed/
 RUN cp -rn /tmp/__storage_seed/calibration_models/. \
             /opt/forensic-model-cache/calibration_models/ 2>/dev/null || true \
  && rm -rf /tmp/__storage_seed
-# worker.py is now copied as part of orchestration/
+
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
@@ -206,13 +206,9 @@ ENV YOLO_MODEL_NAME="${YOLO_MODEL_NAME}" \
 RUN python scripts/validate_ml_tools.py
 
 # Create valid default calibration models at build time if not pre-bundled.
-# These are used when no trained models are available. Use the application
-# calibration writer so the JSON schema, enum values, and current agent IDs
-# stay in lockstep with core/calibration.py.
-RUN if [ ! -f /opt/forensic-model-cache/calibration_models/.trained ]; then \
-        python -c "from core.calibration import CalibrationLayer; layer=CalibrationLayer('/opt/forensic-model-cache/calibration_models'); [layer.fit_default_model(agent) for agent in ('agent1_image','agent2_audio','agent3_object','agent4_video','agent5_metadata')]" ; \
-        touch /opt/forensic-model-cache/calibration_models/.trained ; \
-    fi
+# Delegated to a script so import failures from core.calibration surface
+# with a clear message at build.
+RUN python scripts/preseed_calibration.py
 
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
@@ -272,8 +268,7 @@ FROM app AS production
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
-    CMD wget -qO- http://127.0.0.1:8000/health || exit 1
+
 
 # Start as root so docker_entrypoint.sh can repair mounted volume ownership,
 # then it drops privileges to appuser before running the API or worker.

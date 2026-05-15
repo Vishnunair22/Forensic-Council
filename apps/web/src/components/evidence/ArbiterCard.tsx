@@ -85,8 +85,8 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
             </div>
             <div>
               <h3 className="text-sm font-bold text-white tracking-tight">Council Arbiter</h3>
-              <p className="text-[9px] font-mono text-white/30 uppercase tracking-widest font-bold">
-                {phase === "deep" ? "Phase_2_Synthesis" : "Phase_1_Synthesis"}
+              <p className="text-[9px] font-mono text-white/30 tracking-widest font-bold">
+                {phase === "deep" ? "Phase 2 Synthesis" : "Phase 1 Synthesis"}
               </p>
             </div>
           </div>
@@ -96,7 +96,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
             display.bg, display.border
           )}>
             <Icon className={clsx("w-3 h-3", display.color, (isPreWarming || isSynthesizing) && "animate-pulse")} />
-            <span className={clsx("text-[9px] font-bold uppercase tracking-tighter", display.color)}>
+            <span className={clsx("text-[9px] font-bold tracking-tighter", display.color)}>
               {display.label}
             </span>
           </div>
@@ -106,9 +106,9 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Synthesis_Engine</span>
+                <span className="text-[10px] font-mono text-white/30 tracking-widest">Synthesis Engine</span>
                 <span className="text-[10px] font-mono text-white/50">
-                  {isReady ? "COMPLETED" : isSynthesizing ? "COMPUTING" : "PREPARING"}
+                  {isReady ? "Completed" : isSynthesizing ? "Computing" : "Preparing"}
                 </span>
               </div>
               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
@@ -178,7 +178,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                 }}
               />
             ))}
-            <span className="ml-auto text-[9px] font-mono text-white/20 uppercase">Arbiter_Pulse</span>
+            <span className="ml-auto text-[9px] font-mono text-white/20">Arbiter Pulse</span>
           </div>
         </div>
       </div>

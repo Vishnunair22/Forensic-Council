@@ -169,22 +169,16 @@ export function HeroAuthActions() {
         type="button"
         data-testid="hero-cta-begin"
         whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
-        whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+        whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
         onClick={handleCTAClick}
         aria-label="Upload a file to begin analysis"
-        className="btn-horizon-primary group relative select-none overflow-hidden"
+        className="bg-white text-black px-10 py-4 flex items-center gap-3 select-none rounded-sm font-bold tracking-widest transition-colors hover:bg-gray-100"
       >
-        <motion.div
-          className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-          aria-hidden="true"
-        />
-        <span className="relative z-10 flex items-center gap-4 text-[#020617]">
-          <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-          <span className="font-bold uppercase tracking-widest">Begin Analysis</span>
-        </span>
+        <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" />
+        <span className="uppercase text-sm">Begin Analysis</span>
       </motion.button>
 
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="sync" initial={false}>
         {showUpload && !selectedFile && !isHandingOff && (
           <UploadModal
             key="upload-modal"

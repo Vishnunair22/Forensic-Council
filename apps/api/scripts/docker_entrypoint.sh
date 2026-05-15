@@ -1,7 +1,21 @@
 #!/bin/sh
 # ============================================================================
 # Forensic Council - Docker Entrypoint
+#
+# Runs at container startup BEFORE the API server.
+# 1. Guard: fail fast if required env vars are missing or still placeholders
+# 2. Permission repair: fix volume ownership if running as root
+# 3. Seed calibration and ML model caches into mounted volumes on first start
+# 4. Optionally download any missing models (fail-safe fallback)
+# 5. Verify model cache and Python imports
+# 6. Drop to appuser and exec the API server, worker, or custom command
+#
+# Environment overrides:
+#   SKIP_MODEL_DOWNLOAD=1   Skip background model pre-download (e.g. CI/CD)
+#   SKIP_CACHE_CHECK=1      Skip cache status + import check
 # ============================================================================
+set -e
+export HOME="${HOME:-/tmp}"
 
 # ── Guard: fail fast if required vars are missing or still placeholders ──────
 REQUIRED_VARS="SIGNING_KEY JWT_SECRET_KEY"
@@ -16,24 +30,12 @@ for VAR in $REQUIRED_VARS; do
   # Use eval to get variable value in POSIX sh (no ${!VAR} indirect expansion)
   VAL=$(eval "echo \"\$$VAR\"")
   case "$VAL" in
-    ""|*change*|*placeholder*|*replace*|*REPLACE*|*__REPLACE*)
+    ""|__REPLACE_ME*|__PASTE_*|*placeholder*|*Placeholder*|*PLACEHOLDER*|change-me|changeme|change_me)
       echo "FATAL: $VAR is missing or still a placeholder. Copy .env.example to .env and fill all values." >&2
       exit 1
       ;;
   esac
 done
-# Runs at container startup BEFORE the API server.
-# 1. On FIRST ever start (volumes empty): pre-downloads ML models IN BACKGROUND
-#    so the API starts immediately while models download concurrently.
-# 2. Validates cache state and core Python imports (~3s)
-# 3. Starts the API server / Worker / Script
-#
-# Environment overrides:
-#   SKIP_MODEL_DOWNLOAD=1   Skip background model pre-download (e.g. CI/CD)
-#   SKIP_CACHE_CHECK=1      Skip cache status + import check
-# ============================================================================
-set -e
-export HOME="${HOME:-/tmp}"
 
 EXPECTED_PROJECT="forensic-council"
 if [ -n "${COMPOSE_PROJECT_NAME:-}" ] && [ "$COMPOSE_PROJECT_NAME" != "$EXPECTED_PROJECT" ]; then

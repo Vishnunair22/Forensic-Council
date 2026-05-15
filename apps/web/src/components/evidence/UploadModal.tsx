@@ -3,74 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { X } from "lucide-react";
-import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
+import { X, Plus } from "lucide-react";
+import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { validateEvidenceFile } from "@/lib/fileValidation";
-
-// Envelope icon — shows open state with drag-reactive document card
-function EnvelopeOpen({ isDragging }: { isDragging: boolean }) {
-  return (
-    <div className="relative flex h-24 w-24 items-center justify-center" aria-hidden="true">
-      {/* Rotating dashed ring — CSS animation, no framer-motion overhead */}
-      <div className="absolute inset-0 rounded-full border border-primary/[0.18] border-dashed [animation:spin_24s_linear_infinite]" />
-      <div className="absolute inset-2 rounded-full border border-primary/[0.08]" />
-
-      <div className="relative w-16 h-12">
-        <svg viewBox="0 0 64 48" className="w-full h-full">
-          <defs>
-            <linearGradient id="envBody" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#1e293b" />
-              <stop offset="100%" stopColor="#0f172a" />
-            </linearGradient>
-            <linearGradient id="envFlap" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#334155" />
-              <stop offset="100%" stopColor="#1e293b" />
-            </linearGradient>
-          </defs>
-
-          {/* Envelope body */}
-          <path
-            d="M2 12 L2 42 Q2 46 6 46 L58 46 Q62 46 62 42 L62 12 Q62 8 58 8 L6 8 Q2 8 2 12Z"
-            fill="url(#envBody)"
-            stroke="#475569"
-            strokeWidth="1"
-          />
-          <path d="M2 12 L32 28 L62 12" fill="none" stroke="#475569" strokeWidth="1" />
-
-          {/* Flap — open position */}
-          <path
-            d="M2 8 L32 26 L62 8"
-            fill="url(#envFlap)"
-            stroke="#64748b"
-            strokeWidth="0.5"
-          />
-
-          {/* Document card — rises on drag */}
-          <motion.rect
-            x="10" y="22" width="44" height="18" rx="1"
-            fill="#f8fafc"
-            animate={{ y: isDragging ? 0 : 8, opacity: isDragging ? 1 : 0.6 }}
-            transition={{ duration: 0.28, ease: "easeOut" }}
-          />
-          <motion.path
-            d="M16 28 L28 36"
-            stroke="#94a3b8" strokeWidth="1.5"
-            animate={{ opacity: isDragging ? 1 : 0.35 }}
-            transition={{ duration: 0.2 }}
-          />
-          <motion.path
-            d="M36 28 L48 36"
-            stroke="#94a3b8" strokeWidth="1.5"
-            animate={{ opacity: isDragging ? 1 : 0.35 }}
-            transition={{ duration: 0.2, delay: 0.04 }}
-          />
-        </svg>
-      </div>
-    </div>
-  );
-}
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -146,8 +83,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ background: "rgba(1,2,8,0.96)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/95"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
       <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
@@ -156,19 +92,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 8 }}
           transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden rounded-2xl"
-          style={{
-            background: "rgba(5,9,18,0.97)",
-            border: "1px solid rgba(165,200,255,0.10)",
-            boxShadow: "0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(79,142,247,0.06), inset 0 1px 0 rgba(255,255,255,0.05)",
-          }}
+          className="relative overflow-hidden bg-[#06090E]"
         >
-          {/* Top gradient accent */}
-          <div
-            className="absolute inset-x-0 top-0 h-px"
-            style={{ background: "linear-gradient(90deg, transparent 10%, rgba(79,142,247,0.5) 50%, transparent 90%)" }}
-            aria-hidden="true"
-          />
 
           <div className="p-8 sm:p-10 flex flex-col items-center text-center">
             <button
@@ -183,7 +108,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               <X className="w-4 h-4" />
             </button>
 
-            <p className="text-[9px] font-mono font-bold tracking-[0.28em] uppercase mb-3" style={{ color: "rgba(79,142,247,0.45)" }} aria-hidden="true">
+            <p className="text-[9px] font-mono font-bold tracking-[0.28em] mb-3" style={{ color: "rgba(79,142,247,0.45)" }} aria-hidden="true">
               Evidence Intake
             </p>
             <h2 id="upload-modal-title" className="text-[22px] font-heading font-bold text-white/90 mb-7" style={{ letterSpacing: "-0.02em" }}>
@@ -204,40 +129,32 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   input?.click();
                 }
               }}
-              className="w-full rounded-2xl p-10 cursor-pointer group flex flex-col items-center justify-center gap-5 relative overflow-hidden"
+              className="w-full p-16 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden transition-colors duration-200"
               style={{
-                border: isDragging
-                  ? "1.5px solid rgba(79,142,247,0.45)"
-                  : "1.5px dashed rgba(165,200,255,0.10)",
-                background: isDragging
-                  ? "rgba(79,142,247,0.055)"
-                  : "rgba(255,255,255,0.015)",
-                boxShadow: isDragging
-                  ? "0 0 40px rgba(79,142,247,0.10), inset 0 0 24px rgba(79,142,247,0.04)"
-                  : "none",
-                transition: "border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease",
+                border: isDragging ? "1px solid #FFFFFF" : "1px solid #333333",
+                background: isDragging ? "#111111" : "transparent",
               }}
             >
-              <EnvelopeOpen isDragging={isDragging} />
+              <Plus 
+                className="w-16 h-16 transition-colors duration-200" 
+                style={{ color: isDragging ? "#FFFFFF" : "#555555" }} 
+                strokeWidth={1} 
+                aria-hidden="true" 
+              />
 
-              <div className="flex flex-col items-center gap-1.5 pointer-events-none">
+              <div className="flex flex-col items-center gap-2 pointer-events-none">
                 <span
-                  className="text-[17px] font-heading font-bold transition-colors duration-200"
-                  style={{
-                    color: isDragging ? "var(--color-primary)" : "rgba(255,255,255,0.70)",
-                    letterSpacing: "-0.01em",
-                  }}
+                  className="text-xl font-bold transition-colors duration-200 uppercase tracking-widest"
+                  style={{ color: isDragging ? "#FFFFFF" : "#888888" }}
                 >
-                  {isDragging ? "Release to Upload" : "Drop Evidence File"}
+                  {isDragging ? "Drop Evidence" : "Select Evidence"}
                 </span>
-                <p id="upload-file-help" className="text-[13px] text-muted-readable max-w-[260px] leading-relaxed">
-                  or press Enter to select · images, video, and audio · max 50 MB
+                <p id="upload-file-help" className="text-sm text-slate-500 max-w-[260px] leading-relaxed">
+                  images, video, audio (max 50MB)
                 </p>
               </div>
 
-              <div className="absolute bottom-3 right-4 text-[8px] font-mono tracking-[0.22em]" style={{ color: "rgba(79,142,247,0.18)" }} aria-hidden="true">
-                {isSubmitting ? "UPLOADING..." : "AWAITING_INPUT"}
-              </div>
+
 
               <input
                 type="file"

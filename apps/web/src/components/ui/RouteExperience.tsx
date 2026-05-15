@@ -31,10 +31,14 @@ export function RouteExperience() {
     }
   }, [pathname]);
 
+  // Dev-only diagnostics — print once per page load, not per route change.
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     logApiTargetDiagnostics();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     const behavior =
       pathname === "/evidence" || pathname.startsWith("/result")

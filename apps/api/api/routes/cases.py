@@ -226,10 +226,7 @@ async def analyze_case(
 
     for artifact in pending:
         try:
-            pipeline = ForensicCouncilPipeline(
-                session_id=uuid.UUID(artifact.session_id),
-                config=settings,
-            )
+            pipeline = ForensicCouncilPipeline(config=settings)
 
             # Update artifact status to running
             artifact.status = "running"

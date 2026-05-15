@@ -1027,8 +1027,6 @@ const resumeInvestigation = useCallback(
     dismissCheckpoint,
     clearCompletedAgents,
     restoreSimulationState,
-    handleExport,
-    selectSession,
     setSimulationPhase,
     hitlCheckpoint,
     errorMessage,

@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cost quota default $0 for free tier
 
 ### Fixed
-- Phase 4: Model licensing documentation added (MODEL_PINNING.md)
+- Phase 4: Model licensing documentation added (MODEL_LICENSING.md)
 
 ## [1.6.3] - 2026-04-25
 

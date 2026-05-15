@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
 import {
- ChevronDown,
  Clock,
  AlertTriangle,
  CheckCircle2,
  XCircle,
- Info
+ MinusCircle,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
@@ -15,7 +13,7 @@ import { getToolIcon } from "@/lib/tool-icons";
 import { cleanFindingText } from "@/lib/findingText";
 import type { AgentFindingDTO } from "@/lib/api";
 
-const TECHNICAL_KEYS_TO_HIDE = new Set([
+const HIDE_KEYS = new Set([
  "tool_name",
  "llm_reasoning",
  "llm_synthesis",
@@ -31,46 +29,135 @@ const TECHNICAL_KEYS_TO_HIDE = new Set([
  "artifact_id",
  "session_id",
  "case_id",
+ "degraded",
+ "fallback_reason",
+ "available",
+ "severity_tier",
+ "risk_level",
+ "risk_tier",
+ "analysis_summary",
+ "summary",
+ "notes",
+ "rationale",
+ "explanation",
 ]);
 
-function metricHighlights(metadata: Record<string, unknown> | null | undefined) {
+const METRIC_LABELS: Record<string, string> = {
+ max_anomaly: "Peak Anomaly",
+ num_anomaly_regions: "Anomaly Regions",
+ avg_confidence: "OCR Confidence",
+ confidence: "Confidence",
+ word_count: "Word Count",
+ page_count: "Pages",
+ clone_probability: "Clone Prob",
+ spoof_score: "Spoof Score",
+ synthetic_probability: "Synthetic Prob",
+ re_encoding_detected: "Re-encoded",
+ manipulation_detected: "Manipulation",
+ is_ai_generated: "AI Generated",
+ splicing_detected: "Splicing",
+ copy_move_detected: "Copy-Move",
+ gan_artifact_detected: "GAN Artifact",
+ diffusion_detected: "Diffusion Trace",
+ method: "OCR Method",
+ analysis_source: "Analysis Source",
+ speaker_count: "Speaker Count",
+ dominant_emotion: "Dominant Emotion",
+ flagged_frames: "Flagged Frames",
+ execution_time_ms: "Time",
+};
+
+interface Metric {
+ label: string;
+ value: string;
+ numeric: number | null;
+ emphasis: "danger" | "warn" | "ok" | "neutral";
+}
+
+function classifyMetric(key: string, raw: unknown): "danger" | "warn" | "ok" | "neutral" {
+ if (typeof raw === "boolean") {
+  const flaggers = /detect|manipulation|spoof|splic|copy[_-]?move|gan|synthetic|ai[_-]?generat|re[_-]?encod|diffusion|fake/i;
+  if (flaggers.test(key)) return raw ? "danger" : "ok";
+  return "neutral";
+ }
+ if (typeof raw === "number") {
+  if (key.includes("probability") || key.includes("anomaly") || key.includes("spoof") || /score/i.test(key)) {
+   if (raw >= 0.7) return "danger";
+   if (raw >= 0.4) return "warn";
+   return "ok";
+  }
+  if (/confidence/i.test(key)) {
+   if (raw >= 0.75) return "ok";
+   if (raw >= 0.5) return "warn";
+   return "danger";
+  }
+ }
+ return "neutral";
+}
+
+function metricHighlights(metadata: Record<string, unknown> | null | undefined): Metric[] {
  if (!metadata) return [];
- const items: Array<{ label: string; value: string }> = [];
+ const items: Metric[] = [];
 
  for (const [key, value] of Object.entries(metadata)) {
-  if (items.length >= 5) break;
-  if (key.startsWith("_") || TECHNICAL_KEYS_TO_HIDE.has(key)) continue;
+  if (items.length >= 12) break;
+  if (key.startsWith("_") || HIDE_KEYS.has(key)) continue;
+  if (key === "execution_time_ms") continue;
   if (value === null || value === undefined || typeof value === "object") continue;
 
-  const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const label = METRIC_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   let text = "";
-  if (typeof value === "boolean") text = value ? "Yes" : "No";
-  else if (typeof value === "number") text = Math.abs(value) < 1 ? value.toFixed(3) : String(Math.round(value * 100) / 100);
-  else if (typeof value === "string" && value.length <= 80) text = value;
-  if (text) items.push({ label, value: text });
+  let numeric: number | null = null;
+  if (typeof value === "boolean") {
+   text = value ? "Yes" : "No";
+  } else if (typeof value === "number") {
+   numeric = value;
+   if (key.includes("probability") || key.includes("confidence") || key.includes("score") || key === "max_anomaly") {
+    text = `${Math.round(value * 100)}%`;
+   } else {
+    text = Math.abs(value) < 1 ? value.toFixed(3) : String(Math.round(value * 100) / 100);
+   }
+  } else if (typeof value === "string" && value.length <= 140) {
+   text = value;
+  }
+  if (text) items.push({ label, value: text, numeric, emphasis: classifyMetric(key, value) });
  }
 
  return items;
 }
 
-function findingMeaning(finding: AgentFindingDTO, status: string) {
- const verdict = String(finding.evidence_verdict || "").toUpperCase();
- if (status === "na" || verdict === "NOT_APPLICABLE") {
-  return "This check does not apply to the submitted file type, so it is not counted as suspicious or clean evidence.";
- }
- if (status === "error" || verdict === "ERROR") {
-  return "This check did not complete. It is a coverage limitation, not evidence of manipulation.";
- }
- if (verdict === "POSITIVE") {
-  return "This is an active forensic signal. It should be weighed with the other tools before deciding authenticity.";
- }
- if (verdict === "NEGATIVE") {
-  return "This supports the absence of this specific manipulation pattern.";
- }
- return "This result is useful context, but by itself does not support a firm conclusion.";
+function escapeRegex(input: string): string {
+ return input.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
-function cleanFindingSummary(finding: AgentFindingDTO) {
+function stripToolNamePrefix(text: string, toolLabel: string): string {
+ if (!text) return "";
+ if (toolLabel) {
+  const exact = new RegExp("^" + escapeRegex(toolLabel) + "\\s*:\\s*", "i");
+  text = text.replace(exact, "");
+ }
+ return text.replace(/^(?:[A-Z][a-z]+\s+){1,5}[A-Z][a-z]+:\s+/, "");
+}
+
+const TEMPLATE_PATTERNS = [
+ /^analysis complete\.?$/i,
+ /^checked:?\s*$/i,
+ /^no diagnostic output\.?$/i,
+ /^[^.]{0,80}completed\.?$/i,
+ /^[^.]{0,80}completed;\s*review detailed tool metrics\.?$/i,
+ /^tool (?:execution )?(?:completed|finished)(?:\s+successfully)?\.?$/i,
+ /^(?:check|scan|analysis|run)\s+(?:complete|completed|finished|ok)\.?$/i,
+ /^no (?:issues?|anomal(?:y|ies))\s+(?:found|detected)\.?$/i,
+];
+
+function isTemplateText(text: string): boolean {
+ const t = text.trim();
+ if (!t) return true;
+ if (t.length < 14) return true;
+ return TEMPLATE_PATTERNS.some((re) => re.test(t));
+}
+
+export function deriveSummary(finding: AgentFindingDTO): string {
  const metadata = finding.metadata || {};
  const candidates = [
   metadata.llm_refined_summary,
@@ -78,21 +165,107 @@ function cleanFindingSummary(finding: AgentFindingDTO) {
   metadata.analysis_summary,
   metadata.summary,
   finding.reasoning_summary,
- ].map((v) => String(v || "").trim()).filter(Boolean);
- const generic = /^(analysis complete|checked:?\s*$|no diagnostic output|.+completed; review detailed tool metrics|.+completed\.)$/i;
- const picked = candidates.find((text) => !generic.test(text)) || candidates[0] || "";
- if (picked) return cleanFindingText(picked.replace(/^Checked:\s*/i, ""));
+ ]
+  .map((v) => String(v || "").trim())
+  .filter(Boolean);
+ const picked = candidates.find((text) => !isTemplateText(text)) || "";
+ if (picked) {
+  const toolLabel = fmtTool((metadata.tool_name as string) || finding.finding_type);
+  const stripped = stripToolNamePrefix(picked.replace(/^Checked:\s*/i, ""), toolLabel);
+  return cleanFindingText(stripped);
+ }
 
  const tool = fmtTool((metadata.tool_name as string) || finding.finding_type);
  const verdict = String(finding.evidence_verdict || "").toUpperCase();
- if (verdict === "POSITIVE") return `${tool} reported a supported forensic warning. Review the diagnostic metrics before deciding authenticity.`;
- if (verdict === "NEGATIVE") return `${tool} found no supported anomaly for its specific test.`;
- if (verdict === "ERROR") return `${tool} did not complete and should be treated as a coverage limitation.`;
+ if (verdict === "POSITIVE") return `${tool} reported a manipulation signal — review the metrics below.`;
+ if (verdict === "NEGATIVE") return `${tool} found no anomaly for its specific test.`;
+ if (verdict === "ERROR") return `${tool} did not complete — treat as a coverage limitation.`;
  if (verdict === "NOT_APPLICABLE") return `${tool} is not applicable to this file type.`;
- return `${tool} returned context, but not a firm manipulation signal.`;
+ return `${tool} returned an inconclusive result.`;
 }
 
-// ─── Confidence Bar Component ───
+export function summaryRichness(finding: AgentFindingDTO): number {
+ const summary = deriveSummary(finding);
+ const metrics = metricHighlights(finding.metadata);
+ const verdict = String(finding.evidence_verdict || "").toUpperCase();
+ let score = 0;
+ if (summary && summary.length > 30) score += 2;
+ if (summary && summary.length > 90) score += 1;
+ score += Math.min(metrics.length, 6);
+ if (verdict === "POSITIVE") score += 2;
+ if (verdict === "ERROR") score -= 1;
+ const conf = finding.raw_confidence_score ?? finding.confidence_raw ?? 0;
+ score += Math.round(conf * 2);
+ return score;
+}
+
+function getStatus(finding: AgentFindingDTO) {
+ const na = finding.metadata?.ela_not_applicable || finding.metadata?.ghost_not_applicable;
+ const verdict = String(finding.evidence_verdict || "").toUpperCase();
+ if (na || verdict === "NOT_APPLICABLE") return "na" as const;
+ if (verdict === "ERROR" || finding.status === "ERROR") return "error" as const;
+ if (verdict === "POSITIVE") return "flagged" as const;
+ if (finding.status === "CONFIRMED" || verdict === "NEGATIVE") return "clean" as const;
+ return "inconclusive" as const;
+}
+
+const STATUS_CONFIG = {
+ flagged: {
+  badge: "Flagged",
+  badgeCls: "bg-warning/15 border-warning/35 text-warning",
+  iconCls: "bg-warning/12 border-warning/30 text-warning",
+  rowAccent: "border-l-warning/55",
+ },
+ clean: {
+  badge: "Clean",
+  badgeCls: "bg-primary/15 border-primary/30 text-primary",
+  iconCls: "bg-primary/12 border-primary/25 text-primary",
+  rowAccent: "border-l-primary/40",
+ },
+ error: {
+  badge: "Error",
+  badgeCls: "bg-danger/15 border-danger/35 text-danger",
+  iconCls: "bg-danger/12 border-danger/30 text-danger",
+  rowAccent: "border-l-danger/45",
+ },
+ na: {
+  badge: "N/A",
+  badgeCls: "bg-white/8 border-white/12 text-white/35",
+  iconCls: "bg-white/8 border-white/10 text-white/30",
+  rowAccent: "border-l-white/10",
+ },
+ inconclusive: {
+  badge: "Inconclusive",
+  badgeCls: "bg-white/10 border-white/15 text-white/55",
+  iconCls: "bg-white/10 border-white/12 text-white/50",
+  rowAccent: "border-l-white/20",
+ },
+};
+
+const METRIC_EMPHASIS_CLS: Record<Metric["emphasis"], { wrap: string; label: string; value: string }> = {
+ danger: {
+  wrap: "bg-danger/12 border-danger/30",
+  label: "text-danger/80",
+  value: "text-danger",
+ },
+ warn: {
+  wrap: "bg-warning/10 border-warning/25",
+  label: "text-warning/80",
+  value: "text-warning",
+ },
+ ok: {
+  wrap: "bg-primary/10 border-primary/22",
+  label: "text-primary/80",
+  value: "text-primary",
+ },
+ neutral: {
+  wrap: "bg-white/[0.05] border-white/[0.10]",
+  label: "text-white/55",
+  value: "text-white/85",
+ },
+};
+
+// ─── Confidence Bar ──────────────────────────────────────────────────────────
 export function ConfidenceBar({ value }: { value: number }) {
  const filled = Math.round(value * 5);
  const color = value >= 0.75 ? "bg-primary" : value >= 0.5 ? "bg-warning" : "bg-danger";
@@ -105,193 +278,140 @@ export function ConfidenceBar({ value }: { value: number }) {
      <div
       key={i}
       className={clsx(
-       "h-1 rounded-full transition-all duration-700",
-       i < filled ? color : "bg-white/5",
-       i < filled ? "w-6 shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.5)]" : "w-1.5"
+       "h-2 rounded-full transition-all duration-700",
+       i < filled ? color : "bg-white/8",
+       i < filled ? "w-8 shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.45)]" : "w-2.5"
       )}
      />
     ))}
    </div>
-   <span className={clsx("text-[10px] font-black font-mono tabular-nums", textColor)}>
+   <span className={clsx("text-sm font-black font-mono tabular-nums", textColor)}>
     {Math.round(value * 100)}%
    </span>
   </div>
  );
 }
 
-// ─── Tool Row Component ───
-export function ToolRow({
- finding,
- isLast
-}: {
- finding: AgentFindingDTO;
- isLast: boolean;
-}) {
- const [expanded, setExpanded] = useState(false);
+// ─── Tool Row ────────────────────────────────────────────────────────────────
+export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast: boolean }) {
  const toolName = (finding.metadata?.tool_name as string) || finding.finding_type;
-
- const na = finding.metadata?.ela_not_applicable || finding.metadata?.ghost_not_applicable;
- const evidenceVerdict = String(finding.evidence_verdict || "").toUpperCase();
- const status = na || evidenceVerdict === "NOT_APPLICABLE"
-  ? "na"
-  : evidenceVerdict === "ERROR" || finding.status === "ERROR"
-    ? "error"
-    : evidenceVerdict === "POSITIVE"
-      ? "warning"
-      : finding.status === "CONFIRMED" || evidenceVerdict === "NEGATIVE"
-        ? "success"
-        : "warning";
-
+ const status = getStatus(finding);
+ const cfg = STATUS_CONFIG[status];
  const Icon = getToolIcon(toolName);
  const timingMs = (finding.metadata?.execution_time_ms as number) || null;
- const confidence = finding.raw_confidence_score || 0;
+ const confidence = finding.raw_confidence_score ?? 0;
  const metrics = metricHighlights(finding.metadata);
- const primarySummary = cleanFindingSummary(finding);
+ const summary = deriveSummary(finding);
+ const isDegraded = !!(finding.metadata?.degraded || finding.metadata?.fallback_reason);
+ const isIncomplete = finding.status === "INCOMPLETE";
 
  return (
-  <div className={clsx("group", !isLast && "border-b border-white/[0.03]")}>
-   <button
-    onClick={() => setExpanded(!expanded)}
-    className={clsx(
-     "w-full flex items-center gap-4 px-6 py-4 text-left transition-all",
-     expanded ? "bg-white/[0.03]" : "hover:bg-white/[0.01]"
-    )}
-    aria-expanded={expanded}
-    aria-controls={`tool-content-${toolName}`}
-   >
-    <div className={clsx(
-     "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-md",
-     status === "success" ? "bg-primary/10 border-primary/20 text-primary" :
-     status === "warning" ? "bg-warning/10 border-warning/20 text-warning" :
-     status === "error" ? "bg-danger/10 border-danger/20 text-danger" :
-     "bg-surface-1 border-border-subtle text-white/20"
-    )}>
-     <Icon className="w-4 h-4" />
+  <div
+   className={clsx(
+    "group transition-colors px-5 py-5 space-y-3.5 border-l-2",
+    cfg.rowAccent,
+    !isLast && "border-b border-white/[0.06]",
+   )}
+  >
+   {/* Header row */}
+   <div className="flex items-start gap-3.5">
+    <div className={clsx("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border", cfg.iconCls)}>
+     <Icon className="w-[18px] h-[18px]" />
     </div>
 
-    <span className="flex-1 text-[10px] font-black tracking-wide text-white/60 group-hover:text-white transition-colors">
-     {fmtTool(toolName)}
-    </span>
+    <div className="flex-1 min-w-0">
+     <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[15px] font-bold text-white truncate">
+       {fmtTool(toolName)}
+      </span>
+      {isDegraded && (
+       <span className="text-[10px] font-black tracking-wide text-white/55 border border-white/20 rounded px-1.5 py-0.5 shrink-0">
+        DEGRADED
+       </span>
+      )}
+      {isIncomplete && (
+       <span className="flex items-center gap-1 text-[10px] font-black tracking-wide text-warning border border-warning/35 bg-warning/12 rounded px-1.5 py-0.5 shrink-0">
+        <AlertTriangle className="w-3 h-3" /> INCOMPLETE
+       </span>
+      )}
+     </div>
+    </div>
 
-    <div className="flex items-center gap-4 shrink-0">
+    <div className="flex items-center gap-3 shrink-0">
      {timingMs && (
-      <span className="text-[10px] font-mono text-white/20 flex items-center gap-1.5">
-       <Clock className="w-3 h-3" /> {timingMs >= 1000 ? `${(timingMs/1000).toFixed(1)}s` : `${timingMs}ms`}
+      <span className="hidden sm:flex items-center gap-1 text-[12px] font-mono text-white/45">
+       <Clock className="w-3.5 h-3.5" />{timingMs >= 1000 ? `${(timingMs / 1000).toFixed(1)}s` : `${timingMs}ms`}
       </span>
      )}
-
-     <div className={clsx(
-     "px-3 py-1 rounded-full border text-[9px] font-black tracking-wide",
-      status === "success" ? "bg-primary/10 border-primary/20 text-primary" :
-      status === "error" ? "bg-danger/10 border-danger/20 text-danger" :
-      status === "na" ? "bg-surface-1 border-border-subtle text-white/20" :
-     "bg-warning/10 border-warning/20 text-warning"
-     )}>
-      {status === "success" ? "Clean" : status === "warning" ? "Flagged" : status === "na" ? "N/A" : "Error"}
-     </div>
-
-     {!na && (
+     <span className={clsx("px-2.5 py-1 rounded-full border text-[11px] font-black tracking-wide", cfg.badgeCls)}>
+      {cfg.badge}
+     </span>
+     {status !== "na" && (
       <span className={clsx(
-       "text-[10px] font-black font-mono w-10 text-right tabular-nums",
+       "text-[13px] font-black font-mono w-11 text-right tabular-nums",
        confidence >= 0.75 ? "text-primary" : confidence >= 0.5 ? "text-warning" : "text-danger"
       )}>
        {Math.round(confidence * 100)}%
       </span>
      )}
-
-     <ChevronDown className={clsx("w-3.5 h-3.5 text-white/20 transition-transform duration-300", expanded && "rotate-180 text-white/50")} />
     </div>
-   </button>
+   </div>
 
-   {expanded && (
-    <div id={`tool-content-${toolName}`} className="px-6 pb-6 pt-2">
-     <div className="p-6 rounded-[1.5rem] premium-card space-y-5 shadow-inner">
-      {/* Per-tool specific signal — raw output from the tool */}
-      <div className="space-y-2">
-      <h5 className="text-[9px] font-black text-white/20 tracking-wide">Diagnostic Intelligence</h5>
-       <p className={clsx(
-        "text-[13px] text-white/70 leading-relaxed font-medium tracking-tight",
-        !finding.metadata?.llm_refined_summary && "font-mono"
-       )}>
-        {primarySummary}
-       </p>
-      </div>
+   {/* Summary */}
+   {summary && status !== "na" && (
+    <p className="text-[14px] text-white/80 leading-relaxed font-medium pl-[54px]">
+     {summary}
+    </p>
+   )}
 
-      {metrics.length > 0 && (
-       <div className="flex flex-wrap gap-2">
-        {metrics.map((m) => (
-         <div key={`${toolName}-${m.label}`} className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
-          <span className="block text-[8px] font-black tracking-wide text-white/20">{m.label}</span>
-          <span className="block text-[11px] font-mono font-bold text-white/55 mt-0.5">{m.value}</span>
-         </div>
-        ))}
+   {/* Metric chips */}
+   {metrics.length > 0 && (
+    <div className="pl-[54px] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+     {metrics.map((m) => {
+      const cls = METRIC_EMPHASIS_CLS[m.emphasis];
+      return (
+       <div
+        key={`${toolName}-${m.label}`}
+        className={clsx(
+         "flex flex-col gap-0.5 px-3 py-2 rounded-lg border min-w-0",
+         cls.wrap,
+        )}
+       >
+        <span className={clsx("text-[10px] font-black tracking-wide uppercase truncate", cls.label)}>
+         {m.label}
+        </span>
+        <span className={clsx("text-[14px] font-mono font-bold truncate", cls.value)}>
+         {m.value}
+        </span>
        </div>
-      )}
-
-      <div className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-       <Info className="w-3.5 h-3.5 text-primary/60 mt-0.5 shrink-0" />
-       <p className="text-[11px] text-white/45 leading-relaxed">
-        {findingMeaning(finding, status)}
-       </p>
-      </div>
-
-      {/* Section key signal (quick one-liner verdict) */}
-      {(finding.metadata?.section_key_signal as string) && (
-       <div className="flex items-start gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-        <CheckCircle2 className="w-3.5 h-3.5 text-white/50 mt-0.5 shrink-0" />
-        <p className="text-[11px] text-white/40 leading-relaxed italic">
-         {cleanFindingText(finding.metadata?.section_key_signal as string)}
-        </p>
-       </div>
-      )}
-
-      {finding.status === "ERROR" && (
-       <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 text-rose-400 text-[10px] font-bold tracking-wide">
-        <XCircle className="w-3.5 h-3.5" /> Analysis Protocol Error
-       </div>
-      )}
-
-      {finding.status === "INCOMPLETE" && (
-       <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-400 text-[10px] font-bold tracking-wide">
-        <AlertTriangle className="w-3.5 h-3.5" /> Tool Did Not Complete
-       </div>
-      )}
-     </div>
+      );
+     })}
     </div>
    )}
-  </div>
- );
-}
 
-// ─── More Findings Component ───
-export function MoreFindingsToggle({ findings, count }: { findings: AgentFindingDTO[]; count: number }) {
- const [open, setOpen] = useState(false);
- const issues = findings.filter(f => f.status === "FLAGGED" || f.status === "ERROR").length;
-
- return (
-  <div className="border-t border-white/[0.03]">
-   <button
-    onClick={() => setOpen(!open)}
-    className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/[0.02] transition-all group"
-   >
-    <div className="flex items-center gap-3">
-     <span className="text-[10px] font-black tracking-wide text-white/50 group-hover:text-white/50 transition-colors">
-      {open ? "Condense Analysis" : `+${count} Additional Signal${count > 1 ? "s" : ""}`}
-     </span>
-     {!open && issues > 0 && (
-      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-bold">
-       <AlertTriangle className="w-2.5 h-2.5" /> {issues} Issue{issues > 1 ? "s" : ""}
-      </span>
-     )}
+   {/* Status context */}
+   {status === "na" && (
+    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-white/50 font-medium">
+     <MinusCircle className="w-4 h-4 shrink-0" />
+     Not applicable to this file type — excluded from analysis.
     </div>
-    <ChevronDown className={clsx("w-4 h-4 text-white/20 transition-transform duration-300", open && "rotate-180")} />
-   </button>
-
-   {open && (
-    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-     {findings.map((f, i) => (
-      <ToolRow key={f.finding_id ?? `${f.finding_type}-${i}`} finding={f} isLast={i === findings.length - 1} />
-     ))}
+   )}
+   {status === "error" && (
+    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-danger/85 font-semibold">
+     <XCircle className="w-4 h-4 shrink-0" />
+     Tool error — counts as a coverage gap, not a manipulation signal.
+    </div>
+   )}
+   {status === "flagged" && (
+    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-warning/90 font-medium">
+     <AlertTriangle className="w-4 h-4 shrink-0" />
+     Active signal — weigh with other tools before concluding.
+    </div>
+   )}
+   {status === "clean" && (
+    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-primary/75 font-medium">
+     <CheckCircle2 className="w-4 h-4 shrink-0" />
+     Supports absence of this specific manipulation pattern.
     </div>
    )}
   </div>

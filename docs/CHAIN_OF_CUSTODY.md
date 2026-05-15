@@ -206,7 +206,7 @@ docker compose logs backend | grep "CUSTODY GAP"
 # 3. Compare report_hash against what was issued
 echo -n '{"report_id": ...}' | sha256sum
 
-# 4. Escalate to security team — see RUNBOOK.md §P0
+# 4. Escalate to security team — see OPERATIONAL_RUNBOOK.md §P0
 ```
 
-See [RUNBOOK.md](RUNBOOK.md) for full incident escalation procedures.
+See [OPERATIONAL_RUNBOOK.md](OPERATIONAL_RUNBOOK.md) for full incident escalation procedures.

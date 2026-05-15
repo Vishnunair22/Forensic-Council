@@ -135,7 +135,7 @@ async def list_webhooks(
     pattern = f"{_WEBHOOK_KEY_PREFIX}{user_id}:*"
 
     results = []
-    async for key in redis.scan_iter(match=pattern, count=100):
+    for key in await redis.keys(pattern):
         raw = await redis.get(key)
         if raw:
             try:
@@ -187,7 +187,7 @@ async def deliver_webhook(
         pattern = f"{_WEBHOOK_KEY_PREFIX}{user_id}:*"
 
         webhooks: list[dict[str, Any]] = []
-        async for key in redis.scan_iter(match=pattern, count=100):
+        for key in await redis.keys(pattern):
             raw = await redis.get(key)
             if not raw:
                 continue

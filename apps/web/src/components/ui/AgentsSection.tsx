@@ -11,7 +11,7 @@ export function AgentsSection() {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="text-[10px] font-mono font-bold tracking-[0.28em] text-primary/50 uppercase mb-4"
+          className="text-[10px] font-mono font-bold tracking-[0.28em] text-primary/50 mb-4"
         >
           Agents
         </motion.p>
@@ -93,7 +93,7 @@ export function AgentsSection() {
             {/* Badge */}
             <div className="mb-3">
               <span
-                className="text-[9px] font-mono font-bold tracking-[0.22em] uppercase px-2.5 py-1 rounded-full"
+                className="text-[9px] font-mono font-bold tracking-[0.22em] px-2.5 py-1 rounded-full"
                 style={{
                   color: "rgba(79,142,247,0.65)",
                   background: "rgba(79,142,247,0.07)",
@@ -125,8 +125,8 @@ export function AgentsSection() {
                   animation: "pulse 2s ease-in-out infinite",
                 }}
               />
-              <span className="text-[9px] font-mono text-white/25 tracking-[0.2em] uppercase">
-                Node_{agent.id}_Active
+              <span className="text-[9px] font-mono text-white/25 tracking-[0.2em]">
+                Node {agent.id} Active
               </span>
             </div>
 

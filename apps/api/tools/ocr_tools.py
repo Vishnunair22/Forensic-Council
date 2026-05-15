@@ -121,7 +121,9 @@ def _get_easyocr_reader():
     global _EASYOCR_READER
     if _EASYOCR_READER is None:
         try:
+            import warnings  # noqa: PLC0415
             import easyocr  # noqa: PLC0415
+            warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
 
             model_dir = os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr")
             os.makedirs(model_dir, exist_ok=True)
@@ -478,11 +480,23 @@ async def _extract_text_tesseract_fallback(
 ) -> dict[str, Any]:
     """Internal Tesseract fallback used by extract_text_easyocr."""
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        _OCR_EXECUTOR, _extract_text_tesseract_sync, artifact.file_path
-    )
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_OCR_EXECUTOR, _extract_text_tesseract_sync, artifact.file_path),
+            timeout=20.0,
+        )
+    except TimeoutError:
+        logger.warning("Tesseract fallback timed out after 20s")
+        result = {
+            "tesseract_available": True,
+            "error": "Tesseract timed out after 20s",
+            "lines": [],
+            "full_text": "",
+            "word_count": 0,
+            "has_text": False,
+        }
     result["method"] = "tesseract_fallback"
-    result["court_defensible"] = result.get("tesseract_available", False)
+    result["court_defensible"] = result.get("tesseract_available", False) and not result.get("error")
     return result
 
 
