@@ -110,7 +110,7 @@ All 5 specialist agents extend `ForensicAgent` (abstract base class) and share:
 | Authorization | Role-based (admin / investigator) per route |
 | Rate limiting | Redis INCR/EXPIRE; in-process dict fallback |
 | File safety | MIME + extension allowlist, 50 MB limit, SHA-256 hash lock |
-| Report integrity | ECDSA P-256 + SHA-256, deterministic key derivation from SIGNING_KEY |
+| Report integrity | ECDSA P-256 + SHA-256, DB-backed per-agent keys encrypted via SIGNING_KEY-derived Fernet key |
 | Container | `read_only: true`; writable paths via named volumes only |
 | CORS | Explicit origin allowlist (no wildcard) |
 

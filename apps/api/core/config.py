@@ -163,6 +163,14 @@ class Settings(BaseSettings):
         default=30.0, description="Per-statement Postgres command timeout in seconds"
     )
 
+    # Q-C-2: previously env-only — _websocket.py reads via `getattr(settings,
+    # "max_ws_connections", 1000)`, but without a Pydantic field declaration
+    # the `MAX_WS_CONNECTIONS` env var was silently ignored. Now wired.
+    max_ws_connections: int = Field(
+        default=1000,
+        description="Max concurrent WebSocket connections per API process",
+    )
+
     @field_validator("postgres_user")
     @classmethod
     def validate_postgres_user(cls, v: str, info) -> str:
@@ -551,7 +559,7 @@ class Settings(BaseSettings):
     llm_api_key: str | None = Field(default=None, description="API key for LLM provider")
     llm_model: str = Field(
         default="llama-3.3-70b-versatile",
-        description="LLM model. Groq: llama-3.3-70b-versatile. OpenAI: gpt-4o. Anthropic: claude-3-5-sonnet-20241022",
+        description="LLM model identifier for the selected provider.",
     )
     llm_fallback_models: str = Field(
         default="llama-3.1-8b-instant",

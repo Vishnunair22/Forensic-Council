@@ -10,7 +10,7 @@ This document covers model pinning, provider setup, licensing, and verification 
 
 Set `FREE_TIER_MODE=true` in `.env` to enforce free-tier constraints:
 - Blocks `openai` and `anthropic` LLM providers
-- Blocks paid-tier model strings (gpt-4, claude-*) in Groq requests
+- Blocks paid-tier model strings from paid providers in Groq requests
 - Enforces per-provider RPM/RPD limits via `ProviderQuotaGuard`
 
 Default: `FREE_TIER_MODE=true`

@@ -78,6 +78,9 @@ SIGNING_KEY
 compromise undermines all agent signatures simultaneously. This is documented at
 startup with a `CRITICAL` log entry.
 
+Production deployments fail closed if the database-backed keystore cannot be
+initialized; deterministic fallback is available only outside production.
+
 ---
 
 ## Storage
@@ -92,15 +95,16 @@ CREATE TABLE agent_signing_keys (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE custody_log (
-    id              BIGSERIAL PRIMARY KEY,
+CREATE TABLE chain_of_custody (
+    entry_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entry_type      VARCHAR(64) NOT NULL,
+    agent_id        VARCHAR(64) NOT NULL,
     session_id      UUID NOT NULL,
-    agent_id        TEXT NOT NULL,
-    action          TEXT NOT NULL,
-    content_hash    CHAR(64) NOT NULL,          -- SHA-256 hex
-    signature       TEXT NOT NULL,              -- ECDSA DER, hex-encoded
-    payload         JSONB NOT NULL,
-    signed_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    timestamp_utc   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    content         JSONB NOT NULL,
+    content_hash    VARCHAR(64) NOT NULL,
+    signature       TEXT NOT NULL,
+    prior_entry_ref VARCHAR(64)
 );
 ```
 
@@ -108,18 +112,18 @@ CREATE TABLE custody_log (
 
 ## Verification
 
-### Verify a single entry via API
+### Verify a session chain
 
-```bash
-curl -H "Authorization: Bearer $TOKEN" \
-  https://your-domain/api/v1/sessions/{session_id}/verify
-```
+There is no public `/api/v1/sessions/{session_id}/verify` route in the current
+API. Chain verification is performed by backend code through
+`CustodyLogger.verify_chain(session_id)`, and the pipeline calls this verifier
+during report enrichment.
 
-Response includes:
-- `chain_valid: true/false` — whether every entry in the session verifies
-- `entry_count` — total number of signed entries
-- `failed_entries` — list of entry IDs that failed (empty if chain_valid=true)
-- `verification_utc` — when the check ran
+`verify_chain` returns:
+- `valid: true/false` — whether every entry verifies
+- `total_entries` — total number of signed entries
+- `broken_at` — entry ID where verification failed, if any
+- `broken_reason` — failure reason, if any
 
 ### Manual verification
 
@@ -130,7 +134,7 @@ import json
 # Load entry from the database
 entry = SignedEntry.from_dict(row)
 
-# Verify
+# Verify one entry
 ks = get_keystore()
 is_valid = verify_entry(entry, keystore=ks)
 print(f"Entry {entry.content_hash[:8]}... valid={is_valid}")
@@ -148,14 +152,25 @@ Key rotation should be performed:
 **Before rotating**, archive all signed entries for the agent — post-rotation
 entries signed with the old key will not verify with the new key.
 
-```bash
-# Via the admin API
-curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
-  https://your-domain/api/v1/admin/keys/Agent1/rotate
+There is no public admin key-rotation route in the current API. Rotation is an
+operator action against the backend keystore:
+
+```python
+import asyncio
+from core.signing import get_keystore
+
+
+async def rotate() -> None:
+    ks = get_keystore()
+    await ks.initialize()
+    await ks.rotate_key("Agent1")
+
+
+asyncio.run(rotate())
 ```
 
-Rotation creates a `KEY_ROTATION` custody entry signed by the **old** key,
-proving the rotation was authorized by the previous keyholder.
+Back up the `agent_signing_keys` table before rotation; old entries signed with
+retired keys are not verifiable after the active key changes.
 
 ---
 
@@ -164,7 +179,7 @@ proving the rotation was authorized by the previous keyholder.
 | Limitation | Impact | Mitigation |
 |---|---|---|
 | Clock skew | Timestamp in signed message could be off if server clock drifts | Use NTP; Caddy/Docker include NTP sync |
-| Fallback mode reduces key separation | One `SIGNING_KEY` compromise → all agents affected | Ensure PostgreSQL HA; monitor for fallback log entries |
+| Fallback mode reduces key separation | One `SIGNING_KEY` compromise → all agents affected | Production fails closed; keep PostgreSQL healthy and monitor fallback log entries in non-production |
 | No HSM | Private keys live in application memory | Fernet encryption at rest; access control via env secrets |
 | No cross-server verification | Another instance cannot verify without the same `SIGNING_KEY` | Share `SIGNING_KEY` only between trusted replicas |
 | Engineering-default calibration | Confidence scores are not court-calibrated | Run calibration training against a labelled forensic dataset |
@@ -196,9 +211,20 @@ suppressed by operators.
 If you suspect a custody entry has been tampered with:
 
 ```bash
-# 1. Verify the session chain
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/v1/sessions/{session_id}/verify
+# 1. Verify the session chain from a backend shell
+python - <<'PY'
+import asyncio
+from uuid import UUID
+from core.custody_logger import get_custody_logger
+
+
+async def main() -> None:
+    report = await get_custody_logger().verify_chain(UUID("SESSION_UUID_HERE"))
+    print(report)
+
+
+asyncio.run(main())
+PY
 
 # 2. Check for CUSTODY GAP log entries
 docker compose logs backend | grep "CUSTODY GAP"

@@ -9,10 +9,10 @@
 
 ## Primary Docs (entrypoints for contributors)
 
-| Doc | Owner | Purpose | Source of Truth? | Last Reviewed Phase | Should Local AI Edit? | Verification |
+| Doc | Owner | Purpose | Source of Truth? | Last Reviewed Phase | Should Automation Edit? | Verification |
 |-----|-------|---------|-----------------|--------------------|---------------------|--------------|
 | `README.md` | All | Project entrypoint — onboarding, monorepo layout, fast start, links to source docs | Partial (duplicates sub-docs) | 9 | Only to trim duplicates and fix broken links | `grep -n "docs/WORKFLOW_TRACE.md" README.md` |
-| `PROJECT_HANDOFF.md` | AI/Contributors | Local AI handoff — current phase, changed files, verification results, rules | Yes | 8→9 | Yes, after every phase | `grep -n "Phase" PROJECT_HANDOFF.md` |
+| `PROJECT_HANDOFF.md` | Contributors | Local handoff — current phase, changed files, verification results, rules | Yes | 8→9 | Yes, after every phase | `grep -n "Phase" PROJECT_HANDOFF.md` |
 | `docs/ARCHITECTURE.md` | Architecture | System runtime topology, agent flow, infra components, security | Yes | 9 | Yes | `grep -n "State ownership" docs/ARCHITECTURE.md` |
 | `docs/WORKFLOW_TRACE.md` | Workflow | Route/state machine, Effect A/B, storage key ownership, edge cases | Yes | 7→9 | Yes | `grep -n "Effect A" docs/WORKFLOW_TRACE.md` |
 | `docs/API_CONTRACT.md` | API/Frontend | Backend/frontend contract — auth, investigation, WS/SSE, HITL, report, termination | Created phase 9 | 9 | Yes | `grep -n "409" docs/API_CONTRACT.md` |
@@ -26,7 +26,7 @@
 
 ## App-Specific Docs
 
-| Doc | Owner | Purpose | Source of Truth? | Last Reviewed Phase | Should Local AI Edit? | Verification |
+| Doc | Owner | Purpose | Source of Truth? | Last Reviewed Phase | Should Automation Edit? | Verification |
 |-----|-------|---------|-----------------|--------------------|---------------------|--------------|
 | `apps/api/README.md` | Backend | Backend setup, run, test, config, architecture pointers, guardrails | Yes | 9 | Yes | `grep -n "uv sync" apps/api/README.md` |
 | `apps/web/README.md` | Frontend | Frontend setup, run, test, routes, state ownership, guardrails | Yes | 9 | Yes | `grep -n "npm ci" apps/web/README.md` |

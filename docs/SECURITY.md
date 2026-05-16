@@ -8,7 +8,15 @@ The Forensic Council handles highly sensitive, evidentiary material. Security is
 
 ### 1. The Signing Key
 
-The system derives an Elliptic Curve private key (SECP256R1 / P-256) for each forensic agent deterministically from the root `SIGNING_KEY`. This is achieved using **HMAC-SHA-256** where the agent's unique ID is the message. This ensures that even if one agent's derived key is compromised, the root key remains secure and other agents are unaffected.
+In the normal runtime path, the system stores an independent ECDSA P-256 key pair
+for each forensic agent in the `agent_signing_keys` PostgreSQL table. Private
+keys are encrypted at rest with a Fernet key derived from `SIGNING_KEY` via
+HKDF-SHA256.
+
+If PostgreSQL is unavailable outside production, the keystore can derive
+deterministic fallback keys from `SIGNING_KEY` via HMAC-SHA256. Production
+deployments fail closed instead of using this fallback, because a single
+`SIGNING_KEY` compromise would otherwise undermine all agent signatures.
 
 Generate a secure root key:
 ```bash
@@ -24,12 +32,14 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ### 3. Key Rotation
 
-If `SIGNING_KEY` must be rotated:
-1. Generate a new 32-byte hex: `python -c "import secrets; print(secrets.token_hex(32))"`
-2. Update `SIGNING_KEY` in `.env`
-3. Restart backend: `docker compose -f infra/docker-compose.yml --env-file .env up -d --force-recreate backend`
+If an individual agent key must be rotated, back up `agent_signing_keys`, then run
+the backend keystore rotation path (`get_keystore().rotate_key("Agent1")`) from an
+operator-controlled backend shell. There is no public key-rotation API route.
 
-> **Note:** Reports signed with the old key will fail verification against the new key. This is expected and ensures temporal separation of evidence custody boundaries.
+If the root `SIGNING_KEY` must be rotated, treat it as a high-impact maintenance
+operation: existing encrypted private keys cannot be decrypted with the new root
+secret unless they are rewrapped or regenerated, and reports signed with older
+keys may fail verification against only the new active key material.
 
 ---
 
@@ -83,7 +93,7 @@ Every response carries the following headers (set in `api/main.py`):
 ## Input Validation
 
 - **File upload:** MIME type allow-list AND `_ALLOWED_EXTENSIONS` frozenset â€” both must match. Max 50 MB enforced at middleware level (HTTP 413 before the request body is read).
-- **`case_id` / `investigator_id`:** Strict allow-list regex `^[A-Za-z0-9_\-\.]{1,128}$` enforced before the pipeline starts. Rejects path-traversal characters, shell metacharacters, and SQL injection payloads.
+- **`case_id` / `investigator_id`:** Strict allow-list regex `^[A-Za-z0-9_\-\.]{1,128}$` enforced before the pipeline starts. `case_id` must also start with `CASE-`. Rejects path-traversal characters, shell metacharacters, and SQL injection payloads.
 - **Request body size:** 55 MB hard limit on all POST/PUT/PATCH requests (middleware, before any route handler).
 - **WebSocket auth:** Token required within 10 seconds of connection open; close code 4001 on failure.
 

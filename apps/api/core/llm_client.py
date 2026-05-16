@@ -7,7 +7,7 @@ with a unified interface for generating ReAct reasoning steps.
     - groq      -> Groq API (Llama 3.3 70B, ~700 tok/s, recommended)
     - gemini    -> Google Gemini API (Gemini 2.5 Flash)
     - openai    -> OpenAI API (GPT-4o, GPT-4)
-    - anthropic -> Anthropic API (Claude 3.5 Sonnet)
+    - anthropic -> Anthropic Messages API
     - none      -> Disabled; task-decomposition driver handles all steps
 """
 
@@ -535,7 +535,7 @@ class LLMClient:
         messages: list[dict[str, str]],
         available_tools: list[dict[str, Any]],
     ) -> LLMResponse:
-        """Call Anthropic Claude API."""
+        """Call the Anthropic Messages API."""
         if not self.is_available:
             raise RuntimeError("Anthropic API key is placeholder or missing — cannot call LLM")
         url = "https://api.anthropic.com/v1/messages"
@@ -560,7 +560,7 @@ class LLMClient:
         if self.temperature > 0:
             payload["temperature"] = self.temperature
         if system_message:
-            # M-M-5: enable Claude prompt caching on the (stable) system
+            # M-M-5: enable Anthropic prompt caching on the (stable) system
             # prompt. Forensic system prompts are 3–5 KB of fixed text per
             # call; caching cuts input-token cost ~80% on cache hits. The
             # block form is required when cache_control is set.

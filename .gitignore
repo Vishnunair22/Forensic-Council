@@ -154,14 +154,10 @@ apps/api/baseline_results.txt
 *.sublime-project
 *.sublime-workspace
 .planning/
-.claude/
-.cursor/
 .agent/
 .uv-cache/
 .uv_cache/
 .mcp.json
-.opencode.json
-CLAUDE.md
 MASTER_FIX_*.md
 .ipynb_checkpoints/
 .code-review-graph/

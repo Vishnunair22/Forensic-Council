@@ -14,7 +14,7 @@ After all agents complete, the Council Arbiter needs to generate:
 
 Options for LLM synthesis:
 - **OpenAI GPT-4o**: High quality but expensive ($2.50/1M input tokens) and slower (~5s latency).
-- **Anthropic Claude 3.5 Sonnet**: Strong reasoning but limited free tier and higher latency.
+- **Anthropic Sonnet**: Strong reasoning but limited free tier and higher latency.
 - **Groq Llama 3.3 70B**: Free tier available, ~200 tokens/s inference speed, sufficient quality for structured forensic narratives.
 
 ## Decision

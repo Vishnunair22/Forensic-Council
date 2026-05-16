@@ -159,9 +159,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system runtime topology, ag
 
 See [docs/API_CONTRACT.md](docs/API_CONTRACT.md) for complete backend/frontend API contract including auth, investigation, WebSocket/SSE, HITL, report, and termination endpoints.
 
-## Local AI / handoff
+## Contributor Handoff
 
-See [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) — read this before editing the repo. It contains the current phase, changed files, verification commands, and rules for local AI behavior.
+See [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) — read this before editing the repo. It contains the current phase, changed files, verification commands, and local contributor rules.
 
 ## License
 

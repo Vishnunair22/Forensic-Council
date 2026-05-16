@@ -100,8 +100,21 @@ docker compose logs backend | grep "CUSTODY GAP"
 # 3. Check disk space
 docker compose exec postgres df -h /var/lib/postgresql/data
 
-# 4. Verify chain integrity for affected session
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/sessions/{session_id}/verify
+# 4. Verify chain integrity for the affected session from a backend shell.
+# There is no public /api/v1/sessions/{id}/verify route.
+docker compose exec backend python - <<'PY'
+import asyncio
+from uuid import UUID
+from core.custody_logger import get_custody_logger
+
+
+async def main() -> None:
+    report = await get_custody_logger().verify_chain(UUID("SESSION_UUID_HERE"))
+    print(report)
+
+
+asyncio.run(main())
+PY
 ```
 
 ### P1: Redis unavailable

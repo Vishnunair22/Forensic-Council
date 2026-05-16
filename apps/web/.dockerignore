@@ -44,6 +44,4 @@ nul
 # IDE
 .vscode/
 .idea/
-.cursor/
-.claude/
 .agent/

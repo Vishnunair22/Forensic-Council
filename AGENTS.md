@@ -289,7 +289,7 @@ The application uses five specialist forensic agents and one Council Arbiter.
 
 ---
 
-## Rules for AI Tools and Contributors
+## Rules for Contributors and Automation
 
 ### Do not bypass these systems
 
@@ -446,4 +446,4 @@ This file should describe:
 - which commands failed
 - what the next action is
 
-AI tools should read AGENTS.md first and PROJECT_HANDOFF.md second before making or suggesting changes.
+Contributors should read AGENTS.md first and PROJECT_HANDOFF.md second before making or suggesting changes.

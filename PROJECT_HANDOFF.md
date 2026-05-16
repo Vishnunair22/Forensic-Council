@@ -2,15 +2,68 @@
 
 ## Purpose
 
-This document is the canonical handoff for local AI/code assistants. Read it before editing the repo.
+This document is the canonical handoff for local contributors and automation. Read it before editing the repo.
 
-AI Sync Instructions: Before making or suggesting any changes:
+Contributor Sync Instructions: Before making or suggesting any changes:
 1. Read `AGENTS.md`
 2. Read this file
 3. Check "Phase Inventory" for current phase
 4. Check "Do Not Break" rules
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
+
+---
+
+### 2026-05-16: Phase 14 Documentation Audit Continuation
+
+**Status:** In progress
+
+### What Changed
+- Continued `FULL_APP_AUDIT.md` Phase 14 from the root audit file.
+- Updated `docs/API_CONTRACT.md` for implemented WebSocket auth sources, close codes, health/liveness endpoints, and enforced `CASE-` case IDs.
+- Updated `docs/CHAIN_OF_CUSTODY.md`, `docs/SECURITY.md`, and `docs/OPERATIONAL_RUNBOOK.md` to remove nonexistent custody verification/key-rotation API instructions and document the implemented backend verifier/keystore paths.
+- Updated `docs/ARCHITECTURE.md` and the custody storage reference to reflect DB-backed per-agent signing keys and the real `chain_of_custody` table schema.
+- Corrected the partial `.env.example` Phase 14 cleanup so `CLEANUP_TIMEOUT_SECONDS` remains documented because `apps/api/orchestration/worker.py` still reads it.
+- Preserved the existing `apps/api/core/config.py` Phase 14 change wiring `MAX_WS_CONNECTIONS` into `Settings`.
+- Marked Phase 14 as `In progress` in `FULL_APP_AUDIT.md` with applied fixes and verification state.
+- Removed the tracked `.ai-rules.md` file and scrubbed contributor documentation of named assistant/tool references. Legitimate product terms for forensic synthetic-media detection and provider configuration remain.
+
+### Files Touched
+- `.env.example`
+- `apps/api/core/config.py`
+- `apps/api/core/llm_client.py`
+- `apps/web/.dockerignore`
+- `.gitignore`
+- `AGENTS.md`
+- `README.md`
+- `docs/AI_CONTEXT.md`
+- `docs/API_CONTRACT.md`
+- `docs/ARCHITECTURE.md`
+- `docs/CHAIN_OF_CUSTODY.md`
+- `docs/DOCUMENTATION_INVENTORY.md`
+- `docs/MODEL_REGISTRY.md`
+- `docs/SECURITY.md`
+- `docs/OPERATIONAL_RUNBOOK.md`
+- `docs/adr/ADR-003-groq-synthesis.md`
+- `FULL_APP_AUDIT.md`
+- `PROJECT_HANDOFF.md`
+
+### What Works
+- `python -m py_compile apps/api/core/config.py` passes.
+- `git diff --check` passes.
+- Targeted stale-doc scans no longer find live docs instructing use of nonexistent custody verification/key-rotation routes, except where `CHAIN_OF_CUSTODY.md` explicitly states that the route does not exist.
+- Targeted scans for named assistant/tool references in tracked files pass.
+
+### Commands Failed
+- `python scripts/check_docs.py` failed under this Windows/PowerShell environment, reporting shell syntax errors for every `.sh` file. Direct `bash -n scripts/dev.sh` shows Windows Subsystem for Linux has no installed distributions, so the checker is invoking unusable `C:\WINDOWS\system32\bash.exe`.
+
+### Still Broken / Risks
+- Phase 14 is not complete and was not committed or pushed.
+- The worktree had pre-existing uncommitted Phase 14 edits in `.env.example`, `apps/api/core/config.py`, and `docs/API_CONTRACT.md`; these were preserved and corrected where needed.
+- A broader doc review is still needed for remaining route/config drift.
+
+### Next Action
+- Rerun `python scripts/check_docs.py` in a Bash-enabled environment, finish the remaining Phase 14 docs audit, then commit/push only after verification is clean.
 
 ---
 
@@ -308,7 +361,7 @@ Backend core logic fixes. Key changes:
 
 ---
 
-## Allowed Local AI Behavior
+## Allowed Local Automation Behavior
 
 - Inspect before edit (read the file, understand conventions)
 - Use phase-specific guardrails (this document, AGENTS.md)

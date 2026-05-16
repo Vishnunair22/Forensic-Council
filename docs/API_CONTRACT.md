@@ -2,7 +2,9 @@
 
 **Version:** v1.7.0 | **Base URL:** `http://localhost:8000`
 
-All REST endpoints are prefixed with `/api/v1`. Authentication uses JWT Bearer tokens. Obtain a token via `POST /api/v1/auth/login`.
+Application REST endpoints are prefixed with `/api/v1`; health/liveness probes
+are also exposed at root-level aliases for container checks. Authentication uses
+JWT Bearer tokens. Obtain a token via `POST /api/v1/auth/login`.
 
 Source-of-truth routes: `apps/api/api/routes/` — schemas in `apps/api/api/schemas.py`.
 
@@ -56,8 +58,8 @@ Upload evidence and start a forensic investigation. **Auth required.**
 | Field | Type | Description |
 |-------|------|-------------|
 | `file` | File | Evidence file (max 50 MB) |
-| `case_id` | string | Alphanumeric + `-_.`, 1–128 chars |
-| `investigator_id` | string | Same constraints as `case_id` |
+| `case_id` | string | **MUST start with `CASE-`** (server enforces). Full value must match `[A-Za-z0-9_.-]{1,128}`. |
+| `investigator_id` | string | Alphanumeric + `-_.`, 1–128 chars. No prefix requirement. |
 
 **Accepted MIME types:** `image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`
 
@@ -88,13 +90,17 @@ The frontend should catch `DuplicateInvestigationError` and reconnect to the exi
 
 ### WS `/api/v1/sessions/{session_id}/live`
 
-Live WebSocket stream of agent cognitive updates. **Auth via first message.**
+Live WebSocket stream of agent cognitive updates. **Auth required.**
 
 **Subprotocol:** `forensic-v1`
 
+**Authentication sources, in order:** `fc_session`, `sessionid`, or `access_token`
+cookie; `?token=` query param; `token.<jwt>` WebSocket subprotocol fallback. The
+frontend avoids the subprotocol token path when an auth cookie is present.
+
 **Connection sequence:**
-1. Client opens WebSocket
-2. Client immediately sends: `{"type": "AUTH", "token": "<jwt>"}`
+1. Client opens WebSocket with `forensic-v1`
+2. Server accepts, validates auth, and verifies session ownership
 3. Server responds: `{"type": "CONNECTED", "session_id": "..."}`
 4. Server pushes updates until investigation ends
 
@@ -113,7 +119,20 @@ Live WebSocket stream of agent cognitive updates. **Auth via first message.**
 
 **SSE fallback:** `GET /api/v1/sessions/{session_id}/progress` yields the same event types.
 
-**Close codes:** `4001` auth failure · `4004` session not found
+**Close codes:** `4001` auth failure · `4003` forbidden · `4004` session not found · `4010` interrupted/non-resumable · `1011` server error · `1013` server busy
+
+---
+
+## Health
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Backend readiness probe |
+| GET | `/api/v1/health` | Backend readiness probe under API prefix |
+| GET | `/live` | Lightweight liveness probe |
+| GET | `/api/v1/live` | Lightweight liveness probe under API prefix |
+| GET | `/api/v1/health/ml-tools` | ML tool readiness summary |
+| GET | `/api/v1/health/tools` | Tool registry readiness summary |
 
 ### GET `/api/v1/sessions/{session_id}/progress`
 

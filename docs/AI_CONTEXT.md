@@ -1,4 +1,4 @@
-# AI Context
+# Contributor Context
 
 ## What This Project Is
 
@@ -171,7 +171,7 @@ investigate route
 
 ---
 
-## What AI Tools Should Avoid
+## What Contributors Should Avoid
 
 Do not:
 
