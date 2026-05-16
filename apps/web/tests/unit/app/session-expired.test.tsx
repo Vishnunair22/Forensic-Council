@@ -11,6 +11,12 @@ jest.mock("next/navigation", () => ({
 describe("SessionExpiredPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // T-C-1: SessionExpiredClient branches on window.location.pathname.
+    // jsdom defaults to "/" — the production "Return to Hub" button only
+    // dispatches `fc:reset-home` (no router.push). For the test to
+    // observe router.push("/"), the pathname must be something other
+    // than "/" (the real session-expired route).
+    window.history.replaceState({}, "", "/session-expired");
   });
 
   it("renders the expired-session guidance", () => {

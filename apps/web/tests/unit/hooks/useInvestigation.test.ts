@@ -59,6 +59,13 @@ function setupSimulationMock(
     isReconnecting: false,
     arbiterStatus: null,
     arbiterThinking: null,
+    // T-C-1: useInvestigation destructures setSimulationPhase from
+    // useSimulation() and calls it in handleDeepAnalysis. Without this
+    // mock entry the call would throw TypeError and the re-entry guard
+    // wouldn't be reached, masking the test's real intent.
+    setSimulationPhase: jest.fn(),
+    revealQueue: [],
+    revealPending: false,
   });
 }
 
