@@ -63,12 +63,22 @@ async def enforce_retention() -> int:
 
     deleted_rows = 0
     if pool is not None:
+        # P-C-1: previous query targeted a non-existent `evidence` table with
+        # invalid `RETURNING count(*)` syntax. The canonical schema uses
+        # `evidence_artifacts` (per core/migrations.py migration 6). Delete
+        # rows whose source file is older than cutoff. asyncpg's `execute`
+        # returns the "DELETE N" status string from which the row count
+        # is parsed.
         async with pool.acquire() as conn:
-            result = await conn.fetchval(
-                "DELETE FROM evidence WHERE created_at < $1 RETURNING count(*)",
+            status = await conn.execute(
+                "DELETE FROM evidence_artifacts WHERE created_at < $1",
                 cutoff,
             )
-            deleted_rows = result or 0
+            # status is "DELETE <n>" — trailing integer is the row count.
+            try:
+                deleted_rows = int(str(status).rsplit(" ", 1)[-1])
+            except (ValueError, IndexError):
+                deleted_rows = 0
         await pool.close()
 
     logger.info("retention sweep complete", files=deleted_files, rows=deleted_rows, days=days)

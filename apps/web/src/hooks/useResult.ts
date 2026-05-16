@@ -283,7 +283,13 @@ export function useResult(initialSessionId?: string) {
       try {
         const stored = storage.getItem<HistoryItem[]>("forensic_history", true, []);
         const filtered = (stored ?? []).filter((h) => !(h.sessionId === hItem.sessionId && h.type === hItem.type));
-        storage.setItem("forensic_history", [hItem, ...filtered], true);
+        // P-H-2: cap client-side history at 50 entries to prevent
+        // unbounded localStorage growth and limit PII retention. Older
+        // entries are dropped FIFO; the most recent investigations stay
+        // visible in the History panel.
+        const HISTORY_MAX = 50;
+        const next = [hItem, ...filtered].slice(0, HISTORY_MAX);
+        storage.setItem("forensic_history", next, true);
         historySavedRef.current = true;
       } catch (e: unknown) {
         dbg.error("SessionStorage persistence failed", e);
