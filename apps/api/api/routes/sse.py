@@ -242,6 +242,14 @@ async def sse_progress(
             // Handle AGENT_UPDATE, AGENT_COMPLETE, etc.
         };
     """
+    # S-H-3: enforce session ownership. Without this any authenticated user
+    # could stream another investigator's live findings simply by knowing or
+    # guessing the session_id. The websocket sibling at _websocket.py:147
+    # already enforces this — SSE was the outlier.
+    from api.routes._authz import assert_session_access
+
+    await assert_session_access(session_id, current_user)
+
     return StreamingResponse(
         _event_generator(session_id, request),
         media_type="text/event-stream",

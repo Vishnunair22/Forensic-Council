@@ -83,9 +83,15 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         return
 
     user_id = "anonymous"
+    token_role: str | None = None
     try:
         token_data = await decode_token(auth_token)
         user_id = token_data.user_id
+        # S-H-4: read the role from the SIGNED JWT, not from session metadata.
+        # Metadata is writable by the session owner; trusting it for role
+        # would let any user self-promote to ADMIN/AUDITOR for the duration
+        # of the WebSocket.
+        token_role = getattr(token_data, "role", None)
     except Exception as e:
         logger.warning(
             "WebSocket auth failed: Invalid token",
@@ -140,8 +146,13 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         return
 
     # ── 3. Verify session ownership ────────────────────────────────────────────
+    # S-H-4: role MUST come from the signed JWT (token_role), never from
+    # session metadata. Fall back to "investigator" only if the token did
+    # not include a role claim — never elevate from metadata.
     auth_user = User(
-        user_id=user_id, username=user_id, role=metadata.get("investigator_role", "investigator")
+        user_id=user_id,
+        username=user_id,
+        role=token_role or "investigator",
     )
     try:
         await assert_session_access(session_id, auth_user)

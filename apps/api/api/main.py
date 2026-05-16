@@ -513,10 +513,20 @@ if _settings_for_import is not None:
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Return consistent 422 JSON for Pydantic validation errors."""
+    """Return consistent 422 JSON for Pydantic validation errors.
+
+    S-M-1: strip `input` and `ctx` from each error entry so the response
+    (and downstream client logs / error-reporting tooling) doesn't echo
+    the user's raw input — passwords, file content, EXIF strings etc.
+    Only the field path, message, and Pydantic error code escape.
+    """
+    safe_errors = [
+        {"loc": err.get("loc"), "msg": err.get("msg"), "type": err.get("type")}
+        for err in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "type": "validation_error"},
+        content={"detail": safe_errors, "type": "validation_error"},
     )
 
 

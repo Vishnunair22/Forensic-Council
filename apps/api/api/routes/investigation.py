@@ -438,27 +438,11 @@ async def start_investigation(
                 # then we just fall through to the rest of the investigation.
                 # Otherwise, if was_set is still False, we return 409.
                 if not was_set:
-                    # Re-claim ownership: update the existing session with current user ID.
-                    try:
-                        existing_meta = (
-                            await get_active_pipeline_metadata(existing_session_id) or {}
-                        )
-                        await set_active_pipeline_metadata(
-                            existing_session_id,
-                            {
-                                **existing_meta,
-                                "investigator_id": current_user.user_id,
-                                "investigator_role": current_user.role.value,
-                                "case_investigator_label": investigator_id,
-                            },
-                        )
-                    except Exception as meta_exc:
-                        logger.warning(
-                            "Failed to re-claim session ownership on dedup",
-                            session_id=existing_session_id,
-                            error=str(meta_exc),
-                        )
-
+                    # S-H-6: do NOT mutate the existing session's
+                    # investigator_id on a dedup hit. Ownership stays with
+                    # whoever opened the session originally — chain-of-
+                    # custody attribution depends on it. Return 409 with the
+                    # existing session_id so the caller knows where to look.
                     tmp_path.unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=409,

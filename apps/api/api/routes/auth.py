@@ -342,7 +342,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         httponly=True,
         max_age=get_settings().jwt_access_token_expire_minutes * 60,
         expires=get_settings().jwt_access_token_expire_minutes * 60,
-        samesite="lax",
+        samesite="strict",
         secure=settings.app_env == "production",
         path="/",
     )
@@ -352,7 +352,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         value=csrf_token,
         httponly=False,
         max_age=86400,
-        samesite="lax",
+        samesite="strict",
         secure=settings.app_env == "production",
         path="/",
     )
@@ -412,7 +412,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
         httponly=True,
         max_age=_s.jwt_access_token_expire_minutes * 60,
         expires=_s.jwt_access_token_expire_minutes * 60,
-        samesite="lax",
+        samesite="strict",
         secure=_s.app_env == "production",
         path="/",
     )
@@ -421,6 +421,7 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     current_user: User = Depends(get_current_user),
     authorization: str | None = Header(None),
 ):
@@ -434,10 +435,16 @@ async def logout(
     """
     from core.auth import blacklist_token, decode_token
 
-    # Extract token from Authorization header
+    # Extract token from Authorization header OR HttpOnly cookie.
+    # S-H-2: the application's dominant auth path is the access_token
+    # cookie set at login. Reading the Authorization header alone meant
+    # cookie-only logouts never blacklisted the JWT — an XSS or stolen-
+    # device token stayed valid until natural expiry.
     token = None
     if authorization and authorization.startswith("Bearer "):
         token = authorization[7:]
+    if not token:
+        token = request.cookies.get("access_token")
 
     # Blacklist the token if we have it
     if token:
