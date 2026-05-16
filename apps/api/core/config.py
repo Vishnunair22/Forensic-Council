@@ -146,8 +146,22 @@ class Settings(BaseSettings):
         default="dev-" + "x" * 15, description="PostgreSQL database password"
     )
     postgres_db: str = Field(default="forensic_council", description="PostgreSQL database name")
-    postgres_min_pool_size: int = Field(default=2, description="Min DB connection pool size")
-    postgres_max_pool_size: int = Field(default=10, description="Max DB connection pool size")
+    # I-H-2 / D-H-2: bumped from 2/10 to 5/25. The API and worker each get
+    # their own pool; under concurrent investigations + rate-limiter +
+    # custody-logger + arbiter narrative, 10 connections per process
+    # saturated quickly even though Postgres allows 200.
+    postgres_min_pool_size: int = Field(default=5, description="Min DB connection pool size")
+    postgres_max_pool_size: int = Field(default=25, description="Max DB connection pool size")
+    # I-H-2 / D-H-2: separate connect vs command timeouts so a stuck
+    # query no longer hangs the pool. 30s command_timeout matches the
+    # synthesis call budget; raise via env if a deeper analysis pass
+    # needs longer (e.g. for ALTER TABLE during migrations).
+    postgres_connect_timeout: float = Field(
+        default=10.0, description="Seconds to wait for a fresh PG connect"
+    )
+    postgres_command_timeout: float = Field(
+        default=30.0, description="Per-statement Postgres command timeout in seconds"
+    )
 
     @field_validator("postgres_user")
     @classmethod

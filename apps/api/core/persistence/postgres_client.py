@@ -94,7 +94,18 @@ class PostgresClient:
         )
 
     async def connect(self) -> None:
-        """Establish connection pool to PostgreSQL."""
+        """Establish connection pool to PostgreSQL.
+
+        I-H-2 / D-H-2: `timeout=2.0` is asyncpg's connect timeout. A separate
+        `command_timeout` is needed so a stuck query cannot hold a pool
+        connection indefinitely. Both values are now settings-driven so
+        operators can tune per-environment without code changes.
+        """
+        from core.config import get_settings as _get_settings
+
+        _settings = _get_settings()
+        connect_timeout = float(getattr(_settings, "postgres_connect_timeout", 10.0) or 10.0)
+        command_timeout = float(getattr(_settings, "postgres_command_timeout", 30.0) or 30.0)
         try:
             self._pool = await asyncpg.create_pool(
                 host=self._host,
@@ -105,7 +116,8 @@ class PostgresClient:
                 min_size=self._min_pool_size,
                 max_size=self._max_pool_size,
                 init=self._init_connection,
-                timeout=2.0,
+                timeout=connect_timeout,
+                command_timeout=command_timeout,
             )
 
             # Test connection

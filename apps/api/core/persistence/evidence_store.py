@@ -377,37 +377,17 @@ class EvidenceStore:
             artifact.metadata,
         )
 
-        try:
-            await self._postgres.execute(query, *args)
-        except Exception as e:
-            if "evidence_artifacts" in str(e).lower() and (
-                "does not exist" in str(e).lower() or "undefined" in str(e).lower()
-            ):
-                # Auto-create the table and retry
-                logger.warning("evidence_artifacts table missing — creating inline")
-                create_sql = """
-                    CREATE TABLE IF NOT EXISTS evidence_artifacts (
-                        artifact_id   UUID PRIMARY KEY,
-                        parent_id     UUID REFERENCES evidence_artifacts(artifact_id),
-                        root_id       UUID NOT NULL,
-                        artifact_type VARCHAR(64) NOT NULL,
-                        file_path     TEXT NOT NULL,
-                        content_hash  VARCHAR(64) NOT NULL,
-                        action        TEXT NOT NULL,
-                        agent_id      VARCHAR(64) NOT NULL,
-                        session_id    UUID NOT NULL,
-                        timestamp_utc TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        metadata      JSONB NOT NULL DEFAULT '{}'
-                    );
-                    CREATE INDEX IF NOT EXISTS idx_ev_root ON evidence_artifacts(root_id);
-                    CREATE INDEX IF NOT EXISTS idx_ev_session ON evidence_artifacts(session_id);
-                    CREATE INDEX IF NOT EXISTS idx_ev_parent ON evidence_artifacts(parent_id);
-                    CREATE INDEX IF NOT EXISTS idx_ev_type ON evidence_artifacts(artifact_type);
-                """
-                await self._postgres.execute(create_sql)
-                await self._postgres.execute(query, *args)
-            else:
-                raise
+        # I-C-2 / D-C-2 / D-H-1: removed the inline-DDL fallback. The
+        # alembic migration container is now `service_completed_successfully`
+        # gated in docker-compose, so the schema is guaranteed present
+        # before this code path runs. Inline `CREATE TABLE` races between
+        # concurrent workers (CREATE INDEX deadlocks) and bypasses the
+        # canonical Alembic history — making the migration system the
+        # authoritative source of schema requires removing this branch.
+        # If the table is missing it should fail loudly so the operator
+        # restores migrations rather than papering over the gap with a
+        # silently-different schema.
+        await self._postgres.execute(query, *args)
 
     async def get_artifact(self, artifact_id: UUID) -> EvidenceArtifact | None:
         """

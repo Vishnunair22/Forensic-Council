@@ -354,6 +354,12 @@ services:
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_worker
     restart: unless-stopped
+    # I-H-7: long grace so SIGTERM lets the worker drain mid-pipeline
+    # investigations (audio/video forensics can take minutes). Without
+    # this Docker defaults to 10 s and SIGKILLs through a running
+    # pipeline, leaving Redis queue entries half-processed and
+    # chain-of-custody fragments orphaned.
+    stop_grace_period: 300s
     command: ["worker"]
     environment:
       <<: *backend-env
