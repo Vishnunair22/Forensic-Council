@@ -26,10 +26,14 @@ export function ArbiterDeliberationOverlay({
   return (
     <AnimatePresence>
       {isVisible && (
+        // A-H-1: this overlay contains no interactive elements — it is purely
+        // a status surface while the Arbiter synthesizes. role="alertdialog"
+        // with the live region inside conveys the right semantics without
+        // implying a focus trap obligation that wasn't being met.
         <motion.div
-          role="dialog"
-          aria-modal="true"
+          role="alertdialog"
           aria-labelledby="arbiter-overlay-title"
+          aria-describedby="arbiter-overlay-live"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -39,7 +43,7 @@ export function ArbiterDeliberationOverlay({
             Council Arbiter Synthesizing
           </h2>
           
-          <div aria-live="polite" aria-atomic="true" className="h-8 flex items-center justify-center">
+          <div id="arbiter-overlay-live" aria-live="polite" aria-atomic="true" className="h-8 flex items-center justify-center">
             <motion.p
               key={cleanLiveText}
               initial={{ opacity: 0 }}

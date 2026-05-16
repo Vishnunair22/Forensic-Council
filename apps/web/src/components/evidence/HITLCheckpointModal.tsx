@@ -196,7 +196,7 @@ export function HITLCheckpointModal({
         </div>
 
         {decisionError && (
-         <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-bold text-center tracking-wide">
+         <div role="alert" className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-[11px] font-bold text-center tracking-wide">
           {decisionError}
          </div>
         )}

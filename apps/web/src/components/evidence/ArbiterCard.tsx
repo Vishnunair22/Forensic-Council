@@ -53,10 +53,10 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
     : (cleanThinking || (isReady ? "Council report is ready. Opening the result page when the signed report is available." : ARBITER_PHRASES[phraseIndex]));
 
   const getStatusDisplay = () => {
-    if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" };
-    if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" };
-    if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-emerald-400/70", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
-    if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
+    if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-success", bg: "bg-success/20", border: "border-success/30" };
+    if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-primary", bg: "bg-primary/20", border: "border-primary/30" };
+    if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-success/70", bg: "bg-success/10", border: "border-success/20" };
+    if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-warning", bg: "bg-warning/10", border: "border-warning/20" };
     return { label: "Awaiting Agents", icon: Activity, color: "text-white/30", bg: "bg-white/5", border: "border-white/10" };
   };
 
@@ -71,7 +71,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
     >
       <div className={clsx(
         "absolute -inset-0.5 rounded-2xl blur opacity-10 transition duration-1000 animate-pulse",
-        isReady ? "bg-emerald-500" : isSynthesizing ? "bg-blue-500" : "bg-primary"
+        isReady ? "bg-success" : isSynthesizing ? "bg-primary" : "bg-primary"
       )} />
 
       <div className="relative h-full rounded-2xl overflow-hidden flex flex-col" style={{ background: "rgba(5,9,18,0.92)", border: "1px solid rgba(165,200,255,0.08)", boxShadow: "0 8px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
@@ -115,7 +115,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                 <motion.div
                   className={clsx(
                     "h-full shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.4)]",
-                    isReady ? "bg-emerald-500" : "bg-gradient-to-r from-[var(--color-primary)] to-blue-400"
+                    isReady ? "bg-success" : "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-soft)]"
                   )}
                   initial={{ width: "0%" }}
                   animate={{
@@ -129,7 +129,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
             <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5 flex flex-col gap-3 min-h-[80px]">
               <div className="flex items-start gap-3">
                 {isReady ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
                 ) : isPreWarming || isSynthesizing ? (
                   <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0 mt-0.5" />
                 ) : (
@@ -164,7 +164,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                 key={i}
                 className={clsx(
                   "w-1 rounded-full transition-colors duration-500",
-                  isReady ? "bg-emerald-500/40" : "bg-[var(--color-primary)]/30"
+                  isReady ? "bg-success/40" : "bg-[var(--color-primary)]/30"
                 )}
                 animate={{
                   height: isReady ? 4 : [4, 10, 4],

@@ -96,7 +96,7 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
 
   if (quota?.degraded) {
     return (
-      <div className="flex items-center gap-2 text-xs text-amber-600">
+      <div className="flex items-center gap-2 text-xs text-warning">
         <AlertTriangle className="h-3 w-3" />
         <span>Quota data unavailable</span>
       </div>
@@ -111,10 +111,12 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
   const isWarning = usagePercent >= 80;
   const isCritical = usagePercent >= 100;
 
+  // A-H-2: Tailwind 700-tier shades fail WCAG AA contrast on dark surfaces.
+  // Semantic tokens map to the brand-validated foreground hues.
   const getStatusTextColor = () => {
-    if (isCritical) return "text-red-700";
-    if (isWarning) return "text-amber-700";
-    return "text-emerald-700";
+    if (isCritical) return "text-danger";
+    if (isWarning) return "text-warning";
+    return "text-success";
   };
 
   return (
@@ -127,14 +129,14 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
         </span>
       </div>
 
-      <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
+      <div className="w-px h-3 bg-border-muted" aria-hidden="true" />
 
       <div className="flex items-center gap-1 text-white/50">
         <DollarSign className="h-3 w-3" />
         <span>${quota.cost_estimate_usd.toFixed(4)}</span>
       </div>
 
-      <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
+      <div className="w-px h-3 bg-border-muted" aria-hidden="true" />
 
       <div className="flex items-center gap-1 text-white/50">
         <span>{quota.calls_total} calls</span>
@@ -142,8 +144,8 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
 
       {isCritical && (
         <>
-          <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
-          <div className="flex items-center gap-1 text-red-500 font-bold">
+          <div className="w-px h-3 bg-border-muted" aria-hidden="true" />
+          <div className="flex items-center gap-1 text-danger font-bold">
             <XCircle className="h-3 w-3" />
             <span>Limit reached</span>
           </div>
@@ -152,8 +154,8 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
 
       {isWarning && !isCritical && (
         <>
-          <div className="w-px h-3 bg-[#333333]" aria-hidden="true" />
-          <div className="flex items-center gap-1 text-amber-500 font-bold">
+          <div className="w-px h-3 bg-border-muted" aria-hidden="true" />
+          <div className="flex items-center gap-1 text-warning font-bold">
             <AlertTriangle className="h-3 w-3" />
             <span>High usage</span>
           </div>

@@ -40,8 +40,8 @@ export function AgentStatusSummary({
   const getStatusDot = (status: string) => {
     switch (status) {
       case "running":  return "bg-primary animate-pulse";
-      case "complete": return "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]";
-      case "error":    return "bg-red-500";
+      case "complete": return "bg-success shadow-[0_0_8px_rgba(var(--color-success-rgb),0.4)]";
+      case "error":    return "bg-danger";
       default:         return "bg-white/10";
     }
   };
@@ -53,6 +53,8 @@ export function AgentStatusSummary({
       <button
         type="button"
         onClick={() => setActiveExpanded((v) => !v)}
+        aria-expanded={activeExpanded}
+        aria-controls="agent-status-active-list"
         className="flex items-center justify-between w-full px-5 py-4 hover:bg-white/[0.02] transition-colors group"
       >
         <div className="flex items-center gap-3">
@@ -73,6 +75,7 @@ export function AgentStatusSummary({
         {activeExpanded && (
           <motion.div
             key="active-list"
+            id="agent-status-active-list"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -107,6 +110,8 @@ export function AgentStatusSummary({
           <button
             type="button"
             onClick={() => setSkippedExpanded((v) => !v)}
+            aria-expanded={skippedExpanded}
+            aria-controls="agent-status-skipped-list"
             className="flex items-center justify-between w-full px-5 py-4 hover:bg-white/[0.02] transition-colors group"
           >
             <div className="flex items-center gap-3">
@@ -127,6 +132,7 @@ export function AgentStatusSummary({
             {skippedExpanded && (
               <motion.div
                 key="skipped-list"
+                id="agent-status-skipped-list"
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
