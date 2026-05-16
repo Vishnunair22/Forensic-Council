@@ -99,12 +99,12 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
-        <div className="flex items-center justify-between gap-2 p-2 bg-[#06090E] border border-[#333333]">
+        <div className="flex items-center justify-between gap-2 p-2 bg-surface-1 border border-border-muted">
 
           <button
             type="button"
             onClick={rs.handleHome}
-            className="px-6 py-3 text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-2 transition-colors text-white/50 hover:text-white hover:bg-[#111111]"
+            className="px-6 py-3 text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-2 transition-colors text-white/50 hover:text-white hover:bg-surface-2"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             Hub
@@ -138,7 +138,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                   "px-6 py-3 text-[10px] font-mono font-bold transition-colors tracking-widest flex items-center gap-2 uppercase",
                   rs.activeTab === tab
                     ? "bg-white text-black"
-                    : "text-white/50 hover:text-white hover:bg-[#111111]"
+                    : "text-white/50 hover:text-white hover:bg-surface-2"
                 )}
 
               >
@@ -295,26 +295,26 @@ function ResultSkeletonView() {
     <div className="min-h-screen" aria-busy="true" aria-label="Loading report">
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
         <div
-          className="flex items-center justify-between gap-4 p-4 bg-[#06090E] border border-[#333333]"
+          className="flex items-center justify-between gap-4 p-4 bg-surface-1 border border-border-muted"
         >
-          <div className="skeleton h-10 w-20 rounded-none" />
-          <div className="skeleton h-10 w-64 rounded-none" />
+          <div className="skeleton h-10 w-20 rounded-2xl" />
+          <div className="skeleton h-10 w-64 rounded-2xl" />
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-6 pt-16 space-y-6">
-        <div className="p-8 space-y-8 bg-[#06090E] border border-[#333333]">
+        <div className="p-8 space-y-8 bg-surface-1 border border-border-muted">
           <div className="flex flex-col md:flex-row gap-6 items-center">
-            <div className="skeleton w-32 h-32 rounded-none" />
+            <div className="skeleton w-32 h-32 rounded-2xl" />
             <div className="flex-1 space-y-4 w-full">
-              <div className="skeleton h-3.5 w-44 rounded-none" />
-              <div className="skeleton h-9 w-72 rounded-none" />
-              <div className="skeleton h-16 w-full rounded-none" />
+              <div className="skeleton h-3.5 w-44 rounded-2xl" />
+              <div className="skeleton h-9 w-72 rounded-2xl" />
+              <div className="skeleton h-16 w-full rounded-2xl" />
             </div>
-            <div className="skeleton w-28 h-28 rounded-none" />
+            <div className="skeleton w-28 h-28 rounded-2xl" />
           </div>
         </div>
-        <div className="skeleton h-52 rounded-none bg-[#06090E] border border-[#333333]" />
-        <div className="skeleton h-72 rounded-none bg-[#06090E] border border-[#333333]" />
+        <div className="skeleton h-52 rounded-2xl bg-surface-1 border border-border-muted" />
+        <div className="skeleton h-72 rounded-2xl bg-surface-1 border border-border-muted" />
       </div>
     </div>
   );

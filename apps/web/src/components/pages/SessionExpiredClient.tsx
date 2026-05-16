@@ -45,7 +45,7 @@ export function SessionExpiredClient() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
-          <GlassPanel className="p-10 rounded-[2.5rem] border border-[rgba(165,200,255,0.08)] space-y-8 relative overflow-hidden">
+          <GlassPanel className="p-10 rounded-3xl border border-border-subtle space-y-8 relative overflow-hidden">
              <div className="absolute top-4 right-4 opacity-[0.03]">
                 <Cpu className="w-12 h-12" />
              </div>
@@ -66,7 +66,7 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-primary text-[#020617] hover:scale-[1.02] shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-xs font-black tracking-[0.2em] transition-all flex items-center justify-center gap-3 group"
+                className="w-full py-4 rounded-full bg-primary text-background hover:scale-[1.02] shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-xs font-black tracking-[0.2em] transition-all flex items-center justify-center gap-3 group"
                 data-testid="session-expired-home-cta"
                 aria-label="Return to dashboard"
               >

@@ -70,7 +70,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 6 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden bg-[#06090E] w-full"
+          className="relative overflow-hidden bg-surface-1 w-full rounded-2xl"
         >
           <div className="p-10 flex flex-col items-center text-center">
             <button
@@ -91,7 +91,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                 <h2 id="success-modal-title" className="text-2xl font-bold text-white">Evidence Ready</h2>
               </div>
 
-              <div className="relative overflow-hidden border border-[#333333] bg-[#0A0A0C]" aria-label={`Preview of ${file.name}`}>
+              <div className="relative overflow-hidden border border-border-muted bg-surface-0" aria-label={`Preview of ${file.name}`}>
                 <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
                   {isAudio && previewUrl ? (
                     <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
@@ -150,7 +150,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                 type="button"
                 onClick={() => { playSound("click"); onNewUpload(); }}
                 disabled={isStarting}
-                className="flex-1 py-4 text-sm font-semibold tracking-wide uppercase transition-colors hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed border border-[#333333]"
+                className="flex-1 py-4 text-sm font-semibold tracking-wide uppercase transition-colors hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed border border-border-muted"
               >
                 Reselect File
               </button>

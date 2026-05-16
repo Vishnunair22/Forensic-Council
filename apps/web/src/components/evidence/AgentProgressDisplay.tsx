@@ -349,7 +349,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
                   disabled={isNavigating || (phase as string) === "deep"}
                   className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
                 >
-                  <span className="flex items-center gap-2 text-[#020617]">
+                  <span className="flex items-center gap-2 text-background">
                     {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
                     <span className="font-bold">DEEP ANALYSIS</span>
                     <ArrowRight className="w-4 h-4" />
@@ -387,7 +387,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
                   disabled={isNavigating}
                   className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
                 >
-                  <span className="flex items-center gap-2 text-[#020617]">
+                  <span className="flex items-center gap-2 text-background">
                     {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                     <span className="font-bold">VIEW REPORT</span>
                     <ArrowRight className="w-4 h-4" />

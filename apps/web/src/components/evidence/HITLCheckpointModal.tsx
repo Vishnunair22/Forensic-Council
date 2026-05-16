@@ -90,7 +90,7 @@ export function HITLCheckpointModal({
 
  return (
    <Dialog open={isOpen} onOpenChange={handleDismiss}>
-    <DialogContent className="sm:max-w-xl bg-[#06090E] border border-[#333333] p-0 overflow-hidden shadow-2xl rounded-none">
+    <DialogContent className="sm:max-w-xl bg-surface-1 border border-border-muted p-0 overflow-hidden shadow-2xl rounded-2xl">
 
      {checkpoint ? (
      <div className="p-8 space-y-6">
@@ -113,7 +113,7 @@ export function HITLCheckpointModal({
       <div className="space-y-4">
        {/* Context Panels */}
        <div className="grid grid-cols-1 gap-4">
-        <div className="p-5 bg-[#111111] border border-[#333333] space-y-2">
+        <div className="p-5 bg-surface-2 border border-border-muted space-y-2">
          <h4 className="text-[10px] font-black font-mono text-white/50 tracking-wide uppercase">Evidence Brief</h4>
          <p className="text-sm text-white/80 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
@@ -159,7 +159,7 @@ export function HITLCheckpointModal({
               "p-5 border text-left transition-colors duration-200 relative",
               selectedDecision === option.value
                 ? "bg-white border-white text-black"
-                : "border-[#333333] bg-[#111111] hover:bg-[#1A1A1A]"
+                : "border-border-muted bg-surface-2 hover:bg-surface-3"
             )}
           >
            <div className="flex flex-col gap-1 relative z-10">
@@ -190,7 +190,7 @@ export function HITLCheckpointModal({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Enter forensic notes for this intervention..."
-          className="w-full px-5 py-4 bg-[#111111] border border-[#333333] text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white transition-colors min-h-[100px] resize-none"
+          className="w-full px-5 py-4 bg-surface-2 border border-border-muted text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white transition-colors min-h-[100px] resize-none"
           disabled={isSubmitting}
         />
         </div>
@@ -202,12 +202,12 @@ export function HITLCheckpointModal({
         )}
       </div>
 
-<DialogFooter className="sm:justify-between border-t border-[#333333] p-8 pt-6 gap-4 bg-[#06090E]">
+<DialogFooter className="sm:justify-between border-t border-border-muted p-8 pt-6 gap-4 bg-surface-1">
         <button
          type="button"
          onClick={onDismiss}
          disabled={isSubmitting}
-         className="px-8 py-4 border border-[#333333] text-white/60 hover:text-white hover:bg-[#111111] transition-colors text-sm font-bold tracking-wide uppercase"
+         className="px-8 py-4 border border-border-muted text-white/60 hover:text-white hover:bg-surface-2 transition-colors text-sm font-bold tracking-wide uppercase"
         >
          Cancel
         </button>

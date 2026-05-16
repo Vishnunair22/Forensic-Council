@@ -73,7 +73,7 @@ export function IntelligenceBrief({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.035 }}
-                className="p-5 border border-[#333333] bg-[#06090E]"
+                className="p-5 border border-border-muted bg-surface-1"
               >
                 <div className="flex items-start gap-4">
                   <FindingIcon severity={severity} />
@@ -92,9 +92,9 @@ export function IntelligenceBrief({
         </div>
       )}
 
-      <div className="border border-[#333333] bg-[#06090E] p-5 md:p-6">
+      <div className="border border-border-muted bg-surface-1 p-5 md:p-6">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 border border-[#333333] bg-[#111111] flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 border border-border-muted bg-surface-2 flex items-center justify-center shrink-0">
             <Info className="w-4 h-4 text-primary/70" />
           </div>
           <div className="min-w-0 flex-1">
@@ -110,7 +110,7 @@ export function IntelligenceBrief({
             {(notes.length > 0 || skipped.length > 0) && (
               <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {notes.map((note) => (
-                  <div key={note.label} className="border border-[#333333] bg-[#111111] p-4">
+                  <div key={note.label} className="border border-border-muted bg-surface-2 p-4">
                     <div className="text-[9px] font-mono font-bold text-white/25 tracking-[0.16em] uppercase">
                       {note.label}
                     </div>
@@ -120,7 +120,7 @@ export function IntelligenceBrief({
                   </div>
                 ))}
                 {skipped.length > 0 && (
-                  <div className="border border-[#333333] bg-[#111111] p-4">
+                  <div className="border border-border-muted bg-surface-2 p-4">
                     <div className="text-[9px] font-mono font-bold text-white/25 tracking-[0.16em] uppercase">
                       Skipped Agents
                     </div>
@@ -142,21 +142,21 @@ function FindingIcon({ severity }: { severity: "danger" | "warning" | "info" | "
   const base = "w-9 h-9 shrink-0 flex items-center justify-center border mt-0.5";
   if (severity === "danger") {
     return (
-      <div className={clsx(base, "bg-red-500/10 border-red-500/30 text-red-500")}>
+      <div className={clsx(base, "bg-danger/10 border-danger/30 text-danger")}>
         <AlertCircle className="w-4 h-4" />
       </div>
     );
   }
   if (severity === "warning") {
     return (
-      <div className={clsx(base, "bg-amber-500/10 border-amber-500/30 text-amber-500")}>
+      <div className={clsx(base, "bg-warning/10 border-warning/30 text-warning")}>
         <Minus className="w-4 h-4" />
       </div>
     );
   }
   if (severity === "neutral") {
     return (
-      <div className={clsx(base, "bg-[#111111] border-[#333333] text-white/35")}>
+      <div className={clsx(base, "bg-surface-2 border-border-muted text-white/35")}>
         <CircleDashed className="w-4 h-4" />
       </div>
     );

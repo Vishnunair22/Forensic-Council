@@ -26,7 +26,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export const viewport = { themeColor: "#020617", width: "device-width", initialScale: 1 } as const;
+// V-M-1: themeColor mirrors --color-background (#02040A) so the browser
+// chrome / status bar matches the canvas instead of slate-950.
+export const viewport = { themeColor: "#02040A", width: "device-width", initialScale: 1 } as const;
 
 export default function RootLayout({
   children,

@@ -5,6 +5,7 @@ import type { ReportDTO } from "@/lib/api";
 import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
 import { motion } from "framer-motion";
 import { fmtTime, fmtDuration } from "@/lib/fmt";
+import { accentFor } from "@/lib/agentTheme";
 
 type TimelineItem = { agent_id: string } | AgentUpdate;
 
@@ -14,15 +15,6 @@ interface TimelineTabProps {
   agentTimeline: AgentUpdate[];
   pipelineStartAt: string | null;
 }
-
-const AGENT_THEMES: Record<string, { color: string }> = {
-  Agent1: { color: "#00FFFF" },
-  Agent2: { color: "#00FFFF" },
-  Agent3: { color: "#F59E0B" },
-  Agent4: { color: "#F43F5E" },
-  Agent5: { color: "#8B5CF6" },
-  Arbiter: { color: "#10B981" },
-};
 
 export function TimelineTab({
   report,
@@ -85,7 +77,10 @@ export function TimelineTab({
 
               {/* 2. Tool Execution Nodes */}
               <div className="relative pl-10">
-                <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_#00FFFF]" />
+                <div
+                  className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary"
+                  style={{ boxShadow: "0 0 10px var(--color-primary)" }}
+                />
                 <div className="space-y-8">
                   <div className="space-y-2">
                     <span className="text-[9px] font-mono font-bold text-primary/40 tracking-[0.2em]">Phase 02</span>
@@ -98,7 +93,7 @@ export function TimelineTab({
                   <div className="grid gap-4 max-w-2xl">
                     {(hasLiveTimeline ? agentTimeline : activeAgentIds.map(id => ({ agent_id: id }))).map((update: TimelineItem, idx) => {
                       const agentId = update.agent_id;
-                      const theme = AGENT_THEMES[agentId] || { color: "#00FFFF" };
+                      const theme = { color: accentFor(agentId).color };
                       const completionTime = "completed_at" in update ? update.completed_at : null;
                       const duration = (pipelineStartAt && completionTime) ? fmtDuration(pipelineStartAt, completionTime) : null;
                       // F-L-3: stable key derived from agentId + completion time,
@@ -141,9 +136,15 @@ export function TimelineTab({
               {/* 3. Synthesis */}
               {report.signed_utc && (
                 <div className="relative pl-10">
-                  <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent shadow-[0_0_10px_#8B5CF6]" />
+                  <div
+                    className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full"
+                    style={{
+                      backgroundColor: "var(--color-success)",
+                      boxShadow: "0 0 10px var(--color-success)",
+                    }}
+                  />
                   <div className="space-y-2">
-                    <span className="text-[9px] font-mono font-bold text-accent/40 tracking-[0.2em]">Phase 03</span>
+                    <span className="text-[9px] font-mono font-bold text-[color:var(--color-success)]/40 tracking-[0.2em]">Phase 03</span>
                     <h4 className="text-sm font-heading font-bold text-white/80">Consensus Synthesis</h4>
                     <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
                       Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.

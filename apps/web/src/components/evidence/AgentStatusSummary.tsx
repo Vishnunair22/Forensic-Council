@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, SkipForward, Activity } from "lucide-react";
 import { clsx } from "clsx";
 import type { AgentUpdate } from "./AgentProgressDisplay";
-import { AGENT_GRAPHICS } from "./AgentStatusCard";
+import { AGENT_ICONS } from "./AgentStatusCard";
+import { accentFor } from "@/lib/agentTheme";
 
 interface AgentStatusSummaryProps {
   visibleAgents: Array<{ id: string; name: string }>;
@@ -80,13 +81,13 @@ export function AgentStatusSummary({
           >
             <div className="pb-3 px-2 flex flex-col gap-0.5">
               {visibleAgents.map((agent) => {
-                const graphic = AGENT_GRAPHICS[agent.id];
+                const Icon = AGENT_ICONS[agent.id] ?? Activity;
                 const status = getAgentStatus(agent.id);
-                const Icon = graphic?.icon || Activity;
+                const accentClass = AGENT_ICONS[agent.id] ? accentFor(agent.id).textClass : "text-white/40";
                 return (
                   <div key={agent.id} className="flex items-center justify-between gap-3 pl-4 pr-3 py-2 hover:bg-white/[0.02] rounded-lg transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Icon className={clsx("w-3.5 h-3.5 shrink-0", graphic?.color || "text-white/40")} />
+                      <Icon className={clsx("w-3.5 h-3.5 shrink-0", accentClass)} />
                       <span className="text-[11px] font-medium text-white/70 truncate">{agent.name}</span>
                     </div>
                     <div className={clsx("w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500", getStatusDot(status))} />
@@ -134,11 +135,11 @@ export function AgentStatusSummary({
               >
                 <div className="pb-3 px-2 flex flex-col gap-0.5">
                   {skippedAgents.map((agent) => {
-                    const graphic = AGENT_GRAPHICS[agent.id];
-                    const Icon = graphic?.icon || SkipForward;
+                    const Icon = AGENT_ICONS[agent.id] ?? SkipForward;
+                    const accentClass = AGENT_ICONS[agent.id] ? accentFor(agent.id).textClass : "text-white/40";
                     return (
                       <div key={agent.id} className="flex items-center gap-3 pl-4 py-2">
-                        <Icon className={clsx("w-3.5 h-3.5 shrink-0 opacity-40", graphic?.color || "text-white/40")} />
+                        <Icon className={clsx("w-3.5 h-3.5 shrink-0 opacity-40", accentClass)} />
                         <span className="text-[11px] font-medium text-white/45 truncate">{agent.name}</span>
                       </div>
                     );

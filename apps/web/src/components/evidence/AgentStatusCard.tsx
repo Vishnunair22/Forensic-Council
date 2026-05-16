@@ -23,6 +23,7 @@ import {
   getDefaultProgressTotal,
   getLiveProgressDescriptor,
 } from "@/lib/tool-progress";
+import { accentFor } from "@/lib/agentTheme";
 import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
 
 const TEMPLATE_SUMMARY_RE = [
@@ -145,12 +146,15 @@ function formatElapsed(seconds?: number | null): string | null {
   return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`;
 }
 
-export const AGENT_GRAPHICS: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
-  "Agent1": { icon: ScanEye,  color: "text-[#60A5FA]", bg: "bg-[#60A5FA]/10" },
-  "Agent2": { icon: AudioWaveform, color: "text-[#38BDF8]", bg: "bg-[#38BDF8]/10" },
-  "Agent3": { icon: Boxes,    color: "text-[#818CF8]", bg: "bg-[#818CF8]/10" },
-  "Agent4": { icon: Film,     color: "text-[#22D3EE]", bg: "bg-[#22D3EE]/10" },
-  "Agent5": { icon: Database, color: "text-[#93C5FD]", bg: "bg-[#93C5FD]/10" },
+// V-H-3: agent accent palette resolves to shared lib/agentTheme tokens so the
+// same agent reads with the same accent across both AgentStatusCard and
+// TimelineTab. Icon assignment stays here (the only place that needs it).
+export const AGENT_ICONS: Record<string, LucideIcon> = {
+  Agent1: ScanEye,
+  Agent2: AudioWaveform,
+  Agent3: Boxes,
+  Agent4: Film,
+  Agent5: Database,
 };
 
 const FALLBACK_PHRASES: Record<string, string[]> = {
@@ -191,10 +195,11 @@ const FALLBACK_PHRASES: Record<string, string[]> = {
   ],
 };
 
+// V-H-2: semantic Tailwind palette → semantic tokens.
 const SEV_LABEL: Record<string, string> = {
-  CRITICAL: "text-red-400",
+  CRITICAL: "text-danger",
   HIGH:     "text-danger",
-  MEDIUM:   "text-amber-400",
+  MEDIUM:   "text-warning",
   LOW:      "text-white/35",
 };
 
@@ -220,7 +225,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.05, duration: 0.25 }}
       className={clsx(
-        "relative border-l-4 bg-[#111111] hover:bg-[#1A1A1A] transition-colors border-y border-r border-[#333333]",
+        "relative border-l-4 bg-surface-2 hover:bg-surface-3 transition-colors border-y border-r border-border-muted",
         "px-4 py-3",
         isAlert
           ? "border-l-red-500"
@@ -257,14 +262,14 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
               "text-[11px] font-mono font-black tracking-wide px-1.5 py-0.5 rounded",
               sevLabelColor,
               sev === "CRITICAL" || sev === "HIGH" ? "bg-danger/10 border border-danger/25" :
-              sev === "MEDIUM" ? "bg-amber-500/10 border border-amber-500/25" :
+              sev === "MEDIUM" ? "bg-warning/10 border border-warning/25" :
               "bg-white/[0.04] border border-white/10"
             )}>
               {sev}
             </span>
           )}
           {f.degraded && (
-            <span className="text-[11px] font-mono font-bold text-amber-400 border border-amber-400/30 bg-amber-400/10 rounded px-1.5 py-0.5" title={f.fallback_reason || ""}>
+            <span className="text-[11px] font-mono font-bold text-warning border border-warning/30 bg-warning/10 rounded px-1.5 py-0.5" title={f.fallback_reason || ""}>
               DEGRADED
             </span>
           )}
@@ -432,8 +437,8 @@ export function AgentStatusCard({
   const cfg = statusConfig[status] || statusConfig.running;
   const [stageIndex, setStageIndex] = useState(0);
 
-  const agentGraphic = AGENT_GRAPHICS[agentId] || { icon: Cpu, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/10" };
-  const Icon = agentGraphic.icon;
+  const accent = accentFor(agentId);
+  const Icon = AGENT_ICONS[agentId] ?? Cpu;
 
   useEffect(() => {
     if (status === "running") {
@@ -497,18 +502,18 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-[#06090E] border border-[#333333]",
+        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-surface-1 border border-border-muted rounded-2xl",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
-      <div className="p-7 pb-5 border-b border-[#333333] relative z-10 bg-[#06090E]">
+      <div className="p-7 pb-5 border-b border-border-muted relative z-10 bg-surface-1">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Agent Icon */}
-            <div className="relative w-16 h-16 flex items-center justify-center bg-[#111111] border border-[#333333]">
-              <Icon className={clsx("w-7 h-7 relative z-10", agentGraphic.color)} />
+            <div className="relative w-16 h-16 flex items-center justify-center bg-surface-2 border border-border-muted rounded-xl">
+              <Icon className={clsx("w-7 h-7 relative z-10", accent.textClass)} />
             </div>
 
             <div>
@@ -518,11 +523,11 @@ export function AgentStatusCard({
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30"
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-warning/10 border border-warning/30"
                     title={completedData.fallback_reason || "Analysis degraded"}
                   >
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                    <span className="text-[10px] font-mono font-bold text-amber-500 tracking-widest">
+                    <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+                    <span className="text-[10px] font-mono font-bold text-warning tracking-widest">
                       Degraded
                     </span>
                   </motion.div>
@@ -572,7 +577,7 @@ export function AgentStatusCard({
                       )}
                 </span>
               </div>
-              <div className="relative w-full h-[4px] bg-[#222222] overflow-hidden">
+              <div className="relative w-full h-[4px] bg-surface-3 overflow-hidden">
                 <motion.div
                   className="absolute top-0 bottom-0 bg-white"
                   animate={{

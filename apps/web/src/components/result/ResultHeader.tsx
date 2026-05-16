@@ -37,10 +37,14 @@ interface ResultHeaderProps {
   pipelineDuration: string | null;
 }
 
-const VERDICT_THEMES: Record<string, { color: string; icon: LucideIcon; tone: string }> = {
-  emerald: { color: "#A7FFD2", icon: ShieldCheck, tone: "text-success border-success/20 bg-success/5" },
-  red: { color: "#F43F5E", icon: ShieldAlert, tone: "text-danger border-danger/20 bg-danger/5" },
-  amber: { color: "#F59E0B", icon: Shield, tone: "text-warning border-warning/20 bg-warning/5" },
+// V-C-3: verdict accent colors resolve to semantic CSS variables. `colorRgb`
+// pairs each color with its r,g,b tuple so the `borderColor` / `backgroundColor`
+// styles below can render `rgba(...)` with the same alpha levels we previously
+// got from concatenating hex opacity suffixes (e.g. "#A7FFD230").
+const VERDICT_THEMES: Record<string, { color: string; colorRgb: string; icon: LucideIcon; tone: string }> = {
+  emerald: { color: "var(--color-success-light)", colorRgb: "var(--color-success-light-rgb)", icon: ShieldCheck, tone: "text-success border-success/20 bg-success/5" },
+  red:     { color: "var(--color-danger)",        colorRgb: "var(--color-danger-rgb)",        icon: ShieldAlert, tone: "text-danger border-danger/20 bg-danger/5" },
+  amber:   { color: "var(--color-warning)",       colorRgb: "var(--color-warning-rgb)",       icon: Shield,      tone: "text-warning border-warning/20 bg-warning/5" },
 };
 
 export function ResultHeader({
@@ -121,7 +125,10 @@ export function ResultHeader({
           <div className="flex items-start gap-4 min-w-0">
             <div
               className="w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0"
-              style={{ borderColor: `${theme.color}30`, backgroundColor: `${theme.color}0D` }}
+              style={{
+                borderColor: `rgba(${theme.colorRgb}, 0.19)`,
+                backgroundColor: `rgba(${theme.colorRgb}, 0.05)`,
+              }}
             >
               <VerdictIcon className="w-7 h-7" style={{ color: theme.color }} />
             </div>

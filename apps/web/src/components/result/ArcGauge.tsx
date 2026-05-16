@@ -35,10 +35,24 @@ interface ArcGaugeProps {
   value: number;
   size?: number;
   strokeWidth?: number;
+  /**
+   * Stroke color for the fill arc. Accepts any CSS color (hex, rgb, var()).
+   * V-C-3: defaults to the success-light CSS variable so callers that don't
+   * provide a color render with the brand-aligned forensic-green dial.
+   */
   color?: string;
+  /**
+   * Optional drop-shadow color for the fill arc. Defaults to a soft success
+   * glow when omitted. Previously a string-equality check against the literal
+   * `#00FFFF` was used to detect "default" — replaced with this explicit prop.
+   */
+  glow?: string;
   label?: string;
   sublabel?: string;
 }
+
+const DEFAULT_ARC_COLOR = "var(--color-success-light)";
+const DEFAULT_ARC_GLOW = "rgba(158, 239, 213, 0.4)";
 
 /**
  * Horizon ArcGauge: A high-fidelity digital forensic dial.
@@ -47,7 +61,8 @@ export function ArcGauge({
   value,
   size = 140,
   strokeWidth = 3,
-  color = "#00FFFF",
+  color = DEFAULT_ARC_COLOR,
+  glow,
   label,
   sublabel,
 }: ArcGaugeProps) {
@@ -124,11 +139,11 @@ export function ArcGauge({
               animate={{ pathLength: 1 }}
               d={fillPath}
               fill="none"
-              stroke={color === "#00FFFF" ? "var(--color-success-light)" : color}
+              stroke={color}
               strokeWidth={strokeWidth + 2}
               strokeLinecap="round"
               style={{
-                filter: `drop-shadow(0 0 12px ${color === "#00FFFF" ? "rgba(167,255,210,0.4)" : color + "88"})`,
+                filter: `drop-shadow(0 0 12px ${glow ?? (color === DEFAULT_ARC_COLOR ? DEFAULT_ARC_GLOW : color)})`,
               }}
             />
           )}

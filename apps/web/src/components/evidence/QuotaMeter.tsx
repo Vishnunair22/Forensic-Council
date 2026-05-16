@@ -118,7 +118,7 @@ export function QuotaMeter({ sessionId, enabled = true }: QuotaMeterProps) {
   };
 
   return (
-    <div className="flex items-center gap-4 px-4 py-2 border border-[#333333] bg-[#06090E] text-[10px] font-mono tracking-widest uppercase">
+    <div className="flex items-center gap-4 px-4 py-2 border border-border-muted bg-surface-1 text-[10px] font-mono tracking-widest uppercase rounded-xl">
       <div className="flex items-center gap-2">
         <TrendingUp className={`h-3.5 w-3.5 ${getStatusTextColor()}`} />
         <span className="text-white/50">Quota:</span>

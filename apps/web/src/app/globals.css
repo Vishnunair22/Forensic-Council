@@ -19,9 +19,10 @@
   --color-accent-rgb:    107, 163, 245;
 
   /* ── Semantic ── */
-  --color-success:       #2DD4A0;
-  --color-success-rgb:   45, 212, 160;
-  --color-success-light: #9EEFD5;
+  --color-success:           #2DD4A0;
+  --color-success-rgb:       45, 212, 160;
+  --color-success-light:     #9EEFD5;
+  --color-success-light-rgb: 158, 239, 213;
 
   --color-warning:       #F0B14B;
   --color-warning-rgb:   240, 177, 75;
@@ -71,6 +72,16 @@
   --duration-base:    240ms;
   --duration-slow:    420ms;
   --duration-ambient: 1.6s;
+
+  /* ── Agent accent tokens (V-C-1, V-H-3) ──
+     Single source of truth for the five specialist agents. Both
+     AgentStatusCard and TimelineTab consume these via lib/agentTheme.ts. */
+  --color-agent-image:    #60A5FA;
+  --color-agent-audio:    #38BDF8;
+  --color-agent-scene:    #818CF8;
+  --color-agent-video:    #22D3EE;
+  --color-agent-metadata: #93C5FD;
+  --color-agent-arbiter:  var(--color-success);
 
   /* ── Calibration ── */
   --color-uncalibrated:        #E9A23B;
@@ -273,6 +284,32 @@
   .fc-text-warning   { color: var(--color-warning); }
   .fc-text-success   { color: var(--color-success); }
   .fc-text-primary-accent { color: var(--color-primary); }
+
+  /* ── Eyebrow / micro-label scale (V-H-5) ──
+     Replaces the ad-hoc text-[10px] font-mono tracking-[0.X] pattern
+     repeated 100+ times across the app. */
+  .fc-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .fc-eyebrow-strong {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  /* ── Verdict chrome helpers (V-C-3) ──
+     Used by ResultHeader/VerdictGauge/ArcGauge instead of hard-coded
+     hex literals. Consumers read `--verdict-color` from the host
+     element's style attribute to drive borderColor/backgroundColor. */
+  .fc-verdict-emerald { --verdict-color: var(--color-success-light); }
+  .fc-verdict-red     { --verdict-color: var(--color-danger); }
+  .fc-verdict-amber   { --verdict-color: var(--color-warning); }
 
   /* ── Motion Utilities ── */
   .fc-motion-fast    { transition-duration: var(--duration-fast); }
@@ -481,7 +518,9 @@
   transition-duration: 0.1s;
 }
 
-/* Secondary outline pill */
+/* Secondary outline pill — V-M-2: no backdrop-blur on buttons (allowed
+   only on fc-surface-overlay). Buttons read fine as opaque pills and
+   constant GPU cost from per-button blur is now removed. */
 .btn-outline,
 .btn-horizon-outline,
 .btn-pill-secondary {
@@ -498,8 +537,6 @@
   color: rgba(220,234,255,0.85);
   background: rgba(165,200,255,0.04);
   border: 1px solid rgba(165,200,255,0.15);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
   transition:
     background 0.22s ease,
     border-color 0.22s ease,
@@ -517,12 +554,10 @@
   transform: translateY(-1px);
 }
 
-/* Ghost/glass button */
+/* Ghost/glass button — V-M-2: no backdrop-blur on buttons. */
 .glass-button {
   background: rgba(165,200,255,0.05);
   border: 1px solid rgba(165,200,255,0.14);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
   color: #fff;
   padding: 0.6rem 1.25rem;
   border-radius: var(--radius-full);
@@ -550,9 +585,9 @@
     composes: fc-text-faint;
   }
 
-  .text-muted-decorative {
-    color: rgba(237, 242, 248, 0.35); /* BANNED for text - decorative ONLY */
-  }
+  /* V-M-3: text-muted-decorative deleted — was flagged "BANNED for text"
+     in the design system. Decorative-only usage moves to inline aria-hidden
+     spans with explicit color, or fc-text-faint where text is intended. */
 
   /* ── Global focus ring ── */
   :where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])):focus-visible {

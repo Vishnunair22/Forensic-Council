@@ -92,7 +92,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 8 }}
           transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden bg-[#06090E]"
+          className="relative overflow-hidden bg-surface-1 rounded-2xl"
         >
 
           <div className="p-8 sm:p-10 flex flex-col items-center text-center">

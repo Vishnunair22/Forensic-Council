@@ -21,8 +21,8 @@ export function VerdictGauge({
 }: VerdictGaugeProps) {
   const isUncalibrated = calibrationStatus !== "TRAINED";
   return (
-    <section className="overflow-hidden border border-[#333333] bg-[#06090E]">
-      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[#333333]">
+    <section className="overflow-hidden border border-border-muted bg-surface-1 rounded-2xl">
+      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border-muted">
         
         {/* Consensus Confidence */}
         <div className="p-8 flex flex-col items-center justify-center text-center">
@@ -33,40 +33,40 @@ export function VerdictGauge({
           </div>
 
           {isUncalibrated && (
-            <span className="text-[8px] font-mono text-amber-500 bg-[#111111] border border-[#333333] px-2 py-1 mt-6 uppercase tracking-widest">
+            <span className="text-[8px] font-mono text-warning bg-surface-2 border border-border-muted px-2 py-1 mt-6 uppercase tracking-widest">
               Uncalibrated
             </span>
           )}
         </div>
 
         {/* Integrity Risk */}
-        <StatCard 
+        <StatCard
           label="Integrity Risk"
-          value={manipPct} 
-          unit="%" 
-          subtext="Manipulation Prob." 
+          value={manipPct}
+          unit="%"
+          subtext="Manipulation Prob."
           icon={ShieldAlert}
-          color={manipPct > 50 ? "#F43F5E" : "#A7FFD2"}
+          color={manipPct > 50 ? "var(--color-danger)" : "var(--color-success-light)"}
         />
 
         {/* System Noise */}
-        <StatCard 
+        <StatCard
           label="System Noise"
-          value={errPct} 
-          unit="%" 
-          subtext="Error Variance" 
+          value={errPct}
+          unit="%"
+          subtext="Error Variance"
           icon={Zap}
-          color={errPct > 20 ? "#F59E0B" : "#A7FFD2"}
+          color={errPct > 20 ? "var(--color-warning)" : "var(--color-success-light)"}
         />
 
         {/* Agent Spread */}
-        <StatCard 
+        <StatCard
           label="Agent Spread"
-          value={discordPct} 
-          unit="%" 
-          subtext="Neural Discord" 
+          value={discordPct}
+          unit="%"
+          subtext="Neural Discord"
           icon={Activity}
-          color="#A7FFD2"
+          color="var(--color-success-light)"
         />
 
       </div>
