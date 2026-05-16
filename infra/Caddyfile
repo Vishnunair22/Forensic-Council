@@ -95,7 +95,11 @@
             flush_interval -1
 
             transport http {
-                response_header_timeout 620s
+                # C-H-6: bumped from 620s to 900s to match the frontend's
+                # waitForFinalReport budget (600s) + arbiter deliberation
+                # headroom. Deep investigations can run past 10 minutes;
+                # a tighter header timeout would 502 the user mid-report.
+                response_header_timeout 900s
                 dial_timeout 10s
                 read_buffer 64KB
                 write_buffer 64KB

@@ -573,7 +573,11 @@ export const useSimulation = ({
           // 4003: Access Denied (Identity Mismatch)
           // 4004: Session Not Found
           // 4010: Session Interrupted (Poisoned by restart or terminal error)
-          const terminalCodes = [4001, 4003, 4004, 4010];
+          // C-M-5: 1011 (server error) and 1013 (try again later, broker
+          // saturated) are added so we don't loop reconnect-attempts
+          // through a server that explicitly told us the channel is
+          // dead/busy.
+          const terminalCodes = [1011, 1013, 4001, 4003, 4004, 4010];
           if (terminalCodes.includes(event.code)) {
             dbg.warn("[WebSocket] Terminal close code received. Clearing session state.");
             setIsReconnecting(false);
@@ -606,11 +610,15 @@ export const useSimulation = ({
           setStatus((prev: SimulationStatus) => {
             if (prev !== "complete" && prev !== "error" && prev !== "idle") {
               if (reconnectAttemptsRef.current < reconnectConfig.current.maxRetries) {
-                const delay = Math.min(
+                // C-L-2: full-jitter backoff so N clients re-connecting
+                // after a backend restart don't synchronize into a
+                // thundering herd. delay = random in [base/2, base].
+                const rawDelay = Math.min(
                   reconnectConfig.current.initialDelay *
                     Math.pow(reconnectConfig.current.backoffFactor, reconnectAttemptsRef.current),
                   reconnectConfig.current.maxDelay,
                 );
+                const delay = Math.round(rawDelay * (0.5 + Math.random() * 0.5));
                 reconnectAttemptsRef.current++;
                 setIsReconnecting(true);
                 setReconnectStatusMessage(

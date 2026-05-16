@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from api.routes._authz import assert_session_access
 from api.routes._session_state import (
     get_active_pipeline_metadata,
+    register_websocket,
     unregister_websocket,
 )
 from core.auth import User, decode_token
@@ -160,6 +161,14 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         await websocket.send_json({"type": "ERROR", "message": e.detail})
         await websocket.close(code=4003)
         return
+
+    # C-C-1: register in the in-process WS connection map so that pipeline-
+    # local broadcasts (the non-Redis-worker path, used in single-container
+    # dev deployments) actually reach this socket. Previously the handler
+    # only subscribed to Redis pub/sub; broadcast_update against the local
+    # map silently dropped messages and the unregister call at function-end
+    # was a no-op.
+    register_websocket(session_id, websocket)
 
     # ── 4. Subscribe to Redis Updates for this session ───────────────────────
     idle_timeout = IDLE_TIMEOUT  # 5 minutes

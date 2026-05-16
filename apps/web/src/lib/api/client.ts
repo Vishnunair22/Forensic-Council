@@ -298,8 +298,17 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
 }
 
 export function createLiveSocket(sessionId: string): { ws: WebSocket; connected: Promise<void> } {
-  const token = getAuthToken();
   const wsBase = getWSBase();  // Call function, not use constant
+  // C-H-4: prefer the httpOnly access_token cookie which the backend
+  // already accepts (_websocket.py:60-64). Only fall back to embedding
+  // the bearer in the Sec-WebSocket-Protocol when no cookie is present
+  // (true cross-origin clients, etc.). Subprotocol headers are visible
+  // to every intermediary and are written to Caddy's access log; this
+  // path leaks the JWT every WS open.
+  const hasAuthCookie =
+    typeof document !== "undefined" &&
+    /(?:^|;\s*)(?:access_token|fc_session|sessionid)=/.test(document.cookie);
+  const token = hasAuthCookie ? null : getAuthToken();
   const protocols = token ? ["forensic-v1", `token.${token}`] : ["forensic-v1"];
   const ws = new WebSocket(
     `${wsBase}/api/v1/sessions/${encodeURIComponent(sessionId)}/live`,
