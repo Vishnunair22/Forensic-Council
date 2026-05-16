@@ -14,6 +14,37 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 
 ---
 
+### 2026-05-17: Gitignore Hardening
+
+**Status:** Complete
+
+### What Changed
+- Tightened `.gitignore` to keep local artifacts, caches, generated evidence/report outputs, model weights, frontend build output, local tool state, temp directories, logs, OS files, and local env files out of Git.
+- Preserved committed source files, fixture images, lockfiles, `.env.example`, `.env.local.example`, and storage `.gitkeep` scaffolding.
+- Verified broad root artifact rules do not hide tracked app scaffolding such as `apps/api/reports/.gitkeep`.
+
+### Files Touched
+- `.gitignore`
+- `PROJECT_HANDOFF.md`
+
+### What Works
+- `git ls-files -ci --exclude-standard` returns no tracked files ignored by the hardened rules.
+- `git check-ignore -v` confirms representative artifacts are ignored and tracked scaffolding remains visible.
+- `git diff --check` passes.
+- `python scripts/check_docs.py` passes when run with a Windows-safe PATH that excludes broken WSL `bash.exe`.
+
+### Commands Failed
+- None yet.
+
+### Still Broken / Risks
+- `git status --short --ignored` reports permission warnings while scanning `apps/api/.pytest_cache/` and `apps/api/.pytest_tmp_run/`; both directories are ignored local cache/temp state and not tracked.
+- This is an ignore-rule and handoff-only change.
+
+### Next Action
+- Commit and push the gitignore hardening.
+
+---
+
 ### 2026-05-17: Stable Baseline Guardrails
 
 **Status:** Complete

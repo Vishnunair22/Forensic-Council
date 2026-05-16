@@ -4,6 +4,20 @@
 .env.production
 .env.staging
 .env.*.local
+.env.development
+.env.test
+.env.production.local
+.env.staging.local
+apps/web/.env
+apps/web/.env.local
+apps/web/.env.development
+apps/web/.env.production
+apps/web/.env.*.local
+apps/api/.env
+apps/api/.env.local
+apps/api/.env.*
+!.env.example
+!.env.local.example
 *.key
 *.pem
 *.p12
@@ -18,6 +32,10 @@
 *_report.json
 *_report.txt
 *_scan.txt
+*.sarif
+*.har
+*.pcap
+*.pcapng
 tracked_files.txt
 test_gemini_body.json
 infra/secrets/
@@ -42,6 +60,10 @@ venv/
 .ruff_cache/
 .pyright/
 .hypothesis/
+.tox/
+.nox/
+.dmypy.json
+.pyre/
 htmlcov/
 .coverage
 .coverage.*
@@ -57,8 +79,12 @@ node_modules/
 apps/web/out/
 apps/web/.npm
 apps/web/.cache
+apps/web/.turbo/
+apps/web/.vercel/
+apps/web/.next/
 .cache/
 .turbo/
+.vercel/
 .nyc_output/
 .eslintcache
 apps/web/coverage/
@@ -84,8 +110,16 @@ bun.lockb
 !/apps/api/storage/keys/.gitkeep
 /apps/api/reports/*
 !/apps/api/reports/.gitkeep
+apps/api/storage/tmp/
+apps/api/storage/uploads/
+apps/api/storage/reports/
+apps/api/storage/*.json
+apps/api/storage/*.db
+apps/api/storage/*.sqlite*
 infra/caddy_data/
 infra/caddy_config/
+infra/data/
+infra/tmp/
 
 
 # ── ML model caches (large binary files) ─────────────────────────────────────
@@ -104,6 +138,17 @@ apps/api/.pyright/
 *.onnx
 *.bin
 *.safetensors
+*.ckpt
+*.h5
+*.hdf5
+*.gguf
+*.ggml
+*.tflite
+*.pb
+*.pkl
+*.joblib
+*.npy
+*.npz
 apps/api/cache/**/*.bin
 apps/api/storage/**/*.bin
 
@@ -111,6 +156,12 @@ apps/api/storage/**/*.bin
 # ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 logs/
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 
 # ── OS artefacts ─────────────────────────────────────────────────────────────
@@ -118,12 +169,19 @@ logs/
 Thumbs.db
 desktop.ini
 nul
+ehthumbs.db
+$RECYCLE.BIN/
+.Spotlight-V100/
+.Trashes/
 
 
 # ── Pytest shard / temp dirs (prevent root pollution) ───────────────────────
 pytest-cache-files-*
 .pytest_tmp/
+.pytest_tmp_run/
 tmp_*
+temp/
+tmp/
 apps/api/tmp*/
 apps/api/tests/tmp/
 apps/api/baseline_results.txt
@@ -135,6 +193,15 @@ apps/api/baseline_results.txt
 **/tests/fixtures/*.mp4
 **/tests/fixtures/*.wav
 **/tests/fixtures/*.avi
+**/tests/fixtures/*.mov
+**/tests/fixtures/*.mkv
+**/tests/fixtures/*.flac
+**/tests/fixtures/*.mp3
+**/tests/fixtures/*.zip
+**/tests/fixtures/*.7z
+**/tests/fixtures/*.tar
+**/tests/fixtures/*.tar.gz
+**/tests/fixtures/generated/
 
 
 # ── IDEs, Editors & Tooling ──────────────────────────────────────────────────
@@ -154,10 +221,20 @@ apps/api/baseline_results.txt
 *.sublime-project
 *.sublime-workspace
 .planning/
+.claude/
+.cursor/
 .agent/
+.codex/
+.continue/
+.aider*
+.roo/
+.windsurf/
+.mcp/
 .uv-cache/
 .uv_cache/
 .mcp.json
+.opencode.json
+CLAUDE.md
 MASTER_FIX_*.md
 .ipynb_checkpoints/
 .code-review-graph/
@@ -187,6 +264,13 @@ test_*.ps1
 !/apps/api/scratch/.gitkeep
 /apps/web/public/temp/*
 !/apps/web/public/temp/.gitkeep
+/artifacts/
+/coverage-artifacts/
+/test-artifacts/
+/playwright-artifacts/
+/reports/
+/exports/
+/downloads/
 
 
 # ── CI artifacts — generated files, never committed ──────────────────────────
