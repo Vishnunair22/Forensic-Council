@@ -37,6 +37,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from api.routes.investigation import (
+    ALLOWED_MIME_TYPES,
+    MAX_FILE_SIZE,
+    _append_chunk,
+    _detect_mime_from_head,
+)
 from core.auth import get_current_user
 from core.config import get_settings
 from core.persistence.redis_client import get_redis_client
@@ -51,6 +57,20 @@ _CASE_META_PREFIX = "case_meta:"
 _CASE_ARTIFACTS_PREFIX = "case_artifacts:"
 _CASE_TTL = 60 * 60 * 24 * 7  # 7 days
 
+# B-C-3: track dispatched case tasks so the graceful-shutdown sweep in
+# main.py and `terminate_session` can observe them, and to prevent the
+# garbage collector from cancelling an unrooted asyncio.create_task.
+_dispatched_case_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _evidence_storage_dir() -> Path:
+    """B-C-2: resolve evidence storage from the canonical setting
+    (`evidence_storage_path`) rather than a non-existent `evidence_dir`
+    attribute. Returns an absolute path so workers running in any CWD
+    locate files reliably."""
+    settings = get_settings()
+    return Path(settings.evidence_storage_path).resolve()
+
 
 # ---------------------------------------------------------------------------
 # Models
@@ -64,6 +84,9 @@ class CaseArtifact(BaseModel):
     file_size_bytes: int
     status: str = "pending"  # pending | running | completed | failed
     added_at: str
+    # B-C-2: persist the absolute storage path used at upload so analyze_case
+    # can replay it without re-deriving from a hard-coded relative directory.
+    storage_path: str | None = None
 
 
 class CaseRecord(BaseModel):
@@ -148,27 +171,60 @@ async def add_artifact(
     if len(case.artifacts) >= 10:
         raise HTTPException(status_code=422, detail="Case already has 10 artifacts (maximum)")
 
-    # Save the uploaded file
-    settings = get_settings()
-    storage_dir = Path(settings.evidence_dir) if hasattr(settings, "evidence_dir") else Path("storage/evidence")
+    # B-C-1: MIME sniff + extension/size validation BEFORE writing to disk —
+    # mirrors the same guarantees as /investigate.
+    head = await file.read(2048)
+    await file.seek(0)
+    actual_mime = await _detect_mime_from_head(head)
+    if actual_mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type '{actual_mime}' is not allowed.")
+    if file.size and file.size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File size exceeds limit.")
+
+    # B-C-2: resolve absolute storage directory from settings.
+    storage_dir = _evidence_storage_dir()
     storage_dir.mkdir(parents=True, exist_ok=True)
 
     artifact_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
     safe_name = Path(file.filename or "upload").name
     ext = Path(safe_name).suffix.lower() or ".bin"
-    dest = storage_dir / f"{session_id}{ext}"
+    dest = (storage_dir / f"{session_id}{ext}").resolve()
 
-    contents = await file.read()
-    dest.write_bytes(contents)
+    # B-C-1: stream chunked to disk via the same `_append_chunk` helper used
+    # by /investigate. Enforces MAX_FILE_SIZE during the write so an oversize
+    # upload cannot exhaust memory or disk before the size check.
+    dest.write_bytes(b"")
+    total_size = 0
+    try:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > MAX_FILE_SIZE:
+                dest.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="File size exceeds limit.")
+            await asyncio.to_thread(_append_chunk, dest, chunk)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        dest.unlink(missing_ok=True)
+        logger.error("Failed to persist artifact chunk", case_id=case_id, error=str(exc))
+        raise HTTPException(status_code=500, detail="Failed to store evidence") from exc
+
+    if total_size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="File is empty.")
 
     artifact = CaseArtifact(
         artifact_id=artifact_id,
         session_id=session_id,
         original_filename=safe_name,
-        mime_type=file.content_type or "application/octet-stream",
-        file_size_bytes=len(contents),
+        mime_type=actual_mime,
+        file_size_bytes=total_size,
         added_at=datetime.now(UTC).isoformat(),
+        storage_path=str(dest),
     )
 
     case.artifacts.append(artifact)
@@ -179,7 +235,7 @@ async def add_artifact(
         case_id=case_id,
         artifact_id=artifact_id,
         filename=safe_name,
-        size_bytes=len(contents),
+        size_bytes=total_size,
     )
 
     return {
@@ -191,7 +247,7 @@ async def add_artifact(
     }
 
 
-@cases_router.post("/{case_id}/analyze")
+@cases_router.post("/{case_id}/analyze", status_code=202)
 async def analyze_case(
     case_id: str,
     current_user: Any = Depends(get_current_user),
@@ -200,7 +256,7 @@ async def analyze_case(
     Start forensic analysis for all pending artifacts in the case.
 
     Dispatches each artifact to the existing investigation pipeline.
-    Returns immediately — poll GET /cases/{case_id} for progress.
+    Returns 202 Accepted immediately — poll GET /cases/{case_id} for progress.
     """
     redis = await get_redis_client()
 
@@ -217,34 +273,74 @@ async def analyze_case(
     if not pending:
         raise HTTPException(status_code=409, detail="No pending artifacts to analyze")
 
-    # Import investigation pipeline lazily
+    # Import lazily to keep module import cheap and avoid circular deps.
+    from api.routes._session_state import (
+        set_active_pipeline,
+        set_active_pipeline_metadata,
+        set_active_task,
+    )
     from orchestration.investigation_runner import run_investigation_task
     from orchestration.pipeline import ForensicCouncilPipeline
 
     settings = get_settings()
-    dispatched = []
+    investigator_id = str(current_user.user_id)
+    dispatched: list[str] = []
 
     for artifact in pending:
         try:
-            pipeline = ForensicCouncilPipeline(config=settings)
+            # B-C-2: prefer the persisted storage_path; fall back to deriving
+            # from the configured evidence directory (covers legacy artifacts
+            # uploaded before storage_path was recorded).
+            if artifact.storage_path:
+                evidence_path = Path(artifact.storage_path)
+            else:
+                ext = Path(artifact.original_filename).suffix.lower() or ".bin"
+                evidence_path = _evidence_storage_dir() / f"{artifact.session_id}{ext}"
 
-            # Update artifact status to running
+            if not evidence_path.exists():
+                logger.error(
+                    "Artifact evidence file missing on disk",
+                    case_id=case_id,
+                    artifact_id=artifact.artifact_id,
+                    expected_path=str(evidence_path),
+                )
+                artifact.status = "failed"
+                continue
+
+            pipeline = ForensicCouncilPipeline(config=settings)
             artifact.status = "running"
 
-            # Dispatch pipeline as background task
-            asyncio.create_task(
+            # B-C-3: register the pipeline + minimal metadata before dispatch
+            # so HITL/terminate endpoints + the graceful-shutdown sweep see
+            # this session. Then root the task in a module-level set so the
+            # GC cannot collect it mid-run.
+            set_active_pipeline(artifact.session_id, pipeline)
+            await set_active_pipeline_metadata(
+                artifact.session_id,
+                {
+                    "session_id": artifact.session_id,
+                    "case_id": case_id,
+                    "investigator_id": investigator_id,
+                    "status": "running",
+                    "source": "case",
+                    "started_at": datetime.now(UTC).isoformat(),
+                },
+            )
+
+            task = asyncio.create_task(
                 run_investigation_task(
                     session_id=artifact.session_id,
                     pipeline=pipeline,
-                    evidence_file_path=str(
-                        Path("storage/evidence") / f"{artifact.session_id}{Path(artifact.original_filename).suffix}"
-                    ),
+                    evidence_file_path=str(evidence_path),
                     case_id=case_id,
-                    investigator_id=str(current_user.user_id),
+                    investigator_id=investigator_id,
                     original_filename=artifact.original_filename,
                 ),
                 name=f"case:{case_id}:artifact:{artifact.artifact_id}",
             )
+            set_active_task(artifact.session_id, task)
+            _dispatched_case_tasks.add(task)
+            task.add_done_callback(_dispatched_case_tasks.discard)
             dispatched.append(artifact.artifact_id)
 
         except Exception as e:
@@ -299,13 +395,19 @@ async def get_case(
     all_probs = []
     any_running = False
     any_failed = False
+    # B-M-3: track whether the in-memory case record actually changed so we
+    # only write back to Redis when there's a state delta. Previously every
+    # GET refreshed the TTL and rewrote the value.
+    dirty = False
 
     for artifact in case.artifacts:
         meta = await get_active_pipeline_metadata(artifact.session_id)
         if meta:
             session_status = meta.get("status", "running")
             if session_status == "completed":
-                artifact.status = "completed"
+                if artifact.status != "completed":
+                    artifact.status = "completed"
+                    dirty = True
                 verdict = meta.get("verdict") or "UNKNOWN"
                 prob = float(meta.get("manipulation_probability", 0.0))
                 all_verdicts.append(verdict)
@@ -320,7 +422,9 @@ async def get_case(
                     "result_url": f"/api/v1/sessions/{artifact.session_id}/report",
                 })
             elif session_status == "error":
-                artifact.status = "failed"
+                if artifact.status != "failed":
+                    artifact.status = "failed"
+                    dirty = True
                 any_failed = True
                 artifact_results.append({
                     "artifact_id": artifact.artifact_id,
@@ -360,18 +464,29 @@ async def get_case(
         combined_prob = round(max(all_probs), 4) if all_probs else None
 
     # Update case status
-    if not any_running and not any_failed:
-        case.status = "completed"
-        case.combined_verdict = combined_verdict
-        case.manipulation_probability = combined_prob
-        case.completed_at = datetime.now(UTC).isoformat()
+    new_status = case.status
+    if not any_running and not any_failed and all_verdicts:
+        new_status = "completed"
+        if case.status != new_status:
+            case.status = new_status
+            case.combined_verdict = combined_verdict
+            case.manipulation_probability = combined_prob
+            case.completed_at = datetime.now(UTC).isoformat()
+            dirty = True
     elif not any_running and any_failed:
-        case.status = "partial_failure"
-    else:
-        case.status = "analyzing"
+        new_status = "partial_failure"
+        if case.status != new_status:
+            case.status = new_status
+            dirty = True
+    elif any_running:
+        new_status = "analyzing"
+        if case.status != new_status:
+            case.status = new_status
+            dirty = True
 
-    # Persist updated case
-    await redis.set(meta_key, case.model_dump_json(), ex=_CASE_TTL)
+    # B-M-3: only persist when state actually changed.
+    if dirty:
+        await redis.set(meta_key, case.model_dump_json(), ex=_CASE_TTL)
 
     return {
         "case_id": case_id,

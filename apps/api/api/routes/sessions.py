@@ -5,6 +5,7 @@ Sessions Routes
 Routes for managing investigation sessions.
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
@@ -58,10 +59,22 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
 
     try:
         redis = await get_redis_client()
-        keys = await redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*")
+        # B-H-1: SCAN instead of KEYS — non-blocking iteration.
+        keys: list[str] = []
+        async for _k in redis.scan_iter(
+            match=f"{SESSION_METADATA_KEY_PREFIX}*",
+            count=200,
+        ):
+            keys.append(_k if isinstance(_k, str) else _k.decode())
     except Exception as e:
-        logger.warning("Redis unavailable in list_sessions — returning empty list", error=str(e))
-        return []
+        # B-M-6: signal degraded backend distinctly from the legitimate
+        # empty-state. Returning [] previously made clients believe the
+        # user had zero sessions when Redis was down.
+        logger.warning("Redis unavailable in list_sessions", error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail="Session listing is temporarily unavailable. Please retry.",
+        ) from e
 
     sessions = []
     for key in keys:
@@ -115,6 +128,35 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
             logger.debug("Pipeline abort hook failed", session_id=session_id, exc_info=True)
         remove_active_pipeline(session_id)
 
+    # B-H-8: emit the termination broadcast FIRST while the websocket
+    # connections are still alive and the broadcast topic is still mapped
+    # in Redis. Previously this fired after the WS close + metadata delete,
+    # so subscribers saw a bare disconnect with no reason.
+    try:
+        await broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="ERROR",
+                session_id=session_id,
+                message="Investigation terminated by user.",
+                data={"status": "terminated"},
+            ),
+        )
+    except Exception as exc:
+        logger.debug("Failed to broadcast termination", session_id=session_id, error=str(exc))
+
+    # Give subscribers a moment to receive the broadcast before tearing
+    # down the websocket. 50 ms is the smallest delay that empirically
+    # gives in-process subscribers time to flush without delaying response.
+    await asyncio.sleep(0.05)
+
+    for ws in get_session_websockets(session_id):
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    clear_session_websockets(session_id)
+
     redis = await get_redis_client()
     await redis.delete(
         f"forensic:session:metadata:{session_id}",
@@ -137,26 +179,6 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
             await pipe.execute()
     except Exception as exc:
         logger.debug("Failed to prune terminated session from queue", session_id=session_id, error=str(exc))
-
-    for ws in get_session_websockets(session_id):
-        try:
-            await ws.close()
-        except Exception:
-            pass
-    clear_session_websockets(session_id)
-
-    try:
-        await broadcast_update(
-            session_id,
-            BriefUpdate(
-                type="ERROR",
-                session_id=session_id,
-                message="Investigation terminated by user.",
-                data={"status": "terminated"},
-            ),
-        )
-    except Exception as exc:
-        logger.debug("Failed to broadcast termination", session_id=session_id, error=str(exc))
 
     try:
         persistence = await get_session_persistence()

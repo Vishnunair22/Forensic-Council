@@ -12,6 +12,7 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -85,6 +86,10 @@ _ALLOWED_EXTENSIONS = frozenset(
 )
 
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-\.]{1,128}$")
+
+# B-H-3: hold strong references to deferred-cleanup tasks so the GC
+# can't collect them mid-sleep and silently skip the file unlink.
+_deferred_cleanup_tasks: set[asyncio.Task[Any]] = set()
 
 
 async def _detect_mime_from_head(head: bytes) -> str:
@@ -202,7 +207,10 @@ async def _supersede_prior_investigations(
         task_hash = "forensic:investigation:tasks"
         queue_key = "forensic:investigation:queue"
 
-        keys = await redis.keys(f"{metadata_prefix}*")
+        # B-H-1: SCAN instead of KEYS — runs on every upload, must not block.
+        keys: list[Any] = []
+        async for _k in redis.scan_iter(match=f"{metadata_prefix}*", count=200):
+            keys.append(_k)
         superseded: list[str] = []
         for key in keys:
             key_text = key.decode() if isinstance(key, bytes) else str(key)
@@ -299,8 +307,16 @@ async def start_investigation(
     current_user: User = Depends(get_current_user),  # noqa: B008
 ):
     """Start a new forensic investigation by uploading evidence."""
-    _validate_safe_id(case_id, "case_id")
-    _validate_safe_id(investigator_id, "investigator_id")
+    # B-H-7: route both fields through InvestigationRequest's stricter
+    # validators — same as the typed Pydantic body would. case_id is
+    # required to start with CASE- (api/schemas.py:_validate_case_id);
+    # the previous hand-rolled _validate_safe_id call bypassed that rule.
+    from api.schemas import InvestigationRequest
+
+    try:
+        InvestigationRequest(case_id=case_id, investigator_id=investigator_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # Read a small chunk of bytes in-memory to detect the true MIME type before writing to disk
     head = await file.read(2048)
@@ -629,10 +645,11 @@ async def start_investigation(
         if not pipeline_started:
             tmp_path.unlink(missing_ok=True)
         elif tmp_path.exists():
-            import asyncio as _asyncio
-
+            # B-H-3: track deferred cleanup tasks in a module-level set so
+            # they aren't garbage-collected mid-sleep (which would skip the
+            # unlink) and so graceful shutdown can drain pending cleanups.
             async def _deferred_cleanup(p=tmp_path):
-                await _asyncio.sleep(600)
+                await asyncio.sleep(600)
                 try:
                     p.unlink(missing_ok=True)
                 except Exception as _cleanup_err:
@@ -640,7 +657,9 @@ async def start_investigation(
                         "Deferred tmp file cleanup failed", path=str(p), error=str(_cleanup_err)
                     )
 
-            _asyncio.create_task(_deferred_cleanup())
+            _task = asyncio.create_task(_deferred_cleanup())
+            _deferred_cleanup_tasks.add(_task)
+            _task.add_done_callback(_deferred_cleanup_tasks.discard)
         if settings.app_env != "production":
             raise HTTPException(status_code=500, detail=f"Failed to start investigation: {type(e).__name__}") from e
         raise HTTPException(

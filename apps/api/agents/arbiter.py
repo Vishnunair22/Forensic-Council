@@ -8,6 +8,7 @@ tribunal escalation, and generates court-admissible reports.
 
 from __future__ import annotations
 
+import asyncio
 import uuid as _uuid
 from typing import Any
 from uuid import UUID
@@ -547,19 +548,41 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
                     challenge_entry["challenge_attempts"] = 0
                     revised_findings = []
+                    # B-C-4: a wedged agent ReAct loop must not stall the
+                    # arbiter indefinitely. Cap each reinvocation at a quarter
+                    # of the investigation budget so the deliberation can
+                    # still finalise (with an unresolved-challenge entry).
+                    challenge_timeout = max(
+                        15.0,
+                        float(self.config.investigation_timeout) / 4.0,
+                    )
                     for attempt in range(MAX_CHALLENGE_ATTEMPTS):
                         challenge_entry["challenge_attempts"] = attempt + 1
-                        challenge_result = await self.agent_factory.reinvoke_agent(
-                            agent_id=challenged_id,
-                            session_id=self.session_id,
-                            challenge_context={
-                                "challenge_id": str(_uuid.uuid4()),
-                                "attempt_number": attempt + 1,
-                                "max_attempts": MAX_CHALLENGE_ATTEMPTS,
-                                "contradiction": contradicting,
-                                "arbiter_session": str(self.session_id),
-                            },
-                        )
+                        try:
+                            challenge_result = await asyncio.wait_for(
+                                self.agent_factory.reinvoke_agent(
+                                    agent_id=challenged_id,
+                                    session_id=self.session_id,
+                                    challenge_context={
+                                        "challenge_id": str(_uuid.uuid4()),
+                                        "attempt_number": attempt + 1,
+                                        "max_attempts": MAX_CHALLENGE_ATTEMPTS,
+                                        "contradiction": contradicting,
+                                        "arbiter_session": str(self.session_id),
+                                    },
+                                ),
+                                timeout=challenge_timeout,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                "Challenge attempt timed out",
+                                challenged_agent=challenged_id,
+                                attempt=attempt + 1,
+                                timeout_s=challenge_timeout,
+                                session_id=str(self.session_id),
+                            )
+                            challenge_entry["challenge_timed_out"] = True
+                            continue
                         revised_findings = challenge_result.get("findings", [])
                         if revised_findings:
                             break

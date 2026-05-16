@@ -5,6 +5,8 @@ HITL Routes
 Routes for human-in-the-loop decision handling with atomic processing.
 """
 
+import json
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -72,18 +74,77 @@ async def submit_decision(
             ) from e
         logger.warning("Redis idempotency check failed, proceeding anyway", error=str(e))
 
-    # Look up the active pipeline for this session
-    pipeline = get_active_pipeline(decision.session_id)
-    if pipeline is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No active investigation found for session {decision.session_id}",
-        )
-
     # Verify the user has access to this session.
     from api.routes._authz import assert_session_access
 
     await assert_session_access(decision.session_id, current_user)
+
+    # Look up the active pipeline for this session
+    pipeline = get_active_pipeline(decision.session_id)
+
+    # B-H-9: in worker-mode deployments the pipeline runs in a separate
+    # process, so _active_pipelines is always empty on this API replica.
+    # Mirror the resume_investigation pattern: publish the decision over
+    # Redis pub/sub for the worker, persist an idempotency-friendly key,
+    # and return 202 Accepted. The worker subscribes to
+    # `forensic:notify_decision` and applies the decision against its own
+    # in-memory pipeline.
+    if pipeline is None:
+        settings = get_settings()
+        if settings.use_redis_worker and redis is not None:
+            try:
+                await redis.publish(
+                    "forensic:notify_decision",
+                    json.dumps(
+                        {
+                            "session_id": decision.session_id,
+                            "checkpoint_id": decision.checkpoint_id,
+                            "agent_id": decision.agent_id,
+                            "decision": decision.decision,
+                            "investigator_id": current_user.user_id,
+                            "note": decision.note or "",
+                            "override_finding": decision.override_finding,
+                        }
+                    ),
+                )
+                # Idempotency token so a retry from the client doesn't
+                # re-publish on the second hit.
+                try:
+                    await redis.set(cache_key, "1", ex=3600)
+                except Exception as set_err:
+                    logger.warning(
+                        "Failed to set HITL idempotency key after publish",
+                        checkpoint_id=decision.checkpoint_id,
+                        error=str(set_err),
+                    )
+                logger.info(
+                    "HITL decision dispatched via worker pub/sub",
+                    checkpoint_id=decision.checkpoint_id,
+                    decision=decision.decision,
+                    investigator_id=current_user.user_id,
+                )
+                return {
+                    "status": "accepted",
+                    "message": f"Decision {decision.decision} dispatched to worker",
+                    "session_id": decision.session_id,
+                    "checkpoint_id": decision.checkpoint_id,
+                    "dispatched_at": datetime.now(UTC).isoformat(),
+                }
+            except Exception as exc:
+                logger.error(
+                    "Worker pub/sub dispatch failed for HITL decision",
+                    error=str(exc),
+                    checkpoint_id=decision.checkpoint_id,
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Decision worker is temporarily unavailable. Please retry.",
+                ) from exc
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active investigation found for session {decision.session_id}",
+        )
 
     # Build the HumanDecision from the request
     try:

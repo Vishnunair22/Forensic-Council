@@ -318,7 +318,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         _redis = await get_redis_client()
         _interrupted_count = 0
-        for _key in await _redis.keys(f"{SESSION_METADATA_KEY_PREFIX}*"):
+        # B-H-1: SCAN instead of KEYS — KEYS blocks the Redis main thread
+        # and at startup with a large session set will stall the server.
+        async for _key in _redis.scan_iter(
+            match=f"{SESSION_METADATA_KEY_PREFIX}*",
+            count=200,
+        ):
             try:
                 _raw = await _redis.get(_key)
                 if not _raw:
