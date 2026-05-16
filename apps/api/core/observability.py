@@ -44,17 +44,27 @@ def setup_observability(app, settings) -> None:
     No-ops gracefully when:
     - ``opentelemetry-sdk`` / ``opentelemetry-exporter-otlp-proto-grpc``
       are not installed (development mode).
-    - ``APP_ENV`` is not ``production``.
+    - Neither ``OTEL_EXPORTER_OTLP_ENDPOINT`` nor ``OTEL_ENABLED=true`` is set
+      and the deployment is not production.
+
+    O-H-5: tracing now initializes in any environment where the operator
+    has explicitly enabled it (via the OTel endpoint env var or the
+    ``OTEL_ENABLED`` flag). Production still initializes by default. Dev,
+    staging, and integration test envs gain trace visibility once their
+    compose/k8s sets the endpoint — exactly the environments where
+    pre-prod regressions surface.
     """
     if not OTEL_AVAILABLE:
         return
 
-    if settings.app_env != "production":
-        return
-
     import os
 
-    endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318")
+    explicit_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+    explicit_enabled = os.environ.get("OTEL_ENABLED", "").lower() in ("1", "true", "yes")
+    if settings.app_env != "production" and not explicit_endpoint and not explicit_enabled:
+        return
+
+    endpoint = explicit_endpoint or "http://jaeger:4318"
     service_name = os.environ.get("OTEL_SERVICE_NAME", "forensic-council-api")
 
     resource = Resource.create({"service.name": service_name})

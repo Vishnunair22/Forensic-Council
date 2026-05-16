@@ -133,6 +133,22 @@ async def main() -> None:
             _active_pipelines[session_str] = pipeline
             register_pipeline(session_id, pipeline)
 
+            # O-C-1 (B-H-10): track active sessions in a Redis SET so the
+            # API process can report the gauge correctly in worker-mode
+            # deployments. Previously the in-process _active_pipelines dict
+            # was always empty on the API side and the gauge reported 0.
+            try:
+                from core.persistence.redis_client import get_redis_client as _get_rc
+
+                _rc = await _get_rc()
+                await _rc.client.sadd("metrics:active_sessions", session_str)
+            except Exception as _reg_err:
+                logger.debug(
+                    "Failed to register session in metrics:active_sessions",
+                    session_id=session_str,
+                    error=str(_reg_err),
+                )
+
             report = await pipeline.run_investigation(
                 evidence_file_path=evidence_file_path,
                 case_id=case_id,
@@ -175,6 +191,19 @@ async def main() -> None:
             _active_pipelines.pop(session_str, None)
             unregister_pipeline(session_id)
             clear_session_websockets(session_str)
+            # O-C-1 (B-H-10): remove from the Redis-backed active-sessions
+            # set so the gauge reflects only currently-running pipelines.
+            try:
+                from core.persistence.redis_client import get_redis_client as _get_rc
+
+                _rc = await _get_rc()
+                await _rc.client.srem("metrics:active_sessions", session_str)
+            except Exception as _unreg_err:
+                logger.debug(
+                    "Failed to unregister session from metrics:active_sessions",
+                    session_id=session_str,
+                    error=str(_unreg_err),
+                )
 
     worker.set_handler(investigation_handler)
 

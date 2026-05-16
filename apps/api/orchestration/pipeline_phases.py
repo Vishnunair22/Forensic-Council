@@ -306,8 +306,15 @@ async def run_agents_concurrent(
 
     _tracer = get_tracer("forensic-council.pipeline")
 
-    with _tracer.start_as_current_span("pipeline.run_agents_concurrent") as span:
-        span.set_attribute("session_id", str(session_id))
+    # O-C-3: previously this span closed immediately because the function
+    # body was unindented from the `with` block. Use start_span +
+    # try/finally so the entire concurrent-agents phase is captured under
+    # one span without bulk-reindenting 600 lines of body.
+    _pac_span = _tracer.start_span("pipeline.run_agents_concurrent")
+    try:
+        _pac_span.set_attribute("session_id", str(session_id))
+    except Exception:
+        pass
 
     registry = get_agent_registry()
 
@@ -922,6 +929,12 @@ async def run_agents_concurrent(
     for aid in registry.get_all_agent_ids():
         if pipeline.inter_agent_bus is not None:
             pipeline.inter_agent_bus.unregister_agent(aid)
+
+    # O-C-3: close the span opened at function entry.
+    try:
+        _pac_span.end()
+    except Exception:
+        pass
 
     return results
 

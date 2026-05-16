@@ -827,10 +827,20 @@ async def metrics_middleware(request: Request, call_next):
 
     start_time = time.time()
 
-    # Update active sessions count
-    from api.routes.investigation import get_active_pipelines_count
+    # O-C-1 (B-H-10): read active sessions from the Redis-backed SET that
+    # the worker maintains. The previous in-process counter was always 0
+    # in worker-mode deployments (pipelines run in a separate process).
+    try:
+        from core.persistence.redis_client import get_redis_client as _get_rc
 
-    set_active_sessions(get_active_pipelines_count())
+        _rc = await _get_rc()
+        _count = int(await _rc.client.scard("metrics:active_sessions") or 0)
+    except Exception:
+        # Fallback to in-process count if Redis is unavailable.
+        from api.routes.investigation import get_active_pipelines_count
+
+        _count = get_active_pipelines_count()
+    set_active_sessions(_count)
 
     try:
         response = await call_next(request)

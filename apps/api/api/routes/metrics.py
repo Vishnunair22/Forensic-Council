@@ -218,7 +218,13 @@ def increment_rate_limit_redis_bypasses() -> None:
 
 
 def record_pipeline_phase_duration(phase: str, duration_seconds: float) -> None:
-    """Record pipeline phase duration for observability."""
+    """Record pipeline phase duration for observability.
+
+    O-C-2: previously only the running sum was written to Redis; the snapshot
+    read only the in-process `_local` count/sum, so phase averages reported
+    by /prometheus were always 0 in worker-mode. Now we write both `_sum`
+    (ms) and `_count` to Redis so the API process can compute the average.
+    """
     phase_key_map = {
         "initial": ("phase_initial_sum", "phase_initial_count"),
         "hitl": ("phase_hitl_sum", "phase_hitl_count"),
@@ -232,8 +238,10 @@ def record_pipeline_phase_duration(phase: str, duration_seconds: float) -> None:
     sum_key, count_key = phase_key_map[phase]
     try:
         loop = asyncio.get_running_loop()
-        redis_key = f"metrics:pipeline_phase_seconds_{phase}"
-        loop.create_task(_redis_incr(redis_key, int(duration_seconds * 1000)))
+        redis_sum_key = f"metrics:pipeline_phase_seconds_{phase}_sum"
+        redis_count_key = f"metrics:pipeline_phase_seconds_{phase}_count"
+        loop.create_task(_redis_incr(redis_sum_key, int(duration_seconds * 1000)))
+        loop.create_task(_redis_incr(redis_count_key))
     except RuntimeError:
         _local[sum_key] = _local.get(sum_key, 0.0) + duration_seconds
         _local[count_key] = _local.get(count_key, 0) + 1
@@ -261,19 +269,30 @@ async def _snapshot() -> dict:
         _KEY_RATE_LIMIT_BYPASSES, "rate_limit_redis_bypasses"
     )
 
-    # Pipeline phase durations
-    phase_initial_avg = _local.get("phase_initial_sum", 0.0) / max(
-        _local.get("phase_initial_count", 0), 1
-    )
-    phase_hitl_avg = _local.get("phase_hitl_sum", 0.0) / max(_local.get("phase_hitl_count", 0), 1)
-    phase_deep_avg = _local.get("phase_deep_sum", 0.0) / max(_local.get("phase_deep_count", 0), 1)
-    phase_arbiter_avg = _local.get("phase_arbiter_sum", 0.0) / max(
-        _local.get("phase_arbiter_count", 0), 1
-    )
-    phase_enrich_avg = _local.get("phase_enrich_sum", 0.0) / max(
-        _local.get("phase_enrich_count", 0), 1
-    )
-    phase_sign_avg = _local.get("phase_sign_sum", 0.0) / max(_local.get("phase_sign_count", 0), 1)
+    # Pipeline phase durations. O-C-2: read from Redis sum+count keys
+    # written by the worker, falling back to in-process counters when
+    # Redis is unavailable.
+    async def _phase_avg(phase: str, local_sum_key: str, local_count_key: str) -> float:
+        sum_ms = await _redis_get_int(
+            f"metrics:pipeline_phase_seconds_{phase}_sum", local_sum_key
+        )
+        count = await _redis_get_int(
+            f"metrics:pipeline_phase_seconds_{phase}_count", local_count_key
+        )
+        if count > 0:
+            # Redis stores ms; local stores seconds. Normalise to seconds.
+            redis_local_units_seconds = (
+                sum_ms / 1000.0 if sum_ms else _local.get(local_sum_key, 0.0)
+            )
+            return redis_local_units_seconds / count
+        return 0.0
+
+    phase_initial_avg = await _phase_avg("initial", "phase_initial_sum", "phase_initial_count")
+    phase_hitl_avg = await _phase_avg("hitl", "phase_hitl_sum", "phase_hitl_count")
+    phase_deep_avg = await _phase_avg("deep", "phase_deep_sum", "phase_deep_count")
+    phase_arbiter_avg = await _phase_avg("arbiter", "phase_arbiter_sum", "phase_arbiter_count")
+    phase_enrich_avg = await _phase_avg("enrich", "phase_enrich_sum", "phase_enrich_count")
+    phase_sign_avg = await _phase_avg("sign", "phase_sign_sum", "phase_sign_count")
 
     avg_duration = duration_sum / duration_count if duration_count else 0.0
     error_rate = errors_total / requests_total if requests_total else 0.0
@@ -407,6 +426,23 @@ async def get_prometheus_metrics(current_user: User = Depends(require_admin)) ->
         f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="arbiter"}} {snap["phase_arbiter_avg"]:.3f}',
         f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="enrich"}} {snap["phase_enrich_avg"]:.3f}',
         f'forensic_pipeline_phase_seconds_avg{{app="forensic_council",phase="sign"}} {snap["phase_sign_avg"]:.3f}',
+        "",
+        # O-H-4: db_pool stats are tracked in _snapshot but were only
+        # exposed via the JSON endpoint. Exporting them as Prometheus
+        # gauges lets operators graph pool exhaustion before requests
+        # start failing with 503.
+        "# HELP forensic_db_pool_size Current database connection pool size",
+        "# TYPE forensic_db_pool_size gauge",
+        f'forensic_db_pool_size{{app="forensic_council"}} {snap.get("db_pool_size", 0)}',
+        "# HELP forensic_db_pool_in_use Active database connections",
+        "# TYPE forensic_db_pool_in_use gauge",
+        f'forensic_db_pool_in_use{{app="forensic_council"}} {snap.get("db_pool_in_use", 0)}',
+        "# HELP forensic_db_pool_available Idle database connections",
+        "# TYPE forensic_db_pool_available gauge",
+        f'forensic_db_pool_available{{app="forensic_council"}} {snap.get("db_pool_available", 0)}',
+        "# HELP forensic_db_pool_max Maximum database connection pool size",
+        "# TYPE forensic_db_pool_max gauge",
+        f'forensic_db_pool_max{{app="forensic_council"}} {snap.get("db_pool_max", 0)}',
     ]
     return "\n".join(lines) + "\n"
 
