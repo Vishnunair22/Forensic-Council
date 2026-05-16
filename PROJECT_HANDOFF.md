@@ -14,9 +14,38 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 
 ---
 
+### 2026-05-17: Stable Baseline Guardrails
+
+**Status:** Complete
+
+### What Changed
+- Reintroduced `.ai-rules.md` as a stricter multi-tool contributor guardrail file.
+- Documented the stable rollback baseline: `stable-2026-05-17` at commit `8909d3a3b248e3ef036cc50747dd8b51ef4282c1`.
+- Added explicit rules for protected forensic invariants, scope discipline, risky files, frontend/backend flow preservation, verification, handoff updates, and stable tagging.
+- Corrected the previous handoff context: Phase 14 documentation cleanup was committed and pushed as `8909d3a` with tag `stable-2026-05-17`.
+
+### Files Touched
+- `.ai-rules.md`
+- `PROJECT_HANDOFF.md`
+
+### What Works
+- `git diff --check` passes.
+- `python scripts/check_docs.py` passes when run with a Windows-safe PATH that excludes broken WSL `bash.exe`.
+
+### Commands Failed
+- None yet.
+
+### Still Broken / Risks
+- This is a docs-only guardrail update.
+
+### Next Action
+- Commit and push the guardrail update if the maintainer wants it shared across tools.
+
+---
+
 ### 2026-05-16: Phase 14 Documentation Audit Continuation
 
-**Status:** In progress
+**Status:** Complete
 
 ### What Changed
 - Continued `FULL_APP_AUDIT.md` Phase 14 from the root audit file.
@@ -27,6 +56,8 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 - Preserved the existing `apps/api/core/config.py` Phase 14 change wiring `MAX_WS_CONNECTIONS` into `Settings`.
 - Marked Phase 14 as `In progress` in `FULL_APP_AUDIT.md` with applied fixes and verification state.
 - Removed the tracked `.ai-rules.md` file and scrubbed contributor documentation of named assistant/tool references. Legitimate product terms for forensic synthetic-media detection and provider configuration remain.
+- Committed and pushed the final stable checkpoint to `origin/main`.
+- Created and pushed stable rollback tag `stable-2026-05-17`.
 
 ### Files Touched
 - `.env.example`
@@ -50,7 +81,9 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 
 ### What Works
 - `python -m py_compile apps/api/core/config.py` passes.
+- `python -m py_compile apps/api/core/config.py apps/api/core/llm_client.py` passes.
 - `git diff --check` passes.
+- `python scripts/check_docs.py` passes when run with a Windows-safe PATH that excludes broken WSL `bash.exe`.
 - Targeted stale-doc scans no longer find live docs instructing use of nonexistent custody verification/key-rotation routes, except where `CHAIN_OF_CUSTODY.md` explicitly states that the route does not exist.
 - Targeted scans for named assistant/tool references in tracked files pass.
 
@@ -58,12 +91,10 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 - `python scripts/check_docs.py` failed under this Windows/PowerShell environment, reporting shell syntax errors for every `.sh` file. Direct `bash -n scripts/dev.sh` shows Windows Subsystem for Linux has no installed distributions, so the checker is invoking unusable `C:\WINDOWS\system32\bash.exe`.
 
 ### Still Broken / Risks
-- Phase 14 is not complete and was not committed or pushed.
-- The worktree had pre-existing uncommitted Phase 14 edits in `.env.example`, `apps/api/core/config.py`, and `docs/API_CONTRACT.md`; these were preserved and corrected where needed.
-- A broader doc review is still needed for remaining route/config drift.
+- No known issue from the stable checkpoint. Old published Git history was not rewritten; the stable commit is the forward rollback target.
 
 ### Next Action
-- Rerun `python scripts/check_docs.py` in a Bash-enabled environment, finish the remaining Phase 14 docs audit, then commit/push only after verification is clean.
+- Use `stable-2026-05-17` as the revert target if a later change breaks the app.
 
 ---
 
