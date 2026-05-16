@@ -401,6 +401,20 @@ class KeyStore:
         """
         await self._load_keys_from_db()
 
+        # D-H-6 (S-M-7): in production, refuse to fall through to the
+        # deterministic-derivation path when the DB-backed keystore is
+        # unavailable. Single-SIGNING_KEY fallback collapses every agent's
+        # signature to one master secret — compromise of SIGNING_KEY then
+        # forges every historical and future custody signature, defeating
+        # the entire chain-of-custody.
+        if not self._db_available and self._settings.app_env == "production":
+            raise RuntimeError(
+                "KeyStore.initialize: PostgreSQL is unavailable in production. "
+                "Refusing to derive deterministic signing keys from SIGNING_KEY "
+                "alone — chain-of-custody integrity requires per-agent independent "
+                "keys persisted in the database. Resolve DB connectivity and retry."
+            )
+
         # Generate any missing keys
         for agent_id in self._AGENT_IDS:
             if agent_id not in self._keys:
@@ -411,12 +425,13 @@ class KeyStore:
                     await self._save_key_to_db(agent_id, key_pair)
                     logger.info("Generated independent key pair for agent", agent_id=agent_id)
                 else:
-                    # Deterministic fallback
+                    # Deterministic fallback — only reachable outside production.
                     seed = self._derive_seed(agent_id)
                     self._keys[agent_id] = AgentKeyPair.generate(agent_id, seed=seed)
-                    logger.info(
+                    logger.warning(
                         "Derived deterministic key pair (DB unavailable) — "
-                        "all agent keys share a single master SIGNING_KEY",
+                        "all agent keys share a single master SIGNING_KEY. "
+                        "NOT acceptable for production deployment.",
                         agent_id=agent_id,
                     )
 
@@ -434,9 +449,18 @@ class KeyStore:
             AgentKeyPair for the agent
         """
         if agent_id not in self._keys:
+            # D-H-6 (S-M-7): same hard gate as initialize() — refuse sync
+            # derivation in production so a call path that bypassed
+            # initialize() cannot quietly substitute deterministic keys.
+            if self._settings.app_env == "production":
+                raise RuntimeError(
+                    "KeyStore.get_or_create: refusing deterministic key derivation "
+                    "in production. initialize() must succeed against PostgreSQL "
+                    "before any signature is produced."
+                )
             seed = self._derive_seed(agent_id)
             self._keys[agent_id] = AgentKeyPair.generate(agent_id, seed=seed)
-            logger.info(
+            logger.warning(
                 "Derived deterministic key pair for agent (sync fallback) — "
                 "DB-backed keys not loaded; all agents share one master SIGNING_KEY",
                 agent_id=agent_id,

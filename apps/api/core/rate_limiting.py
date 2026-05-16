@@ -85,6 +85,24 @@ def _record_rate_limit_bypass() -> None:
         increment_rate_limit_redis_bypasses()
 
 
+_RATE_LIMIT_LUA = """
+-- D-C-3: atomic check-and-increment for per-user investigation rate limit.
+-- Without the Lua, concurrent requests could both observe current<MAX and
+-- both INCR, exceeding the limit by N-1 every burst.
+-- KEYS[1] = rate key, ARGV[1] = max, ARGV[2] = window seconds
+local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+if current >= tonumber(ARGV[1]) then
+    local ttl = redis.call('TTL', KEYS[1])
+    return {0, ttl}
+end
+local new_value = redis.call('INCR', KEYS[1])
+if tonumber(new_value) == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+return {1, redis.call('TTL', KEYS[1])}
+"""
+
+
 async def check_investigation_rate_limit(user_id: str, settings: Settings | None = None) -> None:
     """Limit investigation starts per user, failing open only for Redis failures."""
     del settings
@@ -93,17 +111,18 @@ async def check_investigation_rate_limit(user_id: str, settings: Settings | None
     try:
         redis = await get_redis_client()
         key = f"rate:investigation:{user_id}"
-        current = _decode_int(await redis.get(key))
-        if current >= MAX_INVESTIGATIONS_PER_USER:
-            try:
-                ttl = _decode_int(await redis.ttl(key), USER_RATE_WINDOW_SECS)
-                retry_after = ttl if ttl > 0 else USER_RATE_WINDOW_SECS
-            except Exception:
-                retry_after = USER_RATE_WINDOW_SECS
+        result = await redis.client.eval(
+            _RATE_LIMIT_LUA,
+            1,
+            key,
+            str(MAX_INVESTIGATIONS_PER_USER),
+            str(USER_RATE_WINDOW_SECS),
+        )
+        allowed = int(result[0]) if isinstance(result, (list, tuple)) else int(result)
+        ttl_val = int(result[1]) if isinstance(result, (list, tuple)) and len(result) > 1 else USER_RATE_WINDOW_SECS
+        if not allowed:
+            retry_after = ttl_val if ttl_val > 0 else USER_RATE_WINDOW_SECS
             raise _rate_limit_error(retry_after)
-        new_value = await redis.incr(key)
-        if _decode_int(new_value) == 1:
-            await redis.expire(key, USER_RATE_WINDOW_SECS)
         return
     except HTTPException:
         raise
@@ -140,19 +159,33 @@ async def check_daily_cost_quota(
     try:
         redis = await get_redis_client()
         key = f"quota:daily-cost:{user_id}"
-        current = _decode_float(await redis.get(key))
-        if current + ESTIMATED_INVESTIGATION_COST_USD > quota:
-            try:
-                ttl = _decode_int(await redis.ttl(key), COST_QUOTA_WINDOW_SECS)
-            except Exception:
-                ttl = COST_QUOTA_WINDOW_SECS
-            raise _quota_error(ttl if ttl > 0 else COST_QUOTA_WINDOW_SECS)
-        new_value = current + ESTIMATED_INVESTIGATION_COST_USD
-        try:
-            await redis.set(key, str(new_value), ex=COST_QUOTA_WINDOW_SECS)
-        except TypeError:
-            await redis.set(key, str(new_value))
-            await redis.expire(key, COST_QUOTA_WINDOW_SECS)
+        # D-C-3: atomic check-and-increment via Lua. The previous
+        # GET → compute → SET pattern lost concurrent writers' spend.
+        cost_lua = """
+        local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+        local quota = tonumber(ARGV[1])
+        local cost = tonumber(ARGV[2])
+        local window = tonumber(ARGV[3])
+        if current + cost > quota then
+            local ttl = redis.call('TTL', KEYS[1])
+            return {0, ttl}
+        end
+        local new_value = current + cost
+        redis.call('SET', KEYS[1], tostring(new_value), 'EX', window)
+        return {1, window}
+        """
+        result = await redis.client.eval(
+            cost_lua,
+            1,
+            key,
+            str(quota),
+            str(ESTIMATED_INVESTIGATION_COST_USD),
+            str(COST_QUOTA_WINDOW_SECS),
+        )
+        allowed = int(result[0]) if isinstance(result, (list, tuple)) else int(result)
+        ttl_val = int(result[1]) if isinstance(result, (list, tuple)) and len(result) > 1 else COST_QUOTA_WINDOW_SECS
+        if not allowed:
+            raise _quota_error(ttl_val if ttl_val > 0 else COST_QUOTA_WINDOW_SECS)
         return
     except HTTPException:
         raise

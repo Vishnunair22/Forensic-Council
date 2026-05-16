@@ -139,9 +139,15 @@ class InvestigationQueue:
         )
 
         try:
+            # D-C-1: cap unbounded growth of the task hash and queue list.
+            # Without these EXPIREs, abandoned/crashed sessions accumulate
+            # forever and Redis ultimately hits maxmemory. 24 h covers the
+            # longest legitimate investigation lifecycle.
             async with redis.client.pipeline(transaction=True) as pipe:
                 pipe.hset(self.METADATA_KEY, str(session_id), task.model_dump_json())
                 pipe.rpush(self.QUEUE_KEY, str(session_id))
+                pipe.expire(self.METADATA_KEY, 86400)
+                pipe.expire(self.QUEUE_KEY, 86400)
                 await pipe.execute()
         except Exception as e:
             logger.error(

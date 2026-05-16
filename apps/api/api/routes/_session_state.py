@@ -134,6 +134,76 @@ async def get_active_pipeline_metadata(session_id: str) -> dict | None:
     return await redis.get_json(key)
 
 
+async def update_active_pipeline_metadata(
+    session_id: str,
+    fields: dict,
+    *,
+    max_retries: int = 5,
+) -> dict | None:
+    """D-C-4 (B-H-6): atomic read-modify-write on session metadata via WATCH /
+    MULTI / EXEC. Replaces the unsafe `existing = get(); set({**existing, ...})`
+    pattern at every call site. Returns the merged metadata that was written.
+
+    The function retries on `WatchError` up to `max_retries` times, then falls
+    back to a last-writer-wins set (logged) so a hot key under heavy contention
+    cannot block indefinitely. Status-change races are still better-than-stale
+    because the field set is small and merge order is deterministic.
+    """
+    import json as _json
+    from redis.exceptions import WatchError
+
+    redis = await _get_redis()
+    key = f"{SESSION_METADATA_KEY_PREFIX}{session_id}"
+    raw_client = redis.client  # underlying redis.asyncio.Redis
+    for attempt in range(max_retries):
+        try:
+            async with raw_client.pipeline(transaction=True) as pipe:
+                await pipe.watch(key)
+                raw = await pipe.get(key)
+                if raw is None:
+                    existing: dict = {}
+                else:
+                    try:
+                        decoded = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+                        existing = _json.loads(decoded) if isinstance(decoded, str) else (decoded or {})
+                    except (ValueError, TypeError):
+                        existing = {}
+                merged = {**existing, **fields}
+                pipe.multi()
+                pipe.set(key, _json.dumps(merged, default=str), ex=_METADATA_TTL_SECONDS)
+                await pipe.execute()
+                return merged
+        except WatchError:
+            # Concurrent writer modified the key — retry.
+            continue
+        except Exception as exc:
+            # If the underlying client doesn't support WATCH (in-memory fake),
+            # fall back to a plain merge-and-set. Logged once per session.
+            from core.structured_logging import get_logger
+
+            get_logger(__name__).debug(
+                "update_active_pipeline_metadata WATCH/MULTI/EXEC unsupported, using non-atomic fallback",
+                session_id=session_id,
+                error=str(exc),
+            )
+            existing = await get_active_pipeline_metadata(session_id) or {}
+            merged = {**existing, **fields}
+            await set_active_pipeline_metadata(session_id, merged)
+            return merged
+    # Exhausted retries — perform a last-writer-wins update with logging.
+    from core.structured_logging import get_logger
+
+    get_logger(__name__).warning(
+        "update_active_pipeline_metadata exhausted WATCH retries — falling back",
+        session_id=session_id,
+        retries=max_retries,
+    )
+    existing = await get_active_pipeline_metadata(session_id) or {}
+    merged = {**existing, **fields}
+    await set_active_pipeline_metadata(session_id, merged)
+    return merged
+
+
 # ── Report cache ──────────────────────────────────────────────────────────────
 
 

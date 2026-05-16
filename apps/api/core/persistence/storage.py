@@ -212,11 +212,34 @@ class LocalStorageBackend(StorageBackend):
                     f"Source file not found: {file_path}",
                     details={"file_path": file_path},
                 )
+            # D-H-7: reject symlinks so a malicious source cannot point at a
+            # file outside the intended evidence root (forensic integrity).
+            if await loop.run_in_executor(None, source.is_symlink):
+                raise ValueError(f"Symlink sources are not allowed: {file_path}")
             extension = self._get_extension(file_path)
             dest_path = artifact_dir / f"{artifact_id}{extension}"
             await loop.run_in_executor(None, shutil.copy2, source, dest_path)
         else:
             raise ValueError("Either data or file_path must be provided")
+
+        # D-H-7: ensure the resolved destination is inside the storage root.
+        # Defense-in-depth against a misconfigured `root_id` (which is taken
+        # from internal code today but cheap to validate).
+        try:
+            resolved_dest = await loop.run_in_executor(None, dest_path.resolve)
+            resolved_root = await loop.run_in_executor(None, self._storage_path.resolve)
+            if not str(resolved_dest).startswith(str(resolved_root)):
+                # Best-effort cleanup; don't leave a stray write outside root.
+                try:
+                    dest_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise ValueError(
+                    f"Refusing to store evidence outside storage root: {resolved_dest}"
+                )
+        except OSError:
+            # resolve() can fail on stat — proceed but log via existing logger below
+            pass
 
         # Make file read-only for immutability (cross-platform)
         # On Windows, chmod(0o444) has no effect — immutability is enforced

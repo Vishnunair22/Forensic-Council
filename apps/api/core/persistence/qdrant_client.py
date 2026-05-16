@@ -466,7 +466,15 @@ async def get_qdrant_client() -> QdrantClient:
         # Double-checked locking
         if _qdrant_client is None:
             client = QdrantClient()
-            await client.connect()
+            try:
+                await client.connect()
+            except Exception:
+                # D-C-5 (B-C-5): null the singleton on connect failure so
+                # the next call re-attempts cleanly. Previously a failed
+                # connect left a half-initialized client cached, defeating
+                # retry from the lifespan or another worker.
+                _qdrant_client = None
+                raise
             _qdrant_client = client
     return _qdrant_client
 

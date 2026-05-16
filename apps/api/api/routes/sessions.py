@@ -820,10 +820,14 @@ async def resume_investigation(
         except Exception as e:
             _log.warning("Failed to publish deep analysis decision to Redis", error=str(e))
 
-        await set_active_pipeline_metadata(
+        # D-C-4 (B-H-6): atomic CAS instead of RMW. The worker, pipeline,
+        # and other API handlers all write this key concurrently; without
+        # WATCH the last writer silently clobbers concurrent status updates.
+        from api.routes._session_state import update_active_pipeline_metadata as _cas_update
+
+        await _cas_update(
             session_id,
             {
-                **metadata,
                 "status": "paused_resume_requested",
                 "deep_analysis": request.deep_analysis,
                 "resume_requested_at": datetime.now(UTC).isoformat(),
@@ -869,10 +873,12 @@ async def resume_investigation(
         else "Final report synthesis requested. Compiling initial agent findings."
     )
     try:
-        await set_active_pipeline_metadata(
+        # D-C-4 (B-H-6): atomic CAS instead of RMW.
+        from api.routes._session_state import update_active_pipeline_metadata as _cas_update
+
+        await _cas_update(
             session_id,
             {
-                **metadata,
                 "status": "deep_analysis_requested" if request.deep_analysis else "deliberating",
                 "deep_analysis": request.deep_analysis,
                 "brief": synthesis_message,

@@ -268,17 +268,42 @@ class CalibrationLayer:
             calibration_status=CalibrationStatus.UNCALIBRATED,
         )
 
+        # D-H-5 (M-C-3): atomic write — write to a tmp file then os.replace
+        # so a crash mid-write cannot leave a partially-written `latest.json`
+        # for other workers to load. Previous in-place writes risked
+        # corruption that would silently propagate to all callers.
         try:
+            import os
+            import tempfile
+
             agent_dir = self._get_agent_dir(agent_id)
             agent_dir.mkdir(parents=True, exist_ok=True)
+            serialized = json.dumps(model.model_dump(), indent=2, default=str)
 
-            model_path = self._get_model_path(agent_id, version)
-            with open(model_path, "w") as f:
-                json.dump(model.model_dump(), f, indent=2, default=str)
+            def _atomic_write(target: Path) -> None:
+                fd, tmp = tempfile.mkstemp(
+                    prefix=target.name + ".",
+                    suffix=".tmp",
+                    dir=str(target.parent),
+                )
+                try:
+                    with os.fdopen(fd, "w") as fh:
+                        fh.write(serialized)
+                        fh.flush()
+                        try:
+                            os.fsync(fh.fileno())
+                        except OSError:
+                            pass
+                    os.replace(tmp, target)
+                except Exception:
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
+                    raise
 
-            latest_path = self._get_model_path(agent_id, "latest")
-            with open(latest_path, "w") as f:
-                json.dump(model.model_dump(), f, indent=2, default=str)
+            _atomic_write(self._get_model_path(agent_id, version))
+            _atomic_write(self._get_model_path(agent_id, "latest"))
         except OSError:
             # Runtime containers may mount calibration storage read-only or with
             # host-owned permissions. Defaults remain valid in memory; trained

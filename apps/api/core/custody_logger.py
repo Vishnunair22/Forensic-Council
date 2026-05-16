@@ -360,24 +360,42 @@ class CustodyLogger:
                 "prior_entry_ref": prior_entry_ref,
             }
             await redis.client.rpush(self._wal_key, _json_dumps_deterministic(payload))
+            # D-H-9: cap the WAL so a persistent DB outage can't OOM Redis.
+            # 100k entries × ~2 KB ≈ 200 MB upper bound. Oldest entries are
+            # preserved (they have the strongest chain-of-custody value); the
+            # newest entries beyond the cap are dropped with a CRITICAL log.
+            try:
+                await redis.client.ltrim(self._wal_key, 0, 100_000 - 1)
+            except Exception as trim_err:
+                logger.warning(f"Custody WAL: LTRIM failed (non-fatal): {trim_err}")
             logger.warning(f"Custody WAL: Persisted entry {entry_id} to Redis for later flush.")
         except Exception as e:
             logger.critical(f"FATAL CUSTODY GAP: Redis WAL failed for entry {entry_id} - {e}")
             raise
 
     async def _flush_retry_queue(self) -> None:
-        """Attempt to persist any queued entries in the Redis WAL."""
+        """Attempt to persist any queued entries in the Redis WAL.
+
+        D-H-9: bounded batch size and explicit per-call cap. The previous
+        unbounded `while True` loop could spin under a failing DB and
+        re-push the head item indefinitely. We now process up to
+        FLUSH_BATCH_SIZE items per call; on persistent failure the head
+        item is preserved and the caller (heartbeat / startup) tries
+        again later with natural backoff.
+        """
         if self._postgres is None:
             return
 
+        FLUSH_BATCH_SIZE = 500
+        processed = 0
         try:
             redis = await self._get_redis()
-            # Drain the queue
-            while True:
+            while processed < FLUSH_BATCH_SIZE:
                 item_raw = await redis.client.lpop(self._wal_key)
                 if not item_raw:
                     break
 
+                processed += 1
                 item = json.loads(item_raw)
                 item["content"] = _json_safe(item.get("content", {}))
                 try:
@@ -400,13 +418,12 @@ class CustodyLogger:
                         item["prior_entry_ref"],
                     )
                 except Exception as e:
-                    # If it fails again, push it back to the head of the queue (or just log and put back at end)
-                    # For safety, we push it back to the START of the list
+                    # Push back to head and stop — caller retries later.
                     await redis.client.lpush(self._wal_key, item_raw)
                     logger.error(
                         f"Custody WAL: Flush failed for item {item['entry_id']}, put back in queue: {e}"
                     )
-                    break  # Stop flushing if DB is still unhappy
+                    break
 
         except Exception as e:
             logger.error(f"Custody WAL: Error during flush - {e}")

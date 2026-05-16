@@ -72,6 +72,13 @@ class RedisClient:
     async def connect(self) -> None:
         """Establish connection to Redis."""
         try:
+            # D-M-1: cap pool size so a connection storm cannot exhaust
+            # file descriptors. 50 is the redis-py default but making it
+            # explicit (and configurable later) prevents the silent
+            # blocking-acquire pathology at high concurrency.
+            from core.config import get_settings as _get_settings
+
+            _max_conn = getattr(_get_settings(), "redis_max_connections", 50) or 50
             connection_kwargs = {
                 "host": self._host,
                 "port": self._port,
@@ -79,6 +86,7 @@ class RedisClient:
                 "decode_responses": True,
                 "socket_timeout": 30.0,
                 "socket_connect_timeout": 2.0,
+                "max_connections": int(_max_conn),
             }
 
             # Explicitly check for None not truthy to allow empty string passwords
