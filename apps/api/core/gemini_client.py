@@ -116,10 +116,39 @@ _VISION_MIME_TYPES = {
 }
 
 
-# Per-process cache for deep forensic analysis results.
-# Keyed by file_path — upload paths include the session ID so collisions across
-# concurrent investigations are impossible.  Cleared by process restart / new deploy.
+# M-H-8: per-process cache for deep forensic analysis results, keyed by
+# SHA-256 of file content (not path). Same path can refer to a different
+# binary across investigations, so content-hash keying is the only safe
+# identity. Capped to 32 entries with FIFO eviction.
 _DEEP_FORENSIC_CACHE: dict[str, "GeminiVisionFinding"] = {}
+_DEEP_FORENSIC_CACHE_MAX = 32
+
+
+def _deep_forensic_cache_key(file_path: str | None) -> str | None:
+    """Return SHA-256 hex digest of file contents, or None if unreadable."""
+    import os as _os
+
+    if not file_path or not _os.path.isabs(file_path):
+        return None
+    try:
+        import hashlib
+
+        h = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _deep_forensic_cache_put(key: str, value: "GeminiVisionFinding") -> None:
+    if len(_DEEP_FORENSIC_CACHE) >= _DEEP_FORENSIC_CACHE_MAX:
+        try:
+            _DEEP_FORENSIC_CACHE.pop(next(iter(_DEEP_FORENSIC_CACHE)))
+        except StopIteration:
+            pass
+    _DEEP_FORENSIC_CACHE[key] = value
 
 
 @dataclass
@@ -306,9 +335,10 @@ class GeminiVisionClient:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                url = f"{_GEMINI_API_BASE}/models?key={self.api_key}&pageSize=100"
+                # M-C-4: Gemini key as header, not query string.
+                url = f"{_GEMINI_API_BASE}/models?pageSize=100"
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(url)
+                    resp = await client.get(url, headers={"x-goog-api-key": self.api_key})
                     if resp.status_code == 200:
                         data = resp.json()
                         for m in data.get("models", []):
@@ -560,11 +590,11 @@ class GeminiVisionClient:
         if not self._enabled:
             return await self._local_forensic_fallback(file_path, exif_summary)
 
-        # Return cached result if this file was already analysed in this process lifetime.
-        # Cache key is file_path alone — upload paths embed the session ID so collisions
-        # across concurrent investigations are impossible.
-        cache_key = str(file_path)
-        if cache_key in _DEEP_FORENSIC_CACHE:
+        # M-H-8: cache by content-hash, not path. The previous path-keyed
+        # cache could return stale results for a re-uploaded evidence file
+        # that landed at the same fixed-directory path.
+        cache_key = _deep_forensic_cache_key(str(file_path))
+        if cache_key and cache_key in _DEEP_FORENSIC_CACHE:
             cached = _DEEP_FORENSIC_CACHE[cache_key]
             logger.info("Gemini deep forensic cache hit — reusing result", file_path=file_path)
             cached.from_cache = True
@@ -656,8 +686,8 @@ class GeminiVisionClient:
             model_hint=model_hint,
         )
         # Cache the result for subsequent agents in the same process lifetime
-        if result and not result.error:
-            _DEEP_FORENSIC_CACHE[cache_key] = result
+        if cache_key and result and not result.error:
+            _deep_forensic_cache_put(cache_key, result)
         return result
 
     async def analyze_metadata_visual_consistency(

@@ -108,11 +108,13 @@ async def _check_groq(api_key: str, timeout: float = 8.0) -> dict:
 
 async def _check_gemini(api_key: str, timeout: float = 8.0) -> dict:
     """Check Gemini models.list endpoint. No quota burned."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}&pageSize=5"
+    # M-C-4: key as header, not query string.
+    url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=5"
+    headers = {"x-goog-api-key": api_key}
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, headers=headers)
             if resp.status_code == 200:
                 data = resp.json()
                 # Just count for verification — don't load full model list

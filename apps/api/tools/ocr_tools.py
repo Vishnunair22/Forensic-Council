@@ -29,8 +29,38 @@ logger = get_logger(__name__)
 # Shared executor for CPU-bound OCR tasks to avoid blocking the event loop
 _OCR_EXECUTOR = ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) * 4))
 
-# Per-process Gemini OCR cache — keyed by file_path (upload paths embed session ID)
+# M-H-8: per-process Gemini OCR cache — keyed by SHA-256 of file content,
+# not the file path. Same path can refer to a different binary across
+# investigations; hash-keying prevents stale hits on re-uploaded files.
+# Capped to 64 entries with FIFO eviction so memory stays bounded.
 _GEMINI_OCR_CACHE: dict[str, dict] = {}
+_GEMINI_OCR_CACHE_MAX = 64
+
+
+def _gemini_ocr_cache_key(file_path: str) -> str | None:
+    """Return a SHA-256 hex digest of file contents, or None if unreadable."""
+    if not file_path or not os.path.isabs(file_path):
+        return None
+    try:
+        import hashlib
+
+        h = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _gemini_ocr_cache_put(key: str, value: dict) -> None:
+    """Insert with FIFO eviction so the cache cannot grow unbounded."""
+    if len(_GEMINI_OCR_CACHE) >= _GEMINI_OCR_CACHE_MAX:
+        try:
+            _GEMINI_OCR_CACHE.pop(next(iter(_GEMINI_OCR_CACHE)))
+        except StopIteration:
+            pass
+    _GEMINI_OCR_CACHE[key] = value
 
 # Thread-local storage for EasyOCR readers to avoid re-init overhead
 _EASYOCR_READER = None
@@ -510,11 +540,13 @@ async def _extract_text_gemini(
     Results are cached per file_path so subsequent tool calls (analyze_image_content,
     screenshot_layout_forensics, etc.) reuse the same response without a second API hit.
     """
-    cache_key = str(getattr(artifact, "file_path", "") or "")
-    # Only cache absolute paths — test fixtures use relative paths and must not cross-contaminate
-    use_cache = bool(cache_key and os.path.isabs(cache_key))
+    # M-H-8: cache key is content-hash, not path. Test fixtures with
+    # relative paths are still skipped (hash helper returns None).
+    file_path = str(getattr(artifact, "file_path", "") or "")
+    cache_key = _gemini_ocr_cache_key(file_path)
+    use_cache = bool(cache_key)
     if use_cache and cache_key in _GEMINI_OCR_CACHE:
-        logger.info("Gemini OCR cache hit", file_path=cache_key)
+        logger.info("Gemini OCR cache hit", file_path=file_path)
         return _GEMINI_OCR_CACHE[cache_key]
 
     try:
@@ -642,8 +674,8 @@ If no text is visible, return empty lists."""
             "content_type": content_type,
             "content_description": content_description,
         }
-        if use_cache:
-            _GEMINI_OCR_CACHE[cache_key] = result
+        if use_cache and cache_key is not None:
+            _gemini_ocr_cache_put(cache_key, result)
         return result
     except Exception as exc:
         logger.warning("Gemini OCR unavailable, falling back to EasyOCR", error=str(exc))

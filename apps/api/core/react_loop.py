@@ -256,12 +256,23 @@ def create_llm_step_generator(
                 break
 
         try:
-            # Call LLM for reasoning
-            response: LLMResponse = await llm_client.generate_reasoning_step(
-                system_prompt=system_prompt,
-                react_chain=[step.model_dump() for step in react_chain],
-                available_tools=available_tools,
-                current_task=current_task,
+            # M-C-2: hard upper-bound for one reasoning step. generate_reasoning
+            # _step internally iterates up to (4 candidates × 3 retries × llm_
+            # timeout) ≈ 3+ minutes in pathological cases; the existing per-call
+            # timeout is on the httpx layer only. This budget covers the entire
+            # candidate fallback chain so a single ReAct iteration cannot exceed
+            # ~2× llm_timeout regardless of provider flapping.
+            from core.config import get_settings as _get_settings
+
+            _llm_budget = float(_get_settings().llm_timeout) * 2.0
+            response: LLMResponse = await asyncio.wait_for(
+                llm_client.generate_reasoning_step(
+                    system_prompt=system_prompt,
+                    react_chain=[step.model_dump() for step in react_chain],
+                    available_tools=available_tools,
+                    current_task=current_task,
+                ),
+                timeout=_llm_budget,
             )
 
             # Parse response into a ReAct step
@@ -1339,9 +1350,34 @@ class ReActLoopEngine:
                         else:
                             await trace.fail(tool_result.error or "Unknown tool error")
 
-                    except Exception as tool_exc:
-                        await trace.fail(str(tool_exc))
+                    except asyncio.CancelledError:
+                        # Honour cooperative cancellation (terminate / shutdown).
+                        await trace.fail("cancelled")
                         raise
+                    except Exception as tool_exc:
+                        # M-C-1: a tool failure must NOT abort the whole agent
+                        # ReAct loop. Synthesize a failed ToolResult so the
+                        # standard INCOMPLETE-finding emit path below runs and
+                        # the remaining tools / iterations continue. Without
+                        # this guard a single misbehaving handler took down
+                        # the entire agent's investigation.
+                        await trace.fail(str(tool_exc))
+                        logger.warning(
+                            "Tool raised an unhandled exception; continuing the ReAct loop",
+                            agent_id=self.agent_id,
+                            tool_name=next_step.tool_name,
+                            error=str(tool_exc),
+                            exc_info=True,
+                        )
+                        tool_result = ToolResult(
+                            success=False,
+                            output={},
+                            error=f"{type(tool_exc).__name__}: {tool_exc}",
+                            tool_name=next_step.tool_name,
+                            unavailable=False,
+                        )
+                        _tool_span.set_attribute("tool_success", False)
+                        _tool_span.set_attribute("tool_exception", type(tool_exc).__name__)
                     _tool_span.set_attribute("tool_unavailable", tool_result.unavailable)
 
                 # --- Generate AgentFinding from Tool Result ---

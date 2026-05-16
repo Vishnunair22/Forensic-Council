@@ -181,9 +181,13 @@ class LLMClient:
             return False
         try:
             client = await self._get_client(timeout_override=3.0)
+            # M-C-4: Gemini API key carried as `x-goog-api-key` header
+            # instead of `?key=...` query string. Query-string keys are
+            # captured by httpx DEBUG logs, OTel URL attributes, and
+            # intermediate proxy access logs.
             url_map = {
                 "groq": "https://api.groq.com/openai/v1/models",
-                "gemini": f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}?key={self.api_key}",
+                "gemini": f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}",
                 "openai": "https://api.openai.com/v1/models",
                 "anthropic": "https://api.anthropic.com/v1/models",
             }
@@ -195,12 +199,10 @@ class LLMClient:
                 headers = {"Authorization": f"Bearer {self.api_key}"}
             elif self.provider == "anthropic":
                 headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
+            elif self.provider == "gemini":
+                headers = {"x-goog-api-key": self.api_key}
 
-            # For Gemini, the key is usually in the URL for v1beta, or we can use headers
-            if self.provider == "gemini":
-                resp = await asyncio.wait_for(client.get(url), timeout=3.0)
-            else:
-                resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
+            resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
             return resp.status_code < 500
         except (TimeoutError, ConnectionError, OSError) as e:
             logger.debug(
@@ -443,7 +445,9 @@ class LLMClient:
         if not self.api_key:
             raise RuntimeError("Gemini API key missing")
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        # M-C-4: Gemini key as header, not query string.
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        gemini_headers = {"x-goog-api-key": self.api_key}
 
         # Convert messages to Gemini format
         contents = []
@@ -474,7 +478,7 @@ class LLMClient:
             ]
 
         client = await self._get_client()
-        response = await self._with_retry(lambda: client.post(url, json=payload))
+        response = await self._with_retry(lambda: client.post(url, json=payload, headers=gemini_headers))
         response.raise_for_status()
         data = response.json()
 
@@ -556,7 +560,17 @@ class LLMClient:
         if self.temperature > 0:
             payload["temperature"] = self.temperature
         if system_message:
-            payload["system"] = system_message
+            # M-M-5: enable Claude prompt caching on the (stable) system
+            # prompt. Forensic system prompts are 3–5 KB of fixed text per
+            # call; caching cuts input-token cost ~80% on cache hits. The
+            # block form is required when cache_control is set.
+            payload["system"] = [
+                {
+                    "type": "text",
+                    "text": system_message,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         if available_tools:
             payload["tools"] = [
                 {
@@ -647,7 +661,9 @@ class LLMClient:
                 encoded = base64.b64encode(data).decode("utf-8")
                 mime_type = artifact.mime_type or mimetypes.guess_type(artifact.file_path)[0] or "image/jpeg"
 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
+            # M-C-4: Gemini key as header, not query string.
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
+            gemini_headers = {"x-goog-api-key": self.gemini_api_key}
 
             payload = {
                 "contents": [
@@ -669,7 +685,7 @@ class LLMClient:
 
             client = await self._get_client(timeout_override=55.0)
             resp = await self._with_retry(
-                lambda c=client, u=url, p=payload: c.post(u, json=p)
+                lambda c=client, u=url, p=payload, h=gemini_headers: c.post(u, json=p, headers=h)
             )
             resp.raise_for_status()
             text = resp.json()["candidates"][0]["content"]["parts"][0].get("text", "").strip()
@@ -772,7 +788,9 @@ class LLMClient:
                         return resp.json()["choices"][0]["message"].get("content", "").strip()
 
                     elif target_provider == "gemini":
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={target_api_key}"
+                        # M-C-4: Gemini key as header, not query string.
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"
+                        gemini_headers = {"x-goog-api-key": target_api_key}
                         payload = {
                             "contents": [
                                 {
@@ -787,7 +805,7 @@ class LLMClient:
 
                         client = await self._get_client(timeout_override=timeout_override or 15.0)
                         resp = await self._with_retry(
-                            lambda c=client, u=url, p=payload: c.post(u, json=p)
+                            lambda c=client, u=url, p=payload, h=gemini_headers: c.post(u, json=p, headers=h)
                         )
                         resp.raise_for_status()
                         return (
