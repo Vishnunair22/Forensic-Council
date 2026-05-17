@@ -39,6 +39,21 @@ type UseSimulationProps = {
   playSound?: (type: SoundType) => void;
 };
 
+function getMessagePhase(update: BriefUpdate): "initial" | "deep" | null {
+  const data = update.data as Record<string, unknown> | undefined;
+  const phase = data?.analysis_phase;
+  return phase === "initial" || phase === "deep" ? phase : null;
+}
+
+function getMessageSessionId(update: BriefUpdate, targetSessionId: string): string | null {
+  const topLevel = update.session_id;
+  if (typeof topLevel === "string") return topLevel;
+  const data = update.data as Record<string, unknown> | undefined;
+  const dataSessionId = typeof data?.session_id === "string" ? data.session_id : null;
+  if (dataSessionId && dataSessionId !== targetSessionId) return null;
+  return dataSessionId;
+}
+
 export const useSimulation = ({
   onAgentComplete,
   onComplete,
@@ -150,10 +165,21 @@ export const useSimulation = ({
         let isActive = true;
 
         const applyUpdate = (update: BriefUpdate) => {
-          if (update.session_id && update.session_id !== targetSessionId) {
+          const incomingSessionId = getMessageSessionId(update, targetSessionId);
+          if (incomingSessionId && incomingSessionId !== targetSessionId) {
             dbg.warn("[WebSocket] Ignoring update for non-current session", {
               current: targetSessionId,
-              incoming: update.session_id,
+              incoming: incomingSessionId,
+              type: update.type,
+            });
+            return;
+          }
+
+          const messagePhase = getMessagePhase(update);
+          if (messagePhase && messagePhase !== activePhaseRef.current) {
+            dbg.log("[WebSocket] Ignoring stale phase message", {
+              active: activePhaseRef.current,
+              incoming: messagePhase,
               type: update.type,
             });
             return;

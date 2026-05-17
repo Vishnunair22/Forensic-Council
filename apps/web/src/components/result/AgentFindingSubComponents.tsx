@@ -132,12 +132,20 @@ function escapeRegex(input: string): string {
 
 function stripToolNamePrefix(text: string, toolLabel: string): string {
  if (!text) return "";
- if (toolLabel) {
-  const exact = new RegExp("^" + escapeRegex(toolLabel) + "\\s*:\\s*", "i");
-  text = text.replace(exact, "");
+ let previous = "";
+ let current = text.trim();
+ while (current !== previous) {
+  previous = current;
+  if (toolLabel) {
+   const exact = new RegExp("^" + escapeRegex(toolLabel) + "\\s*:\\s*", "i");
+   current = current.replace(exact, "");
+  }
+  // Strip any capitalized/mixed-case words followed by a colon (e.g. "Compression/platform audit:")
+  current = current.replace(/^(?:[A-Za-z0-9_\-\/]+\s*){1,6}:\s*/i, "");
  }
- return text.replace(/^(?:[A-Z][a-z]+\s+){1,5}[A-Z][a-z]+:\s+/, "");
+ return current;
 }
+
 
 const TEMPLATE_PATTERNS = [
  /^analysis complete\.?$/i,

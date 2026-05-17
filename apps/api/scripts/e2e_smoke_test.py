@@ -46,9 +46,10 @@ async def main():
             headers=auth_headers,
         )
         if r.status_code == 404:
+            password = os.environ.get("BOOTSTRAP_INVESTIGATOR_PASSWORD", "dev-investigator-password")
             r = await client.post(
                 "/api/v1/auth/login",
-                data={"username": "investigator", "password": "dev-investigator-password"},
+                data={"username": "investigator", "password": password},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         if r.status_code != 200:
@@ -61,6 +62,9 @@ async def main():
             print(f"  ✗ No access token: {token_data}")
             return
         print(f"  ✓ Token: {token[:20]}...")
+        if token_data.get("csrf_token"):
+            csrf_token = token_data.get("csrf_token")
+            print(f"  ✓ Updated CSRF: {csrf_token[:10]}...")
 
         # Step 3: Upload evidence
         print("\n[3/7] Uploading test evidence...")
@@ -86,7 +90,7 @@ async def main():
             r = await client.post(
                 "/api/v1/investigate",
                 files=files,
-                data={"case_id": "SMOKE-TEST-001", "investigator_id": "REQ-999999"},
+                data={"case_id": "CASE-SMOKE-001", "investigator_id": "REQ-999999"},
                 headers=headers,
             )
         except Exception as e:
@@ -108,6 +112,7 @@ async def main():
         print("\n[4/7] Polling for completion...")
         max_wait = 180
         start = time.time()
+        resumed = False
         while time.time() - start < max_wait:
             r = await client.get(
                 f"/api/v1/sessions/{session_id}/arbiter-status",
@@ -116,12 +121,22 @@ async def main():
             if r.status_code == 200:
                 st = r.json()
                 status = st.get("status")
-                print(f"  ... {status} ({int(time.time() - start)}s)")
+                message = st.get("message", "")
+                print(f"  ... {status} ({int(time.time() - start)}s) - {message}")
                 if status == "complete":
                     break
                 if status == "error":
                     print(f"  ✗ Pipeline error: {st}")
                     return
+                if not resumed and ("awaiting analyst decision" in message.lower() or "awaiting_decision" in status):
+                    print("  → Paused at HITL gate. Auto-resuming with deep_analysis=False...")
+                    resume_r = await client.post(
+                        f"/api/v1/sessions/{session_id}/resume",
+                        json={"deep_analysis": False},
+                        headers=headers,
+                    )
+                    print(f"  ✓ Resume response status: {resume_r.status_code} {resume_r.text[:100]}")
+                    resumed = True
             await asyncio.sleep(10)
 
         if time.time() - start >= max_wait:

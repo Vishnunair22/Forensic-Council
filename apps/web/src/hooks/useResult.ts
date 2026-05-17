@@ -33,6 +33,12 @@ function readSessionContext(sid: string | null): SessionContext | null {
   return storage.getItem<SessionContext>(`forensic_investigation_ctx:${sid}`, true) ?? null;
 }
 
+function readResultPhase(sid: string | null): "initial" | "deep" {
+  if (!sid) return "initial";
+  const phase = storage.getItem(`forensic_result_phase:${sid}`);
+  return phase === "deep" ? "deep" : "initial";
+}
+
 function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): AgentUpdate[] {
   if (!sid) return [];
   const deep = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${sid}`, true);
@@ -74,7 +80,7 @@ export function useResult(initialSessionId?: string) {
     const ready = sessionOnlyStorage.getItem("fc_report_ready") === "1";
     const sid = initialSessionId ?? storage.getItem("forensic_session_id");
     const ctx = readSessionContext(sid);
-    const deep = storage.getItem("forensic_is_deep") === "true";
+    const deep = readResultPhase(sid) === "deep";
 
     setReportAlreadyReady(ready);
     if (sid) setSessionId(sid);
@@ -125,7 +131,7 @@ export function useResult(initialSessionId?: string) {
       historySavedRef.current = false;
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
-      setIsDeepPhase(storage.getItem("forensic_is_deep") === "true");
+      setIsDeepPhase(readResultPhase(initialSessionId) === "deep");
       setThumbnail(
         storage.getItem(`forensic_thumbnail:${initialSessionId}`) ??
         storage.getItem("forensic_thumbnail")
@@ -133,14 +139,14 @@ export function useResult(initialSessionId?: string) {
       setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
       setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
       setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
-      setAgentTimeline(loadAgentTimelineForSession(initialSessionId, storage.getItem("forensic_is_deep") === "true"));
+      setAgentTimeline(loadAgentTimelineForSession(initialSessionId, readResultPhase(initialSessionId) === "deep"));
     }
   }, [mounted, initialSessionId, sessionId]);
 
   const selectSession = useCallback((sid: string) => {
     storage.setItem("forensic_session_id", sid);
     const ctx = readSessionContext(sid);
-    const nextIsDeep = storage.getItem("forensic_is_deep") === "true";
+    const nextIsDeep = readResultPhase(sid) === "deep";
     setSessionId(sid);
     setArbiterComplete(false);
     setMinOverlayDone(false);
@@ -182,8 +188,11 @@ export function useResult(initialSessionId?: string) {
   const finalReportData = useMemo(() => {
     if (!reportQueryData) return null;
     const asAny = reportQueryData as unknown as Record<string, unknown>;
-    if (typeof asAny.report_id === "string") return reportQueryData as unknown as ReportDTO;
-    if (asAny.status === "complete" && asAny.report) return asAny.report as ReportDTO;
+    if (isReportDTO(asAny)) return reportQueryData as unknown as ReportDTO;
+    if (asAny.status === "complete" && asAny.report) {
+      const reportValue = asAny.report as Record<string, unknown>;
+      if (isReportDTO(reportValue)) return reportValue as unknown as ReportDTO;
+    }
     return null;
   }, [reportQueryData]);
 
@@ -365,4 +374,13 @@ export function useResult(initialSessionId?: string) {
     handleExport,
     selectSession,
   };
+}
+
+function isReportDTO(value: Record<string, unknown> | null | undefined): boolean {
+  return (
+    !!value &&
+    typeof value.report_id === "string" &&
+    typeof value.session_id === "string" &&
+    typeof value.overall_verdict === "string"
+  );
 }

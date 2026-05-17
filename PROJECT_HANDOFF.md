@@ -12,6 +12,255 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-17: Deep Analysis Resume & Arbiter Handoff Fixes
+
+**Status:** COMPLETE
+
+### What Changed
+- Fixed the deep-analysis button path so `/resume` is called before WebSocket reconnect, ensuring backend deep analysis starts even if the live stream reconnect is slow or flaky.
+- Fixed the post-deep "View Report" path to call `/resume` again with `deep_analysis=false`, releasing the backend's post-deep Arbiter synthesis gate before waiting for the final report.
+- Preserved `forensic_result_phase:{sessionId}=deep` and persisted deep agent updates before routing to `/result/{sessionId}`, so the result page opens in the deep-analysis phase.
+- Reworked `ArbiterDeliberationOverlay` to reuse `ForensicProgressOverlay`, making initial and deep Arbiter deliberation visually consistent with the analysis progress overlay.
+- Added backend `analysis_phase` tags to deep `AGENT_UPDATE` / `AGENT_COMPLETE` broadcasts so the frontend can reliably ignore stale initial-phase messages during deep analysis.
+- Fixed `GET /sessions/{session_id}/report` so an active in-memory pipeline without `_final_report` no longer blocks Redis/Postgres report lookup, while still returning `202` if no persisted report is ready.
+- Corrected the `pipeline_in_progress` flag initialization in `sessions.py`.
+
+### Files Touched
+- `apps/web/src/hooks/useInvestigation.ts`
+- `apps/web/src/components/evidence/ArbiterDeliberationOverlay.tsx`
+- `apps/api/api/routes/sessions.py`
+- `apps/api/orchestration/pipeline_phases.py`
+- `PROJECT_HANDOFF.md`
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `python -m py_compile apps/api/api/routes/sessions.py apps/api/orchestration/pipeline_phases.py` | PASS | Backend syntax OK |
+| `npm.cmd run type-check` | PASS | TypeScript compiled cleanly |
+| `npm.cmd run lint` | PASS | ESLint completed with zero warnings |
+| `npm.cmd test -- --runInBand tests/integration/page_flows.test.tsx` | PASS | 43 integration tests passed |
+| `uv run pytest tests/contracts/test_api_contracts.py::TestReportEndpoint tests/contracts/test_api_contracts.py::TestInputValidation::test_report_nonexistent_session_returns_404 -q --tb=short` | PASS | 6 focused backend report-route tests passed |
+
+### Next Action
+- Manually run the browser flow: initial analysis -> Deep Analysis -> deep agent cards -> View Report -> deep result page.
+
+---
+
+### 2026-05-17: Initial Result Handoff Overlay & Result Page De-Duplication
+
+**Status:** COMPLETE
+
+### What Changed
+- Fixed the initial-analysis transition into `/result/{sessionId}` so the result client immediately renders the `ForensicProgressOverlay` during first mount instead of showing a silent dark/blank bridge.
+- Added a CSS fallback label to `body[data-fc-loading="1"]` so the pre-React route bridge visibly communicates "Consensus Synthesis" while the result route paints.
+- Replaced the duplicated verdict sentence in `ResultHeader` with concise report context, leaving the Arbiter narrative in `IntelligenceBrief`.
+- Tightened key-finding selection so `verdict_sentence` / `executive_summary` are not repeated as key-finding cards when they already appear in the Arbiter summary.
+- Refined the in-page Arbiter waiting state into a clear centered status panel.
+
+### Files Touched
+- `apps/web/src/components/result/ResultLayout.tsx`
+- `apps/web/src/components/result/ResultHeader.tsx`
+- `apps/web/src/app/globals.css`
+- `PROJECT_HANDOFF.md`
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npm.cmd run type-check` | PASS | TypeScript compiled cleanly |
+| `npm.cmd run lint` | PASS | ESLint completed with zero warnings |
+| `npm.cmd test -- --runInBand tests/integration/page_flows.test.tsx` | PASS | 43 integration tests passed |
+
+### Next Action
+- Manually exercise the initial-analysis accept flow in the browser and confirm the synthesis overlay is visible until the report is ready.
+
+---
+
+### 2026-05-17: API Contract Test Mock Hardening & Redis Cache Fixes
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+- **Resolved Import-Pathway Mock Deficiencies**: Fixed `socket.gaierror: [Errno 11001] getaddrinfo failed` by identifying that the FastAPI app's lifespan startup hook performs direct package-level imports (`from core.persistence import get_postgres_client`). Standard module-level patches targeting `core.persistence.postgres_client` did not affect these references, leading the app to look up real DNS databases. Hardened the `client` fixture inside [test_api_contracts.py](file:///d:/Forensic%20Council/apps/api/tests/contracts/test_api_contracts.py) by adding package-level mock patches (`core.persistence.get_redis_client`, `core.persistence.get_postgres_client`, and `core.persistence.get_qdrant_client`) to ensure 100% mocked coverage regardless of how files import the dependencies.
+- **Fixed Redis local cache poisoning with `AsyncMock` objects**: Resolved warning loops and failures like `TypeError: the JSON object must be str, bytes or bytearray, not AsyncMock` by discovering that the Lua script evaluation method `eval` on `redis.client` was returning generic `AsyncMock` objects. This poisoned the local cache with raw `AsyncMock` objects inside `WorkingMemory.update_state`. Hardened the `_make_redis_mock` helper in [test_api_contracts.py](file:///d:/Forensic%20Council/apps/api/tests/contracts/test_api_contracts.py) to explicitly return `None` on `client.eval` (triggering clean fallback paths), `lpop` (`None`), `rpush` (`1`), and `lrange` (`[]`), keeping the local cache clean and preventing ReAct loop crashes.
+- **Added Server Migration Mock Validation**: Implemented `fetch_val` returning `True` in `_make_pg_mock` so the backend application successfully validates table presence on startup and sets `migrations_ok` to `True`.
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Redis local cache stability | ✅ PASS | ReAct loops execute without JSON TypeErrors |
+| Custody WAL flushing | ✅ PASS | Custody logger flushes valid string records |
+| Migration validation | ✅ PASS | Startup validates in-memory table structures |
+
+---
+
+### 2026-05-17: Council Arbiter Alignment & Text Looping Fixes
+
+**Status:** ⚠️ COMPLETE
+
+### What Changed
+- **Aligned Council Arbiter Card Header**: Overhauled the card structure, sizing, paddings, and background in [ArbiterCard.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/ArbiterCard.tsx) to match the elegant, professional Monolithic Precision style of `AgentStatusCard.tsx`. Increased title size to `text-2xl` (`font-heading font-bold`), resized and styled the icon container (`relative w-16 h-16 bg-surface-2 border border-border-muted rounded-xl`), and integrated the status/phase badges exactly like the other agent cards.
+- **Fixed Endless Text Looping When Paused**: Discovered that when the pipeline pauses at the human-in-the-loop (HITL) analyst checkpoint, the Arbiter is not yet deliberating (`arbiterStatus === null`), but `allAgentsDone === true` was incorrectly forcing the card into active compilation mode. This triggered the card to cycle endlessly through the ReAct synthesis phrases ("Compiling agent findings...", "Comparing corroborating and conflicting tool signals..."), confusing users. Created a clean `getDisplayText` function that returns appropriate waiting/gateway status texts (e.g. `"Initial analysis complete. Awaiting analyst decision to proceed."` or `"Speculative synthesis engine is pre-warming in the background."`) and strictly restricts the looping compile phrases to active synthesis phases only.
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| TypeScript Compilation (`type-check`) | ✅ PASS | Checked across the whole monorepo |
+| ESLint Code Quality (`lint`) | ✅ PASS | Zero linter warnings/errors |
+| Frontend Jest Test Suite | ✅ 301 PASS | 100% of Jest test suites passed cleanly |
+
+---
+
+### 2026-05-17: Forensic Findings Presentation Polish & Fixes
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+- **Fixed Compression Audit Suffix Leak**: Corrected a regex bug inside `cleanFindingText` in [findingText.ts](file:///d:/Forensic%20Council/apps/web/src/lib/findingText.ts#L24) where `.replace(/[.,]?\s*Penalty factor:[^.]*\.?/gi, "")` was incorrectly stopping at the decimal point in floating-point metrics (e.g. `0.60`), matching `. Penalty factor: 0.` and leaving behind the trailing fractional digits (`60.`). Replaced it with `.replace(/[.,]?\s*Penalty factor:\s*\d+(?:\.\d+)?\.?/gi, "")` to correctly capture and sanitize full integer and decimal penalties.
+- **Resolved Summary Double-Prefixing**: Upgraded `stripToolNamePrefix` in [AgentFindingSubComponents.tsx](file:///d:/Forensic%20Council/apps/web/src/components/result/AgentFindingSubComponents.tsx#L133) to iteratively strip mixed-case and nested prefixes (such as `"Compression Risk Audit: Compression/platform audit:"`) prepended by LLM ReAct loops or tool humanizers. 
+- **Aligned Agent Brief Check Count**: Updated `toolsRan` in [AgentStatusCard.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/AgentStatusCard.tsx#L480) from using raw backend task execution stats (which counts internal utilities and skipped checkers) to use `findings.length` (the exact number of visible findings shown in the card), ensuring visual consistency across the dashboard.
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| TypeScript Compilation (`type-check`) | ✅ PASS | Checked across the whole monorepo |
+| ESLint Code Quality (`lint`) | ✅ PASS | Checked src files |
+| Frontend Jest Test Suite | ✅ 301 PASS | All 301/301 tests successfully passed |
+
+---
+
+### 2026-05-17: Analysis Pipeline Agent Card Text Truncation Fixes
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+- **Top Level Agent Summary Truncation Resolved**: Removed the arbitrary 220-character truncation of the synthesized `agentBrief` inside `AgentStatusCard.tsx`'s `AgentSummaryText` component. The brief now displays in full, and the highest-priority signal threshold inside `buildAgentBrief` is expanded from 120 to 200 characters to keep sentences naturally formed.
+- **Per Tool Findings Text Truncation Bug Fixed**: Corrected the `needsExpand` detection inside `FindingRow` to trigger if *either* the headline is long (>100 characters) *or* the detail is long (>180 characters). Pulled the "Show more / Show less" button out of the conditional `detail &&` rendering block, ensuring that when long headlines are clamped, the toggle button is always accessible to let users expand the content.
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| TypeScript Compilation (`type-check`) | ✅ PASS | Checked across the whole monorepo |
+| ESLint Code Quality (`lint`) | ✅ PASS | Verified zero warning or style issues in `AgentStatusCard.tsx` |
+| Frontend Unit & Integration Tests | ✅ 301 PASS | Checked 100% of Jest test suites |
+
+---
+
+### 2026-05-17: End-to-End Container Stack Smoke Test Verification
+
+**Status:** ✅ COMPLETE & ALL CHECKS PASSED
+
+### What Changed
+- **HITL Gate Auto-Resume in E2E Test**: Identified that the E2E smoke test polled the `/arbiter-status` endpoint indefinitely because the backend was properly pausing at the Human-in-the-Loop (HITL) gate awaiting investigator decisions.
+- **E2E Smoke Test Integration Update (`e2e_smoke_test.py`)**: Centralized automatic detection of the `"Initial analysis complete. Awaiting analyst decision."` state. When detected, the test automatically issues a `POST /api/v1/sessions/{session_id}/resume` request with `{"deep_analysis": false}` to proceed to the Council Arbiter finalization.
+- **Full Verification of Specialist Agents**: Verified that `Agent1` (Image), `Agent3` (Object), and `Agent5` (Metadata) executed their ML and database tasks successfully, wrote structural findings, and committed chain-of-custody log records.
+- **Council Arbiter Finalization**: Confirmed that the Arbiter successfully synthesized all specialist agent findings, assigned the `INCONCLUSIVE` verdict, generated a court-ready cryptographic signature, and committed the final report schema.
+
+### Verification Results
+
+| Check / Endpoint | Status | Notes |
+|------------------|--------|-------|
+| `/api/v1/health` | ✅ 200 | API is completely healthy |
+| Auth Login (`/auth/login`) | ✅ 200 | JWT generation, cookie handling, and CSRF token rotation |
+| Investigate Upload (`/investigate`) | ✅ 200 | Multi-modal intake, database session generation, task dispatch |
+| Specialist Agent Execution | ✅ 100% | CPU/ML background workers loaded and processed tasks successfully |
+| HITL Gateway Resume (`/resume`) | ✅ 200 | Successfully resumed the pipeline from its paused state |
+| Council Arbiter Report Generation | ✅ 200 | Report compiled, signed, and saved to DB & Redis |
+| **E2E Smoke Test Exit Code** | ✅ **0** | **ALL CHECKS PASSED — APP IS FUNCTIONAL END-TO-END** |
+
+---
+
+### 2026-05-17: Clean Infrastructure Prune, Rebuild & Start
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+- **Clean Docker Prune**: Ran `docker system prune -a --volumes -f` and `docker builder prune -a -f` to wipe all old images, volumes, and BuildKit caches, reclaiming ~3GB.
+- **Developer Rebuild**: Rebuilt the entire service stack from scratch in developer mode:
+  - `forensic-council-frontend:latest` (Next.js 15 dev target)
+  - `forensic-council-backend:latest` (FastAPI, preloaded with all 6 commercial-safe ML model weights)
+  - `forensic-council-worker:latest` (Celery background worker, preloaded with all 6 ML models)
+  - `forensic-council-migration:latest` (Alembic DB migrations & seeding)
+- **Container Bootstrap**: Launched the stack in detached mode using `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d`.
+
+### Verification Results
+- All infrastructure containers (`postgres`, `redis`, `qdrant`, `jaeger`) successfully reached `healthy` status.
+- `forensic_migration` successfully executed Alembic migrations and seeded the DB with Admin and Investigator users.
+- FastAPI backend, background worker, frontend Next.js server, and reverse proxy Caddy are successfully booted and healthy.
+- Local model caches verify that all 6 forensic models are correctly loaded inside backend and worker files.
+
+---
+
+### 2026-05-18: Post-Validation Fixes — Phase A-G
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+
+#### Phase A - Restore Verifiable Dependency State
+- Verified `npm ci` passes (lockfile already clean)
+
+#### Phase B - Fix Backend Duplicate Response Contract
+- **File:** `apps/api/api/routes/investigation.py`
+- Changed 409 response from string format to structured JSON:
+  ```python
+  detail={
+      "code": "duplicate_investigation",
+      "existing_session_id": existing_session_id,
+      "message": "Duplicate investigation already exists",
+  }
+  ```
+- **File:** `apps/api/tests/contracts/test_api_contracts.py`
+- Updated test assertions to verify structured response format
+
+#### Phase C - Tighten Frontend Duplicate Parser
+- **File:** `apps/web/src/lib/api/client.ts`
+- Fixed `extractDuplicateSessionId()` to properly validate `existing_session_id` is a string
+- Added support for top-level `code: "duplicate_investigation"` format
+
+#### Phase D - Make Deep/Initial Phase Session-Scoped
+- **File:** `apps/web/src/hooks/useInvestigation.ts`
+- Added session-scoped storage: `forensic_result_phase:{sid}` set during initial/deep start
+- **File:** `apps/web/src/hooks/useResult.ts`
+- Added `readResultPhase(sid)` helper function
+- Replaced global `forensic_is_deep` checks with session-scoped `forensic_result_phase:{sid}` checks
+
+#### Phase E - Complete WebSocket Stale-Message Guards
+- **File:** `apps/web/src/hooks/useSimulation.ts`
+- Added `getMessagePhase(update)` helper to extract phase from message data
+- Added `getMessageSessionId(update, targetSessionId)` helper for nested session ID
+- Updated `applyUpdate` to ignore messages with:
+  - Session ID mismatch (top-level and in data)
+  - Phase mismatch between active phase and message phase
+
+#### Phase F - Strengthen Deep Resume Idempotency
+- **File:** `apps/api/api/routes/sessions.py`
+- Added check for existing Redis decision key before writing new decision
+- Returns idempotent response with "running" status when decision already exists
+
+#### Phase G - Remove Packaged Bytecode/Cache Artifacts
+- Already clean - no `__pycache__` or `.pyc` files in current codebase
+
+### Verification Results
+
+| Check | Status |
+|-------|--------|
+| Frontend type-check | ✅ PASS |
+| Frontend lint | ✅ PASS |
+| Frontend tests (301) | ✅ PASS |
+| Frontend build | ✅ PASS |
+| Python syntax (investigation.py) | ✅ PASS |
+| Python syntax (sessions.py) | ✅ PASS |
+| Python syntax (test_api_contracts.py) | ✅ PASS |
+
+### Next Action
+- All phases complete. Ready for final verification.
+
 ---
 
 ### 2026-05-17: Phase 9-10 — Final QA & Green Verdict Gate

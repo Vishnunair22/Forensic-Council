@@ -292,6 +292,12 @@ class RedisClient:
             keys.append(key)
         return keys
 
+    def scan_iter(self, match: str | None = None, count: int | None = None) -> Any:
+        """
+        Return an async iterator that scans keys matching pattern using SCAN (non-blocking).
+        """
+        return self.client.scan_iter(match=match, count=count)
+
     async def publish(self, channel: str, message: Any) -> int:
         """
         Publish a message to a Redis channel.
@@ -464,6 +470,16 @@ class InMemoryRedisClient:
 
         all_keys = set(self._fallback_store) | set(self._hash_store)
         return [key for key in all_keys if fnmatch.fnmatch(key, pattern)]
+
+    async def scan_iter(self, match: str | None = None, count: int | None = None) -> Any:
+        """
+        Return an async iterator that scans keys matching pattern in the in-memory fallback.
+        """
+        import fnmatch
+        all_keys = set(self._fallback_store) | set(self._hash_store)
+        for key in all_keys:
+            if match is None or fnmatch.fnmatch(key, match):
+                yield key
 
     async def publish(self, channel: str, message: Any) -> int:
         return 0

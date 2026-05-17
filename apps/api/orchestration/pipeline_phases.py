@@ -323,6 +323,7 @@ async def run_agents_concurrent(
     async def _broadcast_agent_status(
         aid: str, status: str, message: str, findings=None, error=None, agent_inst=None,
         initial_tool_names: set | None = None,
+        analysis_phase: str = "initial",
     ):
         try:
             from api.routes._session_state import AGENT_NAMES, broadcast_update
@@ -572,6 +573,7 @@ async def run_agents_concurrent(
                     message=message,
                     data={
                         "status": status,
+                        "analysis_phase": analysis_phase,
                         "thinking": message,
                         "tool_name": "file_type_validation"
                         if status == "validating"
@@ -834,6 +836,7 @@ async def run_agents_concurrent(
                 "running",
                 f"{aid} deep analysis in progress.",
                 agent_inst=a_inst,
+                analysis_phase="deep",
             )
             result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
 
@@ -844,6 +847,7 @@ async def run_agents_concurrent(
                     f"{aid} error: {result.error}",
                     error=result.error,
                     agent_inst=a_inst,
+                    analysis_phase="deep",
                 )
             else:
                 # Broadcast only findings produced in the deep pass.
@@ -868,6 +872,7 @@ async def run_agents_concurrent(
                     findings=deep_only if deep_only else None,
                     agent_inst=a_inst,
                     initial_tool_names=initial_tool_names,
+                    analysis_phase="deep",
                 )
 
             if aid == producer_id:

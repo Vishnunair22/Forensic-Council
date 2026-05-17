@@ -68,12 +68,21 @@ def _make_redis_mock() -> AsyncMock:
     m.ping = AsyncMock(return_value=True)
     m.keys = AsyncMock(return_value=[])
     m.publish = AsyncMock(return_value=0)
-    m.get_pubsub = MagicMock(return_value=MagicMock())
+    pubsub_mock = AsyncMock()
+    pubsub_mock.subscribe = AsyncMock()
+    pubsub_mock.get_message = AsyncMock(return_value=None)
+    pubsub_mock.unsubscribe = AsyncMock()
+    m.get_pubsub = MagicMock(return_value=pubsub_mock)
     pipe = AsyncMock()
     pipe.execute = AsyncMock(return_value=[])
     m.pipeline = MagicMock(return_value=pipe)
     m.client = AsyncMock()
     m.client.publish = AsyncMock(return_value=0)
+    m.client.eval = AsyncMock(return_value=None)
+    m.client.lpop = AsyncMock(return_value=None)
+    m.client.rpush = AsyncMock(return_value=1)
+    m.client.lrange = AsyncMock(return_value=[])
+    m.client.pipeline = MagicMock(return_value=pipe)
     return m
 
 
@@ -82,6 +91,7 @@ def _make_pg_mock() -> AsyncMock:
     m.fetch_one = AsyncMock(return_value=None)
     m.fetch_all = AsyncMock(return_value=[])
     m.fetch = AsyncMock(return_value=[])
+    m.fetch_val = AsyncMock(return_value=True)
     m.execute = AsyncMock(return_value="OK")
     m.executemany = AsyncMock()
     m.ping = AsyncMock(return_value=True)
@@ -133,9 +143,12 @@ def client():
     qdrant_mock = _make_qdrant_mock()
 
     patches = [
-        patch("core.persistence.redis_client.get_redis_client", return_value=redis_mock),
-        patch("core.persistence.postgres_client.get_postgres_client", return_value=pg_mock),
-        patch("core.persistence.qdrant_client.get_qdrant_client", return_value=qdrant_mock),
+        patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock, return_value=redis_mock),
+        patch("core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock, return_value=pg_mock),
+        patch("core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock, return_value=qdrant_mock),
+        patch("core.persistence.get_redis_client", new_callable=AsyncMock, return_value=redis_mock),
+        patch("core.persistence.get_postgres_client", new_callable=AsyncMock, return_value=pg_mock),
+        patch("core.persistence.get_qdrant_client", new_callable=AsyncMock, return_value=qdrant_mock),
         patch("core.migrations.run_migrations", new_callable=AsyncMock),
         patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
     ]
@@ -212,7 +225,7 @@ class TestInvestigateEndpoint:
 
         with (
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_queue = AsyncMock()
             mock_queue.submit = AsyncMock(return_value=None)
@@ -288,7 +301,7 @@ class TestResumeEndpoint:
         with (
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_meta.return_value = {
                 "status": "awaiting_decision",
@@ -314,7 +327,7 @@ class TestResumeEndpoint:
         with (
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
             patch("api.routes.sessions.get_active_pipeline") as mock_pipeline_getter,
         ):
             mock_meta.return_value = {
@@ -348,7 +361,7 @@ class TestResumeEndpoint:
         with (
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
             patch("api.routes.sessions.get_active_pipeline") as mock_pipeline_getter,
         ):
             mock_meta.return_value = {
@@ -596,7 +609,7 @@ class TestOwnershipEnforcement:
         with (
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_meta.return_value = {
                 "status": "awaiting_decision",
@@ -790,7 +803,7 @@ class TestDuplicateInvestigation409:
 
         with (
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_queue = AsyncMock()
             mock_queue.submit = AsyncMock(return_value=None)
@@ -810,7 +823,7 @@ class TestDuplicateInvestigation409:
 
         with (
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_queue = AsyncMock()
             mock_queue.submit = AsyncMock(return_value=None)
@@ -831,8 +844,9 @@ class TestDuplicateInvestigation409:
             f"Duplicate upload should return 409, got {resp2.status_code}: {resp2.text}"
         )
         body = resp2.json()
-        assert "session" in body["detail"].lower(), f"409 detail should include session: {body}"
-        assert session_id in body["detail"], f"409 detail should include existing session: {body}"
+        assert body["detail"]["code"] == "duplicate_investigation", f"409 detail should have code: {body}"
+        assert body["detail"]["existing_session_id"] == session_id, f"409 detail should have existing_session_id: {body}"
+        assert body["detail"]["message"], f"409 detail should have message: {body}"
 
     def test_investigate_requires_auth_on_duplicate(self, client):
         """409 with missing auth returns 401 before dedup check."""
@@ -845,7 +859,7 @@ class TestDuplicateInvestigation409:
 
         with (
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_queue = AsyncMock()
             mock_queue.submit = AsyncMock(return_value=None)
@@ -871,7 +885,7 @@ class TestResumeIdempotency:
         with (
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
             patch("api.routes.sessions.get_active_pipeline") as mock_pipeline_getter,
         ):
             mock_meta.return_value = {
@@ -916,7 +930,7 @@ class TestResumeIdempotency:
         with (
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
-            patch("core.persistence.redis_client.get_redis_client") as mock_redis_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
             mock_meta.return_value = {
                 "status": "awaiting_decision",

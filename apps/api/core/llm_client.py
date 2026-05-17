@@ -146,10 +146,9 @@ class LLMClient:
         5 agents × 1 synthesis + 4 arbiter narratives = ~10 concurrent connections.
         Pool allows 50 max with 20 keepalive for burst tolerance.
         """
-        timeout = timeout_override or self.timeout
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                timeout=timeout,
+                timeout=self.timeout,
                 limits=httpx.Limits(
                     max_connections=50,
                     max_keepalive_connections=20,
@@ -778,10 +777,11 @@ class LLMClient:
                         if json_mode:
                             payload["response_format"] = {"type": "json_object"}
 
-                        client = await self._get_client(timeout_override=timeout_override or 15.0)
+                        client = await self._get_client()
+                        req_timeout = timeout_override or 15.0
                         resp = await self._with_retry(
                             lambda c=client, u=url, h=headers, p=payload: c.post(
-                                u, headers=h, json=p
+                                u, headers=h, json=p, timeout=req_timeout
                             )
                         )
                         resp.raise_for_status()
@@ -803,9 +803,12 @@ class LLMClient:
                         if json_mode:
                             payload["generationConfig"]["responseMimeType"] = "application/json"
 
-                        client = await self._get_client(timeout_override=timeout_override or 15.0)
+                        client = await self._get_client()
+                        req_timeout = timeout_override or 15.0
                         resp = await self._with_retry(
-                            lambda c=client, u=url, p=payload, h=gemini_headers: c.post(u, json=p, headers=h)
+                            lambda c=client, u=url, p=payload, h=gemini_headers: c.post(
+                                u, json=p, headers=h, timeout=req_timeout
+                            )
                         )
                         resp.raise_for_status()
                         return (

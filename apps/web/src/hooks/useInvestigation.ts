@@ -645,6 +645,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     storage.setItem("forensic_is_deep", "false");
     const sid = storage.getItem("forensic_session_id");
     if (sid) {
+      storage.setItem(`forensic_result_phase:${sid}`, "initial");
       storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
       sessionOnlyStorage.setItem(`fc_resume_requested:${sid}`, "initial");
     }
@@ -683,6 +684,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     storage.setItem("forensic_is_deep", "true");
     const sid = storage.getItem("forensic_session_id");
     if (sid) {
+      storage.setItem(`forensic_result_phase:${sid}`, "deep");
       // Save only non-skipped initial agents so the deep-phase card list stays correct
       const nonSkipped = (completedAgentsRef.current as AgentUpdate[]).filter(
         (a) => a.status !== "skipped",
@@ -694,15 +696,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     clearCompletedAgents();
     setPhase("deep");
     try {
-      // Reconnect the WebSocket BEFORE resuming so the old connection's internal
-      // message queue (which still holds initial-phase AGENT_UPDATE / AGENT_COMPLETE
-      // messages) is discarded. The new socket starts with an empty queue and will
-      // only receive deep-phase messages.
       setSimulationPhase("deep");
-      if (sid) await connectWebSocket(sid, true);
       await resumeInvestigation(true);
-    } catch {
+      if (sid) await connectWebSocket(sid, true);
+    } catch (err) {
       playSound("error");
+      toast.destructive({
+        title: "Deep analysis failed to start",
+        description: err instanceof Error ? err.message : "Could not resume the investigation.",
+      });
     } finally {
       investigationInFlightRef.current = false;
     }
@@ -767,16 +769,22 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const handleViewResults = useCallback(async () => {
     if (isNavigating) return;
     playSound("click");
-    playSound("complete");
+    playSound("arbiter_start");
     const sid = storage.getItem("forensic_session_id");
-    if (sid) storage.setItem(`forensic_deep_agents:${sid}`, completedAgentsRef.current, true);
+    if (sid) {
+      storage.setItem(`forensic_result_phase:${sid}`, "deep");
+      storage.setItem(`forensic_deep_agents:${sid}`, completedAgentsRef.current, true);
+    }
     setIsNavigating(true);
     setArbiterDeliberating(true);
+    setArbiterLiveText("Final report synthesis requested. Compiling deep analysis findings.");
     try {
       if (!sid) throw new Error("No active session");
+      await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
+      document.body.setAttribute("data-fc-loading", "1");
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -787,7 +795,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setIsNavigating(false);
       setArbiterDeliberating(false);
     }
-  }, [playSound, router, isNavigating]);
+  }, [playSound, resumeInvestigation, router, isNavigating]);
 
   const validAgentsData = AGENTS_DATA.filter((a) => a.name !== "Council Arbiter");
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>

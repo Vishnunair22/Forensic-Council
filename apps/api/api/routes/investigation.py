@@ -446,7 +446,11 @@ async def start_investigation(
                     tmp_path.unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=409,
-                        detail=f"Duplicate detected: session {existing_session_id}",
+                        detail={
+                            "code": "duplicate_investigation",
+                            "existing_session_id": existing_session_id,
+                            "message": "Duplicate investigation already exists",
+                        },
                     )
         except HTTPException:
             raise

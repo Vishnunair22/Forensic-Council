@@ -21,7 +21,7 @@ export function cleanFindingText(text: string | null | undefined, maxLen?: numbe
     // Strip backend metric/audit fragments that leak into summaries
     .replace(/[.,]?\s*Key metrics:[\s\S]*$/i, "")
     .replace(/[.,]?\s*Reliability impact:[^.]*\.?/gi, "")
-    .replace(/[.,]?\s*Penalty factor:[^.]*\.?/gi, "")
+    .replace(/[.,]?\s*Penalty factor:\s*\d+(?:\.\d+)?\.?/gi, "")
     // Strip redundant "Final Verdict: X" and "Confidence: N%" labels from LLM synthesis
     .replace(/\bFinal [Vv]erdict:\s*[A-Za-z_]+[.,]?\s*/g, "")
     .replace(/\b[Cc]onfidence:\s*\d+(?:\.\d+)?%[.,]?\s*/g, "")

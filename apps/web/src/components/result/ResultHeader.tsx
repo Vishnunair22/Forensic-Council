@@ -18,7 +18,6 @@ import { motion } from "framer-motion";
 import clsx from "clsx";
 import type { ReportDTO } from "@/lib/api";
 import type { VerdictConfig } from "@/lib/verdict";
-import { cleanFindingText } from "@/lib/findingText";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";
 import { ArcGauge } from "./ArcGauge";
 
@@ -152,8 +151,13 @@ export function ResultHeader({
               >
                 {vc.label}
               </motion.h2>
-              <p className="mt-3 max-w-3xl text-sm text-white/52 leading-relaxed">
-                {cleanFindingText(report.verdict_sentence || report.executive_summary || vc.desc)}
+              <p className="mt-3 max-w-3xl text-sm text-white/50 leading-relaxed">
+                {buildVerdictContext({
+                  confidence: confPct,
+                  agents: activeAgentIds.length,
+                  phase: isDeepPhase ? "deep" : "initial",
+                  fallback: vc.desc,
+                })}
               </p>
             </div>
           </div>
@@ -244,6 +248,22 @@ function Metric({ label, value, color, icon: Icon }: { label: string; value: num
       </div>
     </div>
   );
+}
+
+function buildVerdictContext({
+  confidence,
+  agents,
+  phase,
+  fallback,
+}: {
+  confidence: number;
+  agents: number;
+  phase: "initial" | "deep";
+  fallback: string;
+}): string {
+  if (agents <= 0) return fallback;
+  const phaseLabel = phase === "deep" ? "deep-analysis" : "initial-analysis";
+  return `Signed ${phaseLabel} report based on ${agents} active agent${agents === 1 ? "" : "s"} with ${confidence}% aggregate confidence.`;
 }
 
 function cleanDisplayName(fileName: string, report: ReportDTO): string {

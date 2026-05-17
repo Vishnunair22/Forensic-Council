@@ -97,6 +97,9 @@ function extractDuplicateSessionId(detail: unknown): string | null {
     if (d.session_id && typeof d.session_id === "string") {
       return d.session_id;
     }
+    if (d.code === "duplicate_investigation") {
+      return typeof d.existing_session_id === "string" ? d.existing_session_id : null;
+    }
     if (d.detail && typeof d.detail === "object") {
       const nested = d.detail as Record<string, unknown>;
       if (nested.existing_session_id && typeof nested.existing_session_id === "string") {
@@ -105,8 +108,8 @@ function extractDuplicateSessionId(detail: unknown): string | null {
       if (nested.session_id && typeof nested.session_id === "string") {
         return nested.session_id;
       }
-      if (nested.code && nested.code === "duplicate_investigation") {
-        return nested.existing_session_id as string ?? null;
+      if (nested.code === "duplicate_investigation") {
+        return typeof nested.existing_session_id === "string" ? nested.existing_session_id : null;
       }
     }
   }

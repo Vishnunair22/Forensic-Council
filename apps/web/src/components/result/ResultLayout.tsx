@@ -82,7 +82,12 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
 
   if (!rs.mounted) {
-    return <ResultSkeletonView />;
+    return (
+      <ResultLoadingView
+        title="Consensus Synthesis"
+        liveText="Final report synthesis requested. Compiling initial agent findings."
+      />
+    );
   }
 
   return (
@@ -193,14 +198,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
           )}
 
-          {rs.state === "arbiter" && (
-            <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
-              <Activity className="w-8 h-8 text-primary animate-pulse" />
-              <p className="font-mono text-xs font-semibold tracking-wide text-white/60">
-                {rs.arbiterMsg || "Arbiter is compiling agent findings..."}
-              </p>
-            </div>
-          )}
+          {rs.state === "arbiter" && <ResultInlineStatus message={rs.arbiterMsg} />}
 
           {rs.state === "ready" && rs.report && (
             <motion.div
@@ -290,9 +288,45 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   );
 }
 
+function ResultLoadingView({
+  title,
+  liveText,
+}: {
+  title: string;
+  liveText: string;
+}) {
+  return (
+    <div className="min-h-screen bg-background" aria-busy="true" aria-label={title}>
+      <ForensicProgressOverlay
+        title={title}
+        liveText={liveText}
+        telemetryLabel="Compiling agent findings"
+        showElapsed
+      />
+      <ResultSkeletonView />
+    </div>
+  );
+}
+
+function ResultInlineStatus({ message }: { message: string }) {
+  return (
+    <div className="min-h-[54vh] flex items-center justify-center">
+      <div className="w-full max-w-md border border-border-muted bg-surface-1 px-8 py-10 text-center">
+        <Activity className="w-8 h-8 text-primary animate-pulse mx-auto" />
+        <div className="mt-6 text-[10px] font-mono font-bold tracking-[0.24em] text-primary/60 uppercase">
+          Consensus Synthesis
+        </div>
+        <p className="mt-3 font-mono text-xs font-semibold leading-relaxed text-white/60">
+          {message || "Arbiter is compiling agent findings..."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ResultSkeletonView() {
   return (
-    <div className="min-h-screen" aria-busy="true" aria-label="Loading report">
+    <div className="min-h-screen opacity-35" aria-hidden="true">
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
         <div
           className="flex items-center justify-between gap-4 p-4 bg-surface-1 border border-border-muted"
@@ -329,20 +363,19 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   if (!report) return [];
 
   const findings: string[] = [];
+  const summaryText = cleanFindingText(report.verdict_sentence || report.executive_summary);
   // Don't truncate the key-findings paragraphs. Arbiter-produced narratives
   // are already concise; mid-sentence "..." cuts hide critical signals.
   const push = (value: string | null | undefined) => {
     const cleaned = cleanFindingText(value);
     if (!cleaned || isLowValueFinding(cleaned)) return;
+    if (summaryText && sameFinding(summaryText, cleaned)) return;
     if (!findings.some((existing) => sameFinding(existing, cleaned))) {
       findings.push(cleaned);
     }
   };
 
   (report.key_findings ?? []).forEach((finding) => push(finding));
-
-  if (findings.length < 4) push(report.verdict_sentence);
-  if (findings.length < 4) push(report.executive_summary);
 
   const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
     .map(([agentId, text]) => ({
@@ -388,7 +421,10 @@ function sameFinding(a: string, b: string): boolean {
   const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const na = normalize(a);
   const nb = normalize(b);
-  return na === nb || na.includes(nb.slice(0, 90)) || nb.includes(na.slice(0, 90));
+  if (!na || !nb) return false;
+  const aSlice = na.slice(0, Math.min(90, na.length));
+  const bSlice = nb.slice(0, Math.min(90, nb.length));
+  return na === nb || na.includes(bSlice) || nb.includes(aSlice);
 }
 
 function isLowValueFinding(text: string): boolean {

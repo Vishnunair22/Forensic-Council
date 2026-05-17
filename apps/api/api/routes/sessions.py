@@ -339,6 +339,7 @@ async def get_session_report(
     await assert_session_access(session_id, current_user)
 
     pipeline = get_active_pipeline(session_id)
+    pipeline_in_progress = False
 
     # ── 1. In-memory pipeline ─────────────────────────────────────────────────
     if pipeline:
@@ -355,14 +356,7 @@ async def get_session_report(
         # Pipeline exists but report not ready: agents, arbiter, or persistence in flight.
         # Do not fall through to 404 just because _active_tasks lost the handle or the
         # asyncio Task appears done for one scheduling slice (breaks Accept → results poll).
-        return JSONResponse(
-            status_code=202,
-            content={
-                "status": "in_progress",
-                "session_id": session_id,
-                "message": "Investigation still in progress",
-            },
-        )
+        pipeline_in_progress = True
 
     # ── 2. In-memory reports cache ────────────────────────────────────────────
     if session_id in _final_reports:
@@ -472,6 +466,16 @@ async def get_session_report(
         raise HTTPException(
             status_code=503,
             detail="Report lookup temporarily unavailable — please retry shortly.",
+        )
+
+    if pipeline_in_progress:
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "in_progress",
+                "session_id": session_id,
+                "message": "Investigation still in progress",
+            },
         )
 
     raise HTTPException(
@@ -784,9 +788,30 @@ async def resume_investigation(
             detail="You do not have access to this investigation",
         )
 
-    # Now write the decision key
+    # Check for existing decision key (idempotency)
     redis = await get_redis_client()
     decision_key = f"forensic:session:resume_decision:{session_id}"
+    existing_decision = await redis.get(decision_key)
+    if existing_decision:
+        _log.info(
+            "Resume called but decision already exists — returning idempotent response",
+            session_id=session_id,
+        )
+        try:
+            existing = json.loads(existing_decision) if isinstance(existing_decision, str) else {}
+        except Exception:
+            existing = {}
+        return {
+            "status": "running",
+            "phase": "deep" if request.deep_analysis else "initial",
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+            "message": "Deep analysis already running"
+            if request.deep_analysis
+            else "Final report synthesis already running",
+        }
+
+    # Now write the decision key
     await redis.set(
         decision_key,
         json.dumps(

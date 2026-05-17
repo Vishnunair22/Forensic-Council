@@ -231,6 +231,14 @@ def mock_redis():
     m.subscribe = AsyncMock()
     m.ping = AsyncMock(return_value=True)
     m.flushdb = AsyncMock()
+
+    # Stub get_pubsub for InterAgentBus distributed signaling
+    pubsub_mock = AsyncMock()
+    pubsub_mock.subscribe = AsyncMock()
+    pubsub_mock.get_message = AsyncMock(return_value=None)
+    pubsub_mock.unsubscribe = AsyncMock()
+    m.get_pubsub = MagicMock(return_value=pubsub_mock)
+
     return m
 
 

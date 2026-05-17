@@ -215,8 +215,8 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const headline = extractHeadline(f);
   const detail = extractDetail(f, headline);
   const MAX = 180;
-  const needsExpand = detail.length > MAX;
-  const visibleDetail = needsExpand && !expanded ? detail.slice(0, MAX).trimEnd() + "…" : detail;
+  const needsExpand = headline.length > 100 || detail.length > MAX;
+  const visibleDetail = needsExpand && !expanded ? (detail.length > MAX ? detail.slice(0, MAX).trimEnd() + "…" : detail) : detail;
 
   return (
     <motion.div
@@ -299,20 +299,22 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
 
         {/* Detail */}
         {detail && (
-          <div className="space-y-1.5">
-            <p className="text-[13px] text-white/65 leading-relaxed">{visibleDetail}</p>
-            {needsExpand && (
-              <button
-                type="button"
-                onClick={() => setExpanded(e => !e)}
-                className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
-              >
-                {expanded
-                  ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
-                  : <><ChevronDown className="w-3.5 h-3.5" /><span>Show more</span></>
-                }
-              </button>
-            )}
+          <p className="text-[13px] text-white/65 leading-relaxed">{visibleDetail}</p>
+        )}
+
+        {/* Expand/Collapse Button */}
+        {needsExpand && (
+          <div className="pt-0.5">
+            <button
+              type="button"
+              onClick={() => setExpanded(e => !e)}
+              className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
+            >
+              {expanded
+                ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
+                : <><ChevronDown className="w-3.5 h-3.5" /><span>Show more</span></>
+              }
+            </button>
           </div>
         )}
 
@@ -328,10 +330,9 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
 
 function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: string }) {
   const [expanded, setExpanded] = useState(false);
-  const cleaned = compactText(text || "", 220);
   const source = cleanFindingText(sourceText || "").trim();
-  const hasSource = source && summaryFingerprint(source) !== summaryFingerprint(cleaned);
-  if (!cleaned) return null;
+  const hasSource = source && summaryFingerprint(source) !== summaryFingerprint(text);
+  if (!text) return null;
   return (
     <div className="border-t border-white/[0.07] pt-3.5 space-y-2.5">
       <div className="flex items-center gap-2 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-white/35">
@@ -339,7 +340,7 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
         Agent Brief
       </div>
       <p className="text-[13px] text-white/76 leading-relaxed font-medium">
-        {cleaned}
+        {text}
       </p>
       {hasSource && (
         <button
@@ -375,7 +376,7 @@ function buildAgentBrief(completedData: AgentUpdate | undefined, findings: Findi
   const confidence = Math.round((completedData.confidence || 0) * 100);
   const alertFindings = findings.filter(isAlertFinding);
   const topFinding = findings[0];
-  const topSignal = topFinding ? compactText(extractHeadline(topFinding), 120) : "";
+  const topSignal = topFinding ? compactText(extractHeadline(topFinding), 200) : "";
   const toolText = toolsRan === 1 ? "1 tool check" : `${toolsRan} tool checks`;
 
   if (alertFindings.length > 0) {
@@ -476,7 +477,7 @@ export function AgentStatusCard({
   const isAgentAlert =
     (typeof verdictScore === "number" && verdictScore > 0.6) ||
     ALERT_VERDICTS.has(agentVerdict || "");
-  const toolsRan = completedData?.tools_ran || findings.length || 0;
+  const toolsRan = findings.length;
   const agentBrief = buildAgentBrief(completedData, findings, toolsRan);
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;

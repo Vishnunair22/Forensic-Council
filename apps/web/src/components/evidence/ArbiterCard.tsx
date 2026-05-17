@@ -29,12 +29,12 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
   const [phraseIndex, setPhraseIndex] = React.useState(0);
 
   React.useEffect(() => {
-    if ((!isSynthesizing && !isPreWarming) || thinking) return;
+    if (!isSynthesizing) return;
     const interval = setInterval(() => {
       setPhraseIndex(prev => (prev + 1) % ARBITER_PHRASES.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [isSynthesizing, isPreWarming, thinking]);
+  }, [isSynthesizing]);
 
   const cleanThinking = React.useMemo(() => {
     if (!thinking) return "";
@@ -47,139 +47,156 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
       .trim();
   }, [thinking]);
 
-  const isWaiting = !isPreWarming && !isPreWarmComplete && !isSynthesizing && !isReady;
-  const displayText = isWaiting
-    ? `Arbiter is waiting for ${phase === "deep" ? "deep" : "initial"} agent findings.`
-    : (cleanThinking || (isReady ? "Council report is ready. Opening the result page when the signed report is available." : ARBITER_PHRASES[phraseIndex]));
-
   const getStatusDisplay = () => {
-    if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-success", bg: "bg-success/20", border: "border-success/30" };
-    if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-primary", bg: "bg-primary/20", border: "border-primary/30" };
-    if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-success/70", bg: "bg-success/10", border: "border-success/20" };
-    if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-warning", bg: "bg-warning/10", border: "border-warning/20" };
-    return { label: "Awaiting Agents", icon: Activity, color: "text-white/30", bg: "bg-white/5", border: "border-white/10" };
+    if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-success", bg: "bg-success/12 border-success/40", border: "border-success/30" };
+    if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40", border: "border-[var(--color-primary)]/30" };
+    if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-success/70", bg: "bg-success/10 border-success/20", border: "border-success/20" };
+    if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-warning", bg: "bg-warning/10 border-warning/20", border: "border-warning/20" };
+    return { label: "Awaiting Agents", icon: Activity, color: "text-white/45", bg: "bg-white/[0.06] border-white/15", border: "border-white/10" };
   };
 
   const display = getStatusDisplay();
-  const Icon = display.icon;
+  
+  const getDisplayText = () => {
+    if (isReady) {
+      return "Council report is ready. Opening the result page when the signed report is available.";
+    }
+    if (cleanThinking) {
+      return cleanThinking;
+    }
+    if (isSynthesizing) {
+      return ARBITER_PHRASES[phraseIndex];
+    }
+    if (status === "pre_warm_complete") {
+      return "Pre-warm complete. Ready to synthesize.";
+    }
+    if (status === "pre_warming") {
+      return "Speculative synthesis engine is pre-warming in the background.";
+    }
+    if (allAgentsDone) {
+      if (phase === "deep") {
+        return "Deep analysis complete. Ready for final report synthesis.";
+      }
+      return "Initial analysis complete. Awaiting analyst decision to proceed.";
+    }
+    return `Arbiter is waiting for ${phase === "deep" ? "deep" : "initial"} agent findings.`;
+  };
+
+  const displayText = getDisplayText();
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      className="relative group h-full"
+      className="relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-surface-1 border border-border-muted rounded-2xl h-full"
+      data-testid="agent-card-arbiter"
     >
-      <div className={clsx(
-        "absolute -inset-0.5 rounded-2xl blur opacity-10 transition duration-1000 animate-pulse",
-        isReady ? "bg-success" : isSynthesizing ? "bg-primary" : "bg-primary"
-      )} />
-
-      <div className="relative h-full rounded-2xl overflow-hidden flex flex-col" style={{ background: "rgba(5,9,18,0.92)", border: "1px solid rgba(165,200,255,0.08)", boxShadow: "0 8px 28px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
-        <div className="px-5 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={clsx(
-              "w-10 h-10 rounded-xl border flex items-center justify-center transition-colors duration-500",
-              display.bg, display.border
-            )}>
-              <Scale className={clsx("w-5 h-5", display.color)} />
+      {/* --- Card Header --- */}
+      <div className="p-7 pb-5 border-b border-border-muted relative z-10 bg-surface-1">
+        <div className="flex items-start justify-between mb-8">
+          <div className="flex items-center gap-5">
+            {/* Arbiter Icon */}
+            <div className="relative w-16 h-16 flex items-center justify-center bg-surface-2 border border-border-muted rounded-xl">
+              <Scale className={clsx("w-7 h-7 relative z-10 transition-colors duration-500", display.color)} />
             </div>
+
             <div>
-              <h3 className="text-sm font-bold text-white tracking-tight">Council Arbiter</h3>
-              <p className="text-[9px] font-mono text-white/30 tracking-widest font-bold">
-                {phase === "deep" ? "Phase 2 Synthesis" : "Phase 1 Synthesis"}
-              </p>
+              <div className="flex items-center gap-2 mb-1.5">
+                <h3 className="text-2xl font-heading font-bold text-white tracking-tight">Council Arbiter</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={clsx(
+                  "px-3 py-1 rounded-md text-[11px] font-mono font-bold border transition-colors duration-500",
+                  display.bg
+                )}>
+                  {display.label}
+                </span>
+                <span className="text-[11px] font-mono font-semibold text-white/50 tracking-wider">
+                  {phase === "deep" ? "Phase 2 Synthesis" : "Phase 1 Synthesis"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-7 flex flex-col flex-1 justify-between gap-6 relative z-10">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-white/35 tracking-widest font-bold">Synthesis Engine</span>
+              <span className="text-[10px] font-mono text-white/50">
+                {isReady ? "Completed" : isSynthesizing ? "Computing" : "Preparing"}
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+              <motion.div
+                className={clsx(
+                  "h-full shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.4)]",
+                  isReady ? "bg-success" : "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-soft)]"
+                )}
+                initial={{ width: "0%" }}
+                animate={{
+                  width: isReady ? "100%" : isPreWarmComplete ? "85%" : isSynthesizing ? "65%" : isPreWarming ? "40%" : "5%"
+                }}
+                transition={{ duration: 1.5, ease: "circOut" }}
+              />
             </div>
           </div>
 
-          <div className={clsx(
-            "px-2 py-1 rounded-md border flex items-center gap-1.5 transition-all duration-500",
-            display.bg, display.border
-          )}>
-            <Icon className={clsx("w-3 h-3", display.color, (isPreWarming || isSynthesizing) && "animate-pulse")} />
-            <span className={clsx("text-[9px] font-bold tracking-tighter", display.color)}>
-              {display.label}
-            </span>
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5 flex flex-col gap-3 min-h-[80px]">
+            <div className="flex items-start gap-3">
+              {isReady ? (
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+              ) : isPreWarming || isSynthesizing ? (
+                <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0 mt-0.5" />
+              ) : (
+                <Activity className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
+              )}
+              <div className="flex flex-col gap-1">
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={displayText}
+                    initial={{ opacity: 0, y: 3 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -3 }}
+                    transition={{ duration: 0.3 }}
+                    className="text-xs text-white/80 leading-relaxed font-medium"
+                  >
+                    {displayText}
+                  </motion.p>
+                </AnimatePresence>
+                {isPreWarming && (
+                  <p className="text-[10px] text-white/40 italic">
+                    Evidence weights are being prepared in the background.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="p-5 flex flex-col flex-1 justify-between gap-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-white/30 tracking-widest">Synthesis Engine</span>
-                <span className="text-[10px] font-mono text-white/50">
-                  {isReady ? "Completed" : isSynthesizing ? "Computing" : "Preparing"}
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <motion.div
-                  className={clsx(
-                    "h-full shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.4)]",
-                    isReady ? "bg-success" : "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-soft)]"
-                  )}
-                  initial={{ width: "0%" }}
-                  animate={{
-                    width: isReady ? "100%" : isPreWarmComplete ? "85%" : isSynthesizing ? "65%" : isPreWarming ? "40%" : "5%"
-                  }}
-                  transition={{ duration: 1.5, ease: "circOut" }}
-                />
-              </div>
-            </div>
-
-            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5 flex flex-col gap-3 min-h-[80px]">
-              <div className="flex items-start gap-3">
-                {isReady ? (
-                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                ) : isPreWarming || isSynthesizing ? (
-                  <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0 mt-0.5" />
-                ) : (
-                  <Activity className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
-                )}
-                <div className="flex flex-col gap-1">
-                  <AnimatePresence mode="wait">
-                    <motion.p
-                      key={displayText}
-                      initial={{ opacity: 0, y: 3 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -3 }}
-                      transition={{ duration: 0.3 }}
-                      className="text-xs text-white/80 leading-relaxed font-medium"
-                    >
-                      {displayText}
-                    </motion.p>
-                  </AnimatePresence>
-                  {isPreWarming && (
-                    <p className="text-[10px] text-white/40 italic">
-                      Evidence weights are being prepared in the background.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 h-4 px-1">
-            {[...Array(12)].map((_, i) => (
-              <motion.div
-                key={i}
-                className={clsx(
-                  "w-1 rounded-full transition-colors duration-500",
-                  isReady ? "bg-success/40" : "bg-[var(--color-primary)]/30"
-                )}
-                animate={{
-                  height: isReady ? 4 : [4, 10, 4],
-                  opacity: isReady ? 0.2 : [0.3, 0.5, 0.3]
-                }}
-                transition={{
-                  duration: 2.5,
-                  repeat: Infinity,
-                  delay: i * 0.15,
-                  ease: "easeInOut"
-                }}
-              />
-            ))}
-            <span className="ml-auto text-[9px] font-mono text-white/20">Arbiter Pulse</span>
-          </div>
+        <div className="flex items-center gap-1.5 h-4 px-1">
+          {[...Array(12)].map((_, i) => (
+            <motion.div
+              key={i}
+              className={clsx(
+                "w-1 rounded-full transition-colors duration-500",
+                isReady ? "bg-success/40" : "bg-[var(--color-primary)]/30"
+              )}
+              animate={{
+                height: isReady ? 4 : [4, 10, 4],
+                opacity: isReady ? 0.2 : [0.3, 0.5, 0.3]
+              }}
+              transition={{
+                duration: 2.5,
+                repeat: Infinity,
+                delay: i * 0.15,
+                ease: "easeInOut"
+              }}
+            />
+          ))}
+          <span className="ml-auto text-[9px] font-mono text-white/20">Arbiter Pulse</span>
         </div>
       </div>
     </motion.div>
