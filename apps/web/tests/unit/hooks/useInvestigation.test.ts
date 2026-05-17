@@ -140,7 +140,7 @@ describe("useInvestigation Hook", () => {
       created_at: new Date().toISOString(),
     };
     setupSimulationMock("awaiting_decision", checkpoint);
-    
+
     const { result } = renderHook(() => useInvestigation(mockPlaySound));
     (api.submitHITLDecision as jest.Mock).mockResolvedValue({});
 
@@ -149,5 +149,36 @@ describe("useInvestigation Hook", () => {
     });
 
     expect(api.submitHITLDecision).toHaveBeenCalled();
+  });
+
+  describe("failure path resets UI state", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      storage.clearAllForensicKeys();
+      sessionOnlyStorage.clearAllForensicKeys();
+      storage.setItem("forensic_auth_ok", "1");
+      (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
+    });
+
+    test("isUploading state resets after auth failure simulation", async () => {
+      (api.autoLoginAsInvestigator as jest.Mock).mockRejectedValue(new Error("Auth failed"));
+
+      const { result } = renderHook(() => useInvestigation(mockPlaySound));
+      const testFile = new File(["test"], "test.jpg", { type: "image/jpeg" });
+
+      act(() => {
+        result.current.handleFile(testFile);
+      });
+
+      await act(async () => {
+        try {
+          await result.current.handleFile(testFile);
+        } catch {
+          // Expected to fail
+        }
+      });
+
+      expect(result.current.isUploading).toBe(false);
+    });
   });
 });

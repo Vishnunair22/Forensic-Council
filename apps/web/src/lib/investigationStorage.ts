@@ -21,11 +21,14 @@ export function clearAgentSnapshots() {
   storage.removeItem("forensic_initial_agents");
   storage.removeItem("forensic_deep_agents");
 
-  Object.keys(window.localStorage).forEach((key) => {
-    if (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:")) {
-      window.localStorage.removeItem(key);
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (key && (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:") || key.startsWith("forensic_investigation_ctx:"))) {
+      keysToRemove.push(key);
     }
-  });
+  }
+  keysToRemove.forEach((key) => window.localStorage.removeItem(key));
 }
 
 export function expireSessionCookie() {

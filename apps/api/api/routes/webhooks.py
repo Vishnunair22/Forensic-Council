@@ -411,7 +411,7 @@ async def deliver_webhook(
                     "X-FC-Timestamp": ts,
                 }
                 if secret:
-                    signed_payload = f"{ts}.{payload_str}".encode("utf-8")
+                    signed_payload = f"{ts}.{payload_str}".encode()
                     sig = hmac.new(
                         key=secret.encode("utf-8"),
                         msg=signed_payload,

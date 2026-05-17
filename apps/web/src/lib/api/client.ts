@@ -81,9 +81,37 @@ export class DuplicateInvestigationError extends Error {
 }
 
 function extractDuplicateSessionId(detail: unknown): string | null {
-  if (typeof detail !== "string") return null;
-  const match = detail.match(/Duplicate detected:\s*session\s+(?:b['"])?([0-9a-fA-F-]+)/);
-  return match?.[1] ?? null;
+  if (detail === null || detail === undefined) return null;
+
+  if (typeof detail === "string") {
+    const match = detail.match(/Duplicate detected:\s*session\s+(?:b['"])?([0-9a-fA-F-]+)/);
+    if (match) return match[1];
+    return null;
+  }
+
+  if (typeof detail === "object") {
+    const d = detail as Record<string, unknown>;
+    if (d.existing_session_id && typeof d.existing_session_id === "string") {
+      return d.existing_session_id;
+    }
+    if (d.session_id && typeof d.session_id === "string") {
+      return d.session_id;
+    }
+    if (d.detail && typeof d.detail === "object") {
+      const nested = d.detail as Record<string, unknown>;
+      if (nested.existing_session_id && typeof nested.existing_session_id === "string") {
+        return nested.existing_session_id;
+      }
+      if (nested.session_id && typeof nested.session_id === "string") {
+        return nested.session_id;
+      }
+      if (nested.code && nested.code === "duplicate_investigation") {
+        return nested.existing_session_id as string ?? null;
+      }
+    }
+  }
+
+  return null;
 }
 
 

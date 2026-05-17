@@ -349,6 +349,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       } catch (authErr) {
         setIsUploading(false);
         setShowLoadingOverlay(false);
+        sessionOnlyStorage.removeItem("fc_show_loading");
         resetSimulation();
         investigationInFlightRef.current = false;
         toast.destructive({ title: "Authentication failed", description: authErr instanceof Error ? authErr.message : "Could not establish session." });
@@ -398,6 +399,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
           setIsUploading(false);
           setShowLoadingOverlay(false);
+          sessionOnlyStorage.removeItem("fc_show_loading");
           resetSimulation();
           playSound("error");
           toast.destructive({ title: "Investigation Failed", description: errorMsg });
@@ -464,6 +466,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to reconnect to stream";
             setIsUploading(false);
             setShowLoadingOverlay(false);
+            sessionOnlyStorage.removeItem("fc_show_loading");
             setWsConnectionError(wsErrMsg);
           })
           .finally(() => {
@@ -487,7 +490,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
+          setIsUploading(false);
           setShowLoadingOverlay(false);
+          sessionOnlyStorage.removeItem("fc_show_loading");
           resetSimulation();
           setWsConnectionError(wsErrMsg);
         })

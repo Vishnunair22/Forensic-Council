@@ -150,12 +150,13 @@ async def update_active_pipeline_metadata(
     because the field set is small and merge order is deterministic.
     """
     import json as _json
+
     from redis.exceptions import WatchError
 
     redis = await _get_redis()
     key = f"{SESSION_METADATA_KEY_PREFIX}{session_id}"
     raw_client = redis.client  # underlying redis.asyncio.Redis
-    for attempt in range(max_retries):
+    for _attempt in range(max_retries):
         try:
             async with raw_client.pipeline(transaction=True) as pipe:
                 await pipe.watch(key)

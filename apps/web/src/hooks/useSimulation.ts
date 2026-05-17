@@ -167,6 +167,24 @@ export const useSimulation = ({
             return;
           }
 
+          if (
+            activePhaseRef.current === "deep" &&
+            update.type === "AGENT_COMPLETE" &&
+            update.data?.analysis_phase === "initial"
+          ) {
+            dbg.log("[WebSocket] Ignoring initial-phase AGENT_COMPLETE during deep analysis");
+            return;
+          }
+
+          if (
+            activePhaseRef.current === "initial" &&
+            update.type === "AGENT_COMPLETE" &&
+            update.data?.analysis_phase === "deep"
+          ) {
+            dbg.log("[WebSocket] Ignoring deep-phase AGENT_COMPLETE during initial analysis");
+            return;
+          }
+
           switch (update.type) {
             case "CONNECTED":
                     // Server confirmed auth and registered socket — connection fully ready.

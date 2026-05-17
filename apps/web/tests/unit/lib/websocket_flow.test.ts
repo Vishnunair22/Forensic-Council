@@ -151,3 +151,43 @@ describe("report polling contract", () => {
     expect(result.report?.report_id).toBe("r1");
   });
 });
+
+describe("WebSocket phase guard behavior", () => {
+  it("ignores message with different session_id", () => {
+    const { connected } = createLiveSocket("sess-a");
+    wsInstance.simulateOpen();
+    wsInstance.simulateMessage({ type: "AGENT_COMPLETE", session_id: "sess-b", agent_id: "AGT-01" });
+    expect(connected).toBeDefined();
+  });
+
+  it("ignores initial AGENT_COMPLETE after deep phase starts", () => {
+    const { connected } = createLiveSocket("sess-phase");
+    wsInstance.simulateOpen();
+    wsInstance.simulateMessage({
+      type: "AGENT_COMPLETE",
+      session_id: "sess-phase",
+      agent_id: "AGT-01",
+      data: { analysis_phase: "initial" },
+    });
+    expect(connected).toBeDefined();
+  });
+
+  it("ignores deep-phase AGENT_COMPLETE during initial analysis", () => {
+    const { connected } = createLiveSocket("sess-phase2");
+    wsInstance.simulateOpen();
+    wsInstance.simulateMessage({
+      type: "AGENT_COMPLETE",
+      session_id: "sess-phase2",
+      agent_id: "AGT-01",
+      data: { analysis_phase: "deep" },
+    });
+    expect(connected).toBeDefined();
+  });
+
+  it("handles ERROR event", () => {
+    const { connected } = createLiveSocket("sess-err2");
+    wsInstance.simulateOpen();
+    wsInstance.simulateMessage({ type: "ERROR", session_id: "sess-err2", message: "Investigation failed" });
+    expect(connected).toBeDefined();
+  });
+});

@@ -386,11 +386,11 @@ class CustodyLogger:
         if self._postgres is None:
             return
 
-        FLUSH_BATCH_SIZE = 500
+        flush_batch_size = 500
         processed = 0
         try:
             redis = await self._get_redis()
-            while processed < FLUSH_BATCH_SIZE:
+            while processed < flush_batch_size:
                 item_raw = await redis.client.lpop(self._wal_key)
                 if not item_raw:
                     break

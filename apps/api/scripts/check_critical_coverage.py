@@ -41,7 +41,7 @@ def main(cov_path: str | None = None) -> None:
     failures = []
     for module, threshold in CRITICAL.items():
         file_key = None
-        for fk, fv in all_files.items():
+        for fk, _fv in all_files.items():
             if module in fk or fk.endswith(module):
                 file_key = fk
                 break

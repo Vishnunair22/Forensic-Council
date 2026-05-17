@@ -573,7 +573,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                                 ),
                                 timeout=challenge_timeout,
                             )
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             logger.warning(
                                 "Challenge attempt timed out",
                                 challenged_agent=challenged_id,

@@ -499,3 +499,50 @@ describe("pollForReport", () => {
     expect(result.report_id).toBe("11111111-1111-4111-8111-111111111111");
   });
 });
+
+describe("DuplicateInvestigationError handling", () => {
+  const { DuplicateInvestigationError } = require("@/lib/api/client");
+
+  it("throws DuplicateInvestigationError for string detail with session ID", async () => {
+    respondJson({ detail: "Duplicate detected: session 550e8400-e29b-41d4-a716-446655440000" }, 409);
+
+    const file = new File(["data"], "evidence.jpg", { type: "image/jpeg" });
+    await expect(startInvestigation(file, "CASE-1234567890", "REQ-12345")).rejects.toThrow(
+      DuplicateInvestigationError
+    );
+  });
+
+  it("throws DuplicateInvestigationError for object with existing_session_id", async () => {
+    respondJson({ detail: { existing_session_id: "550e8400-e29b-41d4-a716-446655440000" } }, 409);
+
+    const file = new File(["data"], "evidence.jpg", { type: "image/jpeg" });
+    await expect(startInvestigation(file, "CASE-1234567890", "REQ-12345")).rejects.toThrow(
+      DuplicateInvestigationError
+    );
+  });
+
+  it("throws DuplicateInvestigationError for structured detail with code", async () => {
+    respondJson(
+      {
+        detail: {
+          code: "duplicate_investigation",
+          existing_session_id: "550e8400-e29b-41d4-a716-446655440000",
+          message: "Duplicate investigation already exists",
+        },
+      },
+      409
+    );
+
+    const file = new File(["data"], "evidence.jpg", { type: "image/jpeg" });
+    const error = await startInvestigation(file, "CASE-1234567890", "REQ-12345").catch((e) => e);
+    expect(error).toBeInstanceOf(DuplicateInvestigationError);
+    expect(error.existingSessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+  });
+
+  it("throws normal Error for 409 without session id", async () => {
+    respondJson({ detail: "Conflict" }, 409);
+
+    const file = new File(["data"], "evidence.jpg", { type: "image/jpeg" });
+    await expect(startInvestigation(file, "CASE-1234567890", "REQ-12345")).rejects.toThrow("Conflict");
+  });
+});

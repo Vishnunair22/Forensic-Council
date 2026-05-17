@@ -98,10 +98,10 @@ case "$MODE" in
     ./scripts/verify_phase8_tests.sh static || fail "test static failed"
     pass "test static"
 
-    ./scripts/verify_phase8_tests.sh frontend-unit 2>/dev/null || true
+    ./scripts/verify_phase8_tests.sh frontend-unit || fail "test frontend-unit failed"
     pass "test frontend-unit"
 
-    ./scripts/verify_phase8_tests.sh backend-unit 2>/dev/null || true
+    ./scripts/verify_phase8_tests.sh backend-unit || fail "test backend-unit failed"
     pass "test backend-unit"
 
     echo "Project verification passed: tests"

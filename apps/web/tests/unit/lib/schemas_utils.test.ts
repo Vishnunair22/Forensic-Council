@@ -7,7 +7,7 @@
  * Run: cd apps/web && npm test -- tests/unit/lib/schemas_utils.test.ts
  */
 
-import { AgentResultSchema, ReportSchema, HistorySchema } from "@/lib/schemas";
+import { AgentResultSchema, ReportSchema, HistorySchema, ReportDTOSchema } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
 // ── Shared valid fixtures ─────────────────────────────────────────────────────
@@ -238,5 +238,164 @@ describe("cn() — Tailwind class merger", () => {
     expect(result).toContain("p-8");
     expect(result).not.toContain("p-2");
     expect(result).toContain("text-sm");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ReportDTOSchema (Backend-to-Frontend DTO)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("ReportDTOSchema", () => {
+  const validReportDTO = {
+    session_id: "550e8400-e29b-41d4-a716-446655440000",
+    report_id: "660e8400-e29b-41d4-a716-446655440001",
+    case_id: "CASE-1234567890",
+    overall_verdict: "LIKELY_AUTHENTIC",
+    overall_confidence: 0.92,
+    overall_error_rate: 0.05,
+    executive_summary: "Evidence appears authentic.",
+    per_agent_findings: {
+      "agent-1": [
+        {
+          finding_id: "f1",
+          agent_id: "agent-1",
+          agent_name: "Image Analyst",
+          finding_type: "ela_analysis",
+          status: "complete",
+          confidence_raw: 0.95,
+          court_statement: "No manipulation detected.",
+          confidence: 0.95,
+        },
+      ],
+    },
+    per_agent_metrics: { "agent-1": { tools_ran: 5, tools_skipped: 1 } },
+    per_agent_analysis: { "agent-1": "Primary analysis complete" },
+    uncertainty_statement: "Analysis based on available tools.",
+    analysis_coverage_note: "All applicable agents completed analysis.",
+    applicable_agent_count: 5,
+    skipped_agents: { "agent-4": "Video analysis not applicable for audio file" },
+    degradation_flags: [],
+    cryptographic_signature: "sig-abc123",
+    report_hash: "hash-abc123",
+    signed_utc: "2025-01-01T00:00:00Z",
+  };
+
+  describe("valid inputs", () => {
+    it("accepts valid complete report DTO", () => {
+      expect(ReportDTOSchema.safeParse(validReportDTO).success).toBe(true);
+    });
+
+    it("accepts minimal required fields", () => {
+      const minimal = {
+        session_id: "550e8400-e29b-41d4-a716-446655440000",
+        report_id: "660e8400-e29b-41d4-a716-446655440001",
+        case_id: "CASE-1234567890",
+        overall_verdict: "INCONCLUSIVE",
+        overall_confidence: 0.5,
+      };
+      expect(ReportDTOSchema.safeParse(minimal).success).toBe(true);
+    });
+
+    it("accepts missing optional fields (graceful degradation)", () => {
+      const partial = {
+        session_id: "550e8400-e29b-41d4-a716-446655440000",
+        report_id: "660e8400-e29b-41d4-a716-446655440001",
+        case_id: "CASE-1234567890",
+        overall_verdict: "INCONCLUSIVE",
+        overall_confidence: 0.5,
+        executive_summary: "Partial analysis completed.",
+        per_agent_findings: {},
+        degradation_flags: ["LLM_UNAVAILABLE"],
+      };
+      expect(ReportDTOSchema.safeParse(partial).success).toBe(true);
+    });
+
+    it("accepts confidence at boundary 0", () => {
+      const zeroConf = { ...validReportDTO, overall_confidence: 0 };
+      expect(ReportDTOSchema.safeParse(zeroConf).success).toBe(true);
+    });
+
+    it("accepts confidence at boundary 1", () => {
+      const maxConf = { ...validReportDTO, overall_confidence: 1 };
+      expect(ReportDTOSchema.safeParse(maxConf).success).toBe(true);
+    });
+
+    it("accepts multiple degradation flags", () => {
+      const degraded = {
+        ...validReportDTO,
+        degradation_flags: ["LLM_UNAVAILABLE", "QDRANT_UNAVAILABLE", "PARTIAL_ANALYSIS"],
+      };
+      expect(ReportDTOSchema.safeParse(degraded).success).toBe(true);
+    });
+
+    it("accepts empty per_agent_findings", () => {
+      const emptyFindings = { ...validReportDTO, per_agent_findings: {} };
+      expect(ReportDTOSchema.safeParse(emptyFindings).success).toBe(true);
+    });
+  });
+
+  describe("invalid inputs", () => {
+    it("rejects missing session_id", () => {
+      const { session_id: _, ...noSessionId } = validReportDTO;
+      expect(ReportDTOSchema.safeParse(noSessionId).success).toBe(false);
+    });
+
+    it("rejects missing report_id", () => {
+      const { report_id: _, ...noReportId } = validReportDTO;
+      expect(ReportDTOSchema.safeParse(noReportId).success).toBe(false);
+    });
+
+    it("rejects missing overall_verdict", () => {
+      const { overall_verdict: _, ...noVerdict } = validReportDTO;
+      expect(ReportDTOSchema.safeParse(noVerdict).success).toBe(false);
+    });
+
+    it("rejects missing overall_confidence", () => {
+      const { overall_confidence: _, ...noConf } = validReportDTO;
+      expect(ReportDTOSchema.safeParse(noConf).success).toBe(false);
+    });
+
+    it("rejects invalid verdict value", () => {
+      const invalidVerdict = { ...validReportDTO, overall_verdict: "INVALID_VERDICT" };
+      expect(ReportDTOSchema.safeParse(invalidVerdict).success).toBe(false);
+    });
+
+    it("rejects confidence > 1", () => {
+      const invalidConf = { ...validReportDTO, overall_confidence: 1.5 };
+      expect(ReportDTOSchema.safeParse(invalidConf).success).toBe(false);
+    });
+
+    it("rejects negative confidence", () => {
+      const negativeConf = { ...validReportDTO, overall_confidence: -0.1 };
+      expect(ReportDTOSchema.safeParse(negativeConf).success).toBe(false);
+    });
+
+    it("rejects non-uuid session_id", () => {
+      const invalidUuid = { ...validReportDTO, session_id: "not-a-uuid" };
+      expect(ReportDTOSchema.safeParse(invalidUuid).success).toBe(false);
+    });
+  });
+
+  describe("graceful fallback behavior", () => {
+    it("handles missing executive_summary with fallback", () => {
+      const noSummary = { ...validReportDTO };
+      delete (noSummary as Record<string, unknown>).executive_summary;
+      const result = ReportDTOSchema.safeParse(noSummary);
+      expect(result.success).toBe(true);
+    });
+
+    it("handles missing uncertainty_statement with fallback", () => {
+      const noUncertainty = { ...validReportDTO };
+      delete (noUncertainty as Record<string, unknown>).uncertainty_statement;
+      const result = ReportDTOSchema.safeParse(noUncertainty);
+      expect(result.success).toBe(true);
+    });
+
+    it("handles missing degradation_flags with fallback", () => {
+      const noFlags = { ...validReportDTO };
+      delete (noFlags as Record<string, unknown>).degradation_flags;
+      const result = ReportDTOSchema.safeParse(noFlags);
+      expect(result.success).toBe(true);
+    });
   });
 });

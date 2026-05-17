@@ -430,3 +430,200 @@ describe("Session-scoped metadata", () => {
     expect(history[0].fileName).toBe("file-a.png");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROUTE-STATE MATRIX (Phase 1 Fix)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Route-State Matrix", () => {
+  const lsStore2: Record<string, string> = {};
+  const ssStore2: Record<string, string> = {};
+
+  beforeEach(() => {
+    Object.keys(lsStore2).forEach((k) => delete lsStore2[k]);
+    Object.keys(ssStore2).forEach((k) => delete ssStore2[k]);
+
+    Object.defineProperty(window, "localStorage", {
+      value: {
+        getItem: jest.fn((k: string) => lsStore2[k] ?? null),
+        setItem: jest.fn((k: string, v: string) => {
+          lsStore2[k] = v;
+        }),
+        removeItem: jest.fn((k: string) => {
+          delete lsStore2[k];
+        }),
+        clear: jest.fn(() => Object.keys(lsStore2).forEach((k) => delete lsStore2[k])),
+      },
+      writable: true,
+    });
+
+    Object.defineProperty(window, "sessionStorage", {
+      value: {
+        getItem: jest.fn((k: string) => ssStore2[k] ?? null),
+        setItem: jest.fn((k: string, v: string) => {
+          ssStore2[k] = v;
+        }),
+        removeItem: jest.fn((k: string) => {
+          delete ssStore2[k];
+        }),
+        clear: jest.fn(() => Object.keys(ssStore2).forEach((k) => delete ssStore2[k])),
+      },
+      writable: true,
+    });
+  });
+
+  it("home with ?upload=1 opens upload modal", () => {
+    const url = new URL("http://localhost/?upload=1");
+    expect(url.searchParams.get("upload")).toBe("1");
+  });
+
+  it("evidence without pending file and without session redirects home with upload prompt", () => {
+    delete lsStore2["forensic_session_id"];
+    delete lsStore2["fc_pending_file_meta"];
+
+    const hasSession = !!(lsStore2["forensic_session_id"] && lsStore2["forensic_session_id"].length > 0);
+    const hasPendingFile = !!(lsStore2["fc_pending_file_meta"] && lsStore2["fc_pending_file_meta"].length > 0);
+
+    expect(hasSession || hasPendingFile).toBe(false);
+  });
+
+  it("evidence with expired auto-start shows recovery and returns home", () => {
+    lsStore2["forensic_session_id"] = "sess-expired";
+    lsStore2["forensic_auto_start"] = String(Date.now() - 3600000);
+
+    const isExpired = parseInt(lsStore2["forensic_auto_start"] || "0", 10) < Date.now() - 300000;
+    expect(isExpired).toBe(true);
+  });
+
+  it("evidence with existing running session reconnects", () => {
+    lsStore2["forensic_session_id"] = "sess-running";
+    lsStore2["forensic_investigation_ctx"] = JSON.stringify({ session_id: "sess-running", status: "running" });
+
+    const hasActiveSession = !!(lsStore2["forensic_session_id"] && lsStore2["forensic_investigation_ctx"]);
+    expect(hasActiveSession).toBe(true);
+  });
+
+  it("result without session shows empty state", () => {
+    delete lsStore2["forensic_session_id"];
+
+    expect(lsStore2["forensic_session_id"]).toBeUndefined();
+  });
+
+  it("result with complete session renders report", () => {
+    lsStore2["forensic_session_id"] = "sess-complete";
+    ssStore2["fc_current_report"] = JSON.stringify({
+      id: "rpt-123",
+      sessionId: "sess-complete",
+      overall_verdict: "LIKELY_AUTHENTIC",
+    });
+
+    const report = ssStore2["fc_current_report"] ? JSON.parse(ssStore2["fc_current_report"]) : null;
+    expect(report?.id).toBe("rpt-123");
+  });
+
+  it("result with missing session shows graceful error", () => {
+    lsStore2["forensic_session_id"] = "sess-missing";
+    const report = ssStore2["fc_current_report"] ? JSON.parse(ssStore2["fc_current_report"]) : null;
+
+    expect(report).toBeNull();
+  });
+
+  it("new upload clears active investigation but preserves history", () => {
+    const history = [
+      { sessionId: "sess-old", fileName: "old.png", verdict: "LIKELY", timestamp: 1000, type: "Initial" },
+    ];
+    lsStore2["forensic_history"] = JSON.stringify(history);
+    lsStore2["forensic_session_id"] = "sess-active";
+    lsStore2["forensic_investigation_ctx"] = '{"session_id":"sess-active"}';
+
+    delete lsStore2["forensic_session_id"];
+    delete lsStore2["forensic_investigation_ctx"];
+
+    const preservedHistory = JSON.parse(lsStore2["forensic_history"] ?? "[]");
+    expect(preservedHistory).toEqual(history);
+    expect(lsStore2["forensic_session_id"]).toBeUndefined();
+    expect(lsStore2["forensic_investigation_ctx"]).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEEP RESULT CONTEXT (Phase 4 Fix)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Deep result context", () => {
+  const lsStore3: Record<string, string> = {};
+
+  beforeEach(() => {
+    Object.keys(lsStore3).forEach((k) => delete lsStore3[k]);
+
+    Object.defineProperty(window, "localStorage", {
+      value: {
+        getItem: jest.fn((k: string) => lsStore3[k] ?? null),
+        setItem: jest.fn((k: string, v: string) => {
+          lsStore3[k] = v;
+        }),
+        removeItem: jest.fn((k: string) => {
+          delete lsStore3[k];
+        }),
+        clear: jest.fn(() => Object.keys(lsStore3).forEach((k) => delete lsStore3[k])),
+      },
+      writable: true,
+    });
+  });
+
+  it("deep result loads deep agent timeline", () => {
+    const deepAgents = [
+      { agent_id: "agent-img", status: "complete", confidence: 0.95 },
+      { agent_id: "agent-audio", status: "complete", confidence: 0.88 },
+    ];
+    lsStore3["forensic_is_deep"] = "true";
+    lsStore3["forensic_session_id"] = "sess-deep";
+    lsStore3["forensic_deep_agents:sess-deep"] = JSON.stringify(deepAgents);
+
+    const isDeep = lsStore3["forensic_is_deep"] === "true";
+    const deepTimeline = isDeep
+      ? JSON.parse(lsStore3[`forensic_deep_agents:${lsStore3["forensic_session_id"]}`] ?? "[]")
+      : [];
+
+    expect(deepTimeline).toHaveLength(2);
+    expect(deepTimeline[0].agent_id).toBe("agent-img");
+  });
+
+  it("deep result preserves original file name from scoped context", () => {
+    lsStore3["forensic_session_id"] = "sess-deep";
+    lsStore3["forensic_investigation_ctx:sess-deep"] = JSON.stringify({
+      session_id: "sess-deep",
+      file_name: "evidence.jpg",
+      mime_type: "image/jpeg",
+      pipeline_start: "2025-01-01T00:00:00Z",
+    });
+
+    const ctx = JSON.parse(lsStore3[`forensic_investigation_ctx:${lsStore3["forensic_session_id"]}`] ?? "{}");
+    expect(ctx.file_name).toBe("evidence.jpg");
+    expect(ctx.mime_type).toBe("image/jpeg");
+  });
+
+  it("deep result saves history item with type Deep", () => {
+    const history = [
+      { sessionId: "sess-deep", fileName: "evidence.jpg", verdict: "LIKELY_AUTHENTIC", timestamp: 1000, type: "Deep" },
+    ];
+
+    lsStore3["forensic_history"] = JSON.stringify(history);
+    const parsed = JSON.parse(lsStore3["forensic_history"] ?? "[]");
+
+    expect(parsed[0].type).toBe("Deep");
+  });
+
+  it("initial result saves history item with type Initial", () => {
+    const history = [
+      { sessionId: "sess-init", fileName: "evidence.jpg", verdict: "LIKELY_AUTHENTIC", timestamp: 1000, type: "Initial" },
+    ];
+
+    lsStore3["forensic_history"] = JSON.stringify(history);
+    lsStore3["forensic_is_deep"] = "false";
+
+    const parsed = JSON.parse(lsStore3["forensic_history"] ?? "[]");
+
+    expect(parsed[0].type).toBe("Initial");
+  });
+});

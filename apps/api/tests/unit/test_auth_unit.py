@@ -59,7 +59,6 @@ from core.auth import (
     get_password_hash,
     verify_password,
 )
-from core.config import get_settings
 
 
 class TestRS256Auth:

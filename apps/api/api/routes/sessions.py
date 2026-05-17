@@ -20,7 +20,6 @@ from api.routes._session_state import (
     get_active_pipeline,
     get_active_pipeline_metadata,
     get_session_websockets,
-    set_active_pipeline_metadata,
 )
 from api.schemas import ReportDTO, ReportStatusDTO, SessionInfo
 from core.auth import User, UserRole, get_current_user

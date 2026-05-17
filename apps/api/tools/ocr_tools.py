@@ -152,6 +152,7 @@ def _get_easyocr_reader():
     if _EASYOCR_READER is None:
         try:
             import warnings  # noqa: PLC0415
+
             import easyocr  # noqa: PLC0415
             warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
 
