@@ -547,6 +547,10 @@ Redis `6379`, and Qdrant `6333/6334` so you can run
 infrastructure. The base and production stacks keep database, cache, and vector
 services internal.
 
+### Operational Note: Worker Warm-up Coupling
+
+In `infra/docker-compose.yml`, Caddy’s startup is coupled to the background worker (`depends_on.worker.condition: service_healthy`). When starting up the first time (especially with model downloads active), the worker’s model warm-up phase can take time. Because Caddy waits for the worker to become healthy before routing public traffic, this coupling is intentional to guarantee that all analytical agents are fully loaded and warm before the API accepts incoming evidence uploads.
+
 ### Security invariant: read-only filesystem
 
 The backend and worker services use `read_only: true` with a `tmpfs: /tmp` mount. This configuration:

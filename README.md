@@ -56,7 +56,7 @@ bash scripts/prod.sh
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d postgres redis qdrant
 
 # Backend
-cd apps/api && uv sync --extra dev --extra security --extra observability
+cd apps/api && uv sync --extra dev --extra security --extra observability --extra ml
 POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/init_db.py
 POSTGRES_HOST=localhost REDIS_HOST=localhost QDRANT_HOST=localhost USE_REDIS_WORKER=false uv run python scripts/run_api.py
 
@@ -80,10 +80,10 @@ For a fully non-Docker run, install and run these services on the host:
 - libmagic
 - mediainfo
 
-Then create a local env file:
+Then create a local env file (use `.env.local.example` for host-run development; `.env.example` is reserved for Docker):
 
 ```bash
-[ -f .env ] || cp .env.example .env
+[ -f .env ] || cp .env.local.example .env
 ```
 
 > If `.env` already exists, neither command overwrites it. Delete `.env` first if you intentionally want to reset.
@@ -116,6 +116,9 @@ NEXT_PUBLIC_API_URL=http://localhost:8000 \
 INTERNAL_API_URL=http://localhost:8000 \
 npm run dev
 ```
+
+> [!IMPORTANT]
+> When compiling for production using `npm run build` (rather than running in dev via `npm run dev`), Next.js bakes `NEXT_PUBLIC_API_URL` statically into the client-side JavaScript bundle. You must supply this environment variable during the `npm run build` compilation step, otherwise frontend client actions will fail to route to the API.
 
 Verify:
 

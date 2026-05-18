@@ -67,8 +67,8 @@ $COMPOSE up -d
 # PRELOAD_MODELS=1 (default) bakes models into the image. When the build
 # cache is cold or volumes are empty, first-start can download several GB.
 # Default budget is 30 min; we surface a banner if download is detected.
-echo "⏳ Waiting for API health through direct dev port (up to 30 min on first run)..."
-TIMEOUT_SEC=1800
+echo "⏳ Waiting for API health through direct dev port (up to 45 min on first run)..."
+TIMEOUT_SEC=2700
 SLEEP_SEC=10
 ELAPSED=0
 DOWNLOAD_NOTED=0

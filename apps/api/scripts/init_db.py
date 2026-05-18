@@ -22,7 +22,10 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.structured_logging import configure_root_logger, get_logger
+from core._bcrypt_shim import ensure_bcrypt_compat  # noqa: E402, I001
+ensure_bcrypt_compat()
+
+from core.structured_logging import configure_root_logger, get_logger  # noqa: E402, I001
 
 # Configure logging immediately to ensure early errors are captured
 configure_root_logger("INFO")

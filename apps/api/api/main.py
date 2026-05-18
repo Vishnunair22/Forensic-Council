@@ -64,7 +64,7 @@ def _app_env_from_env() -> str:
 def _cors_allowed_origins_from_env() -> list[str]:
     raw = os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000",
+        "http://localhost:3000,http://127.0.0.1:3000",
     ).strip()
     if not raw:
         return []
@@ -110,7 +110,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "environment variables are set. Run: cp .env.example .env and fill all values."
         )
     app.state.settings = settings
-    _env_max = int(os.environ.get("FORENSIC_MAX_WORKERS", "0"))
+    try:
+        _env_max = int(os.environ.get("FORENSIC_MAX_WORKERS", "0"))
+    except ValueError:
+        logger.warning("FORENSIC_MAX_WORKERS is not numeric; falling back to auto")
+        _env_max = 0
     max_workers = _env_max if _env_max > 0 else min(4, os.cpu_count() or 2)
     app.state.process_pool = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
     # Cap the number of in-flight + queued CPU tasks to 4× worker count.
@@ -195,6 +199,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if settings.use_redis_worker:
         logger.info("Worker queue mode enabled — ensure worker.py is running")
+        if settings.app_env == "production":
+            try:
+                from core.persistence.redis_client import get_redis_client as _grc
+                rc = await _grc()
+                alive = await rc.get("forensic:worker:heartbeat")
+                if not alive:
+                    logger.warning("Worker heartbeat missing (forensic:worker:heartbeat) — investigations may stall")
+            except Exception as e:
+                logger.warning("Worker heartbeat check failed", error=str(e))
     else:
         logger.info("In-process investigation mode — investigations run in this process")
 
@@ -280,12 +293,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the Gemini models.list endpoint (no quota burned). Unavailable models are
     # pruned from the cascade so investigations never hit avoidable 404s.
     try:
-        from core.gemini_client import GeminiVisionClient
         from core.provider_quota_guard import ProviderQuotaGuard
-
-        _gemini_client = GeminiVisionClient(settings)
-        GeminiVisionClient.configure_quota_pool(settings.gemini_max_concurrent)
-        await _gemini_client.validate_model_availability()
 
         # Configure provider quota guards from settings
         ProviderQuotaGuard.configure(
@@ -301,6 +309,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.free_tier_mode:
             ProviderQuotaGuard.configure("openai", rpm_limit=30, rpd_limit=1500)
             ProviderQuotaGuard.configure("anthropic", rpm_limit=30, rpd_limit=1500)
+
+        if not settings.gemini_api_key_policy_ok:
+            logger.info("Skipping Gemini model availability check (policy not acknowledged)")
+        else:
+            from core.gemini_client import GeminiVisionClient
+            _gemini_client = GeminiVisionClient(settings)
+            GeminiVisionClient.configure_quota_pool(settings.gemini_max_concurrent)
+            await _gemini_client.validate_model_availability()
 
     except Exception as e:
         logger.warning("Gemini model validation skipped", error=str(e))

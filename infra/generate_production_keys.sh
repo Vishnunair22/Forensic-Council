@@ -48,9 +48,7 @@ if [ "${1:-}" = "--update" ]; then
         # Use sed to replace placeholders. On macOS/BSD, sed -i '' is needed, but we target Linux/Debian.
         sed -i "s|^${var}=.*|${var}=${val}|" .env
     done
-    mkdir -p infra/secrets
-    echo -n "$METRICS_SCRAPE_TOKEN" > infra/secrets/metrics_scrape_token.txt
-    echo "SUCCESS: .env updated with fresh keys and infra/secrets/metrics_scrape_token.txt written."
+    echo "SUCCESS: .env updated with fresh keys."
 else
     cat <<EOF
 SIGNING_KEY=${SIGNING_KEY}

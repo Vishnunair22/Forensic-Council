@@ -4,7 +4,9 @@
 #
 # Quick start:
 #   copy .env.example .env   # then fill in LLM_API_KEY etc.
-#   docker compose -f infra/docker-compose.yml --env-file .env up --build
+#   bash scripts/dev.sh                                  # recommended one-command boot
+#   # or, manual:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up --build
 #
 # BuildKit is enabled by default in Docker 23+ and Docker Desktop.
 # If you're on an older Docker version add: DOCKER_BUILDKIT=1 before the command.
@@ -258,7 +260,7 @@ services:
       dockerfile: Dockerfile
       target: development
       args:
-        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-0}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_api
@@ -346,7 +348,7 @@ services:
       dockerfile: Dockerfile
       target: development
       args:
-        PRELOAD_MODELS: ${PRELOAD_MODELS:-1}
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-0}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
     container_name: forensic_worker

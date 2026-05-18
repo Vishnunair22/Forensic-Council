@@ -49,6 +49,7 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN test -z "${NEXT_PUBLIC_API_URL}" || \
     echo "ℹ Baked NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} into bundle. To change, rebuild."
+RUN printf '%s' "${NEXT_PUBLIC_API_URL}" > /app/apps/web/.next/NEXT_PUBLIC_API_URL.bake
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds
@@ -80,6 +81,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/server ./.next/server
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
+
+RUN echo '# Bake check: if NEXT_PUBLIC_API_URL changes you MUST rebuild this image' >> /app/.bake_notice
 
 # Switch to non-root user before the process starts
 USER nextjs
