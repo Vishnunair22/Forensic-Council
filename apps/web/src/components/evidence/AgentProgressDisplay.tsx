@@ -328,16 +328,20 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="w-full max-w-2xl mx-auto px-6 py-8"
+            className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
-            <div className="glass-panel p-2 rounded-full border-white/5">
-              <div className="bg-surface-1/50 rounded-full p-2 flex items-center gap-3">
+            <div className="fc-surface-elevated rounded-2xl px-4 py-4">
+              <p className="text-center fc-eyebrow fc-text-faint mb-4">
+                Initial analysis complete — choose your next step
+              </p>
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   data-testid="accept-analysis-btn"
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
-                  className="flex-1 btn-horizon-outline py-3 text-xs flex items-center justify-center gap-2"
+                  aria-label="Accept initial analysis and generate final report"
+                  className="flex-1 btn-outline py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   <span>Accept Result</span>
@@ -346,14 +350,13 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
                   type="button"
                   data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
-                  disabled={isNavigating || (phase as string) === "deep"}
-                  className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
+                  disabled={isNavigating}
+                  aria-label="Run deep neural analysis with advanced models"
+                  className="flex-[1.5] btn-primary py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="flex items-center gap-2 text-background">
-                    {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                    <span className="font-bold">Deep Analysis</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
+                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                  <span>Deep Analysis</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -367,16 +370,19 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="w-full max-w-2xl mx-auto px-6 py-8"
+            className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
-            <div className="glass-panel p-2 rounded-full border-white/5">
-              <div className="bg-white/5 rounded-full p-2 flex items-center gap-3">
+            <div className="fc-surface-elevated rounded-2xl px-4 py-4">
+              <p className="text-center fc-eyebrow fc-text-faint mb-4">
+                Deep analysis complete — view report or start a new investigation
+              </p>
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   data-testid="new-analysis-btn"
-                  aria-label="New investigation"
+                  aria-label="Start a new investigation"
                   onClick={onNewUpload}
-                  className="flex-1 btn-horizon-outline py-3 text-xs"
+                  className="flex-1 btn-outline py-3 text-xs flex items-center justify-center gap-2"
                 >
                   New Analysis
                 </button>
@@ -385,13 +391,12 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
                   data-testid="view-report-btn"
                   onClick={onViewResults}
                   disabled={isNavigating}
-                  className="flex-[1.5] btn-horizon-primary py-3 text-xs flex items-center justify-center gap-3"
+                  aria-label="View the final forensic report"
+                  className="flex-[1.5] btn-primary py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="flex items-center gap-2 text-background">
-                    {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                    <span className="font-bold">View Report</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
+                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  <span>View Report</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>

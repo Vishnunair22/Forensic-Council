@@ -21,7 +21,7 @@ export function VerdictGauge({
 }: VerdictGaugeProps) {
   const isUncalibrated = calibrationStatus !== "TRAINED";
   return (
-    <section className="overflow-hidden border border-white/5 bg-[#02040A]">
+    <section className="overflow-hidden border border-white/5 bg-transparent">
       <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/5">
         
         {/* Consensus Confidence */}

@@ -169,7 +169,7 @@ export function HeroAuthActions() {
         data-testid="hero-cta-begin"
         onClick={handleCTAClick}
         aria-label="Upload a file to begin analysis"
-        className="group btn-primary !px-12 !py-4 font-bold text-sm outline-none"
+        className="group relative inline-flex items-center gap-3 px-12 py-4 rounded-full bg-primary text-background font-bold text-sm tracking-wide hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-all duration-200 shadow-[0_0_32px_rgba(79,142,247,0.35)] hover:shadow-[0_0_48px_rgba(79,142,247,0.5)]"
       >
         <span>Begin Analysis</span>
         <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />

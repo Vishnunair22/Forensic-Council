@@ -3,7 +3,13 @@
 import React, { useMemo, useEffect, useRef } from "react";
 import { clsx } from "clsx";
 import dynamic from "next/dynamic";
-import { FileSearch, History as HistoryIcon, Home as HomeIcon, ShieldAlert } from "lucide-react";
+import {
+  FileSearch,
+  History as HistoryIcon,
+  Home as HomeIcon,
+  Plus,
+  ShieldAlert,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
@@ -47,18 +53,11 @@ interface ResultLayoutProps {
 export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const rs = useResult(initialSessionId);
 
-  // Scroll-to-top on session change is owned by RouteExperience for the
-  // initial /result/{sid} mount. We only need to handle the case where
-  // initialSessionId changes WITHIN the same mounted ResultLayout (e.g.
-  // selectSession from the History panel switching between session ids).
-  // RouteExperience already sets scrollRestoration = "manual" globally.
   const sessionChangeRef = useRef<string | undefined>(initialSessionId);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Skip the first run (RouteExperience handles initial mount scroll).
     if (sessionChangeRef.current === initialSessionId) return;
     sessionChangeRef.current = initialSessionId;
-    // Synchronous scroll — we're inside the same mount, no animation needed.
     window.scrollTo(0, 0);
   }, [initialSessionId]);
 
@@ -92,6 +91,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
   return (
     <div className="min-h-screen pb-48 pt-36 sm:pt-28 relative">
+      {/* ── Arbiter/Loading overlay ── */}
       <AnimatePresence initial={false}>
         {(rs.state === "arbiter" || rs.state === "loading") && (
           <ForensicProgressOverlay
@@ -103,62 +103,69 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
         )}
       </AnimatePresence>
 
-      <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
-        <div className="flex items-center justify-between gap-2 p-2 bg-black/60 backdrop-blur-md border border-white/5">
+      {/* ── Secondary Tab Nav (Analysis / History) ── */}
+      <nav
+        className="fixed top-16 left-0 right-0 z-[40] border-b border-white/[0.06] bg-[#02040A]/85 backdrop-blur-md"
+        aria-label="Report sections"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-1">
+          {(["analysis", "history"] as Tab[]).map((tab) => (
+            <button
+              type="button"
+              key={tab}
+              role="tab"
+              id={`tab-${tab}`}
+              aria-selected={rs.activeTab === tab}
+              aria-controls={`tabpanel-${tab}`}
+              tabIndex={rs.activeTab === tab ? 0 : -1}
+              ref={(node) => { tabRefs.current[tab] = node; }}
+              onClick={() => rs.setActiveTab(tab)}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                e.preventDefault();
+                const next = rs.activeTab === "analysis" ? "history" : "analysis";
+                rs.setActiveTab(next);
+                requestAnimationFrame(() => tabRefs.current[next]?.focus());
+              }}
+              className={clsx(
+                "px-4 py-2 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 rounded-md transition-all duration-150",
+                rs.activeTab === tab
+                  ? "bg-white text-black"
+                  : "text-white/45 hover:text-white hover:bg-white/[0.05]"
+              )}
+            >
+              {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
+              {tab === "analysis" ? "Analysis" : "History"}
+            </button>
+          ))}
 
-          <button
-            type="button"
-            onClick={rs.handleHome}
-            className="px-6 py-3 text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-2 transition-colors text-white/50 hover:text-white hover:bg-white/5"
-          >
-            <HomeIcon className="w-3.5 h-3.5" />
-            Hub
-          </button>
-
-          <div
-            role="tablist"
-            aria-label="Report sections"
-            tabIndex={-1}
-            className="flex items-center gap-1"
-            onKeyDown={(e) => {
-              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-              e.preventDefault();
-              const next = rs.activeTab === "analysis" ? "history" : "analysis";
-              rs.setActiveTab(next);
-              requestAnimationFrame(() => tabRefs.current[next]?.focus());
-            }}
-          >
-            {(["analysis", "history"] as Tab[]).map((tab) => (
-              <button
-                type="button"
-                key={tab}
-                role="tab"
-                id={`tab-${tab}`}
-                aria-selected={rs.activeTab === tab}
-                aria-controls={`tabpanel-${tab}`}
-                tabIndex={rs.activeTab === tab ? 0 : -1}
-                ref={(node) => { tabRefs.current[tab] = node; }}
-                onClick={() => rs.setActiveTab(tab)}
-                className={clsx(
-                  "px-6 py-3 text-[10px] font-mono font-bold transition-colors tracking-widest flex items-center gap-2 uppercase",
-                  rs.activeTab === tab
-                    ? "bg-white text-black"
-                    : "text-white/50 hover:text-white hover:bg-white/5"
-                )}
-
-              >
-                {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
-                {tab === "analysis" ? "Analysis" : "History"}
-              </button>
-            ))}
+          {/* Spacer + inline nav shortcuts */}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={rs.handleHome}
+              className="px-3 py-1.5 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 text-white/35 hover:text-white/70 transition-colors rounded-md hover:bg-white/[0.04]"
+              aria-label="Back to Home"
+            >
+              <HomeIcon className="w-3 h-3" />
+              Home
+            </button>
+            <button
+              type="button"
+              onClick={rs.handleNew}
+              className="px-3 py-1.5 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 text-white/35 hover:text-white/70 transition-colors rounded-md hover:bg-white/[0.04]"
+              aria-label="New Analysis"
+            >
+              <Plus className="w-3 h-3" />
+              New
+            </button>
           </div>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-10">
-        {/* F-H-8: only mount HistoryPanel when the History tab is active.
-            Previously we used `hidden={...}` which still mounts the panel
-            and triggers its sessionStorage reads on every result-page visit. */}
+      {/* ── Main Content ── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-0">
+        {/* History tab panel */}
         {rs.activeTab === "history" && (
           <div
             role="tabpanel"
@@ -175,6 +182,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           </div>
         )}
 
+        {/* Analysis tab panel */}
         <div
           role="tabpanel"
           id="tabpanel-analysis"
@@ -206,10 +214,11 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               animate="visible"
               variants={{
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.12 } },
+                visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
               }}
-              className="space-y-10"
+              className="space-y-8"
             >
+              {/* ── SECTION 1: Verdict Header ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                 <ResultHeader
                   report={rs.report}
@@ -231,6 +240,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
+              {/* ── SECTION 2: Executive Brief + Key Findings ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                 <IntelligenceBrief
                   verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
@@ -243,22 +253,30 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
+              {/* ── SECTION 3: Degradation Warnings (conditional) ── */}
               {rs.report.degradation_flags && rs.report.degradation_flags.length > 0 && (
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                   <DegradationBanner flags={rs.report.degradation_flags} />
                 </motion.div>
               )}
 
+              {/* ── SECTION 4: Deep Model Telemetry (deep phase only) ── */}
               {rs.isDeepPhase && (
                 <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                   <DeepModelTelemetry report={rs.report} />
                 </motion.div>
               )}
 
+              {/* ── SECTION 5: Agent Forensic Findings ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
-                <AgentAnalysisTab report={rs.report} activeAgentIds={activeAgentIds} isDeepPhase={rs.isDeepPhase} />
+                <AgentAnalysisTab
+                  report={rs.report}
+                  activeAgentIds={activeAgentIds}
+                  isDeepPhase={rs.isDeepPhase}
+                />
               </motion.div>
 
+              {/* ── SECTION 6: Forensic Execution Timeline ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                 <TimelineTab
                   report={rs.report}
@@ -268,6 +286,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
+              {/* ── SECTION 7: Footer ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
                 <ReportFooter handleHome={rs.handleHome} />
               </motion.div>
@@ -276,17 +295,21 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
         </div>
       </div>
 
-      {rs.state === "ready" && rs.activeTab === "analysis" && (
+      {/* ── Action Dock: always visible when analysis tab is active and not loading ── */}
+      {rs.activeTab === "analysis" && (rs.state === "ready" || rs.state === "empty") && (
         <ActionDock
           onHome={rs.handleHome}
           onNew={rs.handleNew}
           onExport={rs.handleExport}
           sessionId={rs.sessionId ?? undefined}
+          showExport={rs.state === "ready"}
         />
       )}
     </div>
   );
 }
+
+// ── Sub-components ──────────────────────────────────────────────────────────
 
 function ResultLoadingView({
   title,
@@ -313,7 +336,7 @@ function ResultInlineStatus({ message }: { message: string }) {
     <div className="min-h-[54vh] flex items-center justify-center">
       <div className="w-full max-w-md border border-white/5 bg-transparent px-8 py-10 text-center">
         <ShieldAlert className="w-12 h-12 text-white/20 mx-auto mb-6" />
-        <div className="mt-6 text-[10px] font-mono font-bold tracking-[0.24em] text-primary/60 uppercase">
+        <div className="mt-6 fc-eyebrow text-primary/60">
           Consensus Synthesis
         </div>
         <p className="mt-3 font-mono text-xs font-semibold leading-relaxed text-white/60">
@@ -327,16 +350,7 @@ function ResultInlineStatus({ message }: { message: string }) {
 function ResultSkeletonView() {
   return (
     <div className="min-h-screen opacity-35" aria-hidden="true">
-      <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
-        {/* 2. Verdict Gauge Placeholder */}
-        <div className="flex items-center justify-between gap-4 p-4 bg-transparent border border-white/5">
-          <div className="skeleton h-12 w-32" />
-          <div className="skeleton h-12 w-32" />
-          <div className="skeleton h-12 w-32" />
-        </div>
-      </div>
-      <div className="max-w-7xl mx-auto px-6 pt-16 space-y-6">
-        {/* 3. Findings Placeholder */}
+      <div className="max-w-7xl mx-auto px-6 pt-28 space-y-6">
         <div className="p-8 space-y-8 bg-transparent border border-white/5">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="skeleton w-32 h-32 rounded-2xl" />
@@ -355,6 +369,7 @@ function ResultSkeletonView() {
   );
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function toPct(value: number | null | undefined): number {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? 0) * 100)));
@@ -365,8 +380,6 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   const findings: string[] = [];
   const summaryText = cleanFindingText(report.verdict_sentence || report.executive_summary);
-  // Don't truncate the key-findings paragraphs. Arbiter-produced narratives
-  // are already concise; mid-sentence "..." cuts hide critical signals.
   const push = (value: string | null | undefined) => {
     const cleaned = cleanFindingText(value);
     if (!cleaned || isLowValueFinding(cleaned)) return;
@@ -378,14 +391,10 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   (report.key_findings ?? []).forEach((finding) => push(finding));
 
-  // Prefer Arbiter-authored key findings. Agent narratives and tool summaries
-  // already appear in the detailed cards below, so mixing them into this brief
-  // creates visible duplicate values on the result page.
   if (findings.length > 0) {
     return findings.slice(0, 4);
   }
 
-  // Fallback only when the backend did not provide key findings.
   if (findings.length === 0) {
     const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
       .map(([agentId, text]) => ({

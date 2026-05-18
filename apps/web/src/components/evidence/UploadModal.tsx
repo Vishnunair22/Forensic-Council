@@ -92,7 +92,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden bg-transparent"
+          className="relative overflow-hidden rounded-2xl border border-border-muted"
+          style={{ background: "rgba(255, 255, 255, 0.015)", backdropFilter: "blur(24px)" }}
         >
           <div className="p-8 sm:p-10 flex flex-col text-left">
             <button

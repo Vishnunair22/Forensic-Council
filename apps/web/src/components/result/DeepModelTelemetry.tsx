@@ -5,7 +5,7 @@ import { Cpu, Zap } from "lucide-react";
 import { ReportDTO } from "@/lib/api";
 
 interface DeepModelTelemetryProps {
- report: ReportDTO;
+  report: ReportDTO;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -19,84 +19,82 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
- // Extract findings that occurred in the deep phase
- const allFindings = Object.values(report.per_agent_findings ?? {}).flat();
- const deepFindings = allFindings.filter(
-  (f) => f != null && (f.metadata as Record<string, unknown>)?.analysis_phase === "deep",
- );
+  const allFindings = Object.values(report.per_agent_findings ?? {}).flat();
+  const deepFindings = allFindings.filter(
+    (f) => f != null && (f.metadata as Record<string, unknown>)?.analysis_phase === "deep",
+  );
 
- if (deepFindings.length === 0) return null;
+  if (deepFindings.length === 0) return null;
 
- // Extract unique "tools/models" from deep findings — guard against null finding_type
- const models = Array.from(new Set(deepFindings.map((f) => f.finding_type).filter(Boolean)));
+  const models = Array.from(
+    new Set(deepFindings.map((f) => f.finding_type).filter(Boolean))
+  );
 
- return (
-  <div className="bg-[#02040A] border border-white/5 rounded-2xl shadow-xl overflow-hidden">
-   <div className="px-5 py-3.5 border-b border-white/5 bg-transparent flex items-center justify-between">
-    <div className="flex items-center gap-2">
-     <Cpu className="w-3.5 h-3.5 text-violet-400" />
-     <span className="text-[10px] font-bold tracking-wide text-foreground/60">
-      Deep Model Telemetry
-     </span>
-    </div>
-    <div className="flex items-center gap-1.5">
-     <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-     <span className="text-[10px] font-mono font-bold text-violet-400/70 tracking-tighter">
-      Heavy-Compute Active
-     </span>
-    </div>
-   </div>
-   <div className="p-5">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-     {models.slice(0, 6).map((model, idx) => {
-      const count = deepFindings.filter(
-       (f) => f.finding_type === model,
-      ).length;
-      const avgConf = Math.round(
-       (deepFindings
-        .filter((f) => f.finding_type === model)
-        .reduce((acc, f) => acc + (f.raw_confidence_score || 0), 0) /
-        count) *
-        100,
-      );
-
-      return (
-       <div
-        key={idx}
-        className="pt-3 border-t border-white/5 space-y-2 relative overflow-hidden group"
-       >
-        <div className="flex items-center justify-between relative z-10">
-         <div className="flex items-center gap-2">
-          <Zap className="w-3 h-3 text-violet-400/50" />
-          <span className="text-[10px] font-mono text-foreground/70 font-bold truncate max-w-[150px]">
-           {TOOL_LABELS[model] || model.replace(/_/g, " ").toUpperCase()}
+  return (
+    <div className="fc-surface-elevated rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-3.5 h-3.5 text-primary/60" />
+          <span className="fc-eyebrow fc-text-muted">
+            Deep Model Telemetry
           </span>
-         </div>
-         <span className="text-[10px] font-mono text-violet-400 font-black">
-          {avgConf}%
-         </span>
         </div>
-        <div className="h-1 w-full bg-white/[0.05] rounded-full overflow-hidden relative z-10">
-         <div
-          className="h-full bg-gradient-to-r from-violet-600 to-indigo-400 transition-all duration-1000"
-          style={{ width: `${avgConf}%` }}
-          role="progressbar"
-          aria-valuenow={avgConf}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${model} confidence`}
-         />
+        <div className="flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="fc-eyebrow fc-text-faint">
+            Heavy-Compute Active
+          </span>
         </div>
-        <div className="flex justify-between items-center text-[10px] font-mono text-foreground/30 relative z-10">
-         <span>LOGIC: {model.startsWith("neural_") || model === "anomaly_tracer" ? "TRANSFORMER_V2" : "TENSOR_V4"}</span>
-         <span>INVOCATIONS: {count}</span>
+      </div>
+
+      {/* Model rows */}
+      <div className="p-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+          {models.slice(0, 6).map((model) => {
+            const modelFindings = deepFindings.filter((f) => f.finding_type === model);
+            const count = modelFindings.length;
+            const avgConf = Math.round(
+              (modelFindings.reduce((acc, f) => acc + (f.raw_confidence_score || 0), 0) / count) * 100,
+            );
+
+            return (
+              <div key={model} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-3 h-3 text-primary/40" />
+                    <span className="text-[11px] font-mono fc-text-secondary font-bold truncate max-w-[160px]">
+                      {TOOL_LABELS[model] || model.replace(/_/g, " ").toUpperCase()}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono font-black fc-text-primary-accent">
+                    {avgConf}%
+                  </span>
+                </div>
+                <div className="h-0.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary/60 transition-all duration-1000"
+                    style={{ width: `${avgConf}%` }}
+                    role="progressbar"
+                    aria-valuenow={avgConf}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${model} confidence`}
+                  />
+                </div>
+                <div className="flex justify-between items-center text-[10px] font-mono fc-text-faint">
+                  <span>
+                    {model.startsWith("neural_") || model === "anomaly_tracer"
+                      ? "TRANSFORMER_V2"
+                      : "TENSOR_V4"}
+                  </span>
+                  <span>{count} invocation{count !== 1 ? "s" : ""}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-violet-600/10 blur-2xl rounded-full group-hover:bg-violet-600/20 transition-colors" />
-       </div>
-      );
-     })}
+      </div>
     </div>
-   </div>
-  </div>
- );
+  );
 }

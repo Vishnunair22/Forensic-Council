@@ -38,7 +38,7 @@ export function TimelineTab({
          <div className="h-px flex-1 bg-white/5" />
       </div>
 
-      <div className="bg-[#02040A] border border-white/5 rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-transparent border border-white/5 rounded-2xl shadow-xl overflow-hidden">
         <div className="bg-transparent">
 
           {/* Header */}

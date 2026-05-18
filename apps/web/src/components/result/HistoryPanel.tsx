@@ -43,7 +43,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
   return (
     <div className="w-full max-w-5xl mx-auto pb-32">
-      <div className="bg-[#02040A] border border-white/5 rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-transparent border border-white/5 rounded-2xl shadow-xl overflow-hidden">
         <div className="bg-transparent">
 
           {/* --- Header --- */}

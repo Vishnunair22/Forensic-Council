@@ -36,8 +36,8 @@ export function ForensicProgressOverlay({
       className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent bg-[#02040A]/90 backdrop-blur-[32px]"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.4, ease: "easeOut" } }}
-      transition={{ duration: 0.14, ease: "easeOut" }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.35, ease: "easeOut" } }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
     >
       <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-[var(--color-primary)]/40 pl-8 md:pl-12 py-4">
         {/* Status indicator */}
@@ -57,9 +57,9 @@ export function ForensicProgressOverlay({
         {/* Title and live text */}
         <div className="mb-12 space-y-5">
           <motion.h1
-            initial={{ x: -10, opacity: 0 }}
+            initial={prefersReducedMotion ? false : { x: -8, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
             className="text-3xl md:text-4xl font-heading font-black text-white tracking-tight"
           >
             {title}
