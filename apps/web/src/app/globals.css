@@ -30,14 +30,14 @@
   --color-danger:        #EF4469;
   --color-danger-rgb:    239, 68, 105;
 
-  /* ── Surfaces — true blacks with micro elevation ── */
-  --color-background:   #02040A;
+  /* ── Surfaces — obsidian slate with micro elevation ── */
+  --color-background:   #080C14;
   --color-foreground:   #EDF2F8;
-  --color-surface-0:    #010307;
-  --color-surface-1:    #060A14;
-  --color-surface-2:    #0A1020;
-  --color-surface-3:    #0F172D;
-  --color-surface-4:    #141D35;
+  --color-surface-0:    #05080E;
+  --color-surface-1:    #0B111F;
+  --color-surface-2:    #0E172A;
+  --color-surface-3:    #121E36;
+  --color-surface-4:    #162642;
 
   /* ── Borders ── */
   --color-border-subtle:  rgba(140,160,200,0.07);
