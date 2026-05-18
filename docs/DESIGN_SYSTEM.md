@@ -353,18 +353,17 @@ these.
 | `fc-surface-quiet`   | `rgba(6,10,20,0.92)`                                                                              | `rgba(165,200,255,0.08)`     | 0    | Inert cards, list rows. **No blur — solid contrast for text-heavy content.** |
 | `fc-surface-elevated`| `linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)), rgba(6,10,20,0.92)`     | `rgba(165,200,255,0.12)`     | 0    | Default container. Visually "glass" via the layered top highlight, but reads opaque. |
 | `fc-surface-overlay` | `rgba(2,4,10,0.96)`                                                                                | `rgba(165,200,255,0.15)`     | 24px | Modals + full-viewport overlays. Backdrop blur HERE only, because there's no text underneath that needs to read through. |
+| `slick-frosted-card` | `rgba(8, 12, 20, 0.65)` layered with `rgba(255,255,255,0.015)`                                     | `rgba(255,255,255,0.07)`     | 16px | Modern frosted cards with highly readable high-contrast texts and smooth spring transitions. |
 
 **Migration map:**
-- `glass-panel`, `premium-glass`     → `fc-surface-elevated`
+- `glass-panel`, `premium-glass`     → `slick-frosted-card` (or `fc-surface-elevated` for static)
 - `horizon-card`, `premium-card`     → `fc-surface-quiet`
 - `fc-surface-crisp`                  → keep as-is (used as pill-nav background, already correct)
 - `step-card`                          → keep as-is
 
 ### 3.4 Backdrop-blur rules
 
-- Backdrop blur is allowed ONLY on `fc-surface-overlay` (modals, error
-  modals, the LoadingOverlay portal, ArbiterDeliberationOverlay,
-  ForensicProgressOverlay).
+- Backdrop blur is allowed on `fc-surface-overlay` (modals/overlays) and the `slick-frosted-card` class (highly visible frosted-glass sheets).
 - All other surfaces — sections, cards, list rows — are **opaque** by
   alpha. The "glass" affordance comes from the layered highlight + border,
   not from a backdrop filter. This guarantees text contrast is

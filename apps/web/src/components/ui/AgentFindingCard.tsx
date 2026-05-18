@@ -392,14 +392,11 @@ export function AgentFindingCard({
   return (
     <div
       className={clsx(
-        "rounded-2xl overflow-hidden transition-all duration-300 border-2",
+        "rounded-2xl overflow-hidden transition-all duration-500 slick-frosted-card",
         open
           ? clsx(theme.border, "ring-1", theme.ring)
-          : "border-white/[0.10] hover:border-white/[0.16]"
+          : "hover:border-white/15"
       )}
-      style={{
-        background: "transparent",
-      }}
     >
       {/* Header Button */}
       <button

@@ -16,7 +16,7 @@ export const GlassPanel = ({
 }: GlassPanelProps) => {
   return (
     <motion.div
-      className={cn("glass-panel p-6", className)}
+      className={cn("slick-frosted-card rounded-2xl p-6", className)}
       initial={{ opacity: 0, y: 18 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
