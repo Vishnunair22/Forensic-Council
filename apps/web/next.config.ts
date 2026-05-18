@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   // Set NEXT_OUTPUT_STANDALONE=0 in .env to disable (default: enabled).
   output: process.env.NEXT_OUTPUT_STANDALONE === "0" ? undefined : "standalone",
 
-  outputFileTracingRoot: __dirname,
+  outputFileTracingRoot: path.resolve(__dirname, "../.."),
   outputFileTracingExcludes: {
     "*": [
       "../**/.git/**",

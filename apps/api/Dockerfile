@@ -135,9 +135,6 @@ USER appuser
 
 HEALTHCHECK NONE
 
-# Run alembic migrations before seeding to ensure schema is current
-CMD ["sh", "-c", "python -m alembic upgrade head && python scripts/init_db.py"]
-
 # -- Stage 4: app - shared source + dirs + bytecode (inherits deps-full) ------
 # This intermediate stage is the common ancestor of development and production.
 # It avoids duplicating COPY / mkdir / compileall / chmod across both targets.
@@ -244,7 +241,7 @@ RUN addgroup --system --gid 1001 appgroup \
 RUN chmod +x scripts/docker_entrypoint.sh
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
-    CMD wget -qO- http://127.0.0.1:8000/health || exit 1
+    CMD wget -qO- http://127.0.0.1:8000/live || exit 1
 
 # -- Stage 5: development - hot-reload server ---------------------------------
 FROM app AS development

@@ -29,19 +29,19 @@ else
   HEALTH_URL="https://${DOMAIN_VALUE}/health"
 fi
 
-echo "⏳ Waiting for API health (up to 120s)..."
-for i in $(seq 1 24); do
+echo "⏳ Waiting for API health (up to 600s)..."
+for i in $(seq 1 120); do
   STATUS=$(curl -sf "$HEALTH_URL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
   if [[ "$STATUS" == "ok" ]]; then
     echo "✅ API healthy"
     break
   fi
-  if [[ $i -eq 24 ]]; then
-    echo "❌ API did not become healthy in 120s."
+  if [[ $i -eq 120 ]]; then
+    echo "❌ API did not become healthy in 600s."
     echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml logs backend"
     exit 1
   fi
-  echo "   Attempt $i/24 — waiting..."
+  echo "   Attempt $i/120 — waiting..."
   sleep 5
 done
 

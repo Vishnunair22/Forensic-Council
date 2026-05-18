@@ -510,6 +510,7 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env
 | File | Role | Use with |
 |------|------|---------|
 | `docker-compose.yml` | Base stack — always required | All modes |
+| `docker-compose.dev.yml` | Dev host-port overlay — exposes ports 8000, 5432, 6379, 6333/6334 to localhost | Development only |
 | `docker-compose.prod.yml` | Production targets, hardened restart, log rotation | Production |
 
 ### Build arguments
@@ -689,3 +690,45 @@ docker system df -v
 docker builder du
 docker volume ls --filter name=forensic-council
 ```
+
+---
+
+## 13. Host-Run Development (API + Frontend on Host, Infra in Docker)
+
+Use this when you want faster Python iteration without rebuilding the backend image.
+
+### Step 1 — Start only infra services
+
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  up -d redis postgres qdrant
+```
+
+### Step 2 — Configure host environment
+
+```bash
+cp .env.local.example .env.local
+# Edit .env.local: set POSTGRES_HOST=localhost, REDIS_HOST=localhost, QDRANT_HOST=localhost
+```
+
+### Step 3 — Start the API on host
+
+```bash
+cd apps/api
+uv sync --locked --extra dev --extra observability --extra security
+uv run scripts/run_api.py
+```
+
+### Step 4 — Start the frontend on host
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+The frontend dev server runs at `http://localhost:3000` and the API at `http://localhost:8000`.
+Note: Caddy is not in the loop for this mode; `NEXT_PUBLIC_API_URL=http://localhost:8000` in `.env.local`.

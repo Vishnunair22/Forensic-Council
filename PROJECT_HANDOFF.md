@@ -12,6 +12,42 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-18: Setup & Build Workflow Audit Resolution
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+- **P1-BUILD-001 (Calibration Models Gitkeep)**: Added `.gitkeep` to `apps/api/storage/calibration_models/` to prevent Docker `COPY storage/` from failing on a fresh checkout.
+- **P1-BUILD-002 (HEALTHCHECK endpoint)**: Updated Stage 4 (`app`) healthcheck in `apps/api/Dockerfile` from `/health` to `/live` to match the compose files and FastAPI spec.
+- **P2-FE-001 (Monorepo Output Tracing Root)**: Replaced `outputFileTracingRoot: __dirname` with `outputFileTracingRoot: path.resolve(__dirname, "../..")` in `apps/web/next.config.ts` to allow standalone Next.js bundles to map monorepo imports correctly.
+- **P2-INFRA-001 (Qdrant HTTP Healthcheck)**: Replaced Qdrant raw TCP port healthcheck in `infra/docker-compose.yml` with a standard `/healthz` HTTP probe via `wget`.
+- **P2-ENV-001 (Dead RATE_LIMIT Vars)**: Cleaned up legacy/dead `RATE_LIMIT_*` environment variables from the `x-backend-env` compose anchor block.
+- **P3-COMPOSE-001 (Duplicate Stage 3 CMD)**: Removed duplicate/stray database migration `CMD` from the migration stage in `apps/api/Dockerfile`.
+- **P3-PROD-001 (Production Boot Budget)**: Raised health check retry bounds in `scripts/prod.sh` to wait up to 600s, preventing false startup failures on slow host preloads.
+- **P3-DOCS-001 & P3-DOCS-002 (Docker Docs Updates)**: Documented `docker-compose.dev.yml` in Section 10's reference table and added Section 13 covering the "Host-Run Development" workflow in `infra/DOCKER_BUILD.md`.
+- **P3-ENV-001 (CADDY_SITE_ADDRESS)**: Fully documented the `CADDY_SITE_ADDRESS` environment variable in `.env.example`.
+
+### Files Touched
+- `.env.example`
+- `apps/api/Dockerfile`
+- `apps/api/storage/calibration_models/.gitkeep`
+- `apps/web/next.config.ts`
+- `infra/DOCKER_BUILD.md`
+- `infra/docker-compose.yml`
+- `scripts/prod.sh`
+
+### Verification Results
+
+| Check / Verification Command | Status | Notes |
+|-----------------------------|--------|-------|
+| `git diff --check` | ✅ PASS | All formatting and trailing whitespaces are perfect |
+| `python scripts/check_docs.py` | ✅ PASS | Documentation integrity checklist is 100% green |
+| `cmd /c npm run type-check` | ✅ PASS | Frontend Next.js type check compiles cleanly |
+| `cmd /c npm run lint` | ✅ PASS | Frontend ESLint has 0 errors or warnings |
+| `docker compose config` | ✅ PASS | Docker configuration schemas are 100% validated |
+
+---
+
 ### 2026-05-18: Type Safety & Observability Hardening (Pyright & TypeScript 100% Green)
 
 **Status:** ✅ COMPLETE
