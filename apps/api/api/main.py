@@ -569,6 +569,7 @@ _CSRF_EXEMPT_PATHS = {
     "/api/v1/health/ml-tools",
     "/api/v1/health/tools",
     "/api/v1/auth/login",
+    "/api/v1/auth/refresh",
     "/docs",
     "/redoc",
     "/openapi.json",

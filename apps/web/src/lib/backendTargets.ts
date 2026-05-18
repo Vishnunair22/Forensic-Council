@@ -9,7 +9,7 @@ export function getBackendBaseUrls(): string[] {
   const isProduction = process.env.NODE_ENV === "production";
 
   const devCandidates = isDocker
-    ? [internalUrl, "http://backend:8000", "http://forensic_api:8000", publicUrl, "http://host.docker.internal:8000"]
+    ? [internalUrl, "http://backend:8000", publicUrl, "http://host.docker.internal:8000"]
     : [internalUrl, publicUrl, "http://localhost:8000", "http://127.0.0.1:8000"];
 
   const prodCandidates = [

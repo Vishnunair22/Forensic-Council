@@ -243,8 +243,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (typeof window === "undefined" || authReadyRef.current) return;
 
     const initAuth = async () => {
-      if (document.cookie.includes("access_token") || getAuthToken() !== null) {
-        return;
+      if (getAuthToken() !== null) {
+        return; // token in sessionStorage — session is current
       } else if (__pendingFileStore.authPromise) {
         await __pendingFileStore.authPromise
           .then(() => {

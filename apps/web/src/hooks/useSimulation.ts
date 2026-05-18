@@ -84,8 +84,6 @@ export const useSimulation = ({
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
   const [arbiterStatus, setArbiterStatus] = useState<string | null>(null);
   const [arbiterThinking, setArbiterThinking] = useState<string | null>(null);
-  const [revealQueue, setRevealQueue] = useState<AgentUpdate[]>([]);
-  const isRevealingRef = useRef(false);
   const activePhaseRef = useRef<SimulationPhase>("initial");
 
   const setSimulationPhase = useCallback((phase: SimulationPhase) => {
@@ -125,10 +123,9 @@ export const useSimulation = ({
   // Connect WebSocket manually — returns a Promise that resolves once the WS is open.
   const connectWebSocket = useCallback(
     (targetSessionId: string, isReconnect: boolean = false): Promise<void> => {
-      // Hard-clear revealQueue and completedAgents when session ID changes
+      // Hard-clear completedAgents when session ID changes
       if (lastSessionIdRef.current !== null && lastSessionIdRef.current !== targetSessionId) {
         setCompletedAgents([]);
-        setRevealQueue([]);
         completedAgentsRef.current = [];
         setAgentUpdates({});
         setPipelineMessage("");
@@ -147,7 +144,6 @@ export const useSimulation = ({
         setAgentUpdates({});
         setErrorMessage(null);
         setReconnectStatusMessage(null);
-        setRevealQueue([]);
       }
 
       return new Promise((resolve, reject) => {
@@ -450,9 +446,6 @@ export const useSimulation = ({
                   break;
 
                 case "PIPELINE_PAUSED":
-                  // Flush the reveal queue immediately so decision buttons can mount without delay
-                  setRevealQueue([]);
-                  isRevealingRef.current = false;
                   setStatus("awaiting_decision");
                   playSoundRef.current?.("think");
                   break;
@@ -843,8 +836,6 @@ export const useSimulation = ({
     setPipelineThinking("");
     setArbiterStatus(null);
     setArbiterThinking(null);
-    setRevealQueue([]);
-    isRevealingRef.current = false;
     if (arbiterPollRef.current) {
       clearInterval(arbiterPollRef.current);
       arbiterPollRef.current = null;
@@ -870,8 +861,6 @@ export const useSimulation = ({
     setPipelineThinking("Preparing forensic agents...");
     setArbiterStatus(null);
     setArbiterThinking(null);
-    setRevealQueue([]);
-    isRevealingRef.current = false;
   }, []);
 
   // Dismiss HITL checkpoint
@@ -991,74 +980,9 @@ const resumeInvestigation = useCallback(
     setAgentUpdates({});
     setPipelineMessage("Beginning deep analysis...");
     setPipelineThinking("");
-    setRevealQueue([]);
-    isRevealingRef.current = false;
   }, []);
 
-  // --- Sequential Reveal Pacing Effect ---
-  useEffect(() => {
-    if (revealQueue.length === 0 || isRevealingRef.current) return;
 
-    isRevealingRef.current = true;
-
-    const processNext = () => {
-      setRevealQueue((prev) => {
-        if (prev.length === 0) {
-          isRevealingRef.current = false;
-          return prev;
-        }
-
-        const [next, ...rest] = prev;
-
-        // Add to completed list
-        setCompletedAgents((current) => {
-          const exists = current.some(a => a.agent_id === next.agent_id);
-          if (exists) {
-            return current.map(a => a.agent_id === next.agent_id ? next : a);
-          }
-          return [...current, next];
-        });
-
-        // Trigger Sound & Callback
-        playSoundRef.current?.("agent");
-        onAgentCompleteRef.current?.(next);
-
-        if (rest.length > 0) {
-          setTimeout(processNext, 400); // 400ms — responsive but still feels like a 'scan'
-        } else {
-          isRevealingRef.current = false;
-        }
-
-        return rest;
-      });
-    };
-
-    processNext();
-  }, [revealQueue]);
-
-  // Watchdog for revealQueue
-  useEffect(() => {
-    if (revealQueue.length === 0) return;
-    const watchdog = setTimeout(() => {
-      dbg.warn("[Simulation] revealQueue stalled. Draining stuck items.");
-      setRevealQueue((prev) => {
-        prev.forEach((agent) => {
-          setCompletedAgents((current) => {
-            const exists = current.some(a => a.agent_id === agent.agent_id);
-            if (exists) {
-              return current.map(a => a.agent_id === agent.agent_id ? agent : a);
-            }
-            return [...current, agent];
-          });
-          onAgentCompleteRef.current?.(agent);
-        });
-        return [];
-      });
-      isRevealingRef.current = false;
-    }, 8000);
-
-    return () => clearTimeout(watchdog);
-  }, [revealQueue]);
 
   const restoreSimulationState = useCallback(
     (
@@ -1095,8 +1019,8 @@ const resumeInvestigation = useCallback(
     setSimulationPhase,
     hitlCheckpoint,
     errorMessage,
-    revealQueue,
-    revealPending: revealQueue.length > 0,
+    revealQueue: [],
+    revealPending: false,
     isReconnecting,
   };
 };

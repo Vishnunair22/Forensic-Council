@@ -336,9 +336,13 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
   // (true cross-origin clients, etc.). Subprotocol headers are visible
   // to every intermediary and are written to Caddy's access log; this
   // path leaks the JWT every WS open.
+  // access_token is httpOnly (never in document.cookie). Use csrf_token
+  // (non-httpOnly, always co-issued at login) as a readable session proxy.
+  // When csrf_token is present, the httpOnly access_token is also present and
+  // will be sent automatically in the WS HTTP upgrade — no subprotocol needed.
   const hasAuthCookie =
     typeof document !== "undefined" &&
-    /(?:^|;\s*)(?:access_token|fc_session|sessionid)=/.test(document.cookie);
+    /(?:^|;\s*)csrf_token=/.test(document.cookie);
   const token = hasAuthCookie ? null : getAuthToken();
   const protocols = token ? ["forensic-v1", `token.${token}`] : ["forensic-v1"];
   const ws = new WebSocket(

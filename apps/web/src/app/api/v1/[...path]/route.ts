@@ -59,7 +59,7 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
         headers,
         body,
         redirect: "manual",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(8_000),
       });
       if (RETRYABLE_STATUSES.has(upstream.status)) {
         const isIdempotent = ["GET", "HEAD", "OPTIONS", "PUT", "DELETE"].includes(req.method);

@@ -224,6 +224,8 @@ export function useResult(initialSessionId?: string) {
       return;
     }
 
+    if (arbiterComplete) return; // report already confirmed complete; skip polling
+
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
@@ -270,7 +272,7 @@ export function useResult(initialSessionId?: string) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [mounted, sessionId]);
+  }, [mounted, sessionId, arbiterComplete]);
 
   // History Persistence (Client Side Only)
   // F-H-10: mark historySavedRef true only AFTER the storage write succeeds,
@@ -306,7 +308,7 @@ export function useResult(initialSessionId?: string) {
     }
   }, [state, report, isDeepPhase, thumbnail, mimeType, sessionId, fileName]);
 
-  const handleNew = useCallback(() => {
+  const _resetAndNavigate = useCallback((path: string) => {
     playSound("reset");
     const savedHistory = (() => {
       try {
@@ -321,26 +323,11 @@ export function useResult(initialSessionId?: string) {
     document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
 
     window.dispatchEvent(new Event("fc:reset-home"));
-    router.push("/?upload=1");
+    router.push(path);
   }, [playSound, router]);
 
-  const handleHome = useCallback(() => {
-    playSound("reset");
-    const savedHistory = (() => {
-      try {
-        return storage.getItem<HistoryItem[]>("forensic_history", true, []) ?? [];
-      } catch { return [] as HistoryItem[]; }
-    })();
-    storage.clearAllForensicKeys();
-    sessionOnlyStorage.clearAllForensicKeys();
-    if (savedHistory.length > 0) {
-      storage.setItem("forensic_history", savedHistory, true);
-    }
-    document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
-
-    window.dispatchEvent(new Event("fc:reset-home"));
-    router.push("/#hero");
-  }, [playSound, router]);
+  const handleNew = useCallback(() => _resetAndNavigate("/?upload=1"), [_resetAndNavigate]);
+  const handleHome = useCallback(() => _resetAndNavigate("/#hero"), [_resetAndNavigate]);
 
   const handleExport = useCallback(() => {
     if (!report) return;
