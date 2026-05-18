@@ -700,7 +700,8 @@ Return ONLY a JSON object:
             lower = str(text or "").lower()
             return not lower.strip() or any(phrase in lower for phrase in BAD_SYNTHESIS_PHRASES)
 
-        sections = response.get("sections") if isinstance(response.get("sections"), list) else []
+        raw_sections = response.get("sections")
+        sections = raw_sections if isinstance(raw_sections, list) else []
         for section in sections:
             refined = section.get("refined_findings") or []
             grounded_any = []
@@ -871,7 +872,8 @@ Return ONLY a JSON object:
             fields = int(exif.get("total_fields_extracted") or exif.get("field_count") or 0)
             hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
             scanned = int(hex_data.get("bytes_scanned") or 0)
-            anomalies = structure.get("anomalies") if isinstance(structure.get("anomalies"), list) else []
+            raw_anomalies = structure.get("anomalies")
+            anomalies = raw_anomalies if isinstance(raw_anomalies, list) else []
             impact = compression.get("forensic_reliability_impact") or "limited"
             if screenshot_like:
                 return (
@@ -891,7 +893,8 @@ Return ONLY a JSON object:
 
     def _tool_grounded_summary(self, row: dict[str, Any], *, screenshot_like: bool) -> str:
         tool = str(row.get("tool") or "")
-        data = row.get("data") if isinstance(row.get("data"), dict) else {}
+        raw_data = row.get("data")
+        data = raw_data if isinstance(raw_data, dict) else {}
         verdict = str(row.get("evidence_verdict") or row.get("status") or "").upper()
         conf = float(row.get("confidence") or 0.0)
 
@@ -999,7 +1002,8 @@ Return ONLY a JSON object:
             captured = data.get("datetime_original") or "not recorded"
             return f"EXIF extraction found {fields} metadata field(s); device {device or 'not recorded'}, original capture time {captured}."
         if tool == "timestamp_analysis":
-            issues = data.get("inconsistencies") if isinstance(data.get("inconsistencies"), list) else []
+            raw_issues = data.get("inconsistencies")
+            issues = raw_issues if isinstance(raw_issues, list) else []
             return (
                 f"Timestamp cross-check found {len(issues)} inconsistency(ies)"
                 + (f": {'; '.join(str(x) for x in issues[:3])}." if issues else ". Filesystem chronology is internally consistent, but screenshot capture time may still be absent from EXIF.")
@@ -1025,7 +1029,8 @@ Return ONLY a JSON object:
                 f"penalty factor {float(penalty or 1.0):.2f}. This limits provenance strength but is not a manipulation signal by itself."
             )
         if tool == "file_structure_analysis":
-            anomalies = data.get("anomalies") if isinstance(data.get("anomalies"), list) else []
+            raw_anomalies = data.get("anomalies")
+            anomalies = raw_anomalies if isinstance(raw_anomalies, list) else []
             return (
                 f"File structure check found valid header/trailer status with {len(anomalies)} anomaly flag(s)"
                 + (f": {'; '.join(map(str, anomalies[:3]))}." if anomalies else " and no appended payload indicators.")
@@ -1080,7 +1085,8 @@ Return ONLY a JSON object:
                 "No high-confidence AI voice-clone pattern was detected."
             )
         if tool == "audio_splice_detect":
-            points = data.get("splice_points") if isinstance(data.get("splice_points"), list) else []
+            raw_points = data.get("splice_points")
+            points = raw_points if isinstance(raw_points, list) else []
             score = data.get("splice_score") or data.get("anomaly_score") or len(points)
             if verdict == "POSITIVE" or points:
                 return (
@@ -1133,7 +1139,8 @@ Return ONLY a JSON object:
                 + ". This establishes scene context for later consistency checks."
             )
         if tool in {"scene_incongruence", "contraband_database", "vector_contraband_search"}:
-            matches = data.get("matches") if isinstance(data.get("matches"), list) else []
+            raw_matches = data.get("matches")
+            matches = raw_matches if isinstance(raw_matches, list) else []
             if verdict == "POSITIVE" or matches:
                 return (
                     f"Scene-context search reported {len(matches)} relevant warning match(es). "
@@ -1152,7 +1159,8 @@ Return ONLY a JSON object:
             )
         if tool in {"optical_flow_analysis", "optical_flow_analyze"}:
             score = data.get("motion_anomaly_score") or data.get("anomaly_score") or data.get("mean_flow_error") or 0
-            frames = data.get("flagged_frames") if isinstance(data.get("flagged_frames"), list) else []
+            raw_frames = data.get("flagged_frames")
+            frames = raw_frames if isinstance(raw_frames, list) else []
             if verdict == "POSITIVE" or frames:
                 return (
                     f"Optical-flow analysis measured motion anomaly score {float(score or 0):.3f} across {len(frames)} flagged frame(s). "

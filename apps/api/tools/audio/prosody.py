@@ -79,13 +79,11 @@ async def run_prosody_analyze(
             used_librosa = False
             y, sr = await loop.run_in_executor(None, lambda: _load_audio_with_soundfile(audio_path))
 
-        len(y) / sr
-
         anomalies = []
 
         if used_librosa:
             f0, voiced_flag, voiced_probs = librosa.pyin(
-                y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr
+                y, fmin=float(librosa.note_to_hz("C2")), fmax=float(librosa.note_to_hz("C7")), sr=sr
             )
         else:
             frame_size = min(2048, max(256, int(sr * 0.04)))
@@ -117,7 +115,7 @@ async def run_prosody_analyze(
                         ProsodyAnomaly(
                             timestamp=time,
                             type="pitch_discontinuity",
-                            severity=min(1.0, abs(f0_diff[jump_idx]) / pitch_threshold / 3),
+                            severity=min(1.0, float(abs(f0_diff[jump_idx]) / pitch_threshold / 3)),
                         )
                     )
 
@@ -136,7 +134,7 @@ async def run_prosody_analyze(
                 ProsodyAnomaly(
                     timestamp=time,
                     type="energy_discontinuity",
-                    severity=min(1.0, abs(rms_diff[jump_idx]) / energy_threshold / 3),
+                    severity=min(1.0, float(abs(rms_diff[jump_idx]) / energy_threshold / 3)),
                 )
             )
 

@@ -607,11 +607,12 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
         integrity_bits: list[str] = []
         if freq:
             meta = _tool_meta(freq)
+            hfr = meta.get("high_freq_ratio")
             integrity_bits.append(
                 f"FFT anomaly score {float(meta.get('anomaly_score') or 0):.3f}"
                 + (
-                    f" / high-frequency ratio {float(meta.get('high_freq_ratio')):.3f}"
-                    if isinstance(meta.get("high_freq_ratio"), (int, float))
+                    f" / high-frequency ratio {float(hfr):.3f}"
+                    if isinstance(hfr, (int, float))
                     else ""
                 )
             )
@@ -625,11 +626,13 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
             )
         if structure:
             meta = _tool_meta(structure)
-            anomalies = meta.get("anomalies") if isinstance(meta.get("anomalies"), list) else []
+            raw_anomalies = meta.get("anomalies")
+            anomalies = raw_anomalies if isinstance(raw_anomalies, list) else []
             integrity_bits.append(f"file structure found {len(anomalies)} anomaly flag(s)")
         if hex_f:
             meta = _tool_meta(hex_f)
-            software = meta.get("software_signatures") if isinstance(meta.get("software_signatures"), list) else []
+            raw_software = meta.get("software_signatures")
+            software = raw_software if isinstance(raw_software, list) else []
             integrity_bits.append(
                 "hex scan found "
                 + (", ".join(str(x) for x in software[:2]) if software else "no embedded editing-software signature")

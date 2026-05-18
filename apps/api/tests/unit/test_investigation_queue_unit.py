@@ -43,7 +43,22 @@ def _make_redis_mock():
     redis.hset = AsyncMock()
     redis.hdel = AsyncMock()
     redis.hget = AsyncMock(return_value=None)
-    redis.client = AsyncMock()
+    redis.exists = AsyncMock(return_value=True)
+    redis.set = AsyncMock()
+
+    pipe = MagicMock()
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=None)
+    pipe.hset = MagicMock()
+    pipe.rpush = MagicMock()
+    pipe.expire = MagicMock()
+    pipe.execute = AsyncMock(return_value=[])
+
+    pipeline_mock = MagicMock()
+    pipeline_mock.return_value = pipe
+
+    redis.client = MagicMock()
+    redis.client.pipeline = pipeline_mock
     redis.client.rpush = AsyncMock()
     redis.client.blpop = AsyncMock(return_value=None)
     return redis
@@ -124,13 +139,16 @@ class TestInvestigationQueue:
         )
         assert isinstance(task, InvestigationTask)
         assert task.case_id == "CASE001"
-        redis.hset.assert_called_once()
-        redis.client.rpush.assert_called_once()
+        pipe = redis.client.pipeline()
+        pipe.hset.assert_called_once()
+        pipe.rpush.assert_called_once()
+        pipe.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_submit_cleans_up_on_push_failure(self):
         queue, redis = self._make_queue_with_redis()
-        redis.client.rpush = AsyncMock(side_effect=RuntimeError("Redis down"))
+        pipe = redis.client.pipeline()
+        pipe.execute = AsyncMock(side_effect=RuntimeError("Redis down"))
         sid = uuid4()
         with pytest.raises(RuntimeError):
             await queue.submit(
@@ -370,7 +388,9 @@ class TestInvestigationWorker:
 
         await worker.start()
 
-        final_task = redis.hset.call_args_list[-1].args[2]
+        import json
+        final_task_str = redis.hset.call_args_list[-1].args[2]
+        final_task = json.loads(final_task_str)
         assert final_task["status"] == "FAILED"
         assert "timed out" in final_task["error"]
 
@@ -411,46 +431,58 @@ class TestGetInvestigationQueue:
 
 
 class TestWorkerHeartbeat:
-    def test_worker_start_writes_heartbeat(self):
+    @pytest.mark.asyncio
+    async def test_worker_start_writes_heartbeat(self):
         """InvestigationWorker.start() writes forensic:worker:heartbeat."""
         redis = _make_redis_mock()
-        heartbeat_written = False
-        original_hset = redis.hset
 
-        def mock_hset(name, key, value):
+        async def mock_blpop(*args, **kwargs):
+            await asyncio.sleep(0.01)
+            raise asyncio.CancelledError()
+        redis.client.blpop = mock_blpop
+
+        heartbeat_written = False
+        original_set = redis.set
+
+        def mock_set(key, value, ex=None):
             nonlocal heartbeat_written
             if "heartbeat" in key:
                 heartbeat_written = True
-            return original_hset(name, key, value)
+            return original_set(key, value, ex)
 
-        redis.hset = mock_hset
+        redis.set = mock_set
         queue = InvestigationQueue()
         queue._redis = redis
         worker = InvestigationWorker(queue, worker_id=99)
         worker.set_handler(AsyncMock())
 
-        import asyncio
-        asyncio.run(worker.start())
+        await worker.start()
 
         assert heartbeat_written, "Worker.start() should write forensic:worker:heartbeat"
 
-    def test_worker_heartbeat_key_format(self):
+    @pytest.mark.asyncio
+    async def test_worker_heartbeat_key_format(self):
         """Heartbeat key follows the expected naming convention."""
         redis = _make_redis_mock()
+
+        async def mock_blpop(*args, **kwargs):
+            await asyncio.sleep(0.01)
+            raise asyncio.CancelledError()
+        redis.client.blpop = mock_blpop
+
         keys_written: list = []
 
-        def capture_hset(name, key, value):
+        def capture_set(key, value, ex=None):
             keys_written.append(key)
-            return AsyncMock()(name, key, value)
+            return AsyncMock()(key, value, ex)
 
-        redis.hset = capture_hset
+        redis.set = capture_set
         queue = InvestigationQueue()
         queue._redis = redis
         worker = InvestigationWorker(queue, worker_id=42)
         worker.set_handler(AsyncMock())
 
-        import asyncio
-        asyncio.run(worker.start())
+        await worker.start()
 
         heartbeat_keys = [k for k in keys_written if "heartbeat" in k]
         assert len(heartbeat_keys) > 0, "At least one heartbeat key should be written"

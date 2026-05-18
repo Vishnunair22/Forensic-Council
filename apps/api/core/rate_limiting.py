@@ -111,7 +111,8 @@ async def check_investigation_rate_limit(user_id: str, settings: Settings | None
     try:
         redis = await get_redis_client()
         key = f"rate:investigation:{user_id}"
-        result = await redis.client.eval(
+        client: Any = redis.client
+        result = await client.eval(
             _RATE_LIMIT_LUA,
             1,
             key,
@@ -174,7 +175,8 @@ async def check_daily_cost_quota(
         redis.call('SET', KEYS[1], tostring(new_value), 'EX', window)
         return {1, window}
         """
-        result = await redis.client.eval(
+        client: Any = redis.client
+        result = await client.eval(
             cost_lua,
             1,
             key,

@@ -9,6 +9,7 @@ import asyncio
 import json
 import time
 from collections import deque
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -18,7 +19,7 @@ from api.routes._session_state import (
     register_websocket,
     unregister_websocket,
 )
-from core.auth import User, decode_token
+from core.auth import User, UserRole, decode_token
 from core.config import get_settings
 from core.structured_logging import get_logger
 
@@ -150,10 +151,15 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
     # S-H-4: role MUST come from the signed JWT (token_role), never from
     # session metadata. Fall back to "investigator" only if the token did
     # not include a role claim — never elevate from metadata.
+    try:
+        role = UserRole(token_role) if token_role else UserRole.INVESTIGATOR
+    except ValueError:
+        role = UserRole.INVESTIGATOR
+
     auth_user = User(
         user_id=user_id,
         username=user_id,
-        role=token_role or "investigator",
+        role=role,
     )
     try:
         await assert_session_access(session_id, auth_user)
@@ -202,7 +208,8 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
 
             await pubsub.subscribe(channel)
 
-            replay_messages = await dedicated_redis.lrange(replay_key, 0, -1)
+            dedicated_redis_any: Any = dedicated_redis
+            replay_messages = await dedicated_redis_any.lrange(replay_key, 0, -1)
             if replay_messages:
                 for msg_json in replay_messages:
                     try:

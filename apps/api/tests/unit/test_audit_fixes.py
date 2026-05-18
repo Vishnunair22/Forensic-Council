@@ -90,7 +90,7 @@ async def test_mime_before_dedup():
         with pytest.raises(HTTPException) as exc:
             await start_investigation(
                 file=mock_file,
-                case_id="case1",
+                case_id="CASE-case1",
                 investigator_id="inv1",
                 current_user=MagicMock(user_id="u1", role=MagicMock(value="investigator")),
             )

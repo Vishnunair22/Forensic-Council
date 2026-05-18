@@ -12,6 +12,45 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-18: Type Safety & Observability Hardening (Pyright & TypeScript 100% Green)
+
+**Status:** ✅ COMPLETE
+
+### What Changed
+- **Backend Type-Safety Resolution**:
+  - Upgraded [_dto.py](file:///d:/Forensic%20Council/apps/api/api/routes/_dto.py) to explicitly narrow the type of dynamic dictionary accessors (`per_agent_metrics` and `per_agent_analysis`) using robust inline assignment and type-check coercion.
+  - Resolved `UserRole` and `User` type mismatch in [_websocket.py](file:///d:/Forensic%20Council/apps/api/api/routes/_websocket.py) by importing the strict enum from `core.auth` and parsing user session roles safely.
+  - Eliminated awaitable list mismatches in [_websocket.py](file:///d:/Forensic%20Council/apps/api/api/routes/_websocket.py), [sessions.py](file:///d:/Forensic%20Council/apps/api/api/routes/sessions.py), and [sse.py](file:///d:/Forensic%20Council/apps/api/api/routes/sse.py) by casting Redis clients to `Any` to correctly support async await resolution on `lrange` commands under Pyright static analysis.
+  - Fixed standard library `logger` calls in [calibration_trainer.py](file:///d:/Forensic%20Council/apps/api/core/calibration_trainer.py) that were incorrectly passing invalid keyword arguments. Mapped them to standard library formatted message signatures.
+  - Narrowed integer types during synthetic training and egress URL validation (in [webhooks.py](file:///d:/Forensic%20Council/apps/api/api/routes/webhooks.py)) to remove any remaining type ambiguities.
+  - Updated [agent_registry.py](file:///d:/Forensic%20Council/apps/api/core/agent_registry.py)'s register method definition to explicitly support `dict[str, Any] | None` annotations for default metadata parameters.
+- **Frontend & Backend 100% Clean Validation**:
+  - Run entire backend typecheck (`uv run pyright`) — fully passed with **0 errors, 0 warnings**!
+  - Run entire backend linting (`uv run ruff check .`) — fully passed with **0 errors, 0 warnings**!
+  - Run entire frontend typecheck (`npm.cmd run type-check`) — fully passed with **0 errors, 0 warnings**!
+  - Run entire frontend linting (`npm.cmd run lint`) — fully passed with **0 errors, 0 warnings**!
+
+### Files Touched
+- `apps/api/api/routes/_dto.py`
+- `apps/api/api/routes/_websocket.py`
+- `apps/api/api/routes/sessions.py`
+- `apps/api/api/routes/sse.py`
+- `apps/api/api/routes/webhooks.py`
+- `apps/api/core/agent_registry.py`
+- `apps/api/core/calibration_trainer.py`
+- `PROJECT_HANDOFF.md`
+
+### Verification Results
+
+| Check / Verification Command | Status | Notes |
+|-----------------------------|--------|-------|
+| `uv run pyright` | ✅ PASS | Python backend has 0 errors, 0 warnings, 0 info |
+| `uv run ruff check .` | ✅ PASS | Python backend linter has 0 rules violations |
+| `npm.cmd run type-check` | ✅ PASS | Next.js frontend has 0 TypeScript errors |
+| `npm.cmd run lint` | ✅ PASS | Next.js frontend has 0 ESLint warnings or errors |
+
+---
+
 ### 2026-05-18: Instant Overlay Display & Duplication Elimination
 
 **Status:** ✅ COMPLETE

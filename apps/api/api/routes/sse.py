@@ -121,7 +121,8 @@ async def _event_generator(
             await pubsub.subscribe(channel)
 
             # 2. Replay any missed messages from the buffer
-            replay_messages = await dedicated_redis.lrange(replay_key, 0, -1)
+            dedicated_redis_any: Any = dedicated_redis
+            replay_messages = await dedicated_redis_any.lrange(replay_key, 0, -1)
             if replay_messages:
                 for msg_json in replay_messages:
                     try:

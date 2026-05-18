@@ -201,7 +201,7 @@ class TestCalibrationLayer:
 
     def test_decompose_uncertainty_escalates_uncalibrated_high_ci(self, tmp_path):
         layer = self._make_layer(tmp_path)
-        ci = {"lower": 0.1, "upper": 0.8}  # width=0.7 → triggers UNCALIBRATED escalation
+        ci = {"lower": 0.1, "upper": 0.95}  # width=0.85 → triggers UNCALIBRATED escalation (> 0.80)
         result = layer._decompose_uncertainty(
             raw_score=0.5,
             params={"A": 2.0, "B": -1.0},

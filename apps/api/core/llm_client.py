@@ -193,13 +193,14 @@ class LLMClient:
             url = url_map.get(self.provider)
             if not url:
                 return True
-            headers = {}
+            headers: dict[str, str] = {}
+            api_key = self.api_key or ""
             if self.provider == "groq" or self.provider == "openai":
-                headers = {"Authorization": f"Bearer {self.api_key}"}
+                headers = {"Authorization": f"Bearer {api_key}"}
             elif self.provider == "anthropic":
-                headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
+                headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
             elif self.provider == "gemini":
-                headers = {"x-goog-api-key": self.api_key}
+                headers = {"x-goog-api-key": api_key}
 
             resp = await asyncio.wait_for(client.get(url, headers=headers), timeout=3.0)
             return resp.status_code < 500
@@ -780,8 +781,8 @@ class LLMClient:
                         client = await self._get_client()
                         req_timeout = timeout_override or 15.0
                         resp = await self._with_retry(
-                            lambda c=client, u=url, h=headers, p=payload: c.post(
-                                u, headers=h, json=p, timeout=req_timeout
+                            lambda c=client, u=url, h=headers, p=payload, t=req_timeout: c.post(
+                                u, headers=h, json=p, timeout=t
                             )
                         )
                         resp.raise_for_status()
@@ -806,8 +807,8 @@ class LLMClient:
                         client = await self._get_client()
                         req_timeout = timeout_override or 15.0
                         resp = await self._with_retry(
-                            lambda c=client, u=url, p=payload, h=gemini_headers: c.post(
-                                u, json=p, headers=h, timeout=req_timeout
+                            lambda c=client, u=url, p=payload, h=gemini_headers, t=req_timeout: c.post(
+                                u, json=p, headers=h, timeout=t
                             )
                         )
                         resp.raise_for_status()

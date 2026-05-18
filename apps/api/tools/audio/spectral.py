@@ -96,14 +96,14 @@ async def run_background_noise_consistency(
                 {
                     "timestamp": times[idx],
                     "type": "spectral_shift",
-                    "severity": min(1.0, abs(feature_diff[idx]) / threshold / 3),
+                    "severity": min(1.0, float(abs(feature_diff[idx]) / threshold / 3)),
                 }
             )
 
         mean_feat = np.mean(features)
         std_feat = np.std(features)
         coefficient_of_variation = std_feat / mean_feat if mean_feat > 0 else 0.0
-        consistency_score = max(0.0, 1.0 - coefficient_of_variation)
+        consistency_score = max(0.0, float(1.0 - coefficient_of_variation))
 
         return {
             "consistency_score": round(consistency_score, 3),

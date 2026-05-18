@@ -714,6 +714,15 @@ def _sessions_route_path():
     return api_root / "api" / "routes" / "sessions.py"
 
 
+def _websocket_route_path():
+    """Resolve the backend websocket route."""
+    import pathlib
+
+    # Walk up: tests/unit/ -> tests/ -> apps/api/
+    api_root = pathlib.Path(__file__).parents[2]
+    return api_root / "api" / "routes" / "_websocket.py"
+
+
 def _metrics_route_path():
     """Resolve the backend metrics route."""
     import pathlib
@@ -873,18 +882,19 @@ class TestWebSocketAuthLogic:
 
     def test_rate_limit_max_messages(self):
         """MAX_MESSAGES_PER_MINUTE constant should be positive."""
-        text = _sessions_route_path().read_text(encoding="utf-8")
+        text = _websocket_route_path().read_text(encoding="utf-8")
         assert "MAX_MESSAGES_PER_MINUTE = 100" in text
 
     def test_idle_timeout_is_positive(self):
-        text = _sessions_route_path().read_text(encoding="utf-8")
+        text = _websocket_route_path().read_text(encoding="utf-8")
         assert "IDLE_TIMEOUT = 300" in text
 
     def test_duplicate_pubsub_close_removed(self):
         """Regression: pubsub.close() must appear exactly once in the finally block."""
-        text = _sessions_route_path().read_text(encoding="utf-8")
+        text = _websocket_route_path().read_text(encoding="utf-8")
         # Find the _redis_subscriber finally block
-        finally_idx = text.find("finally:")
+        sub_idx = text.find("async def _redis_subscriber():")
+        finally_idx = text.find("finally:", sub_idx)
         subscriber_section = text[finally_idx : finally_idx + 600]
         # Count occurrences of 'pubsub.close()' in this section
         count = subscriber_section.count("await pubsub.close()")

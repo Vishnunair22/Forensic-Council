@@ -260,11 +260,11 @@ def train_from_csv(
     metrics = evaluate_calibration(eval_scores, eval_labels, platt_a, platt_b)
 
     logger.info(
-        "Calibration training complete",
-        agent_id=agent_id,
-        platt_a=round(platt_a, 4),
-        platt_b=round(platt_b, 4),
-        **metrics,
+        "Calibration training complete: agent_id=%s, platt_a=%s, platt_b=%s, metrics=%s",
+        agent_id,
+        round(platt_a, 4),
+        round(platt_b, 4),
+        metrics,
     )
 
     return CalibrationTrainingResult(
@@ -273,7 +273,7 @@ def train_from_csv(
         platt_b=platt_b,
         brier_score=metrics.get("brier_score", 1.0),
         ece=metrics.get("ece", 1.0),
-        n_samples=metrics.get("n_samples", len(raw_scores)),
+        n_samples=int(metrics.get("n_samples", len(raw_scores))),
         dataset=dataset_name,
     )
 
@@ -288,7 +288,7 @@ def save_trained_model(
     path = output_dir / f"{result.agent_id}_calibration.json"
     with open(path, "w") as f:
         json.dump(model_dict, f, indent=2)
-    logger.info("Calibration model saved", agent_id=result.agent_id, path=str(path))
+    logger.info("Calibration model saved: agent_id=%s, path=%s", result.agent_id, str(path))
     return path
 
 
@@ -382,7 +382,7 @@ def bootstrap_all_agents(
             saved.append(path)
 
         except Exception as e:
-            logger.error(f"Failed to train calibration for {agent_id}", error=str(e))
+            logger.error(f"Failed to train calibration for {agent_id}: {e}")
 
     return saved
 

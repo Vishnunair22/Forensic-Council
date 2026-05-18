@@ -362,7 +362,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
       </AnimatePresence>
 
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && pipelineStatus === "awaiting_decision" && !arbiterDeliberating && (
+        {phase === "deep" && revealQueue.length === 0 && (awaitingDecision || pipelineStatus === "awaiting_decision") && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

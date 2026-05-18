@@ -89,7 +89,7 @@ async def run_audio_splice_detect(
             segments.append({
                 "timestamp": times[idx],
                 "type": "splice",
-                "confidence": min(1.0, abs(energy_diff[idx]) / energy_threshold / 3),
+                "confidence": min(1.0, float(abs(energy_diff[idx]) / energy_threshold / 3)),
             })
 
         splice_detected = len(segments) > 0

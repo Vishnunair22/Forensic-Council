@@ -102,7 +102,7 @@ class AgentRegistry:
             {"modality": "METADATA", "name": "Metadata & Provenance", "permitted_callees": []},
         )
 
-    def register(self, agent_id: str, agent_class: type, metadata: dict[str, Any] = None):
+    def register(self, agent_id: str, agent_class: type, metadata: dict[str, Any] | None = None):
         """Register a new agent."""
         self._agents[agent_id] = agent_class
         self._metadata[agent_id] = metadata or {}

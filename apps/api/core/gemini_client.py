@@ -338,7 +338,8 @@ class GeminiVisionClient:
                 # M-C-4: Gemini key as header, not query string.
                 url = f"{_GEMINI_API_BASE}/models?pageSize=100"
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(url, headers={"x-goog-api-key": self.api_key})
+                    api_key = self.api_key or ""
+                    resp = await client.get(url, headers={"x-goog-api-key": api_key})
                     if resp.status_code == 200:
                         data = resp.json()
                         for m in data.get("models", []):
@@ -914,7 +915,8 @@ class GeminiVisionClient:
         model_name: str | None = None,
     ) -> str:
         """POST to Gemini API with exponential-backoff retry."""
-        headers = {"x-goog-api-key": self.api_key}
+        api_key = self.api_key or ""
+        headers = {"x-goog-api-key": api_key}
         active_model = model_name or self.model
         for attempt in range(_MAX_RETRIES):
             try:

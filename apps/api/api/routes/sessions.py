@@ -165,7 +165,9 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
     await redis.hdel("forensic:investigation:tasks", session_id)
 
     try:
-        queued = await redis.client.lrange("forensic:investigation:queue", 0, -1)
+        from typing import Any
+        client_any: Any = redis.client
+        queued = await client_any.lrange("forensic:investigation:queue", 0, -1)
         remaining = [
             item
             for item in queued
@@ -797,10 +799,6 @@ async def resume_investigation(
             "Resume called but decision already exists — returning idempotent response",
             session_id=session_id,
         )
-        try:
-            existing = json.loads(existing_decision) if isinstance(existing_decision, str) else {}
-        except Exception:
-            existing = {}
         return {
             "status": "running",
             "phase": "deep" if request.deep_analysis else "initial",

@@ -220,7 +220,7 @@ class VideoHandlers(BaseToolHandler):
                 if not ret:
                     break
                 next_f = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-                flow = cv2.calcOpticalFlowFarneback(prvs, next_f, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+                flow = cv2.calcOpticalFlowFarneback(prvs, next_f, None, 0.5, 3, 15, 3, 5, 1.2, 0)  # type: ignore[arg-type]
                 mag, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
                 flows.append(float(np.mean(mag)))
                 prvs = next_f

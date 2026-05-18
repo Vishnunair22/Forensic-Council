@@ -376,6 +376,7 @@ class InvestigationWorker:
                     logger.error(f"Worker {self.worker_id} loop error", error=str(e))
                     await asyncio.sleep(1)
         finally:
+            self._running = False
             heartbeat_task.cancel()
             try:
                 await heartbeat_task

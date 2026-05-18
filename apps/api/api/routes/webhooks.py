@@ -198,7 +198,7 @@ def _validate_egress_url(url: str) -> tuple[str | None, str | None]:
         reason = _ip_block_reason(ip)
         if reason is not None:
             return None, f"Host {parsed.hostname!r} resolves to a {reason} address ({addr})"
-        resolved = addr
+        resolved = str(addr)
     if resolved is None:
         return None, "Could not resolve hostname to a public IP"
     return resolved, None
