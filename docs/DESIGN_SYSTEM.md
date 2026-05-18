@@ -1,627 +1,1552 @@
-# Forensic Council — Design System
+# Frontend Design System — Precision Frosted Glass
 
-**Status:** v1.7.0 audit baseline (Phase 3.0). This document is the source
-of truth for every subsequent UI refinement phase. A token or class that
-does not appear here is not part of the design system and must not be
-introduced into new code without first updating this doc.
+## 1. Product Design Thesis
 
-**Accessibility floor:** WCAG 2.1 Level AA on a `#02040A` background.
-Aesthetic refinement never overrides a11y. When a glass or low-contrast
-choice would push body text below 4.5:1 contrast, the text wins.
+The app is a premium forensic analysis interface.
+
+It must feel:
+
+- modern
+- slick
+- precise
+- court-grade
+- evidence-first
+- trustworthy
+- glassy but readable
+- high-contrast
+- calm under pressure
+
+The app must not feel like:
+
+- a crypto dashboard
+- a hacker terminal
+- a sci-fi HUD
+- a gaming interface
+- a generic SaaS admin panel
+- a neon cyber dashboard
+
+The core visual language is:
+
+> Precision Frosted Glass
+
+Every major UI element should feel like part of one unified glass operating system: cards, agent panels, buttons, modals, nav, upload areas, tabs, docks, badges, and result containers.
+
+Glass is used for depth and cohesion, not decoration.
+
+Readability always wins over transparency.
 
 ---
 
-## 1. Typography
+# 2. Core Visual Identity
 
-### 1.1 Current state [FACT]
+## 2.1 Design Name
 
-The codebase declares three font families in `globals.css`:
+**Precision Frosted Glass**
 
-```css
---font-sans:    var(--font-geist), system-ui, sans-serif;
---font-heading: var(--font-heading-family), var(--font-geist), sans-serif;
---font-mono:    var(--font-mono-family), ui-monospace, monospace;
+## 2.2 Design Principle
+
+The entire app uses a controlled frosted-glass material system with rounded edges, subtle light reflection, soft depth, and strong text contrast.
+
+The UI should feel premium and cohesive end-to-end.
+
+## 2.3 One-Line Rule
+
+> All UI chrome must use the same frosted glass material language. Transparency, blur, border highlights, and depth are allowed only when they improve clarity, hierarchy, and polish.
+
+---
+
+# 3. Non-Negotiable Rules
+
+These rules are mandatory.
+
+## 3.1 Readability
+
+Text must always be readable.
+
+Never place important text directly over busy visuals without a dark glass surface behind it.
+
+Minimum text opacity:
+
+```txt
+Primary text: 96–100%
+Secondary text: 78–86%
+Muted text: 62–72%
+Faint text: 55% minimum
 ```
 
-`--font-geist`, `--font-heading-family`, and `--font-mono-family` are
-**never defined** anywhere in the codebase. `apps/web/src/app/layout.tsx`
-does not import `next/font/google` or `next/font/local`. No font files are
-shipped in `apps/web/public`.
+Text opacity below `55%` is banned for readable UI text.
 
-Result: `font-sans`, `font-heading`, and the typed `font-family` for any
-class falls back to `system-ui` / `ui-monospace`. The three intended
-typefaces render as one (system default) plus a monospace stack.
+## 3.2 Glass Consistency
 
-### 1.2 Font-size usage [FACT]
+All major UI containers must use the canonical glass surface system.
 
-Counts of `text-[Npx]` and `text-{size}` across all `.tsx` files in
-`apps/web/src/`:
+Do not create one-off card styles with random borders, shadows, and background opacity values.
 
-| Class          | Count | Notes |
-| -------------- | ----- | ----- |
-| `text-[10px]`  | 106   | Heaviest single size. Used for monospace label rows. |
-| `text-[9px]`   | 40    | At or below readability floor. |
-| `text-xs` (12px) | 39  |       |
-| `text-sm` (14px) | 32  |       |
-| `text-[11px]`  | 21    |       |
-| `text-4xl`     | 10    |       |
-| `text-3xl`     | 9     |       |
-| `text-base` (16px) | 7 |       |
-| `text-[13px]`  | 7     |       |
-| `text-xl`      | 6     |       |
-| `text-[8px]`   | 6     | Below readability floor. |
-| `text-[12px]`  | 6     | Duplicates `text-xs`. |
-| `text-2xl`     | 6     |       |
-| `text-lg`      | 5     |       |
-| `text-[17px]`  | 3     |       |
-| `text-5xl`     | 3     |       |
-| `text-[44px]`  | 2     |       |
-| `text-[22px]`  | 2     |       |
-| `text-[15px]`  | 2     |       |
-| `text-[68px]`  | 1     |       |
-| `text-[28px]`  | 1     |       |
-| `text-6xl`     | 1     |       |
+## 3.3 Rounded Shape Language
 
-### 1.3 Tracking (letter-spacing) usage [FACT]
+The app uses soft rounded geometry.
 
-| Class                | Count |
-| -------------------- | ----- |
-| `tracking-wide`      | 52    |
-| `tracking-tight`     | 24    |
-| `tracking-widest`    | 23    |
-| `tracking-[0.2em]`   | 14    |
-| `tracking-tighter`   | 12    |
-| `tracking-[0.18em]`  | 8     |
-| `tracking-[0.3em]`   | 7     |
-| `tracking-wider`     | 6     |
-| `tracking-[0.28em]`  | 4     |
-| `tracking-[0.16em]`  | 4     |
-| `tracking-[0.22em]`  | 3     |
-| `tracking-[0.14em]`  | 3     |
-| `tracking-[0.26em]`  | 1     |
-| `tracking-[0.25em]`  | 1     |
-| `tracking-[0.1em]`   | 1     |
-| `tracking-[0.15em]`  | 1     |
-| `tracking-[0.08em]`  | 1     |
+Required shape language:
 
-### 1.4 Issues
+```txt
+Cards: rounded-2xl or rounded-3xl
+Modals: rounded-3xl
+Buttons: rounded-full pill shape
+Badges: rounded-full
+Input fields: rounded-2xl or rounded-full depending on context
+Panels/docks: rounded-2xl or rounded-3xl
+```
 
-- **No real heading typeface.** `font-heading` resolves to the same family
-  as `font-sans` because `--font-heading-family` is undefined. The visual
-  difference between headings and body relies entirely on size and weight.
-- **`text-[9px]` and `text-[8px]`** are used in 46 places. These render at
-  roughly 9–10 px after browser DPI rounding and are at the edge of
-  legibility. WCAG doesn't set a hard pixel floor, but anything below
-  12 px combined with a low-opacity color routinely fails AA in practice
-  because anti-aliasing reduces perceived contrast.
-- **`text-[10px]` (106 uses)** is the dominant "small label" size, but
-  many of those uses pair it with `text-white/35` or `text-white/40`,
-  which on `#02040A` yields a 3.0–3.4:1 ratio. Below AA for normal text.
-- **`text-[12px]` and `text-xs`** are duplicates. Same 21 uses of
-  `text-[11px]` should be either consolidated to `text-xs` or kept only
-  where the 1-px difference is structurally required.
+Sharp corners are not allowed.
 
-### 1.5 Proposed canonical token set
+## 3.4 Case Rules
 
-A single fluid type scale, all named (no `text-[Npx]` arbitraries except
-where called out). All sizes assume system-ui or future Geist Sans.
+Forced uppercase is banned.
 
-| Token           | Size    | Use                                            |
-| --------------- | ------- | ---------------------------------------------- |
-| `fc-text-xs`    | 12px    | Captions, badges, status pills. Minimum size. |
-| `fc-text-sm`    | 14px    | Secondary body, table cells, labels.          |
-| `fc-text-base`  | 16px    | Body. Default.                                |
-| `fc-text-lg`    | 18px    | Lead paragraph, prominent body.               |
-| `fc-text-xl`    | 20px    | Subsection heading.                           |
-| `fc-text-2xl`   | 24px    | Card title, section subheading.               |
-| `fc-text-3xl`   | 30px    | Page subtitle.                                |
-| `fc-text-4xl`   | 36px    | Page title.                                   |
-| `fc-text-5xl`   | 48px    | Hero subhead.                                 |
-| `fc-text-hero`  | clamp(40px, 6vw, 68px) | Landing-page hero only.            |
+Allowed:
 
-**Eyebrow / mono-label pattern.** The codebase has a recurring pattern of
-small uppercase-tracked monospace labels (e.g. "System_Overview",
-"Forensic Protocol Active", "Investigator Intervention"). These are
-visually distinct. Replace `text-[10px] font-mono uppercase tracking-[0.X]`
-ad-hoc styles with one component class:
+```txt
+Title Case labels
+Sentence case descriptions
+Real acronyms: AI, PDF, API, SHA, MIME, URL
+```
 
-| Token              | Size  | Tracking | Use                                          |
-| ------------------ | ----- | -------- | -------------------------------------------- |
-| `fc-eyebrow`       | 11px  | 0.22em   | The single "label above title" pattern.      |
-| `fc-eyebrow-strong`| 12px  | 0.18em   | When eyebrow is the sole identifier.          |
+Banned:
 
-**Banned:** `text-[8px]`, `text-[9px]`, any new `text-[Npx]` use that
-duplicates an existing named token.
+```txt
+text-transform: uppercase
+uppercase Tailwind class
+Tracking-heavy all-caps labels
+Fake terminal labels
+```
 
-### 1.6 Font loading proposal
+## 3.5 Motion
 
-Phase 3.1 will introduce `next/font/google` imports in
-`apps/web/src/app/layout.tsx` for:
-- **Geist Sans** (variable) → `--font-geist` (used by `font-sans` + `font-heading`)
-- **Geist Mono** (variable) → `--font-mono-family` (used by `font-mono`)
+Motion must be subtle and functional.
 
-Until a distinct heading face is chosen, `--font-heading-family` should be
-removed from `globals.css` and `font-heading` should be redefined to use
-the same Geist Sans family with a heavier weight (`font-weight: 700`,
-which is already enforced by the `h1–h6` rule). The visual distinction
-between body and heading remains size + weight; this is intentional.
+Allowed:
+
+```txt
+Opacity fade
+Tiny y movement: 4px max
+Modal scale: 0.98 to 1
+Short transition duration: 120–180ms
+```
+
+Banned:
+
+```txt
+Hover lift
+Hover scale
+Decorative pulse
+Scan beams
+Orbit animation
+Excessive shimmer
+Springy card entrances
+Large sliding animations
+```
+
+## 3.6 Color
+
+Teal is the product accent and primary action identity.
+
+Teal should be used for:
+
+```txt
+Primary CTA buttons
+Active state
+Focus ring
+Progress state
+Analysis state
+Subtle hover tint
+Selected navigation
+```
+
+Teal should not be used everywhere.
+
+Semantic colors must only represent meaning:
+
+```txt
+Red: danger, destructive action, deception, severe risk
+Amber: caution, uncertainty, review needed
+Emerald: verified, authentic, complete
+Blue: information or neutral process only if needed
+```
+
+Semantic colors must not be used as decorative glows.
 
 ---
 
-## 2. Color
+# 4. Color System
 
-### 2.1 Surface tokens (already canonical) [FACT]
+## 4.1 Base Background
 
-`globals.css` `@theme` block defines:
+The app uses a dark forensic background.
 
-| Token              | Value     |
-| ------------------ | --------- |
-| `--color-background` | `#02040A` |
-| `--color-foreground` | `#EDF2F8` |
-| `--color-surface-0`  | `#010307` |
-| `--color-surface-1`  | `#060A14` |
-| `--color-surface-2`  | `#0A1020` |
-| `--color-surface-3`  | `#0F172D` |
-| `--color-surface-4`  | `#141D35` |
-
-These are the canonical surface stack. **Keep as-is.**
-
-### 2.2 Brand + semantic colors (already canonical) [FACT]
-
-| Token             | Value     | RGB                |
-| ----------------- | --------- | ------------------ |
-| `--color-primary` | `#4F8EF7` | `79, 142, 247`     |
-| `--color-primary-soft` | `#A5C8FF` |                |
-| `--color-accent`  | `#6BA3F5` |                    |
-| `--color-success` | `#2DD4A0` | `45, 212, 160`     |
-| `--color-warning` | `#E9A23B` | `233, 162, 59`     |
-| `--color-danger`  | `#EF4469` | `239, 68, 105`     |
-
-**Keep as-is.** These are well-defined.
-
-### 2.3 Text-opacity drift [FACT]
-
-23 distinct `text-white/N` values in use:
-
-| Class | Count | Contrast vs #02040A (approx) | WCAG AA normal? | WCAG AA large? |
-| ----- | ----- | ---------------------------- | --------------- | -------------- |
-| `text-white/90` | 7  | 16.5:1 | ✓ | ✓ |
-| `text-white/85` | 2  | 15.4:1 | ✓ | ✓ |
-| `text-white/80` | 12 | 14.2:1 | ✓ | ✓ |
-| `text-white/75` | 2  | 12.9:1 | ✓ | ✓ |
-| `text-white/70` | 8  | 11.7:1 | ✓ | ✓ |
-| `text-white/65` | 1  | 10.4:1 | ✓ | ✓ |
-| `text-white/62` | 1  | 9.7:1  | ✓ | ✓ |
-| `text-white/60` | 19 | 9.1:1  | ✓ | ✓ |
-| `text-white/55` | 5  | 8.0:1  | ✓ | ✓ |
-| `text-white/52` | 1  | 7.4:1  | ✓ | ✓ |
-| `text-white/50` | 14 | 6.8:1  | ✓ | ✓ |
-| `text-white/48` | 2  | 6.4:1  | ✓ | ✓ |
-| `text-white/45` | 3  | 5.7:1  | ✓ | ✓ |
-| `text-white/40` | 41 | 4.7:1  | ≈ borderline   | ✓ |
-| `text-white/35` | 17 | 3.9:1  | ✗ | ✓ |
-| `text-white/30` | 22 | 3.2:1  | ✗ | ≈ borderline   |
-| `text-white/25` | 10 | 2.6:1  | ✗ | ✗ |
-| `text-white/22` | 1  | 2.3:1  | ✗ | ✗ |
-| `text-white/20` | 35 | 2.1:1  | ✗ | ✗ |
-| `text-white/18` | 2  | 1.9:1  | ✗ | ✗ |
-| `text-white/15` | 3  | 1.6:1  | ✗ | ✗ |
-| `text-white/10` | 9  | 1.4:1  | ✗ | ✗ — decorative only |
-| `text-white/5`  | 1  | 1.2:1  | ✗ | ✗ — decorative only |
-
-Note: contrast ratios assume `#EDF2F8` (the `--color-foreground` constant)
-mixed against `#02040A`. Approximations only — actual ratios depend on
-glass-blur overlays underneath. The point: **86 uses of text below `/40`
-are presumptively failing WCAG AA for normal body text**, and many of the
-41 `text-white/40` uses are at 10–11 px which makes them likely to fail
-in practice.
-
-### 2.4 Parallel muted-text systems [FACT]
-
-`text-slate-*`, `text-foreground/N`, and inline `style={{color: "..."}}`
-introduce three more parallel ways to express muted text. Counts:
-
-- `text-foreground/*`: 8 uses across 6 distinct opacities.
-- `text-slate-*`: 10 uses across 8 distinct variants
-  (`slate-200/65`, `slate-300/50`, `slate-300/55`, `slate-300/60`,
-  `slate-300/75`, `slate-400`, `slate-500`, `slate-600`).
-
-### 2.5 Semantic color drift [FACT]
-
-The codebase uses multiple Tailwind palette shades for what should be one
-semantic color:
-
-| Semantic role | Variants in use | Canonical proposal |
-| ------------- | --------------- | ------------------ |
-| Danger / error | `text-rose-400` (8), `text-red-400` (5), `text-red-500`, `text-red-600`, `text-red-700`, `text-rose-300` (2), `text-rose-500` | `var(--color-danger)` only |
-| Warning       | `text-amber-400` (8), `text-amber-500` (3), `text-amber-300` (2), `text-amber-600` (2), `text-amber-700`, `text-amber-200/60`, `text-amber-400/{60,70,80}` | `var(--color-warning)` only |
-| Success       | `text-emerald-400` (3), `text-emerald-500`, `text-emerald-700`, `text-emerald-400/40`, `text-emerald-400/70`, `text-teal-400` | `var(--color-success)` only |
-| Info / brand  | `text-blue-400` (2), `text-blue-500`, `text-violet-400` (3), `text-violet-400/50`, `text-violet-400/70` | `var(--color-primary)` only |
-
-`text-amber-700` (`#B45309`) on `#02040A` is ≈ **3.1:1 contrast — fails AA
-for normal text**.
-
-### 2.6 Inline color drift [FACT]
-
-139 distinct inline `rgba()` / hex values appear in `style={{}}` props.
-The top-20 list (counts ≥ 3):
-
-| Value                          | Count |
-| ------------------------------ | ----- |
-| `rgba(255,255,255,0.04)`       | 11    |
-| `rgba(165,200,255,0.07)`       | 10    |
-| `rgba(0,0,0,0.4)`              | 9     |
-| `rgba(255,255,255,0.03)`       | 8     |
-| `#A7FFD2`                       | 8     |
-| `#00FFFF`                       | 7     |
-| `#020617`                       | 6     |
-| `rgba(79,142,247,0.06)`         | 5     |
-| `rgba(165,200,255,0.08)`        | 5     |
-| `#F59E0B`                       | 5     |
-| `rgba(79,142,247,0.8)`          | 4     |
-| `rgba(79,142,247,0.18)`         | 4     |
-| `rgba(79,142,247,0.12)`         | 4     |
-| `rgba(79,142,247,0.07)`         | 4     |
-| `#F43F5E`                       | 4     |
-| `#93C5FD`                       | 4     |
-| `rgba(255,255,255,0.05)`        | 4     |
-| `rgba(0,0,0,0.5)`               | 4     |
-| `rgba(79,142,247,0.10)`         | 3     |
-| `rgba(6,10,20,0.85)`            | 3     |
-| `rgba(5,9,18,0.92)`             | 3     |
-| `rgba(5,9,18,0.9)`              | 3     |
-| `rgba(255,255,255,0.06)`        | 3     |
-| `rgba(165,200,255,0.10)`        | 3     |
-
-Note `#020617` is **not** the same as `--color-background` (`#02040A`).
-Two near-blacks shipping in production.
-
-### 2.7 Canonical color rules (proposed)
-
-1. **Body text uses one of these classes only:**
-   - `fc-text-primary`   → `rgba(237, 242, 248, 1.0)`  ≈ 18:1
-   - `fc-text-secondary` → `rgba(237, 242, 248, 0.78)` ≈ 13:1
-   - `fc-text-muted`     → `rgba(237, 242, 248, 0.62)` ≈ 9.3:1 (AA normal)
-   - `fc-text-faint`     → `rgba(237, 242, 248, 0.55)` ≈ 7.5:1 (AA normal, body-large guaranteed)
-
-   The existing `text-muted-readable` (`0.68`), `text-muted-secondary`
-   (`0.56`), `text-muted-decorative` (`0.35`) already follow this model.
-   The new tokens map cleanly:
-   - `text-muted-readable` → keep, rename to `fc-text-muted` (0.62 floor)
-   - `text-muted-secondary` → keep, rename to `fc-text-faint` (0.55 floor)
-   - `text-muted-decorative` (`0.35`) → **delete**. It is below AA. Any
-     use must become `fc-text-faint` (raised contrast) OR move to a
-     dedicated `fc-text-decorative` token that is ONLY allowed on
-     non-text elements (icon strokes, divider lines, etc).
-
-2. **Banned for text:** `text-white/N` where N < 55 anywhere in body
-   text, AND any N < 40 even for large/decorative text outside of
-   explicitly aria-hidden icons or rules.
-
-3. **Banned for text:** every `text-slate-*` variant. Convert to one of
-   the four `fc-text-*` tokens.
-
-4. **Banned for text:** every numeric Tailwind color shade (`text-red-X`,
-   `text-amber-X`, `text-emerald-X`, etc). Use semantic helpers backed
-   by the CSS variables:
-   - `fc-text-danger`  → `var(--color-danger)`  → `#EF4469` ≈ 5.6:1 (AA normal)
-   - `fc-text-warning` → `#F0B14B` (lifted from `#E9A23B` to clear AA) ≈ 5.8:1
-   - `fc-text-success` → `var(--color-success)` ≈ 9.4:1
-   - `fc-text-primary-accent` → `var(--color-primary)` ≈ 5.8:1
-
-   Warning color **must be lifted** because `#E9A23B` on `#02040A` is
-   exactly 4.42:1, fails AA. Proposed replacement `#F0B14B` clears 4.5:1.
-
-5. **Inline `style={{color: ...}}` is banned for text** after Phase 3.1.
-   Inline color is only permitted for SVG fills, gradient stops, and
-   pseudo-element backgrounds where Tailwind classes don't apply.
-
----
-
-## 3. Glass surfaces
-
-### 3.1 Current classes [FACT]
-
-`globals.css` defines four named glass / surface classes:
-
-| Class             | Background                                                  | Border alpha | Backdrop blur | Use today |
-| ----------------- | ----------------------------------------------------------- | ------------ | ------------- | --------- |
-| `glass-panel`     | `var(--glass-bg)` = `rgba(79,142,247,0.035)`                | 0.09         | 20px          | Section containers (Home page) |
-| `premium-glass`   | identical to `glass-panel`                                  | 0.09         | 20px          | Used 1×, alias |
-| `horizon-card`    | `rgba(6,10,20,0.9)`                                         | 0.09         | none          | Card sublevel |
-| `premium-card`    | identical to `horizon-card`                                 | 0.09         | none          | Alias |
-| `fc-surface-crisp`| layered linear-gradient + `rgba(6,10,20,0.88)`              | 0.10         | none          | Pill nav, focal cards |
-| `step-card`       | `rgba(255,255,255,0.022)`                                   | 0.05         | none          | Step lists inside containers |
-
-### 3.2 Issues
-
-- **`glass-panel` and `premium-glass` are duplicates** (same CSS rule).
-- **`horizon-card` and `premium-card` are duplicates.**
-- The very-low backdrop alpha (`rgba(79,142,247,0.035)`) means the
-  "glass" is nearly invisible. The user has explicitly asked for "glass
-  with solid contrast" — this means we keep the blur for depth perception
-  but the background must be opaque enough that text on top reads
-  cleanly. `rgba(6,10,20,0.88)` on `horizon-card` is the right pattern.
-
-### 3.3 Canonical glass system (proposed)
-
-Three named surfaces. All other glass/card classes alias to or replace
-these.
-
-| Token                | Background                                                                                       | Border                       | Blur | Use |
-| -------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------- | ---- | --- |
-| `fc-surface-quiet`   | `rgba(6,10,20,0.92)`                                                                              | `rgba(165,200,255,0.08)`     | 0    | Inert cards, list rows. **No blur — solid contrast for text-heavy content.** |
-| `fc-surface-elevated`| `linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012)), rgba(6,10,20,0.92)`     | `rgba(165,200,255,0.12)`     | 0    | Default container. Visually "glass" via the layered top highlight, but reads opaque. |
-| `fc-surface-overlay` | `rgba(2,4,10,0.96)`                                                                                | `rgba(165,200,255,0.15)`     | 24px | Modals + full-viewport overlays. Backdrop blur HERE only, because there's no text underneath that needs to read through. |
-| `slick-frosted-card` | `rgba(8, 12, 20, 0.65)` layered with `rgba(255,255,255,0.015)`                                     | `rgba(255,255,255,0.07)`     | 16px | Modern frosted cards with highly readable high-contrast texts and smooth spring transitions. |
-
-**Migration map:**
-- `glass-panel`, `premium-glass`     → `slick-frosted-card` (or `fc-surface-elevated` for static)
-- `horizon-card`, `premium-card`     → `fc-surface-quiet`
-- `fc-surface-crisp`                  → keep as-is (used as pill-nav background, already correct)
-- `step-card`                          → keep as-is
-
-### 3.4 Backdrop-blur rules
-
-- Backdrop blur is allowed on `fc-surface-overlay` (modals/overlays) and the `slick-frosted-card` class (highly visible frosted-glass sheets).
-- All other surfaces — sections, cards, list rows — are **opaque** by
-  alpha. The "glass" affordance comes from the layered highlight + border,
-  not from a backdrop filter. This guarantees text contrast is
-  predictable.
-
----
-
-## 4. Border + radius
-
-### 4.1 Radius usage [FACT]
-
-| Class | Count |
-| --- | --- |
-| `rounded-full` | 97 |
-| `rounded-2xl` | 52 |
-| `rounded-xl` | 46 |
-| `rounded-lg` | 11 |
-| `rounded-3xl` | 7 |
-| `rounded-md` | 7 |
-| `rounded-sm` | 1 |
-| `rounded-[2.5rem]` | 1 |
-| `rounded-[1.5rem]` | 1 |
-| `rounded-[1.25rem]` | 1 |
-
-### 4.2 Canonical radii
-
-Already defined in `globals.css` `@theme`:
-
-| Variable     | Value | Tailwind class | Use |
-| ------------ | ----- | -------------- | --- |
-| `--radius-sm`  | 8px   | `rounded-lg`   | Buttons inside cards, inline controls |
-| `--radius-md`  | 12px  | `rounded-xl`   | Default card |
-| `--radius-lg`  | 16px  | `rounded-2xl`  | Containers |
-| `--radius-xl`  | 20px  | n/a            | Modal corners |
-| `--radius-2xl` | 26px  | `rounded-3xl`  | Hero panels |
-| `--radius-full`| 9999  | `rounded-full` | Pills, avatars |
-
-**Banned:** the three `rounded-[Xrem]` arbitraries — they're 1-px-off
-`rounded-3xl`. Replace with `rounded-3xl` everywhere.
-
----
-
-## 5. Borders
-
-### 5.1 Current state [FACT]
-
-Three border-color tokens are defined in `@theme`:
-- `--color-border-subtle` = `rgba(140,160,200,0.07)`
-- `--color-border-muted`  = `rgba(140,160,200,0.11)`
-- `--color-border-strong` = `rgba(140,160,200,0.20)`
-
-Inline `border-white/N` and `border-[rgba(...)]` are used widely in
-parallel.
-
-### 5.2 Canonical borders
-
-Three tokens above are correct. All inline `border-white/N` should map to
-one of:
-- `border-border-subtle` → very faint divider
-- `border-border-muted`  → default card/section border
-- `border-border-strong` → emphasis / focus state border
-
----
-
-## 6. Motion
-
-### 6.1 Current state [FACT]
-
-Tailwind `duration-N` (in CSS milliseconds):
-
-| Class | Count |
-| --- | --- |
-| `duration-300` | 15 |
-| `duration-500` | 10 |
-| `duration-700` | 6 |
-| `duration-200` | 5 |
-| `duration-400` | 2 |
-| `duration-150` | 2 |
-| `duration-1000` | 2 |
-
-Framer-motion `duration` (in seconds, top 12):
-
-| Value | Count |
-| --- | --- |
-| `0.6` | 8 |
-| `0.4` | 5 |
-| `0.2` | 5 |
-| `0.3` | 4 |
-| `0.14` | 4 |
-| `2`   | 3 |
-| `1.5` | 3 |
-| `1.4` | 3 |
-| `0.22" | 3 |
-| `0.12` | 3 |
-| `4`   | 2 |
-| `3`   | 2 |
-
-### 6.2 Easing [FACT]
-
-Two named easings already defined in `@theme`:
-- `--ease-out`    = `cubic-bezier(0.16, 1, 0.3, 1)`
-- `--ease-spring` = `cubic-bezier(0.34, 1.56, 0.64, 1)`
-- `--ease-in-out` = `cubic-bezier(0.4, 0, 0.2, 1)`
-
-### 6.3 Canonical motion tokens (proposed)
-
-Three transition durations cover 95% of real cases:
-
-| Token            | Duration | Use |
-| ---------------- | -------- | --- |
-| `fc-motion-fast` | 140ms    | Hover micro-feedback, overlay fade-in. |
-| `fc-motion-base` | 240ms    | Default for any state change (color, position, opacity). |
-| `fc-motion-slow` | 420ms    | Page-level transitions, large card mount/unmount. |
-| `fc-motion-ambient` | 1.6s + | Looping ambient animations (breathing glows, ECG-like waves). NOT for user-driven state changes. |
-
-Three easings cover everything:
-- `--ease-out` for entrances and most state changes
-- `--ease-in-out` for ambient loops
-- `--ease-spring` reserved for buttons and other deliberate "bounce" UI
-
-Anything outside these tokens needs a written justification.
-
-### 6.4 Reduced motion
-
-`globals.css` line 3–10 already correctly disables animation and smooth
-scroll for `prefers-reduced-motion`. **Keep.** All Phase 3.x changes
-must respect `useReducedMotion()` from framer-motion before applying
-any non-trivial animation.
-
----
-
-## 7. Focus states
-
-`globals.css` already defines a global focus ring at lines 470–479:
+Recommended tokens:
 
 ```css
-:where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22);
-  border-radius: 4px;
+:root {
+  --fc-bg-root: #02040a;
+  --fc-bg-deep: #030712;
+  --fc-bg-panel: rgba(8, 13, 24, 0.72);
+  --fc-bg-panel-strong: rgba(10, 16, 30, 0.86);
 }
 ```
 
-This is correct. **Keep.** All custom focus rings in components
-(`.fc-focus-ring` etc.) must defer to this global rule. Inline
-`outline: none` is banned unless paired with a replacement focus
-indicator.
+## 4.2 Text Tokens
+
+```css
+:root {
+  --fc-text-primary: rgba(255, 255, 255, 0.98);
+  --fc-text-secondary: rgba(255, 255, 255, 0.82);
+  --fc-text-muted: rgba(255, 255, 255, 0.68);
+  --fc-text-faint: rgba(255, 255, 255, 0.56);
+}
+```
+
+Usage:
+
+```txt
+Primary: page titles, card titles, key numbers, verdicts
+Secondary: normal body text, labels, descriptions
+Muted: metadata, helper text
+Faint: timestamps, non-critical chrome text
+```
+
+Do not use text below `rgba(255,255,255,0.55)`.
+
+## 4.3 Teal Brand Accent
+
+Teal is the main product action color.
+
+```css
+:root {
+  --fc-teal-950: #052f35;
+  --fc-teal-900: #073f46;
+  --fc-teal-800: #07545c;
+  --fc-teal-700: #0f766e;
+  --fc-teal-600: #0f9f9a;
+  --fc-teal-500: #14b8a6;
+  --fc-teal-400: #2dd4bf;
+  --fc-teal-300: #5eead4;
+
+  --fc-teal-soft: rgba(20, 184, 166, 0.12);
+  --fc-teal-border: rgba(94, 234, 212, 0.42);
+  --fc-teal-glow: rgba(45, 212, 191, 0.18);
+}
+```
+
+## 4.4 Semantic Colors
+
+```css
+:root {
+  --fc-danger: #ef4444;
+  --fc-danger-soft: rgba(239, 68, 68, 0.10);
+  --fc-danger-border: rgba(248, 113, 113, 0.34);
+
+  --fc-warning: #f59e0b;
+  --fc-warning-soft: rgba(245, 158, 11, 0.10);
+  --fc-warning-border: rgba(251, 191, 36, 0.34);
+
+  --fc-success: #10b981;
+  --fc-success-soft: rgba(16, 185, 129, 0.10);
+  --fc-success-border: rgba(52, 211, 153, 0.34);
+}
+```
 
 ---
 
-## 8. Layout density
+# 5. Typography System
 
-### 8.1 Container max-widths
+## 5.1 Font Behavior
 
-The codebase uses inconsistent max-widths: `max-w-md`, `max-w-2xl`,
-`max-w-3xl`, `max-w-5xl`, `max-w-7xl`. **Keep all** — they are
-intentional per-section.
+Typography should feel clean, precise, and readable.
 
-### 8.2 Touch targets [a11y FACT]
+Use strong hierarchy, not decorative effects.
 
-WCAG 2.5.5 (AAA) recommends 44×44px minimum touch target. AA (2.5.8)
-recommends 24×24px. Action icons and reset buttons (e.g. navbar Reset
-button at `px-3 py-1.5`) compute to ~30×24px — clears AA but not AAA.
+## 5.2 Text Classes
 
-**Canonical rule:** primary interactive controls must clear 44×44px.
-Secondary controls (small badge buttons, close icons) may use 28×28px
-minimum. Below 28×28 is banned for any tap target.
+```css
+.fc-text-primary {
+  color: var(--fc-text-primary);
+}
 
----
+.fc-text-secondary {
+  color: var(--fc-text-secondary);
+}
 
-## 9. Inventory of files that will change in Phase 3.1+
+.fc-text-muted {
+  color: var(--fc-text-muted);
+}
 
-For traceability, the following files contain the drift documented above
-and will be touched (in order) across Phase 3.1 → 3.7+:
+.fc-text-faint {
+  color: var(--fc-text-faint);
+}
+```
 
-| File | Sub-phase | Reason |
-| --- | --- | --- |
-| `apps/web/src/app/globals.css`                                | 3.1 | All token definitions. |
-| `apps/web/src/app/layout.tsx`                                 | 3.1 | next/font import. |
-| `apps/web/src/components/ui/LandingBackground.tsx`            | 3.2 | Inline rgba colors. |
-| `apps/web/src/components/pages/HomeClient.tsx`                | 3.2 | Hero typography + eyebrow. |
-| `apps/web/src/components/ui/HeroAuthActions.tsx`              | 3.2 | CTA button. |
-| `apps/web/src/components/ui/HowWorksSection.tsx`              | 3.2 | Section typography. |
-| `apps/web/src/components/ui/AgentsSection.tsx`                | 3.2 | Section typography. |
-| `apps/web/src/components/ui/GlassPanel.tsx`                   | 3.2 | Class consolidation. |
-| `apps/web/src/components/ui/GlobalNavbar.tsx`                 | 3.3 | Pill nav, touch target. |
-| `apps/web/src/components/ui/GlobalFooter.tsx`                 | 3.3 | Small-text minimum. |
-| `apps/web/src/components/ui/BrandLogo.tsx`                    | 3.3 | text-[8px]. |
-| `apps/web/src/components/ui/Toaster.tsx`                      | 3.3 | Toast colors. |
-| `apps/web/src/components/evidence/UploadModal.tsx`            | 3.4 | text-[8px], inline colors. |
-| `apps/web/src/components/evidence/UploadSuccessModal.tsx`     | 3.4 |       |
-| `apps/web/src/components/ui/LoadingOverlay.tsx`               | 3.4 |       |
-| `apps/web/src/components/ui/ForensicErrorModal.tsx`           | 3.4 |       |
-| `apps/web/src/components/ui/ForensicProgressOverlay.tsx`      | 3.4 |       |
-| `apps/web/src/components/ui/dialog.tsx`                       | 3.4 |       |
-| `apps/web/src/components/evidence/AgentProgressDisplay.tsx`   | 3.5a |      |
-| `apps/web/src/components/evidence/AgentStatusCard.tsx`        | 3.5a | text-[8px]. |
-| `apps/web/src/components/evidence/AgentStatusSummary.tsx`     | 3.5a |       |
-| `apps/web/src/components/evidence/AgentProgressSkeleton.tsx`  | 3.5a |       |
-| `apps/web/src/components/evidence/ArbiterCard.tsx`            | 3.5b |       |
-| `apps/web/src/components/evidence/ArbiterDeliberationOverlay.tsx` | 3.5b |   |
-| `apps/web/src/components/evidence/ForensicTimeline.tsx`       | 3.5b |       |
-| `apps/web/src/components/evidence/HITLCheckpointModal.tsx`    | 3.5b |       |
-| `apps/web/src/components/evidence/QuotaMeter.tsx`             | 3.5b |       |
-| `apps/web/src/components/evidence/ErrorDisplay.tsx`           | 3.5b |       |
-| `apps/web/src/components/result/ResultLayout.tsx`             | 3.6a |       |
-| `apps/web/src/components/result/ResultHeader.tsx`             | 3.6a | text-[9px]. |
-| `apps/web/src/components/result/ResultStateView.tsx`          | 3.6a |       |
-| `apps/web/src/components/result/VerdictGauge.tsx`             | 3.6a | text-[8px]. |
-| `apps/web/src/components/result/ArcGauge.tsx`                 | 3.6a |       |
-| `apps/web/src/components/result/IntelligenceBrief.tsx`        | 3.6a |       |
-| `apps/web/src/components/result/EvidenceThumbnail.tsx`        | 3.6a |       |
-| `apps/web/src/components/result/AgentAnalysisTab.tsx`         | 3.6b |       |
-| `apps/web/src/components/ui/AgentFindingCard.tsx`             | 3.6b | text-[9px]. |
-| `apps/web/src/components/result/AgentFindingSubComponents.tsx`| 3.6b | text-[8px], text-[9px]. |
-| `apps/web/src/components/result/TimelineTab.tsx`              | 3.6b |       |
-| `apps/web/src/components/result/HistoryPanel.tsx`             | 3.6c | text-[9px]. |
-| `apps/web/src/components/result/DeepModelTelemetry.tsx`       | 3.6c |       |
-| `apps/web/src/components/result/DegradationBanner.tsx`        | 3.6c | text-[9px]. |
-| `apps/web/src/components/result/ActionDock.tsx`               | 3.6c |       |
-| `apps/web/src/components/result/ReportFooter.tsx`             | 3.6c |       |
-| `apps/web/src/components/ui/AgentIcon.tsx`                    | 3.6c |       |
-| `apps/web/src/components/ui/AnimatedNumber.tsx`               | 3.6c |       |
-| `apps/web/src/components/ui/Badge.tsx`                        | 3.6c |       |
-| `apps/web/src/components/pages/SessionExpiredClient.tsx`      | 3.7  | text-[8px]. |
-| `apps/web/src/app/error.tsx`                                   | 3.7  |       |
-| `apps/web/src/app/global-error.tsx`                            | 3.7  |       |
-| `apps/web/src/app/not-found.tsx`                               | 3.7  |       |
-| `apps/web/src/app/evidence/error.tsx`                          | 3.7  |       |
-| `apps/web/src/app/result/error.tsx`                            | 3.7  |       |
+## 5.3 Eyebrow Labels
 
-**3.8 (final pass)** sweeps any residual drift identified during 3.2–3.7.
+Eyebrows are allowed, but they must not be forced uppercase.
+
+```css
+.fc-eyebrow {
+  color: var(--fc-text-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+```
+
+Banned:
+
+```css
+text-transform: uppercase;
+```
+
+## 5.4 Headings
+
+Recommended hierarchy:
+
+```txt
+Page title: text-4xl to text-6xl
+Section title: text-2xl to text-3xl
+Card title: text-lg to text-xl
+Body: text-sm to text-base
+Metadata: text-xs to text-sm
+```
+
+Avoid excessive arbitrary text sizes like:
+
+```txt
+text-[10px]
+text-[11px]
+text-[13px]
+md:text-[80px]
+```
 
 ---
 
-## 10. Rules for adding new tokens
+# 6. Surface System
 
-After this audit lands, new colors / sizes / motion durations require:
-1. A line added to the relevant section of this document.
-2. The new token added to `globals.css` `@theme` or as a utility class.
-3. The token used by name — no raw `text-[Npx]`, no inline `rgba()`
-   for text or borders.
+All cards, panels, modals, upload zones, docks, and agent containers must use canonical surface classes.
 
-If a one-off value is genuinely needed (e.g. a hero-specific gradient
-stop), document the exception in this file under the relevant section.
+## 6.1 Base Glass Surface
+
+```css
+.fc-surface {
+  position: relative;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.035)
+    ),
+    rgba(8, 13, 24, 0.70);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 18px 44px rgba(0, 0, 0, 0.28);
+}
+```
+
+## 6.2 Quiet Surface
+
+Use for normal cards.
+
+```css
+.fc-surface-quiet {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.060),
+      rgba(255, 255, 255, 0.030)
+    ),
+    rgba(8, 13, 24, 0.64);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 12px 30px rgba(0, 0, 0, 0.22);
+}
+```
+
+## 6.3 Elevated Surface
+
+Use for important panels, result cards, agent groups, and upload containers.
+
+```css
+.fc-surface-elevated {
+  border-radius: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.085),
+      rgba(255, 255, 255, 0.040)
+    ),
+    rgba(8, 13, 24, 0.76);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
+    0 22px 56px rgba(0, 0, 0, 0.34);
+}
+```
+
+## 6.4 Overlay Surface
+
+Use for modals, command panels, and blocking overlays.
+
+```css
+.fc-surface-overlay {
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.105),
+      rgba(255, 255, 255, 0.050)
+    ),
+    rgba(5, 10, 20, 0.88);
+  backdrop-filter: blur(30px) saturate(155%);
+  -webkit-backdrop-filter: blur(30px) saturate(155%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 30px 80px rgba(0, 0, 0, 0.48);
+}
+```
+
+## 6.5 Light Reflection Rule
+
+Glass panels may include a subtle top highlight.
+
+Allowed:
+
+```css
+.fc-glass-highlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.00) 42%
+    );
+}
+```
+
+Reflection must be subtle. It must not make text harder to read.
 
 ---
 
-## 11. Compliance check matrix
+# 7. Button System
 
-Each Phase 3.x verification gate must include this check:
+Buttons must be pill-shaped.
 
-- [ ] No new `text-white/N` for N < 55 introduced in changed files.
-- [ ] No new `text-slate-*` introduced.
-- [ ] No new `text-{color}-{shade}` introduced — only semantic helpers.
-- [ ] No new `text-[Npx]` introduced — only named tokens.
-- [ ] All changed inline `style={{color: ...}}` removed or justified.
-- [ ] Touch targets in changed files ≥ 28×28 px.
-- [ ] `useReducedMotion()` respected on any new motion.
-- [ ] Visual diff (manual screenshot) reviewed by operator.
+The app uses four button types:
+
+```txt
+Primary
+Secondary
+Ghost
+Danger
+```
+
+## 7.1 Primary Button
+
+Primary buttons use deep teal frosted glass.
+
+Use for:
+
+```txt
+Begin Analysis
+Upload Evidence
+Continue
+Start Review
+Confirm
+Generate Report
+View Result
+Proceed
+```
+
+Primary button behavior:
+
+```txt
+Default: deep teal glass pill
+Hover: more transparent teal glass with brighter border
+Active: darker pressed teal
+Disabled: muted transparent glass
+```
+
+CSS:
+
+```css
+.fc-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 184, 166, 0.24),
+      rgba(7, 84, 92, 0.42)
+    );
+
+  color: rgba(240, 253, 250, 0.96);
+  border: 1px solid rgba(94, 234, 212, 0.46);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(45, 212, 191, 0.12),
+    0 14px 36px rgba(0, 0, 0, 0.34),
+    0 0 28px rgba(45, 212, 191, 0.14);
+
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.fc-btn-primary:hover {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 184, 166, 0.12),
+      rgba(7, 84, 92, 0.22)
+    );
+
+  color: rgba(255, 255, 255, 0.98);
+  border-color: rgba(94, 234, 212, 0.72);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 12px 32px rgba(0, 0, 0, 0.30),
+    0 0 34px rgba(45, 212, 191, 0.20);
+}
+
+.fc-btn-primary:active {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(15, 118, 110, 0.22),
+      rgba(5, 47, 53, 0.42)
+    );
+  border-color: rgba(94, 234, 212, 0.52);
+}
+
+.fc-btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  box-shadow: none;
+}
+```
+
+## 7.2 Secondary Button
+
+Secondary buttons are neutral glass pills with teal only on hover/focus.
+
+Use for:
+
+```txt
+Back
+Cancel
+View Details
+Download
+Open Timeline
+Switch Tab
+Copy
+Secondary navigation actions
+```
+
+CSS:
+
+```css
+.fc-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.075),
+      rgba(255, 255, 255, 0.035)
+    );
+
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 10px 26px rgba(0, 0, 0, 0.20);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  font-size: 0.875rem;
+  font-weight: 650;
+
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.fc-btn-secondary:hover {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 184, 166, 0.12),
+      rgba(15, 118, 110, 0.075)
+    );
+
+  color: rgba(240, 253, 250, 0.96);
+  border-color: rgba(94, 234, 212, 0.38);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.fc-btn-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+```
+
+## 7.3 Ghost Button
+
+Ghost buttons are for low-priority actions.
+
+Use for:
+
+```txt
+Dismiss
+Learn More
+Expand
+Collapse
+Minor filters
+Inline actions
+Utility actions
+```
+
+CSS:
+
+```css
+.fc-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid transparent;
+
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.fc-btn-ghost:hover {
+  background: rgba(20, 184, 166, 0.07);
+  color: rgba(240, 253, 250, 0.96);
+  border-color: rgba(94, 234, 212, 0.20);
+}
+```
+
+## 7.4 Danger Button
+
+Danger buttons are restrained red glass.
+
+Use for:
+
+```txt
+Delete
+Remove Evidence
+Clear Session
+Reject
+Reset
+Destructive confirmation
+```
+
+CSS:
+
+```css
+.fc-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(254, 202, 202, 0.94);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 26px rgba(0, 0, 0, 0.20);
+
+  font-size: 0.875rem;
+  font-weight: 650;
+
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.fc-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: rgba(255, 235, 235, 0.98);
+  border-color: rgba(248, 113, 113, 0.48);
+}
+```
+
+## 7.5 Button Mapping
+
+```txt
+Primary = teal command
+Secondary = neutral glass support
+Ghost = quiet utility
+Danger = destructive action
+```
+
+Examples:
+
+| Action             | Button Type                                    |
+| ------------------ | ---------------------------------------------- |
+| Begin Analysis     | Primary                                        |
+| Upload Evidence    | Primary                                        |
+| Continue           | Primary                                        |
+| Generate Report    | Primary                                        |
+| Confirm Checkpoint | Primary                                        |
+| Back               | Secondary                                      |
+| Cancel             | Secondary                                      |
+| View Details       | Secondary                                      |
+| Download Report    | Secondary or Primary depending on page context |
+| Copy Link          | Ghost                                          |
+| Dismiss            | Ghost                                          |
+| Expand Details     | Ghost                                          |
+| Remove Evidence    | Danger                                         |
+| Clear Session      | Danger                                         |
+
+---
+
+# 8. Badge and Status System
+
+Badges must be rounded pills.
+
+## 8.1 Neutral Badge
+
+```css
+.fc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.065);
+  color: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+```
+
+## 8.2 Active Badge
+
+```css
+.fc-badge-active {
+  background: rgba(20, 184, 166, 0.11);
+  color: rgba(204, 251, 241, 0.96);
+  border-color: rgba(94, 234, 212, 0.34);
+}
+```
+
+## 8.3 Danger Badge
+
+```css
+.fc-badge-danger {
+  background: rgba(239, 68, 68, 0.10);
+  color: rgba(254, 202, 202, 0.96);
+  border-color: rgba(248, 113, 113, 0.34);
+}
+```
+
+## 8.4 Warning Badge
+
+```css
+.fc-badge-warning {
+  background: rgba(245, 158, 11, 0.10);
+  color: rgba(253, 230, 138, 0.96);
+  border-color: rgba(251, 191, 36, 0.34);
+}
+```
+
+## 8.5 Success Badge
+
+```css
+.fc-badge-success {
+  background: rgba(16, 185, 129, 0.10);
+  color: rgba(187, 247, 208, 0.96);
+  border-color: rgba(52, 211, 153, 0.34);
+}
+```
+
+---
+
+# 9. Modals
+
+All modals must use the overlay glass surface.
+
+Modal requirements:
+
+```txt
+Use fc-surface-overlay
+rounded-3xl or 2rem radius
+Clear title
+Readable body text
+Primary action on the right
+Secondary/cancel action on the left
+No excessive glow
+No low-contrast text
+No forced uppercase
+```
+
+Modal backdrop:
+
+```css
+.fc-modal-backdrop {
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(20, 184, 166, 0.08),
+      transparent 34%
+    ),
+    rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+```
+
+Modal motion:
+
+```txt
+Opacity 0 to 1
+Scale 0.98 to 1
+Duration 140–160ms
+No bounce
+No spring
+```
+
+---
+
+# 10. Agent Cards
+
+Agent cards must look like modern frosted glass panels.
+
+Each agent card should include:
+
+```txt
+Agent name
+Short role
+Current status
+Confidence/progress if available
+Expandable details only when needed
+```
+
+Agent card rules:
+
+```txt
+Use fc-surface-quiet or fc-surface-elevated
+Use rounded-2xl or rounded-3xl
+Use teal only for active/running state
+Use semantic colors only for actual state
+Avoid decorative glowing borders
+Avoid terminal-style uppercase labels
+Avoid too many nested boxes
+```
+
+Active agent state:
+
+```css
+.fc-agent-active {
+  border-color: rgba(94, 234, 212, 0.38);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 184, 166, 0.08),
+      rgba(255, 255, 255, 0.035)
+    ),
+    rgba(8, 13, 24, 0.72);
+}
+```
+
+Completed agent state:
+
+```css
+.fc-agent-complete {
+  border-color: rgba(52, 211, 153, 0.30);
+}
+```
+
+Failed agent state:
+
+```css
+.fc-agent-error {
+  border-color: rgba(248, 113, 113, 0.34);
+}
+```
+
+---
+
+# 11. Inputs and Upload Areas
+
+Inputs and upload zones must also follow the glass system.
+
+## 11.1 Input
+
+```css
+.fc-input {
+  min-height: 44px;
+  border-radius: 1rem;
+  padding: 0 14px;
+
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.96);
+
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.fc-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.fc-input:focus {
+  border-color: rgba(94, 234, 212, 0.52);
+  background: rgba(20, 184, 166, 0.055);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+}
+```
+
+## 11.2 Upload Zone
+
+Upload zones should feel like large elevated glass panels.
+
+```css
+.fc-upload-zone {
+  border-radius: 2rem;
+  border: 1px dashed rgba(94, 234, 212, 0.34);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 184, 166, 0.08),
+      rgba(255, 255, 255, 0.035)
+    ),
+    rgba(8, 13, 24, 0.72);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 18px 44px rgba(0, 0, 0, 0.28);
+}
+
+.fc-upload-zone:hover {
+  border-color: rgba(94, 234, 212, 0.58);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 184, 166, 0.12),
+      rgba(255, 255, 255, 0.04)
+    ),
+    rgba(8, 13, 24, 0.76);
+}
+```
+
+---
+
+# 12. Navigation and Docks
+
+Navigation must be glassy but quiet.
+
+## 12.1 Global Navbar
+
+Rules:
+
+```txt
+Use frosted glass
+Keep height consistent
+Avoid heavy glow
+Use readable text
+Use teal only for active page or primary action
+No uppercase nav labels
+```
+
+## 12.2 Action Dock
+
+Action docks must use elevated glass and pill buttons.
+
+Rules:
+
+```txt
+Use fc-surface-elevated
+No massive shadows
+No excessive blur
+Primary action must be visually dominant
+Secondary actions must be neutral glass
+Mobile layout must preserve tap targets
+```
+
+Minimum tap target:
+
+```txt
+44px for primary actions
+40px minimum for secondary actions
+```
+
+---
+
+# 13. Result Page
+
+The result page must be evidence-first.
+
+Hierarchy:
+
+```txt
+1. Verdict
+2. Evidence identity
+3. Confidence and integrity
+4. Intelligence brief
+5. Key findings
+6. Agent details
+7. Timeline and technical metadata
+```
+
+Result page rules:
+
+```txt
+Verdict should be clear immediately
+Detailed analysis should be progressive
+Avoid overwhelming the user with all agent logs at once
+Use glass cards but avoid too many nested glass boxes
+Semantic colors must map to actual forensic meaning
+```
+
+Verdict color mapping:
+
+```txt
+Authentic / verified: emerald
+Manipulated / deceptive: red
+Uncertain / inconclusive: amber
+Processing / active: teal
+```
+
+---
+
+# 14. Landing Page
+
+The landing page should feel premium, modern, and trustworthy.
+
+Rules:
+
+```txt
+Use frosted glass sections
+Use teal CTA
+Avoid white primary buttons
+Avoid excessive radial glows
+Avoid cyber/HUD styling
+No forced uppercase
+Keep hero text readable
+Keep background subtle
+```
+
+The landing page can be more atmospheric than the app workspace, but it must still share the same material system.
+
+---
+
+# 15. Evidence Upload Flow
+
+The upload flow should feel procedural and controlled.
+
+Rules:
+
+```txt
+Upload area must be a large glass surface
+Primary action must be teal
+File metadata must be readable
+Errors must be clear and restrained
+Progress must be visible but not chaotic
+Do not play sounds for routine card reveals
+Do not overload the page with agent details too early
+```
+
+---
+
+# 16. Analysis Progress Flow
+
+The analysis flow should feel active but not noisy.
+
+Rules:
+
+```txt
+Show current phase first
+Show agent activity second
+Hide verbose logs behind disclosure
+Use teal for active analysis
+Use emerald only for completed checks
+Use amber only for review/uncertainty
+Use red only for failures or high-risk issues
+```
+
+Allowed live indicators:
+
+```txt
+Small status dot
+Subtle progress bar
+Readable status text
+```
+
+Banned live indicators:
+
+```txt
+Large pulsing glows
+Scan beams
+Orbit effects
+Constant shimmer
+Excessive animated borders
+```
+
+---
+
+# 17. Sound Design
+
+Sound must be functional, not decorative.
+
+Allowed sound events:
+
+```txt
+Upload accepted
+Analysis started
+Checkpoint required
+Analysis completed
+Error/failure
+Verdict ready
+```
+
+Banned sound events:
+
+```txt
+Page load
+Card reveal
+Hover
+Tab switch
+Routine animation
+Decorative ambience without user control
+```
+
+Required:
+
+```txt
+Global mute/sound toggle
+Sound setting persistence
+App fully usable with sound disabled
+No autoplay ambience without user consent
+```
+
+---
+
+# 18. Motion System
+
+## 18.1 Standard Transition
+
+```css
+.fc-transition {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+```
+
+## 18.2 Allowed Motion
+
+```txt
+Page reveal: opacity + y 4px
+Card reveal: opacity only or y 4px
+Modal reveal: opacity + scale 0.98
+Progress: subtle linear movement
+Hover: color, border, background, shadow only
+```
+
+## 18.3 Banned Motion
+
+```txt
+hover:-translate-y
+hover:scale-*
+animate-pulse for decoration
+animate-spin except true loading
+scan beam effects
+orbit effects
+large parallax
+spring bounce
+```
+
+## 18.4 Reduced Motion
+
+All motion must respect reduced motion.
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+---
+
+# 19. Accessibility Rules
+
+Accessibility is mandatory.
+
+## 19.1 Contrast
+
+```txt
+Text must stay readable on glass
+No important text below 55% opacity
+No text directly over busy backgrounds
+Interactive labels must be clear
+```
+
+## 19.2 Focus
+
+All interactive elements must have visible focus.
+
+```css
+.fc-focus-ring:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(45, 212, 191, 0.22),
+    0 0 0 1px rgba(94, 234, 212, 0.58);
+}
+```
+
+## 19.3 Touch Targets
+
+```txt
+Primary buttons: 44px minimum height
+Secondary buttons: 40px minimum height
+Icon buttons: 40px minimum square
+```
+
+## 19.4 Color Independence
+
+Do not rely on color alone.
+
+Every status must include at least one of:
+
+```txt
+Text label
+Icon
+Shape
+Position
+Accessible label
+```
+
+---
+
+# 20. Component Inventory
+
+The app should be built from these canonical primitives:
+
+```txt
+AppShell
+Surface
+Button
+Badge
+StatusPill
+SectionHeader
+MetricCard
+AgentCard
+ProgressIndicator
+DisclosurePanel
+Modal
+Toast
+Input
+UploadZone
+ActionDock
+Tabs
+```
+
+Do not create one-off visual systems for individual pages.
+
+---
+
+# 21. Banned Patterns
+
+The following are banned unless explicitly justified:
+
+```txt
+Forced uppercase
+text-white/20
+text-white/25
+text-white/30
+text-white/35
+text-white/40
+text-white/45
+text-white/50
+opacity below 55% on readable text
+hover:-translate-y
+hover:scale-*
+decorative animate-pulse
+scan beam animation
+orbit animation
+large neon glows
+semantic radial glows
+random card styles
+random button styles
+sharp corners
+white primary CTA buttons
+blue/purple SaaS CTA buttons
+terminal-style labels
+excessive tracking
+```
+
+---
+
+# 22. Tailwind Usage Rules
+
+Avoid arbitrary values unless necessary.
+
+Discouraged:
+
+```txt
+text-[10px]
+text-[11px]
+text-[13px]
+tracking-[0.3em]
+gap-[5px]
+blur-[120px]
+shadow-[0_0_*]
+bg-white/[0.02]
+```
+
+Preferred:
+
+```txt
+text-xs
+text-sm
+text-base
+tracking-normal
+tracking-wide
+gap-1
+gap-2
+gap-3
+rounded-2xl
+rounded-3xl
+```
+
+Arbitrary values are allowed only for:
+
+```txt
+Highly specific visual tuning
+One-off layout constraints
+Documented exceptions
+```
+
+---
+
+# 23. Implementation Classes
+
+At minimum, the frontend should expose these classes:
+
+```txt
+fc-text-primary
+fc-text-secondary
+fc-text-muted
+fc-text-faint
+
+fc-surface
+fc-surface-quiet
+fc-surface-elevated
+fc-surface-overlay
+fc-glass-highlight
+
+fc-btn-primary
+fc-btn-secondary
+fc-btn-ghost
+fc-btn-danger
+
+fc-badge
+fc-badge-active
+fc-badge-danger
+fc-badge-warning
+fc-badge-success
+
+fc-input
+fc-upload-zone
+fc-focus-ring
+fc-transition
+```
+
+---
+
+# 24. Migration Checklist
+
+A screen is compliant only if:
+
+```txt
+It uses canonical surface classes
+It uses canonical button classes
+It uses canonical badge/status classes
+It uses approved text opacity levels
+It has no forced uppercase
+It has no hover lift
+It has no hover scale
+It has no decorative pulse
+It has no scan/orbit effects
+It uses teal only for action/active/focus states
+It uses semantic colors only for semantic meaning
+It remains readable with glass enabled
+It remains usable with sound disabled
+It respects reduced motion
+It has visible keyboard focus
+```
+
+---
+
+# 25. Verification Gates
+
+Before considering a UI pass complete, verify:
+
+## 25.1 Visual Consistency
+
+```txt
+All cards share the same glass language
+All modals share the same overlay style
+All buttons use the canonical button system
+All major UI elements have rounded edges
+Primary actions are teal pill buttons
+Secondary actions are neutral glass pill buttons
+```
+
+## 25.2 Readability
+
+```txt
+No readable text below 55% opacity
+No low-contrast metadata
+No text lost on glass backgrounds
+No overly transparent panels behind important content
+```
+
+## 25.3 Interaction
+
+```txt
+Buttons have clear hover/focus/active states
+Hover does not move or scale elements
+Focus state is visible
+Disabled state is obvious
+Touch targets are large enough
+```
+
+## 25.4 Motion
+
+```txt
+No decorative pulse
+No scan beams
+No orbit effects
+No springy entrances
+Reduced motion works
+```
+
+## 25.5 Sound
+
+```txt
+No sound on page load
+No sound on card reveal
+No sound on hover
+Sound only fires for meaningful state changes
+Mute toggle exists and persists
+```
+
+---
+
+# 26. Final Design Rule
+
+The product should feel like a premium forensic glass workstation.
+
+Every screen should look like it belongs to the same system.
+
+The final UI should be:
+
+```txt
+Glass-first
+Teal-accented
+Pill-shaped
+Readable
+Restrained
+Modern
+Slick
+Court-grade
+Consistent
+```
+
+The app must never sacrifice clarity for visual effects.
+
+> Transparency is for depth. Teal is for action. Glass is the material. Evidence is the focus.
