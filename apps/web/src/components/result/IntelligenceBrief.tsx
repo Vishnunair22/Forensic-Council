@@ -162,7 +162,7 @@ function FindingIcon({ severity }: { severity: "danger" | "warning" | "info" | "
     );
   }
   return (
-    <div className={clsx(base, "bg-white text-black")}>
+    <div className={clsx(base, "bg-success/10 border-success/30 text-success")}>
       <CheckCircle2 className="w-4 h-4" />
     </div>
   );

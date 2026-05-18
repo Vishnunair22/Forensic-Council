@@ -128,10 +128,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 requestAnimationFrame(() => tabRefs.current[next]?.focus());
               }}
               className={clsx(
-                "px-4 py-2 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 rounded-md transition-all duration-150",
+                "px-4 py-2 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 rounded-md transition-all duration-150 border",
                 rs.activeTab === tab
-                  ? "bg-white text-black"
-                  : "text-white/45 hover:text-white hover:bg-white/[0.05]"
+                  ? "bg-white/[0.08] text-white border-white/20"
+                  : "text-white/45 hover:text-white hover:bg-white/[0.05] border-transparent"
               )}
             >
               {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
