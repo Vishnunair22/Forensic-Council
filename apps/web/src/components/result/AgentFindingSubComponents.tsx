@@ -239,54 +239,54 @@ function getStatus(finding: AgentFindingDTO) {
 const STATUS_CONFIG = {
  flagged: {
   badge: "Flagged",
-  badgeCls: "bg-warning/15 border-warning/35 text-warning",
-  iconCls: "bg-warning/12 border-warning/30 text-warning",
+  badgeCls: "bg-transparent border-warning/35 text-warning",
+  iconCls: "bg-transparent border-warning/30 text-warning",
   rowAccent: "border-l-warning/55",
  },
  clean: {
   badge: "Clean",
-  badgeCls: "bg-primary/15 border-primary/30 text-primary",
-  iconCls: "bg-primary/12 border-primary/25 text-primary",
+  badgeCls: "bg-transparent border-primary/30 text-primary",
+  iconCls: "bg-transparent border-primary/25 text-primary",
   rowAccent: "border-l-primary/40",
  },
  error: {
   badge: "Error",
-  badgeCls: "bg-danger/15 border-danger/35 text-danger",
-  iconCls: "bg-danger/12 border-danger/30 text-danger",
+  badgeCls: "bg-transparent border-danger/35 text-danger",
+  iconCls: "bg-transparent border-danger/30 text-danger",
   rowAccent: "border-l-danger/45",
  },
  na: {
   badge: "N/A",
-  badgeCls: "bg-white/8 border-white/12 fc-text-faint",
-  iconCls: "bg-white/8 border-white/10 fc-text-faint",
+  badgeCls: "bg-transparent border-white/12 fc-text-faint",
+  iconCls: "bg-transparent border-white/10 fc-text-faint",
   rowAccent: "border-l-white/10",
  },
  inconclusive: {
   badge: "Inconclusive",
-  badgeCls: "bg-white/10 border-white/15 fc-text-faint",
-  iconCls: "bg-white/10 border-white/12 fc-text-muted",
+  badgeCls: "bg-transparent border-white/15 fc-text-faint",
+  iconCls: "bg-transparent border-white/12 fc-text-muted",
   rowAccent: "border-l-white/20",
  },
 };
 
 const METRIC_EMPHASIS_CLS: Record<Metric["emphasis"], { wrap: string; label: string; value: string }> = {
  danger: {
-  wrap: "bg-danger/12 border-danger/30",
+  wrap: "bg-transparent border-danger/30",
   label: "text-danger/80",
   value: "text-danger",
  },
  warn: {
-  wrap: "bg-warning/10 border-warning/25",
+  wrap: "bg-transparent border-warning/25",
   label: "text-warning/80",
   value: "text-warning",
  },
  ok: {
-  wrap: "bg-primary/10 border-primary/22",
+  wrap: "bg-transparent border-primary/22",
   label: "text-primary/80",
   value: "text-primary",
  },
  neutral: {
-  wrap: "bg-white/[0.05] border-white/[0.10]",
+  wrap: "bg-transparent border-white/[0.10]",
   label: "fc-text-faint",
   value: "fc-text-primary",
  },

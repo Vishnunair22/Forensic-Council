@@ -405,8 +405,8 @@ export function AgentFindingCard({
       <button
         onClick={() => setOpen(!open)}
         className={clsx(
-          "w-full px-6 py-5 text-left transition-all relative overflow-hidden group",
-          open ? "bg-white/[0.04]" : "hover:bg-white/[0.025]"
+          "w-full px-6 py-5 text-left transition-all relative overflow-hidden group bg-transparent",
+          open ? "" : "hover:bg-white/[0.02]"
         )}
         aria-expanded={open}
         aria-controls={`agent-content-${agentId}`}
@@ -495,7 +495,7 @@ export function AgentFindingCard({
 
             {/* Agent overview narrative — full text, no clamp */}
             {overview && (
-              <div className="flex items-start gap-3 p-5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
+              <div className="flex items-start gap-3 p-5 rounded-2xl bg-transparent border border-white/[0.08]">
                 <Activity className="w-4 h-4 text-primary/65 mt-1 shrink-0" />
                 <p className="text-[15px] text-white/80 leading-relaxed font-medium">
                   {overview}
@@ -516,7 +516,7 @@ export function AgentFindingCard({
             </div>
 
             {bypassedFindings.length > 0 && (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+              <div className="rounded-2xl border border-white/[0.06] bg-transparent px-5 py-4">
                 <div className="flex items-center gap-2 mb-2.5">
                   <Info className="w-4 h-4 text-white/45" />
                   <span className="text-[12px] font-black tracking-wide text-white/55">

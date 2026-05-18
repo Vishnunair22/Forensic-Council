@@ -17,9 +17,9 @@ export function DegradationBanner({ flags }: DegradationBannerProps) {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="rounded-2xl overflow-hidden border border-warning/20 bg-warning/[0.03]"
+        className="rounded-2xl overflow-hidden border border-warning/20 bg-transparent"
       >
-        <div className="px-5 py-3.5 border-b border-warning/10 bg-warning/[0.05] flex items-center gap-2">
+        <div className="px-5 py-3.5 border-b border-warning/10 bg-transparent flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-warning" />
           <span className="text-[10px] font-bold tracking-wide text-warning">
             Analysis Degradation Notice
