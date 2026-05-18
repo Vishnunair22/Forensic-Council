@@ -21,19 +21,19 @@ export function VerdictGauge({
 }: VerdictGaugeProps) {
   const isUncalibrated = calibrationStatus !== "TRAINED";
   return (
-    <section className="overflow-hidden border border-border-muted bg-surface-1 rounded-2xl">
-      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border-muted">
+    <section className="overflow-hidden border border-white/5 bg-[#02040A]">
+      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/5">
         
         {/* Consensus Confidence */}
         <div className="p-8 flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-mono font-bold text-white/50 tracking-[0.2em] mb-4 uppercase">Consensus Confidence</span>
+          <span className="fc-eyebrow fc-text-muted mb-4">Consensus Confidence</span>
           
           <div className="text-6xl font-black text-white tracking-tighter">
             {confPct}%
           </div>
 
           {isUncalibrated && (
-            <span className="text-[8px] font-mono text-warning bg-surface-2 border border-border-muted px-2 py-1 mt-6 uppercase tracking-widest">
+            <span className="fc-eyebrow text-warning bg-warning/5 border border-warning/20 px-2 py-1 mt-6">
               Uncalibrated
             </span>
           )}
@@ -88,7 +88,7 @@ function StatCard({ label, value, unit, subtext, icon: Icon, color }: StatCardPr
     <div className="p-8 flex flex-col items-center justify-center text-center group">
       <div className="flex items-center gap-3 mb-6">
         <Icon className="w-3.5 h-3.5 text-white/10 group-hover:text-white/30 transition-colors" />
-        <span className="text-[10px] font-mono font-bold text-white/20 tracking-[0.2em]">{label}</span>
+        <span className="fc-eyebrow fc-text-faint">{label}</span>
       </div>
       
       <div className="text-4xl font-mono font-bold text-white mb-4 tracking-tighter" style={{ color }}>
@@ -104,7 +104,7 @@ function StatCard({ label, value, unit, subtext, icon: Icon, color }: StatCardPr
         />
       </div>
       
-      <span className="text-[9px] font-mono text-white/10 mt-4 tracking-widest">{subtext}</span>
+      <span className="fc-eyebrow fc-text-faint mt-4">{subtext}</span>
     </div>
   );
 }

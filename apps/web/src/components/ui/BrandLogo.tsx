@@ -109,8 +109,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -2 }}
               transition={{ duration: 0.15 }}
-              className="text-[8px] font-mono font-bold tracking-[0.22em] mt-0.5"
-              style={{ color: "rgba(165,200,255,0.50)" }}
+              className="fc-eyebrow fc-text-faint mt-0.5"
             >
               Reset & Home
             </motion.span>

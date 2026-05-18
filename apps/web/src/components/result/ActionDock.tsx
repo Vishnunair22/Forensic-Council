@@ -53,22 +53,22 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
   };
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[100] animate-in slide-in-from-bottom-6 duration-700 w-full pointer-events-none">
-      <div className="pointer-events-auto bg-surface-1 border-t border-border-muted px-6 py-4 flex items-center justify-between max-w-5xl mx-auto gap-4">
+      <div className="pointer-events-auto bg-[#02040A]/90 backdrop-blur-xl border-t border-x border-white/10 px-6 py-4 flex items-center justify-between max-w-5xl mx-auto gap-4 rounded-t-xl shadow-[0_-40px_80px_-20px_rgba(0,0,0,0.8)]">
           <button
             type="button"
             onClick={onHome}
-            className="flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest uppercase transition-colors text-white/60 hover:text-white hover:bg-surface-2 border border-border-muted"
+            className="btn-outline flex-none !py-3"
           >
-            <HomeIcon className="w-3.5 h-3.5" />
-            Home
+            <HomeIcon className="w-4 h-4" />
+            Hub
           </button>
 
           <button
             type="button"
             onClick={onNew}
-            className="flex-1 px-8 py-3 text-sm font-bold tracking-widest uppercase flex items-center justify-center gap-2 transition-colors bg-white text-black hover:bg-gray-200"
+            className="btn-primary flex-1 !py-3"
           >
-            <Activity className="w-3.5 h-3.5" />
+            <Activity className="w-4 h-4" />
             New Analysis
           </button>
 
@@ -76,9 +76,9 @@ export function ActionDock({ onHome, onNew, onExport, sessionId }: ActionDockPro
             type="button"
             onClick={handleExport}
             disabled={isExporting}
-            className="flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest uppercase transition-colors text-white/60 hover:text-white hover:bg-surface-2 border border-border-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-outline flex-none !py-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" />
             {isExporting ? "Exporting" : "Export"}
           </button>
       </div>

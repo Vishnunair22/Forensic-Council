@@ -21,10 +21,10 @@ export function DegradationBanner({ flags }: DegradationBannerProps) {
       >
         <div className="px-5 py-3.5 border-b border-warning/10 bg-warning/[0.05] flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-          <span className="text-[10px] font-bold tracking-wide text-warning/80">
+          <span className="text-[10px] font-bold tracking-wide text-warning">
             Analysis Degradation Notice
           </span>
-          <span className="text-[10px] font-mono font-black text-warning/50 tracking-wide ml-auto">
+          <span className="fc-eyebrow text-warning ml-auto">
             {flags.length} FLAG{flags.length !== 1 ? "S" : ""}
           </span>
         </div>
@@ -32,15 +32,15 @@ export function DegradationBanner({ flags }: DegradationBannerProps) {
           {flags.map((flag, i) => (
             <div
               key={i}
-              className="flex items-start gap-3 text-[11px] text-warning/70 leading-relaxed"
+              className="flex items-start gap-3 text-xs text-warning leading-relaxed"
             >
-              <span className="text-[9px] font-mono font-bold text-warning/40 mt-0.5 shrink-0">
+              <span className="text-xs font-mono font-bold text-warning mt-0.5 shrink-0">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span>{flag}</span>
             </div>
           ))}
-          <p className="text-[9px] font-bold tracking-wide text-warning/40 pt-2 border-t border-warning/5">
+          <p className="text-xs font-mono fc-text-faint pt-2 border-t border-warning/5">
             Findings may reflect reduced analytical capacity. Consider this when interpreting results for court submission.
           </p>
         </div>

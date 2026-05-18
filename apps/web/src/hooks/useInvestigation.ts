@@ -680,7 +680,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (investigationInFlightRef.current || resumeInFlightRef.current) return;
     investigationInFlightRef.current = true;
     playSound("click");
-    playSound("think");
+    playSound("scan");
     storage.setItem("forensic_is_deep", "true");
     const sid = storage.getItem("forensic_session_id");
     if (sid) {
@@ -821,22 +821,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const awaitingDecision =
     !isNavigating &&
     !arbiterDeliberating &&
-    (status === "awaiting_decision" ||
-      (phase === "initial" &&
-        mimeType !== null &&
-        expectedAgentIds.size > 0 &&
-        expectedCompletedCount >= expectedAgentIds.size &&
-        !revealPending));
+    status === "awaiting_decision" &&
+    phase === "initial";
   const allAgentsDone = phase === "deep"
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : expectedCompletedCount >= expectedAgentIds.size;
 
   useEffect(() => {
-    if (awaitingDecision && !analysisCompleteSoundedRef.current) {
+    if ((awaitingDecision || (phase === "deep" && allAgentsDone)) && !analysisCompleteSoundedRef.current) {
       analysisCompleteSoundedRef.current = true;
       playSound("analysis_done");
     }
-  }, [awaitingDecision, playSound]);
+  }, [awaitingDecision, phase, allAgentsDone, playSound]);
 
   const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0 || autoStartBlocking;
 

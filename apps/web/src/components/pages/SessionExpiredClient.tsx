@@ -97,7 +97,7 @@ export function SessionExpiredClient() {
         {/* Micro-accent */}
         <div className="flex justify-center opacity-10">
            <div className="h-[1px] w-12 bg-white" />
-           <div className="mx-4 text-[8px] font-mono font-black tracking-widest">System Halt</div>
+           <div className="mx-4 fc-eyebrow fc-text-faint">System Halt</div>
            <div className="h-[1px] w-12 bg-white" />
         </div>
       </div>

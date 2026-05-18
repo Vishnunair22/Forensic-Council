@@ -3,7 +3,7 @@
 import React, { useMemo, useEffect, useRef } from "react";
 import { clsx } from "clsx";
 import dynamic from "next/dynamic";
-import { Activity, FileSearch, History as HistoryIcon, Home as HomeIcon } from "lucide-react";
+import { FileSearch, History as HistoryIcon, Home as HomeIcon, ShieldAlert } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
@@ -104,12 +104,12 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
-        <div className="flex items-center justify-between gap-2 p-2 bg-surface-1 border border-border-muted">
+        <div className="flex items-center justify-between gap-2 p-2 bg-[#02040A] border border-white/5">
 
           <button
             type="button"
             onClick={rs.handleHome}
-            className="px-6 py-3 text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-2 transition-colors text-white/50 hover:text-white hover:bg-surface-2"
+            className="px-6 py-3 text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-2 transition-colors text-white/50 hover:text-white hover:bg-white/5"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             Hub
@@ -143,7 +143,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                   "px-6 py-3 text-[10px] font-mono font-bold transition-colors tracking-widest flex items-center gap-2 uppercase",
                   rs.activeTab === tab
                     ? "bg-white text-black"
-                    : "text-white/50 hover:text-white hover:bg-surface-2"
+                    : "text-white/50 hover:text-white hover:bg-white/5"
                 )}
 
               >
@@ -311,8 +311,8 @@ function ResultLoadingView({
 function ResultInlineStatus({ message }: { message: string }) {
   return (
     <div className="min-h-[54vh] flex items-center justify-center">
-      <div className="w-full max-w-md border border-border-muted bg-surface-1 px-8 py-10 text-center">
-        <Activity className="w-8 h-8 text-primary animate-pulse mx-auto" />
+      <div className="w-full max-w-md border border-white/5 bg-[#02040A] px-8 py-10 text-center">
+        <ShieldAlert className="w-12 h-12 text-white/20 mx-auto mb-6" />
         <div className="mt-6 text-[10px] font-mono font-bold tracking-[0.24em] text-primary/60 uppercase">
           Consensus Synthesis
         </div>
@@ -328,15 +328,16 @@ function ResultSkeletonView() {
   return (
     <div className="min-h-screen opacity-35" aria-hidden="true">
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
-        <div
-          className="flex items-center justify-between gap-4 p-4 bg-surface-1 border border-border-muted"
-        >
-          <div className="skeleton h-10 w-20 rounded-2xl" />
-          <div className="skeleton h-10 w-64 rounded-2xl" />
+        {/* 2. Verdict Gauge Placeholder */}
+        <div className="flex items-center justify-between gap-4 p-4 bg-[#02040A] border border-white/5">
+          <div className="skeleton h-12 w-32" />
+          <div className="skeleton h-12 w-32" />
+          <div className="skeleton h-12 w-32" />
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-6 pt-16 space-y-6">
-        <div className="p-8 space-y-8 bg-surface-1 border border-border-muted">
+        {/* 3. Findings Placeholder */}
+        <div className="p-8 space-y-8 bg-[#02040A] border border-white/5">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="skeleton w-32 h-32 rounded-2xl" />
             <div className="flex-1 space-y-4 w-full">
@@ -347,8 +348,8 @@ function ResultSkeletonView() {
             <div className="skeleton w-28 h-28 rounded-2xl" />
           </div>
         </div>
-        <div className="skeleton h-52 rounded-2xl bg-surface-1 border border-border-muted" />
-        <div className="skeleton h-72 rounded-2xl bg-surface-1 border border-border-muted" />
+        <div className="skeleton h-52 bg-[#02040A] border border-white/5" />
+        <div className="skeleton h-72 bg-[#02040A] border border-white/5" />
       </div>
     </div>
   );
@@ -377,37 +378,49 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   (report.key_findings ?? []).forEach((finding) => push(finding));
 
-  const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
-    .map(([agentId, text]) => ({
-      agentId,
-      text: cleanFindingText(text),
-      priority: agentPriority(agentId),
-    }))
-    .filter((item) => item.text && !isLowValueFinding(item.text))
-    .sort((a, b) => a.priority - b.priority);
-
-  for (const item of agentNarratives) {
-    if (findings.length >= 5) break;
-    push(item.text);
+  // Prefer Arbiter-authored key findings. Agent narratives and tool summaries
+  // already appear in the detailed cards below, so mixing them into this brief
+  // creates visible duplicate values on the result page.
+  if (findings.length > 0) {
+    return findings.slice(0, 4);
   }
 
-  const toolFindings = Object.values(report.per_agent_findings ?? {})
-    .flat()
-    .filter(Boolean)
-    .map((finding) => ({
-      text: cleanToolSummary(finding),
-      confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
-      severity: finding.severity_tier ?? "INFO",
-    }))
-    .filter((item) => item.text && !isLowValueFinding(item.text))
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+  // Fallback only when the backend did not provide key findings.
+  if (findings.length === 0) {
+    const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
+      .map(([agentId, text]) => ({
+        agentId,
+        text: cleanFindingText(text),
+        priority: agentPriority(agentId),
+      }))
+      .filter((item) => item.text && !isLowValueFinding(item.text))
+      .sort((a, b) => a.priority - b.priority);
 
-  for (const item of toolFindings) {
-    if (findings.length >= 6) break;
-    push(item.text);
+    for (const item of agentNarratives) {
+      if (findings.length >= 3) break;
+      push(item.text);
+    }
   }
 
-  return findings.slice(0, 6);
+  if (findings.length === 0) {
+    const toolFindings = Object.values(report.per_agent_findings ?? {})
+      .flat()
+      .filter(Boolean)
+      .map((finding) => ({
+        text: cleanToolSummary(finding),
+        confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
+        severity: finding.severity_tier ?? "INFO",
+      }))
+      .filter((item) => item.text && !isLowValueFinding(item.text))
+      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+
+    for (const item of toolFindings) {
+      if (findings.length >= 3) break;
+      push(item.text);
+    }
+  }
+
+  return findings.slice(0, 3);
 }
 
 function cleanToolSummary(finding: AgentFindingDTO): string {

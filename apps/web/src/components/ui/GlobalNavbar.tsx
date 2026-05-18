@@ -115,7 +115,7 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
-      className={`fixed top-0 inset-x-0 w-full z-[10001] transition-[transform,opacity] duration-300 ease-in-out border-b border-white/5 bg-transparent ${
+      className={`fixed top-0 inset-x-0 w-full z-[10001] transition-[transform,opacity] duration-300 ease-in-out border-b border-white/10 bg-[#02040A]/80 backdrop-blur-md ${
         isVisible || isKeyboardUser ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       }`}
     >

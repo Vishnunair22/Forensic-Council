@@ -3,7 +3,6 @@
 import {
  Clock,
  AlertTriangle,
- CheckCircle2,
  XCircle,
  MinusCircle,
 } from "lucide-react";
@@ -14,6 +13,7 @@ import { cleanFindingText } from "@/lib/findingText";
 import type { AgentFindingDTO } from "@/lib/api";
 
 const HIDE_KEYS = new Set([
+ // Internal / pipeline metadata
  "tool_name",
  "llm_reasoning",
  "llm_synthesis",
@@ -40,6 +40,25 @@ const HIDE_KEYS = new Set([
  "notes",
  "rationale",
  "explanation",
+ // Hash duplicates — we show at most one hash field
+ "current_hash",
+ "stored_hash",
+ "original_hash",
+ "hash_match",
+ "hash_matches",
+ // OCR / text dumps — too long for chips and shown in summary
+ "full_text",
+ "text",
+ "text_preview",
+ "ocr_text_preview",
+ // Implementation / infrastructure details
+ "gemini_available",
+ "screenshot_optimized",
+ "backend",
+ "analysis_source",
+ "file_type_hint",
+ "detected_platform",
+ "note",
 ]);
 
 const METRIC_LABELS: Record<string, string> = {
@@ -100,7 +119,7 @@ function metricHighlights(metadata: Record<string, unknown> | null | undefined):
  const items: Metric[] = [];
 
  for (const [key, value] of Object.entries(metadata)) {
-  if (items.length >= 12) break;
+  if (items.length >= 7) break;
   if (key.startsWith("_") || HIDE_KEYS.has(key)) continue;
   if (key === "execution_time_ms") continue;
   if (value === null || value === undefined || typeof value === "object") continue;
@@ -238,14 +257,14 @@ const STATUS_CONFIG = {
  },
  na: {
   badge: "N/A",
-  badgeCls: "bg-white/8 border-white/12 text-white/35",
-  iconCls: "bg-white/8 border-white/10 text-white/30",
+  badgeCls: "bg-white/8 border-white/12 fc-text-faint",
+  iconCls: "bg-white/8 border-white/10 fc-text-faint",
   rowAccent: "border-l-white/10",
  },
  inconclusive: {
   badge: "Inconclusive",
-  badgeCls: "bg-white/10 border-white/15 text-white/55",
-  iconCls: "bg-white/10 border-white/12 text-white/50",
+  badgeCls: "bg-white/10 border-white/15 fc-text-faint",
+  iconCls: "bg-white/10 border-white/12 fc-text-muted",
   rowAccent: "border-l-white/20",
  },
 };
@@ -268,8 +287,8 @@ const METRIC_EMPHASIS_CLS: Record<Metric["emphasis"], { wrap: string; label: str
  },
  neutral: {
   wrap: "bg-white/[0.05] border-white/[0.10]",
-  label: "text-white/55",
-  value: "text-white/85",
+  label: "fc-text-faint",
+  value: "fc-text-primary",
  },
 };
 
@@ -333,12 +352,12 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
        {fmtTool(toolName)}
       </span>
       {isDegraded && (
-       <span className="text-[10px] font-black tracking-wide text-white/55 border border-white/20 rounded px-1.5 py-0.5 shrink-0">
+       <span className="fc-eyebrow fc-text-faint border border-white/20 rounded px-1.5 py-0.5 shrink-0">
         DEGRADED
        </span>
       )}
       {isIncomplete && (
-       <span className="flex items-center gap-1 text-[10px] font-black tracking-wide text-warning border border-warning/35 bg-warning/12 rounded px-1.5 py-0.5 shrink-0">
+       <span className="flex items-center gap-1 fc-eyebrow text-warning border border-warning/35 bg-warning/12 rounded px-1.5 py-0.5 shrink-0">
         <AlertTriangle className="w-3 h-3" /> INCOMPLETE
        </span>
       )}
@@ -347,11 +366,11 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
     <div className="flex items-center gap-3 shrink-0">
      {timingMs && (
-      <span className="hidden sm:flex items-center gap-1 text-[12px] font-mono text-white/45">
+      <span className="hidden sm:flex items-center gap-1 text-xs font-mono fc-text-faint">
        <Clock className="w-3.5 h-3.5" />{timingMs >= 1000 ? `${(timingMs / 1000).toFixed(1)}s` : `${timingMs}ms`}
       </span>
      )}
-     <span className={clsx("px-2.5 py-1 rounded-full border text-[11px] font-black tracking-wide", cfg.badgeCls)}>
+     <span className={clsx("px-2.5 py-1 rounded-full border text-xs font-bold tracking-wide", cfg.badgeCls)}>
       {cfg.badge}
      </span>
      {status !== "na" && (
@@ -372,23 +391,23 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
     </p>
    )}
 
-   {/* Metric chips */}
+   {/* Metric chips — compact inline */}
    {metrics.length > 0 && (
-    <div className="pl-[54px] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+    <div className="pl-[54px] flex flex-wrap gap-1.5 mt-0.5">
      {metrics.map((m) => {
       const cls = METRIC_EMPHASIS_CLS[m.emphasis];
       return (
        <div
         key={`${toolName}-${m.label}`}
         className={clsx(
-         "flex flex-col gap-0.5 px-3 py-2 rounded-lg border min-w-0",
+         "inline-flex items-center gap-1.5 px-2 py-1 rounded border min-w-0 max-w-[220px]",
          cls.wrap,
         )}
        >
-        <span className={clsx("text-[10px] font-black tracking-wide uppercase truncate", cls.label)}>
+        <span className={clsx("fc-eyebrow shrink-0", cls.label)}>
          {m.label}
         </span>
-        <span className={clsx("text-[14px] font-mono font-bold truncate", cls.value)}>
+        <span className={clsx("text-xs font-mono font-bold truncate", cls.value)}>
          {m.value}
         </span>
        </div>
@@ -397,29 +416,23 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
     </div>
    )}
 
-   {/* Status context */}
+   {/* Status context — only show for actionable states */}
    {status === "na" && (
-    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-white/50 font-medium">
-     <MinusCircle className="w-4 h-4 shrink-0" />
-     Not applicable to this file type — excluded from analysis.
+    <div className="pl-[54px] flex items-center gap-2 text-xs fc-text-faint font-medium">
+     <MinusCircle className="w-3.5 h-3.5 shrink-0" />
+     Not applicable to this file type.
     </div>
    )}
    {status === "error" && (
-    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-danger/85 font-semibold">
-     <XCircle className="w-4 h-4 shrink-0" />
-     Tool error — counts as a coverage gap, not a manipulation signal.
+    <div className="pl-[54px] flex items-center gap-2 text-[12px] text-danger/75 font-semibold">
+     <XCircle className="w-3.5 h-3.5 shrink-0" />
+     Tool did not complete — treat as a coverage gap.
     </div>
    )}
    {status === "flagged" && (
-    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-warning/90 font-medium">
-     <AlertTriangle className="w-4 h-4 shrink-0" />
-     Active signal — weigh with other tools before concluding.
-    </div>
-   )}
-   {status === "clean" && (
-    <div className="pl-[54px] flex items-center gap-2 text-[13px] text-primary/75 font-medium">
-     <CheckCircle2 className="w-4 h-4 shrink-0" />
-     Supports absence of this specific manipulation pattern.
+    <div className="pl-[54px] flex items-center gap-2 text-[12px] text-warning/85 font-medium">
+     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+     Active signal — weigh against other tool results.
     </div>
    )}
   </div>

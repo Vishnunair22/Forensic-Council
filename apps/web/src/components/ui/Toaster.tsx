@@ -21,34 +21,34 @@ const ICON_MAP = {
 const STYLE_MAP: Record<string, { bg: string; border: string; text: string; stripe: string }> =
   {
     default: {
-      bg: "bg-surface-2/85",
-      border: "border-border-subtle",
+      bg: "bg-[#02040A]/80",
+      border: "border-white/10",
       text: "text-white/80",
-      stripe: "bg-primary/40",
+      stripe: "bg-[var(--color-primary)]/40",
     },
     success: {
-      bg: "bg-surface-2/90",
-      border: "border-primary/20",
-      text: "text-primary",
-      stripe: "bg-primary",
+      bg: "bg-[#02040A]/80",
+      border: "border-[var(--color-primary)]/20",
+      text: "text-[var(--color-primary)]",
+      stripe: "bg-[var(--color-primary)]",
     },
     destructive: {
-      bg: "bg-surface-2/90",
-      border: "border-danger/20",
-      text: "text-danger",
-      stripe: "bg-danger",
+      bg: "bg-[#02040A]/80",
+      border: "border-[var(--color-danger)]/20",
+      text: "text-[var(--color-danger)]",
+      stripe: "bg-[var(--color-danger)]",
     },
     warning: {
-      bg: "bg-surface-2/90",
-      border: "border-warning/20",
-      text: "text-warning",
-      stripe: "bg-warning",
+      bg: "bg-[#02040A]/80",
+      border: "border-[var(--color-warning)]/20",
+      text: "text-[var(--color-warning)]",
+      stripe: "bg-[var(--color-warning)]",
     },
     info: {
-      bg: "bg-surface-2/90",
-      border: "border-primary/20",
-      text: "text-primary",
-      stripe: "bg-primary",
+      bg: "bg-[#02040A]/80",
+      border: "border-[var(--color-primary)]/20",
+      text: "text-[var(--color-primary)]",
+      stripe: "bg-[var(--color-primary)]",
     },
   };
 
@@ -66,7 +66,7 @@ function ToastCard({
   return (
     <div
       className={clsx(
-        "relative flex items-start gap-3.5 px-4 py-3.5 rounded-2xl border backdrop-blur-2xl shadow-2xl overflow-hidden",
+        "relative flex items-start gap-3.5 px-4 py-3.5 rounded-xl border backdrop-blur-2xl shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] overflow-hidden",
         "animate-in slide-in-from-right-full fade-in duration-300",
         style.bg,
         style.border,

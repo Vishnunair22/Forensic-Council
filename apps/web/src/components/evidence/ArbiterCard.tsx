@@ -52,7 +52,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
     if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40", border: "border-[var(--color-primary)]/30" };
     if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-success/70", bg: "bg-success/10 border-success/20", border: "border-success/20" };
     if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-warning", bg: "bg-warning/10 border-warning/20", border: "border-warning/20" };
-    return { label: "Awaiting Agents", icon: Activity, color: "text-white/45", bg: "bg-white/[0.06] border-white/15", border: "border-white/10" };
+    return { label: "Awaiting Agents", icon: Activity, color: "fc-text-faint", bg: "bg-white/[0.06] border-white/15", border: "border-white/10" };
   };
 
   const display = getStatusDisplay();
@@ -88,15 +88,15 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      className="relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-surface-1 border border-border-muted rounded-2xl h-full"
+      className="relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-[#02040A] border border-white/5 rounded-2xl h-full shadow-xl"
       data-testid="agent-card-arbiter"
     >
       {/* --- Card Header --- */}
-      <div className="p-7 pb-5 border-b border-border-muted relative z-10 bg-surface-1">
+      <div className="p-7 pb-5 border-b border-white/5 relative z-10 bg-transparent">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Arbiter Icon */}
-            <div className="relative w-16 h-16 flex items-center justify-center bg-surface-2 border border-border-muted rounded-xl">
+            <div className="relative w-16 h-16 flex items-center justify-center bg-transparent border border-white/5 rounded-xl">
               <Scale className={clsx("w-7 h-7 relative z-10 transition-colors duration-500", display.color)} />
             </div>
 
@@ -106,12 +106,12 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-3 py-1 rounded-md text-[11px] font-mono font-bold border transition-colors duration-500",
+                  "px-3 py-1 rounded-md fc-eyebrow border transition-colors duration-500",
                   display.bg
                 )}>
                   {display.label}
                 </span>
-                <span className="text-[11px] font-mono font-semibold text-white/50 tracking-wider">
+                <span className="fc-eyebrow fc-text-faint">
                   {phase === "deep" ? "Phase 2 Synthesis" : "Phase 1 Synthesis"}
                 </span>
               </div>
@@ -124,8 +124,8 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-white/35 tracking-widest font-bold">Synthesis Engine</span>
-              <span className="text-[10px] font-mono text-white/50">
+              <span className="fc-eyebrow fc-text-faint">Synthesis Engine</span>
+              <span className="fc-eyebrow fc-text-faint">
                 {isReady ? "Completed" : isSynthesizing ? "Computing" : "Preparing"}
               </span>
             </div>
@@ -144,7 +144,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
             </div>
           </div>
 
-          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5 flex flex-col gap-3 min-h-[80px]">
+          <div className="flex flex-col gap-3 min-h-[80px] pt-4 border-t border-white/5 mt-2">
             <div className="flex items-start gap-3">
               {isReady ? (
                 <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
@@ -167,7 +167,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                   </motion.p>
                 </AnimatePresence>
                 {isPreWarming && (
-                  <p className="text-[10px] text-white/40 italic">
+                  <p className="text-xs fc-text-faint italic">
                     Evidence weights are being prepared in the background.
                   </p>
                 )}
@@ -196,7 +196,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               }}
             />
           ))}
-          <span className="ml-auto text-[9px] font-mono text-white/20">Arbiter Pulse</span>
+          <span className="ml-auto fc-eyebrow fc-text-faint">Arbiter Pulse</span>
         </div>
       </div>
     </motion.div>

@@ -362,7 +362,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
       </AnimatePresence>
 
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && (allAgentsDone || pipelineStatus === "complete") && !arbiterDeliberating && (
+        {phase === "deep" && revealQueue.length === 0 && pipelineStatus === "awaiting_decision" && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -370,7 +370,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
             className="w-full max-w-2xl mx-auto px-6 py-8"
           >
             <div className="glass-panel p-2 rounded-full border-white/5">
-              <div className="bg-surface-1/50 rounded-full p-2 flex items-center gap-3">
+              <div className="bg-white/5 rounded-full p-2 flex items-center gap-3">
                 <button
                   type="button"
                   data-testid="new-analysis-btn"

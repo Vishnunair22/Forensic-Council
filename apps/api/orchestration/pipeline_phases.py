@@ -1034,6 +1034,27 @@ async def _await_deep_analysis_decision(
 
     decision_key = f"forensic:session:resume_decision:{session_id}"
     redis = await get_redis_client()
+
+    # The frontend can legitimately call /resume a moment before the worker
+    # reaches this pause gate (agent cards may finish revealing before this
+    # coroutine writes the paused metadata). Preserve and consume that early
+    # decision instead of deleting it, otherwise deep analysis appears to start
+    # successfully from the API response but the worker waits forever here.
+    try:
+        raw_pre_gate_decision = await redis.get(decision_key)
+        if raw_pre_gate_decision:
+            decision = json.loads(raw_pre_gate_decision)
+            if isinstance(decision, dict):
+                pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                logger.info(
+                    "Analyst decision consumed before pause gate",
+                    session_id=str(session_id),
+                    deep_analysis=pipeline.run_deep_analysis_flag,
+                )
+                return pipeline.run_deep_analysis_flag
+    except Exception as pre_gate_err:
+        logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
+
     await redis.delete(decision_key)
 
     pipeline._awaiting_user_decision = True
@@ -1119,6 +1140,21 @@ async def _await_deep_report_request(
 
     decision_key = f"forensic:session:resume_decision:{session_id}"
     redis = await get_redis_client()
+
+    # Same race as the initial deep-analysis gate: the analyst may request the
+    # final report just before this post-deep pause is fully registered. Treat
+    # any already-written resume decision as the final synthesis request.
+    try:
+        raw_pre_gate_decision = await redis.get(decision_key)
+        if raw_pre_gate_decision:
+            logger.info(
+                "Final report request consumed before post-deep pause gate",
+                session_id=str(session_id),
+            )
+            return
+    except Exception as pre_gate_err:
+        logger.debug("Pre-gate final-report decision check flicker", error=str(pre_gate_err))
+
     await redis.delete(decision_key)
 
     pipeline._awaiting_user_decision = True

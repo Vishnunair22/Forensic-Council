@@ -14,6 +14,8 @@ import { useSound } from "@/hooks/useSound";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
+import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
+import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
 
 // F-H-5: dynamic() loading prop handles chunk-fetch fallback. A React
 // Suspense wrapper around `next/dynamic` lazy components is dead code
@@ -21,14 +23,6 @@ import { resetActiveInvestigation } from "@/lib/appReset";
 const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
   { loading: () => null },
-);
-const ArbiterDeliberationOverlay = dynamic(
-  () => import("@/components/evidence/ArbiterDeliberationOverlay").then((mod) => mod.ArbiterDeliberationOverlay),
-  { ssr: false },
-);
-const HITLCheckpointModal = dynamic(
-  () => import("@/components/evidence/HITLCheckpointModal").then((mod) => mod.HITLCheckpointModal),
-  { ssr: false },
 );
 
 export function EvidenceUploadClient() {

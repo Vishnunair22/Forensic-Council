@@ -485,9 +485,10 @@
 /*  BUTTONS                                                        */
 /* ─────────────────────────────────────────────────────────────── */
 
-/* Primary — luminous blue pill */
+/* Primary — Premium Solid */
 .btn-primary,
-.btn-horizon-primary {
+.btn-horizon-primary,
+.btn-premium {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -495,48 +496,31 @@
   padding: 0.875rem 2.25rem;
   border-radius: var(--radius-full);
   font-family: var(--font-heading);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  color: #030810 !important;
-
-  background: linear-gradient(
-    140deg,
-    #C8DEFF  0%,
-    #6BA3F5 45%,
-    #3878F0 100%
-  );
-  border: 1px solid rgba(255,255,255,0.35);
-  box-shadow:
-    0 8px 28px -6px rgba(56,120,240,0.50),
-    inset 0 1px 0 rgba(255,255,255,0.50),
-    0 0 0 1px rgba(79,142,247,0.12);
-
-  transition:
-    transform 0.28s var(--ease-out),
-    box-shadow 0.28s ease,
-    filter 0.28s ease;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #fff !important;
+  background: var(--color-primary);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 14px rgba(79,142,247,0.15), inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: filter 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
   will-change: transform;
 }
 .btn-primary:hover,
-.btn-horizon-primary:hover {
-  transform: translateY(-2px) scale(1.01);
-  filter: brightness(1.07);
-  box-shadow:
-    0 14px 38px -8px rgba(56,120,240,0.62),
-    inset 0 1px 0 rgba(255,255,255,0.6),
-    0 0 0 1px rgba(79,142,247,0.18);
+.btn-horizon-primary:hover,
+.btn-premium:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(79,142,247,0.25), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 .btn-primary:active,
-.btn-horizon-primary:active {
-  transform: translateY(0) scale(0.985);
-  filter: brightness(0.97);
+.btn-horizon-primary:active,
+.btn-premium:active {
+  transform: scale(0.98);
+  filter: brightness(0.95);
   transition-duration: 0.1s;
 }
 
-/* Secondary outline pill — V-M-2: no backdrop-blur on buttons (allowed
-   only on fc-surface-overlay). Buttons read fine as opaque pills and
-   constant GPU cost from per-button blur is now removed. */
+/* Secondary outline pill — 'Ghost Plate' */
 .btn-outline,
 .btn-horizon-outline,
 .btn-pill-secondary {
@@ -544,52 +528,56 @@
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  padding: 0.8rem 1.9rem;
+  padding: 0.875rem 2.25rem;
   border-radius: var(--radius-full);
   font-family: var(--font-heading);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.11em;
-  color: rgba(220,234,255,0.85);
-  background: rgba(165,200,255,0.04);
-  border: 1px solid rgba(165,200,255,0.15);
-  transition:
-    background 0.22s ease,
-    border-color 0.22s ease,
-    color 0.22s ease,
-    box-shadow 0.22s ease,
-    transform 0.22s var(--ease-out);
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.7);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: all 0.25s ease;
 }
 .btn-outline:hover,
 .btn-horizon-outline:hover,
 .btn-pill-secondary:hover {
-  background: rgba(165,200,255,0.08);
-  border-color: rgba(165,200,255,0.28);
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.25);
   color: #fff;
-  box-shadow: 0 0 20px rgba(79,142,247,0.14);
-  transform: translateY(-1px);
+}
+.btn-outline:active,
+.btn-horizon-outline:active,
+.btn-pill-secondary:active {
+  transform: scale(0.98);
+  background: rgba(255,255,255,0.01);
+  transition-duration: 0.1s;
 }
 
-/* Ghost/glass button — V-M-2: no backdrop-blur on buttons. */
+/* Glass button — compact ghost */
 .glass-button {
-  background: rgba(165,200,255,0.05);
-  border: 1px solid rgba(165,200,255,0.14);
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.7);
   padding: 0.6rem 1.25rem;
   border-radius: var(--radius-full);
+  font-family: var(--font-heading);
   font-weight: 600;
   font-size: 0.8rem;
-  transition:
-    background 0.25s ease,
-    border-color 0.25s ease,
-    box-shadow 0.25s ease,
-    transform 0.25s var(--ease-out);
+  transition: all 0.25s ease;
 }
 .glass-button:hover {
-  background: rgba(165,200,255,0.10);
-  border-color: rgba(165,200,255,0.30);
-  box-shadow: 0 0 18px rgba(79,142,247,0.16);
-  transform: translateY(-1px);
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.25);
+  color: #fff;
+}
+.glass-button:active {
+  transform: scale(0.98);
+  transition-duration: 0.1s;
 }
 
   /* ── Legacy Contrast tiers (map to fc-text-*) ── */

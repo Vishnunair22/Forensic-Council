@@ -38,20 +38,13 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
     if (v.includes("MANIPULATED")) return "text-danger bg-danger/10 border-danger/30";
     if (v.includes("SUSPICIOUS")) return "text-warning bg-warning/10 border-warning/30";
     if (v.includes("AUTHENTIC")) return "text-success bg-success/10 border-success/30";
-    return "text-white/40 bg-white/5 border-white/10";
+    return "fc-text-faint bg-white/5 border-white/10";
   };
 
   return (
     <div className="w-full max-w-5xl mx-auto pb-32">
-      <div
-        className="rounded-2xl overflow-hidden"
-        style={{
-          background: "rgba(5,9,18,0.9)",
-          border: "1px solid rgba(165,200,255,0.07)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)",
-        }}
-      >
-        <div style={{ background: "rgba(3,6,14,0.3)" }}>
+      <div className="bg-[#02040A] border border-white/5 rounded-2xl shadow-xl overflow-hidden">
+        <div className="bg-transparent">
 
           {/* --- Header --- */}
           <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 border-b border-white/5 gap-6">
@@ -60,7 +53,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                  <HistoryIcon className="w-6 h-6 text-primary" />
                  Investigation Archive
                </h3>
-               <p className="text-[10px] font-mono font-bold text-white/20 tracking-[0.3em]">
+               <p className="fc-eyebrow fc-text-faint">
                  Forensic Registry // Secure Storage V2
                </p>
             </div>
@@ -70,18 +63,18 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                 <>
                   {showConfirm ? (
                     <div className="flex items-center gap-3 bg-danger/10 p-2 rounded-xl border border-danger/20">
-                      <span className="text-[9px] font-mono text-danger font-bold tracking-wider px-2">Confirm?</span>
+                      <span className="text-xs font-mono text-danger font-bold tracking-wider px-2">Confirm?</span>
                       <button
                         type="button"
                         onClick={clearAll}
-                        className="py-1 px-3 text-[9px] font-mono font-bold text-[#05070D] bg-danger rounded-md"
+                        className="py-1 px-3 text-xs font-mono font-bold text-[#05070D] bg-danger rounded-md"
                       >
                         Yes
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowConfirm(false)}
-                        className="py-1 px-3 text-[9px] font-mono font-bold text-white/60 bg-white/5 rounded-md"
+                        className="py-1 px-3 text-xs font-mono font-bold fc-text-secondary bg-white/5 rounded-md"
                       >
                         No
                       </button>
@@ -90,7 +83,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     <button
                       type="button"
                       onClick={() => setShowConfirm(true)}
-                      className="btn-horizon-outline py-2 px-4 text-[10px] text-danger border-danger/20 hover:bg-danger/5"
+                      className="btn-horizon-outline py-2 px-4 text-xs text-danger border-danger/20 hover:bg-danger/5"
                     >
                       Clear Archive
                     </button>
@@ -100,7 +93,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
               <button
                 type="button"
                 onClick={onDismiss}
-                className="text-[10px] font-mono font-bold text-white/40 hover:text-primary tracking-widest transition-colors"
+                className="fc-eyebrow fc-text-muted hover:text-primary-accent transition-colors"
               >
                 Back To Analysis
               </button>
@@ -121,7 +114,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-heading font-bold text-white/40 mb-2 tracking-widest">Archive Empty</p>
-                  <p className="text-[10px] font-mono text-white/20 max-w-xs leading-relaxed">
+                  <p className="text-xs font-mono fc-text-faint max-w-xs leading-relaxed">
                     System awaiting initial analysis payloads for registry sync.
                   </p>
                 </div>
@@ -134,21 +127,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     initial={shouldReduceMotion ? {} : { opacity: 0, x: -20 }}
                     animate={shouldReduceMotion ? {} : { opacity: 1, x: 0 }}
                     transition={shouldReduceMotion ? { duration: 0 } : { delay: i * 0.05 }}
-                    className="group relative rounded-2xl p-6 cursor-pointer transition-all duration-200"
-                    style={{
-                      background: "rgba(8,13,24,0.8)",
-                      border: "1px solid rgba(165,200,255,0.07)",
-                    }}
-                    onMouseEnter={(e) => {
-                      const el = e.currentTarget as HTMLElement;
-                      el.style.borderColor = "rgba(79,142,247,0.18)";
-                      el.style.boxShadow = "0 0 20px rgba(79,142,247,0.06)";
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget as HTMLElement;
-                      el.style.borderColor = "rgba(165,200,255,0.07)";
-                      el.style.boxShadow = "";
-                    }}
+                    className="group relative p-6 cursor-pointer transition-colors duration-200 border-t border-white/5 first:border-t-0 bg-transparent hover:bg-white/[0.02]"
                   >
                     <article aria-label={`View analysis for ${item.fileName}`}>
                       <div className="flex flex-col md:flex-row gap-6 items-center">
@@ -170,8 +149,8 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center gap-3 mb-2">
-                              <span className="text-[9px] font-mono font-bold text-primary/40 tracking-widest">Session {item.sessionId.slice(-6)}</span>
-                              <span className="text-[9px] font-mono text-white/20 tracking-tighter">[{item.type} Analysis]</span>
+                              <span className="fc-eyebrow fc-text-primary-accent">Session {item.sessionId.slice(-6)}</span>
+                              <span className="text-xs font-mono fc-text-faint">[{item.type} Analysis]</span>
                            </div>
                            <h4 className="text-lg font-heading font-bold text-white/80 truncate group-hover:text-white transition-colors">
                              {item.fileName}
@@ -179,7 +158,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                         </div>
 
                         <div className={clsx(
-                          "px-4 py-1.5 rounded border text-[10px] font-mono font-bold tracking-widest",
+                          "px-4 py-1.5 rounded border fc-eyebrow",
                           getVerdictStyle(item.verdict)
                         )}>
                           {item.verdict?.replace(/_/g, " ")}
@@ -187,8 +166,8 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
 
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden lg:block">
-                             <div className="text-[10px] font-mono text-white/20">Timestamp</div>
-                             <div className="text-[10px] font-mono text-white/60">
+                             <div className="text-xs font-mono fc-text-faint">Timestamp</div>
+                             <div className="text-xs font-mono fc-text-muted">
                                {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                              </div>
                           </div>

@@ -72,13 +72,13 @@ export interface AgentStatusCardProps {
 }
 
 const statusConfig = {
-  waiting:     { color: "text-white/20",   label: "Standby"   },
-  queued:      { color: "text-white/30",   label: "Queued"    },
+  waiting:     { color: "fc-text-faint",   label: "Standby"   },
+  queued:      { color: "fc-text-faint",   label: "Queued"    },
   checking:    { color: "text-[var(--color-primary)]",    label: "Syncing" },
   running:     { color: "text-[var(--color-primary)]",    label: "Scanning" },
   complete:    { color: "text-[var(--color-primary)]",    label: "Verified"  },
   error:       { color: "text-danger",     label: "Error"     },
-  unsupported: { color: "text-white/20",   label: "Skipped"   },
+  unsupported: { color: "fc-text-faint",   label: "Skipped"   },
   validating:  { color: "text-[var(--color-primary)]",    label: "Verifying" },
 };
 
@@ -200,7 +200,7 @@ const SEV_LABEL: Record<string, string> = {
   CRITICAL: "text-danger",
   HIGH:     "text-danger",
   MEDIUM:   "text-warning",
-  LOW:      "text-white/35",
+  LOW:      "fc-text-faint",
 };
 
 function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: number }) {
@@ -210,7 +210,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const verdict = normalizeVerdict(f.verdict);
   const elapsed = formatElapsed(f.elapsed_s);
 
-  const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger" : "text-white/45");
+  const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger" : "fc-text-faint");
 
   const headline = extractHeadline(f);
   const detail = extractDetail(f, headline);
@@ -225,11 +225,13 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.05, duration: 0.25 }}
       className={clsx(
-        "relative border-l-4 bg-surface-2 hover:bg-surface-3 transition-colors border-y border-r border-border-muted",
-        "px-4 py-3",
+        "relative bg-transparent transition-colors group",
+        "py-3",
+        i > 0 && "border-t border-white/5",
+        "pl-4 border-l",
         isAlert
-          ? "border-l-red-500"
-          : "border-l-[#555555]"
+          ? "border-l-red-500/50"
+          : "border-l-transparent"
       )}
     >
 
@@ -239,7 +241,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
         <div className="flex items-center gap-2 flex-wrap">
           {f.tool && (
             <span className={clsx(
-              "inline-flex items-center max-w-full px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide",
+              "inline-flex items-center max-w-full px-2.5 py-1 rounded-md text-xs font-bold tracking-wide",
               isAlert
                 ? "bg-danger/15 text-danger border border-danger/30"
                 : "bg-white/[0.06] text-white/80 border border-white/[0.12]"
@@ -249,7 +251,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
           )}
           {f.verdict && (
             <span className={clsx(
-              "text-[10px] font-mono font-black tracking-wide px-1.5 py-0.5 rounded border",
+              "fc-eyebrow border px-1.5 py-0.5 rounded",
               isAlert
                 ? "bg-danger/10 border-danger/25 text-danger"
                 : "bg-emerald-400/10 border-emerald-400/20 text-emerald-200/80"
@@ -259,7 +261,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
           )}
           {sev && SEV_LABEL[sev] && (
             <span className={clsx(
-              "text-[11px] font-mono font-black tracking-wide px-1.5 py-0.5 rounded",
+              "fc-eyebrow px-1.5 py-0.5 rounded",
               sevLabelColor,
               sev === "CRITICAL" || sev === "HIGH" ? "bg-danger/10 border border-danger/25" :
               sev === "MEDIUM" ? "bg-warning/10 border border-warning/25" :
@@ -269,13 +271,13 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
             </span>
           )}
           {f.degraded && (
-            <span className="text-[11px] font-mono font-bold text-warning border border-warning/30 bg-warning/10 rounded px-1.5 py-0.5" title={f.fallback_reason || ""}>
+            <span className="fc-eyebrow text-warning border border-warning/30 bg-warning/10 rounded px-1.5 py-0.5" title={f.fallback_reason || ""}>
               DEGRADED
             </span>
           )}
           {typeof f.confidence === "number" && (
             <span className={clsx(
-              "ml-auto text-[12px] font-mono font-black tabular-nums shrink-0",
+              "ml-auto text-xs font-mono font-black tabular-nums shrink-0",
               isAlert ? "text-danger" :
               f.confidence >= 0.75 ? "text-[var(--color-primary)]" :
               f.confidence >= 0.5 ? "text-warning" :
@@ -308,7 +310,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
             <button
               type="button"
               onClick={() => setExpanded(e => !e)}
-              className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
+              className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
             >
               {expanded
                 ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
@@ -318,10 +320,10 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
           </div>
         )}
 
-        <div className="flex items-center gap-2 pt-1 text-[10px] font-mono font-bold text-white/32 tracking-widest uppercase">
+        <div className="flex items-center gap-2 pt-1 fc-eyebrow fc-text-faint">
           <span>Finding {i + 1}/{total}</span>
           {f.section && <span className="truncate">/ {f.section}</span>}
-          {elapsed && <span className="ml-auto text-white/38 normal-case tracking-normal">{elapsed}</span>}
+          {elapsed && <span className="ml-auto fc-text-faint normal-case tracking-normal">{elapsed}</span>}
         </div>
       </div>
     </motion.div>
@@ -335,7 +337,7 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
   if (!text) return null;
   return (
     <div className="border-t border-white/[0.07] pt-3.5 space-y-2.5">
-      <div className="flex items-center gap-2 text-[10px] font-mono font-black uppercase tracking-[0.22em] text-white/35">
+      <div className="flex items-center gap-2 fc-eyebrow fc-text-faint">
         <ListChecks className="w-3.5 h-3.5 text-[var(--color-primary)]/70" />
         Agent Brief
       </div>
@@ -346,7 +348,7 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[var(--color-primary)]/80 hover:text-[var(--color-primary)] transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/80 hover:text-[var(--color-primary)] transition-colors"
         >
           {expanded ? (
             <>
@@ -503,17 +505,17 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-surface-1 border border-border-muted rounded-2xl",
+        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-[#02040A] border border-white/5 rounded-2xl shadow-xl",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
-      <div className="p-7 pb-5 border-b border-border-muted relative z-10 bg-surface-1">
+      <div className="p-7 pb-5 border-b border-white/5 relative z-10 bg-transparent">
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Agent Icon */}
-            <div className="relative w-16 h-16 flex items-center justify-center bg-surface-2 border border-border-muted rounded-xl">
+            <div className="relative w-16 h-16 flex items-center justify-center bg-transparent border border-white/5 rounded-xl">
               <Icon className={clsx("w-7 h-7 relative z-10", accent.textClass)} />
             </div>
 
@@ -528,7 +530,7 @@ export function AgentStatusCard({
                     title={completedData.fallback_reason || "Analysis degraded"}
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-                    <span className="text-[10px] font-mono font-bold text-warning tracking-widest">
+                    <span className="fc-eyebrow text-warning">
                       Degraded
                     </span>
                   </motion.div>
@@ -536,14 +538,14 @@ export function AgentStatusCard({
               </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-3 py-1 rounded-md text-[11px] font-mono font-bold border",
+                  "px-3 py-1 rounded-md fc-eyebrow border",
                   (status === "complete" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40 text-[var(--color-primary)]" :
                   status === "error" ? "bg-danger/12 border-danger/40 text-danger" :
-                  "bg-white/[0.06] border-white/15 text-white/55"
+                  "bg-white/[0.06] border-white/15 fc-text-faint"
                 )}>
                   {cfg.label}
                 </span>
-                <span className="text-[11px] font-mono font-semibold text-white/50 tracking-wider">
+                <span className="fc-eyebrow fc-text-faint">
                   {badge || `Node ${agentId}`}
                 </span>
               </div>
@@ -569,7 +571,7 @@ export function AgentStatusCard({
                     <ProgressIcon className="w-4 h-4 text-[var(--color-primary)]" />
                   )}
                 </motion.div>
-                <span className="text-[10px] font-mono font-bold tracking-[0.1em] truncate">
+                <span className="fc-eyebrow truncate">
                   {status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
                     : (Math.max(liveTotal, currentToolIndex, 1) > 1 
@@ -578,7 +580,7 @@ export function AgentStatusCard({
                       )}
                 </span>
               </div>
-              <div className="relative w-full h-[4px] bg-surface-3 overflow-hidden">
+              <div className="relative w-full h-[4px] bg-white/10 overflow-hidden">
                 <motion.div
                   className="absolute top-0 bottom-0 bg-white"
                   animate={{
@@ -599,7 +601,7 @@ export function AgentStatusCard({
             >
               <div className="flex items-end justify-between">
                 <div>
-                  <span className="text-[11px] font-mono font-bold text-white/45 tracking-widest block mb-1.5">Final Verdict</span>
+                  <span className="fc-eyebrow fc-text-faint block mb-1.5">Final Verdict</span>
                   <span className={clsx(
                     "text-2xl font-heading font-bold tracking-tight",
                     isAgentAlert ? "text-danger" : agentVerdict === "INCONCLUSIVE" ? "text-warning" : "text-success"
@@ -608,7 +610,7 @@ export function AgentStatusCard({
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[11px] font-mono font-bold text-white/45 tracking-widest block mb-1.5">Confidence</span>
+                  <span className="fc-eyebrow fc-text-faint block mb-1.5">Confidence</span>
                   <span className="text-2xl font-mono font-bold text-white tabular-nums">
                     {Math.round(completedData.confidence * 100)}%
                   </span>
@@ -638,7 +640,7 @@ export function AgentStatusCard({
                   onClick={() => onToggleExpand?.()}
                   className={clsx(
                     "mt-3 w-full py-3.5 rounded-lg flex items-center justify-center gap-2",
-                    "text-[12px] font-black tracking-wide",
+                    "text-xs font-bold",
                     "border transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
                     isExpanded
                       ? "bg-white/[0.04] border-white/15 text-white/65 hover:text-white hover:border-white/25"
@@ -669,7 +671,7 @@ export function AgentStatusCard({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.35 }}
-                  className="max-w-[280px] text-xs text-white/55 font-medium leading-relaxed"
+                  className="max-w-[280px] text-xs fc-text-faint font-medium leading-relaxed"
                 >
                   {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                 </motion.p>
@@ -679,28 +681,28 @@ export function AgentStatusCard({
 
           ) : status === "queued" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
-               <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-center text-white/35">
+               <div className="w-12 h-12 rounded-xl bg-transparent border border-white/5 flex items-center justify-center fc-text-faint">
                   <Activity className="w-6 h-6" />
                </div>
-               <p className="max-w-xs text-xs text-white/45 font-medium leading-relaxed">
+               <p className="max-w-xs text-xs fc-text-faint font-medium leading-relaxed">
                  {sanitizeThinking(thinking) || "Investigation is queued. Waiting for an available forensic worker..."}
                </p>
             </div>
           ) : status === "waiting" ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
-               <span className="text-xs text-white/35 font-medium tracking-wide">Standing by — payload not yet received</span>
+               <span className="text-xs fc-text-faint font-medium tracking-wide">Standing by — payload not yet received</span>
             </div>
           ) : status === "unsupported" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">
-              <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/10 flex items-center justify-center text-white/35">
+              <div className="w-12 h-12 rounded-xl bg-transparent border border-white/5 flex items-center justify-center fc-text-faint">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <p className="max-w-xs text-xs text-white/55 font-medium leading-relaxed">
+              <p className="max-w-xs text-xs fc-text-faint font-medium leading-relaxed">
                 {sanitizeThinking(liveUpdate?.thinking || thinking) ||
                   completedData?.message ||
                   "This specialist does not support the submitted file type."}
               </p>
-              <span className="text-[10px] font-mono tracking-widest text-white/25">
+              <span className="fc-eyebrow fc-text-faint">
                 Hidden after 10s
               </span>
             </div>

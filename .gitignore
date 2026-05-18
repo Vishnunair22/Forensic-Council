@@ -279,3 +279,4 @@ check_critical_coverage_*.txt
 
 # ── Audit plan (session-local) ───────────────────────────────────────────────
 FULL_APP_AUDIT.md
+end to end audit plan.md

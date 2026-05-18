@@ -112,7 +112,7 @@ export function ResultHeader({
             <h1 className="text-2xl md:text-3xl font-heading font-bold text-white/90 tracking-tight truncate">
               {displayName}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-mono tracking-[0.16em] text-white/25">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 fc-eyebrow fc-text-faint">
               <span>Case {shortId(report.case_id)}</span>
               <span>Session {shortId(report.session_id)}</span>
               <span>{activeAgentIds.length} active agent{activeAgentIds.length === 1 ? "" : "s"}</span>
@@ -134,12 +134,12 @@ export function ResultHeader({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <span
-                  className="text-[10px] font-mono font-bold tracking-[0.2em]"
+                  className="fc-eyebrow"
                   style={{ color: theme.color }}
                 >
                   Final Verdict
                 </span>
-                <span className={clsx("px-2.5 py-1 rounded-md border text-[9px] font-mono font-bold tracking-widest", theme.tone)}>
+                <span className={clsx("px-2.5 py-1 rounded-md border fc-eyebrow", theme.tone)}>
                   Arbiter Signed
                 </span>
               </div>
@@ -151,7 +151,7 @@ export function ResultHeader({
               >
                 {vc.label}
               </motion.h2>
-              <p className="mt-3 max-w-3xl text-sm text-white/50 leading-relaxed">
+              <p className="mt-3 max-w-3xl text-sm fc-text-muted leading-relaxed">
                 {buildVerdictContext({
                   confidence: confPct,
                   agents: activeAgentIds.length,
@@ -164,7 +164,7 @@ export function ResultHeader({
 
           <div className="flex items-center justify-between lg:justify-end gap-5 border border-white/8 rounded-2xl bg-white/[0.025] px-5 py-4">
             <div>
-              <div className="text-[10px] font-mono font-bold text-white/30 tracking-[0.18em]">Confidence</div>
+              <div className="fc-eyebrow fc-text-muted">Confidence</div>
               <div className="mt-1 text-4xl font-mono font-bold tracking-tight" style={{ color: theme.color }}>
                 {confPct}%
               </div>
@@ -176,18 +176,18 @@ export function ResultHeader({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Metric label="Manipulation Risk" value={manipPct} color={manipPct > 50 ? "#F43F5E" : "#A7FFD2"} icon={ShieldAlert} />
-          <Metric label="Tool Error Rate" value={errPct} color={errPct > 20 ? "#F59E0B" : "#A7FFD2"} icon={Gauge} />
-          <Metric label="Agent Spread" value={discordPct} color={discordPct > 20 ? "#F59E0B" : "#A7FFD2"} icon={Activity} />
+          <Metric label="Manipulation Risk" value={manipPct} color={manipPct > 50 ? "var(--color-danger)" : "var(--color-success-light)"} icon={ShieldAlert} />
+          <Metric label="Tool Error Rate" value={errPct} color={errPct > 20 ? "var(--color-warning)" : "var(--color-success-light)"} icon={Gauge} />
+          <Metric label="Agent Spread" value={discordPct} color={discordPct > 20 ? "var(--color-warning)" : "var(--color-success-light)"} icon={Activity} />
         </div>
 
         {signature && (
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
             <div className="min-w-0">
-              <div className="text-[9px] font-mono font-bold text-white/25 tracking-[0.2em]">
+              <div className="fc-eyebrow fc-text-faint">
                 Report Integrity
               </div>
-              <p className="mt-1 text-[10px] font-mono text-white/30 truncate">
+              <p className="mt-1 text-xs font-mono fc-text-muted truncate">
                 {signature}
               </p>
             </div>
@@ -197,12 +197,12 @@ export function ResultHeader({
                 onClick={handleCopyHash}
                 aria-label="Copy report hash to clipboard"
                 title="Copy hash"
-                className="flex items-center gap-1.5 text-[9px] font-mono font-bold text-white/30 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded px-2 py-1"
+                className="flex items-center gap-1.5 fc-eyebrow fc-text-muted hover:text-primary-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded px-2 py-1"
               >
                 {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
                 {copied ? "Copied" : "Copy"}
               </button>
-              <div className="flex items-center gap-2 text-[9px] font-mono font-bold text-success/70 tracking-widest">
+              <div className="flex items-center gap-2 fc-eyebrow text-success">
                 <Fingerprint className="w-3.5 h-3.5" />
                 Verified
               </div>
@@ -216,7 +216,7 @@ export function ResultHeader({
 
 function Pill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-md border border-white/8 bg-white/[0.025] px-2.5 py-1.5 text-[9px] font-mono font-bold tracking-[0.14em] text-white/35">
+    <span className="inline-flex items-center gap-2 rounded-md border border-white/8 bg-white/[0.025] px-2.5 py-1.5 fc-eyebrow fc-text-faint">
       <Icon className="w-3 h-3 text-white/25" />
       {label}
     </span>
@@ -229,7 +229,7 @@ function Metric({ label, value, color, icon: Icon }: { label: string; value: num
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Icon className="w-3.5 h-3.5 shrink-0 text-white/25" />
-          <span className="text-[10px] font-mono font-bold text-white/35 tracking-[0.14em] truncate">
+          <span className="fc-eyebrow fc-text-faint truncate">
             {label}
           </span>
         </div>

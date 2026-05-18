@@ -83,34 +83,35 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/95"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-xl"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
       <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
         <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 16 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 8 }}
-          transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden bg-surface-1 rounded-2xl"
+          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className="relative overflow-hidden fc-surface-overlay"
         >
-
-          <div className="p-8 sm:p-10 flex flex-col items-center text-center">
+          <div className="p-8 sm:p-10 flex flex-col text-left">
             <button
               type="button"
               onClick={closeModal}
-              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-xl bg-white/[0.04] text-white/25 hover:text-white/70 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:fc-text-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
               aria-label="Close upload dialog"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
 
-            <p className="text-[9px] font-mono font-bold tracking-[0.28em] mb-3" style={{ color: "rgba(79,142,247,0.45)" }} aria-hidden="true">
-              Evidence Intake
-            </p>
-            <h2 id="upload-modal-title" className="text-[22px] font-heading font-bold text-white/90 mb-7" style={{ letterSpacing: "-0.02em" }}>
-              Upload Evidence
-            </h2>
+            <div className="mb-8">
+              <p className="fc-eyebrow fc-text-faint mb-2" aria-hidden="true">
+                Evidence Intake
+              </p>
+              <h2 id="upload-modal-title" className="text-3xl font-heading font-bold text-white">
+                Upload Evidence
+              </h2>
+            </div>
 
             <div
               data-testid="upload-dropzone"
@@ -126,32 +127,32 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
                   input?.click();
                 }
               }}
-              className="w-full p-16 cursor-pointer group flex flex-col items-center justify-center gap-6 relative overflow-hidden transition-colors duration-200"
-              style={{
-                border: isDragging ? "1px solid #FFFFFF" : "1px solid #333333",
-                background: isDragging ? "#111111" : "transparent",
-              }}
+              className={`w-full py-16 px-8 cursor-pointer group flex flex-col items-center justify-center gap-4 relative transition-all duration-300 border-2 border-dashed rounded-2xl ${
+                isDragging 
+                  ? "bg-primary/10 border-primary shadow-[0_0_25px_rgba(79,142,247,0.15)]" 
+                  : "border-white/10 bg-white/[0.01] hover:bg-white/[0.02] hover:border-white/20"
+              }`}
             >
               <Plus 
-                className="w-16 h-16 transition-colors duration-200" 
-                style={{ color: isDragging ? "#FFFFFF" : "#555555" }} 
+                className={`w-12 h-12 transition-colors duration-200 ${
+                  isDragging ? "text-primary" : "text-white/40 group-hover:text-white/60"
+                }`} 
                 strokeWidth={1} 
                 aria-hidden="true" 
               />
 
-              <div className="flex flex-col items-center gap-2 pointer-events-none">
+              <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
                 <span
-                  className="text-xl font-bold transition-colors duration-200 uppercase tracking-widest"
-                  style={{ color: isDragging ? "#FFFFFF" : "#888888" }}
+                  className={`text-lg font-bold transition-colors duration-200 uppercase tracking-widest ${
+                    isDragging ? "text-primary" : "text-white/80 group-hover:text-white"
+                  }`}
                 >
                   {isDragging ? "Drop Evidence" : "Select Evidence"}
                 </span>
-                <p id="upload-file-help" className="text-sm text-slate-500 max-w-[260px] leading-relaxed">
+                <p id="upload-file-help" className="text-sm font-mono fc-text-muted max-w-[260px]">
                   images, video, audio (max 50MB)
                 </p>
               </div>
-
-
 
               <input
                 type="file"
@@ -169,15 +170,20 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             </div>
 
             {error && (
-              <p id="upload-error" role="alert" className="mt-5 text-[13px] font-semibold" style={{ color: "var(--color-danger)" }}>
-                {error}
-              </p>
+              <div className="mt-6 p-4 border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5 rounded-lg">
+                <p id="upload-error" role="alert" className="text-[13px] font-mono text-[var(--color-danger)]">
+                  {error}
+                </p>
+              </div>
             )}
 
             {isSubmitting && !error && (
-              <p role="status" aria-live="polite" className="mt-5 text-[11px] font-mono animate-pulse" style={{ color: "rgba(79,142,247,0.55)", letterSpacing: "0.18em" }}>
-                Preparing secure channel…
-              </p>
+              <div className="mt-6 flex items-center gap-3">
+                <div className="w-2 h-2 bg-primary animate-pulse" />
+                <p role="status" aria-live="polite" className="text-xs font-mono tracking-widest text-primary/80 uppercase">
+                  Preparing secure channel...
+                </p>
+              </div>
             )}
           </div>
         </motion.div>

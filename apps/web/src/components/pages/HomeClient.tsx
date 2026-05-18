@@ -19,8 +19,8 @@ const containerVariants: Variants = {
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 22, filter: "blur(4px)" },
-  show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } },
+  hidden: { opacity: 0, y: 5 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
 };
 
 export function HomeClient() {
@@ -30,25 +30,27 @@ export function HomeClient() {
 
       {/* ── Hero ── */}
       <section id="hero" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pt-32 pb-20 px-5 sm:px-6">
+        {/* Grid background for structural precision */}
+        <div className="absolute inset-0 bg-grid-small opacity-10 pointer-events-none" />
+
         <motion.div
           variants={prefersReducedMotion ? undefined : containerVariants}
           initial={prefersReducedMotion ? false : "hidden"}
           animate={prefersReducedMotion ? false : "show"}
-          className="flex flex-col items-start w-full max-w-7xl mx-auto z-10"
+          className="flex flex-col items-center text-center w-full max-w-4xl mx-auto z-10"
         >
           {/* Eyebrow */}
           <motion.div variants={itemVariants} className="flex items-center gap-3 mb-8">
-            <span className="text-xs font-mono font-semibold tracking-[0.2em] text-slate-500 uppercase">
+            <span className="fc-eyebrow fc-text-faint">
               [ System Overview ]
             </span>
           </motion.div>
 
           {/* Headline */}
-          <div className="space-y-6 mb-12 max-w-4xl">
+          <div className="space-y-6 mb-12 w-full">
             <motion.h1
               variants={itemVariants}
-              className="text-5xl sm:text-6xl md:text-[80px] font-extrabold leading-[1.02] text-white"
-              style={{ letterSpacing: "-0.03em" }}
+              className="text-5xl sm:text-6xl md:text-[80px] font-black leading-none text-white tracking-tight"
             >
               Multi-Agent Forensic
               <br />
@@ -57,7 +59,7 @@ export function HomeClient() {
 
             <motion.p
               variants={itemVariants}
-              className="text-lg md:text-xl text-slate-400 font-medium leading-relaxed max-w-2xl"
+              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed max-w-2xl mx-auto"
             >
               Forensic Council deploys specialized AI agents to analyze digital evidence,
               synthesizing cohesive, cryptographically-signed reports with chain-of-custody integrity.

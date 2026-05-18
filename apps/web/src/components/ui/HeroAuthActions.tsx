@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
 import { __pendingFileStore } from "@/lib/pendingFileStore";
@@ -18,7 +18,6 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 export function HeroAuthActions() {
   const router = useRouter();
   const { playSound } = useSound();
-  const prefersReducedMotion = useReducedMotion();
 
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -164,19 +163,17 @@ export function HeroAuthActions() {
 
   return (
     <>
-      <motion.button
+      <button
         ref={ctaRef}
         type="button"
         data-testid="hero-cta-begin"
-        whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
-        whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
         onClick={handleCTAClick}
         aria-label="Upload a file to begin analysis"
-        className="bg-white text-black px-10 py-4 flex items-center gap-3 select-none rounded-sm font-bold tracking-widest transition-colors hover:bg-gray-100"
+        className="group btn-primary !px-12 !py-4 font-bold text-sm outline-none"
       >
-        <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" />
-        <span className="uppercase text-sm">Begin Analysis</span>
-      </motion.button>
+        <span>Begin Analysis</span>
+        <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
+      </button>
 
       <AnimatePresence mode="sync" initial={false}>
         {showUpload && !selectedFile && !isHandingOff && (
@@ -195,7 +192,7 @@ export function HeroAuthActions() {
             onDismiss={closeUpload}
             onStartAnalysis={async () => {
               if (isHandingOff) return;
-              playSound("envelope-close");
+              playSound("scan");
               setIsHandingOff(true);
               setShowUpload(false);
               await handleStartAnalysis();

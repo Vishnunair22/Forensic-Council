@@ -25,8 +25,6 @@ export type SoundType =
 
 let globalCtx: AudioContext | null = null;
 // Chrome's autoplay policy: AudioContext must be created/resumed after a user gesture.
-// We set this flag on the first qualifying DOM event and create the context then.
-let _audioUnlocked = false;
 let _masterVolume = 0.3;
 let _isMuted = false;
 
@@ -38,8 +36,6 @@ export function getMuted() { return _isMuted; }
 type AudioContextConstructor = new () => AudioContext;
 
 function _tryUnlock() {
-  if (_audioUnlocked) return;
-  _audioUnlocked = true;
   try {
     if (typeof window === "undefined") return;
     const AC =
@@ -47,7 +43,9 @@ function _tryUnlock() {
       (window as unknown as { webkitAudioContext: AudioContextConstructor })
         .webkitAudioContext;
     if (AC && !globalCtx) globalCtx = new AC();
-    if (globalCtx?.state === "suspended") globalCtx.resume().catch(() => {});
+    if (globalCtx && globalCtx.state === "suspended") {
+      globalCtx.resume().catch(() => {});
+    }
   } catch {
     /* non-critical */
   }
@@ -62,9 +60,11 @@ function _ensureUnlockListeners() {
   _unlockListenersAttached = true;
   const _unlock = () => {
     _tryUnlock();
-    window.removeEventListener("pointerdown", _unlock, true);
-    window.removeEventListener("click", _unlock, true);
-    window.removeEventListener("keydown", _unlock, true);
+    if (globalCtx && globalCtx.state === "running") {
+      window.removeEventListener("pointerdown", _unlock, true);
+      window.removeEventListener("click", _unlock, true);
+      window.removeEventListener("keydown", _unlock, true);
+    }
   };
   window.addEventListener("pointerdown", _unlock, { capture: true, passive: true });
   window.addEventListener("click", _unlock, { capture: true, passive: true });
@@ -96,18 +96,22 @@ export function useSound() {
       if (typeof window === "undefined") return;
       if (_isMuted) return;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      // Try to unlock on programmatic calls (e.g., file picker callback)
-      if (!_audioUnlocked) {
-        _tryUnlock();
-        setTimeout(() => playSound(type), 0);
-        return;
+
+      // Ensure globalCtx is created and resumed on demand
+      if (!globalCtx) {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: AudioContextConstructor })
+            .webkitAudioContext;
+        if (AC) globalCtx = new AC();
       }
-      if (!_audioUnlocked || !globalCtx) return;
+
+      if (!globalCtx) return;
 
       const ctx = globalCtx;
-      if (!ctx) return;
-
-      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
 
       const t = ctx.currentTime;
 

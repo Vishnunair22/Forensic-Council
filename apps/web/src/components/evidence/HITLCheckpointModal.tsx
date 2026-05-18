@@ -9,7 +9,7 @@ import {
  DialogDescription,
  DialogFooter,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Loader2, ShieldAlert, ArrowRight } from "lucide-react";
+import { ShieldAlert, ArrowRight } from "lucide-react";
 import { clsx } from "clsx";
 
 interface HITLCheckpoint {
@@ -90,20 +90,20 @@ export function HITLCheckpointModal({
 
  return (
    <Dialog open={isOpen} onOpenChange={handleDismiss}>
-    <DialogContent className="sm:max-w-xl bg-surface-1 border border-border-muted p-0 overflow-hidden shadow-2xl rounded-2xl">
+    <DialogContent className="sm:max-w-xl p-0">
 
      {checkpoint ? (
-     <div className="p-8 space-y-6">
+     <div className="p-8 space-y-6 flex flex-col text-left">
       <DialogHeader className="text-left space-y-2">
        <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-white flex items-center justify-center">
-         <ShieldAlert className="w-7 h-7 text-black" />
+        <div className="w-10 h-10 border border-white/20 bg-white/5 flex items-center justify-center rounded">
+         <ShieldAlert className="w-5 h-5 text-white/70" />
         </div>
         <div>
-         <DialogTitle className="text-2xl font-extrabold text-white px-0 tracking-tight drop-shadow-md">
+         <DialogTitle className="text-2xl font-heading font-bold text-white tracking-tight">
           Investigator Intervention
          </DialogTitle>
-         <DialogDescription className="text-sm font-mono font-medium text-white/60 tracking-wide mt-1">
+         <DialogDescription className="fc-eyebrow text-white/40 mt-1">
           Checkpoint ID: {checkpoint.checkpoint_id.slice(0, 8)} · {checkpoint.agent_name}
          </DialogDescription>
         </div>
@@ -113,19 +113,19 @@ export function HITLCheckpointModal({
       <div className="space-y-4">
        {/* Context Panels */}
        <div className="grid grid-cols-1 gap-4">
-        <div className="p-5 bg-surface-2 border border-border-muted space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-white/50 tracking-wide uppercase">Evidence Brief</h4>
+        <div className="border-l-2 border-white/20 pl-4 py-1 space-y-2">
+         <h4 className="fc-eyebrow text-white/40">Evidence Brief</h4>
          <p className="text-sm text-white/80 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
-        <div className="p-5 bg-white border border-white space-y-2">
-         <h4 className="text-[10px] font-black font-mono text-black/60 tracking-wide uppercase">Decision Required</h4>
-         <p className="text-sm text-black leading-relaxed font-bold">{checkpoint.decision_needed}</p>
+        <div className="border-l-2 border-[var(--color-primary)] pl-4 py-1 space-y-2 bg-[var(--color-primary)]/5">
+         <h4 className="fc-eyebrow text-[var(--color-primary)]/60">Decision Required</h4>
+         <p className="text-sm text-white leading-relaxed font-bold">{checkpoint.decision_needed}</p>
         </div>
        </div>
 
        {/* Decision Grid */}
-       <div className="space-y-3">
-        <h4 className="text-xs font-black text-white/40 tracking-wide px-1" id="protocol-selection-label">Protocol Selection</h4>
+       <div className="space-y-3 pt-4 border-t border-white/5">
+        <h4 className="fc-eyebrow text-white/40 mb-2" id="protocol-selection-label">Protocol Selection</h4>
         <div
           className="grid grid-cols-2 gap-3"
           role="radiogroup"
@@ -156,22 +156,22 @@ export function HITLCheckpointModal({
             tabIndex={selectedDecision === option.value || (!selectedDecision && option.value === "APPROVE") ? 0 : -1}
             onClick={() => setSelectedDecision(option.value)}
             className={clsx(
-              "p-5 border text-left transition-colors duration-200 relative",
+              "p-4 border text-left transition-colors duration-200 rounded text-sm relative outline-none",
               selectedDecision === option.value
-                ? "bg-white border-white text-black"
-                : "border-border-muted bg-surface-2 hover:bg-surface-3"
+                ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-white shadow-[0_0_15px_rgba(79,142,247,0.15)]"
+                : "border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
             )}
           >
            <div className="flex flex-col gap-1 relative z-10">
             <span className={clsx(
-              "text-sm font-bold tracking-tight transition-colors",
-              selectedDecision === option.value ? "text-black" : "text-white"
+              "font-bold tracking-tight transition-colors",
+              selectedDecision === option.value ? "text-white" : ""
             )}>
              {option.label}
             </span>
             <span className={clsx(
-              "text-[10px] font-medium leading-tight transition-colors",
-              selectedDecision === option.value ? "text-black/70" : "text-white/50"
+              "text-[10px] font-mono leading-tight transition-colors",
+              selectedDecision === option.value ? "text-white/70" : "text-white/40"
             )}>
              {option.description}
             </span>
@@ -181,33 +181,33 @@ export function HITLCheckpointModal({
         </div>
        </div>
 
-{/* Note input */}
+        {/* Note input */}
         <div className="space-y-3">
-         <h4 className="text-xs font-black text-white/40 tracking-wide px-1" id="hitl-notes-label">Supplemental Documentation</h4>
+         <h4 className="fc-eyebrow text-white/40" id="hitl-notes-label">Supplemental Documentation</h4>
          <textarea
           id="hitl-notes"
           aria-labelledby="hitl-notes-label"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Enter forensic notes for this intervention..."
-          className="w-full px-5 py-4 bg-surface-2 border border-border-muted text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white transition-colors min-h-[100px] resize-none"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors min-h-[100px] resize-none"
           disabled={isSubmitting}
         />
         </div>
 
         {decisionError && (
-         <div role="alert" className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-[11px] font-bold text-center tracking-wide">
+         <div role="alert" className="p-3 rounded bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/20 text-[var(--color-danger)] text-[11px] font-bold text-center tracking-wide">
           {decisionError}
          </div>
         )}
       </div>
 
-<DialogFooter className="sm:justify-between border-t border-border-muted p-8 pt-6 gap-4 bg-surface-1">
+      <DialogFooter className="sm:justify-between border-t border-white/5 p-8 pt-6 gap-4">
         <button
          type="button"
          onClick={onDismiss}
          disabled={isSubmitting}
-         className="px-8 py-4 border border-border-muted text-white/60 hover:text-white hover:bg-surface-2 transition-colors text-sm font-bold tracking-wide uppercase"
+         className="btn-outline"
         >
          Cancel
         </button>
@@ -215,16 +215,15 @@ export function HITLCheckpointModal({
          type="button"
          onClick={handleSubmit}
          disabled={!selectedDecision || isSubmitting}
-         className="px-10 py-4 bg-white text-black font-bold text-sm tracking-widest uppercase hover:bg-gray-200 active:bg-gray-300 transition-colors flex items-center gap-2 disabled:opacity-50"
+         className="btn-primary flex items-center gap-2 disabled:opacity-50"
         >
         {isSubmitting ? (
          <>
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           Transmitting...
          </>
         ) : (
          <>
-          <CheckCircle2 className="w-4 h-4" />
           Finalize Decision
           <ArrowRight className="w-4 h-4" />
          </>

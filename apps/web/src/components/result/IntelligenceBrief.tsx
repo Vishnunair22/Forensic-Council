@@ -51,13 +51,13 @@ export function IntelligenceBrief({
             <FileText className="w-4 h-4 text-primary/70" />
             <h2 className="text-lg font-heading font-bold text-white/85">Key Findings</h2>
           </div>
-          <p className="mt-1 text-xs text-white/35">
+          <p className="mt-1 text-xs fc-text-faint">
             Arbiter-selected signals from the agent and tool outputs.
           </p>
         </div>
         <span className={clsx(
-          "w-fit rounded-md border px-3 py-1.5 text-[9px] font-mono font-bold tracking-[0.16em]",
-          isDeepPhase ? "text-success/75 border-success/20 bg-success/5" : "text-white/35 border-white/10 bg-white/[0.025]",
+          "w-fit rounded-md border px-3 py-1.5 fc-eyebrow",
+          isDeepPhase ? "text-success/75 border-success/20 bg-success/5" : "fc-text-faint border-white/10 bg-white/[0.025]",
         )}>
           {isDeepPhase ? "Deep Analysis" : "Initial Analysis"}
         </span>
@@ -73,15 +73,15 @@ export function IntelligenceBrief({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.035 }}
-                className="p-5 border border-border-muted bg-surface-1"
+                className="p-5 border border-white/5 bg-[#02040A] rounded-2xl shadow-xl"
               >
                 <div className="flex items-start gap-4">
                   <FindingIcon severity={severity} />
                   <div className="min-w-0">
-                    <div className="text-[9px] font-mono font-bold text-white/20 tracking-[0.18em]">
+                    <div className="fc-eyebrow fc-text-faint">
                       Signal {String(i + 1).padStart(2, "0")}
                     </div>
-                    <p className="mt-2 text-sm text-white/62 leading-relaxed">
+                    <p className="mt-2 text-sm fc-text-muted leading-relaxed">
                       {finding}
                     </p>
                   </div>
@@ -92,17 +92,17 @@ export function IntelligenceBrief({
         </div>
       )}
 
-      <div className="border border-border-muted bg-surface-1 p-5 md:p-6">
+      <div className="border border-white/5 bg-[#02040A] rounded-2xl shadow-xl p-5 md:p-6">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 border border-border-muted bg-surface-2 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 border border-white/5 bg-transparent flex items-center justify-center shrink-0 rounded-xl">
             <Info className="w-4 h-4 text-primary/70" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-mono font-bold text-white/30 tracking-[0.18em]">
+            <div className="fc-eyebrow fc-text-faint">
               Arbiter Summary
             </div>
             {cleanVerdictSentence && (
-              <p className="mt-2 text-sm md:text-base text-white/65 leading-relaxed">
+              <p className="mt-2 text-sm md:text-base fc-text-secondary leading-relaxed">
                 {cleanVerdictSentence}
               </p>
             )}
@@ -110,21 +110,21 @@ export function IntelligenceBrief({
             {(notes.length > 0 || skipped.length > 0) && (
               <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {notes.map((note) => (
-                  <div key={note.label} className="border border-border-muted bg-surface-2 p-4">
-                    <div className="text-[9px] font-mono font-bold text-white/25 tracking-[0.16em] uppercase">
+                  <div key={note.label} className="border-t border-white/5 pt-4">
+                    <div className="fc-eyebrow fc-text-faint">
                       {note.label}
                     </div>
-                    <p className="mt-2 text-xs text-white/60 leading-relaxed">
+                    <p className="mt-2 text-xs fc-text-muted leading-relaxed">
                       {note.value}
                     </p>
                   </div>
                 ))}
                 {skipped.length > 0 && (
-                  <div className="border border-border-muted bg-surface-2 p-4">
-                    <div className="text-[9px] font-mono font-bold text-white/25 tracking-[0.16em] uppercase">
+                  <div className="border-t border-white/5 pt-4">
+                    <div className="fc-eyebrow fc-text-faint">
                       Skipped Agents
                     </div>
-                    <p className="mt-2 text-xs text-white/60 leading-relaxed">
+                    <p className="mt-2 text-xs fc-text-muted leading-relaxed">
                       {skipped.map(([agent, reason]) => `${agent}: ${cleanFindingText(reason, 80)}`).join("; ")}
                     </p>
                   </div>
@@ -139,7 +139,7 @@ export function IntelligenceBrief({
 }
 
 function FindingIcon({ severity }: { severity: "danger" | "warning" | "info" | "neutral" }) {
-  const base = "w-9 h-9 shrink-0 flex items-center justify-center border mt-0.5";
+  const base = "w-9 h-9 shrink-0 flex items-center justify-center border mt-0.5 rounded-xl";
   if (severity === "danger") {
     return (
       <div className={clsx(base, "bg-danger/10 border-danger/30 text-danger")}>
@@ -156,7 +156,7 @@ function FindingIcon({ severity }: { severity: "danger" | "warning" | "info" | "
   }
   if (severity === "neutral") {
     return (
-      <div className={clsx(base, "bg-surface-2 border-border-muted text-white/35")}>
+      <div className={clsx(base, "bg-transparent border-white/5 text-white/35")}>
         <CircleDashed className="w-4 h-4" />
       </div>
     );

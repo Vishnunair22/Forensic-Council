@@ -74,11 +74,12 @@ ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid  1001 nextjs
 
-# Copy standalone output (Next.js built-in server). In this monorepo the
-# generated server lives at apps/web/server.js inside the standalone tree.
+# Copy standalone output (Next.js built-in server). In this monorepo build the
+# generated server lands at /app/server.js inside the standalone tree.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/server ./.next/server
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
 
 # Switch to non-root user before the process starts
 USER nextjs
@@ -90,4 +91,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 
 EXPOSE 3000
 
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "server.js"]

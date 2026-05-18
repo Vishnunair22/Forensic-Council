@@ -227,7 +227,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
     <div className={clsx(
       "rounded-2xl border-2 overflow-hidden transition-colors duration-300",
       open
-        ? clsx("bg-surface-3", flagCfg.border)
+        ? clsx("bg-white/5", flagCfg.border)
         : clsx(flagCfg.bg, flagCfg.border),
     )}>
       {/* Section header */}
@@ -543,17 +543,6 @@ export function AgentFindingCard({
               </div>
             )}
 
-            {phase === "initial" && realFindings.length > 0 && (
-              <div className="rounded-2xl border border-primary/25 bg-primary/[0.06] px-5 py-4 flex items-start gap-3">
-                <Info className="w-4 h-4 text-primary/85 mt-0.5 shrink-0" />
-                <p className="text-[13px] text-white/75 leading-relaxed font-medium">
-                  <span className="font-black text-primary">Initial Analysis</span>{" "}
-                  ran {realFindings.length} core check{realFindings.length === 1 ? "" : "s"} for fast triage.
-                  Run <span className="font-black text-primary">Deep Analysis</span> to dispatch
-                  the full neural suite (anomaly tracing, frequency artifacts, PRNU, splicing, copy-move, etc.).
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>

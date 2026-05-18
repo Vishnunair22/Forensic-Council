@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { FileText, Music2, X, Loader2 } from "lucide-react";
+import { FileText, Music2, X } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 
@@ -61,41 +61,43 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-xl"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onDismiss(); } }}
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
         <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97, y: 14 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.985, y: 6 }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden bg-surface-1 w-full rounded-2xl"
+          className="relative overflow-hidden fc-surface-overlay"
         >
-          <div className="p-10 flex flex-col items-center text-center">
+          <div className="p-8 sm:p-10 flex flex-col text-left">
             <button
               type="button"
               onClick={closeModal}
               aria-label="Close evidence dialog"
               data-testid="success-modal-close"
-              className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded"
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:fc-text-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="space-y-6 w-full mb-8">
               <div>
-                <p className="text-[10px] font-mono font-bold tracking-[0.25em] text-slate-400 mb-1.5 uppercase" aria-hidden="true">
+                <p className="fc-eyebrow fc-text-faint mb-2" aria-hidden="true">
                   Status: Secured
                 </p>
-                <h2 id="success-modal-title" className="text-2xl font-bold text-white">Evidence Ready</h2>
+                <h2 id="success-modal-title" className="text-3xl font-heading font-bold text-white">
+                  Evidence Ready
+                </h2>
               </div>
 
-              <div className="relative overflow-hidden border border-border-muted bg-surface-0" aria-label={`Preview of ${file.name}`}>
+              <div className="relative overflow-hidden border border-white/10 rounded-2xl bg-white/[0.01]" aria-label={`Preview of ${file.name}`}>
                 <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
                   {isAudio && previewUrl ? (
                     <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
-                      <Music2 className="w-10 h-10 text-slate-600" aria-hidden="true" />
+                      <Music2 className="w-10 h-10 fc-text-muted" aria-hidden="true" />
                       <audio
                         controls
                         src={previewUrl}
@@ -121,19 +123,19 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                       aria-label={file.name}
                     />
                   ) : (
-                    <div className="flex flex-col items-center gap-3 text-slate-600" aria-hidden="true">
+                    <div className="flex flex-col items-center gap-3 fc-text-muted" aria-hidden="true">
                       <FileText className="w-12 h-12" strokeWidth={1} />
-                      <span className="text-xs font-mono tracking-widest uppercase">Data Secured</span>
+                      <span className="fc-eyebrow fc-text-faint">Data Secured</span>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* File metadata */}
-              <div className="flex items-center justify-between px-2 pt-2 text-left" aria-hidden="true">
+              <div className="flex items-center justify-between px-2 pt-2" aria-hidden="true">
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-mono text-white truncate max-w-[300px]">{file.name}</p>
-                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                  <p className="text-sm font-mono font-medium text-white truncate max-w-[300px]">{file.name}</p>
+                  <span className="fc-eyebrow fc-text-muted">
                     {file.type || "binary/octet-stream"}
                   </span>
                 </div>
@@ -145,12 +147,12 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
               </div>
             </div>
 
-            <div className="flex w-full gap-4">
+            <div className="flex w-full gap-4 mt-2">
               <button
                 type="button"
                 onClick={() => { playSound("click"); onNewUpload(); }}
                 disabled={isStarting}
-                className="flex-1 py-4 text-sm font-semibold tracking-wide uppercase transition-colors hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed border border-border-muted"
+                className="btn-outline flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Reselect File
               </button>
@@ -166,11 +168,11 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   }
                 }}
                 disabled={isStarting}
-                className="flex-1 py-4 text-sm font-bold tracking-widest uppercase flex items-center justify-center gap-2 transition-colors bg-white text-black hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isStarting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" aria-hidden="true" />
                     Opening Analysis
                   </>
                 ) : (
