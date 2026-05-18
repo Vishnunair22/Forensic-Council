@@ -47,18 +47,18 @@ const AGENT_META: Record<string, { name: string; role: string; color: string; ic
 };
 
 const COLOR_MAP: Record<string, { bg: string; border: string; text: string; ring: string }> = {
-  cyan:   { bg: "bg-primary/8",     border: "border-primary/30",     text: "text-primary",      ring: "ring-primary/25" },
-  blue:   { bg: "bg-blue-500/8",    border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
-  amber:  { bg: "bg-amber-500/8",   border: "border-amber-500/30",   text: "text-amber-300",    ring: "ring-amber-500/25" },
-  teal:   { bg: "bg-teal-500/8",    border: "border-teal-500/30",    text: "text-teal-300",     ring: "ring-teal-500/25" },
-  violet: { bg: "bg-violet-500/8",  border: "border-violet-500/30",  text: "text-violet-300",   ring: "ring-violet-500/25" },
+  cyan:   { bg: "bg-transparent", border: "border-primary/30",     text: "text-primary",      ring: "ring-primary/25" },
+  blue:   { bg: "bg-transparent", border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
+  amber:  { bg: "bg-transparent", border: "border-amber-500/30",   text: "text-amber-300",    ring: "ring-amber-500/25" },
+  teal:   { bg: "bg-transparent", border: "border-teal-500/30",    text: "text-teal-300",     ring: "ring-teal-500/25" },
+  violet: { bg: "bg-transparent", border: "border-violet-500/30",  text: "text-violet-300",   ring: "ring-violet-500/25" },
 };
 
 const FLAG_CONFIG = {
-  bad:  { color: "text-danger",  bg: "bg-danger/10",   border: "border-danger/25",  icon: AlertTriangle, label: "Anomaly" },
-  warn: { color: "text-warning", bg: "bg-warning/10",  border: "border-warning/25", icon: AlertTriangle, label: "Warning" },
-  ok:   { color: "text-primary", bg: "bg-primary/10",  border: "border-primary/25", icon: CheckCircle2,  label: "Clean"   },
-  info: { color: "text-white/55",bg: "bg-white/[0.04]",border: "border-white/[0.08]",icon: Info,         label: "Info"    },
+  bad:  { color: "text-danger",  bg: "bg-transparent", border: "border-danger/25",  icon: AlertTriangle, label: "Anomaly" },
+  warn: { color: "text-warning", bg: "bg-transparent", border: "border-warning/25", icon: AlertTriangle, label: "Warning" },
+  ok:   { color: "text-primary", bg: "bg-transparent", border: "border-primary/25", icon: CheckCircle2,  label: "Clean"   },
+  info: { color: "text-white/55",bg: "bg-transparent", border: "border-white/[0.08]",icon: Info,         label: "Info"    },
 };
 
 interface Section {
@@ -466,7 +466,7 @@ export function AgentFindingCard({
                 "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-black tracking-wide border transition-colors",
                 open
                   ? "border-white/20 bg-white/[0.06] text-white/85"
-                  : "border-primary/40 bg-primary/[0.12] text-primary group-hover:bg-primary/[0.18]"
+                  : "border-white/10 bg-transparent text-white/60 group-hover:border-white/20 group-hover:text-white"
               )}
               aria-hidden="true"
             >
