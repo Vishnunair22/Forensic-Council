@@ -1,9 +1,10 @@
 import { sessionOnlyStorage, storage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 import type { HistoryItem } from "@/lib/types";
 
 function _saveHistory(): HistoryItem[] {
   try {
-    return storage.getItem<HistoryItem[]>("forensic_history", true, []) ?? [];
+    return storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []) ?? [];
   } catch {
     return [];
   }
@@ -11,20 +12,25 @@ function _saveHistory(): HistoryItem[] {
 
 function _restoreHistory(history: HistoryItem[]) {
   if (history.length > 0) {
-    storage.setItem("forensic_history", history, true);
+    storage.setItem(STORAGE_KEYS.HISTORY, history, true);
   }
 }
 
 export function clearAgentSnapshots() {
   if (typeof window === "undefined") return;
 
-  storage.removeItem("forensic_initial_agents");
-  storage.removeItem("forensic_deep_agents");
+  storage.removeItem(STORAGE_KEYS.INITIAL_AGENTS);
+  storage.removeItem(STORAGE_KEYS.DEEP_AGENTS);
 
   const keysToRemove: string[] = [];
   for (let i = 0; i < window.localStorage.length; i++) {
     const key = window.localStorage.key(i);
-    if (key && (key.startsWith("forensic_initial_agents:") || key.startsWith("forensic_deep_agents:") || key.startsWith("forensic_investigation_ctx:"))) {
+    if (
+      key &&
+      (key.startsWith(`${STORAGE_KEYS.INITIAL_AGENTS}:`) ||
+        key.startsWith(`${STORAGE_KEYS.DEEP_AGENTS}:`) ||
+        key.startsWith(`${STORAGE_KEYS.INVESTIGATION_CTX}:`))
+    ) {
       keysToRemove.push(key);
     }
   }
@@ -33,22 +39,22 @@ export function clearAgentSnapshots() {
 
 export function expireSessionCookie() {
   if (typeof document === "undefined") return;
-  document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
+  document.cookie = `${STORAGE_KEYS.SESSION_ID}=; path=/; max-age=0; SameSite=Lax`;
 }
 
 export function clearInvestigationPersistence() {
   const savedHistory = _saveHistory();
 
   [
-    "forensic_session_id",
-    "forensic_investigation_ctx",
-    "forensic_thumbnail",
-    "forensic_mime_type",
-    "forensic_file_name",
-    "forensic_case_id",
-    "forensic_pipeline_start",
-    "forensic_hitl_checkpoint",
-    "forensic_is_deep",
+    STORAGE_KEYS.SESSION_ID,
+    STORAGE_KEYS.INVESTIGATION_CTX,
+    STORAGE_KEYS.THUMBNAIL,
+    STORAGE_KEYS.MIME_TYPE,
+    STORAGE_KEYS.FILE_NAME,
+    STORAGE_KEYS.CASE_ID,
+    STORAGE_KEYS.PIPELINE_START,
+    STORAGE_KEYS.HITL_CHECKPOINT,
+    STORAGE_KEYS.IS_DEEP,
   ].forEach((key) => {
     storage.removeItem(key);
     sessionOnlyStorage.removeItem(key);

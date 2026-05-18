@@ -12,7 +12,7 @@
  * Run: cd apps/web && npm test -- tests/integration/page_flows.test.tsx
  */
 
-import { mapReportDtoToReport } from "@/hooks/useForensicData";
+import { mapReportDtoToReport } from "../helpers/mapReportDtoToReport";
 import { setAuthToken, getAuthToken, clearAuthToken, isAuthenticated } from "@/lib/api";
 import type { ReportDTO } from "@/lib/api";
 

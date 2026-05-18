@@ -24,7 +24,7 @@ import {
   getLiveProgressDescriptor,
 } from "@/lib/tool-progress";
 import { accentFor } from "@/lib/agentTheme";
-import type { AgentUpdate, FindingPreview } from "./AgentProgressDisplay";
+import type { AgentUpdate, FindingPreview } from "./types";
 
 const TEMPLATE_SUMMARY_RE = [
   /^analysis (?:complete|completed|finished)\.?$/i,

@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+// @ts-ignore
 import { toHaveNoViolations } from 'jest-axe';
 
 // @ts-ignore

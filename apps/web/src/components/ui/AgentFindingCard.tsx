@@ -374,7 +374,7 @@ export function AgentFindingCard({
 
   if (isSkipped) {
     return (
-      <div className="rounded-3xl p-6 border border-white/[0.05] bg-white/[0.015] opacity-40 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-700">
+      <div className="fc-surface-quiet p-6 border border-white/[0.05] bg-white/[0.015] opacity-40 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-700">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
             <meta.icon className="w-5 h-5" />

@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import type { ReportDTO } from "@/lib/api";
-import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
+import type { AgentUpdate } from "@/components/evidence/types";
 import { motion } from "framer-motion";
 import { fmtTime, fmtDuration } from "@/lib/fmt";
 import { accentFor } from "@/lib/agentTheme";

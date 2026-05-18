@@ -11,7 +11,7 @@ const AUTH_TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
 
 import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
 import { SoundType } from "./useSound";
-import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
+import type { AgentUpdate } from "@/components/evidence/types";
 
 class SessionGoneError extends Error {
   constructor() {

@@ -280,3 +280,6 @@ check_critical_coverage_*.txt
 # ── Audit plan (session-local) ───────────────────────────────────────────────
 FULL_APP_AUDIT.md
 end to end audit plan.md
+
+# ── Generated / Stale Files ──────────────────────────────────────────────────
+apps/web/jest-results.json

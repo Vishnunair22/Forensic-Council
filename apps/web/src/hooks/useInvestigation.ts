@@ -24,7 +24,7 @@ import {
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
 import { type SoundType } from "@/hooks/useSound";
-import { type AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
+import { type AgentUpdate } from "@/components/evidence/types";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, SkipForward, Activity } from "lucide-react";
 import { clsx } from "clsx";
-import type { AgentUpdate } from "./AgentProgressDisplay";
+import type { AgentUpdate } from "./types";
 import { AGENT_ICONS } from "./AgentStatusCard";
 import { accentFor } from "@/lib/agentTheme";
 

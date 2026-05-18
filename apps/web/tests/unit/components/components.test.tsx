@@ -39,15 +39,13 @@ jest.mock("framer-motion", () => ({
 
 
 
-jest.mock("@/components/ui/AgentIcon", () => ({
-  AgentIcon: () => <div data-testid="agent-icon" />,
-}));
+
 
 // ── AgentProgressDisplay helpers ──────────────────────────────────────────────
 
 const progressDefaults = {
   agentUpdates: {} as Record<string, { status: string; thinking: string }>,
-  completedAgents: [] as import("@/components/evidence/AgentProgressDisplay").AgentUpdate[],
+  completedAgents: [] as import("@/components/evidence/types").AgentUpdate[],
   progressText: "Initializing…",
   allAgentsDone: false,
   phase: "initial" as "initial" | "deep",
@@ -192,7 +190,7 @@ describe("AgentProgressDisplay", () => {
     // reason; pick up in phase 15 with a small filter tweak so a
     // liveStatus="skipped" Agent stays visible long enough for the
     // AgentStatusCard's "Hidden after 10s" copy to render.
-    it.skip("shows skipped unsupported message before the card expires", () => {
+    it("shows skipped unsupported message before the card expires", () => {
       render(
         <AgentProgressDisplay
           {...progressDefaults}

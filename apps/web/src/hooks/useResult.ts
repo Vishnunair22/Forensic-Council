@@ -13,7 +13,7 @@ import {
 import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
-import type { AgentUpdate } from "@/components/evidence/AgentProgressDisplay";
+import type { AgentUpdate } from "@/components/evidence/types";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 export type Tab = "analysis" | "history";
