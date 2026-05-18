@@ -112,8 +112,13 @@ def sample_user_id() -> str:
 
 @pytest.fixture
 def sample_jpeg_bytes() -> bytes:
-    """Minimal valid JPEG bytes (SOI + EOI markers)."""
-    return b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+    """A valid 1x1 pixel JPEG bytes generated dynamically using PIL."""
+    from PIL import Image
+    import io
+    img = Image.new("RGB", (1, 1), color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
 
 
 @pytest.fixture
@@ -185,22 +190,23 @@ def admin_auth_headers() -> dict:
 @pytest.fixture
 def client(mock_redis, mock_postgres, mock_qdrant):
     """FastAPI TestClient with infrastructure calls mocked for route tests."""
-    from api.main import app
-
     patches = [
-        patch("core.persistence.redis_client.get_redis_client", return_value=mock_redis),
-        patch("core.persistence.postgres_client.get_postgres_client", return_value=mock_postgres),
-        patch("core.persistence.qdrant_client.get_qdrant_client", return_value=mock_qdrant),
+        patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock, return_value=mock_redis),
+        patch("core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock, return_value=mock_postgres),
+        patch("core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock, return_value=mock_qdrant),
+        patch("core.persistence.get_redis_client", new_callable=AsyncMock, return_value=mock_redis),
+        patch("core.persistence.get_postgres_client", new_callable=AsyncMock, return_value=mock_postgres),
+        patch("core.persistence.get_qdrant_client", new_callable=AsyncMock, return_value=mock_qdrant),
         patch("core.migrations.run_migrations", new_callable=AsyncMock),
         patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
     ]
     for patcher in patches:
         patcher.start()
     try:
+        from api.main import app
         with TestClient(app, raise_server_exceptions=False) as test_client:
             yield _DualModeTestClient(test_client)
     finally:
-        app.dependency_overrides.clear()
         for patcher in reversed(patches):
             patcher.stop()
 

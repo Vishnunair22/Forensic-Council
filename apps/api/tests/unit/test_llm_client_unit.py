@@ -259,8 +259,9 @@ class TestGenerateReasoningStep:
             patch.object(client, "_get_client", AsyncMock(return_value=mock_http)),
             patch.object(client, "_with_retry", mock_with_retry),
         ):
-            result = await client._call_groq(
-                messages=[{"role": "user", "content": "test"}],
+            result = await client.generate_reasoning_step(
+                system_prompt="test",
+                react_chain=[],
                 available_tools=[],
             )
 

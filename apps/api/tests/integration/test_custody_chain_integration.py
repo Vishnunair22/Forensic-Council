@@ -101,11 +101,11 @@ class TestCustodyChainIntegrity:
         )
 
         content2 = {"step": 1}
-        signed2 = sign_content("agent-1", content2)
+        signed2 = sign_content("agent-0", content2)
         entry2 = ChainEntry(
             entry_id=uuid4(),
             entry_type=EntryType.ACTION,
-            agent_id="agent-1",
+            agent_id="agent-0",
             session_id=session_id,
             timestamp_utc=signed2.timestamp_utc,
             content=content2,
@@ -145,11 +145,11 @@ class TestCustodyChainIntegrity:
             prior_entry_ref=None,
         )
 
-        signed2 = sign_content("agent-1", {"step": 1})
+        signed2 = sign_content("agent-0", {"step": 1})
         entry2 = ChainEntry(
             entry_id=uuid4(),
             entry_type=EntryType.ACTION,
-            agent_id="agent-1",
+            agent_id="agent-0",
             session_id=session_id,
             timestamp_utc=signed2.timestamp_utc,
             content={"step": 1},
@@ -165,4 +165,4 @@ class TestCustodyChainIntegrity:
 
             report = await custody_logger.verify_chain(session_id=session_id)
             assert report.valid is False
-            assert report.broken_reason == "Chain link broken - prior_entry_ref mismatch"
+            assert report.broken_reason == "Chain link broken - prior_entry_ref mismatch for agent agent-0"

@@ -94,9 +94,12 @@ def client():
 
 @pytest.fixture
 def jpeg_file():
-    return io.BytesIO(
-        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
-    )
+    from PIL import Image
+    img = Image.new("RGB", (10, 10), color="red")
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format="JPEG")
+    img_byte_arr.seek(0)
+    return img_byte_arr
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -269,6 +272,7 @@ class TestInvestigationEndpoint:
 
         try:
             # Mock various dependencies to allow the request to proceed without real infra
+            import tempfile
             with (
                 patch(
                     "api.routes.investigation.check_investigation_rate_limit",
@@ -281,10 +285,8 @@ class TestInvestigationEndpoint:
                 patch("magic.from_buffer", return_value="image/jpeg"),
                 patch(
                     "api.routes.investigation.settings",
-                    MagicMock(evidence_storage_path="/tmp", use_redis_worker=False),
+                    MagicMock(evidence_storage_path=tempfile.gettempdir(), use_redis_worker=False),
                 ),
-                patch("api.routes.investigation.Path.mkdir", MagicMock()),
-                patch("api.routes.investigation.open", MagicMock()),
             ):
                 r = client.post(
                     "/api/v1/investigate",

@@ -270,8 +270,8 @@ class TestUpdateSessionStatus:
             str(uuid4()), "failed", error_message="Pipeline crashed"
         )
         assert result is True
-        # execute called twice (once for investigation_state, once for session_reports)
-        assert pg.execute.call_count == 2
+        # execute called once for atomic session_reports update
+        assert pg.execute.call_count == 1
 
     @pytest.mark.asyncio
     async def test_update_status_returns_false_on_error(self):

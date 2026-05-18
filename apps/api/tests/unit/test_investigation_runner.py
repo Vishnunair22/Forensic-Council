@@ -25,7 +25,7 @@ def mock_pipeline():
 @pytest.fixture(autouse=True)
 def mock_get_active_pipeline_metadata():
     with patch(
-        "orchestration.investigation_runner.get_active_pipeline_metadata",
+        "orchestration.session_finalization.get_active_pipeline_metadata",
         AsyncMock(return_value={}),
     ):
         yield
@@ -66,13 +66,13 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = mock_report
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_completed"),
+            patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persist.return_value = MagicMock(
@@ -105,13 +105,13 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = mock_report
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update"),
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update"),
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_completed"),
+            patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persistence = MagicMock(save_report=AsyncMock(), update_session_status=AsyncMock())
@@ -140,14 +140,14 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = mock_report
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update"),
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update"),
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch(
-                "orchestration.investigation_runner.increment_investigations_completed"
+                "orchestration.session_finalization.increment_investigations_completed"
             ) as mock_inc_comp,
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
@@ -178,13 +178,13 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = mock_report
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update"),
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update"),
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_completed"),
+            patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persist.return_value = MagicMock(
@@ -213,13 +213,13 @@ class TestRunInvestigationTask:
         mock_pipeline.run_investigation = AsyncMock(side_effect=RuntimeError("Pipeline exploded"))
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_failed"),
+            patch("orchestration.session_finalization.increment_investigations_failed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persist.return_value = MagicMock(
@@ -251,14 +251,14 @@ class TestRunInvestigationTask:
         mock_pipeline.run_investigation = AsyncMock(side_effect=RuntimeError("Pipeline exploded"))
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update"),
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update"),
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch(
-                "orchestration.investigation_runner.increment_investigations_failed"
+                "orchestration.session_finalization.increment_investigations_failed"
             ) as mock_inc_fail,
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
@@ -288,13 +288,13 @@ class TestRunInvestigationTask:
         mock_pipeline.run_investigation = AsyncMock(side_effect=RuntimeError("Pipeline exploded"))
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update"),
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update"),
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_failed"),
+            patch("orchestration.session_finalization.increment_investigations_failed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persist.return_value = MagicMock(
@@ -324,13 +324,13 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = mock_report
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update"),
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update"),
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_completed"),
+            patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persist.return_value = MagicMock(
@@ -358,13 +358,13 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = None  # Both are None
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_completed"),
+            patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             mock_persist.return_value = MagicMock(
@@ -397,13 +397,13 @@ class TestRunInvestigationTask:
         mock_pipeline._final_report = mock_report
 
         with (
-            patch("orchestration.investigation_runner.get_session_persistence") as mock_persist,
-            patch("orchestration.investigation_runner.broadcast_update") as mock_broadcast,
-            patch("orchestration.investigation_runner.set_final_report"),
-            patch("orchestration.investigation_runner.set_active_pipeline_metadata"),
+            patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
+            patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
+            patch("orchestration.session_finalization.set_final_report"),
+            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
             patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
-            patch("orchestration.investigation_runner.increment_investigations_completed"),
+            patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
         ):
             # Persistence fails but should continue

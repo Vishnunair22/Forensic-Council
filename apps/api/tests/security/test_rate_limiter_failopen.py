@@ -59,8 +59,7 @@ class TestRateLimiterFailOpen:
         from core.rate_limiting import check_investigation_rate_limit
 
         mock_redis = AsyncMock()
-        mock_redis.get.return_value = b"50"
-        mock_redis.ttl.return_value = 300
+        mock_redis.client.eval = AsyncMock(return_value=[0, 300])
 
         with patch("core.rate_limiting.get_redis_client", return_value=mock_redis):
             with pytest.raises(HTTPException) as exc_info:
@@ -79,7 +78,7 @@ class TestRateLimitMetricIncrement:
         from api.main import app
 
         client = TestClient(app)
-        response = client.get("/metrics")
+        response = client.get("/api/v1/metrics/public")
 
         assert response.status_code == 200
         assert "rate_limit_redis_bypasses" in response.text or "bypasses" in response.text.lower()

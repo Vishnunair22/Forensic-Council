@@ -13,7 +13,7 @@ import pytest
 class TestFullForensicPipeline:
     """Tests for complete forensic pipeline flow."""
 
-    async def test_investigate_returns_200_with_session_id(self, client, auth_headers, jpeg_file):
+    async def test_investigate_returns_200_with_session_id(self, client, auth_headers, jpeg_file, tmp_path):
         """Test that POST /investigate returns 200 with valid session_id."""
         from core.auth import User, UserRole, get_current_user
 
@@ -42,10 +42,8 @@ class TestFullForensicPipeline:
                 patch("magic.from_buffer", return_value="image/jpeg"),
                 patch(
                     "api.routes.investigation.settings",
-                    MagicMock(evidence_storage_path="/tmp", use_redis_worker=False),
+                    MagicMock(evidence_storage_path=str(tmp_path), use_redis_worker=False),
                 ),
-                patch("api.routes.investigation.Path.mkdir", MagicMock()),
-                patch("api.routes.investigation.open", MagicMock()),
             ):
                 response = client.post(
                     "/api/v1/investigate",
@@ -108,7 +106,7 @@ class TestFullForensicPipeline:
                 "api.routes.sessions.get_active_pipeline_metadata", return_value=mock_session_data
             ),
             patch("api.routes.sessions.get_active_pipeline", return_value=None),
-            patch("api.routes.sessions.set_active_pipeline_metadata", new_callable=AsyncMock),
+            patch("api.routes._session_state.update_active_pipeline_metadata", new_callable=AsyncMock),
             patch("api.routes.sessions.get_redis_client", new_callable=AsyncMock),
         ):
             response = client.post(

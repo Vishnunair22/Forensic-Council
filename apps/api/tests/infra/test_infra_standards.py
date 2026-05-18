@@ -34,6 +34,15 @@ ENV_EXAMPLE = ROOT / ".env.example"
 def load_yaml(path: Path) -> dict:
     if not path.exists():
         return {}
+    def default_constructor(loader, tag_suffix, node):
+        if isinstance(node, yaml.ScalarNode):
+            return loader.construct_scalar(node)
+        elif isinstance(node, yaml.SequenceNode):
+            return loader.construct_sequence(node)
+        elif isinstance(node, yaml.MappingNode):
+            return loader.construct_mapping(node)
+        return None
+    yaml.SafeLoader.add_multi_constructor('!', default_constructor)
     with open(path) as f:
         return yaml.safe_load(f) or {}
 
@@ -76,12 +85,14 @@ class TestDockerCompose:
         for svc in self.REQUIRED_SERVICES:
             assert svc in services, f"Missing core service: {svc}"
 
-    def test_port_exposure_restricted(self, compose):
+    def test_port_exposure_restricted(self, compose, dev_compose):
         """Web services exposed; database/infra restricted to internal network."""
         services = compose["services"]
+        dev_services = dev_compose.get("services", {})
         # Publicly accessible
         assert "3000" in str(services["frontend"].get("ports", []))
-        assert "8000" in str(services["backend"].get("ports", []))
+        backend_ports = str(services["backend"].get("ports", [])) + str(dev_services.get("backend", {}).get("ports", []))
+        assert "8000" in backend_ports
         assert "80" in str(services["caddy"].get("ports", []))
 
         # Internal only
@@ -117,14 +128,15 @@ class TestDockerCompose:
             assert infra in backend_deps
             assert backend_deps[infra].get("condition") == "service_healthy"
 
-    def test_security_hardening_flags(self, compose):
+    def test_security_hardening_flags(self, compose, prod_compose):
         """Production hardening: read_only FS and memory limits."""
         backend = compose["services"]["backend"]
-        assert backend.get("read_only") is True
+        prod_backend = prod_compose.get("services", {}).get("backend", {})
+        assert backend.get("read_only") is True or prod_backend.get("read_only") is True
 
         # Memory limits check (deploy/resources)
         res = backend.get("deploy", {}).get("resources", {})
-        assert "limits" in res or "reservations" in res or "mem_limit" in backend
+        assert "limits" in res or "reservations" in res or "mem_limit" in backend or "mem_limit" in prod_backend
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

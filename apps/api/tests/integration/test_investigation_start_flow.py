@@ -129,7 +129,6 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
         "orchestration.session_finalization.broadcast_update", AsyncMock()
     )
 
-    monkeypatch.setattr(investigation_runner, "get_session_websockets", lambda _sid: [])
     monkeypatch.setattr(Path, "unlink", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(investigation_runner, "remove_active_pipeline", lambda _sid: None)
     monkeypatch.setattr(investigation_runner, "clear_session_websockets", lambda _sid: None)

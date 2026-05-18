@@ -158,7 +158,9 @@ def check_scripts_exist() -> list[str]:
 
 def check_shell_scripts_syntax() -> list[str]:
     errors = []
-    import os, shutil, subprocess
+    import os
+    import shutil
+    import subprocess
     if not shutil.which("bash"):
         return []
     old_cwd = os.getcwd()

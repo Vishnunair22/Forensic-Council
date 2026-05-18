@@ -81,7 +81,7 @@ def main() -> None:
     with open(TARGET, "w", encoding="utf-8") as f:
         f.write(content)
 
-    print(f"Updated PROJECT_HANDOFF.md")
+    print("Updated PROJECT_HANDOFF.md")
     print(f"  Branch: {branch}")
     print(f"  Commit: {commit}")
     print(f"  Date:   {NOW}")
