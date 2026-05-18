@@ -34,7 +34,11 @@ export function EvidenceUploadClient() {
 
   useEffect(() => {
     document.body.style.overflow = "";
-    if (!__pendingFileStore.file && !storage.getItem("forensic_session_id")) {
+    if (
+      !__pendingFileStore.file &&
+      !sessionOnlyStorage.getItem("fc_pending_file_meta") &&
+      !storage.getItem("forensic_session_id")
+    ) {
       sessionOnlyStorage.removeItem("forensic_auto_start");
     }
     // On bfcache restore with no session, navigate home rather than reloading
@@ -102,7 +106,7 @@ export function EvidenceUploadClient() {
           />
         )}
 
-        {showAgentProgress ? (
+        {showAgentProgress || investigation.handoffRecovering ? (
           <>
             <AgentProgressDisplay
               agentUpdates={investigation.agentUpdates}

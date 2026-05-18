@@ -1,4 +1,45 @@
 import { test, expect } from "@playwright/test";
+import { deflateSync } from "node:zlib";
+
+function crc32(buffer: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i++) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typeBuffer = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0);
+  return Buffer.concat([length, typeBuffer, data, crc]);
+}
+
+function makeValidPng(): Buffer {
+  const width = 2;
+  const height = 2;
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const rows = Buffer.from([
+    0, 40, 80, 120, 255, 160, 80, 120, 255,
+    0, 40, 180, 120, 255, 40, 80, 220, 255,
+  ]);
+  return Buffer.concat([
+    Buffer.from("89504e470d0a1a0a", "hex"),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(rows)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 test("landing CTA routes selected file into evidence analysis overlay", async ({ page }) => {
   const pageErrors: string[] = [];
@@ -11,15 +52,10 @@ test("landing CTA routes selected file into evidence analysis overlay", async ({
 
   await expect(page.getByRole("dialog", { name: /upload evidence/i })).toBeVisible();
 
-  const png1x1 = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-    "base64",
-  );
-
   await page.getByLabel(/upload evidence file/i).setInputFiles({
     name: "route-flow-evidence.png",
     mimeType: "image/png",
-    buffer: png1x1,
+    buffer: makeValidPng(),
   });
 
   await expect(page.getByRole("heading", { name: /evidence ready/i })).toBeVisible();

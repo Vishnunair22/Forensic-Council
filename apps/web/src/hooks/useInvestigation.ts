@@ -29,6 +29,7 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import { validateEvidenceFile } from "@/lib/fileValidation";
+import { clearPendingEvidenceFile, loadPendingEvidenceFile } from "@/lib/pendingFilePersistence";
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -401,6 +402,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           setShowLoadingOverlay(false);
           sessionOnlyStorage.removeItem("fc_show_loading");
           resetSimulation();
+          setWsConnectionError(errorMsg);
           playSound("error");
           toast.destructive({ title: "Investigation Failed", description: errorMsg });
           investigationInFlightRef.current = false;
@@ -472,6 +474,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           .finally(() => {
             investigationInFlightRef.current = false;
             __pendingFileStore.file = null;
+            clearPendingEvidenceFile().catch(() => {});
             sessionOnlyStorage.removeItem("fc_pending_file_meta");
             sessionExistsRef.current = true;
           });
@@ -499,6 +502,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .finally(() => {
           investigationInFlightRef.current = false;
           __pendingFileStore.file = null;
+          clearPendingEvidenceFile().catch(() => {});
           sessionOnlyStorage.removeItem("fc_pending_file_meta");
           sessionExistsRef.current = true; // Update ref snapshot
         });
@@ -510,9 +514,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   // Effect A — Auto-start from pending file (set by HeroAuthActions before navigating here)
   useEffect(() => {
     if (autoStartFiredRef.current) return;
-    const pending = __pendingFileStore.file;
+    let cancelled = false;
+
+    const startPendingAnalysis = async () => {
+    let pending = __pendingFileStore.file;
+    if (!pending && (autoStartBlocking || sessionOnlyStorage.getItem("forensic_auto_start") === "true")) {
+      pending = await loadPendingEvidenceFile().catch(() => null);
+      if (pending) __pendingFileStore.file = pending;
+    }
+    if (cancelled) return;
     if (!pending) {
-      if (sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
+      if (autoStartBlocking || sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
         clearInvestigationPersistence();
         sessionOnlyStorage.removeItem("forensic_auto_start");
         sessionOnlyStorage.removeItem("fc_show_loading");
@@ -547,7 +559,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }), true);
     setShowLoadingOverlay(true);
     triggerAnalysis(pending);
-  }, [router, triggerAnalysis]);
+    };
+
+    startPendingAnalysis();
+    return () => { cancelled = true; };
+  }, [autoStartBlocking, router, triggerAnalysis]);
 
   // Effect B — Reconnect existing session
   useEffect(() => {
@@ -838,7 +854,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   }, [awaitingDecision, phase, allAgentsDone, playSound]);
 
-  const hasStartedAnalysis = status !== "idle" || isUploading || validCompletedAgents.length > 0 || autoStartBlocking;
+  const hasStartedAnalysis =
+    status !== "idle" ||
+    isUploading ||
+    validCompletedAgents.length > 0 ||
+    autoStartBlocking ||
+    !!wsConnectionError;
 
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.

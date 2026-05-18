@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { arbiterControl } from "@/lib/arbiterControl";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
+import { clearPendingEvidenceFile } from "@/lib/pendingFilePersistence";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 
 function expireCookie(name: string) {
@@ -50,6 +51,7 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   __pendingFileStore.file = null;
   __pendingFileStore.authPromise = null;
   __pendingFileStore.authError = null;
+  clearPendingEvidenceFile().catch(() => {});
 
   sessionOnlyStorage.removeItem("forensic_auto_start");
   sessionOnlyStorage.removeItem("fc_show_loading");

@@ -25,7 +25,7 @@ export type SoundType =
 
 let globalCtx: AudioContext | null = null;
 // Chrome's autoplay policy: AudioContext must be created/resumed after a user gesture.
-let _masterVolume = 0.3;
+let _masterVolume = 0.55;
 let _isMuted = false;
 
 export function setMasterVolume(v: number) { _masterVolume = Math.max(0, Math.min(1, v)); }
@@ -45,6 +45,15 @@ function _tryUnlock() {
     if (AC && !globalCtx) globalCtx = new AC();
     if (globalCtx && globalCtx.state === "suspended") {
       globalCtx.resume().catch(() => {});
+    }
+    if (globalCtx && globalCtx.state === "running") {
+      const silent = globalCtx.createBufferSource();
+      const gain = globalCtx.createGain();
+      gain.gain.value = 0;
+      silent.connect(gain);
+      gain.connect(globalCtx.destination);
+      silent.start();
+      silent.stop(globalCtx.currentTime + 0.01);
     }
   } catch {
     /* non-critical */
@@ -95,7 +104,6 @@ export function useSound() {
     try {
       if (typeof window === "undefined") return;
       if (_isMuted) return;
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
       // Ensure globalCtx is created and resumed on demand
       if (!globalCtx) {

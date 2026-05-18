@@ -10,6 +10,7 @@ import { useSound } from "@/hooks/useSound";
 import { sessionOnlyStorage } from "@/lib/storage";
 import { autoLoginAsInvestigator } from "@/lib/api";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
+import { savePendingEvidenceFile } from "@/lib/pendingFilePersistence";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
@@ -116,6 +117,9 @@ export function HeroAuthActions() {
 
     clearInvestigationPersistence();
     __pendingFileStore.file = selectedFile;
+    await savePendingEvidenceFile(selectedFile).catch((error) => {
+      console.warn("[HeroAuthActions] could not persist pending file:", error);
+    });
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem("fc_show_loading", "true");
     sessionOnlyStorage.setItem(
