@@ -60,6 +60,10 @@ function _tryUnlock() {
   }
 }
 
+export function unlockAudio() {
+  _tryUnlock();
+}
+
 // F-L-2: defer listener registration until first `useSound()` invocation so
 // importing this module has no top-level side effects (cleaner for tree-shaking
 // and SSR safety).
@@ -106,22 +110,18 @@ export function useSound() {
       if (_isMuted) return;
 
       // Ensure globalCtx is created and resumed on demand
-      if (!globalCtx) {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: AudioContextConstructor })
-            .webkitAudioContext;
-        if (AC) globalCtx = new AC();
-      }
+      _tryUnlock();
 
       if (!globalCtx) return;
 
       const ctx = globalCtx;
+      let delay = 0;
       if (ctx.state === "suspended") {
         ctx.resume().catch(() => {});
+        delay = 0.18;
       }
 
-      const t = ctx.currentTime;
+      const t = ctx.currentTime + delay;
 
       // ── Master limiter ────────────────────────────────────────────────────
       const limiter = ctx.createDynamicsCompressor();

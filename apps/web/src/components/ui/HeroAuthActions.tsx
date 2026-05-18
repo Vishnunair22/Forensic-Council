@@ -155,7 +155,7 @@ export function HeroAuthActions() {
         console.warn("[HeroAuthActions] pre-auth failed; evidence page will retry:", error);
         __pendingFileStore.authError = error;
         __pendingFileStore.authPromise = null;
-        return Promise.resolve(null as never);
+        return Promise.reject(error);
       });
   }, [playSound]);
 

@@ -260,6 +260,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
               title: "Authentication Error",
               description: `Could not establish session: ${msg}. Please refresh the page.`,
             });
+            throw err;
           });
       } else if (__pendingFileStore.file || sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
         __pendingFileStore.authPromise = autoLoginAsInvestigator();
@@ -347,6 +348,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       try {
         await authReadyRef.current;
+        if (getAuthToken() === null) {
+          await autoLoginAsInvestigator().then(() => {
+            storage.setItem("forensic_auth_ok", "1");
+          });
+        }
+        if (getAuthToken() === null) {
+          throw new Error("No active credentials established");
+        }
       } catch (authErr) {
         setIsUploading(false);
         setShowLoadingOverlay(false);
