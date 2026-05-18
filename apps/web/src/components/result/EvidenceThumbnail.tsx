@@ -48,7 +48,7 @@ export function EvidenceThumbnail({
 
  return (
   <div
-   className={`relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] flex items-center justify-center ${className}`}
+   className={`relative overflow-hidden rounded-2xl border border-white/[0.06] bg-transparent flex items-center justify-center ${className}`}
    style={{ aspectRatio: "16/9" }}
    role="img"
    aria-label={label}

@@ -83,7 +83,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-xl"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/95"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
     >
       <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
@@ -92,7 +92,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden fc-surface-overlay"
+          className="relative overflow-hidden bg-transparent"
         >
           <div className="p-8 sm:p-10 flex flex-col text-left">
             <button
@@ -129,8 +129,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               }}
               className={`w-full py-16 px-8 cursor-pointer group flex flex-col items-center justify-center gap-4 relative transition-all duration-300 border-2 border-dashed rounded-2xl ${
                 isDragging 
-                  ? "bg-primary/10 border-primary shadow-[0_0_25px_rgba(79,142,247,0.15)]" 
-                  : "border-white/10 bg-white/[0.01] hover:bg-white/[0.02] hover:border-white/20"
+                  ? "bg-transparent border-primary shadow-[0_0_25px_rgba(79,142,247,0.15)]" 
+                  : "border-white/10 bg-transparent hover:border-white/20"
               }`}
             >
               <Plus 
@@ -157,7 +157,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               <input
                 type="file"
                 id="evidence-file-input"
-                aria-label="Choose evidence file"
+                aria-label="Upload evidence file"
                 aria-describedby={error ? "upload-file-help upload-error" : "upload-file-help"}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 accept={Array.from(ALLOWED_MIME_TYPES).join(",")}

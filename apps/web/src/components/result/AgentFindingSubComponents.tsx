@@ -307,7 +307,7 @@ export function ConfidenceBar({ value }: { value: number }) {
       className={clsx(
        "h-2 rounded-full transition-all duration-700",
        i < filled ? color : "bg-white/8",
-       i < filled ? "w-8 shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.45)]" : "w-2.5"
+       i < filled ? "w-8" : "w-2.5"
       )}
      />
     ))}

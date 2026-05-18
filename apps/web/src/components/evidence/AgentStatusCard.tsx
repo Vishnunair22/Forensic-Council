@@ -505,7 +505,7 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-[#02040A] border border-white/5 rounded-2xl shadow-xl",
+        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-transparent border border-white/5 rounded-2xl",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}

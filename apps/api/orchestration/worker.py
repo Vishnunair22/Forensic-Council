@@ -25,6 +25,7 @@ from api.routes._session_state import (  # noqa: E402
 )
 from api.schemas import BriefUpdate  # noqa: E402
 from core.config import get_settings  # noqa: E402
+from core.signing import get_keystore  # noqa: E402
 from core.structured_logging import get_logger  # noqa: E402
 from orchestration.investigation_queue import (  # noqa: E402
     InvestigationWorker,
@@ -45,6 +46,10 @@ settings = get_settings()
 async def main() -> None:
     """Main worker entry point."""
     logger.info("Starting Forensic Council Worker", pid=os.getpid())
+
+    keystore = get_keystore()
+    await keystore.initialize()
+    logger.info("Signing key store initialized in worker")
 
     async def _warmup_background() -> None:
         try:

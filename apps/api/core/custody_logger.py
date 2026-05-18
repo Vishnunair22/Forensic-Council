@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 
 from core.persistence.postgres_client import PostgresClient, get_postgres_client
 from core.persistence.redis_client import get_redis_client
-from core.signing import SignedEntry, sign_content, verify_entry
+from core.signing import SignedEntry, get_keystore, sign_content, verify_entry
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -281,8 +281,11 @@ class CustodyLogger:
         entry_id = uuid4()
         content = _json_safe(content)
 
-        # Sign the content
-        signed = sign_content(agent_id, content)
+        # Sign the content. Dynamic production signers, such as investigator
+        # IDs, need a persisted DB-backed key before the sync signing helper.
+        keystore = get_keystore()
+        await keystore.get_or_create_persistent(agent_id)
+        signed = sign_content(agent_id, content, keystore=keystore)
 
         # Get prior entry hash for chain linking
         # Chain is per-agent to allow concurrent logging without global locks.

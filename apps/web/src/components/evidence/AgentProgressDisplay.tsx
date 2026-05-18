@@ -237,7 +237,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
           </motion.h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse shadow-[0_0_15px_rgba(var(--color-primary-rgb),0.5)]" />
+              <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
               <p className="text-[10px] font-mono font-bold text-[var(--color-primary)] tracking-[0.3em]">
                 {phase === "initial" ? "Initial Verification" : "Deep Analysis"}
               </p>
@@ -351,7 +351,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
                 >
                   <span className="flex items-center gap-2 text-background">
                     {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                    <span className="font-bold">DEEP ANALYSIS</span>
+                    <span className="font-bold">Deep Analysis</span>
                     <ArrowRight className="w-4 h-4" />
                   </span>
                 </button>
@@ -389,7 +389,7 @@ if (phase === "deep") return initialAgentIds.includes(a.id);
                 >
                   <span className="flex items-center gap-2 text-background">
                     {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                    <span className="font-bold">VIEW REPORT</span>
+                    <span className="font-bold">View Report</span>
                     <ArrowRight className="w-4 h-4" />
                   </span>
                 </button>

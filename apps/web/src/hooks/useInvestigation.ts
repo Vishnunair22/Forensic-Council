@@ -691,9 +691,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       );
       storage.setItem(`forensic_initial_agents:${sid}`, nonSkipped, true);
       sessionOnlyStorage.setItem(`fc_resume_requested:${sid}`, "deep");
+      // Remove any stale deep agents so the result page doesn't show initial findings
+      storage.removeItem(`forensic_deep_agents:${sid}`);
     }
     analysisCompleteSoundedRef.current = false;
     clearCompletedAgents();
+    // Also wipe the ref so the storage effect doesn't re-save the cleared array under the wrong key
+    completedAgentsRef.current = [];
     setPhase("deep");
     try {
       setSimulationPhase("deep");

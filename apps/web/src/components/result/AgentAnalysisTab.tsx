@@ -18,7 +18,7 @@ export function AgentAnalysisTab({
 }: AgentAnalysisTabProps) {
   if (activeAgentIds.length === 0) {
     return (
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
+      <div className="rounded-2xl border border-white/[0.06] bg-transparent p-8 text-center">
         <Cpu className="w-8 h-8 text-white/15 mx-auto mb-3" aria-hidden="true" />
         <p className="text-sm text-white/35 font-medium">No agent findings available.</p>
       </div>
@@ -29,7 +29,7 @@ export function AgentAnalysisTab({
     <section aria-label="Agent analysis findings">
       <div className="flex items-center gap-3 mb-4 px-1">
         <Cpu className="w-3.5 h-3.5 text-white/15" aria-hidden="true" />
-        <h2 className="text-[10px] font-bold tracking-widest text-white/40">
+        <h2 className="fc-eyebrow fc-text-faint">
           Agent Forensic Findings
           <span className="ml-2 text-white/15">— {activeAgentIds.length} Nodes</span>
         </h2>

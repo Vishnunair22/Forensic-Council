@@ -49,7 +49,8 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN test -z "${NEXT_PUBLIC_API_URL}" || \
     echo "ℹ Baked NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} into bundle. To change, rebuild."
-RUN printf '%s' "${NEXT_PUBLIC_API_URL}" > /app/apps/web/.next/NEXT_PUBLIC_API_URL.bake
+RUN mkdir -p /app/apps/web/.next \
+ && printf '%s' "${NEXT_PUBLIC_API_URL}" > /app/apps/web/.next/NEXT_PUBLIC_API_URL.bake
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # BuildKit cache mount preserves Next.js compiler cache between rebuilds
@@ -78,9 +79,9 @@ RUN addgroup --system --gid 1001 nodejs \
 # Copy standalone output (Next.js built-in server). In this monorepo build the
 # generated server lands at /app/server.js inside the standalone tree.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/server ./.next/server
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/server ./apps/web/.next/server
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 RUN echo '# Bake check: if NEXT_PUBLIC_API_URL changes you MUST rebuild this image' >> /app/.bake_notice
 
@@ -94,4 +95,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

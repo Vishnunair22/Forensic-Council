@@ -88,9 +88,7 @@ export function ResultHeader({
     <section
       className="overflow-hidden rounded-2xl"
       style={{
-        background: "rgba(6,10,20,0.92)",
         border: "1px solid rgba(165,200,255,0.08)",
-        boxShadow: "0 16px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
     >
       <div className="p-6 md:p-8 space-y-7">
@@ -126,7 +124,7 @@ export function ResultHeader({
               className="w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0"
               style={{
                 borderColor: `rgba(${theme.colorRgb}, 0.19)`,
-                backgroundColor: `rgba(${theme.colorRgb}, 0.05)`,
+                backgroundColor: `transparent`,
               }}
             >
               <VerdictIcon className="w-7 h-7" style={{ color: theme.color }} />
@@ -162,7 +160,7 @@ export function ResultHeader({
             </div>
           </div>
 
-          <div className="flex items-center justify-between lg:justify-end gap-5 border border-white/8 rounded-2xl bg-white/[0.025] px-5 py-4">
+          <div className="flex items-center justify-between lg:justify-end gap-5 border border-white/8 rounded-2xl bg-transparent px-5 py-4">
             <div>
               <div className="fc-eyebrow fc-text-muted">Confidence</div>
               <div className="mt-1 text-4xl font-mono font-bold tracking-tight" style={{ color: theme.color }}>
@@ -182,7 +180,7 @@ export function ResultHeader({
         </div>
 
         {signature && (
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-white/8 bg-transparent px-4 py-3">
             <div className="min-w-0">
               <div className="fc-eyebrow fc-text-faint">
                 Report Integrity
@@ -216,7 +214,7 @@ export function ResultHeader({
 
 function Pill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-md border border-white/8 bg-white/[0.025] px-2.5 py-1.5 fc-eyebrow fc-text-faint">
+    <span className="inline-flex items-center gap-2 rounded-md border border-white/8 bg-transparent px-2.5 py-1.5 fc-eyebrow fc-text-faint">
       <Icon className="w-3 h-3 text-white/25" />
       {label}
     </span>
@@ -225,7 +223,7 @@ function Pill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
 
 function Metric({ label, value, color, icon: Icon }: { label: string; value: number; color: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-white/8 bg-transparent p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Icon className="w-3.5 h-3.5 shrink-0 text-white/25" />

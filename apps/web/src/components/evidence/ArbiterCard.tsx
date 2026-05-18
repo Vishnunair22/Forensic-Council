@@ -88,7 +88,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      className="relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-[#02040A] border border-white/5 rounded-2xl h-full shadow-xl"
+      className="relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-transparent border border-white/5 rounded-2xl h-full"
       data-testid="agent-card-arbiter"
     >
       {/* --- Card Header --- */}

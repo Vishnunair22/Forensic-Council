@@ -104,7 +104,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       </AnimatePresence>
 
       <nav className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-4 sm:px-6">
-        <div className="flex items-center justify-between gap-2 p-2 bg-[#02040A] border border-white/5">
+        <div className="flex items-center justify-between gap-2 p-2 bg-black/60 backdrop-blur-md border border-white/5">
 
           <button
             type="button"
@@ -311,7 +311,7 @@ function ResultLoadingView({
 function ResultInlineStatus({ message }: { message: string }) {
   return (
     <div className="min-h-[54vh] flex items-center justify-center">
-      <div className="w-full max-w-md border border-white/5 bg-[#02040A] px-8 py-10 text-center">
+      <div className="w-full max-w-md border border-white/5 bg-transparent px-8 py-10 text-center">
         <ShieldAlert className="w-12 h-12 text-white/20 mx-auto mb-6" />
         <div className="mt-6 text-[10px] font-mono font-bold tracking-[0.24em] text-primary/60 uppercase">
           Consensus Synthesis
@@ -329,7 +329,7 @@ function ResultSkeletonView() {
     <div className="min-h-screen opacity-35" aria-hidden="true">
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[40] w-full max-w-3xl px-6">
         {/* 2. Verdict Gauge Placeholder */}
-        <div className="flex items-center justify-between gap-4 p-4 bg-[#02040A] border border-white/5">
+        <div className="flex items-center justify-between gap-4 p-4 bg-transparent border border-white/5">
           <div className="skeleton h-12 w-32" />
           <div className="skeleton h-12 w-32" />
           <div className="skeleton h-12 w-32" />
@@ -337,7 +337,7 @@ function ResultSkeletonView() {
       </div>
       <div className="max-w-7xl mx-auto px-6 pt-16 space-y-6">
         {/* 3. Findings Placeholder */}
-        <div className="p-8 space-y-8 bg-[#02040A] border border-white/5">
+        <div className="p-8 space-y-8 bg-transparent border border-white/5">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="skeleton w-32 h-32 rounded-2xl" />
             <div className="flex-1 space-y-4 w-full">
@@ -348,8 +348,8 @@ function ResultSkeletonView() {
             <div className="skeleton w-28 h-28 rounded-2xl" />
           </div>
         </div>
-        <div className="skeleton h-52 bg-[#02040A] border border-white/5" />
-        <div className="skeleton h-72 bg-[#02040A] border border-white/5" />
+        <div className="skeleton h-52 bg-transparent border border-white/5" />
+        <div className="skeleton h-72 bg-transparent border border-white/5" />
       </div>
     </div>
   );

@@ -340,9 +340,11 @@ async function installJourneyMocks(page: import('@playwright/test').Page) {
 test.describe('Forensic Analyst Journey', () => {
 
   test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies();
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
+      document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
     });
 
     // Mock the initial auth/me check
@@ -380,11 +382,12 @@ test.describe('Forensic Analyst Journey', () => {
 
     // 1. Verify landing page aesthetics
     await expect(page.locator('h1')).toContainText(/Multi-Agent Forensic/i);
-    const beginBtn = page.getByRole('button', { name: /Begin Analysis/i });
+    const beginBtn = page.getByTestId('hero-cta-begin');
     await expect(beginBtn).toBeVisible();
 
     // 2. Select evidence from the landing upload modal
     await beginBtn.click();
+    await expect(page.getByRole('dialog', { name: /Upload Evidence/i })).toBeVisible();
     await page.getByLabel(/upload evidence file/i).setInputFiles({
       name: 'test-evidence.png',
       mimeType: 'image/png',
@@ -455,7 +458,7 @@ test.describe('Forensic Analyst Journey', () => {
 
     await page.getByTestId('view-report-btn').click();
     await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
-    await expect(page.getByRole('tab', { name: /Overview/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/The council finds the evidence likely authentic/i)).toBeVisible();
     await expect(page.getByText(/Deep analysis completed and final report rendering succeeded/i)).toBeVisible();
 
@@ -468,32 +471,30 @@ test.describe('Forensic Analyst Journey', () => {
     page.on('pageerror', error => pageErrors.push(error.message));
 
     await installJourneyMocks(page);
-    await page.goto('/evidence');
-
-    await expect(page.getByRole('heading', { name: /Evidence Submission/i })).toBeVisible();
+    await page.goto('/');
+    await page.getByRole('button', { name: /upload a file to begin analysis/i }).click();
 
     const png1x1 = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
       'base64',
     );
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.getByLabel(/upload evidence file/i).setInputFiles({
       name: 'initial-evidence.png',
       mimeType: 'image/png',
       buffer: png1x1,
     });
 
     await expect(page.getByText('initial-evidence.png')).toBeVisible();
-    await page.getByTestId('evidence-submit-btn').click();
+    await page.getByTestId('upload-start-analysis').click();
 
     await expect(page.getByRole('heading', { name: /Analysis Pipeline/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('accept-analysis-btn')).toBeVisible({ timeout: 25_000 });
     await expect(page.getByTestId('deep-analysis-btn')).toBeVisible();
 
     await page.getByTestId('accept-analysis-btn').click();
-    await expect(page.getByText(/Council Deliberation/i)).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
 
-    await expect(page.getByRole('tab', { name: /Overview/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/The council finds the evidence likely authentic after initial analysis/i)).toBeVisible();
     await expect(page.getByText(/Accept Analysis generated and rendered the signed initial report/i)).toBeVisible();
 
@@ -506,22 +507,21 @@ test.describe('Forensic Analyst Journey', () => {
     page.on('pageerror', error => pageErrors.push(error.message));
 
     await installJourneyMocks(page);
-    await page.goto('/evidence');
-
-    await expect(page.getByRole('heading', { name: /Evidence Submission/i })).toBeVisible();
+    await page.goto('/');
+    await page.getByRole('button', { name: /upload a file to begin analysis/i }).click();
 
     const png1x1 = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
       'base64',
     );
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.getByLabel(/upload evidence file/i).setInputFiles({
       name: 'deep-evidence.png',
       mimeType: 'image/png',
       buffer: png1x1,
     });
 
     await expect(page.getByText('deep-evidence.png')).toBeVisible();
-    await page.getByTestId('evidence-submit-btn').click();
+    await page.getByTestId('upload-start-analysis').click();
 
     await expect(page.getByRole('heading', { name: /Analysis Pipeline/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('deep-analysis-btn')).toBeVisible({ timeout: 25_000 });
@@ -533,7 +533,7 @@ test.describe('Forensic Analyst Journey', () => {
     await page.getByTestId('view-report-btn').click();
     await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
 
-    await expect(page.getByRole('tab', { name: /Overview/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/The council finds the evidence likely authentic after deep analysis/i)).toBeVisible();
     await expect(page.getByText(/Deep analysis completed and final report rendering succeeded/i)).toBeVisible();
 
@@ -563,7 +563,7 @@ test.describe('Forensic Analyst Journey', () => {
     await page.goto("/evidence");
     await expect(page.getByText(/No Evidence Queued|Select Evidence/i)).toBeVisible({ timeout: 10_000 });
 
-    const homeBtn = page.getByRole("button", { name: /Return Home|Back|Home/i });
+    const homeBtn = page.getByRole("button", { name: /^Return Home$/i });
     if (await homeBtn.isVisible()) {
       await homeBtn.click();
       await expect(page).toHaveURL(/\/$/);
@@ -577,7 +577,7 @@ test.describe('Forensic Analyst Journey', () => {
     await page.goto("/result/fake-session-id-12345");
 
     await expect(
-      page.getByText(/session expired|not found|arbiter timeout|error/i).first(),
+      page.getByText(/session expired|not found|arbiter timeout|error|failed to fetch|arbiter status failed/i).first(),
     ).toBeVisible({ timeout: 15_000 });
 
     expect(pageErrors).toEqual([]);

@@ -43,7 +43,11 @@ function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): Agent
   if (!sid) return [];
   const deep = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${sid}`, true);
   const initial = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
-  if (isDeep && Array.isArray(deep) && deep.length) return deep;
+  // When deep phase is active, ONLY return deep agents. Never fall back to initial agents
+  // because that would cause initial findings to show as "deep analysis" findings.
+  if (isDeep) {
+    return Array.isArray(deep) && deep.length ? deep : [];
+  }
   if (Array.isArray(initial) && initial.length) return initial;
   return [];
 }

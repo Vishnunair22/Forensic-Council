@@ -57,7 +57,7 @@ export function IntelligenceBrief({
         </div>
         <span className={clsx(
           "w-fit rounded-md border px-3 py-1.5 fc-eyebrow",
-          isDeepPhase ? "text-success/75 border-success/20 bg-success/5" : "fc-text-faint border-white/10 bg-white/[0.025]",
+          isDeepPhase ? "text-success/75 border-success/20 bg-success/5" : "fc-text-faint border-white/10 bg-transparent",
         )}>
           {isDeepPhase ? "Deep Analysis" : "Initial Analysis"}
         </span>
@@ -73,7 +73,7 @@ export function IntelligenceBrief({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.035 }}
-                className="p-5 border border-white/5 bg-[#02040A] rounded-2xl shadow-xl"
+                className="p-5 border border-white/5 bg-transparent rounded-2xl"
               >
                 <div className="flex items-start gap-4">
                   <FindingIcon severity={severity} />
@@ -92,7 +92,7 @@ export function IntelligenceBrief({
         </div>
       )}
 
-      <div className="border border-white/5 bg-[#02040A] rounded-2xl shadow-xl p-5 md:p-6">
+      <div className="border border-white/5 bg-transparent rounded-2xl p-5 md:p-6">
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 border border-white/5 bg-transparent flex items-center justify-center shrink-0 rounded-xl">
             <Info className="w-4 h-4 text-primary/70" />

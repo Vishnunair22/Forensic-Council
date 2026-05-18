@@ -33,7 +33,7 @@ from core.config import Settings, get_settings
 from core.cross_modal_fusion import fuse as cross_modal_fuse
 from core.forensic_policy import ForensicPolicy
 from core.severity import assign_severity_tier
-from core.signing import KeyStore
+from core.signing import get_keystore
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,7 +74,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self.calibration_layer = calibration_layer
         self.agent_factory = agent_factory
         self.config = config or get_settings()
-        self._key_store = KeyStore()
+        self._key_store = get_keystore()
         self._key_store.get_or_create(AgentID.ARBITER)
         self._synthesis_client: Any = None
         self._step_hook: Any = None

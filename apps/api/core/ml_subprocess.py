@@ -178,9 +178,12 @@ class _MLWorker:
 # Global worker pool — one worker per script
 _worker_pool: dict[str, _MLWorker] = {}
 _pool_lock = asyncio.Lock()
+_NO_WORKER_SCRIPTS = {"synthid_watermark_detector.py"}
 
 
 async def _get_or_create_worker(script_name: str, script_path: Path) -> _MLWorker:
+    if script_name in _NO_WORKER_SCRIPTS:
+        raise RuntimeError(f"{script_name} does not support worker mode")
     async with _pool_lock:
         if script_name not in _worker_pool or _worker_pool[script_name]._proc is None:
             _worker_pool[script_name] = _MLWorker(script_name, script_path)
@@ -508,3 +511,21 @@ async def run_ml_tool(
                 "elapsed_s": round(elapsed, 2),
             }
         )
+
+
+async def run_ml_script_subprocess(
+    script_name: str,
+    input_path: str,
+    extra_args: list[str] | None = None,
+    timeout: float = 30.0,
+    timeout_budget: float | None = None,
+) -> dict:
+    """Backward-compatible alias for older agent tool handlers."""
+    normalized_script = script_name if script_name.endswith(".py") else f"{script_name}.py"
+    return await run_ml_tool(
+        script_name=normalized_script,
+        input_path=input_path,
+        extra_args=extra_args,
+        timeout=timeout,
+        timeout_budget=timeout_budget,
+    )

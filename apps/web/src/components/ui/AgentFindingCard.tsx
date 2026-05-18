@@ -227,7 +227,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
     <div className={clsx(
       "rounded-2xl border-2 overflow-hidden transition-colors duration-300",
       open
-        ? clsx("bg-white/5", flagCfg.border)
+        ? clsx("bg-transparent", flagCfg.border)
         : clsx(flagCfg.bg, flagCfg.border),
     )}>
       {/* Section header */}
@@ -396,12 +396,11 @@ export function AgentFindingCard({
       className={clsx(
         "rounded-2xl overflow-hidden transition-all duration-300 border-2",
         open
-          ? clsx(theme.border, "shadow-[0_12px_40px_rgba(0,0,0,0.55)] ring-1", theme.ring)
-          : "border-white/[0.10] shadow-[0_4px_18px_rgba(0,0,0,0.4)] hover:border-white/[0.16]"
+          ? clsx(theme.border, "ring-1", theme.ring)
+          : "border-white/[0.10] hover:border-white/[0.16]"
       )}
       style={{
-        background:
-          "linear-gradient(180deg, rgba(15,23,45,0.92) 0%, rgba(6,10,20,0.96) 100%)",
+        background: "transparent",
       }}
     >
       {/* Header Button */}
@@ -522,7 +521,7 @@ export function AgentFindingCard({
               <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
                 <div className="flex items-center gap-2 mb-2.5">
                   <Info className="w-4 h-4 text-white/45" />
-                  <span className="text-[12px] font-black tracking-wide text-white/55 uppercase">
+                  <span className="text-[12px] font-black tracking-wide text-white/55">
                     Bypassed Tools ({bypassedFindings.length})
                   </span>
                 </div>

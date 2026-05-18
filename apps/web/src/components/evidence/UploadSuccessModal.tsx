@@ -61,7 +61,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-xl"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/95"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onDismiss(); } }}
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
@@ -70,7 +70,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden fc-surface-overlay"
+          className="relative overflow-hidden bg-transparent"
         >
           <div className="p-8 sm:p-10 flex flex-col text-left">
             <button

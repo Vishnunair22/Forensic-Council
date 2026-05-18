@@ -293,7 +293,9 @@ class KeyStore:
                     "SELECT agent_id, encrypted_private_key_pem, is_active "
                     "FROM agent_signing_keys WHERE is_active = true"
                 )
+                self._db_available = True
                 if not rows:
+                    logger.info("No active agent keys found in PostgreSQL; new keys will be generated")
                     return
 
                 for row in rows:
@@ -317,7 +319,6 @@ class KeyStore:
                             error=str(e),
                         )
 
-                self._db_available = True
                 logger.info("Loaded agent keys from PostgreSQL", loaded=len(self._keys))
                 return  # success — exit retry loop
 
@@ -466,6 +467,25 @@ class KeyStore:
                 agent_id=agent_id,
             )
         return self._keys[agent_id]
+
+    async def get_or_create_persistent(self, agent_id: str) -> AgentKeyPair:
+        """
+        Get a key pair for an agent, creating and persisting one when needed.
+
+        This async path is used by production code that can encounter dynamic
+        signer IDs, such as investigator IDs in custody entries.
+        """
+        if agent_id in self._keys:
+            return self._keys[agent_id]
+
+        if self._db_available:
+            key_pair = AgentKeyPair.generate(agent_id)
+            self._keys[agent_id] = key_pair
+            await self._save_key_to_db(agent_id, key_pair)
+            logger.info("Generated independent key pair for signer", agent_id=agent_id)
+            return key_pair
+
+        return self.get_or_create(agent_id)
 
     def get(self, agent_id: str) -> AgentKeyPair | None:
         """
