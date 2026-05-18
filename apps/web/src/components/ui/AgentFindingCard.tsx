@@ -225,10 +225,8 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
 
   return (
     <div className={clsx(
-      "rounded-2xl border-2 overflow-hidden transition-colors duration-300",
-      open
-        ? clsx("bg-transparent", flagCfg.border)
-        : clsx(flagCfg.bg, flagCfg.border),
+      "rounded-2xl border-2 overflow-hidden bg-transparent transition-colors duration-300",
+      flagCfg.border
     )}>
       {/* Section header */}
       <button
@@ -267,7 +265,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
 
       {/* Tools */}
       {open && (
-        <div className="border-t border-white/[0.06] bg-black/15">
+        <div className="border-t border-white/[0.06] bg-transparent">
           {visibleFindings.map((f, i) => (
             <ToolRow
               key={f.finding_id ?? `${f.finding_type}-${i}`}
