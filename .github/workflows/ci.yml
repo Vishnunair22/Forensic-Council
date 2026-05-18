@@ -99,6 +99,11 @@ jobs:
           key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
           restore-keys: uv-${{ runner.os }}-
 
+      - name: Install system dependencies (libmagic)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip uv
@@ -368,6 +373,11 @@ jobs:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('apps/api/uv.lock') }}
           restore-keys: uv-${{ runner.os }}-
+
+      - name: Install system dependencies (libmagic)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1
 
       - name: Install dependencies
         run: |

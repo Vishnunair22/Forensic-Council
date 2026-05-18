@@ -151,15 +151,23 @@ def client():
         patch("core.persistence.get_qdrant_client", new_callable=AsyncMock, return_value=qdrant_mock),
         patch("core.migrations.run_migrations", new_callable=AsyncMock),
         patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
+        patch("api.routes.investigation._detect_mime_from_head", new_callable=AsyncMock, return_value="image/jpeg"),
+        patch("api.routes.investigation.run_investigation_task", new_callable=AsyncMock),
+        patch("api.routes.investigation.ForensicCouncilPipeline", new_callable=MagicMock),
     ]
 
     [p.start() for p in patches]
+    from core.config import get_settings
+    settings = get_settings()
+    original_use_redis_worker = settings.use_redis_worker
+    settings.use_redis_worker = True
     try:
         from api.main import app
 
         with TestClient(app, raise_server_exceptions=False) as c:
             yield c
     finally:
+        settings.use_redis_worker = original_use_redis_worker
         for p in patches:
             p.stop()
 
@@ -830,7 +838,14 @@ class TestDuplicateInvestigation409:
             mock_queue_getter.return_value = mock_queue
 
             mock_redis = _make_redis_mock()
-            mock_redis.get = AsyncMock(return_value=session_id)
+            async def mock_redis_get(key):
+                if key.startswith("dedup:"):
+                    return session_id
+                if key.startswith("session_metadata:"):
+                    return '{"status": "running"}'
+                return None
+            mock_redis.get = AsyncMock(side_effect=mock_redis_get)
+            mock_redis.set = AsyncMock(return_value=False)
             mock_redis_getter.return_value = mock_redis
 
             resp2 = client.post(
