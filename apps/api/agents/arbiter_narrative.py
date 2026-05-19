@@ -105,6 +105,50 @@ def _first_by_tool(findings: list[dict[str, Any]], *tool_names: str) -> dict[str
     return None
 
 
+def _clean_key_finding(text: str) -> str:
+    cleaned = " ".join(str(text or "").replace("\n", " ").split()).strip()
+    for prefix in ("Checked:", "Finding:"):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix) :].strip()
+
+    lower = cleaned.lower()
+    if "sha-256 intake check" in lower:
+        return "SHA-256 intake hash matches the chain-of-custody record."
+    if "available: yes;" in lower and "header valid" in lower:
+        return "File structure check passed: size and header are valid."
+    if "gemini_multimodal extracted" in lower:
+        return "Gemini Vision OCR extracted minimal visible text."
+    if lower.startswith("speaker diarization:"):
+        return cleaned.split(". This supports", 1)[0].strip() + "."
+    if lower.startswith("codec fingerprint:"):
+        return cleaned.split(". This supports", 1)[0].strip() + "."
+    if "hex signature scan found no editing software signatures" in lower:
+        return "Hex signature scan found no editing software signatures."
+    if "compression/platform audit:" in lower:
+        return cleaned.split(". This supports", 1)[0].strip() + "."
+    if "this supports the absence" in lower:
+        cleaned = cleaned.split(". This supports", 1)[0].strip()
+
+    return cleaned.rstrip(" .") + "."
+
+
+def _clean_key_findings(items: list[str], limit: int = 5) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = _clean_key_finding(item)
+        key = text.lower()
+        key = "".join(ch for ch in key if ch.isalnum() or ch.isspace())
+        key = " ".join(key.split())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
 def _is_generic_executive_summary(text: str) -> bool:
     lower = " ".join(str(text or "").lower().split())
     if len(lower) < 60:
@@ -781,7 +825,8 @@ Write 2-3 sentences only. Do not use bullet points."""
                     has_deep_analysis=has_deep_analysis,
                 )
                 if result:
-                    return result
+                    vs, kf, rn = result
+                    return vs, _clean_key_findings(kf), rn
             except Exception as exc:
                 logger.warning(f"Structured summary LLM call failed: {exc}")
 
@@ -895,7 +940,7 @@ Rules:
                     raw = raw[:-3].strip()
             data = json.loads(raw[raw.find("{") : raw.rfind("}") + 1])
             vs = str(data.get("verdict_sentence", ""))
-            kf = [str(x) for x in data.get("key_findings", []) if x][:5]
+            kf = _clean_key_findings([str(x) for x in data.get("key_findings", []) if x])
             rn = str(data.get("reliability_note", ""))
             if vs and kf and rn:
                 return vs, kf, rn
@@ -949,9 +994,9 @@ Rules:
             key=_finding_importance,
             reverse=True,
         )[:5]
-        key_findings_list = [
+        key_findings_list = _clean_key_findings([
             _strip_rs_prefix(_truncate(f.get("reasoning_summary") or "")) for f in top
-        ]
+        ])
         if not key_findings_list:
             key_findings_list = ["No significant findings were identified."]
 

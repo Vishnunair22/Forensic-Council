@@ -171,7 +171,33 @@ async def run_anti_spoofing_detect(
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
             raise
-        raise ToolUnavailableError(f"Anti-spoofing detection failed: {str(e)}") from e
+        try:
+            import soundfile as sf
+
+            signal_np, sr = sf.read(audio_path, dtype="float32")
+            if getattr(signal_np, "ndim", 1) > 1:
+                signal_np = signal_np.mean(axis=1)
+            signal_np = np.asarray(signal_np, dtype=np.float32)
+            if signal_np.size == 0:
+                raise ValueError("empty audio stream")
+            energy = float(np.sqrt(np.mean(np.square(signal_np))))
+            zero_crossings = float(np.mean(np.abs(np.diff(np.signbit(signal_np)))))
+            spoof_probability = max(0.0, min(1.0, (zero_crossings * 2.0) + max(0.0, 0.02 - energy)))
+            return {
+                "spoof_detected": spoof_probability > 0.5,
+                "confidence": round(max(spoof_probability, 1.0 - spoof_probability), 3),
+                "spoof_probability": round(spoof_probability, 4),
+                "anomalies": ["heuristic spoofing risk"] if spoof_probability > 0.5 else [],
+                "analysis_source": "soundfile_energy_zcr_fallback",
+                "court_defensible": False,
+                "available": True,
+                "degraded": True,
+                "fallback_reason": f"Primary anti-spoofing analysis failed ({e}); used signal heuristic.",
+            }
+        except Exception as fallback_error:
+            raise ToolUnavailableError(
+                f"Anti-spoofing detection failed: {fallback_error}"
+            ) from fallback_error
 
 
 async def run_codec_fingerprint(

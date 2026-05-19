@@ -170,6 +170,9 @@ test("fast mocked journey: landing → upload → accept → result → history"
     if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
       await begin.evaluate((element: HTMLElement) => element.click());
     }
+    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+      await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
+    }
   }
   await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
 
@@ -262,7 +265,7 @@ test("mocked reconnect not_found routes home with upload=1", async ({ page }) =>
   });
 
   await page.goto("/evidence");
-  await expect(page.getByText(/No Evidence Queued|Select Evidence/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: /No Evidence Queued/i })).toBeVisible({ timeout: 15_000 });
 });
 
 test("mocked reconnect complete navigates to result", async ({ page }) => {

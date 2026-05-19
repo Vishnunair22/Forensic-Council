@@ -61,6 +61,7 @@ ALLOWED_MIME_TYPES = {
     "audio/x-wav",
     "audio/mpeg",
     "audio/mp4",
+    "audio/x-m4a",
     "audio/flac",
 }
 

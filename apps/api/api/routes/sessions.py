@@ -405,7 +405,7 @@ async def get_session_report(
                 # Re-hydrate from the stored JSON dict
                 from api.schemas import ReportDTO as _RD
 
-                from ._dto import _rebuild_finding
+                from ._dto import _clean_key_findings, _rebuild_finding
 
                 rd = db_row["report_data"]
                 per_agent = {
@@ -436,7 +436,7 @@ async def get_session_report(
                     report_hash=rd.get("report_hash", ""),
                     signed_utc=rd.get("signed_utc"),
                     verdict_sentence=rd.get("verdict_sentence", ""),
-                    key_findings=list(rd.get("key_findings") or []),
+                    key_findings=_clean_key_findings(list(rd.get("key_findings") or [])),
                     reliability_note=rd.get("reliability_note", ""),
                     manipulation_probability=float(rd.get("manipulation_probability") or 0.0),
                     compression_penalty=float(rd.get("compression_penalty") or 1.0),
@@ -479,6 +479,20 @@ async def get_session_report(
                 "message": "Investigation still in progress",
             },
         )
+
+    try:
+        metadata = await get_active_pipeline_metadata(session_id)
+        if metadata and metadata.get("status") not in {"completed", "error", "terminated"}:
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "in_progress",
+                    "session_id": session_id,
+                    "message": metadata.get("brief") or "Investigation still in progress",
+                },
+            )
+    except Exception as meta_err:
+        logger.debug("Report metadata in-progress fallback failed", session_id=session_id, error=str(meta_err))
 
     raise HTTPException(
         status_code=404,

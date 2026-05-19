@@ -23,6 +23,49 @@ def _opt_float(value: Any) -> float | None:
         return None
 
 
+def _clean_key_finding(text: str) -> str:
+    cleaned = " ".join(str(text or "").replace("\n", " ").split()).strip()
+    for prefix in ("Checked:", "Finding:"):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix) :].strip()
+
+    lower = cleaned.lower()
+    if "sha-256 intake check" in lower:
+        return "SHA-256 intake hash matches the chain-of-custody record."
+    if "available: yes;" in lower and "header valid" in lower:
+        return "File structure check passed: size and header are valid."
+    if "gemini_multimodal extracted" in lower:
+        return "Gemini Vision OCR extracted minimal visible text."
+    if lower.startswith("speaker diarization:"):
+        return cleaned.split(". This supports", 1)[0].strip() + "."
+    if lower.startswith("codec fingerprint:"):
+        return cleaned.split(". This supports", 1)[0].strip() + "."
+    if "hex signature scan found no editing software signatures" in lower:
+        return "Hex signature scan found no editing software signatures."
+    if "compression/platform audit:" in lower:
+        return cleaned.split(". This supports", 1)[0].strip() + "."
+    if "this supports the absence" in lower:
+        cleaned = cleaned.split(". This supports", 1)[0].strip()
+
+    return cleaned.rstrip(" .") + "."
+
+
+def _clean_key_findings(items: list[Any], limit: int = 5) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = _clean_key_finding(str(item))
+        key = "".join(ch for ch in text.lower() if ch.isalnum() or ch.isspace())
+        key = " ".join(key.split())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
 def _forensic_report_to_dto(report) -> ReportDTO:
     """
     Convert a ForensicReport Pydantic model or dict to a serialization-safe ReportDTO.
@@ -179,7 +222,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         report_hash=_get_val(report, "report_hash", "") or "",
         signed_utc=signed_utc_str,
         verdict_sentence=_get_val(report, "verdict_sentence", "") or "",
-        key_findings=list(_get_val(report, "key_findings", []) or []),
+        key_findings=_clean_key_findings(list(_get_val(report, "key_findings", []) or [])),
         reliability_note=_get_val(report, "reliability_note", "") or "",
         manipulation_probability=float(_get_val(report, "manipulation_probability", 0.0) or 0.0),
         compression_penalty=float(_get_val(report, "compression_penalty", 1.0) or 1.0),

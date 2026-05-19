@@ -139,10 +139,14 @@ export function HeroAuthActions() {
   }, [selectedFile, router]);
 
   const handleCTAClick = useCallback(() => {
-    playSound("envelope-open");
     setShowUpload(true);
     setSelectedFile(null);
     setIsHandingOff(false);
+    try {
+      playSound("envelope-open");
+    } catch (error) {
+      console.warn("[HeroAuthActions] non-blocking CTA sound failed:", error);
+    }
     // Kick off auth in parallel — evidence page will await this promise
     __pendingFileStore.authError = null;
     __pendingFileStore.authPromise ||= autoLoginAsInvestigator()

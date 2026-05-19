@@ -19,6 +19,7 @@ _EXACT_MIME_EXT_MAP: dict[str, frozenset] = {
     "audio/x-wav": frozenset({".wav"}),
     "audio/mpeg": frozenset({".mp3"}),
     "audio/mp4": frozenset({".m4a"}),
+    "audio/x-m4a": frozenset({".m4a"}),
     "audio/flac": frozenset({".flac"}),
 }
 

@@ -72,6 +72,7 @@ export const ALLOWED_MIME_TYPES = new Set([
   "audio/x-wav",
   "audio/mpeg",
   "audio/mp4",
+  "audio/x-m4a",
   "audio/flac",
 ]);
 

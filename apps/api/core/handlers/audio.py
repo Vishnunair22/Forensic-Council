@@ -442,8 +442,8 @@ class AudioHandlers(BaseToolHandler):
         result = await run_ml_tool(
             "voice_clone_detector.py",
             artifact.file_path,
+            extra_args=["--model", self.agent.config.voice_clone_model_name],
             timeout=30.0,
-            model=self.agent.config.voice_clone_model_name,
         )
         if not result.get("error") and result.get("available"):
             await self.agent._record_tool_result("voice_clone_detect", result)
