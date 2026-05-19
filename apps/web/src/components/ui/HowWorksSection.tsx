@@ -12,7 +12,7 @@ export function HowWorksSection() {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="fc-eyebrow text-white/55 mb-4"
+          className="fc-eyebrow fc-text-faint mb-4"
         >
           Process
         </motion.p>
@@ -22,7 +22,7 @@ export function HowWorksSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="text-3xl sm:text-4xl md:text-[44px] font-heading font-black text-white mb-4 tracking-tight"
+          className="text-3xl sm:text-4xl font-heading font-black text-white mb-4 tracking-tight"
         >
           How Forensic{" "}
           <span className="text-primary">Council Works</span>
@@ -32,7 +32,7 @@ export function HowWorksSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="text-sm sm:text-base font-medium text-white/70 max-w-2xl mx-auto leading-relaxed"
+          className="text-sm sm:text-base font-medium fc-text-secondary max-w-2xl mx-auto leading-relaxed"
         >
           A multi-stage verification pipeline ensuring cryptographic and semantic integrity
           through specialized AI coordination.
@@ -53,29 +53,29 @@ export function HowWorksSection() {
             <div className="relative z-20 mb-5" aria-hidden="true">
               {/* Step number */}
               <div
-                className="absolute -top-2 -right-2 w-5 h-5 rounded-sm flex items-center justify-center z-10 bg-[#02040A] border border-white/10"
+                className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10 bg-[#02040A] border border-white/10"
               >
-                <span className="text-[10px] font-mono font-bold text-white/55">
+                <span className="text-xs font-mono font-bold fc-text-faint">
                   {String(i + 1).padStart(2, "0")}
                 </span>
               </div>
 
               <div
-                className="w-14 h-14 rounded-md flex items-center justify-center bg-white/[0.03] border border-white/10"
+                className="w-14 h-14 rounded-xl flex items-center justify-center bg-white/[0.03] border border-white/10"
               >
                 <item.icon className="w-6 h-6 text-white/80" />
               </div>
             </div>
 
             {/* Card */}
-            <div className="w-full bg-transparent p-6 rounded-md relative overflow-hidden h-full">
+            <div className="w-full fc-surface-quiet p-6 relative overflow-hidden h-full flex flex-col items-center">
               <h3
-                className="text-[15px] font-heading font-black text-white mb-3 text-center"
+                className="text-base font-heading font-black text-white mb-3 text-center"
                 style={{ letterSpacing: "-0.015em" }}
               >
                 {item.title}
               </h3>
-              <p className="text-[13px] text-white/70 leading-relaxed text-center">
+              <p className="text-sm fc-text-secondary leading-relaxed text-center">
                 {item.desc}
               </p>
 

@@ -31,7 +31,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
   );
 
   return (
-    <div className="fc-surface-elevated rounded-2xl overflow-hidden">
+    <div className="fc-surface-elevated overflow-hidden">
       {/* Header */}
       <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -64,7 +64,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                   <div className="flex items-center gap-2">
                     <Zap className="w-3 h-3 text-primary/40" />
                     <span className="text-[11px] font-mono fc-text-secondary font-bold truncate max-w-[160px]">
-                      {TOOL_LABELS[model] || model.replace(/_/g, " ").toUpperCase()}
+                      {TOOL_LABELS[model] || model.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
                     </span>
                   </div>
                   <span className="text-[11px] font-mono font-black fc-text-primary-accent">
@@ -85,8 +85,8 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                 <div className="flex justify-between items-center text-[10px] font-mono fc-text-faint">
                   <span>
                     {model.startsWith("neural_") || model === "anomaly_tracer"
-                      ? "TRANSFORMER_V2"
-                      : "TENSOR_V4"}
+                      ? "Transformer V2"
+                      : "Tensor V4"}
                   </span>
                   <span>{count} invocation{count !== 1 ? "s" : ""}</span>
                 </div>

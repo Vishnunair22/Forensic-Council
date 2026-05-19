@@ -63,14 +63,14 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
     <div className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
       <div className="pointer-events-auto max-w-3xl mx-auto px-4 pb-4">
         <div
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-white/[0.08] bg-[#02040A]/92 backdrop-blur-xl shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.7)]"
+          className="flex items-center gap-3 px-4 py-3 fc-surface"
         >
           {/* Home */}
           <button
             type="button"
             onClick={onHome}
             aria-label="Back to Home"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-white/55 hover:text-white hover:border-white/25 hover:bg-white/[0.04] transition-all duration-150 text-xs font-mono font-bold tracking-[0.12em] uppercase shrink-0"
+            className="fc-btn-secondary text-xs font-mono shrink-0 gap-2"
           >
             <HomeIcon className="w-3.5 h-3.5" />
             Home
@@ -81,7 +81,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
             type="button"
             onClick={onNew}
             aria-label="Start New Analysis"
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-primary)] text-white hover:brightness-110 active:scale-[0.98] transition-all duration-150 text-xs font-bold tracking-[0.06em] uppercase"
+            className="fc-btn-primary flex-1 text-xs gap-2"
           >
             <Plus className="w-3.5 h-3.5" />
             New Analysis
@@ -94,7 +94,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
               onClick={handleExport}
               disabled={isExporting}
               aria-label={isExporting ? "Exporting report…" : "Export report"}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 text-white/55 hover:text-white hover:border-white/25 hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 text-xs font-mono font-bold tracking-[0.12em] uppercase shrink-0"
+              className="fc-btn-secondary text-xs font-mono shrink-0 gap-2"
             >
               <Download className="w-3.5 h-3.5" />
               {isExporting ? "…" : "Export"}

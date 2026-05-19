@@ -209,9 +209,6 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const sev = (f.severity || "").toUpperCase();
   const verdict = normalizeVerdict(f.verdict);
   const elapsed = formatElapsed(f.elapsed_s);
-
-  const sevLabelColor = SEV_LABEL[sev] ?? (isAlert ? "text-danger" : "fc-text-faint");
-
   const headline = extractHeadline(f);
   const detail = extractDetail(f, headline);
   const MAX = 180;
@@ -241,38 +238,32 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
         <div className="flex items-center gap-2 flex-wrap">
           {f.tool && (
             <span className={clsx(
-              "inline-flex items-center max-w-full px-2.5 py-1 rounded-md text-xs font-bold tracking-wide",
-              isAlert
-                ? "bg-danger/15 text-danger border border-danger/30"
-                : "bg-white/[0.06] text-white/80 border border-white/[0.12]"
+              "fc-badge",
+              isAlert ? "fc-badge-danger" : ""
             )}>
               {fmtTool(f.tool)}
             </span>
           )}
           {f.verdict && (
             <span className={clsx(
-              "fc-eyebrow border px-1.5 py-0.5 rounded",
-              isAlert
-                ? "bg-danger/10 border-danger/25 text-danger"
-                : "bg-emerald-400/10 border-emerald-400/20 text-emerald-200/80"
+              "fc-badge",
+              isAlert ? "fc-badge-danger" : "fc-badge-success"
             )}>
               {verdict}
             </span>
           )}
           {sev && SEV_LABEL[sev] && (
             <span className={clsx(
-              "fc-eyebrow px-1.5 py-0.5 rounded",
-              sevLabelColor,
-              sev === "CRITICAL" || sev === "HIGH" ? "bg-danger/10 border border-danger/25" :
-              sev === "MEDIUM" ? "bg-warning/10 border border-warning/25" :
-              "bg-white/[0.04] border border-white/10"
+              "fc-badge",
+              (sev === "CRITICAL" || sev === "HIGH") ? "fc-badge-danger" :
+              sev === "MEDIUM" ? "fc-badge-warning" : ""
             )}>
               {sev}
             </span>
           )}
           {f.degraded && (
-            <span className="fc-eyebrow text-warning border border-warning/30 bg-warning/10 rounded px-1.5 py-0.5" title={f.fallback_reason || ""}>
-              DEGRADED
+            <span className="fc-badge fc-badge-warning" title={f.fallback_reason || ""}>
+              Degraded
             </span>
           )}
           {typeof f.confidence === "number" && (
@@ -505,7 +496,7 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] bg-transparent border border-white/5 rounded-2xl",
+        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] fc-surface-quiet border-none",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
@@ -526,22 +517,19 @@ export function AgentStatusCard({
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-warning/10 border border-warning/30"
+                    className="fc-badge fc-badge-warning flex items-center gap-1.5"
                     title={completedData.fallback_reason || "Analysis degraded"}
                   >
-                    <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-                    <span className="fc-eyebrow text-warning">
-                      Degraded
-                    </span>
+                    <AlertTriangle className="w-3 h-3" />
+                    Degraded
                   </motion.div>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
-                  "px-3 py-1 rounded-md fc-eyebrow border",
-                  (status === "complete" || status === "checking" || status === "running") ? "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40 text-[var(--color-primary)]" :
-                  status === "error" ? "bg-danger/12 border-danger/40 text-danger" :
-                  "bg-white/[0.06] border-white/15 fc-text-faint"
+                  "fc-badge",
+                  (status === "complete" || status === "checking" || status === "running") ? "fc-badge-active" :
+                  status === "error" ? "fc-badge-danger" : ""
                 )}>
                   {cfg.label}
                 </span>
@@ -638,14 +626,7 @@ export function AgentStatusCard({
                 <button
                   type="button"
                   onClick={() => onToggleExpand?.()}
-                  className={clsx(
-                    "mt-3 w-full py-3.5 rounded-lg flex items-center justify-center gap-2",
-                    "text-xs font-bold",
-                    "border transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
-                    isExpanded
-                      ? "bg-white/[0.04] border-white/15 text-white/65 hover:text-white hover:border-white/25"
-                      : "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/18 hover:border-[var(--color-primary)]/60"
-                  )}
+                  className="fc-btn-secondary w-full gap-2 mt-3 text-xs"
                   aria-expanded={isExpanded}
                 >
                   {isExpanded

@@ -128,7 +128,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 requestAnimationFrame(() => tabRefs.current[next]?.focus());
               }}
               className={clsx(
-                "px-4 py-2 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 rounded-md transition-all duration-150 border",
+                "px-4 py-2 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-150 border",
                 rs.activeTab === tab
                   ? "bg-white/[0.08] text-white border-white/20"
                   : "text-white/45 hover:text-white hover:bg-white/[0.05] border-transparent"
@@ -144,7 +144,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <button
               type="button"
               onClick={rs.handleHome}
-              className="px-3 py-1.5 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 text-white/35 hover:text-white/70 transition-colors rounded-md hover:bg-white/[0.04]"
+              className="px-3 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 text-white/55 hover:text-white transition-colors rounded-full hover:bg-white/[0.04]"
               aria-label="Back to Home"
             >
               <HomeIcon className="w-3 h-3" />
@@ -153,7 +153,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <button
               type="button"
               onClick={rs.handleNew}
-              className="px-3 py-1.5 text-[11px] font-mono font-bold tracking-[0.18em] uppercase flex items-center gap-1.5 text-white/35 hover:text-white/70 transition-colors rounded-md hover:bg-white/[0.04]"
+              className="px-3 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 text-white/55 hover:text-white transition-colors rounded-full hover:bg-white/[0.04]"
               aria-label="New Analysis"
             >
               <Plus className="w-3 h-3" />
@@ -334,12 +334,12 @@ function ResultLoadingView({
 function ResultInlineStatus({ message }: { message: string }) {
   return (
     <div className="min-h-[54vh] flex items-center justify-center">
-      <div className="w-full max-w-md border border-white/5 bg-transparent px-8 py-10 text-center">
-        <ShieldAlert className="w-12 h-12 text-white/20 mx-auto mb-6" />
-        <div className="mt-6 fc-eyebrow text-primary/60">
+      <div className="w-full max-w-md fc-surface-quiet px-8 py-10 text-center">
+        <ShieldAlert className="w-12 h-12 text-[var(--color-primary)]/70 mx-auto mb-6 animate-pulse" />
+        <div className="mt-6 fc-eyebrow text-primary/70">
           Consensus Synthesis
         </div>
-        <p className="mt-3 font-mono text-xs font-semibold leading-relaxed text-white/60">
+        <p className="mt-3 font-mono text-xs font-semibold leading-relaxed text-white/70">
           {message || "Arbiter is compiling agent findings..."}
         </p>
       </div>
@@ -351,7 +351,7 @@ function ResultSkeletonView() {
   return (
     <div className="min-h-screen opacity-35" aria-hidden="true">
       <div className="max-w-7xl mx-auto px-6 pt-28 space-y-6">
-        <div className="p-8 space-y-8 bg-transparent border border-white/5">
+        <div className="p-8 space-y-8 fc-surface-quiet">
           <div className="flex flex-col md:flex-row gap-6 items-center">
             <div className="skeleton w-32 h-32 rounded-2xl" />
             <div className="flex-1 space-y-4 w-full">
@@ -362,8 +362,8 @@ function ResultSkeletonView() {
             <div className="skeleton w-28 h-28 rounded-2xl" />
           </div>
         </div>
-        <div className="skeleton h-52 bg-transparent border border-white/5" />
-        <div className="skeleton h-72 bg-transparent border border-white/5" />
+        <div className="skeleton h-52 fc-surface-quiet" />
+        <div className="skeleton h-72 fc-surface-quiet" />
       </div>
     </div>
   );

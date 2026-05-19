@@ -61,7 +61,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
       transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/95"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 fc-modal-backdrop"
       onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onDismiss(); } }}
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
@@ -70,8 +70,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="relative overflow-hidden rounded-2xl border border-border-muted"
-          style={{ background: "rgba(255, 255, 255, 0.015)", backdropFilter: "blur(24px)" }}
+          className="fc-surface-overlay relative overflow-hidden"
         >
           <div className="p-8 sm:p-10 flex flex-col text-left">
             <button
@@ -79,7 +78,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
               onClick={closeModal}
               aria-label="Close evidence dialog"
               data-testid="success-modal-close"
-              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:fc-text-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:fc-text-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
             >
               <X className="w-5 h-5" />
             </button>
@@ -153,7 +152,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                 type="button"
                 onClick={() => { playSound("click"); onNewUpload(); }}
                 disabled={isStarting}
-                className="btn-outline flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="fc-btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Reselect File
               </button>
@@ -169,7 +168,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                   }
                 }}
                 disabled={isStarting}
-                className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="fc-btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isStarting ? (
                   <>

@@ -202,9 +202,9 @@ export function AgentProgressDisplay({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
-              <p className="text-[10px] font-mono font-bold text-[var(--color-primary)] tracking-[0.3em]">
+              <span className="fc-badge fc-badge-active text-xs">
                 {phase === "initial" ? "Initial Verification" : "Deep Analysis"}
-              </p>
+              </span>
             </div>
             <div className="w-[1px] h-3 bg-white/10" />
             <p className="text-sm font-medium text-white/40 italic" role="status" aria-live="polite" aria-atomic="false">
@@ -305,7 +305,7 @@ export function AgentProgressDisplay({
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
                   aria-label="Accept initial analysis and generate final report"
-                  className="flex-1 btn-outline py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 fc-btn-secondary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   <span>Accept Result</span>
@@ -316,7 +316,7 @@ export function AgentProgressDisplay({
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating}
                   aria-label="Run deep neural analysis with advanced models"
-                  className="flex-[1.5] btn-primary py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-[1.5] fc-btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
                   <span>Deep Analysis</span>
@@ -346,7 +346,7 @@ export function AgentProgressDisplay({
                   data-testid="new-analysis-btn"
                   aria-label="Start a new investigation"
                   onClick={onNewUpload}
-                  className="flex-1 btn-outline py-3 text-xs flex items-center justify-center gap-2"
+                  className="flex-1 fc-btn-secondary flex items-center justify-center gap-2"
                 >
                   New Analysis
                 </button>
@@ -356,7 +356,7 @@ export function AgentProgressDisplay({
                   onClick={onViewResults}
                   disabled={isNavigating}
                   aria-label="View the final forensic report"
-                  className="flex-[1.5] btn-primary py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-[1.5] fc-btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                   <span>View Report</span>

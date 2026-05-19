@@ -11,7 +11,7 @@ export function AgentsSection() {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="fc-eyebrow text-white/55 mb-4"
+          className="fc-eyebrow fc-text-faint mb-4"
         >
           Agents
         </motion.p>
@@ -21,7 +21,7 @@ export function AgentsSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="text-3xl sm:text-4xl md:text-[44px] font-heading font-black text-white mb-4 tracking-tight"
+          className="text-3xl sm:text-4xl font-heading font-black text-white mb-4 tracking-tight"
         >
           Meet the{" "}
           <span className="text-primary">Council</span>
@@ -31,7 +31,7 @@ export function AgentsSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="text-sm font-medium text-white/70 max-w-xl mx-auto leading-relaxed"
+          className="text-sm font-medium fc-text-secondary max-w-xl mx-auto leading-relaxed"
         >
           Autonomous investigative agents optimized for multi-modal evidence consensus.
         </motion.p>
@@ -45,19 +45,19 @@ export function AgentsSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.3, delay: i * 0.05, ease: "easeOut" }}
-            className="relative flex flex-col items-center text-center group overflow-hidden rounded-md p-6 bg-transparent transition-colors duration-200"
+            className="relative flex flex-col items-center text-center group overflow-hidden fc-surface-quiet p-6"
           >
             {/* Icon */}
-            <div className="relative w-12 h-12 flex items-center justify-center mb-5 shrink-0 rounded-md bg-white/[0.03] border border-white/10" aria-hidden="true">
+            <div className="relative w-12 h-12 flex items-center justify-center mb-5 shrink-0 rounded-2xl bg-white/[0.03] border border-white/10" aria-hidden="true">
               <agent.icon
                 className="w-5 h-5 text-white/80"
               />
             </div>
 
             {/* Badge */}
-            <div className="mb-3">
+            <div className="mb-4">
               <span
-                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-sm bg-white/5 border border-white/10 text-white/60 uppercase"
+                className="fc-badge fc-eyebrow"
               >
                 {agent.badge}
               </span>
@@ -65,12 +65,12 @@ export function AgentsSection() {
 
             {/* Name & description */}
             <h3
-              className="text-[16px] font-heading font-black text-white mb-2"
+              className="text-lg font-heading font-black text-white mb-2"
               style={{ letterSpacing: "-0.015em" }}
             >
               {agent.name}
             </h3>
-            <p className="text-[13px] text-white/70 leading-relaxed group-hover:text-white/90 transition-colors duration-200">
+            <p className="text-sm fc-text-secondary leading-relaxed group-hover:fc-text-primary transition-colors duration-200">
               {agent.desc}
             </p>
 
@@ -79,7 +79,7 @@ export function AgentsSection() {
               <div
                 className="w-1.5 h-1.5 rounded-full bg-primary"
               />
-              <span className="text-[10px] font-mono text-white/50">
+              <span className="text-xs font-mono fc-text-faint">
                 Node {agent.id} Active
               </span>
             </div>

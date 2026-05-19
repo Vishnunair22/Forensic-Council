@@ -12,6 +12,91 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-19: Progress & Deliberation Overlays and Results Layout Compliance
+
+**Status:** ✅ COMPLETE & 100% VERIFIED
+
+### What Changed
+- **Arbiter Deliberation Overlay Aligned**: Standardized all sharp box borders and corners in `ArbiterDeliberationOverlay.tsx`. Converted the sharp status indicator to a compliant `.fc-badge-success` rounded-full tag. Removed the forced all-caps style (`uppercase`) and custom arbitrary sizes (`text-[10px]`, `text-[11px]`) in favor of standardized responsive sizes (`text-xs`).
+- **Agent Progress Dashboard Calibrated**: Refactored the decision actions in `AgentProgressDisplay.tsx` to utilize central design system buttons (`fc-btn-primary` and `fc-btn-secondary`) instead of legacy outlines. Standardized custom forced terminal labels with the global `.fc-badge-active` pill tags.
+- **Arbiter Specialist Card Upgraded**: Upgraded the container frame in `ArbiterCard.tsx` from flat transparent borders to the premium frosted glass token `.fc-surface-quiet`. Upgraded custom badges to follow the centralized rounded-full `.fc-badge` shape.
+- **Results Layout Tabs & Skeletons Standardized**: Upgraded all navigation tab buttons, back shortcuts, and inline action triggers in `ResultLayout.tsx` to the standard pill-shape (`rounded-full`) to satisfy the button geometry specs. Refactored the boxy flat status view panels and skeleton frames to use the premium `.fc-surface-quiet` frosted glass design style.
+- **Comprehensive Quality Check**: Validated all type-safety rules, linting conditions, Jest snapshots/tests, and document registries with 100% green exit codes.
+
+### Files Touched
+- [ArbiterDeliberationOverlay.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/ArbiterDeliberationOverlay.tsx)
+- [AgentProgressDisplay.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/AgentProgressDisplay.tsx)
+- [ArbiterCard.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/ArbiterCard.tsx)
+- [ResultLayout.tsx](file:///d:/Forensic%20Council/apps/web/src/components/result/ResultLayout.tsx)
+
+### Verification Results
+
+| Check / Verification Command | Status | Notes |
+|-----------------------------|--------|-------|
+| `git diff --check` | ✅ PASS | Zero trailing whitespaces or syntax anomalies |
+| `cmd /c npm run type-check` | ✅ PASS | Next.js compilation succeeds with zero warnings |
+| `cmd /c npm run lint` | ✅ PASS | Linter runs completely green with zero warnings/errors |
+| `cmd /c npm test` | ✅ PASS | All 253 unit & integration tests passed perfectly |
+| `python scripts/check_docs.py` | ✅ PASS | Documentation inventory is fully validated and green |
+
+### 2026-05-19: Landing Page & Core Sections Design System Compliance
+
+**Status:** ✅ COMPLETE & 100% VERIFIED
+
+### What Changed
+- **How It Works Standardized**: Upgraded all step container cards to `.fc-surface-quiet` (frosted glass sheets). Replaced sharp `rounded-sm` step circles with rounded-full pill marks, and swapped legacy `rounded-md` icons for smooth `rounded-xl` frames. Replaced legacy arbitrary pixel text sizes (`text-[10px]`, `text-[13px]`, `text-[15px]`) with standardized class hierarchies (`text-xs`, `text-sm`, `text-base`).
+- **Agents Section Aligned**: Converted raw transparent cards to `.fc-surface-quiet` frosted sheets. Standardized the specialist icons to `rounded-2xl`. Replaced legacy hardcoded uppercase labels (`uppercase`) and text sizes with the centralized `.fc-badge` system in proper Title Case. Enforced accessibility opacities for the node status block (`fc-text-faint`).
+- **Hero CTA Button Unified**: Removed redundant inline background overlays, gradients, and hover transitions in favor of the global teal pill `.fc-btn-primary` class.
+- **Hero Typography Calibrated**: Removed the legacy custom heading size override (`md:text-[80px]`) in favor of a compliant system token (`md:text-7xl`).
+- **Verified Green Pipeline**: Executed compilation checks, Jest tests, ESLint, documentation checks, and git diff audits with zero warnings or errors.
+
+### Files Touched
+- [HowWorksSection.tsx](file:///d:/Forensic%20Council/apps/web/src/components/ui/HowWorksSection.tsx)
+- [AgentsSection.tsx](file:///d:/Forensic%20Council/apps/web/src/components/ui/AgentsSection.tsx)
+- [HeroAuthActions.tsx](file:///d:/Forensic%20Council/apps/web/src/components/ui/HeroAuthActions.tsx)
+- [HomeClient.tsx](file:///d:/Forensic%20Council/apps/web/src/components/pages/HomeClient.tsx)
+
+### Verification Results
+
+| Check / Verification Command | Status | Notes |
+|-----------------------------|--------|-------|
+| `git diff --check` | ✅ PASS | Zero trailing whitespaces or syntax anomalies |
+| `cmd /c npm run type-check` | ✅ PASS | FrontendNext.js compiles with zero type errors |
+| `cmd /c npm run lint` | ✅ PASS | Linter runs completely green with zero warnings/errors |
+| `cmd /c npm test` | ✅ PASS | All 253 unit & integration tests passed perfectly |
+| `python scripts/check_docs.py` | ✅ PASS | Documentation inventory is fully validated and green |
+
+### 2026-05-19: Forensic Modal & Display Standardization ("Anti-Box" Premium Precision)
+
+**Status:** ✅ COMPLETE & 100% VERIFIED
+
+### What Changed
+- **Modals Architecture standardized**: Fully integrated the Precision Frosted Glass system across all modal backdrops (`fc-modal-backdrop`), monolithic overlays (`fc-surface-overlay`), and structural corner geometry (`rounded-3xl` for Dialog primitives, `UploadSuccessModal`, `ForensicErrorModal`, `HITLCheckpointModal`).
+- **Unified Button Hierarchy enforced**: Eliminated legacy custom button borders and styles in favor of brand teal glass primary buttons (`fc-btn-primary`), neutral white secondary buttons (`fc-btn-secondary`), and danger buttons (`fc-btn-danger`), perfectly honoring the pill-shape requirement (`rounded-full`).
+- **Telemetry & Dock Panel standardisation**: Applied `fc-surface` glass sheets to `ActionDock` and `fc-surface-elevated` to `DeepModelTelemetry`, removing boxy, heavy borders and neon glows.
+- **Agent Cards upgraded**: Migrated `AgentStatusCard` container to `fc-surface-quiet` and updated its inline badges (tool, severity, status) to use unified `.fc-badge` schemas (active, success, warning, danger).
+- **Casing & Typo Compliance**: Stripped generic forced-uppercase transformations (`uppercase` styles) from telemetry labels and footer strings, replacing them with sentence/Title case to prevent visual noise.
+- **Clean Diff and Lint Verification**: Resolved trailing whitespaces in `UploadModal.tsx` and unused parameters in `AgentStatusCard.tsx` to keep the linter completely green.
+
+### Files Touched
+- [UploadSuccessModal.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/UploadSuccessModal.tsx)
+- [ForensicErrorModal.tsx](file:///d:/Forensic%20Council/apps/web/src/components/ui/ForensicErrorModal.tsx)
+- [HITLCheckpointModal.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/HITLCheckpointModal.tsx)
+- [ActionDock.tsx](file:///d:/Forensic%20Council/apps/web/src/components/result/ActionDock.tsx)
+- [AgentStatusCard.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/AgentStatusCard.tsx)
+- [DeepModelTelemetry.tsx](file:///d:/Forensic%20Council/apps/web/src/components/result/DeepModelTelemetry.tsx)
+- [UploadModal.tsx](file:///d:/Forensic%20Council/apps/web/src/components/evidence/UploadModal.tsx)
+
+### Verification Results
+
+| Check / Verification Command | Status | Notes |
+|-----------------------------|--------|-------|
+| `git diff --check` | ✅ PASS | Fully clean git diff with zero trailing whitespace |
+| `cmd /c npm run type-check` | ✅ PASS | Frontend Next.js compiles with zero type errors |
+| `cmd /c npm run lint` | ✅ PASS | Linter runs completely green with zero warnings/errors |
+| `cmd /c npm test` | ✅ PASS | All 253 unit & integration tests passed perfectly |
+| `python scripts/check_docs.py` | ✅ PASS | Complete documentation structure and reference validation OK |
+
 ### 2026-05-19: Frontend Design System Standardisation & Cleanup
 
 **Status:** ✅ COMPLETE & VERIFIED

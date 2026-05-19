@@ -62,14 +62,14 @@ export function ArbiterDeliberationOverlay({
           <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-[var(--color-success)]/40 pl-8 md:pl-12 py-4">
             {/* Status indicator */}
             <div className="flex items-center gap-4 mb-10">
-              <div className="relative w-8 h-8 flex items-center justify-center border border-[var(--color-success)]/30 rounded-sm bg-[var(--color-success)]/5">
+              <div className="relative w-8 h-8 flex items-center justify-center border border-[var(--color-success)]/30 rounded-md bg-[var(--color-success)]/5">
                 <motion.div
                   animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-3 h-3 bg-[var(--color-success)]"
+                  className="w-3 h-3 rounded-full bg-[var(--color-success)]"
                 />
               </div>
-              <span className="text-[11px] font-mono font-black tracking-[0.4em] uppercase text-white/50">
+              <span className="fc-badge fc-badge-success">
                 Arbiter Active
               </span>
             </div>
@@ -88,7 +88,7 @@ export function ArbiterDeliberationOverlay({
                 </motion.h1>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-1.5 h-1.5 bg-[var(--color-success)]/50 rounded-sm animate-pulse" />
+                <div className="w-1.5 h-1.5 bg-[var(--color-success)]/50 rounded-full animate-pulse" />
                 <p
                   id="arbiter-live-text"
                   className="text-xs md:text-sm font-mono font-medium text-white/60 tracking-wide"
@@ -103,7 +103,7 @@ export function ArbiterDeliberationOverlay({
 
             {/* Progress bar */}
             <div className="w-full max-w-md">
-              <div className="flex items-center justify-between mb-4 text-[10px] font-mono font-bold tracking-[0.2em] text-white/30 uppercase">
+              <div className="flex items-center justify-between mb-4 text-xs font-mono font-bold tracking-wide fc-text-secondary">
                 <span>Council Arbiter</span>
                 <span className="text-[var(--color-success)]">{formatTime(elapsed)}</span>
               </div>

@@ -63,7 +63,7 @@ export function ForensicErrorModal({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[20000] flex items-center justify-center p-6 bg-[#02040A]/80 backdrop-blur-xl"
+                className="fixed inset-0 z-[20000] flex items-center justify-center p-6 fc-modal-backdrop"
               />
             </Dialog.Overlay>
             <Dialog.Content asChild>
@@ -72,7 +72,7 @@ export function ForensicErrorModal({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.99, y: 5 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                className="relative w-full max-w-xl focus:outline-none overflow-hidden bg-[#02040A] border border-[var(--color-danger)]/20 rounded-xl shadow-[0_0_80px_-20px_rgba(239,68,105,0.15)]"
+                className="relative w-full max-w-xl focus:outline-none overflow-hidden fc-surface-overlay border-[var(--color-danger)]/30 rounded-3xl shadow-[0_0_80px_-20px_rgba(239,68,105,0.15)]"
               >
                 {/* Top accent */}
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-danger)]/50 to-transparent" />
@@ -123,7 +123,7 @@ export function ForensicErrorModal({
                         <button
                           type="button"
                           onClick={onRetry}
-                          className="flex-1 btn-outline border-[var(--color-danger)]/40 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 hover:border-[var(--color-danger)]/60 hover:text-[var(--color-danger)]"
+                          className="flex-1 fc-btn-danger gap-2"
                         >
                           <RefreshCcw className="w-4 h-4" />
                           Retry Analysis
@@ -133,7 +133,7 @@ export function ForensicErrorModal({
                         <button
                           type="button"
                           onClick={onHome}
-                          className="flex-1 btn-outline"
+                          className="flex-1 fc-btn-secondary gap-2"
                         >
                           <HomeIcon className="w-4 h-4" />
                           Return to Hub
@@ -153,7 +153,7 @@ export function ForensicErrorModal({
                   </Dialog.Close>
 
                   {/* Footer Metadata */}
-                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between text-[10px] font-mono text-white/20 uppercase tracking-widest">
+                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between text-[10px] font-mono text-white/20 tracking-widest">
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-danger)] animate-pulse" />
                       <span>Pipeline Halted</span>
