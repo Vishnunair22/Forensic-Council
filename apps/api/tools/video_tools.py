@@ -74,9 +74,14 @@ async def optical_flow_analyze(
         if not cap.isOpened():
             raise ToolUnavailableError(f"Cannot open video: {video_path}")
 
+        # NEW: Verify if OpenCV can fetch frame count and is greater than 0
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if frame_count <= 0:
+            cap.release()
+            raise ToolUnavailableError(f"Invalid frame count ({frame_count}) for video: {video_path}")
+
         try:
             fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -96,8 +101,8 @@ async def optical_flow_analyze(
             heatmap_accumulator = np.zeros((height, width), dtype=np.float32)
 
             # Optimization: Intelligent frame-skipping for long videos
-            # We target ~300 samples for the whole video to stay within deep analysis latency budgets.
-            skip_rate = max(1, frame_count // 300)
+            # We target ~150 samples for the whole video to stay within deep analysis latency budgets.
+            skip_rate = max(1, frame_count // 150)
 
             while True:
                 ret, frame = cap.read()

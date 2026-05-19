@@ -35,6 +35,11 @@ def check_research_model_gate() -> dict[str, Any] | None:
                 "degraded": True,
                 "reason": "research_model_license_gate",
                 "available": False,
+                "evidence_verdict": "NOT_APPLICABLE",
+                "forensic_note": (
+                    "Voice clone detection requires research models. "
+                    "Set ENABLE_RESEARCH_MODELS=true to enable deep speaker verification."
+                ),
             }
     except ImportError:
         # If config not available, allow the tool to run

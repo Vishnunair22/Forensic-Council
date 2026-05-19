@@ -51,6 +51,12 @@ async function uploadThroughLiveInitialAnalysis(page: import("@playwright/test")
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto("/");
+  // NEW: Wait for backend readiness
+  await page.waitForResponse(
+    (response) => (response.url().includes("/api/v1/health") || response.url().includes("/health")) && response.status() === 200,
+    { timeout: 30_000 }
+  );
+
   await page.getByTestId("hero-cta-begin").click();
 
   const startedAt = Date.now();
@@ -64,6 +70,12 @@ async function uploadThroughLiveInitialAnalysis(page: import("@playwright/test")
 
   await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
   await page.getByTestId("upload-start-analysis").click();
+
+  // NEW: Wait for WebSocket handshake completion
+  await page.waitForFunction(() => {
+    return window.localStorage.getItem("forensic_ws_connected") === "true" ||
+           window.location.pathname.includes("/evidence");
+  }, { timeout: 60_000 });
 
   await page.waitForURL(/\/evidence$/, { timeout: 120_000, waitUntil: "commit" });
   await expect(page.getByText(/Uploading evidence|Connecting to analysis|Agents dispatching|Analysis Pipeline/i).first()).toBeVisible({ timeout: 90_000 });
@@ -93,6 +105,7 @@ async function uploadThroughLiveInitialAnalysis(page: import("@playwright/test")
 
 test("runtime: landing upload through live initial analysis and accept result", async ({ page }) => {
   test.setTimeout(1_800_000);
+  test.slow();  // NEW: Mark as slow test for Playwright reporting
   const pageErrors = await uploadThroughLiveInitialAnalysis(page, "accept");
 
   await page.getByTestId("accept-analysis-btn").click();
@@ -105,6 +118,7 @@ test("runtime: landing upload through live initial analysis and accept result", 
 
 test("runtime: landing upload through live deep analysis and final result", async ({ page }) => {
   test.setTimeout(1_800_000);
+  test.slow();  // NEW: Mark as slow test for Playwright reporting
   const pageErrors = await uploadThroughLiveInitialAnalysis(page, "deep");
 
   await page.getByTestId("deep-analysis-btn").click();

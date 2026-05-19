@@ -42,7 +42,7 @@ def client():
     mock_redis.expire = AsyncMock(return_value=True)
     mock_redis.incr = AsyncMock(return_value=1)
     mock_redis.incrby = AsyncMock(return_value=1)
-    mock_redis.eval = AsyncMock(return_value=[1, 60])
+    mock_redis.eval = MagicMock(return_value=[1, 60])
     mock_redis.scan_iter = MagicMock(side_effect=_empty_async_iter)
     mock_redis.ttl = AsyncMock(return_value=3600)
     mock_redis.ping = AsyncMock(return_value=True)

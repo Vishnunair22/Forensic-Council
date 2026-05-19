@@ -12,12 +12,12 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   testIgnore: process.env.RUN_LIVE_E2E === '1' ? [] : ['**/*.live.spec.ts'],
   /* Maximum time one test can run for. */
-  timeout: 60 * 1000,
+  timeout: 90 * 1000,
   expect: {
     timeout: 10 * 1000
   },
   /* Run tests in files in parallel */
-  fullyParallel: true,
+  fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */

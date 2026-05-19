@@ -97,3 +97,33 @@ class TestAudioHandlers:
 
         call_count = mock_registry.register.call_count
         assert call_count >= 5, f"Expected >=5 tools, got {call_count}"
+
+    @pytest.mark.asyncio
+    async def test_audio_extraction_failure_graceful_degradation(self, mock_agent):
+        """Test that _audio_artifact returns degraded result on ffmpeg failure."""
+        from core.handlers.audio import AudioHandlers
+        from unittest.mock import patch
+
+        mock_agent._extracted_audio_artifact = None
+        mock_agent.evidence_artifact.mime_type = "video/mp4"
+        mock_agent.evidence_artifact.file_path = "/fake/path/video.mp4"
+        handler = AudioHandlers(mock_agent)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            # Mock subprocess to fail
+            mock_proc = MagicMock()
+            mock_proc.communicate = AsyncMock(return_value=(b"", b"ffmpeg error"))
+            mock_proc.returncode = 1
+            mock_exec.return_value = mock_proc
+
+            result = await handler._audio_artifact()
+
+            assert getattr(result, "extraction_failed", False) is True
+            assert "Container decode failed" in getattr(result, "error_detail", "")
+
+        # Now test that a tool handler gracefully returns this failure
+        diag_res = await handler.speaker_diarization_handler({"artifact": result})
+        assert diag_res["status"] == "unavailable"
+        assert diag_res["evidence_verdict"] == "ERROR"
+        assert diag_res["available"] is False
+        mock_agent._record_tool_result.assert_called_with("speaker_diarize", diag_res)

@@ -203,3 +203,54 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env
 2. **PostgreSQL**: Mocked via `AsyncMock`. Use the `mock_pg` fixture for custom row returns.
 3. **LLMs**: All agent calls to Groq/Gemini are intercepted to prevent API costs and ensure deterministic results during testing.
 4. **Time**: Use `freezegun` (backend) or `jest.useFakeTimers()` (frontend) for timestamp-sensitive tests.
+
+---
+
+## 🔍 Troubleshooting Flaky Tests
+
+### 1. E2E Order-Dependent and State Pollution Failures
+- **Symptom**: Tests pass individually but fail during a full Playwright Chromium run.
+- **Root Cause**: `localStorage` and `sessionStorage` persist in the browser context across tests, leaking active session states and simulation variables.
+- **Resolution**:
+  - Disable parallel execution in `playwright.config.ts` (`fullyParallel: false` and `workers: 1`).
+  - Use `test.describe.serial` for interdependent journeys.
+  - Clear context, cookies, and local/session storages in a `beforeEach` hook:
+    ```typescript
+    test.beforeEach(async ({ page }) => {
+      await page.context().clearCookies();
+      await page.evaluate(() => {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+      });
+    });
+    ```
+
+### 2. Live Playwright Test Hangs (`full_journey.live.spec.ts`)
+- **Symptom**: Test hangs indefinitely on page redirection or during the upload flow.
+- **Resolution**:
+  - Ensure the backend is fully healthy by waiting for the `/api/v1/health` endpoint:
+    ```typescript
+    await page.waitForResponse(
+      (response) => (response.url().includes("/api/v1/health") || response.url().includes("/health")) && response.status() === 200,
+      { timeout: 30_000 }
+    );
+    ```
+  - Guard the upload state with a WebSocket connection handshake check:
+    ```typescript
+    await page.waitForFunction(() => {
+      return window.localStorage.getItem("forensic_ws_connected") === "true" ||
+             window.location.pathname.includes("/evidence");
+    }, { timeout: 60_000 });
+    ```
+
+### 3. Deep Analysis Tool and Subprocess Failures
+- **Symptom**: Subprocess timeouts or memory exhaustions during heavy audio or video forensic scans (OpenCV, Numba, ECAPA-TDNN).
+- **Resolution**:
+  - Enforce intelligent frame-skipping budgets (`skip_rate = max(1, frame_count // 150)`) inside `optical_flow_analyze`.
+  - Check video integrity before optical flow operations:
+    ```python
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_count <= 0:
+        raise ToolUnavailableError(f"Invalid frame count ({frame_count})")
+    ```
+  - Ensure background worker execution uses graceful timeouts and centralizes fallback logging (e.g. `_audio_artifact()` video track extraction).

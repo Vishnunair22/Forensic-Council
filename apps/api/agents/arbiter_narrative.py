@@ -1192,9 +1192,45 @@ Rules:
                         len(incomplete_findings), len(contested_findings), overall_error_rate
                     )
 
-            (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.gather(
-                t_structured(), t_narratives(), t_executive(), t_uncertainty()
-            )
+            try:
+                # overall investigation timeout budget is ML_SUBPROCESS_TIMEOUT_S (default 120s)
+                overall_timeout = getattr(self.config, "ml_subprocess_timeout_s", 120.0) or 120.0
+                timeout_budget = max(30.0, float(overall_timeout) * 0.25)
+
+                (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.wait_for(
+                    asyncio.gather(
+                        t_structured(), t_narratives(), t_executive(), t_uncertainty()
+                    ),
+                    timeout=timeout_budget
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Arbiter LLM synthesis timed out; falling back to template-generated narratives",
+                    timeout_limit=timeout_budget
+                )
+                v_sent, kf_list, r_note, p_anal, exec_s, unc_s = self._template_all(
+                    overall_verdict,
+                    overall_confidence,
+                    overall_error_rate,
+                    manipulation_probability,
+                    applicable_agent_count,
+                    all_findings,
+                    cross_modal_confirmed_count,
+                    len(contested_findings),
+                    analysis_coverage_note,
+                    active_agent_results,
+                    incomplete_count=len(incomplete_findings),
+                )
+                return {
+                    "verdict_sentence": v_sent,
+                    "key_findings": kf_list,
+                    "reliability_note": r_note,
+                    "per_agent_analysis": p_anal,
+                    "executive_summary": exec_s,
+                    "uncertainty_statement": unc_s,
+                    "llm_used": False,
+                    "narrative_warnings": ["LLM synthesis unavailable due to timeout"],
+                }
 
         self._synthesis_client = None
 

@@ -156,138 +156,148 @@ async function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
   });
 }
 
-test("fast mocked journey: landing → upload → accept → result → history", async ({ page }) => {
-  test.setTimeout(60_000);
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-
-  await setupMockRoutes(page);
-  await page.goto("/?upload=1");
-  if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-    const begin = page.getByTestId("hero-cta-begin");
-    await expect(begin).toBeVisible({ timeout: 10_000 });
-    await begin.click({ force: true });
-    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-      await begin.evaluate((element: HTMLElement) => element.click());
-    }
-    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-      await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
-    }
-  }
-  await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
-
-  const png1x1 = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-    "base64",
-  );
-  await page.getByLabel(/upload evidence file/i).setInputFiles({
-    name: `mock-journey-${Date.now()}.png`,
-    mimeType: "image/png",
-    buffer: png1x1,
+test.describe.serial("mocked journey with session persistence", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.context().clearCookies();
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
   });
 
-  await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("upload-start-analysis").click();
+  test("fast mocked journey: landing → upload → accept → result → history", async ({ page }) => {
+    test.setTimeout(60_000);
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
 
-  await page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" });
-
-  await expect(page.getByText(/Reconnecting/i)).toBeVisible({ timeout: 5_000 }).catch(() => {
-    /* ignore — mocked flow may not show reconnecting text */
-  });
-
-  const sid = await page.evaluate(() => localStorage.getItem("forensic_session_id"));
-  expect(sid).toBeTruthy();
-
-  await expect(page.getByTestId("accept-analysis-btn")).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId("accept-analysis-btn").click();
-
-  await page.waitForURL(/\/result\//, { timeout: 30_000, waitUntil: "commit" });
-  expect(page.url()).toContain(TEST_SESSION_ID);
-
-  await expect(page.getByText(/Evidence appears to be authentic/i)).toBeVisible({ timeout: 10_000 });
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem("forensic_history") ?? "[]").length > 0);
-
-  expect(errors.filter((e) => !e.includes("Warning"))).toEqual([]);
-
-  const historyCount = await page.evaluate(
-    () => JSON.parse(localStorage.getItem("forensic_history") ?? "[]").length,
-  );
-  expect(historyCount).toBeGreaterThan(0);
-});
-
-test("mocked upload route flow: upload → evidence page shows agent cards", async ({ page }) => {
-  test.setTimeout(60_000);
-  await setupMockRoutes(page);
-  await page.goto("/?upload=1");
-  if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-    const begin = page.getByTestId("hero-cta-begin");
-    await expect(begin).toBeVisible({ timeout: 10_000 });
-    await begin.click({ force: true });
+    await setupMockRoutes(page);
+    await page.goto("/?upload=1");
     if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-      await begin.evaluate((element: HTMLElement) => element.click());
+      const begin = page.getByTestId("hero-cta-begin");
+      await expect(begin).toBeVisible({ timeout: 10_000 });
+      await begin.click({ force: true });
+      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+        await begin.evaluate((element: HTMLElement) => element.click());
+      }
+      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+        await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
+      }
     }
-  }
+    await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
 
-  await page.getByLabel(/upload evidence file/i).setInputFiles({
-    name: `route-flow-${Date.now()}.png`,
-    mimeType: "image/png",
-    buffer: Buffer.from(
+    const png1x1 = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
       "base64",
-    ),
+    );
+    await page.getByLabel(/upload evidence file/i).setInputFiles({
+      name: `mock-journey-${Date.now()}.png`,
+      mimeType: "image/png",
+      buffer: png1x1,
+    });
+
+    await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("upload-start-analysis").click();
+
+    await page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" });
+
+    await expect(page.getByText(/Reconnecting/i)).toBeVisible({ timeout: 5_000 }).catch(() => {
+      /* ignore — mocked flow may not show reconnecting text */
+    });
+
+    const sid = await page.evaluate(() => localStorage.getItem("forensic_session_id"));
+    expect(sid).toBeTruthy();
+
+    await expect(page.getByTestId("accept-analysis-btn")).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId("accept-analysis-btn").click();
+
+    await page.waitForURL(/\/result\//, { timeout: 30_000, waitUntil: "commit" });
+    expect(page.url()).toContain(TEST_SESSION_ID);
+
+    await expect(page.getByText(/Evidence appears to be authentic/i)).toBeVisible({ timeout: 10_000 });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("forensic_history") ?? "[]").length > 0);
+
+    expect(errors.filter((e) => !e.includes("Warning"))).toEqual([]);
+
+    const historyCount = await page.evaluate(
+      () => JSON.parse(localStorage.getItem("forensic_history") ?? "[]").length,
+    );
+    expect(historyCount).toBeGreaterThan(0);
   });
 
-  await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("upload-start-analysis").click();
+  test("mocked upload route flow: upload → evidence page shows agent cards", async ({ page }) => {
+    test.setTimeout(60_000);
+    await setupMockRoutes(page);
+    await page.goto("/?upload=1");
+    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+      const begin = page.getByTestId("hero-cta-begin");
+      await expect(begin).toBeVisible({ timeout: 10_000 });
+      await begin.click({ force: true });
+      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+        await begin.evaluate((element: HTMLElement) => element.click());
+      }
+    }
 
-  await page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" });
-  await expect(page.getByTestId("agent-card-Agent1")).toBeVisible({ timeout: 10_000 }).catch(() => {
-    /* agent cards may not render in mocked flow */
-  });
-});
+    await page.getByLabel(/upload evidence file/i).setInputFiles({
+      name: `route-flow-${Date.now()}.png`,
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
 
-test("mocked reconnect not_found routes home with upload=1", async ({ page }) => {
-  test.setTimeout(30_000);
-  await setupMockRoutes(page, "00000000-0000-4000-b000-000000000002");
-  await page.goto("/");
+    await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("upload-start-analysis").click();
 
-  await page.evaluate(() => {
-    localStorage.setItem("forensic_session_id", "00000000-0000-4000-b000-000000000002");
-    sessionStorage.setItem("fc_show_loading", "true");
-  });
-
-  await page.route(`**/api/v1/sessions/00000000-0000-4000-b000-000000000002/arbiter-status`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ status: "not_found", message: "Session not found" }),
+    await page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" });
+    await expect(page.getByTestId("agent-card-Agent1")).toBeVisible({ timeout: 10_000 }).catch(() => {
+      /* agent cards may not render in mocked flow */
     });
   });
 
-  await page.goto("/evidence");
-  await expect(page.getByRole("heading", { name: /No Evidence Queued/i })).toBeVisible({ timeout: 15_000 });
-});
+  test("mocked reconnect not_found routes home with upload=1", async ({ page }) => {
+    test.setTimeout(30_000);
+    await setupMockRoutes(page, "00000000-0000-4000-b000-000000000002");
+    await page.goto("/");
 
-test("mocked reconnect complete navigates to result", async ({ page }) => {
-  test.setTimeout(30_000);
-  const sid = "00000000-0000-4000-c000-000000000003";
-  await setupMockRoutes(page, sid);
-  await page.goto("/");
-
-  await page.evaluate((activeSid) => {
-    localStorage.setItem("forensic_session_id", activeSid);
-    sessionStorage.setItem("fc_show_loading", "true");
-  }, sid);
-
-  await page.route(`**/api/v1/sessions/${sid}/arbiter-status`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ status: "complete", report_id: "rpt-complete" }),
+    await page.evaluate(() => {
+      localStorage.setItem("forensic_session_id", "00000000-0000-4000-b000-000000000002");
+      sessionStorage.setItem("fc_show_loading", "true");
     });
+
+    await page.route(`**/api/v1/sessions/00000000-0000-4000-b000-000000000002/arbiter-status`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "not_found", message: "Session not found" }),
+      });
+    });
+
+    await page.goto("/evidence");
+    await expect(page.getByRole("heading", { name: /No Evidence Queued/i })).toBeVisible({ timeout: 15_000 });
   });
 
-  await page.goto(`/result/${sid}`);
-  await page.waitForURL(/\/result\//, { timeout: 15_000 });
-  expect(page.url()).toContain(sid);
+  test("mocked reconnect complete navigates to result", async ({ page }) => {
+    test.setTimeout(30_000);
+    const sid = "00000000-0000-4000-c000-000000000003";
+    await setupMockRoutes(page, sid);
+    await page.goto("/");
+
+    await page.evaluate((activeSid) => {
+      localStorage.setItem("forensic_session_id", activeSid);
+      sessionStorage.setItem("fc_show_loading", "true");
+    }, sid);
+
+    await page.route(`**/api/v1/sessions/${sid}/arbiter-status`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "complete", report_id: "rpt-complete" }),
+      });
+    });
+
+    await page.goto(`/result/${sid}`);
+    await page.waitForURL(/\/result\//, { timeout: 15_000 });
+    expect(page.url()).toContain(sid);
+  });
 });
