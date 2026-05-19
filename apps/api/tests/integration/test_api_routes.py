@@ -30,6 +30,10 @@ pytestmark = pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi not installed")
 @pytest.fixture(scope="module")
 def client():
     """Return a TestClient with DB / Redis / Qdrant fully mocked."""
+    async def _empty_async_iter(*args, **kwargs):
+        if False:
+            yield None
+
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=None)
     mock_redis.set = AsyncMock(return_value=True)
@@ -38,10 +42,14 @@ def client():
     mock_redis.expire = AsyncMock(return_value=True)
     mock_redis.incr = AsyncMock(return_value=1)
     mock_redis.incrby = AsyncMock(return_value=1)
+    mock_redis.eval = AsyncMock(return_value=[1, 60])
+    mock_redis.scan_iter = MagicMock(side_effect=_empty_async_iter)
     mock_redis.ttl = AsyncMock(return_value=3600)
     mock_redis.ping = AsyncMock(return_value=True)
 
     mock_pipeline = AsyncMock()
+    mock_pipeline.incr = MagicMock(return_value=mock_pipeline)
+    mock_pipeline.expire = MagicMock(return_value=mock_pipeline)
     mock_pipeline.execute = AsyncMock(return_value=[])
     mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
 

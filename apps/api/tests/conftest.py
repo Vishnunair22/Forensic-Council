@@ -55,6 +55,11 @@ class _DualModeTestClient:
     def delete(self, *args, **kwargs):
         return _AwaitableResponse(self._client.delete(*args, **kwargs))
 
+
+async def _empty_async_iter(*args, **kwargs):
+    if False:
+        yield None
+
 # -- Minimal environment before any backend import --
 
 os.environ.setdefault("APP_ENV", "testing")
@@ -233,11 +238,21 @@ def mock_redis():
     m.expire = AsyncMock(return_value=True)
     m.incr = AsyncMock(return_value=1)
     m.incrby = AsyncMock(return_value=1)
+    m.eval = AsyncMock(return_value=[1, 60])
     m.ttl = AsyncMock(return_value=3600)
     m.publish = AsyncMock(return_value=1)
     m.subscribe = AsyncMock()
     m.ping = AsyncMock(return_value=True)
     m.flushdb = AsyncMock()
+    m.scan_iter = MagicMock(side_effect=_empty_async_iter)
+
+    pipe = MagicMock()
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=False)
+    pipe.incr = MagicMock(return_value=pipe)
+    pipe.expire = MagicMock(return_value=pipe)
+    pipe.execute = AsyncMock(return_value=[])
+    m.pipeline = MagicMock(return_value=pipe)
 
     # Stub get_pubsub for InterAgentBus distributed signaling
     pubsub_mock = AsyncMock()

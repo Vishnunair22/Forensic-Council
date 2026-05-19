@@ -11,7 +11,7 @@ import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
-import { storage, sessionOnlyStorage } from "@/lib/storage";
+import { storage } from "@/lib/storage";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
 import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
@@ -34,13 +34,6 @@ export function EvidenceUploadClient() {
 
   useEffect(() => {
     document.body.style.overflow = "";
-    if (
-      !__pendingFileStore.file &&
-      !sessionOnlyStorage.getItem("fc_pending_file_meta") &&
-      !storage.getItem("forensic_session_id")
-    ) {
-      sessionOnlyStorage.removeItem("forensic_auto_start");
-    }
     // On bfcache restore with no session, navigate home rather than reloading
     // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {

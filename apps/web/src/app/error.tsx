@@ -23,9 +23,9 @@ export default function RouteError({
     <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden bg-background">
       <motion.div
         className="relative max-w-md w-full p-10 rounded-3xl overflow-hidden flex flex-col items-center z-10 premium-glass border-danger/20"
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        initial={{ opacity: 0, scale: 0.98, y: 4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+        transition={{ duration: 0.16, ease: "easeOut" }}
       >
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
@@ -61,17 +61,17 @@ export default function RouteError({
             className="btn-outline w-full py-4 tracking-wide"
           >
             <Home className="w-4 h-4" />
-            Return To Hub
+            Return to Hub
           </Link>
         </div>
 
         {process.env.NODE_ENV === "development" && (
           <div className="mt-8 p-5 rounded-2xl border border-danger/20 w-full overflow-hidden text-left shadow-inner">
-            <p className="text-[10px] font-mono text-danger/80 break-all leading-relaxed tracking-tight">
+            <p className="text-xs font-mono text-danger/80 break-all leading-relaxed tracking-tight">
               Diagnostic_Err: {error.message}
             </p>
             {error.digest && (
-              <p className="text-[10px] font-mono text-white/20 mt-2">
+              <p className="text-xs font-mono text-white/55 mt-2">
                 Node_Id: {error.digest}
               </p>
             )}

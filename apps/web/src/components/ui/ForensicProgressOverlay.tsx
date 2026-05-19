@@ -49,7 +49,7 @@ export function ForensicProgressOverlay({
               className="w-3 h-3 bg-[var(--color-primary)]"
             />
           </div>
-          <span className="text-[11px] font-mono font-black tracking-[0.4em] uppercase text-white/50">
+          <span className="fc-eyebrow fc-text-faint">
             System Active
           </span>
         </div>
@@ -65,7 +65,11 @@ export function ForensicProgressOverlay({
             {title}
           </motion.h1>
           <div className="flex items-center gap-4">
-            <div className="w-1.5 h-1.5 bg-white/40 rounded-sm animate-pulse" />
+            <motion.div
+              className="w-1.5 h-1.5 bg-white/55 rounded-full"
+              animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
+              transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+            />
             <p
               id="forensic-live-text"
               className="text-xs md:text-sm font-mono font-medium text-white/60 tracking-wide"
@@ -80,7 +84,7 @@ export function ForensicProgressOverlay({
 
         {/* Progress bar */}
         <div className="w-full max-w-md">
-          <div className="flex items-center justify-between mb-4 text-[10px] font-mono font-bold tracking-[0.2em] text-white/30 uppercase">
+          <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-faint">
             <span>{telemetryLabel}</span>
             {showElapsed && (
               <span className="text-[var(--color-primary)]">{formatTime(elapsed)}</span>

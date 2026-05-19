@@ -144,10 +144,9 @@
     transform: translate(-50%, -50%);
     color: rgba(165, 200, 255, 0.72);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
     pointer-events: none;
   }
 
@@ -255,8 +254,8 @@
   }
 
   .fc-transition {
-    transition-property: transform, opacity, border-color, background-color, box-shadow;
-    transition-duration: 220ms;
+    transition-property: opacity, border-color, background-color, box-shadow, color;
+    transition-duration: 160ms;
     transition-timing-function: var(--ease-out);
   }
 
@@ -294,17 +293,15 @@
      repeated 100+ times across the app. */
   .fc-eyebrow {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .fc-eyebrow-strong {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 900;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 }
 

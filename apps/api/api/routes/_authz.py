@@ -32,10 +32,10 @@ async def _load_session_metadata_from_db(session_id: str) -> dict | None:
 
         persistence = await get_session_persistence()
         state = await persistence.get_session_state(session_id)
-        if state:
+        if isinstance(state, dict) and state:
             return state
         report = await persistence.get_report(session_id)
-        if report:
+        if isinstance(report, dict) and report:
             return {
                 "session_id": report["session_id"],
                 "case_id": report["case_id"],

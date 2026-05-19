@@ -1,5 +1,7 @@
 """Security-focused tests for authentication and authorization."""
 
+from unittest.mock import patch
+
 import pytest
 from fastapi import status
 from httpx import AsyncClient
@@ -17,13 +19,58 @@ class TestAuthSecurity:
 
     async def test_rate_limiting_enforcement(self, client: AsyncClient):
         """Test that rate limiting prevents brute-force attacks."""
+        class _FakeRedis:
+            def __init__(self):
+                self.store: dict[str, int] = {}
+
+            async def eval(self, *args, **kwargs):
+                return [1, 60]
+
+            async def get(self, key):
+                value = self.store.get(key)
+                return str(value) if value is not None else None
+
+            async def ttl(self, key):
+                return 60
+
+            async def incr(self, key):
+                self.store[key] = self.store.get(key, 0) + 1
+                return self.store[key]
+
+            async def expire(self, key, ttl):
+                return True
+
+            def pipeline(self):
+                redis = self
+
+                class _Pipe:
+                    def __init__(self):
+                        self.keys: list[str] = []
+
+                    def incr(self, key):
+                        self.keys.append(key)
+                        return self
+
+                    def expire(self, key, ttl):
+                        return self
+
+                    async def execute(self):
+                        for key in self.keys:
+                            await redis.incr(key)
+                        return []
+
+                return _Pipe()
+
+        fake_redis = _FakeRedis()
         # Make rapid requests to trigger rate limit
         responses = []
-        for _ in range(100):
-            resp = await client.post(
-                "/api/v1/auth/login", json={"email": "test@example.com", "password": "wrong"}
-            )
-            responses.append(resp.status_code)
+        with patch("core.persistence.redis_client.get_redis_client", return_value=fake_redis):
+            for _ in range(100):
+                resp = await client.post(
+                    "/api/v1/auth/login",
+                    data={"username": "test@example.com", "password": "wrong"},
+                )
+                responses.append(resp.status_code)
 
         # Should have at least one 429 response
         assert status.HTTP_429_TOO_MANY_REQUESTS in responses

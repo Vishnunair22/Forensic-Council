@@ -10,6 +10,7 @@ handlers focused on request/response logic.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -61,6 +62,21 @@ async def _get_redis():
     from core.persistence.redis_client import get_redis_client
 
     return await get_redis_client()
+
+
+async def _redis_pipeline(client: Any, *, transaction: bool = True) -> Any:
+    """Return a Redis pipeline from real clients and async test doubles."""
+    pipeline = client.pipeline(transaction=transaction)
+    if inspect.isawaitable(pipeline):
+        pipeline = await pipeline
+    return pipeline
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Await values returned by async test doubles; pass through sync client returns."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -158,7 +174,7 @@ async def update_active_pipeline_metadata(
     raw_client = redis.client  # underlying redis.asyncio.Redis
     for _attempt in range(max_retries):
         try:
-            async with raw_client.pipeline(transaction=True) as pipe:
+            async with await _redis_pipeline(raw_client, transaction=True) as pipe:
                 await pipe.watch(key)
                 raw = await pipe.get(key)
                 if raw is None:
@@ -171,7 +187,9 @@ async def update_active_pipeline_metadata(
                         existing = {}
                 merged = {**existing, **fields}
                 pipe.multi()
-                pipe.set(key, _json.dumps(merged, default=str), ex=_METADATA_TTL_SECONDS)
+                await _maybe_await(
+                    pipe.set(key, _json.dumps(merged, default=str), ex=_METADATA_TTL_SECONDS)
+                )
                 await pipe.execute()
                 return merged
         except WatchError:
@@ -309,10 +327,10 @@ async def broadcast_update(session_id: str, update: BriefUpdate) -> None:
         await redis.client.publish(channel, payload)
 
         # Write to replay buffer (atomic capped list)
-        async with redis.client.pipeline(transaction=True) as pipe:
-            pipe.rpush(replay_key, payload)
-            pipe.ltrim(replay_key, -REPLAY_BUFFER_MAX_LEN, -1)
-            pipe.expire(replay_key, REPLAY_BUFFER_TTL)
+        async with await _redis_pipeline(redis.client, transaction=True) as pipe:
+            await _maybe_await(pipe.rpush(replay_key, payload))
+            await _maybe_await(pipe.ltrim(replay_key, -REPLAY_BUFFER_MAX_LEN, -1))
+            await _maybe_await(pipe.expire(replay_key, REPLAY_BUFFER_TTL))
             await pipe.execute()
 
     except Exception as e:

@@ -23,9 +23,9 @@ export function SessionExpiredClient() {
           transition={{ duration: 0.6 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-center gap-2 opacity-40">
+          <div className="flex items-center justify-center gap-2 fc-text-faint">
             <ShieldAlert className="w-4 h-4 text-red-500" />
-            <span className="text-[10px] tracking-[0.3em] font-mono font-black">
+            <span className="fc-eyebrow">
               Security Boundary
             </span>
           </div>
@@ -35,7 +35,7 @@ export function SessionExpiredClient() {
           >
             Session De-synchronized
           </h1>
-          <p className="text-base text-white/40 font-medium leading-relaxed">
+          <p className="text-base fc-text-secondary font-medium leading-relaxed">
             The investigative payload session has either concluded, expired, or lacked appropriate validation signatures.
           </p>
         </motion.div>
@@ -66,11 +66,11 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-primary text-background hover:scale-[1.02] shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-xs font-black tracking-[0.2em] transition-all flex items-center justify-center gap-3 group"
+                className="w-full py-4 rounded-full bg-primary text-background shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-sm font-black transition-all flex items-center justify-center gap-3 group"
                 data-testid="session-expired-home-cta"
                 aria-label="Return to dashboard"
               >
-                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                <ArrowLeft className="w-4 h-4" />
                 Return to Hub
               </button>
               
@@ -84,10 +84,10 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-xs font-black tracking-[0.2em] transition-all flex items-center justify-center gap-3"
+                className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-sm font-black transition-all flex items-center justify-center gap-3"
                 data-testid="session-expired-retry-cta"
               >
-                <RefreshCw className="w-4 h-4 opacity-40" />
+                <RefreshCw className="w-4 h-4 opacity-60" />
                 New Intake
               </button>
             </div>
@@ -95,10 +95,10 @@ export function SessionExpiredClient() {
         </motion.div>
 
         {/* Micro-accent */}
-        <div className="flex justify-center opacity-10">
-           <div className="h-[1px] w-12 bg-white" />
+        <div className="flex justify-center">
+           <div className="h-[1px] w-12 bg-white/20" />
            <div className="mx-4 fc-eyebrow fc-text-faint">System Halt</div>
-           <div className="h-[1px] w-12 bg-white" />
+           <div className="h-[1px] w-12 bg-white/20" />
         </div>
       </div>
     </main>

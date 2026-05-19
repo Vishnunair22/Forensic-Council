@@ -55,6 +55,10 @@ OWNER_USER_ID = str(uuid.uuid4())
 
 
 def _make_redis_mock() -> AsyncMock:
+    async def _empty_async_iter(*args, **kwargs):
+        if False:
+            yield None
+
     m = AsyncMock()
     m.get = AsyncMock(return_value=None)
     m.get_json = AsyncMock(return_value=None)
@@ -67,13 +71,24 @@ def _make_redis_mock() -> AsyncMock:
     m.ttl = AsyncMock(return_value=3600)
     m.ping = AsyncMock(return_value=True)
     m.keys = AsyncMock(return_value=[])
+    m.scan_iter = MagicMock(side_effect=_empty_async_iter)
+    m.eval = AsyncMock(return_value=[1, 60])
     m.publish = AsyncMock(return_value=0)
     pubsub_mock = AsyncMock()
     pubsub_mock.subscribe = AsyncMock()
     pubsub_mock.get_message = AsyncMock(return_value=None)
     pubsub_mock.unsubscribe = AsyncMock()
     m.get_pubsub = MagicMock(return_value=pubsub_mock)
-    pipe = AsyncMock()
+    pipe = MagicMock()
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=False)
+    pipe.watch = AsyncMock()
+    pipe.get = AsyncMock(return_value=None)
+    pipe.multi = MagicMock()
+    pipe.set = MagicMock(return_value=pipe)
+    pipe.rpush = MagicMock(return_value=pipe)
+    pipe.ltrim = MagicMock(return_value=pipe)
+    pipe.expire = MagicMock(return_value=pipe)
     pipe.execute = AsyncMock(return_value=[])
     m.pipeline = MagicMock(return_value=pipe)
     m.client = AsyncMock()
@@ -128,6 +143,16 @@ def _jwt_for(user_id: str, role: str = "investigator") -> str:
 
 def _auth(user_id: str = OWNER_USER_ID, role: str = "investigator") -> dict:
     return {"Authorization": f"Bearer {_jwt_for(user_id, role)}"}
+
+
+def _csrf(client, headers: dict | None = None) -> dict:
+    """Return headers with a valid double-submit CSRF token for state-changing calls."""
+    client.get("/health")
+    token = client.cookies.get("csrf_token")
+    merged = dict(headers or {})
+    if token:
+        merged["X-CSRF-Token"] = token
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +269,7 @@ class TestInvestigateEndpoint:
 
             resp = client.post(
                 "/api/v1/investigate",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 files={"file": ("evidence.jpg", io.BytesIO(file_bytes), "image/jpeg")},
                 data={"case_id": "CASE-001", "investigator_id": "INVESTIGATOR-001"},
             )
@@ -261,6 +286,7 @@ class TestInvestigateEndpoint:
         file_bytes = b"\xff\xd8\xff\xe0"
         resp = client.post(
             "/api/v1/investigate",
+            headers=_csrf(client),
             files={"file": ("e.jpg", io.BytesIO(file_bytes), "image/jpeg")},
         )
         assert resp.status_code == 401
@@ -269,7 +295,7 @@ class TestInvestigateEndpoint:
         """Missing multipart file body → 422 Unprocessable Entity."""
         resp = client.post(
             "/api/v1/investigate",
-            headers=_auth(),
+            headers=_csrf(client, _auth()),
             data={"case_id": "CASE-001"},
         )
         assert resp.status_code == 422
@@ -286,7 +312,7 @@ class TestSSEEndpoint:
             with client.stream(
                 "GET",
                 f"/api/v1/sessions/{SESSION_ID}/progress",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             ) as stream:
                 for line in stream.iter_lines():
                     if line.startswith("data:"):
@@ -324,7 +350,7 @@ class TestResumeEndpoint:
 
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={"deep_analysis": False},
             )
         # 404 = wrong URL; anything else means route exists
@@ -357,7 +383,7 @@ class TestResumeEndpoint:
 
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={"deep_analysis": False},
             )
         assert resp.status_code == 200
@@ -391,7 +417,7 @@ class TestResumeEndpoint:
 
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={"deep_analysis": True},
             )
         assert resp.status_code == 200
@@ -419,7 +445,7 @@ class TestArbiterStatusEndpoint:
             }
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -439,7 +465,7 @@ class TestArbiterStatusEndpoint:
             }
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -455,7 +481,7 @@ class TestArbiterStatusEndpoint:
         ):
             resp = client.get(
                 f"/api/v1/sessions/{uuid.uuid4()}/arbiter-status",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -467,6 +493,9 @@ class TestReportEndpoint:
 
     def test_report_202_while_in_progress(self, client):
         """Pipeline exists but _final_report is None → 202."""
+        from api.routes._session_state import _final_reports
+        _final_reports.pop(SESSION_ID, None)
+
         mock_pipeline = MagicMock()
         mock_pipeline._final_report = None
         mock_pipeline._error = None
@@ -474,6 +503,7 @@ class TestReportEndpoint:
             patch("api.routes.sessions.get_active_pipeline", return_value=mock_pipeline),
             patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
             patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+            patch("api.routes._session_state.get_final_report", return_value=None),
         ):
             mock_meta.return_value = {"status": "running", "investigator_id": OWNER_USER_ID}
             mock_meta_sessions.return_value = {
@@ -482,7 +512,7 @@ class TestReportEndpoint:
             }
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/report",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 202
         body = resp.json()
@@ -505,7 +535,7 @@ class TestReportEndpoint:
             }
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/report",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 500
 
@@ -530,7 +560,7 @@ class TestReportEndpoint:
             }
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/report",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -573,7 +603,7 @@ class TestReportEndpoint:
             }
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/report/download",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         assert "content-disposition" in {k.lower() for k in resp.headers}
@@ -633,7 +663,7 @@ class TestOwnershipEnforcement:
             # Request from a DIFFERENT user
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(user_id=OTHER_USER_ID),
+                headers=_csrf(client, _auth(user_id=OTHER_USER_ID)),
                 json={"deep_analysis": False},
             )
         assert resp.status_code == 403
@@ -658,7 +688,7 @@ class TestInputValidation:
             }
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={},  # missing deep_analysis
             )
         assert resp.status_code == 422
@@ -667,7 +697,7 @@ class TestInputValidation:
         """Session ID that fails UUID validation → 422."""
         resp = client.post(
             "/api/v1/sessions/not-a-uuid!!/resume",
-            headers=_auth(),
+            headers=_csrf(client, _auth()),
             json={"deep_analysis": False},
         )
         assert resp.status_code in (404, 422)
@@ -688,7 +718,7 @@ class TestInputValidation:
 
                 resp = client.get(
                     f"/api/v1/sessions/{uuid.uuid4()}/report",
-                    headers=_auth(),
+                    headers=_csrf(client, _auth()),
                 )
         assert resp.status_code == 404
 
@@ -777,7 +807,7 @@ class TestHITLDecisionEndpoint:
 
             resp = client.post(
                 "/api/v1/hitl/decision",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={
                     "session_id": SESSION_ID,
                     "checkpoint_id": checkpoint_id,
@@ -822,7 +852,7 @@ class TestDuplicateInvestigation409:
 
             resp1 = client.post(
                 "/api/v1/investigate",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 files={"file": ("dup.jpg", io.BytesIO(file_bytes), "image/jpeg")},
                 data={"case_id": "CASE-001", "investigator_id": "INVESTIGATOR-001"},
             )
@@ -850,7 +880,7 @@ class TestDuplicateInvestigation409:
 
             resp2 = client.post(
                 "/api/v1/investigate",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 files={"file": ("dup.jpg", io.BytesIO(file_bytes), "image/jpeg")},
                 data={"case_id": "CASE-002", "investigator_id": "INVESTIGATOR-001"},
             )
@@ -886,6 +916,7 @@ class TestDuplicateInvestigation409:
 
             resp = client.post(
                 "/api/v1/investigate",
+                headers=_csrf(client),
                 files={"file": ("dup2.jpg", io.BytesIO(file_bytes), "image/jpeg")},
                 data={"case_id": "CASE-001", "investigator_id": "INVESTIGATOR-001"},
             )
@@ -922,7 +953,7 @@ class TestResumeIdempotency:
 
             resp1 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={"deep_analysis": False},
             )
 
@@ -931,7 +962,7 @@ class TestResumeIdempotency:
 
             resp2 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
                 json={"deep_analysis": False},
             )
 
@@ -960,13 +991,13 @@ class TestResumeIdempotency:
 
             resp1 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(user_id=OTHER_USER_ID),
+                headers=_csrf(client, _auth(user_id=OTHER_USER_ID)),
                 json={"deep_analysis": False},
             )
 
             resp2 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
-                headers=_auth(user_id=OTHER_USER_ID),
+                headers=_csrf(client, _auth(user_id=OTHER_USER_ID)),
                 json={"deep_analysis": False},
             )
 
@@ -984,7 +1015,7 @@ class TestArbiterStatusUnreachable:
 
             resp = client.get(
                 f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -998,7 +1029,7 @@ class TestArbiterStatusUnreachable:
         with patch("api.routes._session_state.get_active_pipeline_metadata", return_value=None):
             resp = client.get(
                 f"/api/v1/sessions/{random_sid}/arbiter-status",
-                headers=_auth(),
+                headers=_csrf(client, _auth()),
             )
         assert resp.status_code == 200
         body = resp.json()

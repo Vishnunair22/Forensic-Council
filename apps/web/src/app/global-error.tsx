@@ -29,9 +29,9 @@ export default function GlobalError({
               boxShadow:
                 "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
           >
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-400/30 to-transparent rounded-t-3xl" />
 
@@ -55,14 +55,10 @@ export default function GlobalError({
             <div className="w-full space-y-3">
               <motion.button
                 onClick={() => reset()}
-                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-bold text-[#04070F]"
+                className="w-full py-3.5 rounded-full inline-flex items-center justify-center gap-2 font-bold text-[#04070F]"
                 style={{
                   background: "linear-gradient(135deg, #93C5FD 0%, #3B82F6 60%, #2563EB 100%)",
                   boxShadow: "0 10px 30px -8px rgba(79,142,247,0.6), inset 0 1px 0 rgba(255,255,255,0.35)",
-                }}
-                whileHover={{
-                  scale: 1.02,
-                  boxShadow: "0 0 32px rgba(79,142,247,0.35)",
                 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -72,7 +68,7 @@ export default function GlobalError({
 
               <Link
                 href="/"
-                className="w-full py-3.5 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
+                className="w-full py-3.5 rounded-full inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
               >
                 <Home className="w-4 h-4" />
                 Return to Dashboard
@@ -81,11 +77,11 @@ export default function GlobalError({
 
             {process.env.NODE_ENV === "development" && (
               <div className="mt-6 p-4 bg-black/40 rounded-xl border border-red-500/20 w-full overflow-hidden text-left">
-                <p className="text-[10px] font-mono text-red-400 break-all leading-relaxed">
+                <p className="text-xs font-mono text-red-400 break-all leading-relaxed">
                   {error.message}
                 </p>
                 {error.digest && (
-                  <p className="text-[10px] font-mono text-slate-600 mt-1">
+                  <p className="text-xs font-mono text-white/55 mt-1">
                     Digest: {error.digest}
                   </p>
                 )}

@@ -174,10 +174,17 @@ def check_shell_scripts_syntax() -> list[str]:
                     cwd=str(ROOT),
                 )
                 if result.returncode != 0:
-                    stderr = result.stderr.strip()
-                    if "WSL" in stderr or "no such file" in stderr.lower() or "not recognized" in stderr.lower():
+                    stderr = (result.stderr or result.stdout).strip()
+                    normalized_stderr = stderr.replace("\x00", "")
+                    lower_stderr = normalized_stderr.lower()
+                    if (
+                        "wsl" in lower_stderr
+                        or "windows subsystem for linux has no installed distributions" in lower_stderr
+                        or "no such file" in lower_stderr
+                        or "not recognized" in lower_stderr
+                    ):
                         continue
-                    errors.append(f"shell syntax error in {f}: {stderr}")
+                    errors.append(f"shell syntax error in {f}: {normalized_stderr}")
     finally:
         os.chdir(old_cwd)
     return errors

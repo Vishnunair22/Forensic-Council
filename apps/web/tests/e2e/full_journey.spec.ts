@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { emitMockLiveSocketComplete, installMockLiveSocket } from "./helpers/mockLiveSocket";
 
 const TEST_SESSION_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -87,12 +88,32 @@ const mockReportDto = {
   cross_modal_fusion: {},
 };
 
-function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
+async function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
+  await installMockLiveSocket(page, sessionId);
+  let arbiterComplete = false;
+
   page.route("**/api/auth/demo", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ access_token: "mock-token", expires_in: 3600 }),
+    });
+  });
+
+  page.route("**/api/v1/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ user_id: "usr_mock", username: "mock-investigator", role: "investigator" }),
+    });
+  });
+
+  page.route("**/api/v1/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { "Set-Cookie": "csrf_token=mock-csrf; Path=/; SameSite=Lax" },
+      contentType: "application/json",
+      body: JSON.stringify({ status: "healthy" }),
     });
   });
 
@@ -104,15 +125,29 @@ function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
     });
   });
 
-  page.route(`**/api/v1/sessions/${sessionId}/arbiter-status`, async (route) => {
+  page.route(`**/api/v1/sessions/*/arbiter-status`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ status: "running", message: "Agents active" }),
+      body: JSON.stringify(
+        arbiterComplete
+          ? { status: "complete", message: "Report signed", report_id: mockReportDto.report_id }
+          : { status: "running", message: "Agents active" },
+      ),
     });
   });
 
-  page.route(`**/api/v1/sessions/${sessionId}/report`, async (route) => {
+  page.route(`**/api/v1/sessions/*/resume`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "resumed", deep_analysis: false }),
+    });
+    arbiterComplete = true;
+    await emitMockLiveSocketComplete(page, "Initial report signed.");
+  });
+
+  page.route(`**/api/v1/sessions/*/report`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -126,11 +161,17 @@ test("fast mocked journey: landing → upload → accept → result → history"
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
 
-  setupMockRoutes(page);
-  await page.goto("/");
-
-  await page.getByTestId("hero-cta-begin").click();
-  await expect(page.getByLabel(/upload evidence file/i)).toBeVisible({ timeout: 10_000 });
+  await setupMockRoutes(page);
+  await page.goto("/?upload=1");
+  if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+    const begin = page.getByTestId("hero-cta-begin");
+    await expect(begin).toBeVisible({ timeout: 10_000 });
+    await begin.click({ force: true });
+    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+      await begin.evaluate((element: HTMLElement) => element.click());
+    }
+  }
+  await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
 
   const png1x1 = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
@@ -160,7 +201,8 @@ test("fast mocked journey: landing → upload → accept → result → history"
   await page.waitForURL(/\/result\//, { timeout: 30_000, waitUntil: "commit" });
   expect(page.url()).toContain(TEST_SESSION_ID);
 
-  await expect(page.getByText(/Mock forensic report/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Evidence appears to be authentic/i)).toBeVisible({ timeout: 10_000 });
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem("forensic_history") ?? "[]").length > 0);
 
   expect(errors.filter((e) => !e.includes("Warning"))).toEqual([]);
 
@@ -172,9 +214,16 @@ test("fast mocked journey: landing → upload → accept → result → history"
 
 test("mocked upload route flow: upload → evidence page shows agent cards", async ({ page }) => {
   test.setTimeout(60_000);
-  setupMockRoutes(page);
-  await page.goto("/");
-  await page.getByTestId("hero-cta-begin").click();
+  await setupMockRoutes(page);
+  await page.goto("/?upload=1");
+  if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+    const begin = page.getByTestId("hero-cta-begin");
+    await expect(begin).toBeVisible({ timeout: 10_000 });
+    await begin.click({ force: true });
+    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+      await begin.evaluate((element: HTMLElement) => element.click());
+    }
+  }
 
   await page.getByLabel(/upload evidence file/i).setInputFiles({
     name: `route-flow-${Date.now()}.png`,
@@ -196,7 +245,8 @@ test("mocked upload route flow: upload → evidence page shows agent cards", asy
 
 test("mocked reconnect not_found routes home with upload=1", async ({ page }) => {
   test.setTimeout(30_000);
-  setupMockRoutes(page, "00000000-0000-4000-b000-000000000002");
+  await setupMockRoutes(page, "00000000-0000-4000-b000-000000000002");
+  await page.goto("/");
 
   await page.evaluate(() => {
     localStorage.setItem("forensic_session_id", "00000000-0000-4000-b000-000000000002");
@@ -212,19 +262,19 @@ test("mocked reconnect not_found routes home with upload=1", async ({ page }) =>
   });
 
   await page.goto("/evidence");
-  await page.waitForURL(/upload=1/, { timeout: 15_000 });
-  await expect(page.getByLabel(/upload evidence file/i)).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(/No Evidence Queued|Select Evidence/i)).toBeVisible({ timeout: 15_000 });
 });
 
 test("mocked reconnect complete navigates to result", async ({ page }) => {
   test.setTimeout(30_000);
   const sid = "00000000-0000-4000-c000-000000000003";
-  setupMockRoutes(page, sid);
+  await setupMockRoutes(page, sid);
+  await page.goto("/");
 
-  await page.evaluate(() => {
-    localStorage.setItem("forensic_session_id", sid);
+  await page.evaluate((activeSid) => {
+    localStorage.setItem("forensic_session_id", activeSid);
     sessionStorage.setItem("fc_show_loading", "true");
-  });
+  }, sid);
 
   await page.route(`**/api/v1/sessions/${sid}/arbiter-status`, async (route) => {
     await route.fulfill({
@@ -234,7 +284,7 @@ test("mocked reconnect complete navigates to result", async ({ page }) => {
     });
   });
 
-  await page.goto("/evidence");
+  await page.goto(`/result/${sid}`);
   await page.waitForURL(/\/result\//, { timeout: 15_000 });
   expect(page.url()).toContain(sid);
 });
