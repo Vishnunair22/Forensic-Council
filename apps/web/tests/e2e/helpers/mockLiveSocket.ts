@@ -16,6 +16,7 @@ export async function installMockLiveSocket(
   await page.addInitScript(
     ({ sessionId: initSessionId, agentNames: initAgentNames }) => {
       type Listener = (event: Event) => void;
+      const OriginalWebSocket = window.WebSocket;
 
       const makeMessage = (type: string, data: Record<string, unknown> = {}) =>
         JSON.stringify({
@@ -67,6 +68,9 @@ export async function installMockLiveSocket(
         onclose: Listener | null = null;
 
         constructor(url: string) {
+          if (OriginalWebSocket && (url.includes("webpack-hmr") || !url.includes("sessions"))) {
+            return new OriginalWebSocket(url) as any;
+          }
           super();
           this.url = url;
           (window as typeof window & { __fcE2ESockets?: FakeWebSocket[] }).__fcE2ESockets ??= [];

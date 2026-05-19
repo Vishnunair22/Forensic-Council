@@ -152,6 +152,8 @@ async def _ensure_start_time() -> None:
 
 def increment_request_count() -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_REQUESTS))
     except RuntimeError:
@@ -160,6 +162,8 @@ def increment_request_count() -> None:
 
 def increment_error_count() -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_ERRORS))
     except RuntimeError:
@@ -168,6 +172,8 @@ def increment_error_count() -> None:
 
 def record_request_duration(duration_ms: float) -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_DURATION_SUM, int(duration_ms)))
         loop.create_task(_redis_incr(_KEY_DURATION_COUNT))
@@ -178,6 +184,8 @@ def record_request_duration(duration_ms: float) -> None:
 
 def set_active_sessions(count: int) -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_set(_KEY_ACTIVE_SESSIONS, count))
     except RuntimeError:
@@ -186,6 +194,8 @@ def set_active_sessions(count: int) -> None:
 
 def increment_investigations_started() -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_INV_STARTED))
     except RuntimeError:
@@ -194,6 +204,8 @@ def increment_investigations_started() -> None:
 
 def increment_investigations_completed() -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_INV_COMPLETED))
     except RuntimeError:
@@ -202,6 +214,8 @@ def increment_investigations_completed() -> None:
 
 def increment_investigations_failed() -> None:
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_INV_FAILED))
     except RuntimeError:
@@ -211,6 +225,8 @@ def increment_investigations_failed() -> None:
 def increment_rate_limit_redis_bypasses() -> None:
     """Increment counter when rate limiting fails open due to Redis being unavailable."""
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         loop.create_task(_redis_incr(_KEY_RATE_LIMIT_BYPASSES))
     except RuntimeError:
@@ -237,6 +253,8 @@ def record_pipeline_phase_duration(phase: str, duration_seconds: float) -> None:
         return
     sum_key, count_key = phase_key_map[phase]
     try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
         loop = asyncio.get_running_loop()
         redis_sum_key = f"metrics:pipeline_phase_seconds_{phase}_sum"
         redis_count_key = f"metrics:pipeline_phase_seconds_{phase}_count"

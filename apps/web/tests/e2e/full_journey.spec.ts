@@ -144,6 +144,7 @@ async function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
       body: JSON.stringify({ status: "resumed", deep_analysis: false }),
     });
     arbiterComplete = true;
+    await page.waitForTimeout(100);
     await emitMockLiveSocketComplete(page, "Initial report signed.");
   });
 
@@ -159,10 +160,13 @@ async function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
 test.describe.serial("mocked journey with session persistence", () => {
   test.beforeEach(async ({ page }) => {
     await page.context().clearCookies();
+    await setupMockRoutes(page);
+    await page.goto("/");
     await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
+    await page.goto("/");
   });
 
   test("fast mocked journey: landing → upload → accept → result → history", async ({ page }) => {
@@ -257,6 +261,8 @@ test.describe.serial("mocked journey with session persistence", () => {
 
   test("mocked reconnect not_found routes home with upload=1", async ({ page }) => {
     test.setTimeout(30_000);
+    page.on("console", (msg) => console.log(`[BROWSER CONSOLE] ${msg.text()}`));
+    page.on("pageerror", (err) => console.error(`[BROWSER ERROR] ${err.message}`));
     await setupMockRoutes(page, "00000000-0000-4000-b000-000000000002");
     await page.goto("/");
 
@@ -274,7 +280,8 @@ test.describe.serial("mocked journey with session persistence", () => {
     });
 
     await page.goto("/evidence");
-    await expect(page.getByRole("heading", { name: /No Evidence Queued/i })).toBeVisible({ timeout: 15_000 });
+    await page.waitForURL(/\/(\?upload=1)?$/, { timeout: 15_000 });
+    await expect(page.getByTestId("hero-cta-begin")).toBeVisible({ timeout: 15_000 });
   });
 
   test("mocked reconnect complete navigates to result", async ({ page }) => {

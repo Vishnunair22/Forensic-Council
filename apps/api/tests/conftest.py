@@ -232,6 +232,7 @@ def mock_redis():
     """AsyncMock Redis client with all common methods stubbed."""
     m = AsyncMock()
     m.get = AsyncMock(return_value=None)
+    m.get_json = AsyncMock(return_value=None)
     m.set = AsyncMock(return_value=True)
     m.delete = AsyncMock(return_value=1)
     m.exists = AsyncMock(return_value=0)

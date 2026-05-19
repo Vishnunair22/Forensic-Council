@@ -62,13 +62,25 @@ def client():
     mock_qdrant = AsyncMock()
     mock_qdrant.search = AsyncMock(return_value=[])
     mock_qdrant.ping = AsyncMock(return_value=True)
+    async def mock_get_redis(*args, **kwargs):
+        return mock_redis
+
+    async def mock_get_pg(*args, **kwargs):
+        return mock_pg
+
+    async def mock_get_qdrant(*args, **kwargs):
+        return mock_qdrant
+
+    async def mock_noop(*args, **kwargs):
+        return False
 
     patches = [
-        patch("core.persistence.redis_client.get_redis_client", return_value=mock_redis),
-        patch("core.persistence.postgres_client.get_postgres_client", return_value=mock_pg),
-        patch("core.persistence.qdrant_client.get_qdrant_client", return_value=mock_qdrant),
-        patch("core.migrations.run_migrations", new_callable=AsyncMock),
-        patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
+        patch("core.persistence.redis_client.get_redis_client", new=mock_get_redis),
+        patch("core.persistence.postgres_client.get_postgres_client", new=mock_get_pg),
+        patch("core.persistence.qdrant_client.get_qdrant_client", new=mock_get_qdrant),
+        patch("core.migrations.run_migrations", new=mock_noop),
+        patch("scripts.init_db.bootstrap_users", new=mock_noop),
+        patch("core.auth.is_token_blacklisted", new=mock_noop),
     ]
 
     started = []
@@ -281,15 +293,19 @@ class TestInvestigationEndpoint:
         try:
             # Mock various dependencies to allow the request to proceed without real infra
             import tempfile
+            async def mock_noop(*args, **kwargs):
+                pass
+
             with (
                 patch(
                     "api.routes.investigation.check_investigation_rate_limit",
-                    new_callable=AsyncMock,
+                    new=mock_noop,
                 ),
-                patch("api.routes.investigation.check_daily_cost_quota", new_callable=AsyncMock),
+                patch("api.routes.investigation.check_daily_cost_quota", new=mock_noop),
                 patch(
-                    "api.routes.investigation.set_active_pipeline_metadata", new_callable=AsyncMock
+                    "api.routes.investigation.set_active_pipeline_metadata", new=mock_noop
                 ),
+                patch("api.routes.investigation.run_investigation_task", new=mock_noop),
                 patch("magic.from_buffer", return_value="image/jpeg"),
                 patch(
                     "api.routes.investigation.settings",

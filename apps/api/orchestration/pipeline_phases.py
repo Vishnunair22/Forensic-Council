@@ -1061,7 +1061,9 @@ async def _await_deep_analysis_decision(
     pipeline.deep_analysis_decision_event.clear()
     pipeline.run_deep_analysis_flag = False
 
-    existing_metadata = await get_active_pipeline_metadata(str(session_id)) or {}
+    existing_metadata = await get_active_pipeline_metadata(str(session_id))
+    if not isinstance(existing_metadata, dict):
+        existing_metadata = {}
     await set_active_pipeline_metadata(
         str(session_id),
         {
@@ -1161,7 +1163,9 @@ async def _await_deep_report_request(
     pipeline.deep_analysis_decision_event.clear()
     pipeline.run_deep_analysis_flag = False
 
-    existing_metadata = await get_active_pipeline_metadata(str(session_id)) or {}
+    existing_metadata = await get_active_pipeline_metadata(str(session_id))
+    if not isinstance(existing_metadata, dict):
+        existing_metadata = {}
     await set_active_pipeline_metadata(
         str(session_id),
         {

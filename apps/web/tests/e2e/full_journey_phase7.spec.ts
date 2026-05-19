@@ -142,6 +142,19 @@ test.describe("Full Journey — Phase 7 Edge Cases", () => {
   });
 
   async function uploadPng(page: Page, name = `phase7-${Date.now()}.png`) {
+    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+      const begin = page.getByTestId("hero-cta-begin");
+      await expect(begin).toBeVisible({ timeout: 10_000 });
+      await begin.click({ force: true });
+      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+        await begin.evaluate((element: HTMLElement) => element.click());
+      }
+      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+        await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
+      }
+    }
+    await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
+
     const png1x1 = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
       "base64",

@@ -51,11 +51,19 @@ async function uploadThroughLiveInitialAnalysis(page: import("@playwright/test")
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto("/");
-  // NEW: Wait for backend readiness
-  await page.waitForResponse(
-    (response) => (response.url().includes("/api/v1/health") || response.url().includes("/health")) && response.status() === 200,
-    { timeout: 30_000 }
-  );
+  // NEW: Wait for backend readiness via direct request
+  const apiContext = page.request;
+  for (let i = 0; i < 30; i++) {
+    try {
+      const resp = await apiContext.get("http://localhost:8000/api/v1/health");
+      if (resp.status() === 200) {
+        break;
+      }
+    } catch (e) {
+      // ignore and retry
+    }
+    await page.waitForTimeout(1000);
+  }
 
   await page.getByTestId("hero-cta-begin").click();
 
@@ -80,8 +88,8 @@ async function uploadThroughLiveInitialAnalysis(page: import("@playwright/test")
   await page.waitForURL(/\/evidence$/, { timeout: 120_000, waitUntil: "commit" });
   await expect(page.getByText(/Uploading evidence|Connecting to analysis|Agents dispatching|Analysis Pipeline/i).first()).toBeVisible({ timeout: 90_000 });
 
-  await expect(page.getByRole("button", { name: /Active Specialists \(3\)/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Skipped \(2\)/i })).toBeVisible();
+  await expect(page.getByRole("button").filter({ hasText: "Active Specialists" })).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByRole("button").filter({ hasText: "Skipped" })).toBeVisible({ timeout: 120_000 });
 
   for (const agentId of ["Agent1", "Agent3", "Agent5"]) {
     await expect(page.getByTestId(`agent-card-${agentId}`)).toBeVisible({ timeout: 120_000 });

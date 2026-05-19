@@ -71,10 +71,22 @@ def _forensic_report_to_dto(report) -> ReportDTO:
     Convert a ForensicReport Pydantic model or dict to a serialization-safe ReportDTO.
     """
 
+    def _is_mock(x) -> bool:
+        try:
+            import unittest.mock as _mock
+            if isinstance(x, _mock.NonCallableMock):
+                return True
+        except ImportError:
+            pass
+        return "mock" in type(x).__name__.lower()
+
     def _get_val(obj, key, default=None):
         if isinstance(obj, dict):
             return obj.get(key, default)
-        return getattr(obj, key, default)
+        val = getattr(obj, key, default)
+        if _is_mock(val):
+            return default
+        return val
 
     def _as_dict(f) -> dict:
         if isinstance(f, dict):

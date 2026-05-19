@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from core.config import get_settings
-from core.persistence.postgres_client import PostgresClient, get_postgres_client
+from core.persistence.postgres_client import PostgresClient
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +30,8 @@ class SessionPersistence:
         """Ensure database client is connected — always reuse the singleton pool."""
         if self.client is None:
             try:
+                from core.persistence.postgres_client import get_postgres_client
+
                 self.client = await asyncio.wait_for(get_postgres_client(), timeout=10.0)
             except TimeoutError:
                 raise RuntimeError("Database connection timed out after 10s in session persistence")

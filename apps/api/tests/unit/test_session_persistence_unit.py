@@ -302,7 +302,7 @@ class TestEnsureClient:
         sp = SessionPersistence(client=None)
         mock_pg = _make_postgres_mock()
         with patch(
-            "core.session_persistence.get_postgres_client", new=AsyncMock(return_value=mock_pg)
+            "core.persistence.postgres_client.get_postgres_client", new=AsyncMock(return_value=mock_pg)
         ):
             await sp._ensure_client()
         assert sp.client is mock_pg
@@ -311,7 +311,7 @@ class TestEnsureClient:
     async def test_ensure_client_raises_on_timeout(self):
         sp = SessionPersistence(client=None)
         with patch(
-            "core.session_persistence.get_postgres_client",
+            "core.persistence.postgres_client.get_postgres_client",
             new=AsyncMock(side_effect=TimeoutError()),
         ):
             with pytest.raises(RuntimeError, match="timed out"):
