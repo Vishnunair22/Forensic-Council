@@ -113,8 +113,9 @@ def sample_user_id() -> str:
 @pytest.fixture
 def sample_jpeg_bytes() -> bytes:
     """A valid 1x1 pixel JPEG bytes generated dynamically using PIL."""
-    from PIL import Image
     import io
+
+    from PIL import Image
     img = Image.new("RGB", (1, 1), color="white")
     buf = io.BytesIO()
     img.save(buf, format="JPEG")

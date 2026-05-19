@@ -12,6 +12,26 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-19: Frontend Design System Standardisation & Cleanup
+
+**Status:** ✅ COMPLETE & VERIFIED
+
+### What Changed
+- **Unified Design System**: Replaced [FRONTEND_DESIGN_SYSTEM.md](file:///d:/Forensic%20Council/apps/web/FRONTEND_DESIGN_SYSTEM.md) in the frontend application directory with the exact and complete premium Precision Frosted Glass design system guidelines from `docs/DESIGN_SYSTEM.md`.
+- **Docs Directory Cleanup**: Surgically removed the redundant `docs/DESIGN_SYSTEM.md` file since the design rules are now fully integrated and maintained directly inside the frontend monorepo workspace at `apps/web/FRONTEND_DESIGN_SYSTEM.md`.
+- **Validation Audit**: Successfully verified the documentation tree structure, link integrity, and Monorepo rules by running the verification scripts.
+
+### Files Touched
+- [apps/web/FRONTEND_DESIGN_SYSTEM.md](file:///d:/Forensic%20Council/apps/web/FRONTEND_DESIGN_SYSTEM.md)
+- `docs/DESIGN_SYSTEM.md` (deleted)
+
+### Verification Results
+
+| Check / Verification Command | Status | Notes |
+|-----------------------------|--------|-------|
+| `git diff --check` | ✅ PASS | Zero trailing whitespaces or formatting anomalies |
+| `python scripts/check_docs.py` | ✅ PASS | Entire documentation inventory is 100% green |
+
 ### 2026-05-18: Consensus Synthesis Backdrop & Transition Sync
 
 **Status:** ✅ COMPLETE & 100% VERIFIED
