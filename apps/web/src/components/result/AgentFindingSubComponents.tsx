@@ -348,7 +348,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
     <div className="flex-1 min-w-0">
      <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-[15px] font-bold text-white truncate">
+      <span className="text-sm font-bold text-white truncate">
        {fmtTool(toolName)}
       </span>
       {isDegraded && (
@@ -386,7 +386,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
    {/* Summary */}
    {summary && status !== "na" && (
-    <p className="text-[14px] text-white/80 leading-relaxed font-medium pl-[54px]">
+    <p className="text-sm text-white/80 leading-relaxed font-medium pl-[54px]">
      {summary}
     </p>
    )}

@@ -120,15 +120,14 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
-      className={`fixed top-0 inset-x-0 z-[10001] h-16 transition-[transform,opacity] duration-300 ease-in-out ${
+      className={`fixed top-0 inset-x-0 z-[10001] h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-300 ease-in-out ${
         isVisible || isKeyboardUser
           ? "translate-y-0 opacity-100"
           : "-translate-y-full opacity-0 pointer-events-none"
       }`}
       style={{
-        background: "linear-gradient(180deg, rgba(2,4,10,0.96) 0%, rgba(3,7,18,0.92) 100%)",
-        backdropFilter: "blur(24px) saturate(160%)",
-        WebkitBackdropFilter: "blur(24px) saturate(160%)",
+        borderRadius: 0,
+        border: "none",
         borderBottom: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "0 1px 0 rgba(94,234,212,0.10), 0 8px 40px rgba(0,0,0,0.45)",
       }}
@@ -177,10 +176,7 @@ export function GlobalNavbar() {
               className="w-1 h-1 rounded-full shrink-0"
               style={{ background: "rgba(94,234,212,0.55)" }}
             />
-            <span
-              className="fc-eyebrow truncate"
-              style={{ color: "rgba(165,200,255,0.40)", fontSize: "10px", letterSpacing: "0.10em" }}
-            >
+            <span className="fc-eyebrow fc-text-muted truncate tracking-widest">
               {pageLabel}
             </span>
           </div>
@@ -203,10 +199,7 @@ export function GlobalNavbar() {
               </span>
             </div>
           ) : (
-            <span
-              className="fc-eyebrow hidden md:inline shrink-0"
-              style={{ color: "rgba(165,200,255,0.22)", letterSpacing: "0.14em" }}
-            >
+            <span className="fc-eyebrow fc-text-faint hidden md:inline shrink-0 tracking-widest">
               FC — MULTI-AGENT
             </span>
           )}

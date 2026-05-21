@@ -6,6 +6,7 @@ import { RouteExperience } from "@/components/ui/RouteExperience";
 import { Toaster } from "@/components/ui/Toaster";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import { LandingBackground } from "@/components/ui/LandingBackground";
+import { GlobalLoadingOverlay } from "@/components/ui/GlobalLoadingOverlay";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -39,6 +40,9 @@ export default function RootLayout({
         </a>
 
         <QueryProvider>
+          <Suspense fallback={null}>
+            <GlobalLoadingOverlay />
+          </Suspense>
           <GlobalNavbar />
           <main className="flex-1 relative z-10 pt-16" id="main-content">
             {children}

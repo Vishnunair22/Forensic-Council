@@ -13,7 +13,9 @@ are the sole responsibilities.
 
 from __future__ import annotations
 
+import asyncio
 from functools import cached_property
+from typing import Any
 
 from agents.base_agent import ForensicAgent
 from core.handlers.image import ImageHandlers
@@ -27,11 +29,14 @@ logger = get_logger(__name__)
 
 
 class Agent3Object(ForensicAgent):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._agent1_context: dict = {}
+        self._agent1_context_event: asyncio.Event = asyncio.Event()
+
     @property
     def agent_name(self) -> str:
         return "Agent3_ObjectDetection"
-
-
 
     def inject_agent1_context(self, agent1_gemini_findings: dict) -> None:
         self._agent1_context = agent1_gemini_findings or {}

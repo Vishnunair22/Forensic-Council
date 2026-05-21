@@ -68,14 +68,14 @@ export function LoadingOverlay({
       }
       transition={{ duration: 0.14, ease: "easeOut" }}
     >
-      <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-[var(--color-primary)]/40 pl-8 md:pl-12 py-4">
+      <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-primary/40 pl-8 md:pl-12 py-4">
         {/* Status indicator */}
         <div className="flex items-center gap-4 mb-10">
-          <div className="relative w-8 h-8 flex items-center justify-center border border-[var(--color-primary)]/30 rounded-sm bg-[var(--color-primary)]/5">
+          <div className="relative w-8 h-8 flex items-center justify-center border border-primary/30 rounded-sm bg-primary/5">
             <motion.div
               animate={{ opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className="w-3 h-3 bg-[var(--color-primary)]"
+              className="w-3 h-3 bg-primary"
             />
           </div>
           <span className="fc-eyebrow fc-text-faint">
@@ -87,9 +87,9 @@ export function LoadingOverlay({
         <div className="mb-12 space-y-5">
           <motion.h1
             key={displayText}
-            initial={{ x: -10, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.2 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
             className="text-3xl md:text-4xl font-heading font-black text-white tracking-tight"
             role="status"
             aria-live="polite"
@@ -116,7 +116,7 @@ export function LoadingOverlay({
           </div>
           <div className="h-px w-full bg-white/10 relative overflow-hidden">
             <motion.div
-              className="absolute inset-y-0 left-0 bg-[var(--color-primary)] shadow-[0_0_15px_var(--color-primary)]"
+              className="absolute inset-y-0 left-0 bg-primary"
               initial={{ width: "0%" }}
               animate={prefersReducedMotion ? {} : { width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"] }}
               transition={prefersReducedMotion ? {} : { duration: 3.5, times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1], repeat: Infinity, ease: "linear" }}

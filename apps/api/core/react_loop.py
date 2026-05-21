@@ -255,17 +255,18 @@ def create_llm_step_generator(
                 current_task = task.description
                 break
 
-        try:
-            # M-C-2: hard upper-bound for one reasoning step. generate_reasoning
-            # _step internally iterates up to (4 candidates × 3 retries × llm_
-            # timeout) ≈ 3+ minutes in pathological cases; the existing per-call
-            # timeout is on the httpx layer only. This budget covers the entire
-            # candidate fallback chain so a single ReAct iteration cannot exceed
-            # ~2× llm_timeout regardless of provider flapping.
-            from core.config import get_settings as _get_settings
+        from core.config import get_settings as _get_settings
 
-            _llm_budget = float(_get_settings().llm_timeout) * 2.0
-            response: LLMResponse = await asyncio.wait_for(
+        # M-C-2: hard upper-bound for one reasoning step. generate_reasoning
+        # _step internally iterates up to (4 candidates × 3 retries × llm_
+        # timeout) ≈ 3+ minutes in pathological cases; the existing per-call
+        # timeout is on the httpx layer only. This budget covers the entire
+        # candidate fallback chain so a single ReAct iteration cannot exceed
+        # ~2× llm_timeout regardless of provider flapping.
+        _llm_budget = float(_get_settings().llm_timeout) * 2.0
+
+        async def _attempt_llm_call() -> LLMResponse:
+            return await asyncio.wait_for(
                 llm_client.generate_reasoning_step(
                     system_prompt=system_prompt,
                     react_chain=[step.model_dump() for step in react_chain],
@@ -275,35 +276,75 @@ def create_llm_step_generator(
                 timeout=_llm_budget,
             )
 
-            # Parse response into a ReAct step
-            parsed = parse_llm_step(response.content, response.tool_call)
-
-            # Create the ReAct step
-            step = ReActStep(
-                step_type=parsed["step_type"],  # type: ignore[arg-type]  # parse_llm_step returns dict[str, Any]; step_type value is always a valid Literal
+        def _parse_response(response: LLMResponse) -> ReActStep:
+            """Strip markdown fences from content before parsing, then build step."""
+            content = response.content or ""
+            # Strip fences from text content so JSON embedded in fences doesn't
+            # confuse the text-based action parser (tool_call path is already
+            # handled in LLMClient._parse_openai_response).
+            stripped = content.strip()
+            if stripped.startswith("```"):
+                first_nl = stripped.find("\n")
+                if first_nl != -1:
+                    stripped = stripped[first_nl + 1 :]
+                else:
+                    stripped = stripped[3:]
+            if stripped.endswith("```"):
+                stripped = stripped[: stripped.rfind("```")]
+            stripped = stripped.strip()
+            # Use stripped content only when no tool_call; preserve original
+            # content for display when the model adds prose around fences.
+            effective_content = stripped if not response.tool_call else content
+            parsed = parse_llm_step(effective_content, response.tool_call)
+            return ReActStep(
+                step_type=parsed["step_type"],  # type: ignore[arg-type]
                 content=parsed["content"],
                 tool_name=parsed.get("tool_name"),
                 tool_input=parsed.get("tool_input"),
                 iteration=len(react_chain) + 1,
             )
 
-            logger.info(
-                "LLM generated ReAct step",
-                agent_name=agent_name,
-                step_type=step.step_type,
-                tool_name=step.tool_name,
-            )
+        last_exc: BaseException | None = None
+        for attempt in range(2):
+            try:
+                response: LLMResponse = await _attempt_llm_call()
+                step = _parse_response(response)
+                logger.info(
+                    "LLM generated ReAct step",
+                    agent_name=agent_name,
+                    step_type=step.step_type,
+                    tool_name=step.tool_name,
+                    attempt=attempt,
+                )
+                return step
+            except Exception as exc:
+                last_exc = exc
+                if attempt == 0:
+                    logger.warning(
+                        "LLM step generation failed on attempt 1; retrying once",
+                        error=str(exc),
+                        agent_name=agent_name,
+                    )
+                else:
+                    logger.error(
+                        "LLM step generation failed on both attempts; emitting THOUGHT fallback",
+                        error=str(exc),
+                        agent_name=agent_name,
+                        exc_info=True,
+                    )
 
-            return step
-
-        except Exception as e:
-            logger.error(
-                "LLM step generation failed, falling back to default",
-                error=str(e),
-                agent_name=agent_name,
-                exc_info=True,
-            )
-            return None
+        # Both attempts failed — emit a sanitized THOUGHT so the ReAct loop
+        # continues without a hard stop instead of returning None and silently
+        # stalling task decomposition.
+        sanitized_reason = str(last_exc)[:120] if last_exc else "unknown error"
+        return ReActStep(
+            step_type="THOUGHT",
+            content=(
+                f"LLM reasoning unavailable ({sanitized_reason}). "
+                "Proceeding with task-decomposition fallback."
+            ),
+            iteration=len(react_chain) + 1,
+        )
 
     return llm_step_generator
 
@@ -1722,10 +1763,17 @@ class ReActLoopEngine:
                 },
             )
 
-        # Store checkpoint in Redis
+        # Store checkpoint in Redis with a 15-minute TTL (900 s).
+        # After expiry Redis evicts the key automatically; check_expired_hitl()
+        # detects this on the next poll and emits a checkpoint_expired SSE event
+        # so the frontend auto-resolves the pending review widget.
         if self.redis_client is not None:
             key = f"hitl:{self.session_id}:{self.agent_id}"
-            await self.redis_client.set(key, json.dumps(checkpoint.model_dump(), default=str))
+            await self.redis_client.set(
+                key,
+                json.dumps(checkpoint.model_dump(), default=str),
+                ex=900,
+            )
 
         self._current_checkpoint = checkpoint
         return checkpoint

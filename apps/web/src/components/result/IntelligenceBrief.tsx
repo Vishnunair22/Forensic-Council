@@ -64,7 +64,7 @@ export function IntelligenceBrief({
       <div className="p-6 md:p-7 space-y-5">
         {/* Arbiter summary — lead paragraph */}
         {cleanVerdictSentence && (
-          <p className="text-sm md:text-[15px] text-white/80 leading-relaxed">
+          <p className="text-sm md:text-base text-white/80 leading-relaxed">
             {cleanVerdictSentence}
           </p>
         )}
@@ -79,9 +79,9 @@ export function IntelligenceBrief({
                 return (
                   <motion.div
                     key={`${i}-${finding.slice(0, 20)}`}
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04, duration: 0.16, ease: "easeOut" }}
                     className="flex items-start gap-3"
                   >
                     <FindingDot severity={severity} />

@@ -53,20 +53,20 @@ export function ArbiterDeliberationOverlay({
           key="arbiter-overlay"
           aria-busy="true"
           aria-label="Consensus Synthesis in progress"
-          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 bg-[#02040A]/95 backdrop-blur-[32px]"
+          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 bg-background/90 backdrop-blur-2xl"
           initial={prefersReducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16 } }}
           transition={{ duration: 0.16, ease: "easeOut" }}
         >
-          <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-[var(--color-success)]/40 pl-8 md:pl-12 py-4">
+          <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-success/40 pl-8 md:pl-12 py-4">
             {/* Status indicator */}
             <div className="flex items-center gap-4 mb-10">
-              <div className="relative w-8 h-8 flex items-center justify-center border border-[var(--color-success)]/30 rounded-md bg-[var(--color-success)]/5">
+              <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-md bg-success/5">
                 <motion.div
                   animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-3 h-3 rounded-full bg-[var(--color-success)]"
+                  className="w-3 h-3 rounded-full bg-success"
                 />
               </div>
               <span className="fc-badge fc-badge-success">
@@ -77,10 +77,10 @@ export function ArbiterDeliberationOverlay({
             {/* Title */}
             <div className="mb-12 space-y-5">
               <div className="flex items-center gap-3">
-                <ShieldCheck className="w-7 h-7 text-[var(--color-success)]/70 shrink-0" />
+                <ShieldCheck className="w-7 h-7 text-success/70 shrink-0" />
                 <motion.h1
-                  initial={prefersReducedMotion ? false : { x: -8, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
                   className="text-3xl md:text-4xl font-heading font-black text-white tracking-tight"
                 >
@@ -88,7 +88,7 @@ export function ArbiterDeliberationOverlay({
                 </motion.h1>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-1.5 h-1.5 bg-[var(--color-success)]/50 rounded-full animate-pulse" />
+                <div className="w-1.5 h-1.5 bg-success/50 rounded-full animate-pulse" />
                 <p
                   id="arbiter-live-text"
                   className="text-xs md:text-sm font-mono font-medium text-white/60 tracking-wide"
@@ -105,11 +105,11 @@ export function ArbiterDeliberationOverlay({
             <div className="w-full max-w-md">
               <div className="flex items-center justify-between mb-4 text-xs font-mono font-bold tracking-wide fc-text-secondary">
                 <span>Council Arbiter</span>
-                <span className="text-[var(--color-success)]">{formatTime(elapsed)}</span>
+                <span className="text-success">{formatTime(elapsed)}</span>
               </div>
               <div className="h-px w-full bg-white/10 relative overflow-hidden">
                 <motion.div
-                  className="absolute inset-y-0 left-0 bg-[var(--color-success)] shadow-[0_0_15px_var(--color-success)]"
+                  className="absolute inset-y-0 left-0 bg-success"
                   initial={{ width: "0%" }}
                   animate={prefersReducedMotion ? {} : {
                     width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"],

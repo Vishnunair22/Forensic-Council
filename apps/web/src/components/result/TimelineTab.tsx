@@ -73,7 +73,6 @@ export function TimelineTab({
               <div className="relative pl-10">
                 <div
                   className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary"
-                  style={{ boxShadow: "0 0 8px var(--color-primary)" }}
                 />
                 <div className="space-y-8">
                   <div className="space-y-2">
@@ -97,11 +96,12 @@ export function TimelineTab({
                       return (
                         <motion.div
                           key={stableKey}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.16, ease: "easeOut" }}
                           className="flex items-center gap-4 py-4 group border-t border-white/5 first:border-t-0"
                         >
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: theme.color, boxShadow: `0 0 10px ${theme.color}` }} />
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: theme.color }} />
                           <div className="flex-1">
                             <span className="fc-eyebrow" style={{ color: theme.color }}>
                               {"agent_name" in update ? update.agent_name : agentId}
@@ -131,11 +131,7 @@ export function TimelineTab({
               {report.signed_utc && (
                 <div className="relative pl-10">
                   <div
-                    className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full"
-                    style={{
-                      backgroundColor: "var(--color-success)",
-                      boxShadow: "0 0 8px var(--color-success)",
-                    }}
+                    className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-success"
                   />
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-success opacity-80">Phase 03</span>

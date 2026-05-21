@@ -773,6 +773,30 @@ async def run_agents_concurrent(
                 agent_inst=agent,
             )
             return agent, initial_findings, "complete"
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            # Per-agent timeout (Fix 4): collect whatever findings the agent
+            # accumulated before the deadline and continue the pipeline in a
+            # degraded state.  Never re-raise — one slow agent must not abort
+            # the full council investigation.
+            findings = list(getattr(agent, "_findings", []) or [])
+            logger.warning(
+                f"{aid} initial pass timed out after {agent_timeout}s; "
+                f"continuing with {len(findings)} partial findings",
+                agent_id=aid,
+                timeout_s=agent_timeout,
+                partial_findings=len(findings),
+            )
+            if pipeline.signal_bus:
+                await pipeline.signal_bus.signal_failure(aid)
+            await _broadcast_agent_status(
+                aid,
+                "degraded",
+                f"{aid} timed out — partial findings retained.",
+                findings=findings,
+                error=str(e),
+                agent_inst=agent,
+            )
+            return agent, findings, "degraded"
         except Exception as e:
             logger.error(f"{aid} initial pass failed", error=str(e))
             findings = list(getattr(agent, "_findings", []) or [])

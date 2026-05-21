@@ -98,14 +98,14 @@ export function ResultHeader({
               <VerdictIcon className="w-6 h-6" style={{ color: theme.color }} />
             </div>
             <div className="min-w-0">
-              <div className="fc-eyebrow" style={{ color: theme.color }}>
+              <div className="fc-eyebrow" style={{ color: theme.color, textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
                 Final Verdict · {isDeepPhase ? "Deep" : "Initial"} Analysis · Arbiter Signed
               </div>
               <motion.h2
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-1 text-3xl md:text-4xl font-heading font-bold leading-none tracking-tight"
-                style={{ color: theme.color }}
+                style={{ color: theme.color, textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}
               >
                 {vc.label}
               </motion.h2>
@@ -168,15 +168,15 @@ export function ResultHeader({
             <h1 className="text-sm font-bold text-white/90 truncate">{displayName}</h1>
             <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
               {mimeType && <span className="fc-eyebrow fc-text-faint">{mimeType}</span>}
-              <span className="fc-text-faint text-[10px]">·</span>
+              <span className="fc-text-faint text-xs">·</span>
               <span className="fc-eyebrow fc-text-faint">Case {shortId(report.case_id)}</span>
-              <span className="fc-text-faint text-[10px]">·</span>
+              <span className="fc-text-faint text-xs">·</span>
               <span className="fc-eyebrow fc-text-faint">
                 {activeAgentIds.length} agent{activeAgentIds.length === 1 ? "" : "s"}
               </span>
               {pipelineDuration && (
                 <>
-                  <span className="fc-text-faint text-[10px]">·</span>
+                  <span className="fc-text-faint text-xs">·</span>
                   <span className="fc-eyebrow fc-text-faint">{pipelineDuration}</span>
                 </>
               )}
@@ -234,7 +234,7 @@ function MetricCell({
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
             className="h-full rounded-full"
             style={{ backgroundColor: color }}
           />

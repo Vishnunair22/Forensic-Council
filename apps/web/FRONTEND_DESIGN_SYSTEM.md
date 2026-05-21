@@ -676,6 +676,32 @@ Transition:       160ms ease
 No scale on hover or drag-over
 ```
 
+## 11.3 Evidence File Name Display
+
+After a file is accepted, its name is rendered inside a glass panel. File names are user-controlled and must be treated as adversarial input — a malicious actor can submit a file with a 500-character name, homoglyph sequences, or zero-width spaces. An unbounded file name will blow out flex containers, break glass boundaries, and can obscure adjacent UI elements (including action buttons like Delete or Proceed).
+
+**Mandatory constraints for all rendered file names:**
+
+```txt
+Always truncate: overflow-hidden, text-overflow: ellipsis, white-space: nowrap
+Always constrain the container: max-w-full or an explicit max-w-* — never fit-content or min-content
+Always provide the full name via the title attribute for hover inspection
+Never allow the file name to set the width of its parent glass panel
+```
+
+Canonical pattern:
+
+```tsx
+<span
+  className="block truncate max-w-full text-sm fc-text-secondary"
+  title={fileName}
+>
+  {fileName}
+</span>
+```
+
+For hashes, raw output, and URLs displayed on this same screen, see **Section 20.5** (Forensic Data Rendering) for the full truncation and overflow ruleset.
+
 ---
 
 # 12. Navigation
@@ -746,7 +772,8 @@ Rules:
 Verdict must be immediately visible above the fold
 Detailed logs must be behind disclosure (not expanded by default)
 Semantic colors must map to forensic meaning — never decorative
-Glass cards without excessive nesting (max 2 layers)
+Glass nesting follows the global Rule of Two (see Section 6.8) — no exceptions on this page
+All evidence strings (file names, hashes, MIME types) follow the truncation rules in Sections 11.3 and 20.5
 ```
 
 Verdict color mapping:

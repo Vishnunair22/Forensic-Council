@@ -117,8 +117,8 @@ export function HITLCheckpointModal({
          <h4 className="fc-eyebrow fc-text-faint">Evidence Brief</h4>
          <p className="text-sm text-white/80 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
-        <div className="border-l-2 border-[var(--color-primary)] pl-4 py-1 space-y-2 bg-[var(--color-primary)]/5">
-         <h4 className="fc-eyebrow text-[var(--color-primary)]/60">Decision Required</h4>
+        <div className="border-l-2 border-primary pl-4 py-1 space-y-2 bg-primary/5">
+         <h4 className="fc-eyebrow text-primary/60">Decision Required</h4>
          <p className="text-sm text-white leading-relaxed font-bold">{checkpoint.decision_needed}</p>
         </div>
        </div>
@@ -158,7 +158,7 @@ export function HITLCheckpointModal({
             className={clsx(
               "p-4 border text-left transition-colors duration-200 rounded-2xl text-sm relative outline-none",
               selectedDecision === option.value
-                ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-white shadow-[0_0_15px_rgba(79,142,247,0.15)]"
+                ? "bg-primary/10 border-primary text-white"
                 : "border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
             )}
           >
@@ -190,13 +190,13 @@ export function HITLCheckpointModal({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Enter forensic notes for this intervention..."
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors min-h-[100px] resize-none"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 transition-colors min-h-[100px] resize-none"
           disabled={isSubmitting}
         />
         </div>
 
         {decisionError && (
-         <div role="alert" className="p-3 rounded bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/20 text-[var(--color-danger)] text-xs font-bold text-center tracking-wide">
+         <div role="alert" className="p-3 rounded bg-danger/10 border border-danger/20 text-danger text-xs font-bold text-center tracking-wide">
           {decisionError}
          </div>
         )}

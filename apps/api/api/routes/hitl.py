@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.routes import _session_state
-from api.schemas import HITLDecisionRequest
+from api.schemas import BriefUpdate, HITLDecisionRequest
 from core.auth import User, get_current_user
 from core.config import get_settings
 from core.react_loop import HumanDecision
@@ -26,6 +26,79 @@ router = APIRouter(prefix="/api/v1/hitl", tags=["hitl"])
 def get_active_pipeline(session_id: str):
     """Compatibility wrapper for tests and older imports."""
     return _session_state.get_active_pipeline(session_id)
+
+
+@router.get("/checkpoint/{session_id}/{agent_id}")
+async def check_expired_hitl(
+    session_id: str,
+    agent_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Poll the HITL checkpoint key for a given session/agent pair.
+
+    Returns the checkpoint JSON if the key still exists in Redis.
+    If the 900s TTL has elapsed and the key is missing, emits a
+    ``HITL_EXPIRED`` SSE event for the session and returns
+    ``{"status": "expired", ...}``.
+
+    The frontend polls this endpoint while a HITL review widget is active;
+    on an ``expired`` response it can auto-dismiss the widget without
+    requiring a human action.
+    """
+    from api.routes._authz import assert_session_access
+
+    await assert_session_access(session_id, current_user)
+
+    redis = None
+    try:
+        from core.persistence.redis_client import get_redis_client
+
+        redis = await get_redis_client()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Redis unavailable") from exc
+
+    key = f"hitl:{session_id}:{agent_id}"
+    try:
+        raw = await redis.get(key)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Redis read error") from exc
+
+    if raw is not None:
+        try:
+            checkpoint = json.loads(raw)
+        except Exception:
+            checkpoint = {"raw": raw}
+        return {"status": "active", "checkpoint": checkpoint}
+
+    # Key missing — TTL expired or checkpoint was never created.
+    # Emit HITL_EXPIRED so the SSE stream carries the expiry signal to all
+    # connected clients (not just the poller).
+    try:
+        await _session_state.broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="HITL_EXPIRED",
+                session_id=session_id,
+                agent_id=agent_id,
+                message=f"HITL checkpoint for {agent_id} expired (auto-resolved after 15 min)",
+                data={"agent_id": agent_id, "session_id": session_id, "auto_resolved": True},
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to broadcast HITL_EXPIRED event",
+            session_id=session_id,
+            agent_id=agent_id,
+            error=str(exc),
+        )
+
+    return {
+        "status": "expired",
+        "session_id": session_id,
+        "agent_id": agent_id,
+        "message": "HITL checkpoint has expired (auto-resolved after 15 minutes)",
+    }
 
 
 @router.post("/decision")

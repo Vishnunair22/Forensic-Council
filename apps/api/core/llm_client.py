@@ -512,6 +512,26 @@ class LLMClient:
         ]
 
     @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        """Strip leading/trailing markdown code fences from a string.
+
+        Handles both ```json ... ``` and ``` ... ``` forms.  The stripped
+        result is used as input to json.loads so the LLM can freely wrap
+        JSON in fences without breaking argument parsing.
+        """
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            # Remove opening fence (with optional language tag)
+            first_newline = stripped.find("\n")
+            if first_newline != -1:
+                stripped = stripped[first_newline + 1 :]
+            else:
+                stripped = stripped[3:]
+        if stripped.endswith("```"):
+            stripped = stripped[: stripped.rfind("```")]
+        return stripped.strip()
+
+    @staticmethod
     def _parse_openai_response(data: dict[str, Any]) -> LLMResponse:
         """Parse an OpenAI/Groq-format response dict."""
         choice = data["choices"][0]
@@ -521,8 +541,17 @@ class LLMClient:
             tc = message["tool_calls"][0]
             raw_args = tc["function"]["arguments"]
             try:
-                args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                if isinstance(raw_args, str):
+                    cleaned = LLMClient._strip_markdown_fences(raw_args)
+                    args = json.loads(cleaned)
+                else:
+                    args = raw_args
             except json.JSONDecodeError:
+                logger.warning(
+                    "Tool call arguments JSON parse failed; using empty dict",
+                    tool_name=tc["function"]["name"],
+                    raw_args=raw_args[:200] if isinstance(raw_args, str) else str(raw_args),
+                )
                 args = {}
             return LLMResponse(
                 content=message.get("content") or "",

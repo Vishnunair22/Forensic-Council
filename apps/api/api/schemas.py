@@ -186,6 +186,7 @@ class BriefUpdate(BaseModel):
     type: Literal[
         "AGENT_UPDATE",
         "HITL_CHECKPOINT",
+        "HITL_EXPIRED",
         "AGENT_COMPLETE",
         "PIPELINE_COMPLETE",
         "PIPELINE_PAUSED",

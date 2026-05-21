@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
@@ -14,7 +15,6 @@ import { savePendingEvidenceFile } from "@/lib/pendingFilePersistence";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
-import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 
 export function HeroAuthActions() {
   const router = useRouter();
@@ -34,39 +34,6 @@ export function HeroAuthActions() {
   useEffect(() => {
     document.body.style.overflow = showUpload || isHandingOff ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [showUpload, isHandingOff]);
-
-  // Hide app shell from assistive technologies when modals are open
-  useEffect(() => {
-    const appRoot = document.getElementById("main-content");
-    const nav = document.querySelector("nav[aria-label='Main navigation']");
-    const footer = document.querySelector("footer");
-
-    const active = showUpload || isHandingOff;
-    for (const el of [appRoot, nav, footer]) {
-      if (!el) continue;
-      if (active) {
-        el.setAttribute("aria-hidden", "true");
-        if ("inert" in el) {
-          (el as HTMLElement & { inert?: boolean }).inert = true;
-        }
-      } else {
-        el.removeAttribute("aria-hidden");
-        if ("inert" in el) {
-          (el as HTMLElement & { inert?: boolean }).inert = false;
-        }
-      }
-    }
-
-    return () => {
-      for (const el of [appRoot, nav, footer]) {
-        if (!el) continue;
-        el.removeAttribute("aria-hidden");
-        if ("inert" in el) {
-          (el as HTMLElement & { inert?: boolean }).inert = false;
-        }
-      }
-    };
   }, [showUpload, isHandingOff]);
 
   // Listen for global reset and open-upload events dispatched by navbar / session-expired
@@ -134,7 +101,7 @@ export function HeroAuthActions() {
     );
 
     // Brief pause so the loading overlay is visible before navigation
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
     router.push("/evidence", { scroll: true });
   }, [selectedFile, router]);
 
@@ -183,39 +150,40 @@ export function HeroAuthActions() {
         <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
       </button>
 
-      <AnimatePresence mode="sync" initial={false}>
-        {showUpload && !selectedFile && !isHandingOff && (
-          <UploadModal
-            key="upload-modal"
-            onClose={closeUpload}
-            onFileSelected={(file) => setSelectedFile(file)}
-          />
-        )}
+      <Dialog
+        open={showUpload && !isHandingOff}
+        onOpenChange={(open) => { if (!open) closeUpload(); }}
+      >
+        <DialogContent className="max-w-xl p-0">
+          <DialogTitle className="sr-only">
+            {!selectedFile ? "Upload Evidence" : "Evidence Ready"}
+          </DialogTitle>
+          <AnimatePresence mode="sync" initial={false}>
+            {!selectedFile ? (
+              <UploadModal
+                key="upload-modal"
+                onClose={closeUpload}
+                onFileSelected={(file) => setSelectedFile(file)}
+              />
+            ) : (
+              <UploadSuccessModal
+                key="success-modal"
+                file={selectedFile}
+                onNewUpload={() => setSelectedFile(null)}
+                onDismiss={closeUpload}
+                onStartAnalysis={async () => {
+                  if (isHandingOff) return;
+                  playSound("scan");
+                  setIsHandingOff(true);
+                  setShowUpload(false);
+                  await handleStartAnalysis();
+                }}
+              />
+            )}
+          </AnimatePresence>
+        </DialogContent>
+      </Dialog>
 
-        {showUpload && selectedFile && !isHandingOff && (
-          <UploadSuccessModal
-            key="success-modal"
-            file={selectedFile}
-            onNewUpload={() => setSelectedFile(null)}
-            onDismiss={closeUpload}
-            onStartAnalysis={async () => {
-              if (isHandingOff) return;
-              playSound("scan");
-              setIsHandingOff(true);
-              setShowUpload(false);
-              await handleStartAnalysis();
-            }}
-          />
-        )}
-
-        {isHandingOff && (
-          <LoadingOverlay
-            key="handoff-overlay"
-            liveText="Opening evidence analysis..."
-            exitDuration={0.15}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 }

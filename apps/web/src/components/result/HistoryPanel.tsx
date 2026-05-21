@@ -124,9 +124,9 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                 {[...history].sort((a,b) => b.timestamp - a.timestamp).map((item, i) => (
                   <motion.div
                     key={item.sessionId}
-                    initial={shouldReduceMotion ? {} : { opacity: 0, x: -20 }}
-                    animate={shouldReduceMotion ? {} : { opacity: 1, x: 0 }}
-                    transition={shouldReduceMotion ? { duration: 0 } : { delay: i * 0.05 }}
+                    initial={shouldReduceMotion ? {} : { opacity: 0, y: 4 }}
+                    animate={shouldReduceMotion ? {} : { opacity: 1, y: 0 }}
+                    transition={shouldReduceMotion ? { duration: 0 } : { delay: i * 0.05, duration: 0.16, ease: "easeOut" }}
                     className="group relative p-6 cursor-pointer transition-colors duration-200 border-t border-white/5 first:border-t-0 bg-transparent hover:bg-white/[0.02]"
                   >
                     <article aria-label={`View analysis for ${item.fileName}`}>

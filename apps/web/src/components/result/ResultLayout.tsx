@@ -108,7 +108,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
       {/* ── Secondary Tab Nav (Analysis / History) ── */}
       <nav
-        className="fixed top-16 left-0 right-0 z-[40] border-b border-white/[0.06] bg-[#02040A]/85 backdrop-blur-md"
+        className="fixed top-16 left-0 right-0 z-[40] border-b border-white/[0.06] bg-background/85 backdrop-blur-md"
         aria-label="Report sections"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-1">
@@ -209,7 +209,16 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
           )}
 
-          {rs.state === "arbiter" && <ResultInlineStatus message={rs.arbiterMsg} />}
+          <AnimatePresence>
+            {rs.state === "arbiter" && (
+              <motion.div
+                key="inline-status"
+                exit={{ opacity: 0, transition: { duration: 0.16 } }}
+              >
+                <ResultInlineStatus message={rs.arbiterMsg} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {rs.state === "ready" && rs.report && (
             <motion.div
@@ -217,7 +226,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               animate="visible"
               variants={{
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
+                visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.18 } },
               }}
               className="space-y-5"
             >
@@ -362,7 +371,7 @@ function ResultInlineStatus({ message }: { message: string }) {
   return (
     <div className="min-h-[54vh] flex items-center justify-center">
       <div className="w-full max-w-md fc-surface-quiet px-8 py-10 text-center">
-        <ShieldAlert className="w-12 h-12 text-[var(--color-primary)]/70 mx-auto mb-6" />
+        <ShieldAlert className="w-12 h-12 text-primary/70 mx-auto mb-6" />
         <div className="mt-6 fc-eyebrow text-primary/70">
           Consensus Synthesis
         </div>

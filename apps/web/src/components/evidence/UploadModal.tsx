@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { createPortal } from "react-dom";
+import { useState, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { X, Plus } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
-import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { validateEvidenceFile } from "@/lib/fileValidation";
 
 export interface UploadModalProps {
@@ -15,25 +13,16 @@ export interface UploadModalProps {
 }
 
 export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
-  const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { playSound } = useSound();
-  const dialogRef = useRef<HTMLDivElement>(null);
 
   const closeModal = useCallback(() => {
     playSound("click");
     onClose();
   }, [playSound, onClose]);
-
-  useFocusTrap(dialogRef, mounted, closeModal);
-
-  // Mount focus guard — focus trap handles first-focus; focus stays in modal
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -48,20 +37,17 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   }, []);
 
   const selectFile = useCallback((file: File) => {
-    const error = validateEvidenceFile(file);
-    if (error) {
-      setError(error);
+    const validationError = validateEvidenceFile(file);
+    if (validationError) {
+      setError(validationError);
       playSound("error");
       return;
     }
-
-    if (isSubmitting) return; // Prevent double-submit
+    if (isSubmitting) return;
     setIsSubmitting(true);
-
     setError(null);
     playSound("success-chime");
     onFileSelected(file);
-    // Note: isSubmitting stays true — modal will close via parent after upload starts
   }, [onFileSelected, playSound, isSubmitting]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -72,123 +58,104 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     if (file) selectFile(file);
   }, [selectFile]);
 
-  if (!mounted) return null;
-
-  return createPortal(
+  return (
     <motion.div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="upload-modal-title"
-      initial={prefersReducedMotion ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.12, ease: "easeIn" } }}
-      transition={{ duration: 0.14, ease: "easeOut" }}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 fc-modal-backdrop"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) { playSound("click"); onClose(); } }}
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, y: -4 }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className="p-8 sm:p-10 flex flex-col text-left"
     >
-      <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
-        <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, y: 4 }}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          className="fc-surface-overlay relative overflow-hidden"
-        >
-          <div className="p-8 sm:p-10 flex flex-col text-left">
-            <button
-              type="button"
-              onClick={closeModal}
-              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:fc-text-primary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
-              aria-label="Close upload dialog"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      <button
+        type="button"
+        onClick={closeModal}
+        className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
+        aria-label="Close upload dialog"
+      >
+        <X className="w-5 h-5" />
+      </button>
 
-            <div className="mb-8">
-              <p className="fc-eyebrow fc-text-faint mb-2" aria-hidden="true">
-                Evidence Intake
-              </p>
-              <h2 id="upload-modal-title" className="text-3xl font-heading font-bold text-white">
-                Upload Evidence
-              </h2>
-            </div>
-
-            <div
-              data-testid="upload-dropzone"
-              role="button"
-              tabIndex={0}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  const input = e.currentTarget.querySelector<HTMLInputElement>("input[type='file']");
-                  input?.click();
-                }
-              }}
-              className={`w-full py-16 px-8 cursor-pointer group flex flex-col items-center justify-center gap-4 relative transition-all duration-300 fc-upload-zone ${
-                isDragging 
-                  ? "border-primary shadow-[0_0_25px_rgba(79,142,247,0.15)]"
-                  : ""
-              }`}
-            >
-              <Plus 
-                className={`w-12 h-12 transition-colors duration-200 ${
-                  isDragging ? "text-primary" : "text-white/40 group-hover:text-white/60"
-                }`} 
-                strokeWidth={1} 
-                aria-hidden="true" 
-              />
-
-              <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
-                <span
-                  className={`text-lg font-bold transition-colors duration-200 tracking-wide ${
-                    isDragging ? "text-primary" : "text-white/80 group-hover:text-white"
-                  }`}
-                >
-                  {isDragging ? "Drop Evidence" : "Select Evidence"}
-                </span>
-                <p id="upload-file-help" className="text-sm font-mono fc-text-muted max-w-[260px]">
-                  images, video, audio (max 50MB)
-                </p>
-              </div>
-
-              <input
-                type="file"
-                id="evidence-file-input"
-                aria-label="Upload evidence file"
-                aria-describedby={error ? "upload-file-help upload-error" : "upload-file-help"}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
-                onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) selectFile(file);
-                }}
-              />
-            </div>
-
-            {error && (
-              <div className="mt-6 p-4 border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5 rounded-2xl">
-                <p id="upload-error" role="alert" className="text-sm font-mono text-[var(--color-danger)]">
-                  {error}
-                </p>
-              </div>
-            )}
-
-            {isSubmitting && !error && (
-              <div className="mt-6 flex items-center gap-3">
-                <div className="w-2 h-2 bg-primary animate-pulse" />
-                <p role="status" aria-live="polite" className="text-xs font-mono tracking-widest text-primary/80">
-                  Preparing secure channel...
-                </p>
-              </div>
-            )}
-          </div>
-        </motion.div>
+      <div className="mb-8">
+        <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
+          Evidence Intake
+        </p>
+        <h2 className="text-3xl font-heading font-bold text-white">
+          Upload Evidence
+        </h2>
       </div>
-    </motion.div>,
-    document.body
+
+      <div
+        data-testid="upload-dropzone"
+        role="button"
+        tabIndex={0}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            const input = e.currentTarget.querySelector<HTMLInputElement>("input[type='file']");
+            input?.click();
+          }
+        }}
+        className={`w-full py-16 px-8 cursor-pointer group flex flex-col items-center justify-center gap-4 relative transition-all duration-150 fc-upload-zone ${
+          isDragging
+            ? "border-primary"
+            : ""
+        }`}
+      >
+        <Plus
+          className={`w-12 h-12 transition-colors duration-150 ${
+            isDragging ? "text-primary" : "text-white/40 group-hover:text-white/60"
+          }`}
+          strokeWidth={1}
+          aria-hidden="true"
+        />
+
+        <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
+          <span
+            className={`text-lg font-bold transition-colors duration-150 tracking-wide ${
+              isDragging ? "text-primary" : "text-white/80 group-hover:text-white"
+            }`}
+          >
+            {isDragging ? "Drop Evidence" : "Select Evidence"}
+          </span>
+          <p id="upload-file-help" className="text-sm font-mono fc-text-muted max-w-[260px]">
+            images, video, audio (max 50MB)
+          </p>
+        </div>
+
+        <input
+          type="file"
+          id="evidence-file-input"
+          aria-label="Upload evidence file"
+          aria-describedby={error ? "upload-file-help upload-error" : "upload-file-help"}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
+          onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) selectFile(file);
+          }}
+        />
+      </div>
+
+      {error && (
+        <div className="mt-6 p-4 border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5 rounded-2xl">
+          <p id="upload-error" role="alert" className="text-sm font-mono text-[var(--color-danger)]">
+            {error}
+          </p>
+        </div>
+      )}
+
+      {isSubmitting && !error && (
+        <div className="mt-6 flex items-center gap-3">
+          <div className="w-2 h-2 bg-primary animate-pulse" />
+          <p role="status" aria-live="polite" className="text-xs font-mono tracking-widest text-primary/80">
+            Preparing secure channel...
+          </p>
+        </div>
+      )}
+    </motion.div>
   );
 }

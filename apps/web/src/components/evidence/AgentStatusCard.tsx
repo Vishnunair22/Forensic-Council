@@ -72,12 +72,12 @@ export interface AgentStatusCardProps {
 const statusConfig = {
   waiting:     { color: "fc-text-faint",   label: "Standby"   },
   queued:      { color: "fc-text-faint",   label: "Queued"    },
-  checking:    { color: "text-[var(--color-primary)]",    label: "Syncing" },
-  running:     { color: "text-[var(--color-primary)]",    label: "Scanning" },
-  complete:    { color: "text-[var(--color-primary)]",    label: "Verified"  },
+  checking:    { color: "text-primary",    label: "Syncing" },
+  running:     { color: "text-primary",    label: "Scanning" },
+  complete:    { color: "text-primary",    label: "Verified"  },
   error:       { color: "text-danger",     label: "Error"     },
   unsupported: { color: "fc-text-faint",   label: "Skipped"   },
-  validating:  { color: "text-[var(--color-primary)]",    label: "Verifying" },
+  validating:  { color: "text-primary",    label: "Verifying" },
 };
 
 const ALERT_VERDICTS = new Set([
@@ -269,7 +269,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
           <span className={clsx(
             "ml-auto text-xs font-mono font-black tabular-nums shrink-0",
             isAlert ? "text-danger" :
-            f.confidence >= 0.75 ? "text-[var(--color-primary)]" :
+            f.confidence >= 0.75 ? "text-primary" :
             f.confidence >= 0.5 ? "text-warning" : "text-white/50"
           )}>
             {Math.round(f.confidence * 100)}%
@@ -280,7 +280,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       {/* Headline */}
       {headline && (
         <p className={clsx(
-          "text-[14px] font-semibold leading-snug mb-1.5",
+          "text-sm font-semibold leading-snug mb-1.5",
           isAlert ? "text-white" : "text-white/85",
           !expanded && "line-clamp-2",
         )}>
@@ -297,7 +297,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
         <button
           type="button"
           onClick={() => setExpanded(e => !e)}
-          className="mt-1 inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
+          className="mt-1 inline-flex items-center gap-1 text-xs font-mono font-bold text-primary/75 hover:text-primary transition-colors"
         >
           {expanded
             ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
@@ -324,17 +324,17 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
   return (
     <div className="border-t border-white/[0.07] pt-3.5 space-y-2.5">
       <div className="flex items-center gap-2 fc-eyebrow fc-text-faint">
-        <ListChecks className="w-3.5 h-3.5 text-[var(--color-primary)]/70" />
+        <ListChecks className="w-3.5 h-3.5 text-primary/70" />
         Agent Brief
       </div>
-      <p className="text-sm text-white/76 leading-relaxed font-medium">
+      <p className="text-sm text-white leading-relaxed font-medium">
         {text}
       </p>
        {hasSource && (
          <button
            type="button"
            onClick={() => setExpanded((e) => !e)}
-           className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/80 hover:text-[var(--color-primary)] transition-colors"
+           className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary/80 hover:text-primary transition-colors"
          >
            {expanded ? (
              <>
@@ -350,7 +350,7 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
          </button>
        )}
       {expanded && hasSource && (
-        <p className="rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-xs leading-relaxed text-white/55">
+        <p className="rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-xs leading-relaxed fc-text-faint">
           {source}
         </p>
       )}
@@ -531,8 +531,9 @@ export function AgentStatusCard({
                 <h3 className="text-2xl font-heading font-bold text-white tracking-tight">{name}</h3>
                 {completedData?.degraded && (
                   <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.16, ease: "easeOut" }}
                     className="fc-badge fc-badge-warning flex items-center gap-1.5"
                     title={completedData.fallback_reason || "Analysis degraded"}
                   >
@@ -570,9 +571,9 @@ export function AgentStatusCard({
               <div className="flex items-center gap-3 text-white/60">
                 <motion.div key={progressDescriptor.label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }}>
                   {status === "checking" ? (
-                    <Activity className="w-4 h-4 text-[var(--color-primary)]" />
+                    <Activity className="w-4 h-4 text-primary" />
                   ) : (
-                    <ProgressIcon className="w-4 h-4 text-[var(--color-primary)]" />
+                    <ProgressIcon className="w-4 h-4 text-primary" />
                   )}
                 </motion.div>
                 <span className="fc-eyebrow truncate">
@@ -688,8 +689,12 @@ export function AgentStatusCard({
                </div>
              </>
            ) : (status === "running" || status === "checking" || status === "validating") ? (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
-              <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)]">
+            <div
+              className="flex flex-col items-center justify-center h-full text-center gap-4 py-12"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <div className="w-12 h-12 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary">
                 {status === "running" ? (
                   <ProgressIcon className="w-6 h-6" />
                 ) : (
@@ -701,7 +706,7 @@ export function AgentStatusCard({
                   key={sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
+                  exit={{ opacity: 0, transition: { duration: 0.1 } }}
                   transition={{ duration: 0.16 }}
                   className="max-w-[280px] text-xs fc-text-faint font-medium leading-relaxed"
                 >
@@ -722,7 +727,7 @@ export function AgentStatusCard({
             </div>
           ) : status === "waiting" ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
-               <span className="text-xs fc-text-faint font-medium tracking-wide">Standing by — payload not yet received</span>
+               <span className="text-xs fc-text-faint font-medium">Standing by — payload not yet received</span>
             </div>
           ) : status === "unsupported" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">

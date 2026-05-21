@@ -52,6 +52,15 @@ async def mark_investigation_completed(
     original_filename: str | None,
     report,
 ) -> None:
+    # Idempotency guard: if already finalized, skip to prevent duplicate synthesis
+    _early_meta = await get_active_pipeline_metadata(session_id) or {}
+    if _early_meta.get("status") == "completed":
+        logger.info(
+            "mark_investigation_completed: session already completed, skipping duplicate call",
+            session_id=session_id,
+        )
+        return
+
     _investigator_id, _investigator_role, _case_label = await _get_investigator_metadata(
         session_id, investigator_id
     )

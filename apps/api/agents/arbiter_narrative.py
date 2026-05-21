@@ -20,6 +20,34 @@ from agents.arbiter_verdict import (
 from core.llm_client import LLMClient
 from core.signing import sign_content
 from core.structured_logging import get_logger
+from pydantic import BaseModel, Field
+
+
+class ArbiterSynthesis(BaseModel):
+    """Validated output contract for `deliberate_narratives`.
+
+    All fields have safe defaults so a partially-failed synthesis never
+    raises and never propagates None into downstream report assembly.
+    """
+
+    verdict_sentence: str = Field(default="", description="One-sentence forensic verdict")
+    key_findings: list[str] = Field(default_factory=list, description="3-5 key findings")
+    reliability_note: str = Field(default="", description="Confidence and caveat note")
+    per_agent_analysis: dict[str, str] = Field(
+        default_factory=dict, description="Flat per-agent narrative text"
+    )
+    per_agent_narrative_structured: dict[str, dict] = Field(
+        default_factory=dict, description="Structured per-agent narrative sections"
+    )
+    summary_structured: dict = Field(
+        default_factory=dict, description="Machine-readable summary building blocks"
+    )
+    executive_summary: str = Field(default="", description="Cross-modal executive summary")
+    uncertainty_statement: str = Field(default="", description="Uncertainty and caveat statement")
+    llm_used: bool = Field(default=False, description="Whether LLM was used for synthesis")
+    narrative_warnings: list[str] = Field(
+        default_factory=list, description="Degradation or warning flags"
+    )
 
 # S-H-5 / OWASP LLM01: prompt-injection defence for Groq synthesis paths.
 # Every place we feed user-controlled strings (filename, OCR-extracted
@@ -147,6 +175,25 @@ def _clean_key_findings(items: list[str], limit: int = 5) -> list[str]:
         if len(cleaned) >= limit:
             break
     return cleaned
+
+
+def _validate_synthesis(raw: dict) -> dict:
+    """Validate and coerce a narrative dict against ArbiterSynthesis, returning a safe dict.
+
+    On validation failure the raw dict is returned with any missing fields filled in
+    from ArbiterSynthesis defaults so callers never receive None values.
+    """
+    try:
+        validated = ArbiterSynthesis.model_validate(raw)
+        return validated.model_dump()
+    except Exception as exc:
+        logger.warning(
+            "ArbiterSynthesis validation failed; applying safe defaults for missing fields",
+            error=str(exc),
+        )
+        defaults = ArbiterSynthesis().model_dump()
+        defaults.update({k: v for k, v in raw.items() if v is not None})
+        return defaults
 
 
 def _is_generic_executive_summary(text: str) -> bool:
@@ -1297,11 +1344,12 @@ Rules:
                     incomplete_count=len(incomplete_findings),
                     per_agent_metrics=per_agent_metrics,
                 )
-                return self._postprocess_narratives(
+                raw = self._postprocess_narratives(
                     v_sent, kf_list, r_note, p_anal, exec_s, unc_s,
                     False, ["LLM synthesis unavailable due to timeout"],
                     per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note
                 )
+                return _validate_synthesis(raw)
 
         self._synthesis_client = None
 
@@ -1311,11 +1359,52 @@ Rules:
         elif use_llm and not llm_enabled:
             narrative_warnings.append("Narrative degraded: LLM health check failed")
 
-        return self._postprocess_narratives(
+        raw = self._postprocess_narratives(
             v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt,
             llm_enabled, narrative_warnings,
             per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note
         )
+        return _validate_synthesis(raw)
+
+    def _check_synthesis_grounding(
+        self,
+        verdict_sentence: str,
+        key_findings: list[str],
+        overall_verdict: str,
+        all_findings: list[dict[str, Any]],
+    ) -> list[str]:
+        """Cross-check LLM synthesis claims against actual agent findings.
+
+        Returns warning strings for any grounding violations found.
+        """
+        warnings: list[str] = []
+        verdict_upper = (overall_verdict or "").upper()
+        synthesis = " ".join([verdict_sentence] + key_findings).lower()
+
+        # Warn if synthesis claims manipulation signals but computed verdict is clean
+        manipulation_signals = (
+            "tamper", "fabricat", "deepfake", "synthetically generat",
+            "forged", "spliced", "splice", "cloned", "manipulat",
+        )
+        if verdict_upper in ("AUTHENTIC", "LIKELY_AUTHENTIC"):
+            for sig in manipulation_signals:
+                if sig in synthesis:
+                    warnings.append(
+                        f"Synthesis references '{sig}' inconsistently with computed verdict "
+                        f"{overall_verdict}; section may reflect LLM hallucination."
+                    )
+                    break
+
+        # Warn if synthesis attributes findings to an agent with no actual findings
+        agent_ids_in_findings = {str(f.get("agent_id", "")) for f in all_findings}
+        for agent_label in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5"):
+            if agent_label.lower() in synthesis and agent_label not in agent_ids_in_findings:
+                warnings.append(
+                    f"Synthesis references {agent_label} but that agent produced no findings "
+                    "in this session; claim may be hallucinated."
+                )
+
+        return warnings
 
     def _postprocess_narratives(
         self,
@@ -1450,6 +1539,19 @@ Rules:
             "context_lines": context_lines,
             "coverage_line": analysis_coverage_note or "Full coverage completed successfully."
         }
+
+        # Hallucination cross-check: validate LLM synthesis against actual findings
+        if llm_enabled:
+            grounding_warnings = self._check_synthesis_grounding(
+                v_sent, kf_list, overall_verdict, all_findings
+            )
+            if grounding_warnings:
+                narrative_warnings.extend(grounding_warnings)
+                logger.warning(
+                    "Arbiter synthesis grounding violations detected",
+                    warning_count=len(grounding_warnings),
+                    warnings=grounding_warnings,
+                )
 
         return {
             "verdict_sentence": v_sent,

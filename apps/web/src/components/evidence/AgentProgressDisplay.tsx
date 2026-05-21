@@ -170,7 +170,7 @@ export function AgentProgressDisplay({
 
   return (
     <div
-      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-24 pt-12"
+      className="flex flex-col w-full max-w-screen-2xl mx-auto gap-8 pb-24 pt-12"
       aria-label="Agent forensic analysis progress"
     >
       {/* Pipeline header */}
@@ -178,8 +178,9 @@ export function AgentProgressDisplay({
         {/* Always-visible row: title + summary + toggle */}
         <div className="flex items-start justify-between gap-6 w-full">
           <motion.h1
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
             className="text-5xl md:text-6xl font-heading font-bold text-white tracking-tight pt-1"
           >
             Analysis Pipeline
@@ -227,7 +228,7 @@ export function AgentProgressDisplay({
             >
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                   <span className="fc-badge fc-badge-active text-xs">
                     {phase === "initial" ? "Initial Verification" : "Deep Analysis"}
                   </span>
@@ -314,7 +315,7 @@ export function AgentProgressDisplay({
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">
-              <p className="text-center fc-eyebrow fc-text-faint mb-4">
+              <p className="text-center fc-eyebrow fc-text-muted mb-4">
                 Initial analysis complete — choose your next step
               </p>
               <div className="flex items-center gap-3">
@@ -356,7 +357,7 @@ export function AgentProgressDisplay({
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">
-              <p className="text-center fc-eyebrow fc-text-faint mb-4">
+              <p className="text-center fc-eyebrow fc-text-muted mb-4">
                 Deep analysis complete — view report or start a new investigation
               </p>
               <div className="flex items-center gap-3">

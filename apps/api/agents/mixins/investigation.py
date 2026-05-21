@@ -127,11 +127,33 @@ class AgentInvestigationMixin:
     async def self_reflection_pass(self, findings: list[AgentFinding]) -> Any: ...
 
     async def _publish_tool_registry_snapshot(self, agent_id: str | None = None) -> None:
-        """Expose the live tool catalogue to working memory for LLM ReAct mode."""
+        """Expose the live tool catalogue to working memory for LLM ReAct mode.
+
+        Tools are filtered to only include those applicable to the evidence
+        MIME type (Fix 3) so the LLM never suggests semantically wrong tools.
+        """
         registry = getattr(self, "_tool_registry", None)
         if registry is None:
             return
-        snapshot = [tool.model_dump() for tool in registry.list_tools()]
+
+        # Apply MIME-type filtering so the LLM only sees relevant tools.
+        mime_type: str = (
+            getattr(getattr(self, "evidence_artifact", None), "mime_type", None) or ""
+        )
+        try:
+            from core.task_tool_config import get_allowed_tools_for_mime
+
+            allowed = get_allowed_tools_for_mime(mime_type) if mime_type else None
+        except Exception:
+            allowed = None
+
+        all_tools = registry.list_tools()
+        if allowed is not None:
+            filtered = [t for t in all_tools if t.name in allowed]
+            # Safety: if filtering would leave zero tools, use the full set.
+            snapshot = [t.model_dump() for t in (filtered if filtered else all_tools)]
+        else:
+            snapshot = [t.model_dump() for t in all_tools]
         try:
             await self.working_memory.update_state(
                 session_id=self.session_id,
@@ -415,6 +437,7 @@ class AgentInvestigationMixin:
             iteration_ceiling=self.iteration_ceiling,
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
+            redis_client=getattr(self.working_memory, "_redis", None),
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             agent=self,
             hitl_timeout=540.0,
@@ -495,6 +518,7 @@ class AgentInvestigationMixin:
             iteration_ceiling=len(deep_tasks) + 3,
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
+            redis_client=getattr(self.working_memory, "_redis", None),
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             agent=self,
             hitl_timeout=540.0,
@@ -559,6 +583,7 @@ class AgentInvestigationMixin:
             iteration_ceiling=max(3, self.iteration_ceiling // 2),
             working_memory=self.working_memory,
             custody_logger=self.custody_logger,
+            redis_client=getattr(self.working_memory, "_redis", None),
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             hitl_timeout=540.0,
         )

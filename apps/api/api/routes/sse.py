@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.exceptions import HTTPException
 from fastapi.responses import StreamingResponse
 
 from core.auth import User, get_current_user
@@ -36,6 +37,7 @@ CRITICAL_TYPES = frozenset(
 async def _event_generator(
     session_id: str,
     request: Request,
+    last_event_id: str | None = None,
 ) -> AsyncIterator[str]:
     """
     Generate SSE events for a session.
@@ -99,6 +101,9 @@ async def _event_generator(
     settings = get_settings()
     dedicated_redis = None
     pubsub = None
+    # Tracks how many buffered events precede the client's reconnect point.
+    # Set inside the Redis block if Last-Event-ID is provided; defaults to 0.
+    replay_start = 0
     if settings.use_redis_worker:
         try:
             from redis.asyncio import Redis
@@ -120,12 +125,29 @@ async def _event_generator(
             # 1. Subscribe first (captures all future messages)
             await pubsub.subscribe(channel)
 
-            # 2. Replay any missed messages from the buffer
+            # 2. Replay any missed messages from the buffer.
+            # Each buffered entry is stored as a JSON string (the raw message).
+            # When the client supplies a Last-Event-ID header we skip every
+            # buffered entry up to and including that position index so the
+            # client receives only the delta it missed.
             dedicated_redis_any: Any = dedicated_redis
             replay_messages = await dedicated_redis_any.lrange(replay_key, 0, -1)
             replayed_types: set[str] = set()
+
+            # Determine the replay start position from Last-Event-ID.
+            # We encode event IDs as "<session_id>:<zero-based-index>".
+            replay_start = 0
+            if last_event_id and last_event_id.startswith(f"{session_id}:"):
+                try:
+                    last_idx = int(last_event_id.split(":", 1)[1])
+                    replay_start = last_idx + 1
+                except (ValueError, IndexError):
+                    replay_start = 0
+
             if replay_messages:
-                for msg_json in replay_messages:
+                for idx, msg_json in enumerate(replay_messages):
+                    if idx < replay_start:
+                        continue
                     try:
                         data = json.loads(msg_json)
                         await consumer.send_json(data)
@@ -196,6 +218,12 @@ async def _event_generator(
         # Send initial connection event with retry hint
         yield f"retry: 2000\nevent: connected\ndata: {json.dumps({'type': 'CONNECTED', 'session_id': session_id})}\n\n"
 
+        # Track a per-stream event counter so the client can resume from
+        # the exact position after a reconnect via the Last-Event-ID header.
+        # IDs are scoped per session: "<session_id>:<monotonic_index>".
+        # Starts at replay_start so IDs stay globally monotonic across reconnects.
+        _event_index = replay_start
+
         while True:
             # Check if client disconnected
             if await request.is_disconnected():
@@ -204,7 +232,9 @@ async def _event_generator(
             try:
                 # Wait for events with timeout (send keepalive every 15s for Caddy)
                 msg = await asyncio.wait_for(queue.get(), timeout=15.0)
-                yield f"data: {json.dumps(msg)}\n\n"
+                event_id = f"{session_id}:{_event_index}"
+                _event_index += 1
+                yield f"id: {event_id}\ndata: {json.dumps(msg)}\n\n"
             except (asyncio.TimeoutError, TimeoutError):
                 # Keepalive
                 yield ": keepalive\n\n"
@@ -266,7 +296,10 @@ async def sse_progress(
 
     Returns a StreamingResponse with text/event-stream content type.
     Browser EventSource API automatically reconnects on disconnection.
+    Supports the Last-Event-ID header for resume-from-disconnect replay.
     """
+    # Read Last-Event-ID header for reconnect replay support
+    last_event_id: str | None = request.headers.get("Last-Event-ID") or request.headers.get("last-event-id")
     try:
         from api.routes._authz import assert_session_access
         await assert_session_access(session_id, current_user)
@@ -292,7 +325,7 @@ async def sse_progress(
         )
 
     return StreamingResponse(
-        _event_generator(session_id, request),
+        _event_generator(session_id, request, last_event_id=last_event_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

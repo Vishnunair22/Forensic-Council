@@ -142,9 +142,9 @@ export function EvidenceUploadClient() {
               transition={{ duration: 0.16 }}
               className="text-center space-y-6"
             >
-              <div className="flex items-center justify-center gap-2 opacity-40 mb-2">
-                <Shield className="w-4 h-4 text-primary" />
-                <span className="text-xs tracking-[0.3em] font-mono font-black">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Shield className="w-4 h-4 fc-text-faint" />
+                <span className="text-xs tracking-widest font-mono font-black fc-text-faint">
                   Intake Protocol
                 </span>
               </div>

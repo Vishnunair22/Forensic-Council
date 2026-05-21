@@ -69,10 +69,7 @@ export function HowWorksSection() {
 
             {/* Card */}
             <div className="w-full fc-surface-quiet p-6 relative overflow-hidden h-full flex flex-col items-center">
-              <h3
-                className="text-base font-heading font-black text-white mb-3 text-center"
-                style={{ letterSpacing: "-0.015em" }}
-              >
+              <h3 className="text-base font-heading font-black text-white mb-3 text-center tracking-tight">
                 {item.title}
               </h3>
               <p className="text-sm fc-text-secondary leading-relaxed text-center">
@@ -81,7 +78,7 @@ export function HowWorksSection() {
 
               {/* Hover glow */}
               <div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-400 pointer-events-none"
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none"
                 style={{
                   background: "radial-gradient(ellipse at 50% 0%, rgba(79,142,247,0.07), transparent 70%)",
                 }}

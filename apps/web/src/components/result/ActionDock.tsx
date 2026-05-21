@@ -61,7 +61,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
-      <div className="pointer-events-auto max-w-3xl mx-auto px-4 pb-4">
+      <div className="pointer-events-auto max-w-3xl mx-auto px-4" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 1rem)" }}>
         <div
           className="flex items-center gap-3 px-4 py-3 fc-surface"
         >
