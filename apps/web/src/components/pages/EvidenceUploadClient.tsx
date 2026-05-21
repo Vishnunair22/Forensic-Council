@@ -86,7 +86,7 @@ export function EvidenceUploadClient() {
         )}
       </AnimatePresence>
 
-      <div className="relative min-h-screen px-4 sm:px-6 py-24 sm:py-32">
+      <div className="relative min-h-screen px-4 sm:px-6 py-10 sm:py-14">
         {investigation.wsConnectionError && !investigation.isReconnecting && (
           <ForensicErrorModal
             isVisible
@@ -101,28 +101,29 @@ export function EvidenceUploadClient() {
 
         {showAgentProgress || investigation.handoffRecovering ? (
           <>
-            <AgentProgressDisplay
-              agentUpdates={investigation.agentUpdates}
-              completedAgents={investigation.validCompletedAgents}
-              progressText={investigation.pipelineThinking}
-              allAgentsDone={investigation.allAgentsDone}
-              phase={investigation.phase}
-              awaitingDecision={investigation.awaitingDecision}
-              pipelineStatus={investigation.status}
-              pipelineMessage={investigation.pipelineMessage}
-              onNewUpload={investigation.handleNewUpload}
-              onViewResults={investigation.handleViewResults}
-              onAcceptAnalysis={investigation.handleAcceptAnalysis}
-              onRunDeepAnalysis={investigation.handleDeepAnalysis}
-              isNavigating={investigation.isNavigating}
-              mimeType={investigation.mimeType || undefined}
-              playSound={playSound}
-              revealQueue={investigation.revealQueue}
-              arbiterDeliberating={investigation.arbiterDeliberating}
-              arbiterStatus={investigation.arbiterStatus}
-              arbiterThinking={investigation.arbiterThinking}
-              hasStartedAnalysis={investigation.hasStartedAnalysis}
-            />
+             <AgentProgressDisplay
+               agentUpdates={investigation.agentUpdates}
+               completedAgents={investigation.validCompletedAgents}
+               progressText={investigation.pipelineThinking}
+               allAgentsDone={investigation.allAgentsDone}
+               phase={investigation.phase}
+               awaitingDecision={investigation.awaitingDecision}
+               pipelineStatus={investigation.status}
+               pipelineMessage={investigation.pipelineMessage}
+               onNewUpload={investigation.handleNewUpload}
+               onViewResults={investigation.handleViewResults}
+               onAcceptAnalysis={investigation.handleAcceptAnalysis}
+               onRunDeepAnalysis={investigation.handleDeepAnalysis}
+               isNavigating={investigation.isNavigating}
+               mimeType={investigation.mimeType || undefined}
+               playSound={playSound}
+               revealQueue={investigation.revealQueue}
+               arbiterDeliberating={investigation.arbiterDeliberating}
+               arbiterStatus={investigation.arbiterStatus}
+               arbiterThinking={investigation.arbiterThinking}
+               hasStartedAnalysis={investigation.hasStartedAnalysis}
+               overlayVisible={investigation.showLoadingOverlay}
+             />
 
             <HITLCheckpointModal
               checkpoint={investigation.hitlCheckpoint}
@@ -136,21 +137,21 @@ export function EvidenceUploadClient() {
 
           <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
             <motion.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
+              transition={{ duration: 0.16 }}
               className="text-center space-y-6"
             >
               <div className="flex items-center justify-center gap-2 opacity-40 mb-2">
                 <Shield className="w-4 h-4 text-primary" />
-                <span className="text-[10px] tracking-[0.3em] font-mono font-black">
+                <span className="text-xs tracking-[0.3em] font-mono font-black">
                   Intake Protocol
                 </span>
               </div>
               <h1 className="text-4xl font-extrabold tracking-tighter text-white">
                 No Evidence Queued
               </h1>
-              <p className="text-white/40 text-base max-w-sm mx-auto leading-relaxed">
+              <p className="fc-text-faint text-base max-w-sm mx-auto leading-relaxed">
                 Return to the home page to upload evidence and begin a new investigation.
               </p>
               <button
@@ -158,7 +159,7 @@ export function EvidenceUploadClient() {
                   resetActiveInvestigation(queryClient);
                   router.push("/");
                 }}
-                className="btn-horizon-primary mt-4"
+                className="fc-btn-primary mt-4"
               >
                 Return Home
               </button>

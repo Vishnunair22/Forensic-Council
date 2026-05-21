@@ -242,15 +242,15 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
           {section.label}
         </span>
         {section.keySignal && (
-          <span className="hidden md:block text-[12px] font-mono text-white/55 truncate max-w-[260px]">
+          <span className="hidden md:block text-xs font-mono text-white/55 truncate max-w-[260px]">
             {section.keySignal}
           </span>
         )}
-        <span className="text-[12px] font-mono font-black text-white/55 shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
+        <span className="text-xs font-mono font-black text-white/55 shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
           {section.findings.length} {section.findings.length === 1 ? "tool" : "tools"}
         </span>
         <span
-          className="flex items-center gap-1.5 text-[11px] font-black tracking-wide text-white/60 group-hover/section:text-white transition-colors"
+          className="flex items-center gap-1.5 text-xs font-black tracking-wide text-white/60 group-hover/section:text-white transition-colors"
           aria-hidden="true"
         >
           {open ? "Hide" : "Show"}
@@ -278,7 +278,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="w-full px-5 py-3.5 text-[12px] font-black tracking-wide text-primary/90 hover:text-primary hover:bg-primary/[0.06] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+              className="w-full px-5 py-3.5 text-xs font-black tracking-wide text-primary/90 hover:text-primary hover:bg-primary/[0.06] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
             >
               Show {hiddenCount} more tool finding{hiddenCount === 1 ? "" : "s"}
               <ChevronDown className="w-3.5 h-3.5" />
@@ -289,7 +289,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
             <button
               type="button"
               onClick={() => setShowAll(false)}
-              className="w-full px-5 py-3 text-[11px] font-black tracking-wide text-white/45 hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+              className="w-full px-5 py-3 text-xs font-black tracking-wide fc-text-faint hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
             >
               Collapse to top {INITIAL_TOOLS_PER_SECTION}
               <ChevronDown className="w-3 h-3 rotate-180" />
@@ -411,10 +411,10 @@ export function AgentFindingCard({
           </div>
           <div>
             <h3 className="text-sm font-bold text-white/65 tracking-wide">{meta.name}</h3>
-            <p className="text-[11px] font-mono font-bold text-white/45 mt-0.5">{meta.role} · Protocol Skip</p>
+            <p className="text-xs font-mono font-bold fc-text-faint mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
-        <span className="text-[11px] font-bold tracking-wide text-white/30 px-3 py-1.5 rounded-full border border-white/10">Not Applicable</span>
+        <span className="text-xs font-bold tracking-wide fc-text-faint px-3 py-1.5 rounded-full border border-white/10">Not Applicable</span>
       </div>
     );
   }
@@ -422,7 +422,7 @@ export function AgentFindingCard({
   return (
     <div
       className={clsx(
-        "rounded-2xl overflow-hidden transition-all duration-500 slick-frosted-card",
+        "rounded-2xl overflow-hidden transition-all duration-500 fc-surface-quiet",
         open
           ? clsx(theme.border, "ring-1", theme.ring)
           : "hover:border-white/15"
@@ -453,17 +453,17 @@ export function AgentFindingCard({
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-[18px] font-black text-white tracking-tight">{meta.name}</h3>
               {metrics && (
-                <span className={clsx("px-2.5 py-1 rounded-full text-[11px] font-black tracking-wider", verdictClasses(displayVerdict))}>
+                <span className={clsx("px-2.5 py-1 rounded-full text-xs font-black tracking-wider", verdictClasses(displayVerdict))}>
                   {displayVerdict.replace(/_/g, " ")}
                 </span>
               )}
               {anomalyCount > 0 && (
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-danger/15 border border-danger/35 text-danger text-[11px] font-black">
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-danger/15 border border-danger/35 text-danger text-xs font-black">
                   <AlertTriangle className="w-3.5 h-3.5" /> {anomalyCount}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2.5 text-[12px] font-mono font-bold text-white/55 flex-wrap">
+            <div className="flex items-center gap-2.5 text-xs font-mono font-bold text-white/55 flex-wrap">
               <span>{meta.role}</span>
               <span className="text-white/25">·</span>
               <span>{realFindings.length} checks</span>
@@ -476,7 +476,7 @@ export function AgentFindingCard({
               )}
             </div>
             {!open && overview && (
-              <p className="text-[13px] text-white/55 leading-relaxed font-medium line-clamp-3 italic">
+              <p className="text-sm text-white/55 leading-relaxed font-medium line-clamp-3 italic">
                 {overview}
               </p>
             )}
@@ -485,12 +485,12 @@ export function AgentFindingCard({
           {/* Right: confidence + show/hide pill */}
           <div className="flex items-center gap-3 shrink-0">
             <ConfidenceBar value={confidence} />
-            <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-[11px] font-black tracking-wide text-white/65">
+            <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-black tracking-wide text-white/65">
               {phase === 'deep' ? 'Deep' : 'Initial'}
             </div>
             <span
               className={clsx(
-                "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-black tracking-wide border transition-colors",
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-black tracking-wide border transition-colors",
                 open
                   ? "border-white/20 bg-white/[0.06] text-white/85"
                   : "border-white/10 bg-transparent text-white/60 group-hover:border-white/20 group-hover:text-white"
@@ -527,7 +527,7 @@ export function AgentFindingCard({
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                   <div className="flex items-center gap-2 text-cyan-400">
                     <ShieldCheck className="w-4 h-4 shrink-0 text-cyan-400" />
-                    <h4 className="text-xs font-black tracking-wider uppercase font-mono text-cyan-400">Evidence Assessment</h4>
+                    <h4 className="text-xs font-black tracking-wider font-mono text-cyan-400">Evidence Assessment</h4>
                   </div>
                   <p className="text-[14px] text-white/70 leading-relaxed font-medium">
                     {parsedNarrative.evidence_assessment}
@@ -538,7 +538,7 @@ export function AgentFindingCard({
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                   <div className="flex items-center gap-2 text-teal-400">
                     <Activity className="w-4 h-4 shrink-0 text-teal-400" />
-                    <h4 className="text-xs font-black tracking-wider uppercase font-mono text-teal-400">Deep Validation</h4>
+                    <h4 className="text-xs font-black tracking-wider font-mono text-teal-400">Deep Validation</h4>
                   </div>
                   <p className="text-[14px] text-white/70 leading-relaxed font-medium">
                     {parsedNarrative.deep_analysis}
@@ -549,7 +549,7 @@ export function AgentFindingCard({
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                   <div className="flex items-center gap-2 text-violet-400">
                     <Shield className="w-4 h-4 shrink-0 text-violet-400" />
-                    <h4 className="text-xs font-black tracking-wider uppercase font-mono text-violet-400">Reliability & Verdict</h4>
+                    <h4 className="text-xs font-black tracking-wider font-mono text-violet-400">Reliability & Verdict</h4>
                   </div>
                   <p className="text-[14px] text-white/70 leading-relaxed font-medium">
                     {parsedNarrative.reliability_verdict}
@@ -583,7 +583,7 @@ export function AgentFindingCard({
               <div className="rounded-2xl border border-white/[0.06] bg-transparent px-5 py-4">
                 <div className="flex items-center gap-2 mb-2.5">
                   <Info className="w-4 h-4 text-white/45" />
-                  <span className="text-[12px] font-black tracking-wide text-white/55">
+                  <span className="text-xs font-black tracking-wide text-white/55">
                     Bypassed Tools ({bypassedFindings.length})
                   </span>
                 </div>
@@ -593,7 +593,7 @@ export function AgentFindingCard({
                     return (
                       <span
                         key={`${toolName}-${i}`}
-                        className="text-[12px] font-mono text-white/55 px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.08]"
+                        className="text-xs font-mono text-white/55 px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.08]"
                         title="Not applicable to this file type"
                       >
                         {fmtTool(toolName)}

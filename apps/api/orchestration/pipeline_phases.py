@@ -32,7 +32,7 @@ _TRAILING_ABSENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
-PREVIEW_EXCLUDED_TOOLS = {"file_hash_verify", "hash_verify", "custody_check", "file_type_validation"}
+PREVIEW_EXCLUDED_TOOLS = {"hash_verify", "custody_check", "file_type_validation"}
 
 
 def _metric_digest(metadata: dict[str, Any]) -> str:
@@ -201,6 +201,31 @@ def _humanize_initial_finding(
         if parts:
             return "; ".join(parts).capitalize() + ". This is common for screenshots and exported images."
 
+    if "compression_risk_audit" in tool:
+        platform = str(metadata.get("detected_platform") or "").strip()
+        impact = str(metadata.get("forensic_reliability_impact") or "NONE").upper()
+        penalty = float(metadata.get("compression_penalty") or 1.0)
+        if penalty >= 0.95 or not platform:
+            return "No social media or messaging app compression footprint detected. Metadata integrity is unaffected."
+        if "unknown" in platform.lower() or "stripped" in platform.lower():
+            return (
+                f"Metadata appears stripped or platform-normalized — no specific app fingerprint identified, "
+                f"which is consistent with social media re-processing, a privacy tool, or a system screenshot. "
+                f"Forensic reliability impact: {impact.lower()}."
+            )
+        clean_platform = (
+            platform.replace("(Stripped Metadata - High Compression Risk)", "")
+                    .replace("(Filename Signal)", "")
+                    .replace("(High Compression)", "")
+                    .replace("(Medium-High Compression)", "")
+                    .strip().rstrip("-").strip()
+        )
+        return (
+            f"Compression footprint matches {clean_platform}. "
+            f"This platform applies significant re-compression which degrades forensic reliability "
+            f"({impact.lower()} impact)."
+        )
+
     if "file_structure_analysis" in tool or "file structure analysis" in text.lower():
         if "anomalies: 0" in text.lower() or "header valid" in text.lower():
             return "File container structure is valid: header/trailer checks passed and no appended payload was detected."
@@ -279,15 +304,34 @@ def _humanize_initial_finding(
         )
         if any(p in clean_text.lower() for p in generic_patterns):
             tool_label = str(tool_name or "Tool").replace("_", " ").title()
-            clean_text = f"{tool_label} returned a negative result"
+            # Add metric context
+            if metric_note and metric_note.lower() not in clean_text.lower():
+                clean_text = f"{tool_label} completed — no anomaly detected. Metric: {metric_note}."
+            else:
+                clean_text = f"{tool_label} completed — no anomaly detected."
         if metric_note and metric_note.lower() not in clean_text.lower():
             return f"{clean_text} Key metrics: {metric_note}."
         return clean_text
 
+    # Enrich the fallback with structured metadata fields if available.
     metric_note = _metric_digest(metadata)
-    if metric_note and metric_note.lower() not in text.lower():
-        return f"{text} Key metrics: {metric_note}."
-    return text
+    confidence_val = metadata.get("confidence") or metadata.get("score")
+    verdict_val = str(metadata.get("verdict") or evidence_verdict or "").upper()
+
+    enriched = text
+    # Append key metric only if it adds new information
+    if metric_note and metric_note.lower() not in enriched.lower():
+        enriched = f"{enriched} Metric: {metric_note}."
+
+    # Surface confidence if present and not already in text
+    if confidence_val and str(round(float(confidence_val), 2)) not in enriched:
+        try:
+            pct = round(float(confidence_val) * 100)
+            enriched = f"{enriched} (confidence: {pct}%)"
+        except (TypeError, ValueError):
+            pass
+
+    return enriched if enriched.strip() else None
 
 
 async def run_agents_concurrent(
@@ -506,15 +550,21 @@ async def run_agents_concurrent(
                             "summary": human_summary[:640],
                             "severity": sev,
                             "verdict": tv,
-                            "key_signal": m.get("section_key_signal")
-                            or m.get("raw_tool_summary")
-                            or "",
+                            "key_signal": (
+                                m.get("section_key_signal")
+                                or m.get("raw_tool_summary")
+                                or m.get("key_finding")
+                                or m.get("anomaly_description")
+                                or m.get("match_description")
+                                or ""
+                            ),
                             "confidence": (
                                 _finding_attr(f, "confidence_raw", None)
                             ),
                             "section": m.get("section") or "",
                             "degraded": bool(m.get("degraded") or m.get("fallback_reason")),
                             "fallback_reason": m.get("fallback_reason"),
+                            "elapsed_s": m.get("elapsed_s"),
                         }
                     )
 
@@ -584,9 +634,9 @@ async def run_agents_concurrent(
                         else 1
                         if status == "validating"
                         else None,
-                        "findings_count": 0
-                        if status == "skipped"
-                        else (len(findings) if findings else 0),
+                         "findings_count": 0
+                         if status == "skipped"
+                         else len(preview),
                         "confidence": 0
                         if status == "skipped"
                         else (

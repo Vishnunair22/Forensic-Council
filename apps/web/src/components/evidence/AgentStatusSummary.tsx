@@ -1,18 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, SkipForward, Activity } from "lucide-react";
+import React from "react";
+import { motion } from "framer-motion";
 import { clsx } from "clsx";
 import type { AgentUpdate } from "./types";
 import { AGENT_ICONS } from "./AgentStatusCard";
 import { accentFor } from "@/lib/agentTheme";
+import { Activity, SkipForward } from "lucide-react";
 
 interface AgentStatusSummaryProps {
   visibleAgents: Array<{ id: string; name: string }>;
   skippedAgents: Array<{ id: string; name: string }>;
-  agentUpdates: Record<string, { status: string }>;
+  agentUpdates: Record<string, { status: string; thinking?: string }>;
   completedAgents: AgentUpdate[];
+}
+
+const ALERT_VERDICTS = new Set([
+  "SUSPICIOUS", "TAMPERED", "NEEDS_REVIEW",
+  "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC",
+]);
+
+function normalizeVerdict(v?: string): string {
+  if (!v) return "Pending";
+  return v.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export function AgentStatusSummary({
@@ -21,9 +31,6 @@ export function AgentStatusSummary({
   agentUpdates,
   completedAgents,
 }: AgentStatusSummaryProps) {
-  const [activeExpanded, setActiveExpanded] = useState(false);
-  const [skippedExpanded, setSkippedExpanded] = useState(false);
-
   const getAgentStatus = (agentId: string) => {
     const completed = completedAgents?.find((c) => c.agent_id === agentId);
     if (completed) {
@@ -37,124 +44,171 @@ export function AgentStatusSummary({
     return "waiting";
   };
 
-  const getStatusDot = (status: string) => {
-    switch (status) {
-      case "running":  return "bg-primary animate-pulse";
-      case "complete": return "bg-success shadow-[0_0_8px_rgba(var(--color-success-rgb),0.4)]";
-      case "error":    return "bg-danger";
-      default:         return "bg-white/10";
-    }
-  };
+  const total = visibleAgents.length;
+  const doneCount = visibleAgents.filter(a => {
+    const s = getAgentStatus(a.id);
+    return s === "complete" || s === "error";
+  }).length;
+  const flaggedAgents = completedAgents.filter(a =>
+    ALERT_VERDICTS.has(a.agent_verdict || "") || (a.verdict_score ?? 0) > 0.6
+  );
+  const anyRunning = visibleAgents.some(a => getAgentStatus(a.id) === "running");
+  const allDone = doneCount === total && total > 0;
+
+  const pipelineSignal =
+    flaggedAgents.length > 0 ? "flagged"
+    : allDone ? "clear"
+    : "active";
 
   return (
-    <div className="rounded-2xl overflow-hidden min-w-[200px] max-w-[260px]" style={{ background: "rgba(5,9,18,0.95)", border: "1px solid rgba(165,200,255,0.08)", boxShadow: "0 8px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
-
-      {/* Active specialists row */}
-      <button
-        type="button"
-        onClick={() => setActiveExpanded((v) => !v)}
-        aria-expanded={activeExpanded}
-        aria-controls="agent-status-active-list"
-        className="flex items-center justify-between w-full px-5 py-4 hover:bg-white/[0.02] transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <Activity className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform shrink-0" />
-          <span className="text-[10px] font-mono font-bold text-white tracking-[0.18em]">
-            Active Specialists
+    <div
+      className="rounded-2xl overflow-hidden min-w-[220px] max-w-[270px] flex flex-col"
+      style={{
+        background: "rgba(5,9,18,0.95)",
+        border: "1px solid rgba(165,200,255,0.08)",
+        boxShadow: "0 8px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)",
+      }}
+    >
+      {/* Pipeline signal header */}
+      <div className="px-5 pt-4 pb-3 border-b border-white/[0.06]">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="fc-eyebrow text-white/50">Pipeline</span>
+          <span className={clsx(
+            "text-xs font-mono font-bold tabular-nums",
+            pipelineSignal === "flagged" ? "text-danger" :
+            pipelineSignal === "clear"   ? "text-[var(--color-success)]" :
+                                           "text-[var(--color-primary)]"
+          )}>
+            {doneCount}/{total}
           </span>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-mono font-bold text-white/35">({visibleAgents.length})</span>
-          <motion.div animate={{ rotate: activeExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-          </motion.div>
-        </div>
-      </button>
 
-      <AnimatePresence initial={false}>
-        {activeExpanded && (
+        {/* Progress bar */}
+        <div className="relative w-full h-[3px] bg-white/[0.08] rounded-full overflow-hidden">
           <motion.div
-            key="active-list"
-            id="agent-status-active-list"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="overflow-hidden"
-          >
-            <div className="pb-3 px-2 flex flex-col gap-0.5">
-              {visibleAgents.map((agent) => {
-                const Icon = AGENT_ICONS[agent.id] ?? Activity;
-                const status = getAgentStatus(agent.id);
-                const accentClass = AGENT_ICONS[agent.id] ? accentFor(agent.id).textClass : "text-white/40";
+            className={clsx(
+              "absolute top-0 bottom-0 left-0 rounded-full",
+              pipelineSignal === "flagged" ? "bg-danger" :
+              pipelineSignal === "clear"   ? "bg-[var(--color-success)]" :
+                                             "bg-[var(--color-primary)]"
+            )}
+            animate={{ width: total > 0 ? `${(doneCount / total) * 100}%` : "0%" }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          />
+        </div>
+
+        {/* Signal label */}
+        <p className={clsx(
+          "text-xs font-semibold mt-2",
+          pipelineSignal === "flagged" ? "text-danger" :
+          pipelineSignal === "clear"   ? "text-[var(--color-success)]" :
+                                         "text-[var(--color-primary)]"
+        )}>
+          {pipelineSignal === "flagged"
+            ? `${flaggedAgents.length} specialist${flaggedAgents.length > 1 ? "s" : ""} flagged`
+            : pipelineSignal === "clear"
+            ? "All clear"
+            : anyRunning ? "Scanning in progress" : "Initializing specialists"}
+        </p>
+      </div>
+
+      {/* Per-agent rows */}
+      <div className="flex flex-col py-2">
+        {visibleAgents.map((agent) => {
+          const status = getAgentStatus(agent.id);
+          const completed = completedAgents?.find((c) => c.agent_id === agent.id);
+          const isAlert = ALERT_VERDICTS.has(completed?.agent_verdict || "") || (completed?.verdict_score ?? 0) > 0.6;
+          const accent = accentFor(agent.id);
+          const Icon = AGENT_ICONS[agent.id] ?? Activity;
+          const confidence = completed?.confidence != null
+            ? Math.round(completed.confidence * 100)
+            : null;
+
+          return (
+            <div
+              key={agent.id}
+              className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors"
+            >
+              {/* Agent icon */}
+              <Icon className={clsx(
+                "w-3.5 h-3.5 shrink-0 transition-opacity",
+                status === "waiting" ? "opacity-30" : "",
+                status === "complete" || status === "running" ? accent.textClass : "text-white/30"
+              )} />
+
+              {/* Name */}
+              <span className={clsx(
+                "text-xs font-medium min-w-0 flex-1 truncate",
+                status === "waiting" ? "text-white/30" : "text-white/70"
+              )}>
+                {agent.name}
+              </span>
+
+              {/* Status indicator */}
+              {status === "running" && (
+                <span className="flex items-center gap-1 shrink-0">
+                  <motion.div
+                    className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)]"
+                    animate={{ opacity: [1, 0.3, 1] }}
+                    transition={{ duration: 1.2, repeat: Infinity }}
+                  />
+                </span>
+              )}
+              {status === "complete" && completed && (
+                <span className={clsx(
+                  "text-xs font-mono font-bold tabular-nums shrink-0",
+                  isAlert ? "text-danger" :
+                  (completed.agent_verdict === "INCONCLUSIVE") ? "text-warning" :
+                  "text-[var(--color-success)]"
+                )}>
+                  {confidence != null ? `${confidence}%` : normalizeVerdict(completed.agent_verdict)}
+                </span>
+              )}
+              {status === "error" && (
+                <span className="text-xs font-mono font-bold text-danger shrink-0">Err</span>
+              )}
+              {status === "waiting" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-white/10 shrink-0" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Verdict strip — only when complete agents have verdicts */}
+      {completedAgents.length > 0 && allDone && (
+        <div className="border-t border-white/[0.06] px-5 py-3">
+          <div className="flex flex-wrap gap-1.5">
+            {completedAgents
+              .filter(a => a.agent_verdict)
+              .map(a => {
+                const isAlert = ALERT_VERDICTS.has(a.agent_verdict || "") || (a.verdict_score ?? 0) > 0.6;
+                const isInconclusive = a.agent_verdict === "INCONCLUSIVE";
                 return (
-                  <div key={agent.id} className="flex items-center justify-between gap-3 pl-4 pr-3 py-2 hover:bg-white/[0.02] rounded-lg transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Icon className={clsx("w-3.5 h-3.5 shrink-0", accentClass)} />
-                      <span className="text-[11px] font-medium text-white/70 truncate">{agent.name}</span>
-                    </div>
-                    <div className={clsx("w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500", getStatusDot(status))} />
-                  </div>
+                  <span
+                    key={a.agent_id}
+                    className={clsx(
+                      "fc-badge text-[10px]",
+                      isAlert ? "fc-badge-danger" : isInconclusive ? "fc-badge-warning" : "fc-badge-success"
+                    )}
+                    title={`${a.agent_name}: ${normalizeVerdict(a.agent_verdict)}`}
+                  >
+                    {normalizeVerdict(a.agent_verdict)}
+                  </span>
                 );
               })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
 
-      {/* Skipped specialists row — only rendered when there are skipped agents */}
+      {/* Skipped agents — compact footer */}
       {skippedAgents.length > 0 && (
-        <>
-          <div className="mx-5 h-px bg-white/[0.06]" />
-
-          <button
-            type="button"
-            onClick={() => setSkippedExpanded((v) => !v)}
-            aria-expanded={skippedExpanded}
-            aria-controls="agent-status-skipped-list"
-            className="flex items-center justify-between w-full px-5 py-4 hover:bg-white/[0.02] transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <SkipForward className="w-3.5 h-3.5 text-white/40 group-hover:scale-110 transition-transform shrink-0" />
-              <span className="text-[10px] font-mono font-bold text-white/50 tracking-[0.18em]">
-                Skipped
-              </span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-[10px] font-mono font-bold text-white/35">({skippedAgents.length})</span>
-              <motion.div animate={{ rotate: skippedExpanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
-                <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-              </motion.div>
-            </div>
-          </button>
-
-          <AnimatePresence initial={false}>
-            {skippedExpanded && (
-              <motion.div
-                key="skipped-list"
-                id="agent-status-skipped-list"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.22 }}
-                className="overflow-hidden"
-              >
-                <div className="pb-3 px-2 flex flex-col gap-0.5">
-                  {skippedAgents.map((agent) => {
-                    const Icon = AGENT_ICONS[agent.id] ?? SkipForward;
-                    const accentClass = AGENT_ICONS[agent.id] ? accentFor(agent.id).textClass : "text-white/40";
-                    return (
-                      <div key={agent.id} className="flex items-center gap-3 pl-4 py-2">
-                        <Icon className={clsx("w-3.5 h-3.5 shrink-0 opacity-40", accentClass)} />
-                        <span className="text-[11px] font-medium text-white/45 truncate">{agent.name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
+        <div className="border-t border-white/[0.06] px-5 py-3 flex items-center gap-2">
+          <SkipForward className="w-3 h-3 text-white/20 shrink-0" />
+          <span className="text-[11px] text-white/30 truncate">
+            {skippedAgents.map(a => a.name).join(", ")} skipped
+          </span>
+        </div>
       )}
     </div>
   );

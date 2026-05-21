@@ -57,7 +57,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
 
         {/* Center dot */}
         <motion.div
-          animate={{ opacity: isHovered ? 1 : 0.55, scale: isHovered ? 1.3 : 1 }}
+          animate={{ opacity: isHovered ? 1 : 0.55 }}
           transition={{ duration: 0.2 }}
           className="absolute w-1 h-1 rounded-full"
           style={{ background: "rgba(165,200,255,0.95)", boxShadow: "0 0 6px rgba(79,142,247,0.8)" }}

@@ -10,7 +10,7 @@
 }
 
 @theme {
-  /* ── Core Brand — Teal Precision Glass Upgrade ── */
+  /* ── Core Brand — Teal Precision Glass ── */
   --color-primary:       #14B8A6;
   --color-primary-rgb:   20, 184, 166;
   --color-primary-soft:  #5EEAD4;
@@ -30,7 +30,7 @@
   --color-danger:        #EF4444;
   --color-danger-rgb:    239, 68, 68;
 
-  /* ── Surfaces — obsidian slate with micro elevation ── */
+  /* ── Surfaces ── */
   --color-background:   #02040A;
   --color-foreground:   #EDF2F8;
   --color-surface-0:    #02040A;
@@ -74,7 +74,7 @@
   --duration-slow:    420ms;
   --duration-ambient: 1.6s;
 
-  /* ── Agent accent tokens (V-C-1, V-H-3) ── */
+  /* ── Agent accent tokens ── */
   --color-agent-image:    #60A5FA;
   --color-agent-audio:    #38BDF8;
   --color-agent-scene:    #818CF8;
@@ -115,14 +115,7 @@
     min-height: 100vh;
   }
 
-  /* ── Loading bridge ─────────────────────────────────────────────────
-     Set by useInvestigation.handleAcceptAnalysis right before
-     router.push("/result/{sid}") and removed by useResult / RouteExperience
-     once the result page mounts. Paints a full-viewport blackout so the
-     brief gap between unmounting the evidence overlay and the result
-     page's ForensicProgressOverlay does not flash the page background.
-     Pointer-events:none means it never blocks interaction in the rare
-     case the attribute lingers. */
+  /* Loading bridge overlay — set by useInvestigation before route push */
   body[data-fc-loading="1"]::before {
     content: "";
     position: fixed;
@@ -132,7 +125,6 @@
     backdrop-filter: blur(32px);
     -webkit-backdrop-filter: blur(32px);
     pointer-events: none;
-    /* No transition — appears instantly, the React overlay fades out on top. */
   }
 
   body[data-fc-loading="1"]::after {
@@ -161,10 +153,21 @@
     cursor: pointer;
   }
 
-  /* Refined selection */
   ::selection {
     background: rgba(79,142,247,0.25);
     color: #fff;
+  }
+
+  /* Global focus ring — applied to all interactive elements */
+  :where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22);
+    border-radius: 4px;
+  }
+
+  :where([data-focus-contained="true"]):focus-visible {
+    outline-offset: -2px;
   }
 }
 
@@ -181,7 +184,7 @@
   .border-border-muted  { border-color: var(--color-border-muted); }
   .border-border-strong { border-color: var(--color-border-strong); }
 
-  /* Grid — finer, more architectural */
+  /* Grid — architectural */
   .bg-grid-small {
     background-image:
       linear-gradient(to right, rgba(165,200,255,0.04) 1px, transparent 1px),
@@ -189,7 +192,7 @@
     background-size: 28px 28px;
   }
 
-  /* Dot grid — organic, premium feel */
+  /* Dot grid — organic */
   .bg-dot-grid {
     background-image: radial-gradient(circle, rgba(165,200,255,0.08) 1px, transparent 1px);
     background-size: 24px 24px;
@@ -253,18 +256,19 @@
     background-size: 128px 128px;
   }
 
+  /* ── Canonical transition — single definition ── */
   .fc-transition {
-    transition-property: opacity, border-color, background-color, box-shadow, color;
-    transition-duration: 160ms;
-    transition-timing-function: var(--ease-out);
+    transition:
+      background-color 160ms ease,
+      border-color     160ms ease,
+      color            160ms ease,
+      box-shadow       160ms ease,
+      opacity          160ms ease;
   }
-
-
 
   .fc-focus-ring {
     outline: none;
   }
-
   .fc-focus-ring:focus-visible {
     box-shadow:
       0 0 0 2px rgba(79,142,247,0.85),
@@ -288,9 +292,7 @@
   .fc-text-success   { color: var(--color-success); }
   .fc-text-primary-accent { color: var(--color-primary); }
 
-  /* ── Eyebrow / micro-label scale (V-H-5) ──
-     Replaces the ad-hoc text-[10px] font-mono tracking-[0.X] pattern
-     repeated 100+ times across the app. */
+  /* ── Eyebrow / micro-label scale ── */
   .fc-eyebrow {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -306,62 +308,77 @@
 }
 
 /* ─────────────────────────────────────────────────────────────── */
-/*  GLASS SYSTEM & CANONICAL SURFACE CLASSES                       */
+/*  GLASS SURFACE SYSTEM                                           */
 /* ─────────────────────────────────────────────────────────────── */
 
-.fc-surface {
+/*
+ * Surface decision tree — pick the lowest level that is still visible:
+ *
+ *   fc-surface-solid    — fully opaque (#060D18); use for visual anchor points
+ *                         that must not blend into the background (e.g. sidebar rails).
+ *   fc-surface-quiet    — subtle frosted glass; default for inner containers,
+ *                         cards nested inside a page section, list items.
+ *   fc-surface          — standard frosted glass; primary card / panel surface
+ *                         that sits directly on the page background.
+ *   fc-surface-elevated — prominent frosted glass; use for dialogs, feature
+ *                         callouts, and cards that demand visual hierarchy.
+ *   fc-surface-overlay  — maximum frosted glass; modal backdrops and critical
+ *                         overlays that float above all other content.
+ *
+ *   Rule: never use a higher tier unless the lower one is invisible at that
+ *   location. Adjacent surfaces must differ by exactly one tier.
+ */
+
+/* Solid anchor — one non-glass surface to prevent the "everything is glass" collapse */
+.fc-surface-solid {
   position: relative;
   border-radius: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.075),
-      rgba(255, 255, 255, 0.035)
-    ),
-    rgba(8, 13, 24, 0.70);
-  backdrop-filter: blur(22px) saturate(135%);
-  -webkit-backdrop-filter: blur(22px) saturate(135%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 18px 44px rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: #060D18;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
 }
 
 .fc-surface-quiet {
   position: relative;
   border-radius: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255,255,255,0.13);
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.060),
-      rgba(255, 255, 255, 0.030)
-    ),
-    rgba(8, 13, 24, 0.64);
+    linear-gradient(180deg, rgba(255,255,255,0.072), rgba(255,255,255,0.038)),
+    rgba(8, 13, 24, 0.68);
   backdrop-filter: blur(18px) saturate(125%);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 12px 30px rgba(0, 0, 0, 0.22);
+    inset 0 1px 0 rgba(255,255,255,0.11),
+    0 12px 30px rgba(0,0,0,0.28);
+}
+
+.fc-surface {
+  position: relative;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.088), rgba(255,255,255,0.046)),
+    rgba(8, 13, 24, 0.74);
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 18px 44px rgba(0,0,0,0.32);
 }
 
 .fc-surface-elevated {
   position: relative;
   border-radius: 1.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.17);
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.085),
-      rgba(255, 255, 255, 0.040)
-    ),
-    rgba(8, 13, 24, 0.76);
+    linear-gradient(180deg, rgba(255,255,255,0.095), rgba(255,255,255,0.050)),
+    rgba(8, 13, 24, 0.80);
   backdrop-filter: blur(24px) saturate(145%);
   -webkit-backdrop-filter: blur(24px) saturate(145%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
-    0 22px 56px rgba(0, 0, 0, 0.34);
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    inset 0 -1px 0 rgba(255,255,255,0.05),
+    0 22px 56px rgba(0,0,0,0.38);
 }
 
 .fc-surface-overlay {
@@ -369,18 +386,14 @@
   border-radius: 2rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.105),
-      rgba(255, 255, 255, 0.050)
-    ),
+    linear-gradient(180deg, rgba(255,255,255,0.105), rgba(255,255,255,0.050)),
     rgba(5, 10, 20, 0.88);
   backdrop-filter: blur(30px) saturate(155%);
   -webkit-backdrop-filter: blur(30px) saturate(155%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-    0 30px 80px rgba(0, 0, 0, 0.48);
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(255,255,255,0.06),
+    0 30px 80px rgba(0,0,0,0.48);
 }
 
 .fc-glass-highlight::before {
@@ -389,87 +402,12 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.12),
-      rgba(255, 255, 255, 0.00) 42%
-    );
-}
-
-/* Legacy / Aliases upgraded to modern frosted glass style without lift */
-.glass-panel {
-  position: relative;
-  border-radius: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.060),
-      rgba(255, 255, 255, 0.030)
-    ),
-    rgba(8, 13, 24, 0.64);
-  backdrop-filter: blur(18px) saturate(125%);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 12px 30px rgba(0, 0, 0, 0.22);
-  transition: border-color var(--duration-base) ease;
-}
-
-.glass-panel:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-/* Container panels should not lift */
-.glass-panel.no-hover-lift:hover {
-  transform: none;
-}
-
-.premium-glass {
-  position: relative;
-  border-radius: 1.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.085),
-      rgba(255, 255, 255, 0.040)
-    ),
-    rgba(8, 13, 24, 0.76);
-  backdrop-filter: blur(24px) saturate(145%);
-  -webkit-backdrop-filter: blur(24px) saturate(145%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.045),
-    0 22px 56px rgba(0, 0, 0, 0.34);
-  transition: border-color var(--duration-base) ease;
-}
-
-.premium-glass:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-/* Step/feature cards — inside containers, no backdrop-filter double-up */
-.step-card {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-lg);
-  transition: border-color 0.3s ease;
-}
-.step-card:hover {
-  border-color: rgba(20, 184, 166, 0.22);
+  background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.00) 42%);
 }
 
 /* ── Typography Effects ── */
 .text-hero-gradient {
-  background: linear-gradient(
-    140deg,
-    #FFFFFF    0%,
-    #D4E8FF   25%,
-    #A5C8FF   55%,
-    #14B8A6  100%
-  );
+  background: linear-gradient(140deg, #FFFFFF 0%, #D4E8FF 25%, #A5C8FF 55%, #14B8A6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -479,10 +417,7 @@
 /*  BUTTON SYSTEM                                                  */
 /* ─────────────────────────────────────────────────────────────── */
 
-.fc-btn-primary,
-.btn-primary,
-.btn-horizon-primary,
-.btn-premium {
+.fc-btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -490,75 +425,49 @@
   min-height: 44px;
   padding: 0 22px;
   border-radius: 999px;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(20, 184, 166, 0.24),
-      rgba(7, 84, 92, 0.42)
-    );
+  background: linear-gradient(180deg, rgba(20,184,166,0.24), rgba(7,84,92,0.42));
   color: rgba(240, 253, 250, 0.96) !important;
   border: 1px solid rgba(94, 234, 212, 0.46);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(45, 212, 191, 0.12),
-    0 14px 36px rgba(0, 0, 0, 0.34),
-    0 0 28px rgba(45, 212, 191, 0.14);
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    inset 0 -1px 0 rgba(45,212,191,0.12),
+    0 14px 36px rgba(0,0,0,0.34),
+    0 0 28px rgba(45,212,191,0.14);
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   transition:
     background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
+    border-color     160ms ease,
+    color            160ms ease,
+    box-shadow       160ms ease;
   will-change: auto;
 }
 
-.fc-btn-primary:hover,
-.btn-primary:hover,
-.btn-horizon-primary:hover,
-.btn-premium:hover {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(20, 184, 166, 0.12),
-      rgba(7, 84, 92, 0.22)
-    );
-  color: rgba(255, 255, 255, 0.98) !important;
+.fc-btn-primary:hover {
+  background: linear-gradient(180deg, rgba(20,184,166,0.12), rgba(7,84,92,0.22));
+  color: rgba(255,255,255,0.98) !important;
   border-color: rgba(94, 234, 212, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 12px 32px rgba(0, 0, 0, 0.30),
-    0 0 34px rgba(45, 212, 191, 0.20);
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 12px 32px rgba(0,0,0,0.30),
+    0 0 34px rgba(45,212,191,0.20);
 }
 
-.fc-btn-primary:active,
-.btn-primary:active,
-.btn-horizon-primary:active,
-.btn-premium:active {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(15, 118, 110, 0.22),
-      rgba(5, 47, 53, 0.42)
-    );
+.fc-btn-primary:active {
+  background: linear-gradient(180deg, rgba(15,118,110,0.22), rgba(5,47,53,0.42));
   border-color: rgba(94, 234, 212, 0.52);
   transform: scale(0.98);
   transition-duration: 0.1s;
 }
 
-.fc-btn-primary:disabled,
-.btn-primary:disabled,
-.btn-horizon-primary:disabled,
-.btn-premium:disabled {
+.fc-btn-primary:disabled {
   cursor: not-allowed;
   opacity: 0.48;
   box-shadow: none;
 }
 
-.fc-btn-secondary,
-.btn-outline,
-.btn-horizon-outline {
+.fc-btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -566,61 +475,44 @@
   min-height: 40px;
   padding: 0 18px;
   border-radius: 999px;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.075),
-      rgba(255, 255, 255, 0.035)
-    );
-  color: rgba(255, 255, 255, 0.78) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.035));
+  color: rgba(255,255,255,0.78) !important;
+  border: 1px solid rgba(255,255,255,0.16);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    0 10px 26px rgba(0, 0, 0, 0.20);
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 10px 26px rgba(0,0,0,0.20);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   font-size: 0.875rem;
   font-weight: 650;
   transition:
     background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease;
+    border-color     160ms ease,
+    color            160ms ease,
+    box-shadow       160ms ease;
 }
 
-.fc-btn-secondary:hover,
-.btn-outline:hover,
-.btn-horizon-outline:hover {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(20, 184, 166, 0.12),
-      rgba(15, 118, 110, 0.075)
-    );
-  color: rgba(240, 253, 250, 0.96) !important;
+.fc-btn-secondary:hover {
+  background: linear-gradient(180deg, rgba(20,184,166,0.12), rgba(15,118,110,0.075));
+  color: rgba(240,253,250,0.96) !important;
   border-color: rgba(94, 234, 212, 0.38);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13),
-    0 10px 26px rgba(0, 0, 0, 0.22);
+    inset 0 1px 0 rgba(255,255,255,0.13),
+    0 10px 26px rgba(0,0,0,0.22);
 }
 
-.fc-btn-secondary:active,
-.btn-outline:active,
-.btn-horizon-outline:active {
+.fc-btn-secondary:active {
   transform: scale(0.98);
   background: rgba(20, 184, 166, 0.05);
   transition-duration: 0.1s;
 }
 
-.fc-btn-secondary:disabled,
-.btn-outline:disabled,
-.btn-horizon-outline:disabled {
+.fc-btn-secondary:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
 
-.fc-btn-ghost,
-.btn-ghost {
+.fc-btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -629,25 +521,23 @@
   padding: 0 14px;
   border-radius: 999px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.68) !important;
+  color: rgba(255,255,255,0.68) !important;
   border: 1px solid transparent;
   font-size: 0.875rem;
   font-weight: 600;
   transition:
     background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    border-color     160ms ease,
+    color            160ms ease;
 }
 
-.fc-btn-ghost:hover,
-.btn-ghost:hover {
+.fc-btn-ghost:hover {
   background: rgba(20, 184, 166, 0.07);
-  color: rgba(240, 253, 250, 0.96) !important;
+  color: rgba(240,253,250,0.96) !important;
   border-color: rgba(94, 234, 212, 0.20);
 }
 
-.fc-btn-danger,
-.btn-danger {
+.fc-btn-danger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -659,20 +549,19 @@
   color: rgba(254, 202, 202, 0.94) !important;
   border: 1px solid rgba(248, 113, 113, 0.28);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 10px 26px rgba(0, 0, 0, 0.20);
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 10px 26px rgba(0,0,0,0.20);
   font-size: 0.875rem;
   font-weight: 650;
   transition:
     background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    border-color     160ms ease,
+    color            160ms ease;
 }
 
-.fc-btn-danger:hover,
-.btn-danger:hover {
+.fc-btn-danger:hover {
   background: rgba(239, 68, 68, 0.14);
-  color: rgba(255, 235, 235, 0.98) !important;
+  color: rgba(255,235,235,0.98) !important;
   border-color: rgba(248, 113, 113, 0.48);
 }
 
@@ -685,9 +574,9 @@
   min-height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.065);
-  color: rgba(255, 255, 255, 0.74);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255,255,255,0.065);
+  color: rgba(255,255,255,0.74);
+  border: 1px solid rgba(255,255,255,0.12);
   font-size: 0.75rem;
   font-weight: 650;
 }
@@ -722,103 +611,55 @@
   min-height: 44px;
   border-radius: 1rem;
   padding: 0 14px;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.96);
   outline: none;
   transition:
-    border-color 160ms ease,
+    border-color     160ms ease,
     background-color 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow       160ms ease;
 }
 
 .fc-input::placeholder {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255,255,255,0.55);
 }
 
 .fc-input:focus {
   border-color: rgba(94, 234, 212, 0.52);
   background: rgba(20, 184, 166, 0.055);
-  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+  box-shadow: 0 0 0 3px rgba(45,212,191,0.12);
 }
 
 .fc-upload-zone {
   border-radius: 2rem;
   border: 1px dashed rgba(94, 234, 212, 0.34);
   background:
-    linear-gradient(
-      180deg,
-      rgba(20, 184, 166, 0.08),
-      rgba(255, 255, 255, 0.035)
-    ),
+    linear-gradient(180deg, rgba(20,184,166,0.08), rgba(255,255,255,0.035)),
     rgba(8, 13, 24, 0.72);
   backdrop-filter: blur(24px) saturate(145%);
   -webkit-backdrop-filter: blur(24px) saturate(145%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 18px 44px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 18px 44px rgba(0,0,0,0.28);
 }
 
 .fc-upload-zone:hover {
   border-color: rgba(94, 234, 212, 0.58);
   background:
-    linear-gradient(
-      180deg,
-      rgba(20, 184, 166, 0.12),
-      rgba(255, 255, 255, 0.04)
-    ),
+    linear-gradient(180deg, rgba(20,184,166,0.12), rgba(255,255,255,0.04)),
     rgba(8, 13, 24, 0.76);
 }
 
-/* ── Modals & Transitions ── */
+/* ── Modals ── */
 
 .fc-modal-backdrop {
   background:
-    radial-gradient(
-      circle at top,
-      rgba(20, 184, 166, 0.08),
-      transparent 34%
-    ),
+    radial-gradient(circle at top, rgba(20,184,166,0.08), transparent 34%),
     rgba(0, 0, 0, 0.58);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-
-.fc-transition {
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease,
-    opacity 160ms ease;
-}
-
-
-
-  /* ── Legacy Contrast tiers (map to fc-text-*) ── */
-  .text-muted-readable {
-    composes: fc-text-muted;
-  }
-
-  .text-muted-secondary {
-    composes: fc-text-faint;
-  }
-
-  /* V-M-3: text-muted-decorative deleted — was flagged "BANNED for text"
-     in the design system. Decorative-only usage moves to inline aria-hidden
-     spans with explicit color, or fc-text-faint where text is intended. */
-
-  /* ── Global focus ring ── */
-  :where(a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])):focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 3px;
-    box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.22);
-    border-radius: 4px;
-  }
-
-  :where([data-focus-contained="true"]):focus-visible {
-    outline-offset: -2px;
-  }
 
 /* ─────────────────────────────────────────────────────────────── */
 /*  ANIMATIONS                                                     */
@@ -850,37 +691,13 @@
   100% { transform: translateY(500%); opacity: 0; }
 }
 
-/* Progress bar fill — used in loading states */
 @keyframes fc-progress-fill {
   0%   { width: 0%; }
   60%  { width: 85%; }
   100% { width: 100%; }
 }
 
-/* Subtle breathing glow on active indicators */
 @keyframes fc-glow-breathe {
   0%, 100% { opacity: 0.6; filter: blur(4px); }
   50%       { opacity: 1;   filter: blur(8px); }
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  PREMIUM DESIGN SYSTEM TOKENS                                  */
-/* ─────────────────────────────────────────────────────────────── */
-.slick-frosted-card {
-  background: rgba(8, 12, 20, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 
-    0 4px 30px rgba(0, 0, 0, 0.25),
-    inset 0 1px 1px rgba(255, 255, 255, 0.05);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.slick-frosted-card:hover {
-  background: rgba(8, 12, 20, 0.72);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 
-    0 10px 40px rgba(0, 0, 0, 0.35),
-    inset 0 1px 1px rgba(255, 255, 255, 0.08);
 }

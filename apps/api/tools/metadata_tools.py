@@ -167,7 +167,7 @@ async def file_structure_analysis(*, artifact: Any = None, file_path: str | None
         "file_size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
         "header_valid": len(data) > 0,
-        "anomalies": 0,
+        "anomalies": [],
         "verdict": "CLEAN",
     }
 

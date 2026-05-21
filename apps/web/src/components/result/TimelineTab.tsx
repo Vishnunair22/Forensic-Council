@@ -67,7 +67,7 @@ export function TimelineTab({
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-primary-accent opacity-80">Phase 01</span>
                     <h4 className="text-sm font-heading font-bold text-white/80">Evidence Ingress</h4>
-                    <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
+                    <p className="text-xs fc-text-faint leading-relaxed max-w-xl italic">
                       Secure intake of forensic evidence. Metadata extraction and integrity pre-check completed.
                     </p>
                     <div className="text-xs font-mono fc-text-faint">[{fmtTime(pipelineStartAt)}] Transmission Secured</div>
@@ -85,7 +85,7 @@ export function TimelineTab({
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-primary-accent opacity-80">Phase 02</span>
                     <h4 className="text-sm font-heading font-bold text-white/80">Forensic Agent Scans</h4>
-                    <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
+                    <p className="text-xs fc-text-faint leading-relaxed max-w-xl italic">
                       Execution of deep neural probes and specialized investigative agents.
                     </p>
                   </div>
@@ -146,7 +146,7 @@ export function TimelineTab({
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-success opacity-80">Phase 03</span>
                     <h4 className="text-sm font-heading font-bold text-white/80">Consensus Synthesis</h4>
-                    <p className="text-xs text-white/40 leading-relaxed max-w-xl italic">
+                    <p className="text-xs fc-text-faint leading-relaxed max-w-xl italic">
                       Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
                     </p>
                     <div className="text-xs font-mono fc-text-faint">

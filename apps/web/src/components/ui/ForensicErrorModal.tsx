@@ -68,11 +68,11 @@ export function ForensicErrorModal({
             </Dialog.Overlay>
             <Dialog.Content asChild>
               <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.99, y: 5 }}
-                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                className="relative w-full max-w-xl focus:outline-none overflow-hidden fc-surface-overlay border-[var(--color-danger)]/30 rounded-3xl shadow-[0_0_80px_-20px_rgba(239,68,105,0.15)]"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+                className="relative w-full max-w-xl focus:outline-none overflow-hidden fc-surface-overlay border-[var(--color-danger)]/30 rounded-3xl"
               >
                 {/* Top accent */}
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-danger)]/50 to-transparent" />
@@ -95,7 +95,7 @@ export function ForensicErrorModal({
                   </Dialog.Title>
 
                   <Dialog.Description asChild>
-                    <p className="text-sm font-medium text-white/40 leading-relaxed mb-8">
+                    <p className="text-sm font-medium fc-text-faint leading-relaxed mb-8">
                       {message}
                     </p>
                   </Dialog.Description>
@@ -108,11 +108,11 @@ export function ForensicErrorModal({
                         <span>Diagnostic Trace</span>
                       </div>
                       <div className="flex justify-between items-center text-xs font-mono">
-                        <span className="text-white/30">Error ID</span>
+                        <span className="fc-text-faint">Error ID</span>
                         <span className="text-[var(--color-danger)] font-bold">{errorCode}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs font-mono">
-                        <span className="text-white/30">UTC Time</span>
+                        <span className="fc-text-faint">UTC Time</span>
                         <span className="text-white/60">{utcStamp}</span>
                       </div>
                     </div>
@@ -153,7 +153,7 @@ export function ForensicErrorModal({
                   </Dialog.Close>
 
                   {/* Footer Metadata */}
-                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between text-[10px] font-mono text-white/20 tracking-widest">
+                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between text-xs font-mono fc-text-faint tracking-widest">
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-danger)] animate-pulse" />
                       <span>Pipeline Halted</span>

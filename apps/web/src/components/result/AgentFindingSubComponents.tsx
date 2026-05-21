@@ -375,7 +375,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
      </span>
      {status !== "na" && (
       <span className={clsx(
-       "text-[13px] font-black font-mono w-11 text-right tabular-nums",
+       "text-sm font-black font-mono w-11 text-right tabular-nums",
        confidence >= 0.75 ? "text-primary" : confidence >= 0.5 ? "text-warning" : "text-danger"
       )}>
        {Math.round(confidence * 100)}%
@@ -424,13 +424,13 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
     </div>
    )}
    {status === "error" && (
-    <div className="pl-[54px] flex items-center gap-2 text-[12px] text-danger/75 font-semibold">
+    <div className="pl-[54px] flex items-center gap-2 text-xs text-danger/75 font-semibold">
      <XCircle className="w-3.5 h-3.5 shrink-0" />
      Tool did not complete — treat as a coverage gap.
     </div>
    )}
    {status === "flagged" && (
-    <div className="pl-[54px] flex items-center gap-2 text-[12px] text-warning/85 font-medium">
+    <div className="pl-[54px] flex items-center gap-2 text-xs text-warning/85 font-medium">
      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
      Active signal — weigh against other tool results.
     </div>

@@ -70,7 +70,7 @@ export function IntelligenceBrief({
             return (
               <motion.article
                 key={`${i}-${finding.slice(0, 20)}`}
-                initial={{ opacity: 0, y: 6 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.035 }}
                 className="p-5 border border-white/5 bg-transparent rounded-2xl"
@@ -156,7 +156,7 @@ function FindingIcon({ severity }: { severity: "danger" | "warning" | "info" | "
   }
   if (severity === "neutral") {
     return (
-      <div className={clsx(base, "bg-transparent border-white/5 text-white/35")}>
+      <div className={clsx(base, "bg-transparent border-white/5 fc-text-faint")}>
         <CircleDashed className="w-4 h-4" />
       </div>
     );

@@ -29,15 +29,15 @@ export default function GlobalError({
               boxShadow:
                 "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
-            initial={{ opacity: 0, scale: 0.98, y: 4 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
           >
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-400/30 to-transparent rounded-t-3xl" />
 
             <motion.div
-              className="w-16 h-16 bg-red-500/10 border border-red-500/25 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(239,68,68,0.15)]"
-              animate={{ scale: [1, 1.05, 1] }}
+              className="w-16 h-16 bg-red-500/10 border border-red-500/25 rounded-2xl flex items-center justify-center mb-6"
+              animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
             >
               <AlertTriangle className="w-8 h-8 text-red-400" />

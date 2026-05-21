@@ -142,7 +142,7 @@ export function ResultHeader({
                 </span>
               </div>
               <motion.h2
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-1 text-4xl md:text-5xl font-heading font-bold leading-none tracking-tight"
                 style={{ color: theme.color }}
@@ -239,7 +239,7 @@ function Metric({ label, value, color, icon: Icon }: { label: string; value: num
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-          transition={{ duration: 0.9, ease: "easeOut" }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="h-full rounded-full"
           style={{ backgroundColor: color }}
         />

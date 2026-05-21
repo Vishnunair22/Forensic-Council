@@ -255,6 +255,14 @@ deep_agent2:
   "run voice_clone_deep_ensemble": "voice_clone_deep_ensemble"
   "run anti_spoofing_deep_ensemble": "anti_spoofing_deep_ensemble"
 
+# --- Agent 5: Initial Pass Tools (screenshot/image) ---
+agent5_initial:
+  "run file_hash_verify against ingestion hash": "file_hash_verify"
+  "run exif_extract to record screenshot container metadata and software hints": "exif_extract"
+  "run hex_signature_scan for raw-byte software signatures": "hex_signature_scan"
+  "run compression_risk_audit to check for social media footprints": "compression_risk_audit"
+  "run file_structure_analysis for binary anomalies in headers and trailers": "file_structure_analysis"
+
 # --- Deep Pass Tools (Agent 5) ---
 deep_agent5:
   "run metadata_anomaly_score": "metadata_anomaly_score"

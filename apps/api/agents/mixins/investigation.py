@@ -331,7 +331,7 @@ class AgentInvestigationMixin:
             ),
             reverse=True,
         )
-        top_findings = sorted_findings[:4]
+        top_findings = sorted_findings[:5]
         if top_findings:
             primary = top_findings[0]
             primary_summary = primary.reasoning_summary.strip()

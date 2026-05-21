@@ -86,12 +86,12 @@ function ToastCard({
 
       <div className="flex-1 min-w-0 py-0.5">
         {t.title && (
-          <p className={clsx("text-[12px] font-bold leading-tight", style.text)}>
+          <p className={clsx("text-xs font-bold leading-tight", style.text)}>
             {t.title}
           </p>
         )}
         {t.description && (
-          <p className="text-[11px] font-mono text-muted-secondary leading-relaxed mt-1">
+          <p className="text-xs font-mono fc-text-faint leading-relaxed mt-1">
             {t.description}
           </p>
         )}

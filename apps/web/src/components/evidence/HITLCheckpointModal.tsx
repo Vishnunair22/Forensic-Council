@@ -103,7 +103,7 @@ export function HITLCheckpointModal({
          <DialogTitle className="text-2xl font-heading font-bold text-white tracking-tight">
           Investigator Intervention
          </DialogTitle>
-         <DialogDescription className="fc-eyebrow text-white/40 mt-1">
+         <DialogDescription className="fc-eyebrow fc-text-faint mt-1">
           Checkpoint ID: {checkpoint.checkpoint_id.slice(0, 8)} · {checkpoint.agent_name}
          </DialogDescription>
         </div>
@@ -114,7 +114,7 @@ export function HITLCheckpointModal({
        {/* Context Panels */}
        <div className="grid grid-cols-1 gap-4">
         <div className="border-l-2 border-white/20 pl-4 py-1 space-y-2">
-         <h4 className="fc-eyebrow text-white/40">Evidence Brief</h4>
+         <h4 className="fc-eyebrow fc-text-faint">Evidence Brief</h4>
          <p className="text-sm text-white/80 leading-relaxed">{checkpoint.brief_text}</p>
         </div>
         <div className="border-l-2 border-[var(--color-primary)] pl-4 py-1 space-y-2 bg-[var(--color-primary)]/5">
@@ -125,7 +125,7 @@ export function HITLCheckpointModal({
 
        {/* Decision Grid */}
        <div className="space-y-3 pt-4 border-t border-white/5">
-        <h4 className="fc-eyebrow text-white/40 mb-2" id="protocol-selection-label">Protocol Selection</h4>
+        <h4 className="fc-eyebrow fc-text-faint mb-2" id="protocol-selection-label">Protocol Selection</h4>
         <div
           className="grid grid-cols-2 gap-3"
           role="radiogroup"
@@ -170,8 +170,8 @@ export function HITLCheckpointModal({
              {option.label}
             </span>
             <span className={clsx(
-              "text-[10px] font-mono leading-tight transition-colors",
-              selectedDecision === option.value ? "text-white/70" : "text-white/40"
+              "text-xs font-mono leading-tight transition-colors",
+              selectedDecision === option.value ? "text-white/70" : "fc-text-faint"
             )}>
              {option.description}
             </span>
@@ -183,7 +183,7 @@ export function HITLCheckpointModal({
 
         {/* Note input */}
         <div className="space-y-3">
-         <h4 className="fc-eyebrow text-white/40" id="hitl-notes-label">Supplemental Documentation</h4>
+         <h4 className="fc-eyebrow fc-text-faint" id="hitl-notes-label">Supplemental Documentation</h4>
          <textarea
           id="hitl-notes"
           aria-labelledby="hitl-notes-label"
@@ -196,7 +196,7 @@ export function HITLCheckpointModal({
         </div>
 
         {decisionError && (
-         <div role="alert" className="p-3 rounded bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/20 text-[var(--color-danger)] text-[11px] font-bold text-center tracking-wide">
+         <div role="alert" className="p-3 rounded bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/20 text-[var(--color-danger)] text-xs font-bold text-center tracking-wide">
           {decisionError}
          </div>
         )}

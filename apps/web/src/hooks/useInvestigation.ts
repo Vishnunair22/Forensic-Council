@@ -872,40 +872,45 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   // Safety dismissal for reconnects or very fast streams that update state
   // before the connection promise settles.
-  useEffect(() => {
-    // Wait until the backend has transitioned out of initiating to dismiss.
-    // status !== "idle" && status !== "initiating" means we've started receiving real updates.
-    const isActuallyRunning = status !== "idle" && status !== "initiating";
-    
-    if (showLoadingOverlay) {
-      if (overlayStartTimeRef.current === 0) {
-        overlayStartTimeRef.current = Date.now();
-      }
-
-      if (isActuallyRunning) {
-        const elapsed = Date.now() - overlayStartTimeRef.current;
-        const minDuration = 2500; // Keep overlay for at least 2.5s for perceived performance
-
-        if (elapsed >= minDuration) {
-          setShowLoadingOverlay(false);
-          sessionOnlyStorage.removeItem("fc_show_loading");
-        } else if (!minOverlayTimerRef.current) {
-          minOverlayTimerRef.current = setTimeout(() => {
-            setShowLoadingOverlay(false);
-            sessionOnlyStorage.removeItem("fc_show_loading");
-            minOverlayTimerRef.current = null;
-          }, minDuration - elapsed);
-        }
-      }
-    } else {
-      // If overlay is hidden, ensure timer is cleared and start time reset
-      if (minOverlayTimerRef.current) {
-        clearTimeout(minOverlayTimerRef.current);
-        minOverlayTimerRef.current = null;
-      }
-      overlayStartTimeRef.current = 0;
-    }
-  }, [showLoadingOverlay, status]);
+   useEffect(() => {
+     // Wait until the backend has transitioned out of initiating to dismiss.
+     // status !== "idle" && status !== "initiating" means we've started receiving real updates.
+     // Dismiss as soon as either the WS stream is ready (connection established)
+     // OR the pipeline has sent its first real status update. This prevents the
+     // gap between "WS open" and "first AGENT_UPDATE" from holding the overlay.
+     const isActuallyRunning =
+       (status !== "idle" && status !== "initiating") ||
+       (analysisStreamReady && status !== "idle");
+     
+     if (showLoadingOverlay) {
+       if (overlayStartTimeRef.current === 0) {
+         overlayStartTimeRef.current = Date.now();
+       }
+       
+       if (isActuallyRunning) {
+         const elapsed = Date.now() - overlayStartTimeRef.current;
+         const minDuration = 2500; // Keep overlay for at least 2.5s for perceived performance
+ 
+         if (elapsed >= minDuration) {
+           setShowLoadingOverlay(false);
+           sessionOnlyStorage.removeItem("fc_show_loading");
+         } else if (!minOverlayTimerRef.current) {
+           minOverlayTimerRef.current = setTimeout(() => {
+             setShowLoadingOverlay(false);
+             sessionOnlyStorage.removeItem("fc_show_loading");
+             minOverlayTimerRef.current = null;
+           }, minDuration - elapsed);
+         }
+       }
+     } else {
+       // If overlay is hidden, ensure timer is cleared and start time reset
+       if (minOverlayTimerRef.current) {
+         clearTimeout(minOverlayTimerRef.current);
+         minOverlayTimerRef.current = null;
+       }
+       overlayStartTimeRef.current = 0;
+     }
+   }, [showLoadingOverlay, status, analysisStreamReady]);
 
 
   useEffect(() => {

@@ -83,7 +83,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     <button
                       type="button"
                       onClick={() => setShowConfirm(true)}
-                      className="btn-horizon-outline py-2 px-4 text-xs text-danger border-danger/20 hover:bg-danger/5"
+                      className="fc-btn-secondary py-2 px-4 text-xs text-danger border-danger/20 hover:bg-danger/5"
                     >
                       Clear Archive
                     </button>
@@ -113,7 +113,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                   <HistoryIcon className="w-10 h-10 text-white/5" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-heading font-bold text-white/40 mb-2 tracking-widest">Archive Empty</p>
+                  <p className="text-sm font-heading font-bold fc-text-faint mb-2 tracking-widest">Archive Empty</p>
                   <p className="text-xs font-mono fc-text-faint max-w-xs leading-relaxed">
                     System awaiting initial analysis payloads for registry sync.
                   </p>

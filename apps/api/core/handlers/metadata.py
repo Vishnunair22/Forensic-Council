@@ -209,7 +209,7 @@ class MetadataHandlers(BaseToolHandler):
         result.setdefault("absent_mandatory_fields", absent_fields)
         result.setdefault("available", True)
         result.setdefault("court_defensible", True)
-        result.setdefault("confidence", 0.4 if total_fields == 0 else 0.75)
+        result.setdefault("confidence", 0.65 if total_fields == 0 else 0.75)
         if total_fields == 0:
             result.setdefault(
                 "file_format_note",

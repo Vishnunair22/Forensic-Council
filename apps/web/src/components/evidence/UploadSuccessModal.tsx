@@ -31,8 +31,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
 
   useEffect(() => {
     setMounted(true);
-    playSound("card_reveal");
-  }, [playSound]);
+  }, []);
 
   useEffect(() => {
     if (
@@ -66,10 +65,10 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
     >
       <div className="relative w-full max-w-xl" onClick={(e) => e.stopPropagation()} ref={dialogRef}>
         <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.99, y: 5 }}
-          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, y: 4 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="fc-surface-overlay relative overflow-hidden"
         >
           <div className="p-8 sm:p-10 flex flex-col text-left">

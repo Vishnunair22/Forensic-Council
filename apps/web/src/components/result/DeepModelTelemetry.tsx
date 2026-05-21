@@ -63,11 +63,11 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Zap className="w-3 h-3 text-primary/40" />
-                    <span className="text-[11px] font-mono fc-text-secondary font-bold truncate max-w-[160px]">
+                    <span className="text-xs font-mono fc-text-secondary font-bold truncate max-w-[160px]">
                       {TOOL_LABELS[model] || model.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono font-black fc-text-primary-accent">
+                  <span className="text-xs font-mono font-black fc-text-primary-accent">
                     {avgConf}%
                   </span>
                 </div>
@@ -82,7 +82,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                     aria-label={`${model} confidence`}
                   />
                 </div>
-                <div className="flex justify-between items-center text-[10px] font-mono fc-text-faint">
+                <div className="flex justify-between items-center text-xs font-mono fc-text-faint">
                   <span>
                     {model.startsWith("neural_") || model === "anomaly_tracer"
                       ? "Transformer V2"

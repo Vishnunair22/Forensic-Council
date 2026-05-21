@@ -20,7 +20,7 @@ export function AgentAnalysisTab({
     return (
       <div className="rounded-2xl border border-white/[0.06] bg-transparent p-8 text-center">
         <Cpu className="w-8 h-8 text-white/15 mx-auto mb-3" aria-hidden="true" />
-        <p className="text-sm text-white/35 font-medium">No agent findings available.</p>
+        <p className="text-sm fc-text-faint font-medium">No agent findings available.</p>
       </div>
     );
   }
@@ -31,7 +31,7 @@ export function AgentAnalysisTab({
         <Cpu className="w-3.5 h-3.5 text-white/15" aria-hidden="true" />
         <h2 className="fc-eyebrow fc-text-faint">
           Agent Forensic Findings
-          <span className="ml-2 text-white/15">— {activeAgentIds.length} Nodes</span>
+          <span className="ml-2 fc-text-faint">— {activeAgentIds.length} Nodes</span>
         </h2>
       </div>
 

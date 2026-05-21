@@ -17,20 +17,20 @@ export function AgentsSection() {
         </motion.p>
         <motion.h2
           id="agents-heading"
-          initial={{ opacity: 0, y: 5 }}
+          initial={{ opacity: 0, y: 4 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="text-3xl sm:text-4xl font-heading font-black text-white mb-4 tracking-tight"
         >
           Meet the{" "}
           <span className="text-primary">Council</span>
         </motion.h2>
         <motion.p
-          initial={{ opacity: 0, y: 5 }}
+          initial={{ opacity: 0, y: 4 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="text-sm font-medium fc-text-secondary max-w-xl mx-auto leading-relaxed"
         >
           Autonomous investigative agents optimized for multi-modal evidence consensus.
@@ -41,10 +41,10 @@ export function AgentsSection() {
         {AGENTS.map((agent, i) => (
           <motion.article
             key={agent.id}
-            initial={{ opacity: 0, y: 5 }}
+            initial={{ opacity: 0, y: 4 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.3, delay: i * 0.05, ease: "easeOut" }}
+            transition={{ duration: 0.16, delay: i * 0.04, ease: "easeOut" }}
             className="relative flex flex-col items-center text-center group overflow-hidden fc-surface-quiet p-6"
           >
             {/* Icon */}

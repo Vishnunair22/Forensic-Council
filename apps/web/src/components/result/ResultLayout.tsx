@@ -90,7 +90,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   }
 
   return (
-    <div className="min-h-screen pb-48 pt-36 sm:pt-28 relative">
+    <div className="min-h-screen pb-48 pt-20 sm:pt-12 relative">
       {/* ── Arbiter/Loading overlay ── */}
       <AnimatePresence initial={false}>
         {(rs.state === "arbiter" || rs.state === "loading") && (
@@ -131,7 +131,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 "px-4 py-2 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-150 border",
                 rs.activeTab === tab
                   ? "bg-white/[0.08] text-white border-white/20"
-                  : "text-white/45 hover:text-white hover:bg-white/[0.05] border-transparent"
+                  : "fc-text-faint hover:text-white hover:bg-white/[0.05] border-transparent"
               )}
             >
               {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
@@ -219,7 +219,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               className="space-y-8"
             >
               {/* ── SECTION 1: Verdict Header ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                 <ResultHeader
                   report={rs.report}
                   fileName={rs.fileName || rs.report.case_id || "Evidence"}
@@ -241,7 +241,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* ── SECTION 2: Executive Brief + Key Findings ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                 <IntelligenceBrief
                   verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
                   keyFindings={keyFindings}
@@ -255,20 +255,20 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
               {/* ── SECTION 3: Degradation Warnings (conditional) ── */}
               {rs.report.degradation_flags && rs.report.degradation_flags.length > 0 && (
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                   <DegradationBanner flags={rs.report.degradation_flags} />
                 </motion.div>
               )}
 
               {/* ── SECTION 4: Deep Model Telemetry (deep phase only) ── */}
               {rs.isDeepPhase && (
-                <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+                <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                   <DeepModelTelemetry report={rs.report} />
                 </motion.div>
               )}
 
               {/* ── SECTION 5: Agent Forensic Findings ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                 <AgentAnalysisTab
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -277,7 +277,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* ── SECTION 6: Forensic Execution Timeline ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                 <TimelineTab
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -287,7 +287,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* ── SECTION 7: Footer ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 15 }, visible: { opacity: 1, y: 0 } }}>
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
                 <ReportFooter handleHome={rs.handleHome} />
               </motion.div>
             </motion.div>
@@ -335,7 +335,7 @@ function ResultInlineStatus({ message }: { message: string }) {
   return (
     <div className="min-h-[54vh] flex items-center justify-center">
       <div className="w-full max-w-md fc-surface-quiet px-8 py-10 text-center">
-        <ShieldAlert className="w-12 h-12 text-[var(--color-primary)]/70 mx-auto mb-6 animate-pulse" />
+        <ShieldAlert className="w-12 h-12 text-[var(--color-primary)]/70 mx-auto mb-6" />
         <div className="mt-6 fc-eyebrow text-primary/70">
           Consensus Synthesis
         </div>

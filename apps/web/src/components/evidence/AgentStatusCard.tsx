@@ -31,15 +31,13 @@ const TEMPLATE_SUMMARY_RE = [
   /^tool (?:execution )?(?:complete|completed|finished)(?:\s+successfully)?\.?$/i,
   /^checked:?\s*$/i,
   /^no diagnostic output\.?$/i,
-  /^[^.]{0,80}completed\.?$/i,
-  /^[^.]{0,80}completed;\s*review detailed tool metrics\.?$/i,
   /^(?:check|scan|run)\s+(?:ok|complete|finished)\.?$/i,
 ];
 
 function isTemplateSummary(text: string): boolean {
   const t = text.trim();
   if (!t) return true;
-  if (t.length < 18) return true;
+  if (t.length < 12) return true;    // reduced from 18 to 12
   return TEMPLATE_SUMMARY_RE.some((re) => re.test(t));
 }
 
@@ -196,7 +194,7 @@ const FALLBACK_PHRASES: Record<string, string[]> = {
 };
 
 // V-H-2: semantic Tailwind palette → semantic tokens.
-const SEV_LABEL: Record<string, string> = {
+const _SEV_LABEL: Record<string, string> = {
   CRITICAL: "text-danger",
   HIGH:     "text-danger",
   MEDIUM:   "text-warning",
@@ -210,10 +208,25 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const verdict = normalizeVerdict(f.verdict);
   const elapsed = formatElapsed(f.elapsed_s);
   const headline = extractHeadline(f);
-  const detail = extractDetail(f, headline);
-  const MAX = 180;
-  const needsExpand = headline.length > 100 || detail.length > MAX;
-  const visibleDetail = needsExpand && !expanded ? (detail.length > MAX ? detail.slice(0, MAX).trimEnd() + "…" : detail) : detail;
+
+  // IMPROVEMENT: If summary == headline, show first 2 sentences as detail
+  // instead of empty detail (the old "after headline slice" logic showed nothing)
+  const fullSummary = cleanFindingText(f.summary || "").trim();
+  const detail = extractDetail(f, headline) || 
+    (fullSummary !== headline && fullSummary.length > headline.length + 10
+      ? fullSummary.slice(headline.length).replace(/^[.\s]+/, "").trim()
+      : "");
+
+  const MAX_DETAIL = 200;
+  const needsExpand = detail.length > MAX_DETAIL;
+  const visibleDetail = needsExpand && !expanded ? detail.slice(0, MAX_DETAIL).trimEnd() + "…" : detail;
+
+  // CLEAN presentation: only show badges that carry signal
+  // - Tool badge: always show (identifies the check)
+  // - Verdict badge: only when FLAGGED or NEEDS_REVIEW (not for CLEAN — it's the default)
+  // - Severity badge: only when HIGH/CRITICAL/MEDIUM
+  const showVerdictBadge = f.verdict && f.verdict !== "CLEAN" && f.verdict !== "NOT_APPLICABLE";
+  const showSeverityBadge = sev && ["CRITICAL", "HIGH", "MEDIUM"].includes(sev);
 
   return (
     <motion.div
@@ -222,100 +235,82 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.05, duration: 0.25 }}
       className={clsx(
-        "relative bg-transparent transition-colors group",
-        "py-3",
+        "relative py-3 pl-4 border-l transition-colors",
         i > 0 && "border-t border-white/5",
-        "pl-4 border-l",
-        isAlert
-          ? "border-l-red-500/50"
-          : "border-l-transparent"
+        isAlert ? "border-l-red-500/50" : "border-l-white/10"
       )}
     >
-
-
-      <div className="flex flex-col gap-2.5 min-w-0">
-        {/* Top row */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {f.tool && (
-            <span className={clsx(
-              "fc-badge",
-              isAlert ? "fc-badge-danger" : ""
-            )}>
-              {fmtTool(f.tool)}
-            </span>
-          )}
-          {f.verdict && (
-            <span className={clsx(
-              "fc-badge",
-              isAlert ? "fc-badge-danger" : "fc-badge-success"
-            )}>
-              {verdict}
-            </span>
-          )}
-          {sev && SEV_LABEL[sev] && (
-            <span className={clsx(
-              "fc-badge",
-              (sev === "CRITICAL" || sev === "HIGH") ? "fc-badge-danger" :
-              sev === "MEDIUM" ? "fc-badge-warning" : ""
-            )}>
-              {sev}
-            </span>
-          )}
-          {f.degraded && (
-            <span className="fc-badge fc-badge-warning" title={f.fallback_reason || ""}>
-              Degraded
-            </span>
-          )}
-          {typeof f.confidence === "number" && (
-            <span className={clsx(
-              "ml-auto text-xs font-mono font-black tabular-nums shrink-0",
-              isAlert ? "text-danger" :
-              f.confidence >= 0.75 ? "text-[var(--color-primary)]" :
-              f.confidence >= 0.5 ? "text-warning" :
-              "text-white/60"
-            )}>
-              {Math.round(f.confidence * 100)}%
-            </span>
-          )}
-        </div>
-
-        {/* Headline — full text, two-line clamp until expanded */}
-        {headline && (
-          <p className={clsx(
-            "text-[14px] font-semibold leading-snug",
-            isAlert ? "text-white" : "text-white/90",
-            !expanded && "line-clamp-2",
+      {/* Top row: tool + verdict + severity badges + confidence */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {f.tool && (
+          <span className={clsx("fc-badge", isAlert ? "fc-badge-danger" : "")}>
+            {fmtTool(f.tool)}
+          </span>
+        )}
+        {showVerdictBadge && (
+          <span className={clsx("fc-badge", isAlert ? "fc-badge-danger" : "fc-badge-success")}>
+            {verdict}
+          </span>
+        )}
+        {showSeverityBadge && (
+          <span className={clsx(
+            "fc-badge",
+            (sev === "CRITICAL" || sev === "HIGH") ? "fc-badge-danger" : "fc-badge-warning"
           )}>
-            {headline}
-          </p>
+            {sev}
+          </span>
         )}
-
-        {/* Detail */}
-        {detail && (
-          <p className="text-[13px] text-white/65 leading-relaxed">{visibleDetail}</p>
+        {f.degraded && (
+          <span className="fc-badge fc-badge-warning" title={f.fallback_reason || ""}>
+            Degraded
+          </span>
         )}
-
-        {/* Expand/Collapse Button */}
-        {needsExpand && (
-          <div className="pt-0.5">
-            <button
-              type="button"
-              onClick={() => setExpanded(e => !e)}
-              className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
-            >
-              {expanded
-                ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
-                : <><ChevronDown className="w-3.5 h-3.5" /><span>Show more</span></>
-              }
-            </button>
-          </div>
+        {typeof f.confidence === "number" && (
+          <span className={clsx(
+            "ml-auto text-xs font-mono font-black tabular-nums shrink-0",
+            isAlert ? "text-danger" :
+            f.confidence >= 0.75 ? "text-[var(--color-primary)]" :
+            f.confidence >= 0.5 ? "text-warning" : "text-white/50"
+          )}>
+            {Math.round(f.confidence * 100)}%
+          </span>
         )}
+      </div>
 
-        <div className="flex items-center gap-2 pt-1 fc-eyebrow fc-text-faint">
-          <span>Finding {i + 1}/{total}</span>
-          {f.section && <span className="truncate">/ {f.section}</span>}
-          {elapsed && <span className="ml-auto fc-text-faint normal-case tracking-normal">{elapsed}</span>}
-        </div>
+      {/* Headline */}
+      {headline && (
+        <p className={clsx(
+          "text-[14px] font-semibold leading-snug mb-1.5",
+          isAlert ? "text-white" : "text-white/85",
+          !expanded && "line-clamp-2",
+        )}>
+          {headline}
+        </p>
+      )}
+
+      {/* Detail (only when it adds information) */}
+      {visibleDetail && (
+        <p className="text-sm text-white/60 leading-relaxed">{visibleDetail}</p>
+      )}
+
+      {needsExpand && (
+        <button
+          type="button"
+          onClick={() => setExpanded(e => !e)}
+          className="mt-1 inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/75 hover:text-[var(--color-primary)] transition-colors"
+        >
+          {expanded
+            ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
+            : <><ChevronDown className="w-3.5 h-3.5" /><span>Expand</span></>
+          }
+        </button>
+      )}
+
+      {/* Footer: section context and timing */}
+      <div className="flex items-center gap-2 mt-2 fc-eyebrow fc-text-faint">
+        <span>Check {i + 1} of {total}</span>
+        {f.section && <><span className="text-white/20">/</span><span className="truncate">{f.section}</span></>}
+        {elapsed && <span className="ml-auto normal-case tracking-normal">{elapsed}</span>}
       </div>
     </motion.div>
   );
@@ -332,30 +327,30 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
         <ListChecks className="w-3.5 h-3.5 text-[var(--color-primary)]/70" />
         Agent Brief
       </div>
-      <p className="text-[13px] text-white/76 leading-relaxed font-medium">
+      <p className="text-sm text-white/76 leading-relaxed font-medium">
         {text}
       </p>
-      {hasSource && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/80 hover:text-[var(--color-primary)] transition-colors"
-        >
-          {expanded ? (
-            <>
-              <ChevronUp className="w-3.5 h-3.5" />
-              <span>Hide source summary</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-3.5 h-3.5" />
-              <span>Show source summary</span>
-            </>
-          )}
-        </button>
-      )}
+       {hasSource && (
+         <button
+           type="button"
+           onClick={() => setExpanded((e) => !e)}
+           className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[var(--color-primary)]/80 hover:text-[var(--color-primary)] transition-colors"
+         >
+           {expanded ? (
+             <>
+               <ChevronUp className="w-3.5 h-3.5" />
+               <span>Hide detail</span>
+             </>
+           ) : (
+             <>
+               <ChevronDown className="w-3.5 h-3.5" />
+               <span>Show tool basis</span>
+             </>
+           )}
+         </button>
+       )}
       {expanded && hasSource && (
-        <p className="rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-[12px] leading-relaxed text-white/55">
+        <p className="rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-xs leading-relaxed text-white/55">
           {source}
         </p>
       )}
@@ -363,21 +358,33 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
   );
 }
 
-function buildAgentBrief(completedData: AgentUpdate | undefined, findings: FindingPreview[], toolsRan: number): string {
+function buildAgentBrief(
+  completedData: AgentUpdate | undefined,
+  findings: FindingPreview[],
+  toolsRan: number,
+): string {
   if (!completedData) return "";
+
+  // 1. Prefer the backend synthesis narrative — it was purpose-built as the
+  //    agent-level summary and is more accurate than a tool-level construction.
+  const synthSummary = cleanFindingText(completedData.summary || "").trim();
+  if (synthSummary && !isTemplateSummary(synthSummary)) {
+    return synthSummary;
+  }
+
+  // 2. Fall back to a structured construction only when no synthesis is available.
   const verdict = normalizeVerdict(completedData.agent_verdict);
   const confidence = Math.round((completedData.confidence || 0) * 100);
-  const alertFindings = findings.filter(isAlertFinding);
-  const topFinding = findings[0];
-  const topSignal = topFinding ? compactText(extractHeadline(topFinding), 200) : "";
   const toolText = toolsRan === 1 ? "1 tool check" : `${toolsRan} tool checks`;
+  const alertFindings = findings.filter(isAlertFinding);
 
   if (alertFindings.length > 0) {
-    return `${verdict} at ${confidence}% confidence after ${toolText}. Highest-priority signal: ${topSignal || "review the flagged tool output below."}`;
+    const topSignal = compactText(extractHeadline(alertFindings[0]), 160);
+    return `${verdict} at ${confidence}% confidence after ${toolText}. Primary signal: ${topSignal}`;
   }
 
   if (findings.length > 0) {
-    return `${verdict} at ${confidence}% confidence after ${toolText}. No high-severity tool signal surfaced; most relevant note: ${topSignal}`;
+    return `${verdict} at ${confidence}% confidence after ${toolText}. No critical-severity signal detected in reviewed tools.`;
   }
 
   return `${verdict} at ${confidence}% confidence after ${toolText}. The backend did not return detailed tool findings for this specialist.`;
@@ -444,33 +451,42 @@ export function AgentStatusCard({
   }, [status]);
 
 
-  const findings = React.useMemo(() => {
-    const raw = completedData?.findings_preview || [];
-    const deduped: FindingPreview[] = [];
-    const seen = new Set<string>();
-    for (const f of raw) {
-      const summaryText = (f.summary || "").trim();
-      // Skip stub/template findings entirely.
-      if (!f.key_signal?.trim() && isTemplateSummary(summaryText)) continue;
-      // Dedup on tool + verdict + severity + a normalised summary fingerprint,
-      // so two emits of the same finding (re-runs, partial updates) collapse,
-      // but a real shift (ELA NEGATIVE → ELA SUSPICIOUS) still surfaces.
-      const toolPart = f.tool || summaryText.slice(0, 90).toLowerCase().trim();
-      const fp = summaryFingerprint(summaryText || f.key_signal || "");
-      const key = `${toolPart}::${(f.verdict || "").toUpperCase()}::${(f.severity || "").toUpperCase()}::${fp}`;
-      if (!seen.has(key)) {
-        deduped.push(f);
-        seen.add(key);
-      }
-    }
-    return deduped.sort((a, b) => rankFinding(a) - rankFinding(b));
-  }, [completedData]);
+   const findings = React.useMemo(() => {
+     const raw = completedData?.findings_preview || [];
+     const deduped: FindingPreview[] = [];
+     const seen = new Set<string>();
+     for (const f of raw) {
+       const summaryText = (f.summary || "").trim();
+       const hasKeySignal = !!f.key_signal?.trim();
+       const hasVerdict = !!f.verdict && f.verdict !== "INCONCLUSIVE" && f.verdict !== "CLEAN";
+       const _confidence = typeof f.confidence === "number" ? f.confidence : 0;
+       
+       // Only drop the finding if it has no signal at all:
+       // - summary is a template AND no key_signal AND no flagged verdict
+       if (!hasKeySignal && !hasVerdict && isTemplateSummary(summaryText)) continue;
+       
+       // Dedup logic unchanged
+       const toolPart = f.tool || summaryText.slice(0, 90).toLowerCase().trim();
+       const fp = summaryFingerprint(summaryText || f.key_signal || "");
+       const key = `${toolPart}::${(f.verdict || "").toUpperCase()}::${(f.severity || "").toUpperCase()}::${fp}`;
+       if (!seen.has(key)) {
+         deduped.push(f);
+         seen.add(key);
+       }
+     }
+     return deduped.sort((a, b) => rankFinding(a) - rankFinding(b));
+   }, [completedData]);
   const verdictScore = completedData?.verdict_score;
   const agentVerdict = completedData?.agent_verdict;
   const isAgentAlert =
     (typeof verdictScore === "number" && verdictScore > 0.6) ||
     ALERT_VERDICTS.has(agentVerdict || "");
-  const toolsRan = findings.length;
+   // Use the backend-reported count of successful tool executions as the authoritative
+   // number. Fall back to findings.length only if the backend didn't send tools_ran.
+   const toolsRan =
+     typeof completedData?.tools_ran === "number"
+       ? completedData.tools_ran
+       : findings.length;
   const agentBrief = buildAgentBrief(completedData, findings, toolsRan);
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
@@ -496,7 +512,7 @@ export function AgentStatusCard({
     <motion.div
       layout
       className={clsx(
-        "relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] fc-surface-quiet border-none",
+        "relative flex flex-col overflow-hidden fc-surface-quiet border-none",
         (status === "waiting" || status === "queued") && "opacity-50"
       )}
       data-testid={`agent-card-${agentId}`}
@@ -546,15 +562,15 @@ export function AgentStatusCard({
         <AnimatePresence mode="wait">
           {(status === "running" || status === "checking") && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              exit={{ opacity: 0, y: -4 }}
               className="space-y-4"
             >
               <div className="flex items-center gap-3 text-white/60">
-                <motion.div key={progressDescriptor.label} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}>
+                <motion.div key={progressDescriptor.label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }}>
                   {status === "checking" ? (
-                    <Activity className="w-4 h-4 text-[var(--color-primary)] animate-pulse" />
+                    <Activity className="w-4 h-4 text-[var(--color-primary)]" />
                   ) : (
                     <ProgressIcon className="w-4 h-4 text-[var(--color-primary)]" />
                   )}
@@ -583,7 +599,7 @@ export function AgentStatusCard({
 
           {status === "complete" && completedData && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               className="space-y-4"
             >
@@ -604,45 +620,80 @@ export function AgentStatusCard({
                   </span>
                 </div>
               </div>
-              <AgentSummaryText
-                text={agentBrief}
-                sourceText={completedData.summary || completedData.message || ""}
-              />
+               <AgentSummaryText
+                 text={agentBrief}           // buildAgentBrief now returns synthesis first
+                 sourceText={
+                   // Only offer the toggle when brief was a fallback construction
+                   // (i.e. synthesis was missing and we built from tool data)
+                   !cleanFindingText(completedData.summary || "").trim()
+                     ? (completedData.message || "")
+                     : ""
+                 }
+               />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* --- Findings Surface --- */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar scroll-smooth px-6 py-5 relative z-10">
+      <div className="px-6 py-5 relative z-10">
         <AnimatePresence mode="wait">
-          {status === "complete" && findings.length > 0 ? (
-            <div className="space-y-3">
-              {(isExpanded ? findings : findings.slice(0, 3)).map((f, i) => (
-                <FindingRow key={`${f.tool}-${i}`} f={f} i={i} total={findings.length} />
-              ))}
+           {status === "complete" && findings.length > 0 ? (
+             <>
+               <div className="flex items-center justify-between mb-3 px-1">
+                 <span className="fc-eyebrow fc-text-faint">
+                   {findings.length} finding{findings.length !== 1 ? "s" : ""}
+                   {toolsRan > findings.length ? ` · ${toolsRan} tools checked` : ""}
+                 </span>
+               </div>
+               <div className="space-y-3">
+                 {/* --- Findings Surface --- */}
+                 {(() => {
+                   const MAX_COLLAPSED = 3;
+                   const alertFindings = findings.filter(isAlertFinding);
+                   const nonAlertFindings = findings.filter(f => !isAlertFinding(f));
 
-              {findings.length > 3 && (
-                <button
-                  type="button"
-                  onClick={() => onToggleExpand?.()}
-                  className="fc-btn-secondary w-full gap-2 mt-3 text-xs"
-                  aria-expanded={isExpanded}
-                >
-                  {isExpanded
-                    ? <><ChevronUp className="w-4 h-4" /><span>Collapse to top 3 findings</span></>
-                    : <><ChevronDown className="w-4 h-4" /><span>Show all {findings.length} tool findings ({findings.length - 3} hidden)</span></>
-                  }
-                </button>
-              )}
-            </div>
-          ) : (status === "running" || status === "checking" || status === "validating") ? (
+                   const collapsedFindings = isExpanded
+                     ? findings
+                     : alertFindings.length > 0
+                       ? [
+                           ...alertFindings.slice(0, Math.min(2, alertFindings.length)),
+                           ...nonAlertFindings.slice(0, Math.max(0, MAX_COLLAPSED - Math.min(2, alertFindings.length))),
+                         ]
+                       : findings.slice(0, MAX_COLLAPSED);
+
+                   return collapsedFindings.map((f, i) => (
+                     <FindingRow key={`${f.tool}-${i}`} f={f} i={i} total={findings.length} />
+                   ));
+                 })()}
+
+                 {findings.length > 3 && (
+                   <button
+                     type="button"
+                     onClick={() => onToggleExpand?.()}
+                     className="fc-btn-secondary w-full gap-2 mt-3 text-xs"
+                     aria-expanded={isExpanded}
+                   >
+                     {isExpanded
+                       ? <><ChevronUp className="w-4 h-4" /><span>Collapse to top 3 findings</span></>
+                       : <><ChevronDown className="w-4 h-4" /><span>
+                           Show all {findings.length} findings
+                           {toolsRan > findings.length
+                             ? ` (${toolsRan - findings.length} tool checks had no flagged signal)`
+                             : ""}
+                         </span></>
+                   }
+                 </button>
+                 )}
+               </div>
+             </>
+           ) : (status === "running" || status === "checking" || status === "validating") ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
               <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)]">
                 {status === "running" ? (
                   <ProgressIcon className="w-6 h-6" />
                 ) : (
-                  <Activity className="w-6 h-6 animate-pulse" />
+                  <Activity className="w-6 h-6" />
                 )}
               </div>
               <AnimatePresence mode="wait">
@@ -651,7 +702,7 @@ export function AgentStatusCard({
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.35 }}
+                  transition={{ duration: 0.16 }}
                   className="max-w-[280px] text-xs fc-text-faint font-medium leading-relaxed"
                 >
                   {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}

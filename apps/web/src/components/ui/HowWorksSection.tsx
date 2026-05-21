@@ -18,20 +18,20 @@ export function HowWorksSection() {
         </motion.p>
         <motion.h2
           id="how-it-works-heading"
-          initial={{ opacity: 0, y: 5 }}
+          initial={{ opacity: 0, y: 4 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="text-3xl sm:text-4xl font-heading font-black text-white mb-4 tracking-tight"
         >
           How Forensic{" "}
           <span className="text-primary">Council Works</span>
         </motion.h2>
         <motion.p
-          initial={{ opacity: 0, y: 5 }}
+          initial={{ opacity: 0, y: 4 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
           className="text-sm sm:text-base font-medium fc-text-secondary max-w-2xl mx-auto leading-relaxed"
         >
           A multi-stage verification pipeline ensuring cryptographic and semantic integrity
@@ -43,10 +43,10 @@ export function HowWorksSection() {
         {HOW_IT_WORKS.map((item, i) => (
           <motion.div
             key={item.step}
-            initial={{ opacity: 0, y: 5 }}
+            initial={{ opacity: 0, y: 4 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.3, delay: i * 0.05, ease: "easeOut" }}
+            transition={{ duration: 0.16, delay: i * 0.04, ease: "easeOut" }}
             className="flex flex-col items-center"
           >
             {/* Step number + icon */}

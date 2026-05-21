@@ -14,9 +14,9 @@ export function DegradationBanner({ flags }: DegradationBannerProps) {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: -8 }}
+        initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.16, ease: "easeOut" }}
         className="fc-surface-quiet border-warning/20 rounded-2xl overflow-hidden bg-transparent"
       >
         <div className="px-5 py-3.5 border-b border-warning/10 bg-transparent flex items-center gap-2">

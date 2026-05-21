@@ -22,16 +22,16 @@ export default function RouteError({
   return (
     <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden bg-background">
       <motion.div
-        className="relative max-w-md w-full p-10 rounded-3xl overflow-hidden flex flex-col items-center z-10 premium-glass border-danger/20"
-        initial={{ opacity: 0, scale: 0.98, y: 4 }}
+        className="relative max-w-md w-full p-10 rounded-3xl overflow-hidden flex flex-col items-center z-10 fc-surface-elevated border-danger/20"
+        initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.16, ease: "easeOut" }}
       >
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
         <motion.div
-          className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-2xl flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(244,63,94,0.2)]"
-          animate={{ scale: [1, 1.05, 1], opacity: [0.8, 1, 0.8] }}
+          className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-2xl flex items-center justify-center mb-8"
+          animate={{ opacity: [0.7, 1, 0.7] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
           <AlertTriangle className="w-10 h-10 text-danger" />
@@ -49,7 +49,7 @@ export default function RouteError({
         <div className="w-full space-y-4">
           <motion.button
             onClick={() => reset()}
-            className="btn-horizon-primary w-full py-4 tracking-wide"
+            className="fc-btn-primary w-full py-4 tracking-wide"
             whileTap={{ scale: 0.98 }}
           >
             <RefreshCcw className="w-4 h-4" />
@@ -58,7 +58,7 @@ export default function RouteError({
 
           <Link
             href="/"
-            className="btn-outline w-full py-4 tracking-wide"
+            className="fc-btn-secondary w-full py-4 tracking-wide"
           >
             <Home className="w-4 h-4" />
             Return to Hub

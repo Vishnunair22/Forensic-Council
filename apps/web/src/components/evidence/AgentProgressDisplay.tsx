@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Loader2,
   FileText,
   ArrowRight,
   Activity,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
@@ -47,6 +49,7 @@ interface AgentProgressDisplayProps {
   arbiterStatus?: string | null;
   arbiterThinking?: string | null;
   hasStartedAnalysis?: boolean;
+  overlayVisible?: boolean;
 }
 
 type Agent = typeof AGENTS_DATA[number];
@@ -69,7 +72,6 @@ export function AgentProgressDisplay({
   onRunDeepAnalysis,
   isNavigating = false,
   mimeType,
-  playSound,
   revealQueue = [],
   arbiterDeliberating = false,
   arbiterStatus = null,
@@ -77,25 +79,7 @@ export function AgentProgressDisplay({
   hasStartedAnalysis = false,
 }: AgentProgressDisplayProps) {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
-  
-  const playSoundRef = useRef(playSound);
-  useEffect(() => { playSoundRef.current = playSound; }, [playSound]);
-
-  // Play page-load sound + staggered card entrance sounds once on mount
-  const mountSoundsFiredRef = useRef(false);
-  useEffect(() => {
-    if (mountSoundsFiredRef.current) return;
-    mountSoundsFiredRef.current = true;
-    const ps = playSoundRef.current;
-    if (!ps) return;
-    ps("page_load");
-    
-    // Only play entrance hums for agents that are actually supported/visible
-    const supported = allValidAgents.filter(a => isAgentSupportedForMime(a.id, mimeType));
-    supported.forEach((_, i) => {
-      setTimeout(() => playSoundRef.current?.("card_reveal"), i * 150 + 80);
-    });
-  }, [mimeType]);  
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
 
   useEffect(() => {
     if (!mimeType) return;
@@ -175,56 +159,91 @@ export function AgentProgressDisplay({
   };
 
   const itemVariants: import("framer-motion").Variants = {
-    hidden: { opacity: 0, scale: 0.92, y: 40 },
+    hidden: { opacity: 0, y: 4 },
     show: {
       opacity: 1,
-      scale: 1,
       y: 0,
-      transition: { type: "spring", damping: 22, stiffness: 110, duration: 0.55 },
+      transition: { duration: 0.16, ease: "easeOut" },
     },
   };
 
 
   return (
     <div
-      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-24 pt-24"
+      className="flex flex-col w-full max-w-[1560px] mx-auto gap-8 pb-24 pt-12"
       aria-label="Agent forensic analysis progress"
     >
-      <div className="flex flex-col md:flex-row items-start justify-between gap-10 w-full mb-12 px-2">
-        <div className="flex flex-col gap-2">
+      {/* Pipeline header */}
+      <div className="w-full px-2 mb-4">
+        {/* Always-visible row: title + summary + toggle */}
+        <div className="flex items-start justify-between gap-6 w-full">
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="text-5xl md:text-6xl font-heading font-bold text-white tracking-tight"
+            className="text-5xl md:text-6xl font-heading font-bold text-white tracking-tight pt-1"
           >
             Analysis Pipeline
           </motion.h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
-              <span className="fc-badge fc-badge-active text-xs">
-                {phase === "initial" ? "Initial Verification" : "Deep Analysis"}
+
+          <div className="flex items-start gap-4 shrink-0">
+            {/* Summary always visible — primary status signal */}
+            <AgentStatusSummary
+              visibleAgents={visibleAgents}
+              skippedAgents={skippedAgents}
+              agentUpdates={agentUpdates}
+              completedAgents={completedAgents}
+            />
+
+            {/* Collapse toggle — only hides the phase/progress text row */}
+            <button
+              type="button"
+              onClick={() => setHeaderCollapsed(v => !v)}
+              aria-expanded={!headerCollapsed}
+              aria-controls="pipeline-header-panel"
+              className="flex items-center gap-1.5 fc-text-faint hover:text-white/60 transition-colors mt-2 shrink-0"
+            >
+              <span className="text-xs font-mono hidden sm:block">
+                {headerCollapsed ? "Expand" : "Collapse"}
               </span>
-            </div>
-            <div className="w-[1px] h-3 bg-white/10" />
-            <p className="text-sm font-medium text-white/40 italic" role="status" aria-live="polite" aria-atomic="false">
-              {pipelineMessage || (allAgentsDone ? "Analysis phase complete" : progressText || "Coordination in progress")}
-            </p>
+              {headerCollapsed
+                ? <ChevronDown className="w-4 h-4" />
+                : <ChevronUp className="w-4 h-4" />
+              }
+            </button>
           </div>
         </div>
 
-        <div className="flex-shrink-0">
-          <AgentStatusSummary 
-            visibleAgents={visibleAgents}
-            skippedAgents={skippedAgents}
-            agentUpdates={agentUpdates}
-            completedAgents={completedAgents}
-          />
-        </div>
+        {/* Collapsible: phase badge + progress text only */}
+        <AnimatePresence initial={false}>
+          {!headerCollapsed && (
+            <motion.div
+              id="pipeline-header-panel"
+              key="pipeline-header-panel"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center gap-4 mt-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
+                  <span className="fc-badge fc-badge-active text-xs">
+                    {phase === "initial" ? "Initial Verification" : "Deep Analysis"}
+                  </span>
+                </div>
+                <div className="w-[1px] h-3 bg-white/10" />
+                <p className="text-sm font-medium fc-text-faint italic" role="status" aria-live="polite" aria-atomic="false">
+                  {pipelineMessage || (allAgentsDone ? "Analysis phase complete" : progressText || "Coordination in progress")}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
 
-      <div className="w-full">
+      <div className="w-full flex flex-col gap-5">
         <motion.div
           className={`grid gap-5 ${
             visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
@@ -241,7 +260,7 @@ export function AgentProgressDisplay({
                 key={agent.id}
                 layout
                 variants={itemVariants}
-                exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
+                exit={{ opacity: 0, transition: { duration: 0.16 } }}
               >
                 <AgentStatusCard
                   agentId={agent.id}
@@ -257,41 +276,41 @@ export function AgentProgressDisplay({
                 />
               </motion.div>
             ))}
-            </AnimatePresence>
+          </AnimatePresence>
+        </motion.div>
 
-            {/* Arbiter Pre-warming / Active Card */}
-            <AnimatePresence>
-              {(hasStartedAnalysis || awaitingDecision || arbiterStatus || arbiterDeliberating) && (
-                <motion.div
-                  key="arbiter-card"
-                  layout
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.3 } }}
-                >
-                  <ArbiterCard 
-                    status={arbiterDeliberating ? "synthesizing" : arbiterStatus}
-                    thinking={
-                      arbiterThinking ||
-                      (arbiterDeliberating
-                        ? "Council Arbiter is synthesizing agent findings into the final report."
-                        : null)
-                    }
-                    phase={phase}
-                    allAgentsDone={allAgentsDone}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+        {/* Arbiter card — separate row below the agent grid, centered */}
+        <AnimatePresence>
+          {(hasStartedAnalysis || awaitingDecision || arbiterStatus || arbiterDeliberating) && (
+            <motion.div
+              key="arbiter-card"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.16 } }}
+              className="w-full max-w-lg mx-auto"
+            >
+              <ArbiterCard
+                status={arbiterDeliberating ? "synthesizing" : arbiterStatus}
+                thinking={
+                  arbiterThinking ||
+                  (arbiterDeliberating
+                    ? "Council Arbiter is synthesizing agent findings into the final report."
+                    : null)
+                }
+                phase={phase}
+                allAgentsDone={allAgentsDone}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <AnimatePresence>
         {awaitingDecision && phase === "initial" && revealQueue.length === 0 && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
+            exit={{ opacity: 0, y: 4 }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">
@@ -331,9 +350,9 @@ export function AgentProgressDisplay({
       <AnimatePresence>
         {phase === "deep" && revealQueue.length === 0 && (awaitingDecision || pipelineStatus === "awaiting_decision") && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
+            exit={{ opacity: 0, y: 4 }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">

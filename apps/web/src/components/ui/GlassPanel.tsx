@@ -16,11 +16,11 @@ export const GlassPanel = ({
 }: GlassPanelProps) => {
   return (
     <motion.div
-      className={cn("slick-frosted-card rounded-2xl p-6", className)}
-      initial={{ opacity: 0, y: 18 }}
+      className={cn("fc-surface-quiet rounded-2xl p-6", className)}
+      initial={{ opacity: 0, y: 4 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
       {...props}
     >
       {children}

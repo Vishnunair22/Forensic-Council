@@ -33,14 +33,14 @@ export default function RootLayout({
         </Suspense>
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-2 focus:left-2 focus:px-4 focus:py-2 glass-panel font-bold"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-2 focus:left-2 focus:px-4 focus:py-2 fc-surface-quiet font-bold"
         >
           Skip to main content
         </a>
 
         <QueryProvider>
           <GlobalNavbar />
-          <main className="flex-1 relative z-10" id="main-content">
+          <main className="flex-1 relative z-10 pt-16" id="main-content">
             {children}
           </main>
 

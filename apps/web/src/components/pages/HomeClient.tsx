@@ -19,8 +19,8 @@ const containerVariants: Variants = {
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 5 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } },
+  hidden: { opacity: 0, y: 4 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.16, ease: "easeOut" } },
 };
 
 export function HomeClient() {
@@ -29,7 +29,7 @@ export function HomeClient() {
     <div className="relative min-h-screen">
 
       {/* ── Hero ── */}
-      <section id="hero" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pt-32 pb-20 px-5 sm:px-6">
+      <section id="hero" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pt-16 pb-20 px-5 sm:px-6">
         {/* Grid background for structural precision */}
         <div className="absolute inset-0 bg-grid-small opacity-10 pointer-events-none" />
 

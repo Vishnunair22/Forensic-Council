@@ -86,9 +86,10 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      className="relative flex flex-col overflow-hidden min-h-[520px] max-h-[860px] fc-surface-quiet h-full"
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className="relative flex flex-col overflow-hidden fc-surface-quiet"
       data-testid="agent-card-arbiter"
     >
       {/* --- Card Header --- */}
@@ -120,7 +121,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
         </div>
       </div>
 
-      <div className="p-7 flex flex-col flex-1 justify-between gap-6 relative z-10">
+      <div className="p-7 flex flex-col gap-6 relative z-10">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -132,7 +133,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
               <motion.div
                 className={clsx(
-                  "h-full shadow-[0_0_10px_rgba(var(--color-primary-rgb),0.4)]",
+                  "h-full",
                   isReady ? "bg-success" : "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-soft)]"
                 )}
                 initial={{ width: "0%" }}
@@ -160,7 +161,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                     initial={{ opacity: 0, y: 3 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -3 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.16 }}
                     className="text-xs text-white/80 leading-relaxed font-medium"
                   >
                     {displayText}

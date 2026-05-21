@@ -10,7 +10,7 @@ export function SessionExpiredClient() {
   const router = useRouter();
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center px-6 py-32 overflow-hidden">
+    <div className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16 overflow-hidden">
       {/* Background Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden -z-10">
         <div className="absolute top-[20%] left-[-10%] w-[40%] h-[40%] bg-red-500/5 blur-[120px] rounded-full" />
@@ -18,9 +18,9 @@ export function SessionExpiredClient() {
 
       <div className="w-full max-w-md mx-auto relative z-10 text-center space-y-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.16 }}
           className="space-y-4"
         >
           <div className="flex items-center justify-center gap-2 fc-text-faint">
@@ -41,9 +41,9 @@ export function SessionExpiredClient() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
+          transition={{ duration: 0.16, delay: 0.08 }}
         >
           <GlassPanel className="p-10 rounded-3xl border border-border-subtle space-y-8 relative overflow-hidden">
              <div className="absolute top-4 right-4 opacity-[0.03]">
@@ -66,7 +66,7 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-primary text-background shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)] text-sm font-black transition-all flex items-center justify-center gap-3 group"
+                className="w-full py-4 rounded-full bg-primary text-background text-sm font-black transition-all flex items-center justify-center gap-3 group"
                 data-testid="session-expired-home-cta"
                 aria-label="Return to dashboard"
               >
@@ -101,6 +101,6 @@ export function SessionExpiredClient() {
            <div className="h-[1px] w-12 bg-white/20" />
         </div>
       </div>
-    </main>
+    </div>
   );
 }
