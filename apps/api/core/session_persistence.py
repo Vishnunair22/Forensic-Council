@@ -357,6 +357,89 @@ class SessionPersistence:
             logger.error("Failed to list sessions", error=str(e))
             return []
 
+    async def list_sessions_for_user(
+        self,
+        investigator_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """
+        List sessions for a specific user (or all users if investigator_id is None).
+
+        Queries both investigation_state (active/recent) and session_reports
+        (completed) so history survives Redis TTL expiry and restarts.
+
+        Returns dicts with: session_id, case_id, investigator_id, status, created_at.
+        """
+        await self._ensure_client()
+        if self.client is None:
+            return []
+
+        try:
+            if investigator_id:
+                rows = await self.client.fetch(
+                    """
+                    SELECT session_id, case_id, investigator_id, status, created_at
+                    FROM (
+                        SELECT DISTINCT ON (session_id)
+                               session_id, case_id, investigator_id, status, created_at
+                        FROM (
+                            SELECT session_id::text, case_id, investigator_id, status,
+                                   created_at
+                            FROM investigation_state
+                            WHERE investigator_id = $1
+                            UNION ALL
+                            SELECT session_id::text, case_id, investigator_id, status,
+                                   completed_at AS created_at
+                            FROM session_reports
+                            WHERE investigator_id = $1
+                              AND completed_at > NOW() - INTERVAL '30 days'
+                        ) combined
+                        ORDER BY session_id, created_at DESC NULLS LAST
+                    ) deduped
+                    ORDER BY created_at DESC NULLS LAST
+                    LIMIT $2
+                    """,
+                    investigator_id,
+                    limit,
+                )
+            else:
+                rows = await self.client.fetch(
+                    """
+                    SELECT session_id, case_id, investigator_id, status, created_at
+                    FROM (
+                        SELECT DISTINCT ON (session_id)
+                               session_id, case_id, investigator_id, status, created_at
+                        FROM (
+                            SELECT session_id::text, case_id, investigator_id, status,
+                                   created_at
+                            FROM investigation_state
+                            UNION ALL
+                            SELECT session_id::text, case_id, investigator_id, status,
+                                   completed_at AS created_at
+                            FROM session_reports
+                            WHERE completed_at > NOW() - INTERVAL '30 days'
+                        ) combined
+                        ORDER BY session_id, created_at DESC NULLS LAST
+                    ) deduped
+                    ORDER BY created_at DESC NULLS LAST
+                    LIMIT $1
+                    """,
+                    limit,
+                )
+            return [
+                {
+                    "session_id": str(row["session_id"]),
+                    "case_id": row["case_id"],
+                    "investigator_id": row["investigator_id"],
+                    "status": row["status"],
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            logger.error("Failed to list sessions for user", error=str(e))
+            return []
+
     async def cleanup_expired_sessions(self) -> int:
         """
         Clean up expired session states.

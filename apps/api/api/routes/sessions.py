@@ -1,6 +1,6 @@
 """
 Sessions Routes
-==============
+===============
 
 Routes for managing investigation sessions.
 """
@@ -75,6 +75,7 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
             detail="Session listing is temporarily unavailable. Please retry.",
         ) from e
 
+    redis_session_ids: set[str] = set()
     sessions = []
     for key in keys:
         session_id = key.replace(SESSION_METADATA_KEY_PREFIX, "")
@@ -88,6 +89,7 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
             if current_user.role not in (UserRole.ADMIN, UserRole.AUDITOR):
                 if owner != current_user.user_id:
                     continue
+            redis_session_ids.add(session_id)
             sessions.append(
                 SessionInfo(
                     session_id=session_id,
@@ -96,6 +98,33 @@ async def list_sessions(current_user: User = Depends(get_current_user)):
                     started_at=metadata.get("created_at", ""),
                 )
             )
+
+    # Postgres fallback — surfaces completed sessions that have aged out of Redis
+    try:
+        from core.session_persistence import get_session_persistence
+
+        persistence = await get_session_persistence()
+        investigator_filter = (
+            None
+            if current_user.role in (UserRole.ADMIN, UserRole.AUDITOR)
+            else current_user.user_id
+        )
+        db_rows = await persistence.list_sessions_for_user(investigator_id=investigator_filter)
+        for row in db_rows:
+            sid = row["session_id"]
+            if sid in redis_session_ids:
+                continue  # Redis has fresher state
+            sessions.append(
+                SessionInfo(
+                    session_id=sid,
+                    case_id=row.get("case_id", "unknown"),
+                    status=row.get("status", "completed"),
+                    started_at=row.get("created_at", ""),
+                )
+            )
+    except Exception as _db_err:
+        logger.debug("Postgres session fallback failed", error=str(_db_err))
+
     return sessions
 
 

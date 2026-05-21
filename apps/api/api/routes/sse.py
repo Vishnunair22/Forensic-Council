@@ -123,16 +123,42 @@ async def _event_generator(
             # 2. Replay any missed messages from the buffer
             dedicated_redis_any: Any = dedicated_redis
             replay_messages = await dedicated_redis_any.lrange(replay_key, 0, -1)
+            replayed_types: set[str] = set()
             if replay_messages:
                 for msg_json in replay_messages:
                     try:
                         data = json.loads(msg_json)
                         await consumer.send_json(data)
+                        replayed_types.add(data.get("type", ""))
                     except Exception as replay_error:
                         logger.debug(
                             "Failed to replay SSE update",
                             session_id=session_id,
                             error=str(replay_error),
+                        )
+
+            # 3. If the replay buffer didn't include a terminal event, check
+            # Redis metadata — the pipeline may have completed before the
+            # replay key was populated (e.g. on a fast investigation or after
+            # a Redis flush). This path works across worker/API processes
+            # because get_active_pipeline_metadata reads from Redis, not
+            # from the in-process _final_reports dict.
+            terminal_replayed = bool(replayed_types & CRITICAL_TYPES)
+            if not terminal_replayed:
+                from api.routes._session_state import get_active_pipeline_metadata
+
+                meta = await get_active_pipeline_metadata(session_id)
+                if isinstance(meta, dict):
+                    status = meta.get("status")
+                    if status in ("completed", "error"):
+                        event_type = "PIPELINE_COMPLETE" if status == "completed" else "ERROR"
+                        await consumer.send_json(
+                            {
+                                "type": event_type,
+                                "session_id": session_id,
+                                "message": meta.get("brief", ""),
+                                "data": {"status": status, "synthesized_from_metadata": True},
+                            }
                         )
 
             async def _redis_listener(ps, _channel: str) -> None:

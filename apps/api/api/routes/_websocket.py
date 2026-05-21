@@ -105,8 +105,11 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
         return
 
     # ── 2. Wait for session metadata ─────────────────────────────────────────
+    # Metadata is written to Redis by start_investigation() before the HTTP
+    # response is returned, so it should be present on the first read.  The
+    # loop is a defensive guard against any transient Redis propagation delay.
     metadata = None
-    for _i in range(60):  # up to 6 s
+    for _i in range(10):  # up to 1 s
         metadata = await get_active_pipeline_metadata(session_id)
         if metadata:
             break
@@ -124,13 +127,19 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
                 session_id=session_id,
             )
         else:
-            logger.warning(
-                "WebSocket connection rejected: Session metadata not found",
-                session_id=session_id,
-            )
-            await websocket.send_json({"type": "ERROR", "message": "Session not found"})
-            await websocket.close(code=4004)
-            return
+            # DB fallback: session may exist in persistent storage even if the
+            # Redis key expired or was evicted (e.g. after an API restart).
+            from api.routes._authz import _load_session_metadata_from_db
+
+            metadata = await _load_session_metadata_from_db(session_id)
+            if not metadata:
+                logger.warning(
+                    "WebSocket connection rejected: Session metadata not found",
+                    session_id=session_id,
+                )
+                await websocket.send_json({"type": "ERROR", "message": "Session not found"})
+                await websocket.close(code=4004)
+                return
 
     if isinstance(metadata, dict) and metadata.get("status") == "interrupted":
         logger.warning(

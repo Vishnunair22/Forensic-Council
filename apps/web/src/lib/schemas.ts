@@ -26,7 +26,7 @@ export const ReportDTOSchema = z.object({
   session_id: z.string().uuid(),
   report_id: z.string().uuid(),
   case_id: z.string(),
-  overall_verdict: z.enum(VERDICTS),
+  overall_verdict: z.string(),
   overall_confidence: z.number().min(0).max(1),
   overall_error_rate: z.number().min(0).max(1).optional(),
   manipulation_probability: z.number().min(0).max(1).optional(),

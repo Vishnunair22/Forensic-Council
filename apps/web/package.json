@@ -14,7 +14,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:webpack": "next dev --webpack",
+    "dev:webpack": "next dev",
     "build": "next build",
     "build:strict": "next build --no-lint && next build",
     "start": "next start",

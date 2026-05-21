@@ -17,6 +17,17 @@ from core._bcrypt_shim import ensure_bcrypt_compat  # noqa: E402
 
 ensure_bcrypt_compat()
 
+# rust-notify (the Rust backend inside watchfiles) crashes with EIO on Windows →
+# WSL2 → container bind mounts. WATCHFILES_FORCE_POLLING=true switches to rust's
+# own poll watcher, but the Rust code still hits the same EIO on first watch().
+# Block the module before uvicorn is imported so its supervisors/__init__.py
+# falls through to the pure-Python StatReload (os.stat polling) instead.
+import os as _os, sys as _sys  # noqa: E402
+
+if _os.getenv("WATCHFILES_FORCE_POLLING", "").lower() in ("1", "true", "yes"):
+    _sys.modules.setdefault("uvicorn.supervisors.watchfilesreload", None)  # type: ignore[arg-type]
+del _os, _sys
+
 import uvicorn  # noqa: E402
 
 from core.structured_logging import configure_root_logger  # noqa: E402
@@ -46,6 +57,7 @@ if __name__ == "__main__":
         host=os.getenv("API_HOST", "0.0.0.0"),
         port=int(os.getenv("API_PORT", "8000")),
         reload=reload_enabled and not is_production,
+        reload_dirs=["/app"] if reload_enabled and not is_production else None,
         log_level=settings.log_level.lower(),
         # In production: multiple workers are handled externally (e.g. gunicorn/k8s).
         # Single-worker uvicorn is correct here because the pipeline uses in-process

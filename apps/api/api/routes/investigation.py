@@ -29,6 +29,7 @@ from api.routes._session_state import (
     set_active_pipeline,
     set_active_pipeline_metadata,
     set_active_task,
+    update_active_pipeline_metadata,
 )
 from api.routes.metrics import (
     increment_investigations_started,
@@ -415,7 +416,7 @@ async def start_investigation(
                         await get_active_pipeline_metadata(existing_session_id) or {}
                     )
                     status = existing_meta.get("status")
-                    if status not in ("running", "paused"):
+                    if status not in ("running", "paused", "queued"):
                         await _redis.delete(dedup_key)
                         # Try setting it again for the current request
                         was_set = await _redis.set(
@@ -494,7 +495,7 @@ async def start_investigation(
         await set_active_pipeline_metadata(
             session_id,
             {
-                "status": "running",
+                "status": "queued",
                 "brief": "Initializing forensic pipeline...",
                 "case_id": case_id,
                 "investigator_id": current_user.user_id,
@@ -598,6 +599,7 @@ async def start_investigation(
         else:
             pipeline = ForensicCouncilPipeline()
             set_active_pipeline(session_id, pipeline)
+            await update_active_pipeline_metadata(session_id, {"status": "running"})
             task = asyncio.create_task(
                 run_investigation_task(
                     session_id=session_id,

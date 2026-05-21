@@ -36,14 +36,17 @@ export function getWSBase(): string {
     } catch { /* fall through */ }
   }
 
-  // Dev convenience: direct Next.js dev server on :3000, backend on :8000.
-  // When the app is reached through Caddy on :80/:443, keep WebSockets
-  // same-origin so production/local proxy routing remains valid.
+  // When the app is reached through the Next.js dev server on :3000,
+  // route WebSocket through Caddy on :80 so the WS upgrade goes through
+  // the same reverse proxy as all other API traffic. Port 8000 is not
+  // directly exposed in the default docker-compose stack (only via the
+  // docker-compose.dev.yml overlay), so connecting to :8000 from the
+  // browser would silently fail and fall back to SSE every time.
   if (
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
     window.location.port === "3000"
   ) {
-    return `ws://${window.location.hostname}:8000`;
+    return `ws://${window.location.hostname}`;
   }
 
   // Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)

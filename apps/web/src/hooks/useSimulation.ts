@@ -514,6 +514,14 @@ export const useSimulation = ({
                     setArbiterThinking(arbData.thinking || update.message);
                   }
                   break;
+
+                case "BATCH":
+                  if (Array.isArray((update as { updates?: unknown }).updates)) {
+                    for (const u of (update as { updates: BriefUpdate[] }).updates) {
+                      applyUpdate(u);
+                    }
+                  }
+                  break;
           }
         };
 

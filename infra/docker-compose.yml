@@ -14,6 +14,11 @@
 # ML models are stored in named volumes (hf_cache, torch_cache, etc.).
 # They download ONCE on first start and persist across rebuilds/restarts.
 # DO NOT use `docker compose down -v` unless you want to redownload all models.
+# WARNING: `docker compose down -v` also destroys the postgres volume, permanently
+# deleting the ECDSA private keys in the agent_signing_keys table (encrypted at rest
+# via HKDF-derived Fernet from SIGNING_KEY). New keys are generated on next startup,
+# making all previously signed report signatures unverifiable. Back up the postgres
+# volume before running `down -v` if you need to preserve signature chain of custody.
 #
 # IMPORTANT: COMPOSE_PROJECT_NAME is set to "forensic-council" in .env.example.
 # This ensures dev and production builds share the SAME named volumes and never
@@ -89,6 +94,11 @@ x-backend-env: &backend-env
   # polling ensures uvicorn --reload actually picks up code changes.
   WATCHFILES_FORCE_POLLING: "true"
   PYTHONDONTWRITEBYTECODE: "1"
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8000}
+  # Cap ML process pool workers to 2 in Docker dev to avoid OOM when both
+  # backend and worker run simultaneous pools on a mem_limit: 4g budget.
+  # Set to 0 in .env to restore auto (min(4, cpu_count)) for bare-metal.
+  FORENSIC_MAX_WORKERS: ${FORENSIC_MAX_WORKERS:-2}
 
 services:
   # --------------------------------------------------------------------------
@@ -518,7 +528,7 @@ services:
       # use the Docker-internal service name "backend".
       - INTERNAL_API_URL=http://backend:8000
       - DISABLE_NEXT_API_PROXY=${DISABLE_NEXT_API_PROXY:-}
-    command: ["npm", "run", "dev"]
+    command: ["npm", "run", "dev:webpack"]
     depends_on:
       backend:
         condition: service_healthy

@@ -94,9 +94,13 @@ const nextConfig: NextConfig = {
   },
 
   // ── Dev-mode file watcher (Windows + Docker fallback) ────────────────────
-  // On Windows bind mounts, inotify events are not forwarded into the container
-  // reliably, so polling restores HMR. The custom source-map template also
-  // avoids Chrome "illegal path" errors for host paths with spaces.
+  // The Docker dev command uses `next dev` (webpack mode — webpack is the
+  // default in 15.5.x; --no-turbopack is not a valid flag in this build) so
+  // that WATCHPACK_POLLING=true and the poll interval below take effect.
+  // Turbopack ignores these vars; without polling, inotify events from the
+  // Windows host → WSL2 → container bind mount are silently dropped and HMR
+  // stops working. The source-map template also avoids Chrome "illegal path"
+  // errors for host paths with spaces.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   webpack: (config: any, { dev }: { dev: boolean }) => {
     if (dev) {

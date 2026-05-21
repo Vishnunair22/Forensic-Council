@@ -247,12 +247,13 @@ async def export_report_pdf(
     """
     html = await export_report_html(report_dict, session_id)
 
-    # --- Always write HTML fallback ---
-    reports_dir = Path("reports")
-    reports_dir.mkdir(exist_ok=True)
-    html_path = reports_dir / f"{session_id}_report.html"
-    html_path.write_text(html, encoding="utf-8")
-    logger.info("HTML report written", path=str(html_path))
+    # --- Write HTML to /tmp (world-writable, survives appuser restrictions) ---
+    try:
+        html_path = Path("/tmp") / f"{session_id}_report.html"
+        html_path.write_text(html, encoding="utf-8")
+        logger.info("HTML report written", path=str(html_path))
+    except Exception as _html_write_err:
+        logger.debug("Could not write HTML fallback", error=str(_html_write_err))
 
     # --- Try WeasyPrint ---
     try:
@@ -290,6 +291,18 @@ async def export_report_pdf(
     return None
 
 
+def _safe_latin1(text: str) -> str:
+    """Normalize unicode to Latin-1 safe string for fpdf2 built-in fonts."""
+    return (
+        text.replace("—", "--")  # em dash
+            .replace("–", "-")   # en dash
+            .replace("‘", "'").replace("’", "'")  # curly single quotes
+            .replace("“", '"').replace("”", '"')  # curly double quotes
+            .replace("…", "...")  # ellipsis
+            .encode("latin-1", errors="replace").decode("latin-1")
+    )
+
+
 def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
     """Build a simple text-based PDF using fpdf2."""
     from fpdf import FPDF  # type: ignore[import]
@@ -300,7 +313,7 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
 
     # Title
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "FORENSIC COUNCIL — CONFIDENTIAL REPORT", ln=True, align="C")
+    pdf.cell(0, 10, "FORENSIC COUNCIL -- CONFIDENTIAL REPORT", ln=True, align="C")
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "", 9)
@@ -311,22 +324,36 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
 
     # Verdict
     pdf.set_font("Helvetica", "B", 12)
-    verdict = report_dict.get("verdict", "INCONCLUSIVE")
+    verdict = report_dict.get("overall_verdict", report_dict.get("verdict", "INCONCLUSIVE"))
     prob = float(report_dict.get("manipulation_probability", 0.0))
     pdf.cell(0, 8, f"VERDICT: {verdict}  |  Manipulation Probability: {prob:.1%}", ln=True)
     pdf.ln(4)
 
-    # Narrative
+    # Executive summary
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 7, "Investigation Narrative", ln=True)
+    pdf.cell(0, 7, "Executive Summary", ln=True)
     pdf.set_font("Helvetica", "", 9)
-    narrative = str(report_dict.get("narrative", report_dict.get("summary", "No narrative.")))
-    for line in textwrap.wrap(narrative, width=90):
+    narrative = str(report_dict.get("executive_summary", report_dict.get("narrative", report_dict.get("summary", "No summary."))))
+    for line in textwrap.wrap(_safe_latin1(narrative), width=90):
         pdf.cell(0, 5, line, ln=True)
     pdf.ln(4)
 
+    # Verdict sentence
+    vs = report_dict.get("verdict_sentence", "")
+    if vs:
+        pdf.set_font("Helvetica", "I", 9)
+        for line in textwrap.wrap(_safe_latin1(str(vs)), width=90):
+            pdf.cell(0, 5, line, ln=True)
+        pdf.ln(2)
+
     # Findings summary
-    findings = report_dict.get("findings", [])
+    all_findings = []
+    per_agent = report_dict.get("per_agent_findings", {})
+    if isinstance(per_agent, dict):
+        for agent_findings in per_agent.values():
+            if isinstance(agent_findings, list):
+                all_findings.extend(agent_findings)
+    findings = all_findings or report_dict.get("findings", [])
     if findings:
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 7, f"Findings ({len(findings)} total)", ln=True)
@@ -334,11 +361,11 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
         for f in findings[:20]:  # Cap at 20 to avoid overflow
             if not isinstance(f, dict):
                 continue
-            ftype = f.get("finding_type", "Unknown")[:60]
+            ftype = _safe_latin1(f.get("finding_type", "Unknown")[:60])
             fconf = f.get("confidence_raw")
             conf_str = f"{float(fconf):.0%}" if fconf is not None else "N/A"
             everd = f.get("evidence_verdict", "?")[:20]
-            pdf.cell(0, 5, f"  [{everd}] {ftype} — Conf: {conf_str}", ln=True)
+            pdf.cell(0, 5, f"  [{everd}] {ftype} - Conf: {conf_str}", ln=True)
 
     # Hash
     pdf.ln(4)

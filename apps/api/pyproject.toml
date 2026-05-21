@@ -68,6 +68,8 @@ dependencies = [
     "easyocr>=1.7.2",                   # Neural OCR: handles curved text, low-res, 80+ langs
     # AV container profiling
     "pymediainfo>=6.1.0",               # Deep container analysis: codec, fps mode, writing app
+    # PDF report generation (pure Python — no system libraries required)
+    "fpdf2>=2.7",
 ]
 
 [project.optional-dependencies]
