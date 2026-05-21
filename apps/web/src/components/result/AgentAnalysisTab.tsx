@@ -27,15 +27,15 @@ export function AgentAnalysisTab({
 
   return (
     <section aria-label="Agent analysis findings">
-      <div className="flex items-center gap-3 mb-4 px-1">
-        <Cpu className="w-3.5 h-3.5 text-white/15" aria-hidden="true" />
-        <h2 className="fc-eyebrow fc-text-faint">
-          Agent Forensic Findings
-          <span className="ml-2 fc-text-faint">— {activeAgentIds.length} Nodes</span>
-        </h2>
+      <div className="flex items-center justify-between gap-3 mb-3 px-1">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-primary/60" aria-hidden="true" />
+          <h2 className="text-sm font-bold text-white/85">Agent Findings</h2>
+        </div>
+        <span className="fc-eyebrow fc-text-faint">{activeAgentIds.length} node{activeAgentIds.length === 1 ? "" : "s"}</span>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {activeAgentIds.map((agentId) => {
           const rawFindings = report?.per_agent_findings?.[agentId];
           const allFindings = Array.isArray(rawFindings) ? rawFindings : [];
@@ -57,9 +57,7 @@ export function AgentAnalysisTab({
               narrative={report?.per_agent_analysis?.[agentId]}
               agentSummary={report?.per_agent_summary?.[agentId]}
               phase={isDeepPhase ? "deep" : "initial"}
-              // Every agent card opens by default — collapsing the rest behind
-              // a tiny chevron made users think findings were missing.
-              defaultOpen={true}
+              defaultOpen={false}
             />
           );
         })}

@@ -32,38 +32,32 @@ export function TimelineTab({
   }, [agentTimeline]);
 
   return (
-    <section className="space-y-8">
-      <div className="flex items-center gap-4">
-         <span className="fc-eyebrow fc-text-muted">Forensic Execution Lifecycle</span>
-         <div className="h-px flex-1 bg-white/5" />
-      </div>
+    <section>
+      <div className="border border-white/[0.06] rounded-2xl overflow-hidden">
 
-      <div className="bg-transparent border border-white/5 rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-transparent">
-
-          {/* Header */}
-          <div className="px-10 py-8 border-b border-white/5 flex items-center justify-between gap-6">
-            <div className="flex flex-col gap-1">
-              <h3 className="text-xl font-heading font-bold text-white tracking-tight">Sequence Registry</h3>
-              <p className="fc-eyebrow fc-text-faint">Atomic Tool Execution Logs</p>
-            </div>
-            {pipelineStartAt && report.signed_utc && (
-              <div className="px-4 py-2 rounded-lg bg-primary/5 border border-primary/20 fc-eyebrow fc-text-primary-accent">
-                Cycle Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
-              </div>
-            )}
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between gap-6">
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-sm font-bold text-white/85">Sequence Registry</h3>
+            <p className="fc-eyebrow fc-text-faint">Atomic Tool Execution Logs</p>
           </div>
+          {pipelineStartAt && report.signed_utc && (
+            <div className="px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/20 fc-eyebrow fc-text-primary-accent">
+              Cycle Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
+            </div>
+          )}
+        </div>
 
-          <div className="p-12 relative">
-            {/* Timeline Line */}
-            <div className="absolute left-12 top-12 bottom-12 w-px bg-white/5" />
+        <div className="p-6 md:p-8 relative">
+          {/* Timeline Line */}
+            <div className="absolute left-6 md:left-8 top-6 bottom-6 w-px bg-white/[0.05]" />
 
-            <div className="space-y-16">
+            <div className="space-y-10">
 
               {/* 1. Evidence Ingress */}
               {pipelineStartAt && (
                 <div className="relative pl-10">
-                  <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-white/10 border border-white/20 shadow-[0_0_10px_rgba(255,255,255,0.1)]" />
+                  <div className="absolute left-[-5px] top-1.5 w-2 h-2 rounded-full bg-white/20 border border-white/30" />
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-primary-accent opacity-80">Phase 01</span>
                     <h4 className="text-sm font-heading font-bold text-white/80">Evidence Ingress</h4>
@@ -78,8 +72,8 @@ export function TimelineTab({
               {/* 2. Tool Execution Nodes */}
               <div className="relative pl-10">
                 <div
-                  className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary"
-                  style={{ boxShadow: "0 0 10px var(--color-primary)" }}
+                  className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary"
+                  style={{ boxShadow: "0 0 8px var(--color-primary)" }}
                 />
                 <div className="space-y-8">
                   <div className="space-y-2">
@@ -137,10 +131,10 @@ export function TimelineTab({
               {report.signed_utc && (
                 <div className="relative pl-10">
                   <div
-                    className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full"
+                    className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full"
                     style={{
                       backgroundColor: "var(--color-success)",
-                      boxShadow: "0 0 10px var(--color-success)",
+                      boxShadow: "0 0 8px var(--color-success)",
                     }}
                   />
                   <div className="space-y-2">
@@ -159,9 +153,7 @@ export function TimelineTab({
 
             </div>
           </div>
-
         </div>
-      </div>
     </section>
   );
 }

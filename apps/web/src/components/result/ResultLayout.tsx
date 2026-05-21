@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useMemo, useEffect, useRef } from "react";
+import React, { useMemo, useEffect, useRef, useState } from "react";
 import { clsx } from "clsx";
 import dynamic from "next/dynamic";
 import {
+  ChevronDown,
+  Clock,
   FileSearch,
   History as HistoryIcon,
   Home as HomeIcon,
@@ -79,6 +81,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
   const keyFindings = useMemo(() => buildKeyFindings(rs.report), [rs.report]);
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
+  const [showTimeline, setShowTimeline] = useState(false);
 
   if (!rs.mounted) {
     return (
@@ -216,7 +219,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 hidden: { opacity: 0 },
                 visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
               }}
-              className="space-y-8"
+              className="space-y-5"
             >
               {/* ── SECTION 1: Verdict Header ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
@@ -276,14 +279,38 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
-              {/* ── SECTION 6: Forensic Execution Timeline ── */}
+              {/* ── SECTION 6: Forensic Execution Timeline (collapsed by default) ── */}
               <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                <TimelineTab
-                  report={rs.report}
-                  activeAgentIds={activeAgentIds}
-                  agentTimeline={rs.agentTimeline}
-                  pipelineStartAt={rs.pipelineStartAt}
-                />
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-white/[0.05]" />
+                  <button
+                    type="button"
+                    onClick={() => setShowTimeline((v) => !v)}
+                    className="flex items-center gap-2 fc-eyebrow fc-text-faint hover:text-white/70 transition-colors px-3 py-2 rounded-lg hover:bg-white/[0.04] border border-transparent hover:border-white/[0.06]"
+                    aria-expanded={showTimeline}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    Execution Timeline
+                    <ChevronDown
+                      className={clsx(
+                        "w-3.5 h-3.5 transition-transform duration-300",
+                        showTimeline && "rotate-180"
+                      )}
+                    />
+                  </button>
+                  <div className="h-px flex-1 bg-white/[0.05]" />
+                </div>
+
+                {showTimeline && (
+                  <div className="mt-4">
+                    <TimelineTab
+                      report={rs.report}
+                      activeAgentIds={activeAgentIds}
+                      agentTimeline={rs.agentTimeline}
+                      pipelineStartAt={rs.pipelineStartAt}
+                    />
+                  </div>
+                )}
               </motion.div>
 
               {/* ── SECTION 7: Footer ── */}
