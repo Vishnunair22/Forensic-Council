@@ -217,6 +217,86 @@ class ArbiterNarrativeMixin:
         ),
     }
 
+    def _programmatic_agent_narrative(
+        self,
+        agent_id: str,
+        findings: list[dict[str, Any]],
+        metrics: dict[str, Any],
+    ) -> str:
+        """Programmatically generate three sections if LLM is unavailable/fails."""
+        initial_f = [
+            f
+            for f in findings
+            if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"
+        ]
+        
+        assessment_parts = []
+        for f in initial_f:
+            meta = f.get("metadata") or {}
+            tool_name = meta.get("tool_name") or f.get("finding_type", "")
+            verdict = evidence_verdict_of(f)
+            statement = f.get("court_statement") or f.get("reasoning_summary") or ""
+            if verdict == "NOT_APPLICABLE":
+                reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable"
+                assessment_parts.append(f"{tool_name} was bypassed because it is {reason}.")
+            elif verdict == "ERROR":
+                assessment_parts.append(f"{tool_name} failed to execute successfully.")
+            else:
+                s_part = f" (statement: {statement})" if statement else ""
+                assessment_parts.append(f"{tool_name} reported {verdict.lower()}{s_part}.")
+                
+        evidence_assessment = " ".join(assessment_parts) or "No initial findings were reported for assessment."
+        
+        deep_f = [f for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
+        if not deep_f:
+            deep_analysis = "Deep analysis was not executed or no deep findings were reported for this agent."
+        else:
+            deep_parts = []
+            for f in deep_f:
+                meta = f.get("metadata") or {}
+                tool_name = meta.get("tool_name") or f.get("finding_type", "")
+                verdict = evidence_verdict_of(f)
+                statement = f.get("court_statement") or f.get("reasoning_summary") or ""
+                if meta.get("gated") or meta.get("skipped"):
+                    reason = meta.get("reason") or "no prior suspicious signal"
+                    deep_parts.append(f"{tool_name} was gated and skipped ({reason}).")
+                elif verdict == "NOT_APPLICABLE":
+                    deep_parts.append(f"{tool_name} was bypassed.")
+                elif verdict == "ERROR":
+                    deep_parts.append(f"{tool_name} failed.")
+                else:
+                    s_part = f" ({statement})" if statement else ""
+                    deep_parts.append(f"{tool_name} deep scan reported {verdict.lower()}{s_part}.")
+            deep_analysis = " ".join(deep_parts)
+            
+        confidence_pct = round(metrics.get("confidence_score", 0) * 100)
+        error_rate_pct = round(metrics.get("error_rate", 0) * 100)
+        tools_ok = metrics.get("tools_succeeded", 0)
+        tools_total = metrics.get("total_tools_called", 0)
+        tools_na = metrics.get("tools_not_applicable", 0)
+        
+        has_positive = any(evidence_verdict_of(f) == "POSITIVE" for f in findings)
+        if has_positive:
+            agent_verdict = "SUSPICIOUS"
+        elif metrics.get("skipped"):
+            agent_verdict = "NOT APPLICABLE"
+        elif metrics.get("error_rate", 0) > 0.4:
+            agent_verdict = "INCONCLUSIVE"
+        else:
+            agent_verdict = "AUTHENTIC"
+            
+        reliability_verdict = (
+            f"The analysis has {confidence_pct}% confidence with an error rate of {error_rate_pct}% "
+            f"({tools_ok} of {tools_total} tools succeeded, {tools_na} were not applicable). "
+            f"The computed forensic verdict for this agent is {agent_verdict}."
+        )
+        
+        return json.dumps({
+            "evidence_assessment": evidence_assessment,
+            "deep_analysis": deep_analysis,
+            "reliability_verdict": reliability_verdict
+        })
+
     async def _generate_agent_narrative(
         self,
         agent_id: str,
@@ -224,16 +304,16 @@ class ArbiterNarrativeMixin:
         metrics: dict[str, Any],
     ) -> str:
         """
-        Generate a Groq-synthesised per-agent narrative.
+        Generate a Groq-synthesised per-agent narrative as a three-key JSON.
         """
         if not (self.config.llm_api_key and self.config.llm_provider != "none"):  # type: ignore[attr-defined]
-            return ""
+            return self._programmatic_agent_narrative(agent_id, findings, metrics)
 
         client = getattr(self, "_synthesis_client", None) or LLMClient(
             self.config, use_arbiter_tier=True
         )
         if not client.is_available:
-            return ""
+            return self._programmatic_agent_narrative(agent_id, findings, metrics)
 
         agent_full_name = self._AGENT_FULL_NAMES.get(agent_id, agent_id)
         confidence_pct = round(metrics.get("confidence_score", 0) * 100)
@@ -253,7 +333,6 @@ class ArbiterNarrativeMixin:
 
         def _fmt_text(findings_list: list[dict]) -> str:
             lines = []
-            # Sort findings: Deep phase first, then by confidence descending.
             sorted_findings = sorted(
                 findings_list,
                 key=lambda x: (
@@ -322,35 +401,19 @@ class ArbiterNarrativeMixin:
                     f"{json.dumps(_comparison_pairs, indent=2)}"
                 )
 
-        _deep_para = (
-            (
-                "\n\nPARAGRAPH 2 — Deep analysis and cross-validation:\n"
-                "- What deep tools confirmed, expanded, or contradicted from initial analysis.\n"
-                "- Exact Gemini findings if present: content type, extracted text, "
-                "detected objects, authenticity verdict."
-            )
-            if has_deep
-            else ""
-        )
-
         system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.
 
-Write {"2-3" if has_deep else "2"} clear, plain-English paragraphs for the {agent_full_name}. Structure:
+You MUST respond ONLY with a valid JSON object containing exactly three keys: "evidence_assessment", "deep_analysis", and "reliability_verdict". Do not output any markdown formatting (like ```json) or other text outside the JSON structure.
 
-PARAGRAPH 1 — Forensic evidence assessment:
-- For each tool with applicability "RAN": cite the EXACT metric values from the "metrics" field and interpret them forensically. Do not paraphrase — state the actual numbers (e.g. "ELA found 3 localised anomaly regions with max deviation 14.2", "YOLO detected person (0.87), laptop (0.76)").
-- For each tool with applicability "NOT_APPLICABLE": explicitly state that the tool was BYPASSED for this file type. Use the reason from the finding summary (e.g. "Physical scene analysis is not applicable to digital screenshots"). Do NOT treat these as suspicious.
-- For each tool with applicability "FAILED": state that it failed to produce a valid signal and describe the missing analysis dimension.
-{_deep_para}
+JSON Structure:
+{{
+  "evidence_assessment": "<Forensic evidence assessment paragraphs. Cite exact metric values from initial findings and interpret them forensically. Explicitly mention any bypassed (NOT_APPLICABLE) or FAILED tools.>",
+  "deep_analysis": "<Deep analysis and cross-validation paragraphs. If a deep pass was run, specify what deep tools (TruFor, BusterNet, Gemini Multimodal, etc.) confirmed, expanded, or contradicted. If no deep pass was run, explicitly note that deep analysis was skipped/gated.>",
+  "reliability_verdict": "<Reliability and verdict paragraphs. Cite the agent's confidence: {confidence_pct}%, tool error rate: {error_rate_pct}% ({tools_ok} of {tools_total} tools succeeded, {tools_na} not applicable). Conclude with the plain-English verdict for this agent (e.g., AUTHENTIC, SUSPICIOUS, INCONCLUSIVE, or NOT APPLICABLE).>"
+}}
 
-PARAGRAPH {"3" if has_deep else "2"} — Reliability and verdict:
-- Agent confidence: {confidence_pct}%. Tool error rate: {error_rate_pct}% ({tools_ok} of {tools_total} tools succeeded, {tools_na} not applicable to file type).
-- Plain-English verdict for this agent: AUTHENTIC / SUSPICIOUS / INCONCLUSIVE / NOT APPLICABLE.
+Do NOT use bullet points in the JSON values. Write in continuous prose. Interpret numbers — do not paste raw JSON."""
 
-Do NOT use bullet points. Write in continuous prose. Interpret numbers — do not paste raw JSON."""
-
-        # S-H-5: wrap tool-derived strings in UNTRUSTED markers and prepend
-        # the safety preamble to the system prompt.
         initial_block = _wrap_untrusted(f"{agent_full_name}_initial_findings", _fmt_text(initial_f))
         comparison_block = (
             _wrap_untrusted(f"{agent_full_name}_comparison", comparison_section)
@@ -369,19 +432,30 @@ Do NOT use bullet points. Write in continuous prose. Interpret numbers — do no
             f"Initial analysis ({len(initial_f)} tool scans):\n{initial_block}"
             f"{comparison_block}"
             f"{initial_vs_deep_block}\n\n"
-            f"Write the per-agent analysis section."
+            f"Write the per-agent analysis section JSON."
         )
 
         try:
-            return await client.generate_synthesis(
+            raw = await client.generate_synthesis(
                 system_prompt=_SAFETY_PREAMBLE + "\n" + system_prompt,
                 user_content=user_content,
-                max_tokens=600,
-                json_mode=False,
+                max_tokens=800,
+                json_mode=True,
             )
+            if raw:
+                # Strip markdown code blocks if any
+                raw_clean = raw.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = raw_clean.split("```", 2)[-1].lstrip("json").strip()
+                    if raw_clean.endswith("```"):
+                        raw_clean = raw_clean[:-3].strip()
+                parsed = json.loads(raw_clean[raw_clean.find("{") : raw_clean.rfind("}") + 1])
+                if all(k in parsed for k in ("evidence_assessment", "deep_analysis", "reliability_verdict")):
+                    return json.dumps(parsed)
         except Exception as e:
             logger.debug(f"Per-agent narrative Groq parsing/call failed for {agent_id}: {e}")
-            return ""
+
+        return self._programmatic_agent_narrative(agent_id, findings, metrics)
 
     async def _generate_executive_summary(
         self,
@@ -1100,6 +1174,7 @@ Rules:
                 analysis_coverage_note,
                 active_agent_results,
                 incomplete_count=len(incomplete_findings),
+                per_agent_metrics=per_agent_metrics,
             )
         else:
             await _step("Generating Groq summaries from tool findings.")
@@ -1220,17 +1295,13 @@ Rules:
                     analysis_coverage_note,
                     active_agent_results,
                     incomplete_count=len(incomplete_findings),
+                    per_agent_metrics=per_agent_metrics,
                 )
-                return {
-                    "verdict_sentence": v_sent,
-                    "key_findings": kf_list,
-                    "reliability_note": r_note,
-                    "per_agent_analysis": p_anal,
-                    "executive_summary": exec_s,
-                    "uncertainty_statement": unc_s,
-                    "llm_used": False,
-                    "narrative_warnings": ["LLM synthesis unavailable due to timeout"],
-                }
+                return self._postprocess_narratives(
+                    v_sent, kf_list, r_note, p_anal, exec_s, unc_s,
+                    False, ["LLM synthesis unavailable due to timeout"],
+                    per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note
+                )
 
         self._synthesis_client = None
 
@@ -1240,24 +1311,185 @@ Rules:
         elif use_llm and not llm_enabled:
             narrative_warnings.append("Narrative degraded: LLM health check failed")
 
+        return self._postprocess_narratives(
+            v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt,
+            llm_enabled, narrative_warnings,
+            per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note
+        )
+
+    def _postprocess_narratives(
+        self,
+        v_sent: str,
+        kf_list: list[str],
+        r_note: str,
+        p_anal: dict[str, str],
+        exec_sum: str,
+        unc_stmt: str,
+        llm_enabled: bool,
+        narrative_warnings: list[str],
+        per_agent_metrics: dict[str, Any],
+        all_findings: list[dict[str, Any]],
+        overall_verdict: str,
+        analysis_coverage_note: str,
+    ) -> dict[str, Any]:
+        import json
+        p_anal_structured = {}
+        p_anal_flat = {}
+        for aid, narr_str in p_anal.items():
+            if not narr_str:
+                p_anal_flat[aid] = ""
+                p_anal_structured[aid] = {
+                    "evidence_assessment": "No initial findings were reported for assessment.",
+                    "deep_analysis": "Deep analysis was not executed or no deep findings were reported for this agent.",
+                    "reliability_verdict": ""
+                }
+                continue
+            try:
+                parsed = json.loads(narr_str)
+                p_anal_structured[aid] = {
+                    "evidence_assessment": parsed.get("evidence_assessment", ""),
+                    "deep_analysis": parsed.get("deep_analysis", ""),
+                    "reliability_verdict": parsed.get("reliability_verdict", "")
+                }
+                p_anal_flat[aid] = " ".join([
+                    parsed.get("evidence_assessment", ""),
+                    parsed.get("deep_analysis", ""),
+                    parsed.get("reliability_verdict", "")
+                ]).strip()
+            except Exception:
+                p_anal_flat[aid] = narr_str
+                p_anal_structured[aid] = {
+                    "evidence_assessment": narr_str,
+                    "deep_analysis": "",
+                    "reliability_verdict": ""
+                }
+
+        confidence_values = [
+            float(m.get("confidence_score") or 0.0)
+            for m in per_agent_metrics.values()
+            if not m.get("skipped") and float(m.get("confidence_score") or 0.0) > 0
+        ]
+        confidence = round((sum(confidence_values) / len(confidence_values)) * 100) if confidence_values else 0
+        verdict = (overall_verdict or "REVIEW REQUIRED").replace("_", " ").title()
+
+        freq = _first_by_tool(all_findings, "frequency_domain_analysis")
+        hash_f = _first_by_tool(all_findings, "file_hash_verify")
+        ocr = _first_by_tool(all_findings, "extract_text_from_image", "extract_evidence_text")
+        layout = _first_by_tool(all_findings, "screenshot_layout_forensics")
+        exif = _first_by_tool(all_findings, "exif_extract")
+        hex_f = _first_by_tool(all_findings, "hex_signature_scan")
+        structure = _first_by_tool(all_findings, "file_structure_analysis")
+        compression = _first_by_tool(all_findings, "compression_risk_audit")
+
+        integrity_lines = []
+        if freq:
+            meta = _tool_meta(freq)
+            hfr = meta.get("high_freq_ratio")
+            integrity_lines.append(
+                f"FFT anomaly score {float(meta.get('anomaly_score') or 0):.3f}"
+                + (f" / high-frequency ratio {float(hfr):.3f}" if isinstance(hfr, (int, float)) else "")
+            )
+        if hash_f:
+            meta = _tool_meta(hash_f)
+            matched = meta.get("hash_matches") is True or meta.get("hash_match") is True
+            digest = str(meta.get("current_hash") or meta.get("computed_hash") or meta.get("original_hash") or "")
+            integrity_lines.append(
+                f"SHA-256 {'matched intake custody' if matched else 'mismatched intake custody'}"
+                + (f" ({digest[:12]}...)" if digest else "")
+            )
+        if structure:
+            meta = _tool_meta(structure)
+            raw_anomalies = meta.get("anomalies")
+            anomalies = raw_anomalies if isinstance(raw_anomalies, list) else []
+            integrity_lines.append(f"file structure found {len(anomalies)} anomaly flag(s)")
+        if hex_f:
+            meta = _tool_meta(hex_f)
+            raw_software = meta.get("software_signatures")
+            software = raw_software if isinstance(raw_software, list) else []
+            integrity_lines.append(
+                "hex scan found "
+                + (", ".join(str(x) for x in software[:2]) if software else "no embedded editing-software signature")
+            )
+
+        context_lines = []
+        if ocr:
+            meta = _tool_meta(ocr)
+            words = int(meta.get("word_count") or 0)
+            method = meta.get("method") or meta.get("ocr_engine") or "OCR"
+            preview = " ".join(
+                str(meta.get("text") or meta.get("full_text") or meta.get("ocr_text_preview") or "")
+                .replace("|", " | ")
+                .split()
+            )
+            context_lines.append(
+                f"{method} OCR read {words} word(s)"
+                + (f": {preview[:200]}" if preview else "")
+            )
+        if layout:
+            meta = _tool_meta(layout)
+            context_lines.append(
+                f"screenshot layout had {int(meta.get('layout_anomaly_count') or 0)} anomaly flag(s)"
+                + (f" at edge density {meta.get('edge_density')}" if meta.get("edge_density") is not None else "")
+            )
+        if exif:
+            meta = _tool_meta(exif)
+            fields = int(meta.get("total_fields_extracted") or 0)
+            has_device = bool(meta.get("device_model") or meta.get("camera_make") or meta.get("camera_model"))
+            context_lines.append(
+                f"EXIF contained {fields} field(s) and {'device metadata' if has_device else 'no camera/device capture record'}"
+            )
+        if compression:
+            meta = _tool_meta(compression)
+            impact = meta.get("forensic_reliability_impact") or "unspecified"
+            penalty = meta.get("compression_penalty", 1.0)
+            context_lines.append(f"compression/provenance reliability impact {impact} (penalty {float(penalty or 1.0):.2f})")
+
+        summary_structured = {
+            "verdict_line": f"{verdict} at {confidence}% confidence.",
+            "integrity_lines": integrity_lines,
+            "context_lines": context_lines,
+            "coverage_line": analysis_coverage_note or "Full coverage completed successfully."
+        }
+
         return {
             "verdict_sentence": v_sent,
             "key_findings": kf_list,
             "reliability_note": r_note,
-            "per_agent_analysis": p_anal,
+            "per_agent_analysis": p_anal_flat,
+            "per_agent_narrative_structured": p_anal_structured,
+            "summary_structured": summary_structured,
             "executive_summary": exec_sum,
             "uncertainty_statement": unc_stmt,
             "llm_used": llm_enabled,
             "narrative_warnings": narrative_warnings,
         }
 
+
     def _template_all(
-        self, ov, oc, oer, mp, aac, af, cmc, cont, acn, aar, incomplete_count: int = 0
+        self,
+        ov,
+        oc,
+        oer,
+        mp,
+        aac,
+        af,
+        cmc,
+        cont,
+        acn,
+        aar,
+        incomplete_count: int = 0,
+        per_agent_metrics: dict[str, Any] | None = None,
     ):
         vs, kf, rn = self._template_structured_summary(ov, oc, oer, mp, aac, af, cmc, cont, acn)
         exec_s = self._template_executive_summary(len(aar), len(af), cmc, cont, af)
         unc_s = self._template_uncertainty_statement(incomplete_count, cont, oer)
-        return vs, kf, rn, {}, exec_s, unc_s
+        metrics = per_agent_metrics or {}
+        p_anal = {}
+        for aid, res in aar.items():
+            p_anal[aid] = self._programmatic_agent_narrative(
+                aid, res.get("findings", []), metrics.get(aid, {})
+            )
+        return vs, kf, rn, p_anal, exec_s, unc_s
 
     async def sign_report(
         self, report: ForensicReport, completion_time: datetime | None = None

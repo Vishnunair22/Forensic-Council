@@ -125,15 +125,16 @@ class TestLLMClientCircuitBreakerKeying:
         client = LLMClient(
             config=Settings(
                 app_env="testing",
-                llm_provider="openai",
+                llm_provider="gemini",
                 llm_api_key="test-key-long-enough-placeholder",
-                llm_model="gpt-4o",
+                llm_model="gemini-2.5-flash",
+                gemini_api_key_policy_ok=True,
             )
         )
 
         # Verify by checking the client has the model set correctly
-        assert client.model == "gpt-4o"
-        assert client.provider == "openai"
+        assert client.model == "gemini-2.5-flash"
+        assert client.provider == "gemini"
 
     @pytest.mark.asyncio
     async def test_multiple_llm_clients_for_different_providers(self):
@@ -142,12 +143,13 @@ class TestLLMClientCircuitBreakerKeying:
         from core.llm_client import LLMClient
 
         # Create clients for different providers
-        openai_client = LLMClient(
+        gemini_client = LLMClient(
             config=Settings(
                 app_env="testing",
-                llm_provider="openai",
+                llm_provider="gemini",
                 llm_api_key="test-key-long-enough-placeholder",
-                llm_model="gpt-4o",
+                llm_model="gemini-2.5-flash",
+                gemini_api_key_policy_ok=True,
             )
         )
 
@@ -161,9 +163,9 @@ class TestLLMClientCircuitBreakerKeying:
         )
 
         # Both should be functional and independent
-        assert openai_client.provider == "openai"
+        assert gemini_client.provider == "gemini"
         assert groq_client.provider == "groq"
-        assert openai_client.model != groq_client.model
+        assert gemini_client.model != groq_client.model
 
 
 class TestCircuitBreakerFailureThreshold:

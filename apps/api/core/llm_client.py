@@ -1,13 +1,11 @@
 """
 LLM Client for Forensic Council ReAct Loop Reasoning.
 
-Provides async LLM API clients for OpenAI, Anthropic, and Groq,
+Provides async LLM API clients for Groq and Gemini,
 with a unified interface for generating ReAct reasoning steps.
 
     - groq      -> Groq API (Llama 3.3 70B, ~700 tok/s, recommended)
     - gemini    -> Google Gemini API (Gemini 2.5 Flash)
-    - openai    -> OpenAI API (GPT-4o, GPT-4)
-    - anthropic -> Anthropic Messages API
     - none      -> Disabled; task-decomposition driver handles all steps
 """
 
@@ -89,11 +87,11 @@ class LLMResponse:
 
 class LLMClient:
     """
-    Async LLM client with unified interface across Groq, OpenAI, and Anthropic.
+    Async LLM client with unified interface across Groq and Gemini.
 
     All requests run through exponential-backoff retry logic.
     Groq (Llama 3.3 70B) is the recommended provider for this project:
-    - ~700 tok/s vs ~80 tok/s on OpenAI
+    - ~700 tok/s
     - Full function-calling support
     - Free tier supports full investigations in dev
     """
@@ -187,18 +185,14 @@ class LLMClient:
             url_map = {
                 "groq": "https://api.groq.com/openai/v1/models",
                 "gemini": f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}",
-                "openai": "https://api.openai.com/v1/models",
-                "anthropic": "https://api.anthropic.com/v1/models",
             }
             url = url_map.get(self.provider)
             if not url:
                 return True
             headers: dict[str, str] = {}
             api_key = self.api_key or ""
-            if self.provider == "groq" or self.provider == "openai":
+            if self.provider == "groq":
                 headers = {"Authorization": f"Bearer {api_key}"}
-            elif self.provider == "anthropic":
-                headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
             elif self.provider == "gemini":
                 headers = {"x-goog-api-key": api_key}
 
@@ -314,10 +308,6 @@ class LLMClient:
             resp = await self._call_groq(messages, available_tools)
         elif self.provider == "gemini":
             resp = await self._call_gemini(messages, available_tools)
-        elif self.provider == "openai":
-            resp = await self._call_openai(messages, available_tools)
-        elif self.provider == "anthropic":
-            resp = await self._call_anthropic(messages, available_tools)
         else:
             raise ValueError(f"Unknown LLM provider: {self.provider}")
 
@@ -501,100 +491,7 @@ class LLMClient:
             logger.error(f"Failed to parse Gemini response: {data}")
             raise RuntimeError(f"Invalid Gemini response: {e}") from e
 
-    async def _call_openai(
-        self,
-        messages: list[dict[str, str]],
-        available_tools: list[dict[str, Any]],
-    ) -> LLMResponse:
-        """Call OpenAI API."""
-        if not self.is_available:
-            raise RuntimeError("OpenAI API key is placeholder or missing — cannot call LLM")
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        tools = self._tools_to_openai_format(available_tools)
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
 
-        client = await self._get_client()
-        response = await self._with_retry(lambda: client.post(url, headers=headers, json=payload))
-        response.raise_for_status()
-        return self._parse_openai_response(response.json())
-
-    async def _call_anthropic(
-        self,
-        messages: list[dict[str, str]],
-        available_tools: list[dict[str, Any]],
-    ) -> LLMResponse:
-        """Call the Anthropic Messages API."""
-        if not self.is_available:
-            raise RuntimeError("Anthropic API key is placeholder or missing — cannot call LLM")
-        url = "https://api.anthropic.com/v1/messages"
-        headers = {
-            "x-api-key": self.api_key,
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01",
-        }
-        system_message = ""
-        chat_messages: list[dict] = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_message = msg["content"]
-            else:
-                chat_messages.append(msg)
-
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": self.max_tokens,
-            "messages": chat_messages,
-        }
-        if self.temperature > 0:
-            payload["temperature"] = self.temperature
-        if system_message:
-            # M-M-5: enable Anthropic prompt caching on the (stable) system
-            # prompt. Forensic system prompts are 3–5 KB of fixed text per
-            # call; caching cuts input-token cost ~80% on cache hits. The
-            # block form is required when cache_control is set.
-            payload["system"] = [
-                {
-                    "type": "text",
-                    "text": system_message,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ]
-        if available_tools:
-            payload["tools"] = [
-                {
-                    "name": t["name"],
-                    "description": t.get("description", ""),
-                    "input_schema": t.get("parameters", {"type": "object", "properties": {}}),
-                }
-                for t in available_tools
-            ]
-
-        client = await self._get_client()
-        response = await self._with_retry(lambda: client.post(url, headers=headers, json=payload))
-        response.raise_for_status()
-        data = response.json()
-
-        content = ""
-        tool_call = None
-        for block in data.get("content", []):
-            if block["type"] == "text":
-                content += block["text"]
-            elif block["type"] == "tool_use":
-                tool_call = {"name": block["name"], "arguments": block["input"]}
-
-        return LLMResponse(content=content, tool_call=tool_call, usage=data.get("usage"))
 
     @staticmethod
     def _tools_to_openai_format(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -756,12 +653,8 @@ class LLMClient:
 
                 try:
                     # Dispatch to specific provider logic
-                    if target_provider in ("groq", "openai"):
-                        url = (
-                            "https://api.groq.com/openai/v1/chat/completions"
-                            if target_provider == "groq"
-                            else "https://api.openai.com/v1/chat/completions"
-                        )
+                    if target_provider == "groq":
+                        url = "https://api.groq.com/openai/v1/chat/completions"
                         headers = {
                             "Authorization": f"Bearer {target_api_key}",
                             "Content-Type": "application/json",

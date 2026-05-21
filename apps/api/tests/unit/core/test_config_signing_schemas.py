@@ -100,7 +100,7 @@ class TestSettings:
 
             settings = get_settings()
             if hasattr(settings, "llm_provider"):
-                assert settings.llm_provider in ("groq", "openai", "anthropic", "none", "test")
+                assert settings.llm_provider in ("groq", "gemini", "none", "test")
         except ImportError:
             pytest.skip()
 

@@ -258,6 +258,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             per_agent_findings=per_agent_findings,
             per_agent_metrics=per_agent_metrics,
             per_agent_analysis=narratives["per_agent_analysis"],
+            per_agent_narrative_structured=narratives.get("per_agent_narrative_structured", {}),
+            summary_structured=narratives.get("summary_structured", {}),
             overall_confidence=overall_confidence,
             overall_error_rate=overall_error_rate,
             overall_verdict=overall_verdict,

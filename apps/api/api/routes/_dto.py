@@ -245,6 +245,8 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         skipped_agents=dict(_get_val(report, "skipped_agents", {}) or {}),
         analysis_coverage_note=_get_val(report, "analysis_coverage_note", "") or "",
         per_agent_summary=dict(_get_val(report, "per_agent_summary", {}) or {}),
+        per_agent_narrative_structured=dict(_get_val(report, "per_agent_narrative_structured", {}) or {}),
+        summary_structured=dict(_get_val(report, "summary_structured", {}) or {}),
         degradation_flags=list(_get_val(report, "degradation_flags", []) or []),
         cross_modal_fusion=dict(_get_val(report, "cross_modal_fusion", {}) or {}),
     )

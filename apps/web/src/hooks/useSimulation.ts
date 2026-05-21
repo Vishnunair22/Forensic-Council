@@ -9,7 +9,7 @@ const HITL_CHECKPOINT_KEY = "forensic_hitl_checkpoint";
 const SESSION_ID_KEY = "forensic_session_id";
 const AUTH_TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
 
-import { createLiveSocket, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
+import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/types";
 
@@ -91,6 +91,7 @@ export const useSimulation = ({
   }, []);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const sseRef = useRef<{ close: () => void } | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
   const lastSessionIdRef = useRef<string | null>(null);
   /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
@@ -151,6 +152,10 @@ export const useSimulation = ({
         if (wsRef.current) {
           wsRef.current.close();
           wsRef.current = null;
+        }
+        if (sseRef.current) {
+          sseRef.current.close();
+          sseRef.current = null;
         }
 
         // Use a persistent queue ref to avoid concurrent processing loops on reconnect
@@ -659,7 +664,7 @@ export const useSimulation = ({
                 reconnectAttemptsRef.current++;
                 setIsReconnecting(true);
                 setReconnectStatusMessage(
-                  `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})…`,
+                  `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})...`,
                 );
                 if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
                 reconnectTimerRef.current = setTimeout(() => {
@@ -733,8 +738,36 @@ export const useSimulation = ({
           .catch((err: unknown) => {
             // connected promise settled (either onerror or onclose before open)
             if (!wsConnectionReady) {
-              const msg = err instanceof Error ? err.message : "WebSocket connection failed";
-              reject(new Error(msg));
+              dbg.warn("[WebSocket] Connection failed, falling back to SSE progress stream...", err);
+              try {
+                if (wsRef.current) {
+                  wsRef.current.close();
+                  wsRef.current = null;
+                }
+                const sseConnection = connectLiveSSE(
+                  targetSessionId,
+                  (data) => {
+                    const update = data as BriefUpdate;
+                    if ((update as { type: string }).type === "PING") {
+                      return;
+                    }
+                    messageQueue.push(update);
+                    processQueue();
+                  },
+                  (sseErr) => {
+                    dbg.warn("[SSE] Reconnection error:", sseErr.message);
+                    setReconnectStatusMessage(sseErr.message);
+                  }
+                );
+                sseRef.current = sseConnection;
+                wsConnectionReady = true;
+                setIsReconnecting(false);
+                setReconnectStatusMessage(null);
+                resolve();
+              } catch {
+                const msg = err instanceof Error ? err.message : "WebSocket connection failed";
+                reject(new Error(msg));
+              }
             }
           });
       });
@@ -763,6 +796,10 @@ export const useSimulation = ({
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
+      }
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
       }
     };
   }, []);

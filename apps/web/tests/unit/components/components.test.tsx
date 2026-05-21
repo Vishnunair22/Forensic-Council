@@ -182,15 +182,10 @@ describe("AgentProgressDisplay", () => {
       expect(screen.queryByText(/4\/4/i)).not.toBeInTheDocument();
     });
 
-    // T-C-1: this test articulates intended UX ("skipped briefly visible
-    // before fading") that isn't implemented in production today — the
-    // visibleAgents filter at AgentProgressDisplay.tsx:158 excludes
-    // unsupported agents by mime type before the liveStatus="skipped"
-    // exception is consulted. Skipped here with a deliberate xfail-style
-    // reason; pick up in phase 15 with a small filter tweak so a
-    // liveStatus="skipped" Agent stays visible long enough for the
-    // AgentStatusCard's "Hidden after 10s" copy to render.
-    it("shows skipped unsupported message before the card expires", () => {
+    // T-C-1: this test verifies that unsupported agents (which transition
+    // immediately to skipped) do not render in the active cards grid on the
+    // evidence analysis page, as per strict product requirements.
+    it("ensures skipped unsupported agent cards are not rendered", () => {
       render(
         <AgentProgressDisplay
           {...progressDefaults}
@@ -204,8 +199,8 @@ describe("AgentProgressDisplay", () => {
         />,
       );
 
-      expect(screen.getByText(/does not support the submitted file type/i)).toBeInTheDocument();
-      expect(screen.getByText(/hidden after 10s/i)).toBeInTheDocument();
+      expect(screen.queryByText(/does not support the submitted file type/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/hidden after 10s/i)).not.toBeInTheDocument();
     });
 
     it("shows queued cards instead of syncing all agents while waiting for a worker", async () => {

@@ -307,8 +307,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             rpd_limit=settings.gemini_rpd_limit,
         )
         if settings.free_tier_mode:
-            ProviderQuotaGuard.configure("openai", rpm_limit=30, rpd_limit=1500)
-            ProviderQuotaGuard.configure("anthropic", rpm_limit=30, rpd_limit=1500)
+            pass
 
         if not settings.gemini_api_key_policy_ok:
             logger.info("Skipping Gemini model availability check (policy not acknowledged)")

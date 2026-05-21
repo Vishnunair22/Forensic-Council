@@ -530,14 +530,12 @@ class Settings(BaseSettings):
         description="Daily API cost quota in USD for admin role. Set to 0 for unlimited.",
     )
 
-    # Free-tier mode — restricts providers to open-source options and
-    # forbids paid OpenAI/Anthropic defaults when running in cost-constrained mode.
+    # Free-tier mode — restricts providers to open-source or free-tier options.
     free_tier_mode: bool = Field(
         default=False,
         description=(
             "When True, restricts LLM_PROVIDER to: none, groq, or gemini. "
-            "OpenAI and Anthropic are blocked. Arbiter chain is also limited "
-            "to groq/gemini only. Prevents accidental paid-tier costs in dev."
+            "Prevents accidental paid-tier costs in dev."
         ),
     )
 
@@ -554,7 +552,7 @@ class Settings(BaseSettings):
     # LLM Configuration (Global / Agents)
     llm_provider: str = Field(
         default="none",
-        description="LLM provider for agents: groq (recommended), openai, anthropic, or none",
+        description="LLM provider for agents: groq (recommended), gemini, or none",
     )
     llm_api_key: str | None = Field(default=None, description="API key for LLM provider")
     llm_model: str = Field(
@@ -566,7 +564,7 @@ class Settings(BaseSettings):
         description=(
             "Comma-separated fallback models for the configured LLM provider. "
             "For Groq, these are tried after LLM_MODEL when the primary model "
-            "fails or is unavailable. Do not prefix entries with 'openai/' for Groq."
+            "fails or is unavailable."
         ),
     )
     llm_temperature: float = Field(
@@ -595,7 +593,7 @@ class Settings(BaseSettings):
     )
     arbiter_llm_api_key: str | None = Field(
         default=None,
-        description="Dedicated API key for Arbiter LLM (e.g. Anthropic key). If unset, falls back to LLM_API_KEY.",
+        description="Dedicated API key for Arbiter LLM. If unset, falls back to LLM_API_KEY.",
     )
     arbiter_primary_model: str = Field(
         default="llama-3.3-70b-versatile",
@@ -767,7 +765,7 @@ class Settings(BaseSettings):
         provider = data.get("llm_provider", "none")
         free_tier = data.get("free_tier_mode", False)
 
-        valid_providers = {"groq", "openai", "anthropic", "none"}
+        valid_providers = {"groq", "gemini", "none"}
         if provider not in valid_providers:
             raise ValueError(
                 f"LLM_PROVIDER must be one of {sorted(valid_providers)}, got '{provider}'. "
@@ -781,14 +779,6 @@ class Settings(BaseSettings):
 
         if v and provider != "none" and len(v) < 20:
             raise ValueError("LLM_API_KEY appears invalid (too short)")
-
-        # In free_tier_mode, block paid-tier providers
-        if free_tier and provider in ("openai", "anthropic"):
-            raise ValueError(
-                f"free_tier_mode=True — LLM_PROVIDER='{provider}' is blocked. "
-                "Use 'groq' (free tier) or 'gemini' (free tier) instead. "
-                "To use {provider}, set FREE_TIER_MODE=false."
-            )
 
         # In free_tier_mode, forbid paid-tier default model strings
         if free_tier and provider == "groq":

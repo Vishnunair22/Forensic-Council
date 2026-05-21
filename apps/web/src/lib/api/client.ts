@@ -399,6 +399,93 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
   return { ws, connected };
 }
 
+export interface SSEConnection {
+  close: () => void;
+}
+
+export function connectLiveSSE(
+  sessionId: string,
+  onMessage: (data: unknown) => void,
+  onError?: (err: Error) => void
+): SSEConnection {
+  let es: EventSource | null = null;
+  let closed = false;
+  let reconnectAttempt = 0;
+  let reconnectTimer: NodeJS.Timeout | null = null;
+
+  const retryDelays = [1500, 3000, 6000];
+
+  function getRetryDelay(attempt: number): number {
+    if (attempt < retryDelays.length) {
+      return retryDelays[attempt];
+    }
+    return retryDelays[retryDelays.length - 1];
+  }
+
+  function connect() {
+    if (closed) return;
+
+    const hasAuthCookie =
+      typeof document !== "undefined" &&
+      /(?:^|;\s*)csrf_token=/.test(document.cookie);
+    const token = hasAuthCookie ? null : getAuthToken();
+    const url = token
+      ? `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/progress?token=${encodeURIComponent(token)}`
+      : `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/progress`;
+
+    es = new EventSource(url, { withCredentials: true });
+
+    es.onopen = () => {
+      reconnectAttempt = 0;
+    };
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onMessage(data);
+      } catch (err) {
+        dbg.error("[SSE] Failed to parse message:", err);
+      }
+    };
+
+    es.onerror = () => {
+      if (closed) return;
+      dbg.warn("[SSE] Connection error. Attempting reconnect...");
+      
+      if (es) {
+        es.close();
+        es = null;
+      }
+
+      const delay = getRetryDelay(reconnectAttempt);
+      reconnectAttempt++;
+
+      if (onError) {
+        onError(new Error(`Connection lost. Reconnecting in ${delay / 1000}s...`));
+      }
+
+      reconnectTimer = setTimeout(() => {
+        connect();
+      }, delay);
+    };
+  }
+
+  connect();
+
+  return {
+    close: () => {
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (es) {
+        es.close();
+        es = null;
+      }
+    }
+  };
+}
+
 export async function getReport(sessionId: string): Promise<ReportResponse> {
   return handleAuthError(async () => {
     const response = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report`, {

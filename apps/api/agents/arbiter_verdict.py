@@ -136,6 +136,14 @@ class ForensicReport(BaseModel):
             "tools_total, findings, error_rate_pct."
         ),
     )
+    per_agent_narrative_structured: dict[str, dict[str, str]] = Field(
+        default_factory=dict,
+        description="Structured per-agent narratives: evidence_assessment, deep_analysis, reliability_verdict.",
+    )
+    summary_structured: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured executive summary: verdict_line, integrity_lines, context_lines, coverage_line.",
+    )
     cryptographic_signature: str = ""
     report_hash: str = ""
     # Overall calibration status for the report — TRAINED only if ALL agents used trained models

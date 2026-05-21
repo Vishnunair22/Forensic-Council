@@ -6,7 +6,7 @@ Verifies LLM API connectivity using /models endpoints only (no quota burned).
 Outputs structured JSON so it can be consumed by automation/orchestration scripts.
 
 Usage:
-    python verify_llm_keys.py [--provider {gemini,groq,openai,anthropic,all}] [--json]
+    python verify_llm_keys.py [--provider {gemini,groq,all}] [--json]
     python verify_llm_keys.py --provider all --json > key_status.json
 
 Output JSON shape:
@@ -163,112 +163,7 @@ async def _check_gemini(api_key: str, timeout: float = 8.0) -> dict:
         }
 
 
-async def _check_openai(api_key: str, timeout: float = 8.0) -> dict:
-    """Check OpenAI /models endpoint. No quota burned."""
-    url = "https://api.openai.com/v1/models"
-    headers = {"Authorization": f"Bearer {api_key}"}
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                model_count = len(data.get("data", []))
-                return {
-                    "status": "ok",
-                    "status_code": 200,
-                    "models_count": model_count,
-                    "error": None,
-                }
-            elif resp.status_code == 401:
-                return {
-                    "status": "error",
-                    "status_code": 401,
-                    "models_count": 0,
-                    "error": "Invalid API key (401 Unauthorized)",
-                }
-            else:
-                return {
-                    "status": "error",
-                    "status_code": resp.status_code,
-                    "models_count": 0,
-                    "error": resp.text[:200],
-                }
-    except httpx.TimeoutException:
-        return {
-            "status": "error",
-            "status_code": 0,
-            "models_count": 0,
-            "error": f"Request timed out after {timeout:.0f}s",
-        }
-    except httpx.ConnectError as e:
-        return {
-            "status": "error",
-            "status_code": 0,
-            "models_count": 0,
-            "error": f"Connection failed: {e}",
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "status_code": 0,
-            "models_count": 0,
-            "error": str(e),
-        }
-
-
-async def _check_anthropic(api_key: str, timeout: float = 8.0) -> dict:
-    """Check Anthropic /models endpoint. No quota burned."""
-    url = "https://api.anthropic.com/v1/models"
-    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                model_count = len(data.get("data", []))
-                return {
-                    "status": "ok",
-                    "status_code": 200,
-                    "models_count": model_count,
-                    "error": None,
-                }
-            elif resp.status_code == 401:
-                return {
-                    "status": "error",
-                    "status_code": 401,
-                    "models_count": 0,
-                    "error": "Invalid API key (401 Unauthorized)",
-                }
-            else:
-                return {
-                    "status": "error",
-                    "status_code": resp.status_code,
-                    "models_count": 0,
-                    "error": resp.text[:200],
-                }
-    except httpx.TimeoutException:
-        return {
-            "status": "error",
-            "status_code": 0,
-            "models_count": 0,
-            "error": f"Request timed out after {timeout:.0f}s",
-        }
-    except httpx.ConnectError as e:
-        return {
-            "status": "error",
-            "status_code": 0,
-            "models_count": 0,
-            "error": f"Connection failed: {e}",
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "status_code": 0,
-            "models_count": 0,
-            "error": str(e),
-        }
 
 
 async def main():
@@ -278,7 +173,7 @@ async def main():
     )
     parser.add_argument(
         "--provider",
-        choices=["gemini", "groq", "openai", "anthropic", "all"],
+        choices=["gemini", "groq", "all"],
         default="all",
         help="Provider to verify (default: all)",
     )
@@ -301,8 +196,6 @@ async def main():
     providers = {
         "groq": ("LLM_API_KEY", _check_groq),
         "gemini": ("GEMINI_API_KEY", _check_gemini),
-        "openai": ("OPENAI_API_KEY", _check_openai),
-        "anthropic": ("ANTHROPIC_API_KEY", _check_anthropic),
     }
 
     check_providers = providers.keys() if args.provider == "all" else [args.provider]

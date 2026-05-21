@@ -126,11 +126,11 @@ class TestIsAvailable:
         assert client.is_available is True
 
     def test_changeme_key_not_available(self):
-        client = _make_client_direct(provider="openai", api_key="changeme")
+        client = _make_client_direct(provider="groq", api_key="changeme")
         assert client.is_available is False
 
     def test_sk_xxx_not_available(self):
-        client = _make_client_direct(provider="openai", api_key="sk-xxx")
+        client = _make_client_direct(provider="groq", api_key="sk-xxx")
         assert client.is_available is False
 
 
@@ -164,8 +164,9 @@ class TestHealthCheck:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_health_check_openai_provider(self):
-        client = _make_client_direct(provider="openai", api_key="sk-real-abcdefghijk1234567")
+    async def test_health_check_gemini_provider(self):
+        client = _make_client_direct(provider="gemini", api_key="AIzaSyRealKey-abcdefghijk1234567")
+        client.config.gemini_api_key_policy_ok = True
         with patch.object(client, "_get_client") as mock_get:
             mock_resp = MagicMock()
             mock_resp.status_code = 200

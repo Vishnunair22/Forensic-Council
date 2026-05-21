@@ -66,7 +66,7 @@ Key `.env` variables for free-tier provider setup:
 
 | Variable | Purpose |
 | --- | --- |
-| `FREE_TIER_MODE` | `true` blocks OpenAI/Anthropic, enforces quota limits |
+| `FREE_TIER_MODE` | `true` enforces free-tier model strings and quota limits |
 | `LLM_API_KEY` | Groq key — agent uses `llama-3.1-8b-instant`, Arbiter `llama-3.3-70b-versatile` |
 | `GEMINI_API_KEY` | Gemini key for Agent 1/3/5 deep analysis |
 | `GEMINI_API_KEY_POLICY_OK` | Must be `true` before Gemini calls (safety flag) |

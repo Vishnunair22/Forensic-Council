@@ -13,17 +13,16 @@ After all agents complete, the Council Arbiter needs to generate:
 4. An uncertainty statement
 
 Options for LLM synthesis:
-- **OpenAI GPT-4o**: High quality but expensive ($2.50/1M input tokens) and slower (~5s latency).
-- **Anthropic Sonnet**: Strong reasoning but limited free tier and higher latency.
-- **Groq Llama 3.3 70B**: Free tier available, ~200 tokens/s inference speed, sufficient quality for structured forensic narratives.
+- **Groq Llama 3.3 70B**: Free tier available, high inference speed, sufficient quality for structured forensic narratives.
+- **Google Gemini 2.5 Flash**: Fast, multimodal, and used for vision-audio grounding.
 
 ## Decision
 
-Use Groq with Llama 3.3 70B for all post-analysis synthesis tasks.
+Use Groq with Llama 3.3 70B for all post-analysis synthesis tasks, with Gemini as a fallback.
 
 ## Consequences
 
-- Synthesis completes in 3-5 seconds vs 10-30 seconds with other providers.
+- Synthesis completes in 3-5 seconds vs other providers.
 - Free tier is sufficient for development and low-volume production.
-- Template fallbacks are maintained for when Groq is unreachable (3s health check before parallel calls).
-- The `llm_provider` config allows switching to OpenAI or Anthropic without code changes.
+- Template/grounded fallbacks are maintained for when Groq is unreachable (3s health check before parallel calls).
+- The `llm_provider` config allows switching to Gemini or disabling synthesis without code changes.

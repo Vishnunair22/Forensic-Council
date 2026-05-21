@@ -363,12 +363,26 @@ def _extract_text_easyocr_sync(
     """
     Synchronous EasyOCR extraction (runs in thread pool).
     """
+    import time
+    logger.info(f"[OCR] Starting EasyOCR sync text extraction for {file_path}")
+    start_time = time.time()
+    
+    logger.info("[OCR] Fetching EasyOCR reader instance...")
+    reader_start = time.time()
     reader = _get_easyocr_reader()
+    reader_duration = time.time() - reader_start
+    logger.info(f"[OCR] EasyOCR reader fetched in {reader_duration:.3f}s")
+    
     if reader is None:
+        logger.warning("[OCR] EasyOCR reader is not available")
         return {"easyocr_available": False}
 
     try:
+        logger.info(f"[OCR] Running EasyOCR readtext on {file_path}")
+        inference_start = time.time()
         results = reader.readtext(file_path, detail=1, paragraph=False)
+        inference_duration = time.time() - inference_start
+        logger.info(f"[OCR] EasyOCR readtext inference completed in {inference_duration:.3f}s")
 
         lines: list[str] = []
         bboxes: list[dict] = []
@@ -392,6 +406,9 @@ def _extract_text_easyocr_sync(
         full_text = " ".join(lines)
         avg_conf = round(float(sum(confidences)) / len(confidences), 4) if confidences else 0.0
 
+        total_duration = time.time() - start_time
+        logger.info(f"[OCR] EasyOCR sync pipeline completed successfully in {total_duration:.3f}s. Words extracted: {len(full_text.split())}")
+
         return {
             "easyocr_available": True,
             "lines": lines,
@@ -403,6 +420,7 @@ def _extract_text_easyocr_sync(
         }
 
     except Exception as exc:
+        logger.error(f"[OCR] Exception in EasyOCR readtext on {file_path}: {exc}", exc_info=True)
         return {
             "easyocr_available": True,
             "error": str(exc),
@@ -423,6 +441,19 @@ async def extract_text_easyocr(
     if not os.path.exists(artifact.file_path):
         raise ToolUnavailableError(f"File not found: {artifact.file_path}")
 
+    from core.config import get_settings
+    settings = get_settings()
+    total_timeout = getattr(settings, "ocr_tool_timeout", 60.0)
+    
+    # Allocate 70% to EasyOCR and 30% to Tesseract fallback
+    easyocr_timeout = max(30.0, total_timeout * 0.7)
+    tesseract_timeout = max(20.0, total_timeout * 0.3)
+
+    logger.info(
+        f"[OCR] Starting extract_text_easyocr with total_timeout={total_timeout}s. "
+        f"EasyOCR timeout={easyocr_timeout:.1f}s, Tesseract fallback timeout={tesseract_timeout:.1f}s."
+    )
+
     loop = asyncio.get_running_loop()
     try:
         result = await asyncio.wait_for(
@@ -430,19 +461,19 @@ async def extract_text_easyocr(
                 _OCR_EXECUTOR,
                 lambda: _extract_text_easyocr_sync(artifact.file_path, detail=detail),
             ),
-            timeout=30.0,
+            timeout=easyocr_timeout,
         )
     except TimeoutError:
-        logger.warning("EasyOCR extraction timed out — falling back to Tesseract")
-        return await _extract_text_tesseract_fallback(artifact)
+        logger.warning(f"[OCR] EasyOCR extraction timed out after {easyocr_timeout:.1f}s — falling back to Tesseract")
+        return await _extract_text_tesseract_fallback(artifact, timeout=tesseract_timeout)
     except Exception as exc:
-        logger.error(f"EasyOCR extraction failed: {exc}")
-        return await _extract_text_tesseract_fallback(artifact)
+        logger.error(f"[OCR] EasyOCR extraction failed: {exc}")
+        return await _extract_text_tesseract_fallback(artifact, timeout=tesseract_timeout)
 
     if not result.get("easyocr_available"):
         # Graceful fallback to Tesseract
-        logger.debug("EasyOCR unavailable — falling back to Tesseract")
-        return await _extract_text_tesseract_fallback(artifact)
+        logger.debug("[OCR] EasyOCR unavailable — falling back to Tesseract")
+        return await _extract_text_tesseract_fallback(artifact, timeout=tesseract_timeout)
 
     result["method"] = "easyocr"
     result["court_defensible"] = True
@@ -508,19 +539,21 @@ def _extract_text_tesseract_sync(file_path: str) -> dict[str, Any]:
 
 async def _extract_text_tesseract_fallback(
     artifact: EvidenceArtifact,
+    timeout: float = 20.0,
 ) -> dict[str, Any]:
     """Internal Tesseract fallback used by extract_text_easyocr."""
+    logger.info(f"[OCR] Running Tesseract fallback for {artifact.file_path} with timeout={timeout:.1f}s")
     loop = asyncio.get_running_loop()
     try:
         result = await asyncio.wait_for(
             loop.run_in_executor(_OCR_EXECUTOR, _extract_text_tesseract_sync, artifact.file_path),
-            timeout=20.0,
+            timeout=timeout,
         )
     except TimeoutError:
-        logger.warning("Tesseract fallback timed out after 20s")
+        logger.warning(f"[OCR] Tesseract fallback timed out after {timeout:.1f}s")
         result = {
             "tesseract_available": True,
-            "error": "Tesseract timed out after 20s",
+            "error": f"Tesseract timed out after {timeout:.1f}s",
             "lines": [],
             "full_text": "",
             "word_count": 0,

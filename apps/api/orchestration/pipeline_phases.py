@@ -987,6 +987,23 @@ async def _run_agent_deep_only(
                 timeout=deep_timeout,
             )
             all_findings = getattr(agent, "_findings", initial_findings)
+            for idx in range(initial_count, len(all_findings)):
+                finding = all_findings[idx]
+                if not isinstance(finding.metadata, dict):
+                    finding.metadata = {}
+                finding.metadata["analysis_phase"] = "deep"
+                meta = finding.metadata
+                reason_str = str(meta.get("reason") or meta.get("skipped_reason") or "").lower()
+                is_gated = (
+                    meta.get("skipped") is True
+                    or meta.get("anomaly_tracer_skipped") is True
+                    or meta.get("adversarial_check_skipped") is True
+                    or "not triggered" in reason_str
+                    or "not warranted" in reason_str
+                )
+                if is_gated:
+                    finding.metadata["gated"] = True
+
             deep_count = max(0, len(all_findings) - initial_count)
             span.set_attribute("deep_finding_count", deep_count)
             span.set_attribute("total_finding_count", len(all_findings))

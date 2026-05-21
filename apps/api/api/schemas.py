@@ -145,6 +145,8 @@ class ReportDTO(BaseModel):
     analysis_coverage_note: str = ""
     # Flat per-agent summary (D)
     per_agent_summary: dict[str, Any] = Field(default_factory=dict)
+    per_agent_narrative_structured: dict[str, dict[str, str]] = Field(default_factory=dict)
+    summary_structured: dict[str, Any] = Field(default_factory=dict)
     # Degradation transparency — non-empty means analysis ran in reduced-capability mode.
     # Must be surfaced as a visible warning in any UI, printout, or court exhibit.
     degradation_flags: list[str] = Field(default_factory=list)

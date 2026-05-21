@@ -179,10 +179,15 @@ async def _event_generator(
                 # Wait for events with timeout (send keepalive every 15s for Caddy)
                 msg = await asyncio.wait_for(queue.get(), timeout=15.0)
                 yield f"data: {json.dumps(msg)}\n\n"
-            except TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 # Keepalive
                 yield ": keepalive\n\n"
-
+    except Exception as stream_exc:
+        logger.error("SSE event generator error", session_id=session_id, error=str(stream_exc))
+        try:
+            yield f"event: error\ndata: {json.dumps({'type': 'ERROR', 'message': str(stream_exc)})}\n\n"
+        except Exception:
+            pass
     finally:
         # Cancel Redis pub/sub listener
         if redis_task is not None:
@@ -235,21 +240,30 @@ async def sse_progress(
 
     Returns a StreamingResponse with text/event-stream content type.
     Browser EventSource API automatically reconnects on disconnection.
-
-    Usage (frontend):
-        const es = new EventSource(`/api/v1/sessions/${sessionId}/progress`);
-        es.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            // Handle AGENT_UPDATE, AGENT_COMPLETE, etc.
-        };
     """
-    # S-H-3: enforce session ownership. Without this any authenticated user
-    # could stream another investigator's live findings simply by knowing or
-    # guessing the session_id. The websocket sibling at _websocket.py:147
-    # already enforces this — SSE was the outlier.
-    from api.routes._authz import assert_session_access
+    try:
+        from api.routes._authz import assert_session_access
+        await assert_session_access(session_id, current_user)
+    except Exception as auth_exc:
+        # If authentication or authorization fails, return a text/event-stream StreamingResponse
+        # that immediately emits the error event and terminates, preventing HTML/JSON fallback.
+        async def error_generator():
+            yield f"event: error\ndata: {json.dumps({'type': 'ERROR', 'message': str(auth_exc)})}\n\n"
 
-    await assert_session_access(session_id, current_user)
+        status_code = 403
+        if isinstance(auth_exc, HTTPException):
+            status_code = auth_exc.status_code
+
+        return StreamingResponse(
+            error_generator(),
+            status_code=status_code,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return StreamingResponse(
         _event_generator(session_id, request),

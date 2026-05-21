@@ -124,12 +124,12 @@ export function AgentProgressDisplay({
       .filter((a): boolean => {
         const completed = completedAgents?.find((c) => c.agent_id === a.id);
         const liveStatus = agentUpdates[a.id]?.status;
-        if (completed?.status === "skipped" && liveStatus !== "skipped") return false;
+        if (completed?.status === "skipped" || liveStatus === "skipped") return false;
         const agentVerdict = (completed as unknown as { agent_verdict?: unknown })?.agent_verdict;
         if (agentVerdict === "NOT_APPLICABLE") return false;
         if (phase === "deep") return initialAgentIds.includes(a.id);
         if (!mimeType) return true;
-        return isAgentSupportedForMime(a.id, mimeType) || liveStatus === "skipped";
+        return isAgentSupportedForMime(a.id, mimeType);
       });
   }, [phase, initialAgentIds, mimeType, completedAgents, agentUpdates]);
 

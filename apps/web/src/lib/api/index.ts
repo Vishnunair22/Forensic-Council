@@ -10,6 +10,8 @@ export {
   autoLoginAsInvestigator,
   checkBackendHealth,
   createLiveSocket,
+  connectLiveSSE,
+  type SSEConnection,
   ensureAuthenticated,
   getArbiterStatus,
   getBrief,

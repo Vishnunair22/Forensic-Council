@@ -239,7 +239,11 @@ test.describe.serial("mocked journey with session persistence", () => {
       if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
         await begin.evaluate((element: HTMLElement) => element.click());
       }
+      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
+        await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
+      }
     }
+    await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
 
     await page.getByLabel(/upload evidence file/i).setInputFiles({
       name: `route-flow-${Date.now()}.png`,

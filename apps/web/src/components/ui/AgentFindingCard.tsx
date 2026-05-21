@@ -349,10 +349,40 @@ export function AgentFindingCard({
   }, [realFindings]);
 
   const sections = useMemo(() => groupFindingsBySection(realFindings), [realFindings]);
-  const overview = useMemo(
-    () => buildAgentOverview(realFindings, metrics, narrative),
-    [realFindings, metrics, narrative]
-  );
+  const parsedNarrative = useMemo(() => {
+    if (!narrative) return null;
+    try {
+      const cleanNarrative = narrative.trim();
+      const firstBrace = cleanNarrative.indexOf("{");
+      const lastBrace = cleanNarrative.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        const parsed = JSON.parse(cleanNarrative.slice(firstBrace, lastBrace + 1));
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          "evidence_assessment" in parsed &&
+          "deep_analysis" in parsed &&
+          "reliability_verdict" in parsed
+        ) {
+          return parsed as {
+            evidence_assessment: string;
+            deep_analysis: string;
+            reliability_verdict: string;
+          };
+        }
+      }
+    } catch {
+      // Not valid JSON narrative format
+    }
+    return null;
+  }, [narrative]);
+
+  const overview = useMemo(() => {
+    if (parsedNarrative) {
+      return `${parsedNarrative.evidence_assessment} ${parsedNarrative.reliability_verdict}`;
+    }
+    return buildAgentOverview(realFindings, metrics, narrative);
+  }, [realFindings, metrics, narrative, parsedNarrative]);
 
   const anomalyCount = useMemo(
     () => realFindings.filter(f =>
@@ -491,13 +521,50 @@ export function AgentFindingCard({
           <div className="px-6 pb-6 pt-3 space-y-4 animate-in fade-in duration-300">
 
             {/* Agent overview narrative — full text, no clamp */}
-            {overview && (
-              <div className="flex items-start gap-3 p-5 rounded-2xl bg-transparent border border-white/[0.08]">
-                <Activity className="w-4 h-4 text-primary/65 mt-1 shrink-0" />
-                <p className="text-[15px] text-white/80 leading-relaxed font-medium">
-                  {overview}
-                </p>
+            {parsedNarrative ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                {/* Evidence Assessment Column */}
+                <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
+                  <div className="flex items-center gap-2 text-cyan-400">
+                    <ShieldCheck className="w-4 h-4 shrink-0 text-cyan-400" />
+                    <h4 className="text-xs font-black tracking-wider uppercase font-mono text-cyan-400">Evidence Assessment</h4>
+                  </div>
+                  <p className="text-[14px] text-white/70 leading-relaxed font-medium">
+                    {parsedNarrative.evidence_assessment}
+                  </p>
+                </div>
+
+                {/* Deep Cross-Validation Column */}
+                <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
+                  <div className="flex items-center gap-2 text-teal-400">
+                    <Activity className="w-4 h-4 shrink-0 text-teal-400" />
+                    <h4 className="text-xs font-black tracking-wider uppercase font-mono text-teal-400">Deep Validation</h4>
+                  </div>
+                  <p className="text-[14px] text-white/70 leading-relaxed font-medium">
+                    {parsedNarrative.deep_analysis}
+                  </p>
+                </div>
+
+                {/* Reliability & Verdict Column */}
+                <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
+                  <div className="flex items-center gap-2 text-violet-400">
+                    <Shield className="w-4 h-4 shrink-0 text-violet-400" />
+                    <h4 className="text-xs font-black tracking-wider uppercase font-mono text-violet-400">Reliability & Verdict</h4>
+                  </div>
+                  <p className="text-[14px] text-white/70 leading-relaxed font-medium">
+                    {parsedNarrative.reliability_verdict}
+                  </p>
+                </div>
               </div>
+            ) : (
+              overview && (
+                <div className="flex items-start gap-3 p-5 rounded-2xl bg-transparent border border-white/[0.08]">
+                  <Activity className="w-4 h-4 text-primary/65 mt-1 shrink-0" />
+                  <p className="text-[15px] text-white/80 leading-relaxed font-medium">
+                    {overview}
+                  </p>
+                </div>
+              )
             )}
 
             {/* Section groups */}

@@ -41,3 +41,18 @@ def assign_severity_tier(confidence: float, verdict: str) -> SeverityTier:
         return SeverityTier.LOW
 
     return SeverityTier.INFORMATIONAL
+
+
+def assign_severity_for_finding(f: Any) -> SeverityTier:
+    """
+    Wrapper to assign a severity tier from a finding dictionary or object.
+    """
+    from typing import Any
+    if isinstance(f, dict):
+        confidence = float(f.get("confidence_raw") or f.get("confidence") or 0.0)
+        verdict = str(f.get("evidence_verdict") or f.get("verdict") or "CLEAN")
+    else:
+        confidence = float(getattr(f, "confidence_raw", 0.0) or getattr(f, "confidence", 0.0) or 0.0)
+        verdict = str(getattr(f, "evidence_verdict", "CLEAN") or getattr(f, "verdict", "CLEAN"))
+    return assign_severity_tier(confidence, verdict)
+

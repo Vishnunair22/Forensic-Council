@@ -59,7 +59,7 @@ export async function installMockLiveSocket(
         static CLOSING = 2;
         static CLOSED = 3;
 
-        readonly url: string;
+        readonly url: string = "";
         readonly protocol = "forensic-v1";
         readyState = FakeWebSocket.CONNECTING;
         onopen: Listener | null = null;

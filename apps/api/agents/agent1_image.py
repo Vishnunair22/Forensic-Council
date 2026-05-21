@@ -81,8 +81,8 @@ class Agent1Image(ForensicAgent):
         """
         base = [
             "Run file_hash_verify for evidence integrity check",
-            "Run extract_text_from_image for visible text extraction",
             "Run analyze_image_content for semantic image understanding",
+            "Run extract_text_from_image for visible text extraction",
         ]
         if self._is_screen_capture or self._is_digital_capture:
             # Screenshots: fast integrity + OCR + frequency scan + semantic.
@@ -90,9 +90,9 @@ class Agent1Image(ForensicAgent):
             # is less informative for screenshots which are inherently unique UI states.
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run analyze_image_content for semantic image understanding",
                 "Run extract_text_from_image for visible text extraction",
                 "Run frequency_domain_analysis for frequency domain analysis",
-                "Run analyze_image_content for semantic image understanding",
             ]
         base.insert(3, "Run neural_fingerprint for conceptual similarity detection")
         if self._is_lossless:

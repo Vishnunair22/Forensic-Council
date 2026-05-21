@@ -109,6 +109,39 @@ class NeuralSynthesisMixin:
                 model_hint=model_hint,
             )
 
+            if finding.error:
+                err_msg = finding.error
+                err_status = "FAILED"
+                if "401" in err_msg or "unauthorized" in err_msg.lower() or "auth" in err_msg.lower() or "api key" in err_msg.lower():
+                    err_status = "AUTH_FAILED"
+                elif "timeout" in err_msg.lower() or "timed out" in err_msg.lower():
+                    err_status = "TIMEOUT"
+
+                result = {
+                    "agent_id": self.agent_id,
+                    "finding_type": "gemini_vision_deep_forensic_analysis",
+                    "confidence_raw": 0.55,
+                    "status": err_status,
+                    "evidence_refs": [],
+                    "reasoning_summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
+                    "summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
+                    "metadata": {
+                        "tool_name": "gemini_deep_forensic",
+                        "analysis_source": "gemini_vision",
+                        "available": False,
+                        "court_defensible": False,
+                        "status": err_status,
+                        "error": err_msg,
+                    },
+                    "court_defensible": False,
+                    "caveat": "Gemini vision analysis failed/unavailable.",
+                    "stub_result": True,
+                    "available": False,
+                }
+                if hasattr(self, "_record_tool_error"):
+                    await self._record_tool_error("gemini_deep_forensic", f"Error ({err_status}): {err_msg}")
+                return result
+
             result = finding.to_finding_dict(self.agent_id)
             result["analysis_source"] = f"gemini_{model_hint}" if model_hint else "gemini_vision"
 
@@ -118,68 +151,75 @@ class NeuralSynthesisMixin:
 
             return result
 
-        except httpx.AuthenticationError as e:
-            logger.error(
-                "Gemini authentication failed - invalid API key",
-                agent_id=self.agent_id,
-                error=str(e),
-                exc_info=True,
-            )
-            err_result = {
-                "error": str(e),
-                "analysis_source": "gemini_vision",
-                "available": False,
-                "court_defensible": False,
-                "confidence": 0.0,
-                "status": "AUTH_FAILED",
-            }
-            if hasattr(self, "_record_tool_error"):
-                await self._record_tool_error("gemini_deep_forensic", f"Authentication error: {e}")
-            raise  # Re-raise auth failures - cannot recover
-
-        except httpx.RateLimitError as e:
-            logger.warning(
-                "Gemini rate limit hit - will retry",
-                agent_id=self.agent_id,
-                error=str(e),
-            )
-            if hasattr(self, "_record_tool_error"):
-                await self._record_tool_error("gemini_deep_forensic", f"Rate limited: {e}")
-            raise  # Retry on rate limits
-
-        except httpx.TimeoutException as e:
-            logger.warning(
-                "Gemini request timed out",
-                agent_id=self.agent_id,
-                error=str(e),
-            )
-            err_result = {
-                "error": f"Timeout: {e}",
-                "analysis_source": "gemini_vision",
-                "available": False,
-                "court_defensible": False,
-                "confidence": 0.0,
-                "status": "TIMEOUT",
-            }
-            if hasattr(self, "_record_tool_error"):
-                await self._record_tool_error("gemini_deep_forensic", f"Timeout: {e}")
-            return err_result
-
         except Exception as e:
-            logger.error(
-                "Gemini deep forensic analysis failed",
-                agent_id=self.agent_id,
-                error=str(e),
-                exc_info=True,
-            )
+            err_msg = str(e)
+            err_status = "FAILED"
+
+            if (
+                "401" in err_msg
+                or "unauthorized" in err_msg.lower()
+                or "auth" in err_msg.lower()
+                or "api key" in err_msg.lower()
+                or (hasattr(e, "response") and getattr(e.response, "status_code", None) == 401)
+            ):
+                err_status = "AUTH_FAILED"
+                logger.error(
+                    "Gemini authentication failed - invalid API key",
+                    agent_id=self.agent_id,
+                    error=err_msg,
+                    exc_info=True,
+                )
+            elif (
+                isinstance(e, httpx.TimeoutException)
+                or "timeout" in err_msg.lower()
+                or "timed out" in err_msg.lower()
+            ):
+                err_status = "TIMEOUT"
+                logger.warning(
+                    "Gemini request timed out",
+                    agent_id=self.agent_id,
+                    error=err_msg,
+                )
+            elif (
+                "429" in err_msg
+                or "rate limit" in err_msg.lower()
+                or "quota" in err_msg.lower()
+                or (hasattr(e, "response") and getattr(e.response, "status_code", None) == 429)
+            ):
+                logger.warning(
+                    "Gemini rate limit / quota hit",
+                    agent_id=self.agent_id,
+                    error=err_msg,
+                )
+            else:
+                logger.error(
+                    "Gemini deep forensic analysis failed",
+                    agent_id=self.agent_id,
+                    error=err_msg,
+                    exc_info=True,
+                )
+
             err_result = {
-                "error": str(e),
-                "analysis_source": "gemini_vision",
-                "available": False,
+                "agent_id": self.agent_id,
+                "finding_type": "gemini_vision_deep_forensic_analysis",
+                "confidence_raw": 0.55,
+                "status": err_status,
+                "evidence_refs": [],
+                "reasoning_summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
+                "summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
+                "metadata": {
+                    "tool_name": "gemini_deep_forensic",
+                    "analysis_source": "gemini_vision",
+                    "available": False,
+                    "court_defensible": False,
+                    "status": err_status,
+                    "error": err_msg,
+                },
                 "court_defensible": False,
-                "confidence": 0.0,
-                "status": "FAILED",
+                "caveat": "Gemini vision analysis failed/unavailable.",
+                "stub_result": True,
+                "available": False,
             }
             if hasattr(self, "_record_tool_error"):
-                await self._record_tool_error("gemini_deep_forensic", str(e))
+                await self._record_tool_error("gemini_deep_forensic", f"Error ({err_status}): {err_msg}")
             return err_result
