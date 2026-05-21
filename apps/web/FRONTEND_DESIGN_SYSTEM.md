@@ -76,6 +76,8 @@ Faint text:     55% min   (timestamps, non-critical chrome text)
 
 Text opacity below `55%` is banned for readable UI text.
 
+**Glass surface constraint:** Text rendered inside `fc-surface-elevated` or `fc-surface-overlay` must use `fc-text-muted` (68%) as the readable minimum — not `fc-text-faint`. The backdrop content beneath a glass surface is variable; `fc-text-faint` at 55% cannot be guaranteed to meet WCAG 4.5:1 in all real-world conditions. `fc-text-faint` inside elevated/overlay surfaces is permitted only for timestamps, decorative separators, and non-readable chrome.
+
 **Allowed exceptions** (not readable text — these are visual chrome):
 - Decorative icon buttons: opacity can be lower when they have a visible hover target (e.g., `text-white/30 hover:text-white/90`)
 - Separator characters (`·`, `/`) used as visual dividers
@@ -218,10 +220,12 @@ Four canonical text utility classes, defined in globals.css:
 fc-text-primary       → rgba(255,255,255,0.98)   page titles, verdicts, key numbers
 fc-text-secondary     → rgba(255,255,255,0.82)   normal body text, labels
 fc-text-muted         → rgba(255,255,255,0.68)   metadata, helper text
-fc-text-faint         → rgba(255,255,255,0.55)   timestamps, faint chrome text
+fc-text-faint         → rgba(255,255,255,0.55)   timestamps, faint chrome text (decorative only inside glass)
 ```
 
 Never use `text-white/X` with X < 55 for readable text. Use the canonical classes instead.
+
+**`fc-text-faint` inside `fc-surface-elevated` or `fc-surface-overlay`:** Restricted to decorative/non-readable chrome. Readable content in these contexts must use `fc-text-muted` (68%) minimum, because the variable glass backdrop makes 55% opacity unreliable for WCAG compliance. This does not affect `fc-text-faint` on standard backgrounds or `fc-surface-quiet`/`fc-surface` where the backdrop opacity is more controlled.
 
 Do not create new text utility classes outside this hierarchy.
 
@@ -422,6 +426,32 @@ fc-surface-overlay  → maximum frosted glass
 ## 6.7 Light Reflection
 
 Glass panels may include a subtle top highlight via a pseudo-element. The highlight must not exceed 12% white overlay at the top edge and must fade to 0% within 42% of the panel height.
+
+## 6.8 Glass Nesting Limit — The Rule of Two
+
+`backdrop-filter` forces a GPU compositing layer in the browser. Each nested blur layer compounds this cost. On integrated graphics — common on department-issued investigator hardware — two nested `backdrop-filter` surfaces degrade frame rate noticeably; three or more cause visible jank.
+
+**The Rule:** A maximum of two `backdrop-filter` surfaces may overlap on the Z-axis at any time.
+
+The permitted stack:
+
+```txt
+Level 0: Page background (#02040A)               — no backdrop-filter
+Level 1: Glass card / panel                       — one backdrop-filter (fc-surface, fc-surface-quiet, fc-surface-elevated)
+Level 2: Glass modal / overlay                    — one backdrop-filter (fc-surface-overlay + fc-modal-backdrop)
+```
+
+`fc-modal-backdrop` counts as one blur layer. If the modal shell is `fc-surface-overlay` (layer two), the interior of that modal cannot contain any additional blurred surfaces.
+
+**If a card must live inside a glass modal:**
+
+```txt
+Use fc-surface-solid (fully opaque, no backdrop-filter)
+OR use a non-blurred translucent fallback: background: rgba(8,13,24,0.72), no backdrop-filter
+Do NOT use fc-surface-quiet, fc-surface, or fc-surface-elevated inside fc-surface-overlay
+```
+
+This rule applies to the Z-axis overlap region only. Two separate glass surfaces that do not visually overlap (e.g., a sidebar card and a main content card on the same page) are not subject to this constraint.
 
 ---
 
@@ -728,6 +758,51 @@ Uncertain / inconclusive: amber (--color-warning)
 Processing / active:      teal (--color-primary)
 ```
 
+## 13.1 Print and PDF Export Mode
+
+"Court-grade" means the report must be as official on a printed page as on a monitor. Frosted glass, `backdrop-filter`, and dark backgrounds do not survive PDF export reliably — Chromium print, system print dialog, and headless renderers (Puppeteer, Playwright PDF) each handle `@media print` differently. `backdrop-filter` in particular is silently dropped or rendered opaque-black by most PDF engines.
+
+**Primary mechanism: `data-print-mode` attribute, not `@media print` alone.**
+
+Set `data-print-mode="true"` on `<html>` or `<body>` when the user triggers export. `@media print` may be used as a supplementary fallback but must not be the sole mechanism. Tailwind `print:` variants are insufficient for overriding `backdrop-filter` across all PDF paths.
+
+When `data-print-mode="true"` is active:
+
+```txt
+All backdrop-filter surfaces:   → background: #ffffff, backdrop-filter: none
+All dark backgrounds:           → #ffffff
+Primary text (fc-text-primary): → #000000
+Secondary text:                 → #1a1a1a
+Muted text:                     → #4a4a4a
+Faint text:                     → #6b7280
+Teal accent (#5eead4):          → #0f766e  (darker teal — printable, high-contrast on white)
+Glass borders:                  → #d1d5db  (gray-300)
+All box-shadow / blur:          → removed
+Badge backgrounds:              → semantic solid equivalents (danger → #dc2626, success → #15803d, etc.)
+```
+
+Implementation pattern in `globals.css`:
+
+```css
+[data-print-mode="true"] .fc-surface,
+[data-print-mode="true"] .fc-surface-quiet,
+[data-print-mode="true"] .fc-surface-elevated,
+[data-print-mode="true"] .fc-surface-overlay,
+[data-print-mode="true"] .fc-surface-solid {
+  backdrop-filter: none;
+  background: #ffffff;
+  border-color: #d1d5db;
+  box-shadow: 0 0 0 1px #d1d5db;
+}
+
+[data-print-mode="true"] .fc-text-primary   { color: #000000; }
+[data-print-mode="true"] .fc-text-secondary { color: #1a1a1a; }
+[data-print-mode="true"] .fc-text-muted     { color: #4a4a4a; }
+[data-print-mode="true"] .fc-text-faint     { color: #6b7280; }
+```
+
+The print export button must set this attribute before triggering `window.print()` or the PDF generation call, and remove it after the dialog closes.
+
 ---
 
 # 14. Landing Page
@@ -986,6 +1061,50 @@ Position
 aria-label / aria-live
 ```
 
+## 20.5 Forensic Data Rendering
+
+Forensic strings — file names, SHA-256/MD5 hashes, MIME types, raw log output, URLs, and all user-submitted content — are variable-length and uncontrolled. They must never be allowed to dictate the width, height, or overflow behavior of a glass panel.
+
+**Truncation rules:**
+
+```txt
+Evidence file names:    truncate (overflow hidden, text-overflow ellipsis, white-space nowrap)
+Hash strings:           font-mono + break-all, or truncate with a visible copy-to-clipboard action
+Raw string output:      break-words or break-all inside a max-height constrained scrollable container
+URLs:                   break-all or truncate + full value in title attribute or tooltip on hover
+MIME types / labels:    truncate — these can be arbitrarily long in malformed files
+```
+
+**Container constraints:**
+
+```txt
+Glass panels must use rigid width constraints (max-w-* or w-full within a constrained parent)
+Glass panels with variable-length content must have explicit max-height on scrollable regions
+Do not use min-content or fit-content as panel width when content is user-generated
+All display containers for evidence strings must use overflow-hidden or overflow-x-auto — never overflow-visible
+```
+
+**Canonical hash display pattern:**
+
+```tsx
+<span className="font-mono text-xs fc-text-muted break-all select-all">
+  {hash}
+</span>
+```
+
+When truncation is preferred over line-breaking (e.g., inside a narrow card column):
+
+```tsx
+<span
+  className="font-mono text-xs fc-text-muted truncate block max-w-[240px]"
+  title={hash}
+>
+  {hash}
+</span>
+```
+
+The `title` attribute is required on truncated hashes so investigators can read the full value on hover without expanding the layout.
+
 ---
 
 # 21. Tailwind Usage Rules
@@ -1132,7 +1251,33 @@ text-[10px]  text-[11px]  text-[13px]  (use system scale)
 One-off surface styles (custom bg + border + blur outside surface classes)
 One-off button styles (custom bg + text + border not matching a button class)
 Nested <main> elements
+Three or more backdrop-filter layers overlapping on the Z-axis (Rule of Two — see Section 6.8)
 ```
+
+**Tooling Enforcement**
+
+Banned patterns must be enforced by automated tooling, not solely by PR review. PR review alone is insufficient — violations accumulate. Required enforcement layer:
+
+```txt
+eslint-plugin-tailwindcss:
+  - `forbiddenClassNames` rule — add all banned Tailwind utility names from this section
+  - Flag text-white/* below /55 on non-exempt elements
+  - Flag hover:scale-*, group-hover:scale-*, and animate-pulse on non-dot elements
+
+Stylelint:
+  - Disallow `text-transform: uppercase` in component CSS
+  - Disallow `animation-duration` above 200ms
+  - Custom plugin to warn on `backdrop-filter` used inside a selector that is itself
+    a child of a backdrop-filter surface (nested blur detection)
+
+CI gate:
+  - Linting must pass before merge
+  - Banned patterns in this section are lint errors, not warnings
+  - No silent suppression — eslint-disable-next-line requires an inline comment
+    explaining the documented exception
+```
+
+The rule configurations live in `.eslintrc` and `.stylelintrc` at the project root. If a banned pattern must be used for a documented exception, suppress it explicitly with a required comment — `// eslint-disable-next-line tailwindcss/no-restricted-classes -- [reason]` — never silently.
 
 ---
 
@@ -1166,6 +1311,8 @@ A screen is compliant only if all of the following are true:
 [ ] Uses only canonical fc-surface-* classes for all major containers
 [ ] No one-off card or panel styles
 [ ] Adjacent surface tiers differ by exactly one level
+[ ] Maximum of two backdrop-filter layers overlap on the Z-axis at any time (Rule of Two)
+[ ] Cards inside fc-surface-overlay modals use fc-surface-solid or a non-blurred fallback
 ```
 
 **Typography:**
@@ -1218,6 +1365,18 @@ A screen is compliant only if all of the following are true:
 [ ] Status communicated by text/icon, not color alone
 [ ] Screen fully usable with sound disabled
 [ ] Reduced motion respected
+[ ] Text inside fc-surface-elevated or fc-surface-overlay uses fc-text-muted (68%) minimum for readable content
+[ ] All evidence strings (hashes, file names, URLs) are truncated or break-all — no layout-breaking overflow
+[ ] Hash display containers use overflow-hidden or overflow-x-auto, not overflow-visible
+```
+
+**Print/Export:**
+```txt
+[ ] Print/PDF export sets data-print-mode="true" on <html> before triggering export
+[ ] All fc-surface-* classes render as white (#ffffff) with backdrop-filter: none in print mode
+[ ] All fc-text-* classes render as dark readable values in print mode
+[ ] Teal accent converts to #0f766e (high-contrast printable) in print mode
+[ ] No glass borders, glows, or blur artifacts visible in exported PDF
 ```
 
 **Layout:**
@@ -1281,6 +1440,18 @@ No sound on card reveal
 No sound on hover or tab switch
 Sound only fires for meaningful state changes
 Mute toggle exists and persists
+```
+
+## 26.6 Print and PDF Export
+
+```txt
+Trigger export with data-print-mode="true" set on <html>
+All glass surfaces render as white panels with black text
+No backdrop-filter artifacts in the exported file
+Teal accents are readable (#0f766e on white)
+Verdict, evidence identity, hash, and confidence score are all visible and legible
+Layout does not break or overflow on A4/Letter page width
+data-print-mode attribute is removed after the export dialog closes
 ```
 
 ---
