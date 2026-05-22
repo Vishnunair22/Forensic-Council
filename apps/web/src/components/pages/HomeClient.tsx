@@ -43,7 +43,7 @@ export function HomeClient() {
           <div className="space-y-6 mb-12 w-full">
             <motion.h1
               variants={itemVariants}
-              className="text-5xl sm:text-6xl md:text-7xl font-black leading-none text-white tracking-tight"
+              className="text-5xl sm:text-6xl md:text-7xl font-black leading-none fc-text-primary tracking-tight"
             >
               Multi-Agent Forensic
               <br />

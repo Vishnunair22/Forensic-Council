@@ -61,7 +61,7 @@ export function HeroAuthActions() {
   // Auto-open upload modal when returning from evidence page via ?upload=1
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const openOnce = sessionOnlyStorage.getItem("fc_open_upload_once");
+    const openOnce = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
 
     if (params.get("upload") !== "1" && openOnce !== "1") {
       sessionOnlyStorage.removeItem("forensic_auto_start");
@@ -70,7 +70,7 @@ export function HeroAuthActions() {
     if (params.get("upload") === "1" || openOnce === "1") {
       setShowUpload(true);
       setSelectedFile(null);
-      if (openOnce === "1") sessionOnlyStorage.removeItem("fc_open_upload_once");
+      if (openOnce === "1") sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
       const url = new URL(window.location.href);
       if (url.searchParams.has("upload")) {
         url.searchParams.delete("upload");
@@ -91,7 +91,7 @@ export function HeroAuthActions() {
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
     sessionOnlyStorage.setItem(
-      "fc_pending_file_meta",
+      STORAGE_KEYS.FC_PENDING_FILE_META,
       JSON.stringify({
         name: selectedFile.name,
         type: selectedFile.type,
@@ -145,7 +145,7 @@ export function HeroAuthActions() {
         data-testid="hero-cta-begin"
         onClick={handleCTAClick}
         aria-label="Upload a file to begin analysis"
-        className="group fc-btn-primary text-sm font-bold gap-3 px-10 py-3.5"
+        className="group fc-btn-primary gap-3 px-10"
       >
         <span>Begin Analysis</span>
         <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />

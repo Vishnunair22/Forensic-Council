@@ -26,7 +26,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
             ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 18px rgba(79,142,247,0.30), 0 2px 12px rgba(0,0,0,0.5)"
             : "inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(79,142,247,0.12), 0 2px 12px rgba(0,0,0,0.4)",
         }}
-        transition={{ duration: 0.25 }}
+        transition={{ duration: 0.16 }}
         style={{
           background: "linear-gradient(140deg, #0D1829 0%, #060E1A 100%)",
           border: "1px solid rgba(79,142,247,0.30)",
@@ -35,7 +35,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
         {/* Core glow */}
         <motion.div
           animate={{ opacity: isHovered ? 0.50 : 0.16 }}
-          transition={{ duration: 0.25 }}
+          transition={{ duration: 0.16 }}
           className="absolute inset-0"
           style={{ background: "radial-gradient(circle at 50% 40%, rgba(79,142,247,0.9), transparent 68%)" }}
         />

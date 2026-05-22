@@ -29,4 +29,6 @@ export const STORAGE_KEYS = {
   FC_SHOW_LOADING: "fc_show_loading",
   FC_NO_RECONNECT: "fc_no_reconnect",
   FC_REPORT_READY: "fc_report_ready",
+  FC_OPEN_UPLOAD_ONCE: "fc_open_upload_once",
+  FC_PENDING_FILE_META: "fc_pending_file_meta",
 } as const;

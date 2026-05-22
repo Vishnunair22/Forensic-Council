@@ -22,7 +22,7 @@ export function HowWorksSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="text-3xl sm:text-4xl font-heading font-black text-white mb-4 tracking-tight"
+          className="text-3xl sm:text-4xl font-heading font-black fc-text-primary mb-4 tracking-tight"
         >
           How Forensic{" "}
           <span className="text-primary">Council Works</span>
@@ -53,7 +53,7 @@ export function HowWorksSection() {
             <div className="relative z-20 mb-5" aria-hidden="true">
               {/* Step number */}
               <div
-                className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10 bg-[#02040A] border border-white/10"
+                className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10 bg-surface-0 border border-white/10"
               >
                 <span className="text-xs font-mono font-bold fc-text-faint">
                   {String(i + 1).padStart(2, "0")}
@@ -61,15 +61,15 @@ export function HowWorksSection() {
               </div>
 
               <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center bg-white/[0.03] border border-white/10"
+                className="w-14 h-14 rounded-xl flex items-center justify-center bg-white/3 border border-white/10"
               >
                 <item.icon className="w-6 h-6 text-white/80" />
               </div>
             </div>
 
             {/* Card */}
-            <div className="w-full fc-surface-quiet p-6 relative overflow-hidden h-full flex flex-col items-center">
-              <h3 className="text-base font-heading font-black text-white mb-3 text-center tracking-tight">
+            <div className="w-full fc-surface-quiet p-6 relative overflow-hidden h-full flex flex-col items-center group">
+              <h3 className="text-base font-heading font-black fc-text-primary mb-3 text-center tracking-tight">
                 {item.title}
               </h3>
               <p className="text-sm fc-text-secondary leading-relaxed text-center">

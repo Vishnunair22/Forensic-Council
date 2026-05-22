@@ -21,7 +21,7 @@ export function AgentsSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.16, ease: "easeOut" }}
-          className="text-3xl sm:text-4xl font-heading font-black text-white mb-4 tracking-tight"
+          className="text-3xl sm:text-4xl font-heading font-black fc-text-primary mb-4 tracking-tight"
         >
           Meet the{" "}
           <span className="text-primary">Council</span>
@@ -48,7 +48,7 @@ export function AgentsSection() {
             className="relative flex flex-col items-center text-center group overflow-hidden fc-surface-quiet p-6"
           >
             {/* Icon */}
-            <div className="relative w-12 h-12 flex items-center justify-center mb-5 shrink-0 rounded-2xl bg-white/[0.03] border border-white/10" aria-hidden="true">
+            <div className="relative w-12 h-12 flex items-center justify-center mb-5 shrink-0 rounded-2xl bg-white/3 border border-white/10" aria-hidden="true">
               <agent.icon
                 className="w-5 h-5 text-white/80"
               />
@@ -56,21 +56,16 @@ export function AgentsSection() {
 
             {/* Badge */}
             <div className="mb-4">
-              <span
-                className="fc-badge fc-eyebrow"
-              >
+              <span className="fc-badge">
                 {agent.badge}
               </span>
             </div>
 
             {/* Name & description */}
-            <h3
-              className="text-lg font-heading font-black text-white mb-2"
-              style={{ letterSpacing: "-0.015em" }}
-            >
+            <h3 className="text-lg font-heading font-black fc-text-primary mb-2 tracking-tight">
               {agent.name}
             </h3>
-            <p className="text-sm fc-text-secondary leading-relaxed group-hover:fc-text-primary transition-colors duration-200">
+            <p className="text-sm fc-text-secondary leading-relaxed">
               {agent.desc}
             </p>
 
