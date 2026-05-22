@@ -465,6 +465,66 @@ SECTION H — SEALED FLOW REGISTRY
       - Cookie assignment: `${STORAGE_KEYS.SESSION_ID}=${sessionIdToUse};...` (no raw string)
       - Overlay: 2.5s minimum (minOverlayTimerRef); 8s hard safety (ANALYSIS_STARTUP_GRACE_MS)
 
+  SEALED: F-IA-01 (Pipeline Kick-off) — 2026-05-22
+    Files: api/utils.ts
+    Invariants:
+      - No raw AUTH_TOKEN / AUTH_TOKEN_EXPIRY strings; all via STORAGE_KEYS registry
+      - autoLoginAsInvestigator() pre-fires on CTA click; evidence page awaits the promise
+
+  SEALED: F-IA-02 (WebSocket Event Stream) — 2026-05-22
+    Files: useSimulation.ts
+    Invariants:
+      - HITL_CHECKPOINT_KEY, SESSION_ID_KEY, AUTH_TOKEN_EXPIRY_KEY consts purged; use STORAGE_KEYS
+      - Replay buffer: forensic:replay:{session_id}, max 50, 5min TTL
+      - Reconnect uses exponential backoff; SSE fallback on exhaustion
+      - Session guard + phase guard on every applyUpdate call
+
+  SEALED: F-IA-03 (Agent Dispatch & MIME Routing) — 2026-05-22
+    Files: mime_registry.py, agentSupport.ts (read-only, no changes needed)
+    Invariants:
+      - Backend and frontend MIME routing tables are consistent
+      - Agent5 is the universal fallback (supports "*")
+
+  SEALED: F-IA-04 (Tool Execution & ML Models) — 2026-05-22
+    Files: ml_subprocess.py, llm_client.py (read-only, no changes needed)
+    Invariants:
+      - One persistent worker process per ML script; JSON stdin/stdout
+      - Circuit breaker: 5 failures → open, 60s recovery
+      - Background stderr consumer prevents pipe deadlock
+
+  SEALED: F-IA-05 (Arbiter Synthesis) — 2026-05-22
+    Files: arbiter.py, arbiter_narrative.py, pipeline.py (read-only, no changes needed)
+    Invariants:
+      - pre_warm() is deterministic (no LLM call)
+      - finalise_from_cache() uses Groq with 90s timeout + template fallback
+      - All user-controlled strings wrapped in _wrap_untrusted() before LLM
+      - ARBITER_UPDATE events broadcast via _broadcast_arbiter_step hook
+
+  SEALED: F-IA-06 (Live Agent Card UI) — 2026-05-22
+    Files: AgentStatusCard.tsx, AgentProgressDisplay.tsx
+    Invariants:
+      - All Framer Motion durations ≤ 0.16s (200ms ceiling)
+      - All exit animations use y: 4 (same direction as entrance, not y: -4)
+      - All animated sections have explicit transition={{ duration: 0.16 }}
+      - No raw storage key strings; all via STORAGE_KEYS constants
+
+  SEALED: F-IA-07 (HITL Gate & Decision UI) — 2026-05-22
+    Files: HITLCheckpointModal.tsx, useSimulation.ts
+    Invariants:
+      - HITLCheckpointModal resets state on checkpoint_id change (useEffect dep)
+      - ArrowKey keyboard navigation for radio group
+      - resumeInvestigation() posts to /sessions/{id}/resume
+      - HITL_CHECKPOINT_KEY uses STORAGE_KEYS.HITL_CHECKPOINT (no raw string)
+
+  SEALED: F-STORAGE-SWEEP (Global STORAGE_KEYS Compliance Sweep) — 2026-05-22
+    Files: useResult.ts, appReset.ts, GlobalNavbar.tsx, HeroAuthActions.tsx,
+           HistoryPanel.tsx, ResultClientRedirect.tsx, result/page.tsx,
+           EvidenceUploadClient.tsx, SessionExpiredClient.tsx
+    Invariants:
+      - Zero raw forensic_* or fc_* string literals in any .ts/.tsx file
+      - All files that use storage keys import STORAGE_KEYS from @/lib/storageKeys
+      - Server component result/page.tsx may import storageKeys (pure constants, no side effects)
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────

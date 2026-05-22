@@ -12,6 +12,106 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-22: Initial Analysis Pipeline — Sub-Flows F-IA-01 through F-IA-07
+
+**Status:** ✅ COMPLETE & SEALED
+
+### Flow Trace
+1. **F-IA-01 — Pipeline Kick-off**: `autoLoginAsInvestigator()` pre-auth in `HeroAuthActions`, auth token storage via `STORAGE_KEYS.AUTH_TOKEN` / `STORAGE_KEYS.AUTH_TOKEN_EXPIRY` in `api/utils.ts`; `triggerAnalysis()` → `startInvestigation()` API call → WebSocket connect
+2. **F-IA-02 — WebSocket Event Stream**: `connectWebSocket()` in `useSimulation.ts`; auth priority cookie → query → subprotocol; replay buffer catchup on reconnect; PING/PONG 30s; idle timeout 5min; reconnect backoff with SSE fallback
+3. **F-IA-03 — Agent Dispatch & MIME Routing**: Backend `MimeRegistry` per-agent prefix matching; frontend `supportedAgentIdsForMime()` consistent; `AgentID` StrEnum with AGENT1-5 + ARBITER
+4. **F-IA-04 — Tool Execution & ML Models**: Persistent subprocess worker pool (one per script), JSON stdin/stdout, timeout+kill+restart, background stderr consumer; circuit breakers per provider:model (5 failures, 60s recovery)
+5. **F-IA-05 — Arbiter Synthesis**: `pre_warm()` deterministic only; `finalise_from_cache()` with Groq LLM (90s timeout, template fallback); `_SAFETY_PREAMBLE` + `_wrap_untrusted()` prompt injection defense; `_broadcast_arbiter_step` hook broadcasts ARBITER_UPDATE events
+6. **F-IA-06 — Live Agent Card UI**: `AgentStatusCard` + `AgentProgressDisplay` — motion ceiling enforced (160ms, y:4 exit); STORAGE_KEYS compliance for session-scoped keys
+7. **F-IA-07 — HITL Gate & Decision UI**: `PIPELINE_PAUSED` → `awaiting_decision` status → `HITLCheckpointModal`; keyboard navigation (ArrowKeys); `resumeInvestigation()` → `POST /sessions/{id}/resume`; HITL_CHECKPOINT_KEY registered in STORAGE_KEYS
+
+### What Changed
+- **`api/utils.ts`**: Removed raw `_TOKEN_KEY` / `_TOKEN_EXPIRY_KEY` consts; added `STORAGE_KEYS` import; replaced all 6 occurrences with registry constants
+- **`useSimulation.ts`**: Removed 3 raw storage key consts (`HITL_CHECKPOINT_KEY`, `SESSION_ID_KEY`, `AUTH_TOKEN_EXPIRY_KEY`); added `STORAGE_KEYS` import; replaced all occurrences with registry constants
+- **`AgentStatusCard.tsx`**: Fixed `FindingRow` duration `0.25` → `0.16`; fixed progress exit `y: -4` → `y: 4`; added `transition={{ duration: 0.16 }}` on complete and progress sections
+- **`AgentProgressDisplay.tsx`**: Fixed arbiter card exit `y: -4` → `y: 4`; added `transition={{ duration: 0.16 }}` on decision panels; replaced 2 raw storage key strings with `STORAGE_KEYS` constants
+- **STORAGE_KEYS compliance sweep** (remaining raw strings after F-Evidence-Page-Load): `useResult.ts`, `appReset.ts`, `GlobalNavbar.tsx`, `HeroAuthActions.tsx`, `HistoryPanel.tsx`, `ResultClientRedirect.tsx`, `result/page.tsx`, `EvidenceUploadClient.tsx`, `SessionExpiredClient.tsx` — all raw `forensic_*` / `fc_*` strings replaced with registry constants and imports added
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-IA-01 (Pipeline Kick-off) — 2026-05-22
+  Files: api/utils.ts
+  Invariants:
+    - No raw AUTH_TOKEN / AUTH_TOKEN_EXPIRY strings; all via STORAGE_KEYS registry
+    - autoLoginAsInvestigator() pre-fires on CTA click, evidence page awaits the promise
+
+SEALED: F-IA-02 (WebSocket Event Stream) — 2026-05-22
+  Files: useSimulation.ts, _websocket.py (read-only)
+  Invariants:
+    - HITL_CHECKPOINT_KEY, SESSION_ID_KEY, AUTH_TOKEN_EXPIRY_KEY purged; use STORAGE_KEYS
+    - Replay buffer: forensic:replay:{session_id}, max 50, 5min TTL
+    - Reconnect uses exponential backoff; SSE fallback on exhaustion
+    - Session guard + phase guard on every applyUpdate call
+
+SEALED: F-IA-03 (Agent Dispatch & MIME Routing) — 2026-05-22
+  Files: mime_registry.py, agentSupport.ts (read-only)
+  Invariants:
+    - Backend and frontend MIME routing tables are consistent
+    - Agent5 is the universal fallback (supports "*")
+
+SEALED: F-IA-04 (Tool Execution & ML Models) — 2026-05-22
+  Files: ml_subprocess.py, llm_client.py (read-only)
+  Invariants:
+    - One persistent worker process per ML script; JSON stdin/stdout
+    - Circuit breaker: 5 failures → open, 60s recovery
+    - Background stderr consumer prevents pipe deadlock
+
+SEALED: F-IA-05 (Arbiter Synthesis) — 2026-05-22
+  Files: arbiter.py, arbiter_narrative.py, pipeline.py (read-only)
+  Invariants:
+    - pre_warm() is deterministic (no LLM call)
+    - finalise_from_cache() uses Groq with 90s timeout + template fallback
+    - All user-controlled strings wrapped in _wrap_untrusted() before LLM
+    - ARBITER_UPDATE events broadcast via _broadcast_arbiter_step hook
+
+SEALED: F-IA-06 (Live Agent Card UI) — 2026-05-22
+  Files: AgentStatusCard.tsx, AgentProgressDisplay.tsx
+  Invariants:
+    - All Framer Motion durations ≤ 0.16s (200ms ceiling)
+    - All exit animations use y: 4 (same direction as entrance, not y: -4)
+    - All animated sections have explicit transition={{ duration: 0.16 }}
+    - No raw storage key strings; all via STORAGE_KEYS constants
+
+SEALED: F-IA-07 (HITL Gate & Decision UI) — 2026-05-22
+  Files: HITLCheckpointModal.tsx, useSimulation.ts (read-only for modal)
+  Invariants:
+    - HITLCheckpointModal resets state on checkpoint_id change
+    - ArrowKey keyboard navigation for radio group
+    - resumeInvestigation() posts to /sessions/{id}/resume
+    - HITL_CHECKPOINT_KEY uses STORAGE_KEYS.HITL_CHECKPOINT (no raw string)
+```
+
+### Files Touched
+- [apps/web/src/lib/api/utils.ts](apps/web/src/lib/api/utils.ts)
+- [apps/web/src/hooks/useSimulation.ts](apps/web/src/hooks/useSimulation.ts)
+- [apps/web/src/components/evidence/AgentStatusCard.tsx](apps/web/src/components/evidence/AgentStatusCard.tsx)
+- [apps/web/src/components/evidence/AgentProgressDisplay.tsx](apps/web/src/components/evidence/AgentProgressDisplay.tsx)
+- [apps/web/src/hooks/useResult.ts](apps/web/src/hooks/useResult.ts)
+- [apps/web/src/lib/appReset.ts](apps/web/src/lib/appReset.ts)
+- [apps/web/src/components/ui/GlobalNavbar.tsx](apps/web/src/components/ui/GlobalNavbar.tsx)
+- [apps/web/src/components/ui/HeroAuthActions.tsx](apps/web/src/components/ui/HeroAuthActions.tsx)
+- [apps/web/src/components/result/HistoryPanel.tsx](apps/web/src/components/result/HistoryPanel.tsx)
+- [apps/web/src/app/result/ResultClientRedirect.tsx](apps/web/src/app/result/ResultClientRedirect.tsx)
+- [apps/web/src/app/result/page.tsx](apps/web/src/app/result/page.tsx)
+- [apps/web/src/components/pages/EvidenceUploadClient.tsx](apps/web/src/components/pages/EvidenceUploadClient.tsx)
+- [apps/web/src/components/pages/SessionExpiredClient.tsx](apps/web/src/components/pages/SessionExpiredClient.tsx)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| STORAGE_KEYS sweep clean | ✅ PASS | Zero raw `forensic_*/fc_*` strings in any `.ts/.tsx` file |
+| Motion ceiling compliance | ✅ PASS | All durations ≤ 0.16s, all exits use y: 4 |
+| Sealed flow regressions | ✅ PASS | No invariants from prior sealed flows broken |
+
+---
+
 ### 2026-05-22: Evidence Analysis Page Load — Storage Key Compliance (F-Evidence-Page-Load)
 
 **Status:** ✅ COMPLETE & SEALED
