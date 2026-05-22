@@ -456,6 +456,15 @@ SECTION H — SEALED FLOW REGISTRY
       - EvidenceUploadClient empty state uses fc-eyebrow fc-text-faint + font-heading font-black
       - GlobalLoadingOverlay hides when pathname === "/evidence" (hand-off gate)
 
+  SEALED: F-Evidence-Page-Load (Analysis Progress Overlay → Evidence Analysis Page Load) — 2026-05-22
+    Files: storageKeys.ts, useInvestigation.ts, ResultHeader.tsx, api/types.ts
+    Invariants:
+      - STORAGE_KEYS registry has 24 entries; INVESTIGATOR_ID, AUTH_OK, FC_RESUME_REQUESTED registered
+      - useInvestigation.ts imports STORAGE_KEYS; zero raw string storage keys remain
+      - Compound session-scoped keys: `${STORAGE_KEYS.<KEY>}:${sid}` form throughout
+      - Cookie assignment: `${STORAGE_KEYS.SESSION_ID}=${sessionIdToUse};...` (no raw string)
+      - Overlay: 2.5s minimum (minOverlayTimerRef); 8s hard safety (ANALYSIS_STARTUP_GRACE_MS)
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────

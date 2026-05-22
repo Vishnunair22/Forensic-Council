@@ -12,6 +12,58 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-22: Evidence Analysis Page Load — Storage Key Compliance (F-Evidence-Page-Load)
+
+**Status:** ✅ COMPLETE & SEALED
+
+### Flow Trace
+1. `GlobalLoadingOverlay` hides (pathname === "/evidence") → `EvidenceUploadClient` mounts
+2. `useInvestigation` lazy-state initializers run (SSR-guarded): `autoStartBlocking` reads `AUTO_START`, `showLoadingOverlay` reads `FC_SHOW_LOADING`
+3. `freshMountDoneRef` effect (once) — if `__pendingFileStore.file` exists, clears stale session
+4. Auth effect — awaits pre-fetched `__pendingFileStore.authPromise` or fires new `autoLoginAsInvestigator()`
+5. Effect A (auto-start) — reads pending file from `__pendingFileStore.file` or `loadPendingEvidenceFile()` (IndexedDB fallback) → calls `triggerAnalysis()`
+6. `triggerAnalysis` — auth check, thumbnail generation, `startInvestigation()` API call, writes all session keys, connects WebSocket
+7. Overlay dismiss: 2.5s minimum display enforced by `minOverlayTimerRef`; 8s safety hard-dismiss with `ANALYSIS_STARTUP_GRACE_MS`
+8. Effect B (reconnect) — if no pending file, reads existing session from `SESSION_ID`, checks `FC_NO_RECONNECT`, calls `connectWebSocket(existingSessionId, true)`
+
+### What Changed
+- **`storageKeys.ts`**: Added three previously-unregistered keys: `INVESTIGATOR_ID: "forensic_investigator_id"`, `AUTH_OK: "forensic_auth_ok"`, `FC_RESUME_REQUESTED: "fc_resume_requested"`
+- **`useInvestigation.ts`**: Added `import { STORAGE_KEYS } from "@/lib/storageKeys"`. Replaced every raw string storage key (~60 instances) with the registry constant, including compound session-scoped template keys (`${STORAGE_KEYS.RESULT_PHASE}:${sid}` etc.) and the cookie assignment string
+- **`ResultHeader.tsx`**: Removed unused `clsx` import
+- **`api/types.ts`**: Added `BATCH` event type and `updates?: BriefUpdate[]` field to `BriefUpdate` (pre-existing uncommitted drift)
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-Evidence-Page-Load (Analysis Progress Overlay → Evidence Analysis Page Load) — 2026-05-22
+  Files: storageKeys.ts, useInvestigation.ts
+  Invariants:
+    - All 24 STORAGE_KEYS entries are registered (no magic strings)
+    - INVESTIGATOR_ID, AUTH_OK, FC_RESUME_REQUESTED entries present in registry
+    - useInvestigation.ts imports STORAGE_KEYS and uses no raw string keys
+    - Compound session-scoped keys use template form: `${STORAGE_KEYS.<KEY>}:${sid}`
+    - Cookie assignment uses STORAGE_KEYS.SESSION_ID (no raw "forensic_session_id" string)
+    - Overlay minimum display: 2500ms enforced by minOverlayTimerRef
+    - Overlay hard safety timeout: ANALYSIS_STARTUP_GRACE_MS (8s)
+```
+
+### Files Touched
+- [apps/web/src/lib/storageKeys.ts](apps/web/src/lib/storageKeys.ts)
+- [apps/web/src/hooks/useInvestigation.ts](apps/web/src/hooks/useInvestigation.ts)
+- [apps/web/src/components/result/ResultHeader.tsx](apps/web/src/components/result/ResultHeader.tsx)
+- [apps/web/src/lib/api/types.ts](apps/web/src/lib/api/types.ts)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| STORAGE_KEYS registry complete | ✅ PASS | 24 keys registered; INVESTIGATOR_ID, AUTH_OK, FC_RESUME_REQUESTED added |
+| Raw string keys eliminated | ✅ PASS | ~60 instances replaced with constants |
+| Compound template keys correct | ✅ PASS | All `:${sid}` patterns use STORAGE_KEYS prefix |
+| Cookie string uses constant | ✅ PASS | `${STORAGE_KEYS.SESSION_ID}=...` confirmed |
+
+---
+
 ### 2026-05-22: App Shell Audit — App Load, Refresh, Hard Refresh, Smooth Scroll, Universal Reset (F-App-Shell)
 
 **Status:** ✅ COMPLETE & SEALED
