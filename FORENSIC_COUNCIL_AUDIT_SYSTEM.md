@@ -405,6 +405,20 @@ SECTION H — SEALED FLOW REGISTRY
       - GlobalNavbar "Session Active" label uses text-blue-300/65 (no inline style color)
       - GlobalNavbar tagline is "FC — Multi-Agent" (Title Case)
 
+  SEALED: F-Landing-Page (Landing Page Design Audit) — 2026-05-22
+    Files: HomeClient.tsx, HowWorksSection.tsx, AgentsSection.tsx,
+           BrandLogo.tsx, HeroAuthActions.tsx, storageKeys.ts
+    Invariants:
+      - All text-white usages replaced with fc-text-primary (§4.2)
+      - No arbitrary hex colors in landing components (bg-[#02040A] → bg-surface-0)
+      - No decimal opacity classes (bg-white/[0.03] → bg-white/3)
+      - fc-btn-primary CTA carries no redundant text-sm/font-bold/py-* overrides
+      - BrandLogo Framer Motion transitions ≤ 200ms (canonical 160ms)
+      - fc-badge and fc-eyebrow are never combined on the same element
+      - group-hover: variants not applied to custom CSS layer classes
+      - HowWorksSection card div carries group class so hover glow activates
+      - FC_OPEN_UPLOAD_ONCE and FC_PENDING_FILE_META registered in STORAGE_KEYS
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────

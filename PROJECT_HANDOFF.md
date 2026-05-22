@@ -67,6 +67,63 @@ SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal R
 
 ---
 
+### 2026-05-22: Landing Page Design Audit — Precision Frosted Glass Compliance
+
+**Status:** ✅ COMPLETE & SEALED
+
+### What Changed
+- **Hero h1 token**: `text-white` → `fc-text-primary` in HomeClient.tsx (§4.2)
+- **Section headings (h2)**: `text-white` → `fc-text-primary` in HowWorksSection and AgentsSection (§4.2)
+- **Agent card h3**: Removed inline `style={{ letterSpacing: "-0.015em" }}` and replaced `text-white` with `fc-text-primary tracking-tight` — Tailwind scale handles tracking (§5.4)
+- **Step number circle**: `bg-[#02040A]` → `bg-surface-0` (§21.1 — no arbitrary hex values)
+- **Icon wrappers**: `bg-white/[0.03]` → `bg-white/3` in HowWorksSection and AgentsSection (§21.1 — whole-number opacity)
+- **CTA button cleanup**: Removed redundant `text-sm font-bold py-3.5` from `fc-btn-primary` className — canonical class already defines these (§3.1 no overrides)
+- **BrandLogo motion ceiling**: Two `transition={{ duration: 0.25 }}` → `transition={{ duration: 0.16 }}` on box-shadow and core-glow animations (§3.5 — max 200ms, canonical 160ms)
+- **Badge + eyebrow conflict**: `className="fc-badge fc-eyebrow"` → `className="fc-badge"` on agent card badges — combining both causes font-weight conflict (650 vs 700) (§3.6)
+- **Dead Tailwind variant removed**: `group-hover:fc-text-primary transition-colors duration-200` stripped from AgentsSection paragraph — Tailwind v4 cannot generate `group-hover:` variants for custom CSS layer classes
+- **Hover glow activated**: Added `group` class to HowWorksSection card div — `group-hover:opacity-100` on the glow overlay was dead without a `group` ancestor
+- **STORAGE_KEYS registry**: Added `FC_OPEN_UPLOAD_ONCE` and `FC_PENDING_FILE_META`; updated HeroAuthActions.tsx to use constants (§magic-string compliance)
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-Landing-Page (Landing Page Design Audit) — 2026-05-22
+  Files: HomeClient.tsx, HowWorksSection.tsx, AgentsSection.tsx,
+         BrandLogo.tsx, HeroAuthActions.tsx, storageKeys.ts
+  Invariants:
+    - All text-white usages replaced with fc-text-primary (§4.2)
+    - No arbitrary hex colors (bg-[#02040A] banned → bg-surface-0)
+    - No decimal opacity (bg-white/[0.03] banned → bg-white/3)
+    - fc-btn-primary CTA carries no redundant text-sm/font-bold/py-* overrides
+    - BrandLogo Framer Motion transitions ≤ 200ms (canonical 160ms)
+    - fc-badge and fc-eyebrow are never combined on the same element
+    - group-hover: variants not applied to custom CSS layer classes
+    - HowWorksSection card has group class so hover glow activates
+    - FC_OPEN_UPLOAD_ONCE and FC_PENDING_FILE_META in STORAGE_KEYS registry
+```
+
+### Files Touched
+- [apps/web/src/components/pages/HomeClient.tsx](apps/web/src/components/pages/HomeClient.tsx)
+- [apps/web/src/components/ui/HowWorksSection.tsx](apps/web/src/components/ui/HowWorksSection.tsx)
+- [apps/web/src/components/ui/AgentsSection.tsx](apps/web/src/components/ui/AgentsSection.tsx)
+- [apps/web/src/components/ui/BrandLogo.tsx](apps/web/src/components/ui/BrandLogo.tsx)
+- [apps/web/src/components/ui/HeroAuthActions.tsx](apps/web/src/components/ui/HeroAuthActions.tsx)
+- [apps/web/src/lib/storageKeys.ts](apps/web/src/lib/storageKeys.ts)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| fc-text-primary replaces text-white | ✅ PASS | h1, h2, h3 all use design token |
+| No arbitrary hex/decimal opacity values | ✅ PASS | bg-surface-0, bg-white/3 confirmed |
+| BrandLogo motion ≤ 200ms | ✅ PASS | All durations ≤ 0.16s |
+| fc-badge has no conflicting fc-eyebrow | ✅ PASS | Badge class standalone |
+| HowWorksSection group class present | ✅ PASS | Hover glow activates correctly |
+| STORAGE_KEYS registry complete | ✅ PASS | FC_OPEN_UPLOAD_ONCE, FC_PENDING_FILE_META added |
+| Sealed flow regressions | ✅ PASS | F-App-Shell invariants intact |
+
+---
+
 ### 2026-05-19: Progress & Deliberation Overlays and Results Layout Compliance
 
 **Status:** ✅ COMPLETE & 100% VERIFIED
