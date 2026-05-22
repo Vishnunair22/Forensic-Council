@@ -30,7 +30,7 @@ export function LoadingOverlay({
   liveText,
   dispatchedCount = 0,
   playSound,
-  exitDuration = 0.35,
+  exitDuration = 0.16,
 }: LoadingOverlayProps) {
   const prefersReducedMotion = useReducedMotion();
   const raw = toDisplayText(liveText || "", dispatchedCount);
@@ -58,7 +58,7 @@ export function LoadingOverlay({
 
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-[#02040A]"
+      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-surface-0"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={
@@ -66,7 +66,7 @@ export function LoadingOverlay({
           ? {}
           : { opacity: 0, transition: { duration: exitDuration, ease: "easeIn" } }
       }
-      transition={{ duration: 0.14, ease: "easeOut" }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
     >
       <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-primary/40 pl-8 md:pl-12 py-4">
         {/* Status indicator */}
@@ -90,7 +90,7 @@ export function LoadingOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl md:text-4xl font-heading font-black text-white tracking-tight"
+            className="text-3xl md:text-4xl font-heading font-black fc-text-primary tracking-tight"
             role="status"
             aria-live="polite"
             aria-atomic="true"
@@ -103,7 +103,7 @@ export function LoadingOverlay({
               animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
               transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
             />
-            <p className="text-xs md:text-sm font-mono font-medium text-white/60 tracking-wide">
+            <p className="text-xs md:text-sm font-mono font-medium fc-text-muted tracking-wide">
               Establishing secure forensic perimeter...
             </p>
           </div>

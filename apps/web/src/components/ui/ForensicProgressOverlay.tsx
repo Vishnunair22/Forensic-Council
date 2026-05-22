@@ -60,7 +60,7 @@ export function ForensicProgressOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl md:text-4xl font-heading font-black text-white tracking-tight"
+            className="text-3xl md:text-4xl font-heading font-black fc-text-primary tracking-tight"
           >
             {title}
           </motion.h1>
@@ -72,7 +72,7 @@ export function ForensicProgressOverlay({
             />
             <p
               id="forensic-live-text"
-              className="text-xs md:text-sm font-mono font-medium text-white/60 tracking-wide"
+              className="text-xs md:text-sm font-mono font-medium fc-text-muted tracking-wide"
               role="status"
               aria-live="polite"
               aria-atomic="true"
