@@ -67,6 +67,46 @@ SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal R
 
 ---
 
+### 2026-05-22: Upload Modal → Upload Success Modal Flow Audit
+
+**Status:** ✅ COMPLETE & SEALED
+
+### Flow Trace
+- `AnimatePresence mode="sync" initial={false}` — exit and enter play simultaneously; `initial={false}` prevents UploadModal from double-animating when Dialog shell opens. ✅
+- File selected → `setSelectedFile(file)` → UploadSuccessModal mounts, UploadModal exits. Keys (`"upload-modal"`, `"success-modal"`) ensure correct AnimatePresence identity tracking. ✅
+- Preview URL lifecycle: `URL.createObjectURL` in `useEffect`, revoked on unmount. ✅
+- Reselect: `setSelectedFile(null)` → fresh UploadModal instance, `isSubmitting`/`error` reset. ✅
+
+### What Changed
+- **`aria-hidden="true"` removed from file metadata row**: Filename, MIME type, and file size were invisible to screen readers. These are confirmation-critical — the user must be able to hear which file they selected. Attribute removed.
+- **`disabled:opacity-50 disabled:cursor-not-allowed` removed from both buttons**: `fc-btn-primary:disabled` and `fc-btn-secondary:disabled` already define `opacity: 0.48; cursor: not-allowed` in globals.css. The Tailwind utilities were overriding the canonical opacity (0.48 → 0.50) and duplicating the cursor rule.
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-Upload-Success-Modal (Upload Modal → Upload Success Modal) — 2026-05-22
+  Files: UploadSuccessModal.tsx
+  Invariants:
+    - File metadata row has no aria-hidden (filename/size are screen-reader accessible)
+    - fc-btn-primary and fc-btn-secondary carry no disabled:opacity-* overrides
+      (canonical :disabled rules in globals.css own opacity=0.48 and cursor)
+    - AnimatePresence mode="sync" initial={false} governs the upload→success swap
+    - Preview URL is created via URL.createObjectURL and revoked on unmount
+```
+
+### Files Touched
+- [apps/web/src/components/evidence/UploadSuccessModal.tsx](apps/web/src/components/evidence/UploadSuccessModal.tsx)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| aria-hidden removed from metadata row | ✅ PASS | Filename/size screen-reader accessible |
+| disabled:opacity-50 removed | ✅ PASS | Canonical fc-btn-*:disabled owns opacity |
+| Flow keys correct | ✅ PASS | "upload-modal" / "success-modal" stable |
+
+---
+
 ### 2026-05-22: Upload Modal → File Picker Flow Audit
 
 **Status:** ✅ COMPLETE & SEALED

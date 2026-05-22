@@ -438,6 +438,14 @@ SECTION H — SEALED FLOW REGISTRY
       - handleDragLeave guards against child-element relatedTarget (no isDragging flicker)
       - File input has tabIndex={-1} (keyboard nav owned by role=button parent div)
 
+  SEALED: F-Upload-Success-Modal (Upload Modal → Upload Success Modal) — 2026-05-22
+    Files: UploadSuccessModal.tsx
+    Invariants:
+      - File metadata row has no aria-hidden (filename/size are screen-reader accessible)
+      - fc-btn-primary and fc-btn-secondary carry no disabled:opacity-* overrides
+      - AnimatePresence mode="sync" initial={false} governs the upload→success swap
+      - Preview URL is created via URL.createObjectURL and revoked on unmount
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────
