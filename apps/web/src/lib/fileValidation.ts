@@ -1,6 +1,6 @@
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 
-const ALLOWED_EXTENSIONS = new Set([
+export const ALLOWED_EXTENSIONS = new Set([
   ".jpg",
   ".jpeg",
   ".png",

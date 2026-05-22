@@ -2,10 +2,10 @@
 
 import { useState, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { X, Plus } from "lucide-react";
+import { X, CloudUpload } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
-import { validateEvidenceFile } from "@/lib/fileValidation";
+import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -33,6 +33,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // Ignore if the cursor moved onto a child element — dragLeave bubbles from children.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDragging(false);
   }, []);
 
@@ -104,7 +106,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             : ""
         }`}
       >
-        <Plus
+        <CloudUpload
           className={`w-12 h-12 transition-colors duration-150 ${
             isDragging ? "text-primary" : "text-white/40 group-hover:text-white/60"
           }`}
@@ -128,10 +130,11 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <input
           type="file"
           id="evidence-file-input"
+          tabIndex={-1}
           aria-label="Upload evidence file"
           aria-describedby={error ? "upload-file-help upload-error" : "upload-file-help"}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          accept={Array.from(ALLOWED_MIME_TYPES).join(",")}
+          accept={[...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS].join(",")}
           onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
           onChange={(e) => {
             const file = e.target.files?.[0];
