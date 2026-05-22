@@ -699,6 +699,19 @@ class Settings(BaseSettings):
         ),
     )
 
+    @field_validator("arbiter_gemini_api_key")
+    @classmethod
+    def normalize_arbiter_gemini_key(cls, v: str | None) -> str | None:
+        """Normalise empty / whitespace-only string → None (matches gemini_api_key behaviour).
+
+        ARBITER_GEMINI_API_KEY= (empty) is documented as 'share main key'. Without this
+        normaliser Pydantic loads the empty string as '' which is falsy but not None,
+        creating an inconsistency with all other nullable key fields.
+        """
+        if v is not None and v.strip() == "":
+            return None
+        return v
+
     # Forensic Tool Timeouts
     agent_context_wait_timeout: float = Field(
         default=60.0,

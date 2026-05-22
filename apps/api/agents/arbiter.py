@@ -666,7 +666,14 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             flags.append("LLM synthesis bypassed")
         if penalty < 1.0:
             flags.append(f"Compression penalty applied ({round((1 - penalty) * 100)}%)")
-        if not any(
+        # Only flag missing Gemini when the report actually contains deep-phase findings —
+        # Gemini is not part of initial analysis (Phase 1), so this check must be gated on
+        # whether deep analysis ran. Without the gate it fires as a false positive on every
+        # initial-analysis report, incorrectly indicating degradation to operators and the UI.
+        has_deep_findings = any(
+            (f.get("metadata") or {}).get("analysis_phase") == "deep" for f in findings
+        )
+        if has_deep_findings and not any(
             str((f.get("metadata") or {}).get("analysis_source", "")).startswith("gemini")
             for f in findings
         ):
