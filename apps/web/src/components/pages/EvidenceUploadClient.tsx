@@ -141,15 +141,15 @@ export function EvidenceUploadClient() {
               className="text-center space-y-6"
             >
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Shield className="w-4 h-4 fc-text-faint" />
-                <span className="fc-eyebrow fc-text-faint">
+                <Shield className="w-4 h-4 fc-text-muted" />
+                <span className="fc-eyebrow fc-text-muted">
                   Intake Protocol
                 </span>
               </div>
               <h1 className="text-4xl font-heading font-black tracking-tight fc-text-primary">
                 No Evidence Queued
               </h1>
-              <p className="fc-text-faint text-base max-w-sm mx-auto leading-relaxed">
+              <p className="fc-text-secondary text-base max-w-sm mx-auto leading-relaxed">
                 Return to the home page to upload evidence and begin a new investigation.
               </p>
               <button

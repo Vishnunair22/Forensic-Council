@@ -148,14 +148,17 @@ export function HeroAuthActions() {
         className="group fc-btn-primary gap-3 px-10"
       >
         <span>Begin Analysis</span>
-        <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
+        <ArrowRight className="w-5 h-5 transition-transform duration-[160ms] group-hover:translate-x-1" aria-hidden="true" />
       </button>
 
       <Dialog
-        open={showUpload && !isHandingOff}
+        open={showUpload}
         onOpenChange={(open) => { if (!open) closeUpload(); }}
       >
-        <DialogContent className="max-w-xl p-0">
+        <DialogContent
+          className="max-w-xl p-0"
+          onFocusOutside={(e) => e.preventDefault()}
+        >
           <DialogTitle className="sr-only">
             {!selectedFile ? "Upload Evidence" : "Evidence Ready"}
           </DialogTitle>
@@ -176,7 +179,7 @@ export function HeroAuthActions() {
                   if (isHandingOff) return;
                   playSound("scan");
                   setIsHandingOff(true);
-                  setShowUpload(false);
+                  sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
                   await handleStartAnalysis();
                 }}
               />

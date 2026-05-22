@@ -62,14 +62,14 @@ export function ArbiterDeliberationOverlay({
           <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-success/40 pl-8 md:pl-12 py-4">
             {/* Status indicator */}
             <div className="flex items-center gap-4 mb-10">
-              <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-md bg-success/5">
+              <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-xl bg-success/5">
                 <motion.div
                   animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                   className="w-3 h-3 rounded-full bg-success"
                 />
               </div>
-              <span className="fc-badge fc-badge-success">
+              <span className="fc-eyebrow fc-text-muted">
                 Arbiter Active
               </span>
             </div>
@@ -82,7 +82,7 @@ export function ArbiterDeliberationOverlay({
                   initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className="text-3xl md:text-4xl font-heading font-black text-white tracking-tight"
+                  className="text-3xl md:text-4xl font-heading font-black fc-text-primary tracking-tight"
                 >
                   Consensus Synthesis
                 </motion.h1>
@@ -91,7 +91,7 @@ export function ArbiterDeliberationOverlay({
                 <div className="w-1.5 h-1.5 bg-success/50 rounded-full animate-pulse" />
                 <p
                   id="arbiter-live-text"
-                  className="text-xs md:text-sm font-mono font-medium text-white/60 tracking-wide"
+                  className="text-xs md:text-sm font-mono font-medium fc-text-muted tracking-wide"
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"
@@ -103,7 +103,7 @@ export function ArbiterDeliberationOverlay({
 
             {/* Progress bar */}
             <div className="w-full max-w-md">
-              <div className="flex items-center justify-between mb-4 text-xs font-mono font-bold tracking-wide fc-text-secondary">
+              <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-muted">
                 <span>Council Arbiter</span>
                 <span className="text-success">{formatTime(elapsed)}</span>
               </div>

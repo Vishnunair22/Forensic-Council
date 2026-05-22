@@ -53,15 +53,15 @@ export function HowWorksSection() {
             <div className="relative z-20 mb-5" aria-hidden="true">
               {/* Step number */}
               <div
-                className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center z-10 bg-surface-0 border border-white/10"
+                className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full flex items-center justify-center z-10 bg-surface-0 border border-white/10"
               >
-                <span className="text-xs font-mono font-bold fc-text-faint">
+                <span className="text-xs font-mono font-bold fc-text-secondary">
                   {String(i + 1).padStart(2, "0")}
                 </span>
               </div>
 
               <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center bg-white/3 border border-white/10"
+                className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/[0.04] border border-white/10"
               >
                 <item.icon className="w-6 h-6 text-white/80" />
               </div>
@@ -69,7 +69,7 @@ export function HowWorksSection() {
 
             {/* Card */}
             <div className="w-full fc-surface-quiet p-6 relative overflow-hidden h-full flex flex-col items-center group">
-              <h3 className="text-base font-heading font-black fc-text-primary mb-3 text-center tracking-tight">
+              <h3 className="text-lg font-heading font-black fc-text-primary mb-3 text-center tracking-tight">
                 {item.title}
               </h3>
               <p className="text-sm fc-text-secondary leading-relaxed text-center">

@@ -72,9 +72,9 @@ export function AgentsSection() {
             {/* Status */}
             <div className="mt-auto pt-5 border-t border-white/10 w-full flex items-center justify-center gap-2" aria-hidden="true">
               <div
-                className="w-1.5 h-1.5 rounded-full bg-primary"
+                className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
               />
-              <span className="text-xs font-mono fc-text-faint">
+              <span className="text-xs font-mono fc-text-muted">
                 Node {agent.id} Active
               </span>
             </div>

@@ -16,10 +16,6 @@ function toPct(v: number | null | undefined): string {
   return `${Math.max(0, Math.min(100, Math.round(Number(v ?? 0) * 100)))}%`;
 }
 
-function toCount(v: number | null | undefined): string {
-  return String(Math.round(Number(v ?? 0)));
-}
-
 export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataProps) {
   const [showAllTools, setShowAllTools] = useState(false);
 

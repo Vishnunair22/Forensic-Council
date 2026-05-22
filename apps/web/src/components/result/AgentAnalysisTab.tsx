@@ -20,7 +20,7 @@ export function AgentAnalysisTab({
     return (
       <div className="rounded-2xl border border-white/[0.06] bg-transparent p-8 text-center">
         <Cpu className="w-8 h-8 text-white/15 mx-auto mb-3" aria-hidden="true" />
-        <p className="text-sm fc-text-faint font-medium">No agent findings available.</p>
+        <p className="text-sm fc-text-muted font-medium">No agent findings available.</p>
       </div>
     );
   }
@@ -30,9 +30,9 @@ export function AgentAnalysisTab({
       <div className="flex items-center justify-between gap-3 mb-3 px-1">
         <div className="flex items-center gap-2">
           <Cpu className="w-4 h-4 text-primary/60" aria-hidden="true" />
-          <h2 className="text-sm font-bold text-white/85">Agent Findings</h2>
+          <h2 className="text-sm font-bold fc-text-primary">Agent Findings</h2>
         </div>
-        <span className="fc-eyebrow fc-text-faint">{activeAgentIds.length} node{activeAgentIds.length === 1 ? "" : "s"}</span>
+        <span className="fc-eyebrow fc-text-muted">{activeAgentIds.length} node{activeAgentIds.length === 1 ? "" : "s"}</span>
       </div>
 
       <div className="space-y-2.5">

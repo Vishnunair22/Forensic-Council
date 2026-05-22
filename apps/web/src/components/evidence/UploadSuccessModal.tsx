@@ -52,7 +52,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
         onClick={closeModal}
         aria-label="Close evidence dialog"
         data-testid="success-modal-close"
-        className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary transition-colors duration-[160ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
       >
         <X className="w-5 h-5" />
       </button>
@@ -99,7 +99,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
             ) : (
               <div className="flex flex-col items-center gap-3 fc-text-muted" aria-hidden="true">
                 <FileText className="w-12 h-12" strokeWidth={1} />
-                <span className="fc-eyebrow fc-text-faint">Data Secured</span>
+                <span className="fc-eyebrow fc-text-muted">Data Secured</span>
               </div>
             )}
           </div>

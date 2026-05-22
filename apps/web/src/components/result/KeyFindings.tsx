@@ -24,7 +24,7 @@ const SEVERITY_CFG = {
   danger:  { cls: "bg-danger/15 border-danger/35",    Icon: AlertCircle,   color: "text-danger"   },
   warning: { cls: "bg-warning/10 border-warning/30",  Icon: AlertTriangle, color: "text-warning"  },
   info:    { cls: "bg-success/10 border-success/30",  Icon: CheckCircle2,  color: "text-success"  },
-  neutral: { cls: "bg-transparent border-white/[0.1]",Icon: CircleDashed,  color: "fc-text-faint" },
+  neutral: { cls: "bg-transparent border-white/[0.1]",Icon: CircleDashed,  color: "fc-text-muted" },
 } as const;
 
 export function KeyFindings({ findings }: KeyFindingsProps) {
@@ -38,8 +38,8 @@ export function KeyFindings({ findings }: KeyFindingsProps) {
     >
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
         <Lightbulb className="w-4 h-4 text-primary/60" />
-        <h2 className="text-sm font-bold text-white/85">Key Findings</h2>
-        <span className="fc-eyebrow fc-text-faint ml-auto">{clean.length} signal{clean.length === 1 ? "" : "s"}</span>
+        <h2 className="text-sm font-bold fc-text-primary">Key Findings</h2>
+        <span className="fc-eyebrow fc-text-muted ml-auto">{clean.length} signal{clean.length === 1 ? "" : "s"}</span>
       </div>
 
       <div className="p-6 space-y-3">
@@ -55,7 +55,7 @@ export function KeyFindings({ findings }: KeyFindingsProps) {
               transition={{ delay: i * 0.04, duration: 0.16, ease: "easeOut" }}
               className="flex items-start gap-3"
             >
-              <div className={clsx("w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 border", cfg.cls)}>
+              <div className={clsx("w-5 h-5 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border", cfg.cls)}>
                 <Icon className={clsx("w-3 h-3", cfg.color)} />
               </div>
               <p className="text-sm fc-text-muted leading-relaxed">{finding}</p>

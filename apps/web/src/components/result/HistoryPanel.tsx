@@ -20,7 +20,6 @@ import { useSessionStorage } from "@/hooks/useSessionStorage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 interface HistoryPanelProps {
-  onDismiss: () => void;
   onSelect: (sessionId: string) => void;
   currentSessionId?: string | null;
 }
@@ -80,7 +79,7 @@ function ConfidencePill({ value }: { value: number }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function HistoryPanel({ onDismiss, onSelect, currentSessionId }: HistoryPanelProps) {
+export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) {
   const [history, setHistory] = useSessionStorage<HistoryItem[]>(STORAGE_KEYS.HISTORY, [], true);
   const shouldReduceMotion = useReducedMotion();
 

@@ -43,7 +43,7 @@ export function HomeClient() {
           <div className="space-y-6 mb-12 w-full">
             <motion.h1
               variants={itemVariants}
-              className="text-5xl sm:text-6xl md:text-7xl font-black leading-none fc-text-primary tracking-tight"
+              className="text-4xl sm:text-5xl md:text-6xl font-black leading-none fc-text-primary tracking-tight"
             >
               Multi-Agent Forensic
               <br />
@@ -74,7 +74,7 @@ export function HomeClient() {
       </section>
 
       {/* ── Content sections ── */}
-      <section className="relative w-full px-4 sm:px-6 pb-32 max-w-7xl mx-auto space-y-32">
+      <section className="relative w-full px-4 sm:px-6 pb-20 max-w-7xl mx-auto space-y-20">
         <div>
           <HowWorksSection />
         </div>

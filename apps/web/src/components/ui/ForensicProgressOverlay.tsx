@@ -53,14 +53,14 @@ export function ForensicProgressOverlay({
       <div className={`relative z-10 w-full max-w-xl mx-auto border-l-2 ${borderColor} pl-8 md:pl-12 py-4`}>
         {/* Status indicator */}
         <div className="flex items-center gap-4 mb-10">
-          <div className={`relative w-8 h-8 flex items-center justify-center border ${indicatorBorder} rounded-md ${indicatorBg}`}>
+          <div className={`relative w-8 h-8 flex items-center justify-center border ${indicatorBorder} rounded-xl ${indicatorBg}`}>
             <motion.div
               animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
               className={`w-3 h-3 ${pulseDot}`}
             />
           </div>
-          <span className="fc-eyebrow fc-text-faint">
+          <span className="fc-eyebrow fc-text-muted">
             {badgeLabel}
           </span>
         </div>
@@ -95,7 +95,7 @@ export function ForensicProgressOverlay({
 
         {/* Progress bar */}
         <div className="w-full max-w-md">
-          <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-faint">
+          <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-muted">
             <span>{telemetryLabel}</span>
             {showElapsed && (
               <span className={timerColor}>{formatTime(elapsed)}</span>

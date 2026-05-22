@@ -31,7 +31,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
   );
 
   return (
-    <div className="fc-surface-elevated overflow-hidden">
+    <div className="fc-surface-elevated rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -42,7 +42,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-          <span className="fc-eyebrow fc-text-faint">
+          <span className="fc-eyebrow fc-text-muted">
             Heavy-Compute Active
           </span>
         </div>
@@ -82,7 +82,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                     aria-label={`${model} confidence`}
                   />
                 </div>
-                <div className="flex justify-between items-center text-xs font-mono fc-text-faint">
+                <div className="flex justify-between items-center text-xs font-mono fc-text-muted">
                   <span>
                     {model.startsWith("neural_") || model === "anomaly_tracer"
                       ? "Transformer V2"

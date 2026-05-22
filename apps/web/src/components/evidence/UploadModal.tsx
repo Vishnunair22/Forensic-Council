@@ -71,7 +71,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       <button
         type="button"
         onClick={closeModal}
-        className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-faint hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary transition-colors duration-[160ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
         aria-label="Close upload dialog"
       >
         <X className="w-5 h-5" />
@@ -107,8 +107,8 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         }`}
       >
         <CloudUpload
-          className={`w-12 h-12 transition-colors duration-150 ${
-            isDragging ? "text-primary" : "text-white/40 group-hover:text-white/60"
+          className={`w-12 h-12 transition-colors duration-[160ms] ${
+            isDragging ? "text-primary" : "text-white/60 group-hover:text-white/80"
           }`}
           strokeWidth={1}
           aria-hidden="true"

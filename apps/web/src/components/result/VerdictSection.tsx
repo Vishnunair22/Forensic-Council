@@ -82,7 +82,7 @@ export function VerdictSection({
             <div className="text-5xl font-mono font-bold leading-none tabular-nums" style={{ color: theme.color }}>
               {confPct}%
             </div>
-            <div className="fc-eyebrow fc-text-faint mt-2">Confidence</div>
+            <div className="fc-eyebrow fc-text-muted mt-2">Confidence</div>
           </div>
         </div>
 
@@ -90,7 +90,7 @@ export function VerdictSection({
           <p className="mt-4 text-sm fc-text-muted leading-relaxed max-w-2xl">{primaryText}</p>
         )}
         {agentLine && (
-          <p className="mt-1.5 text-xs font-mono fc-text-faint">{agentLine}</p>
+          <p className="mt-1.5 text-xs font-mono fc-text-muted">{agentLine}</p>
         )}
       </div>
 
@@ -132,7 +132,7 @@ function MetricCell({
 }) {
   return (
     <div className="px-4 md:px-5 py-4">
-      <div className="flex items-center gap-1.5 fc-eyebrow fc-text-faint mb-2">
+      <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-2">
         <Icon className="w-3 h-3 shrink-0" />
         <span className="truncate">{label}</span>
       </div>

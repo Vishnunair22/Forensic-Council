@@ -121,7 +121,7 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
-      className={`fixed top-0 inset-x-0 z-[10001] h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-300 ease-in-out ${
+      className={`fixed top-0 inset-x-0 z-[10001] h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${
         isVisible || isKeyboardUser
           ? "translate-y-0 opacity-100"
           : "-translate-y-full opacity-0 pointer-events-none"

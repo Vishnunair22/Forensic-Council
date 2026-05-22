@@ -78,7 +78,7 @@ interface ActiveAgentsPanelProps {
 }
 
 function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAgentStatus }: ActiveAgentsPanelProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const doneCount = visibleAgents.filter(a => {
     const s = getAgentStatus(a.id);
@@ -92,20 +92,20 @@ function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAg
         onClick={() => setExpanded(v => !v)}
         aria-expanded={expanded}
         aria-controls="active-agents-panel"
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/2 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition"
       >
         <div className="flex items-center gap-2.5">
-          <Activity className="w-3.5 h-3.5 text-primary shrink-0" />
+          <Activity className="w-4 h-4 text-primary shrink-0" />
           <span className="fc-eyebrow fc-text-secondary">Active Agents</span>
           <span className="fc-badge fc-badge-active">{visibleAgents.length}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono fc-text-faint tabular-nums">
+          <span className="text-sm font-mono fc-text-muted tabular-nums">
             {doneCount}/{visibleAgents.length}
           </span>
           {expanded
-            ? <ChevronUp className="w-3.5 h-3.5 fc-text-faint" />
-            : <ChevronDown className="w-3.5 h-3.5 fc-text-faint" />}
+            ? <ChevronUp className="w-4 h-4 fc-text-muted" />
+            : <ChevronDown className="w-4 h-4 fc-text-muted" />}
         </div>
       </button>
 
@@ -141,28 +141,24 @@ function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAg
                   className="flex items-center gap-3 px-5 py-3 border-b border-white/4 last:border-0"
                 >
                   {/* Status dot */}
-                  <div className="shrink-0 w-1.5 h-1.5">
+                  <div className="shrink-0 w-2 h-2">
                     {status === "running" && (
-                      <motion.div
-                        className="w-1.5 h-1.5 rounded-full bg-primary"
-                        animate={{ opacity: [1, 0.3, 1] }}
-                        transition={{ duration: 1.2, repeat: Infinity }}
-                      />
+                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                     )}
-                    {status === "complete" && <div className="w-1.5 h-1.5 rounded-full bg-success" />}
-                    {status === "error" && <div className="w-1.5 h-1.5 rounded-full bg-danger" />}
+                    {status === "complete" && <div className="w-2 h-2 rounded-full bg-success" />}
+                    {status === "error" && <div className="w-2 h-2 rounded-full bg-danger" />}
                     {(status === "waiting" || status === "queued" || status === "checking" || status === "validating") && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-white/15" />
+                      <div className="w-2 h-2 rounded-full bg-white/20" />
                     )}
                   </div>
 
                   {/* Agent icon */}
-                  <Icon className={clsx("w-3.5 h-3.5 shrink-0", accent.textClass)} />
+                  <Icon className={clsx("w-4 h-4 shrink-0", accent.textClass)} />
 
                   {/* Name + live status */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium fc-text-secondary leading-none">{agent.name}</p>
-                    <p className="text-xs fc-text-faint mt-1 truncate leading-none">
+                    <p className="text-sm font-semibold fc-text-primary leading-none">{agent.name}</p>
+                    <p className="text-xs fc-text-secondary mt-1 truncate leading-none">
                       {status === "running" && toolDesc.label}
                       {status === "checking" && "Synchronizing with pipeline..."}
                       {status === "validating" && "Verifying chain of custody..."}
@@ -204,7 +200,7 @@ interface SkippedAgentsPanelProps {
 }
 
 function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const mimeCategory = mimeType?.split("/")?.[0] ?? "this";
   const reason = `Not applicable for ${mimeCategory} files`;
@@ -216,16 +212,16 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
         onClick={() => setExpanded(v => !v)}
         aria-expanded={expanded}
         aria-controls="skipped-agents-panel"
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/2 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition"
       >
         <div className="flex items-center gap-2.5">
-          <MinusCircle className="w-3.5 h-3.5 fc-text-faint shrink-0" />
+          <MinusCircle className="w-4 h-4 fc-text-muted shrink-0" />
           <span className="fc-eyebrow fc-text-muted">Skipped Agents</span>
           <span className="fc-badge">{skippedAgents.length}</span>
         </div>
         {expanded
-          ? <ChevronUp className="w-3.5 h-3.5 fc-text-faint" />
-          : <ChevronDown className="w-3.5 h-3.5 fc-text-faint" />}
+          ? <ChevronUp className="w-4 h-4 fc-text-muted" />
+          : <ChevronDown className="w-4 h-4 fc-text-muted" />}
       </button>
 
       <AnimatePresence initial={false}>
@@ -248,12 +244,12 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
                   className="flex items-center gap-3 px-5 py-3 border-b border-white/4 last:border-0"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-white/10 shrink-0" />
-                  <Icon className="w-3.5 h-3.5 shrink-0 fc-text-faint" />
+                  <Icon className="w-4 h-4 shrink-0 fc-text-muted" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium fc-text-muted leading-none">{agent.name}</p>
-                    <p className="text-xs fc-text-faint mt-1 leading-none">{reason}</p>
+                    <p className="text-sm font-medium fc-text-secondary leading-none">{agent.name}</p>
+                    <p className="text-xs fc-text-muted mt-1 leading-none">{reason}</p>
                   </div>
-                  <span className="fc-eyebrow fc-text-faint shrink-0">N/A</span>
+                  <span className="fc-eyebrow fc-text-muted shrink-0">N/A</span>
                 </div>
               );
             })}
@@ -389,13 +385,24 @@ export function AgentProgressDisplay({
           className="flex flex-wrap items-center gap-3 mb-5"
         >
           <h1 className="text-3xl md:text-4xl font-heading font-bold fc-text-primary tracking-tight">
-            {phase === "deep" ? "Deep Analysis" : "Forensic Analysis"}
+            {allAgentsDone && phase === "initial"
+              ? "Initial Analysis"
+              : phase === "deep"
+              ? "Deep Analysis"
+              : "Forensic Analysis"}
           </h1>
-          <span className="fc-badge fc-badge-active">
-            {phase === "initial" ? "Initial Verification" : "Phase 2"}
+          <span className={clsx(
+            "fc-badge",
+            allAgentsDone && phase === "initial" ? "fc-badge-success" : "fc-badge-active"
+          )}>
+            {allAgentsDone && phase === "initial"
+              ? "Complete"
+              : phase === "initial"
+              ? "Initial Verification"
+              : "Phase 2"}
           </span>
           <p
-            className="text-sm font-medium fc-text-faint italic ml-auto hidden md:block"
+            className="text-sm font-medium fc-text-secondary ml-auto hidden md:block"
             role="status"
             aria-live="polite"
             aria-atomic="false"
@@ -470,7 +477,7 @@ export function AgentProgressDisplay({
 
       {/* ── Initial analysis decision gate ──────────────────────────────── */}
       <AnimatePresence>
-        {awaitingDecision && phase === "initial" && revealQueue.length === 0 && !arbiterDeliberating && (
+        {(awaitingDecision || (allAgentsDone && phase === "initial" && !isNavigating && pipelineStatus !== "complete")) && revealQueue.length === 0 && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -479,7 +486,7 @@ export function AgentProgressDisplay({
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">
-              <p className="text-center fc-eyebrow fc-text-muted mb-4">
+              <p className="text-center text-sm fc-text-secondary mb-4">
                 Initial analysis complete — choose your next step
               </p>
               <div className="flex items-center gap-3">
@@ -523,7 +530,7 @@ export function AgentProgressDisplay({
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">
-              <p className="text-center fc-eyebrow fc-text-muted mb-4">
+              <p className="text-center text-sm fc-text-secondary mb-4">
                 Deep analysis complete — view report or start a new investigation
               </p>
               <div className="flex items-center gap-3">

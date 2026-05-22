@@ -75,7 +75,7 @@ const statusConfig = {
   checking:    { color: "text-primary",    label: "Syncing" },
   running:     { color: "text-primary",    label: "Scanning" },
   complete:    { color: "text-primary",    label: "Verified"  },
-  error:       { color: "text-danger",     label: "Error"     },
+  error:       { color: "fc-text-danger",   label: "Error"     },
   unsupported: { color: "fc-text-faint",   label: "Skipped"   },
   validating:  { color: "text-primary",    label: "Verifying" },
 };
@@ -111,7 +111,7 @@ function rankFinding(f: FindingPreview): number {
 
 function confidenceTier(c: number): { label: string; colorClass: string } {
   if (c >= 0.8) return { label: "High", colorClass: "text-primary" };
-  if (c >= 0.55) return { label: "Med", colorClass: "text-warning" };
+  if (c >= 0.55) return { label: "Medium", colorClass: "text-warning" };
   return { label: "Low", colorClass: "fc-text-faint" };
 }
 
@@ -239,7 +239,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           {f.tool && (
-            <span className="text-xs font-mono font-bold fc-text-secondary tracking-wide">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/8 border border-primary/15 text-xs font-mono font-semibold text-primary shrink-0 tracking-wide">
               {fmtTool(f.tool)}
             </span>
           )}
@@ -288,7 +288,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
             <button
               type="button"
               onClick={() => setExpanded(e => !e)}
-              className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-mono font-bold text-primary/75 hover:text-primary transition-colors align-baseline"
+              className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-mono font-bold text-primary hover:text-primary/80 fc-transition align-baseline"
             >
               {expanded
                 ? <><ChevronUp className="w-3 h-3" /><span>less</span></>
@@ -303,7 +303,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       <div className="flex items-center gap-2 mt-2 fc-eyebrow fc-text-faint">
         <span>{i + 1}/{total}</span>
         {f.section && (
-          <><span className="text-white/15">·</span><span className="truncate">{f.section}</span></>
+          <><span className="fc-text-faint">·</span><span className="truncate">{f.section}</span></>
         )}
         {elapsed && <span className="ml-auto normal-case tracking-normal">{elapsed}</span>}
       </div>
@@ -311,78 +311,67 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   );
 }
 
-function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const source = cleanFindingText(sourceText || "").trim();
-  const hasSource = source && summaryFingerprint(source) !== summaryFingerprint(text);
-  if (!text) return null;
+interface AgentBriefProps {
+  completedData: AgentUpdate;
+  findings: FindingPreview[];
+  toolsRan: number;
+  isAlert: boolean;
+}
+
+function AgentBrief({ completedData, findings, toolsRan, isAlert }: AgentBriefProps) {
+  const synthSummary = cleanFindingText(completedData.summary || "").trim();
+  const hasSynthesis = !!synthSummary && !isTemplateSummary(synthSummary);
+
+  // Fallback: pick the most meaningful signals — alert findings first, then any with a key_signal
+  const alertFindings = findings.filter(isAlertFinding);
+  const signalPool = alertFindings.length > 0 ? alertFindings : findings.filter(f => !!f.key_signal?.trim());
+  const topSignals = signalPool
+    .slice(0, 3)
+    .map(f => cleanFindingText(f.key_signal || f.summary || "").trim())
+    .filter(s => s && !isTemplateSummary(s));
+
+  const failedCount = completedData.tools_failed ?? 0;
+
+  if (!hasSynthesis && topSignals.length === 0) return null;
+
   return (
     <div className="border-t border-white/7 pt-3.5 space-y-2.5">
       <div className="flex items-center gap-2 fc-eyebrow fc-text-faint">
-        <ListChecks className="w-3.5 h-3.5 text-primary/70" />
+        <ListChecks className="w-3.5 h-3.5 text-primary shrink-0" />
         Agent Brief
       </div>
-      <p className="text-sm fc-text-secondary leading-relaxed font-medium">
-        {text}
-      </p>
-       {hasSource && (
-         <button
-           type="button"
-           onClick={() => setExpanded((e) => !e)}
-           className="inline-flex items-center gap-1 text-xs font-mono font-bold text-primary/80 hover:text-primary transition-colors"
-         >
-           {expanded ? (
-             <>
-               <ChevronUp className="w-3.5 h-3.5" />
-               <span>Hide detail</span>
-             </>
-           ) : (
-             <>
-               <ChevronDown className="w-3.5 h-3.5" />
-               <span>Show tool basis</span>
-             </>
-           )}
-         </button>
-       )}
-      {expanded && hasSource && (
-        <p className="rounded-lg border border-white/8 bg-white/2 px-3 py-2.5 text-xs leading-relaxed fc-text-faint">
-          {source}
+
+      {hasSynthesis ? (
+        <p className="text-sm fc-text-secondary leading-relaxed">
+          {synthSummary}
         </p>
+      ) : (
+        <ul className="space-y-2">
+          {topSignals.map((signal, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className={clsx(
+                "mt-[5px] w-1.5 h-1.5 rounded-full shrink-0",
+                isAlert ? "bg-danger" : "bg-white/40"
+              )} />
+              <span className="text-sm fc-text-secondary leading-snug">{signal}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(toolsRan > 0 || failedCount > 0) && (
+        <div className="flex items-center gap-2 fc-eyebrow fc-text-faint">
+          <span>{toolsRan} tool{toolsRan !== 1 ? "s" : ""} ran</span>
+          {failedCount > 0 && (
+            <>
+              <span>·</span>
+              <span className="fc-text-warning">{failedCount} degraded</span>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
-}
-
-function buildAgentBrief(
-  completedData: AgentUpdate | undefined,
-  findings: FindingPreview[],
-  toolsRan: number,
-): string {
-  if (!completedData) return "";
-
-  // 1. Prefer the backend synthesis narrative — it was purpose-built as the
-  //    agent-level summary and is more accurate than a tool-level construction.
-  const synthSummary = cleanFindingText(completedData.summary || "").trim();
-  if (synthSummary && !isTemplateSummary(synthSummary)) {
-    return synthSummary;
-  }
-
-  // 2. Structural fallback — counts and aggregate signals only; never copies finding text.
-  const verdict = normalizeVerdict(completedData.agent_verdict);
-  const confidence = Math.round((completedData.confidence || 0) * 100);
-  const toolText = toolsRan === 1 ? "1 tool" : `${toolsRan} tools`;
-  const alertCount = findings.filter(isAlertFinding).length;
-  const failedCount = completedData.tools_failed ?? 0;
-  const parts = [`${verdict} at ${confidence}% confidence across ${toolText}`];
-  if (alertCount > 0) {
-    parts.push(`${alertCount} flagged signal${alertCount > 1 ? "s" : ""} detected`);
-  } else if (findings.length > 0) {
-    parts.push("no critical signals detected");
-  }
-  if (failedCount > 0) {
-    parts.push(`${failedCount} tool${failedCount > 1 ? "s" : ""} degraded`);
-  }
-  return parts.join(" · ") + ".";
 }
 
 export function AgentStatusCard({
@@ -482,7 +471,6 @@ export function AgentStatusCard({
      typeof completedData?.tools_ran === "number"
        ? completedData.tools_ran
        : findings.length;
-  const agentBrief = buildAgentBrief(completedData, findings, toolsRan);
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
   // Once the backend has emitted a concrete tool, trust that progress instead
@@ -506,7 +494,7 @@ export function AgentStatusCard({
   return (
     <motion.div
       layout
-      className="relative flex flex-col overflow-hidden fc-surface-quiet border-none"
+      className="relative flex flex-col overflow-hidden fc-surface"
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
@@ -514,7 +502,7 @@ export function AgentStatusCard({
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-5">
             {/* Agent Icon */}
-            <div className="relative w-16 h-16 flex items-center justify-center bg-transparent border border-white/5 rounded-xl">
+            <div className="relative w-16 h-16 flex items-center justify-center bg-transparent border border-white/5 rounded-2xl">
               <Icon className={clsx("w-7 h-7 relative z-10", accent.textClass)} />
             </div>
 
@@ -561,15 +549,15 @@ export function AgentStatusCard({
               transition={{ duration: 0.16 }}
               className="space-y-4"
             >
-              <div className="flex items-center gap-3 fc-text-muted">
-                <motion.div key={progressDescriptor.label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }}>
+              <div className="flex items-center gap-3 fc-text-muted min-w-0">
+                <motion.div key={progressDescriptor.label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="shrink-0">
                   {status === "checking" ? (
                     <Activity className="w-4 h-4 text-primary" />
                   ) : (
                     <ProgressIcon className="w-4 h-4 text-primary" />
                   )}
                 </motion.div>
-                <span className="fc-eyebrow truncate">
+                <span className="fc-eyebrow min-w-0 break-words">
                   {status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
                     : (Math.max(liveTotal, currentToolIndex, 1) > 1 
@@ -584,7 +572,7 @@ export function AgentStatusCard({
                   animate={{
                     width: status === "checking" ? "100%" : `${(currentToolIndex / liveTotal) * 100}%`,
                   }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.16 }}
                 />
               </div>
 
@@ -610,20 +598,16 @@ export function AgentStatusCard({
                 </div>
                 <div className="text-right">
                   <span className="fc-eyebrow fc-text-faint block mb-1.5">Confidence</span>
-                  <span className="text-2xl font-mono font-bold text-white tabular-nums">
+                  <span className="text-2xl font-mono font-bold fc-text-primary tabular-nums">
                     {Math.round(completedData.confidence * 100)}%
                   </span>
                 </div>
               </div>
-               <AgentSummaryText
-                 text={agentBrief}           // buildAgentBrief now returns synthesis first
-                 sourceText={
-                   // Only offer the toggle when brief was a fallback construction
-                   // (i.e. synthesis was missing and we built from tool data)
-                   !cleanFindingText(completedData.summary || "").trim()
-                     ? (completedData.message || "")
-                     : ""
-                 }
+               <AgentBrief
+                 completedData={completedData}
+                 findings={findings}
+                 toolsRan={toolsRan}
+                 isAlert={isAgentAlert}
                />
             </motion.div>
           )}
@@ -640,11 +624,11 @@ export function AgentStatusCard({
                    {findings.length} finding{findings.length !== 1 ? "s" : ""}
                    {toolsRan > findings.length ? ` · ${toolsRan} tools` : ""}
                  </span>
-                 {(completedData?.tools_failed ?? 0) > 0 && (
-                   <span className="fc-badge fc-badge-warning">
-                     {completedData!.tools_failed} tool{completedData!.tools_failed! > 1 ? "s" : ""} degraded
-                   </span>
-                 )}
+                  {completedData && typeof completedData.tools_failed === "number" && completedData.tools_failed > 0 && (
+                    <span className="fc-badge fc-badge-warning">
+                      {completedData.tools_failed} tool{completedData.tools_failed > 1 ? "s" : ""} degraded
+                    </span>
+                  )}
                </div>
                <div className="space-y-3">
                  {(() => {
@@ -687,7 +671,7 @@ export function AgentStatusCard({
               aria-live="polite"
               aria-atomic="true"
             >
-              <div className="w-12 h-12 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary">
+              <div className="w-12 h-12 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-center text-primary">
                 {status === "running" ? (
                   <ProgressIcon className="w-6 h-6" />
                 ) : (
@@ -711,7 +695,7 @@ export function AgentStatusCard({
 
           ) : status === "queued" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-4 py-12">
-               <div className="w-12 h-12 rounded-xl bg-transparent border border-white/5 flex items-center justify-center fc-text-faint">
+               <div className="w-12 h-12 rounded-2xl bg-transparent border border-white/5 flex items-center justify-center fc-text-faint">
                   <Activity className="w-6 h-6" />
                </div>
                <p className="max-w-xs text-xs fc-text-faint font-medium leading-relaxed">
@@ -724,7 +708,7 @@ export function AgentStatusCard({
             </div>
           ) : status === "unsupported" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">
-              <div className="w-12 h-12 rounded-xl bg-transparent border border-white/5 flex items-center justify-center fc-text-faint">
+              <div className="w-12 h-12 rounded-2xl bg-transparent border border-white/5 flex items-center justify-center fc-text-faint">
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <p className="max-w-xs text-xs fc-text-faint font-medium leading-relaxed">

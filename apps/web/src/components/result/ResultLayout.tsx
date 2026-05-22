@@ -131,10 +131,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                   requestAnimationFrame(() => tabRefs.current[next]?.focus());
                 }}
                 className={clsx(
-                  "px-4 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-150 border",
+                  "px-4 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-[160ms] border",
                   rs.activeTab === tab
                     ? "bg-white/[0.08] text-white border-white/20"
-                    : "fc-text-faint hover:text-white hover:bg-white/[0.05] border-transparent"
+                    : "fc-text-muted hover:text-white hover:bg-white/[0.05] border-transparent"
                 )}
               >
                 {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
@@ -160,7 +160,6 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
         {rs.activeTab === "history" && (
           <div role="tabpanel" id="tabpanel-history" aria-labelledby="tab-history">
             <HistoryPanel
-              onDismiss={() => rs.setActiveTab("analysis")}
               onSelect={(sid) => {
                 rs.selectSession(sid);
                 rs.setActiveTab("analysis");
@@ -355,7 +354,7 @@ function ExportDropdown({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={exporting}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.10] fc-text-faint hover:text-white hover:bg-white/[0.05] hover:border-white/[0.15] transition-all duration-150 fc-eyebrow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.10] fc-text-muted hover:text-white hover:bg-white/[0.05] hover:border-white/[0.15] transition-all duration-[160ms] fc-eyebrow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
         aria-label="Export report"
         aria-expanded={open}
       >
