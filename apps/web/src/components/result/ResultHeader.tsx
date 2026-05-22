@@ -13,7 +13,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import clsx from "clsx";
 import type { ReportDTO } from "@/lib/api";
 import type { VerdictConfig } from "@/lib/verdict";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";

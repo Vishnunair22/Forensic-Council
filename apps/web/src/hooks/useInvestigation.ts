@@ -30,6 +30,7 @@ import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import { validateEvidenceFile } from "@/lib/fileValidation";
 import { clearPendingEvidenceFile, loadPendingEvidenceFile } from "@/lib/pendingFilePersistence";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -123,11 +124,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const _initInvestigatorId = () => {
     if (typeof window === "undefined") return "REQ-000000";
-    const stored = storage.getItem("forensic_investigator_id");
+    const stored = storage.getItem(STORAGE_KEYS.INVESTIGATOR_ID);
     const validIdPattern = /^REQ-\d{5,10}$/;
     if (stored && validIdPattern.test(stored)) return stored;
     const fresh = "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
-    storage.setItem("forensic_investigator_id", fresh);
+    storage.setItem(STORAGE_KEYS.INVESTIGATOR_ID, fresh);
     return fresh;
   };
 
@@ -138,16 +139,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
   const [autoStartBlocking, setAutoStartBlocking] = useState(() => {
     if (typeof window === "undefined") return false;
-    return sessionOnlyStorage.getItem("forensic_auto_start") === "true";
+    return sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
   });
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(() => {
     if (typeof window === "undefined") return false;
     // Guard: if a session existed before auto-start, don't carry over the loading flag
-    const isAutoStart = sessionOnlyStorage.getItem("forensic_auto_start") === "true";
-    const hasSession = !!storage.getItem("forensic_session_id");
-    const showLoading = sessionOnlyStorage.getItem("fc_show_loading") === "true";
+    const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
+    const hasSession = !!storage.getItem(STORAGE_KEYS.SESSION_ID);
+    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
     if (showLoading && hasSession && !isAutoStart) {
-      sessionOnlyStorage.removeItem("fc_show_loading");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       return false;
     }
     return showLoading;
@@ -208,17 +209,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     completedAgentsRef.current = completedAgents;
-    const sid = storage.getItem("forensic_session_id");
+    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (completedAgents.length > 0 && status !== "idle" && sid) {
       storage.setItem(
-        phase === "deep" ? `forensic_deep_agents:${sid}` : `forensic_initial_agents:${sid}`,
+        phase === "deep" ? `${STORAGE_KEYS.DEEP_AGENTS}:${sid}` : `${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`,
         completedAgents,
         true,
       );
     }
   }, [completedAgents, phase, status]);
 
-  const sessionExistsRef = useRef(typeof window !== "undefined" && !!storage.getItem("forensic_session_id"));
+  const sessionExistsRef = useRef(typeof window !== "undefined" && !!storage.getItem(STORAGE_KEYS.SESSION_ID));
 
   const [_authError, setAuthError] = useState<string | null>(null);
 
@@ -249,7 +250,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       } else if (__pendingFileStore.authPromise) {
         await __pendingFileStore.authPromise
           .then(() => {
-            storage.setItem("forensic_auth_ok", "1");
+            storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
             __pendingFileStore.authPromise = null;
           })
           .catch((err: unknown) => {
@@ -262,11 +263,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             });
             throw err;
           });
-      } else if (__pendingFileStore.file || sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
+      } else if (__pendingFileStore.file || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
         __pendingFileStore.authPromise = autoLoginAsInvestigator();
         await __pendingFileStore.authPromise
           .then(() => {
-            storage.setItem("forensic_auth_ok", "1");
+            storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
             __pendingFileStore.authPromise = null;
           })
           .catch((err: unknown) => {
@@ -293,10 +294,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setArbiterDeliberating(false);
     setArbiterLiveText("");
     setWsConnectionError(null);
-    sessionOnlyStorage.removeItem("fc_show_loading");
-    const sid = storage.getItem("forensic_session_id");
+    sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
-      sessionOnlyStorage.removeItem(`fc_resume_requested:${sid}`);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`);
     }
     clearInvestigationPersistence();
     lastSessionIdRef.current = null;
@@ -323,7 +324,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionExistsRef.current = false;
 
       setMimeType(targetFile.type);
-      storage.setItem("forensic_mime_type", targetFile.type);
+      storage.setItem(STORAGE_KEYS.MIME_TYPE, targetFile.type);
 
       playSound("scan");
       setIsUploading(true);
@@ -344,13 +345,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       const caseId = "CASE-" + uuid;
 
       setShowLoadingOverlay(true);
-      sessionOnlyStorage.setItem("fc_show_loading", "true");
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
 
       try {
         await authReadyRef.current;
         if (getAuthToken() === null) {
           await autoLoginAsInvestigator().then(() => {
-            storage.setItem("forensic_auth_ok", "1");
+            storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
           });
         }
         if (getAuthToken() === null) {
@@ -359,7 +360,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       } catch (authErr) {
         setIsUploading(false);
         setShowLoadingOverlay(false);
-        sessionOnlyStorage.removeItem("fc_show_loading");
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
         resetSimulation();
         investigationInFlightRef.current = false;
         toast.destructive({ title: "Authentication failed", description: authErr instanceof Error ? authErr.message : "Could not establish session." });
@@ -386,14 +387,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           if (ctx) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             thumbnailDataUrl = canvas.toDataURL("image/jpeg", 0.72);
-            storage.setItem("forensic_thumbnail", thumbnailDataUrl);
+            storage.setItem(STORAGE_KEYS.THUMBNAIL, thumbnailDataUrl);
           }
           URL.revokeObjectURL(thumbUrl);
         } catch {
           // thumbnail is cosmetic — never block upload on failure
         }
       } else {
-        storage.removeItem("forensic_thumbnail");
+        storage.removeItem(STORAGE_KEYS.THUMBNAIL);
       }
 
       let sessionIdToUse: string | undefined;
@@ -409,7 +410,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
           setIsUploading(false);
           setShowLoadingOverlay(false);
-          sessionOnlyStorage.removeItem("fc_show_loading");
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
           resetSimulation();
           setWsConnectionError(errorMsg);
           playSound("error");
@@ -435,32 +436,32 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         mime_type: targetFile.type,
         pipeline_start: pipelineStart,
       };
-      storage.setItem("forensic_investigation_ctx", investigationCtx, true);
-      storage.setItem(`forensic_investigation_ctx:${sessionIdToUse}`, investigationCtx, true);
+      storage.setItem(STORAGE_KEYS.INVESTIGATION_CTX, investigationCtx, true);
+      storage.setItem(`${STORAGE_KEYS.INVESTIGATION_CTX}:${sessionIdToUse}`, investigationCtx, true);
       // Individual keys kept for hooks that read them directly
-      storage.setItem("forensic_session_id", sessionIdToUse);
+      storage.setItem(STORAGE_KEYS.SESSION_ID, sessionIdToUse);
       if (typeof document !== "undefined") {
-        document.cookie = `forensic_session_id=${sessionIdToUse}; path=/; max-age=3600; SameSite=Lax`;
+        document.cookie = `${STORAGE_KEYS.SESSION_ID}=${sessionIdToUse}; path=/; max-age=3600; SameSite=Lax`;
       }
-      storage.setItem("forensic_file_name", targetFile.name);
-      storage.setItem(`forensic_file_name:${sessionIdToUse}`, targetFile.name);
-      storage.setItem("forensic_case_id", caseId);
-      storage.setItem("forensic_investigator_id", investigatorId);
-      storage.setItem("forensic_mime_type", targetFile.type);
-      storage.setItem(`forensic_mime_type:${sessionIdToUse}`, targetFile.type);
+      storage.setItem(STORAGE_KEYS.FILE_NAME, targetFile.name);
+      storage.setItem(`${STORAGE_KEYS.FILE_NAME}:${sessionIdToUse}`, targetFile.name);
+      storage.setItem(STORAGE_KEYS.CASE_ID, caseId);
+      storage.setItem(STORAGE_KEYS.INVESTIGATOR_ID, investigatorId);
+      storage.setItem(STORAGE_KEYS.MIME_TYPE, targetFile.type);
+      storage.setItem(`${STORAGE_KEYS.MIME_TYPE}:${sessionIdToUse}`, targetFile.type);
 
-      storage.setItem("forensic_pipeline_start", pipelineStart);
-      storage.setItem(`forensic_pipeline_start:${sessionIdToUse}`, pipelineStart);
+      storage.setItem(STORAGE_KEYS.PIPELINE_START, pipelineStart);
+      storage.setItem(`${STORAGE_KEYS.PIPELINE_START}:${sessionIdToUse}`, pipelineStart);
 
       if (thumbnailDataUrl) {
-        storage.setItem(`forensic_thumbnail:${sessionIdToUse}`, thumbnailDataUrl);
+        storage.setItem(`${STORAGE_KEYS.THUMBNAIL}:${sessionIdToUse}`, thumbnailDataUrl);
       }
 
       lastSessionIdRef.current = sessionIdToUse;
 
       if (isDuplicateSession) {
-        const savedDeepAgents = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${sessionIdToUse}`, true, []);
-        const savedInitialAgents = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sessionIdToUse}`, true, []);
+        const savedDeepAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.DEEP_AGENTS}:${sessionIdToUse}`, true, []);
+        const savedInitialAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.INITIAL_AGENTS}:${sessionIdToUse}`, true, []);
         const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
         const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
         setPhase(restoredPhase as "initial" | "deep");
@@ -477,14 +478,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to reconnect to stream";
             setIsUploading(false);
             setShowLoadingOverlay(false);
-            sessionOnlyStorage.removeItem("fc_show_loading");
+            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
             setWsConnectionError(wsErrMsg);
           })
           .finally(() => {
             investigationInFlightRef.current = false;
             __pendingFileStore.file = null;
             clearPendingEvidenceFile().catch(() => {});
-            sessionOnlyStorage.removeItem("fc_pending_file_meta");
+            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_PENDING_FILE_META);
             sessionExistsRef.current = true;
           });
         return;
@@ -504,7 +505,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
           setIsUploading(false);
           setShowLoadingOverlay(false);
-          sessionOnlyStorage.removeItem("fc_show_loading");
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
           resetSimulation();
           setWsConnectionError(wsErrMsg);
         })
@@ -512,7 +513,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           investigationInFlightRef.current = false;
           __pendingFileStore.file = null;
           clearPendingEvidenceFile().catch(() => {});
-          sessionOnlyStorage.removeItem("fc_pending_file_meta");
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_PENDING_FILE_META);
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
@@ -527,19 +528,19 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     const startPendingAnalysis = async () => {
     let pending = __pendingFileStore.file;
-    if (!pending && (autoStartBlocking || sessionOnlyStorage.getItem("forensic_auto_start") === "true")) {
+    if (!pending && (autoStartBlocking || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true")) {
       pending = await loadPendingEvidenceFile().catch(() => null);
       if (pending) __pendingFileStore.file = pending;
     }
     if (cancelled) return;
     if (!pending) {
-      if (autoStartBlocking || sessionOnlyStorage.getItem("forensic_auto_start") === "true") {
+      if (autoStartBlocking || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
         clearInvestigationPersistence();
-        sessionOnlyStorage.removeItem("forensic_auto_start");
-        sessionOnlyStorage.removeItem("fc_show_loading");
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
         setAutoStartBlocking(false);
         setShowLoadingOverlay(false);
-        const pendingMeta = sessionOnlyStorage.getItem("fc_pending_file_meta", true, null) as { name: string } | null;
+        const pendingMeta = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_PENDING_FILE_META, true, null) as { name: string } | null;
         toast.destructive({
           title: "File selection was lost after refresh",
           description: pendingMeta?.name
@@ -548,8 +549,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         });
         return;
       }
-      sessionOnlyStorage.removeItem("forensic_auto_start");
-      sessionOnlyStorage.removeItem("fc_show_loading");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       setAutoStartBlocking(false);
       setShowLoadingOverlay(false);
       return;
@@ -557,9 +558,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     autoStartFiredRef.current = true;
     setFile(pending);
-    sessionOnlyStorage.removeItem("forensic_auto_start");
-    sessionOnlyStorage.setItem("fc_show_loading", "true");
-    sessionOnlyStorage.setItem("fc_pending_file_meta", JSON.stringify({
+    sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_PENDING_FILE_META, JSON.stringify({
       name: pending.name,
       type: pending.type,
       size: pending.size,
@@ -580,22 +581,22 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (status !== "idle" && status !== "error") return;
 
     // fc_show_loading guard on reconnect
-    if (sessionOnlyStorage.getItem("fc_show_loading") === "true") {
-      sessionOnlyStorage.removeItem("fc_show_loading");
+    if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true") {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       setShowLoadingOverlay(false);
     }
 
-    const existingSessionId = storage.getItem("forensic_session_id");
-    const noReconnect = sessionOnlyStorage.getItem("fc_no_reconnect");
+    const existingSessionId = storage.getItem(STORAGE_KEYS.SESSION_ID);
+    const noReconnect = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_NO_RECONNECT);
 
     if (!existingSessionId || noReconnect) {
-      if (noReconnect) sessionOnlyStorage.removeItem("fc_no_reconnect");
+      if (noReconnect) sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_NO_RECONNECT);
       return;
     }
 
     autoStartFiredRef.current = true;
-    const savedDeepAgents = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${existingSessionId}`, true, []);
-    const savedInitialAgents = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${existingSessionId}`, true, []);
+    const savedDeepAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.DEEP_AGENTS}:${existingSessionId}`, true, []);
+    const savedInitialAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.INITIAL_AGENTS}:${existingSessionId}`, true, []);
     const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
     const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
 
@@ -607,14 +608,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setAnalysisStreamReady(false);
     setUploadPhaseText("Reconnecting to analysis stream");
     setShowLoadingOverlay(false);
-    sessionOnlyStorage.removeItem("fc_show_loading");
+    sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
 
     (async () => {
       try {
         const st = await withTimeout(getArbiterStatus(existingSessionId), 8_000);
         if (st.status === "not_found") {
-          storage.removeItem("forensic_session_id");
-          storage.removeItem("forensic_investigation_ctx");
+          storage.removeItem(STORAGE_KEYS.SESSION_ID);
+          storage.removeItem(STORAGE_KEYS.INVESTIGATION_CTX);
           resetSimulation();
           setShowLoadingOverlay(false);
           toast.destructive({
@@ -624,7 +625,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           return;
         }
         if (st.status === "complete") {
-          sessionOnlyStorage.setItem("fc_report_ready", "1");
+          sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
           router.push(`/result/${existingSessionId}`, { scroll: true });
           return;
         }
@@ -665,12 +666,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     resumeInFlightRef.current = true;
     playSound("click");
     playSound("arbiter_start");
-    storage.setItem("forensic_is_deep", "false");
-    const sid = storage.getItem("forensic_session_id");
+    storage.setItem(STORAGE_KEYS.IS_DEEP, "false");
+    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
-      storage.setItem(`forensic_result_phase:${sid}`, "initial");
-      storage.setItem(`forensic_initial_agents:${sid}`, completedAgentsRef.current, true);
-      sessionOnlyStorage.setItem(`fc_resume_requested:${sid}`, "initial");
+      storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "initial");
+      storage.setItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, completedAgentsRef.current, true);
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`, "initial");
     }
     setIsNavigating(true);
     setArbiterDeliberating(true);
@@ -680,7 +681,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
       // Remove fc_report_ready so the result page knows to poll for arbiter progress natively.
-      sessionOnlyStorage.removeItem("fc_report_ready");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
       // Apply CSS bridge so no blank gap exists between this overlay and the result page.
       document.body.setAttribute("data-fc-loading", "1");
       navigated = true;
@@ -704,18 +705,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     investigationInFlightRef.current = true;
     playSound("click");
     playSound("scan");
-    storage.setItem("forensic_is_deep", "true");
-    const sid = storage.getItem("forensic_session_id");
+    storage.setItem(STORAGE_KEYS.IS_DEEP, "true");
+    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
-      storage.setItem(`forensic_result_phase:${sid}`, "deep");
+      storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "deep");
       // Save only non-skipped initial agents so the deep-phase card list stays correct
       const nonSkipped = (completedAgentsRef.current as AgentUpdate[]).filter(
         (a) => a.status !== "skipped",
       );
-      storage.setItem(`forensic_initial_agents:${sid}`, nonSkipped, true);
-      sessionOnlyStorage.setItem(`fc_resume_requested:${sid}`, "deep");
+      storage.setItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, nonSkipped, true);
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`, "deep");
       // Remove any stale deep agents so the result page doesn't show initial findings
-      storage.removeItem(`forensic_deep_agents:${sid}`);
+      storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
     }
     analysisCompleteSoundedRef.current = false;
     clearCompletedAgents();
@@ -738,7 +739,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [playSound, resumeInvestigation, clearCompletedAgents, connectWebSocket, setSimulationPhase]);
 
   const retryWsConnection = useCallback(() => {
-    const sid = lastSessionIdRef.current || storage.getItem("forensic_session_id");
+    const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (!sid) {
       // No session to reconnect to — fall back to a fresh upload
       if (file) triggerAnalysis(file);
@@ -751,7 +752,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         setAnalysisStreamReady(true);
         setUploadPhaseText("Agents dispatching");
         setShowLoadingOverlay(false);
-        sessionOnlyStorage.removeItem("fc_show_loading");
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       })
       .catch((wsErr: unknown) => {
         const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -787,9 +788,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     completedAgentsRef.current = [];
     clearInvestigationPersistence();
     resetSimulation();
-    sessionOnlyStorage.removeItem("forensic_auto_start");
-    sessionOnlyStorage.setItem("fc_open_upload_once", "1");
-    sessionOnlyStorage.setItem("fc_no_reconnect", "1");
+    sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE, "1");
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
     router.push("/?upload=1");
   }, [resetSimulation, playSound, router]);
 
@@ -797,10 +798,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating) return;
     playSound("click");
     playSound("arbiter_start");
-    const sid = storage.getItem("forensic_session_id");
+    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
-      storage.setItem(`forensic_result_phase:${sid}`, "deep");
-      storage.setItem(`forensic_deep_agents:${sid}`, completedAgentsRef.current, true);
+      storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "deep");
+      storage.setItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`, completedAgentsRef.current, true);
     }
     setIsNavigating(true);
     setArbiterDeliberating(true);
@@ -832,11 +833,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [mimeType, setMimeType] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     if (__pendingFileStore.file?.type) return __pendingFileStore.file.type;
-    return storage.getItem("forensic_mime_type") || null;
+    return storage.getItem(STORAGE_KEYS.MIME_TYPE) || null;
   });
 
   useEffect(() => {
-    setMimeType(storage.getItem("forensic_mime_type") || file?.type || null);
+    setMimeType(storage.getItem(STORAGE_KEYS.MIME_TYPE) || file?.type || null);
   }, [file]);
 
   const expectedAgentIds = useMemo(() => supportedAgentIdsForMime(mimeType), [mimeType]);
@@ -891,11 +892,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
  
          if (elapsed >= minDuration) {
            setShowLoadingOverlay(false);
-           sessionOnlyStorage.removeItem("fc_show_loading");
+           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
          } else if (!minOverlayTimerRef.current) {
            minOverlayTimerRef.current = setTimeout(() => {
              setShowLoadingOverlay(false);
-             sessionOnlyStorage.removeItem("fc_show_loading");
+             sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
              minOverlayTimerRef.current = null;
            }, minDuration - elapsed);
          }
@@ -917,7 +918,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       // Hard safety: if the overlay is still up after 8s, something is stuck.
       // We dismiss it to let the user see the current (possibly errored) state.
       setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem("fc_show_loading");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       
       if (!analysisStreamReady && (status === "idle" || status === "initiating")) {
         setWsConnectionError("Analysis startup timed out. Please try again.");

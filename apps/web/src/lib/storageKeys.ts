@@ -25,10 +25,15 @@ export const STORAGE_KEYS = {
   INITIAL_AGENTS: "forensic_initial_agents",
   DEEP_AGENTS: "forensic_deep_agents",
 
+  // Identity
+  INVESTIGATOR_ID: "forensic_investigator_id",
+  AUTH_OK: "forensic_auth_ok",
+
   // Ephemeral flow-control flags (sessionStorage only, cleared by resetActiveInvestigation)
   FC_SHOW_LOADING: "fc_show_loading",
   FC_NO_RECONNECT: "fc_no_reconnect",
   FC_REPORT_READY: "fc_report_ready",
   FC_OPEN_UPLOAD_ONCE: "fc_open_upload_once",
   FC_PENDING_FILE_META: "fc_pending_file_meta",
+  FC_RESUME_REQUESTED: "fc_resume_requested",
 } as const;

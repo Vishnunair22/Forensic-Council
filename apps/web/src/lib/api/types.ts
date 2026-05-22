@@ -100,12 +100,14 @@ export interface BriefUpdate {
     | "PIPELINE_PAUSED"
     | "PIPELINE_QUARANTINED"
     | "ARBITER_UPDATE"
-    | "REPORT_READY";
+    | "REPORT_READY"
+    | "BATCH";
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;
   message: string;
   data: Record<string, unknown> | null;
+  updates?: BriefUpdate[];
 }
 
 export interface HITLCheckpoint {
