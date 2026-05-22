@@ -20,7 +20,6 @@ import { isAgentSupportedForMime, supportedAgentIdsForMime } from "@/lib/agentSu
 import { accentFor } from "@/lib/agentTheme";
 import { getLiveProgressDescriptor } from "@/lib/tool-progress";
 import { AgentStatusCard, AGENT_ICONS } from "./AgentStatusCard";
-import { ArbiterCard } from "./ArbiterCard";
 import type { SoundType } from "@/hooks/useSound";
 import type { AgentUpdate } from "./types";
 
@@ -51,9 +50,6 @@ interface AgentProgressDisplayProps {
   playSound?: (type: SoundType) => void;
   revealQueue?: AgentUpdate[];
   arbiterDeliberating?: boolean;
-  arbiterStatus?: string | null;
-  arbiterThinking?: string | null;
-  hasStartedAnalysis?: boolean;
   overlayVisible?: boolean;
 }
 
@@ -287,9 +283,6 @@ export function AgentProgressDisplay({
   mimeType,
   revealQueue = [],
   arbiterDeliberating = false,
-  arbiterStatus = null,
-  arbiterThinking = null,
-  hasStartedAnalysis = false,
 }: AgentProgressDisplayProps) {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
@@ -473,31 +466,6 @@ export function AgentProgressDisplay({
           </AnimatePresence>
         </motion.div>
 
-        {/* Arbiter card — centered below the agent grid */}
-        <AnimatePresence>
-          {(hasStartedAnalysis || awaitingDecision || arbiterStatus || arbiterDeliberating) && (
-            <motion.div
-              key="arbiter-card"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={{ duration: 0.16 }}
-              className="w-full max-w-lg mx-auto"
-            >
-              <ArbiterCard
-                status={arbiterDeliberating ? "synthesizing" : arbiterStatus}
-                thinking={
-                  arbiterThinking ||
-                  (arbiterDeliberating
-                    ? "Council Arbiter is synthesizing agent findings into the final report."
-                    : null)
-                }
-                phase={phase}
-                allAgentsDone={allAgentsDone}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* ── Initial analysis decision gate ──────────────────────────────── */}

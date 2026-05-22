@@ -120,9 +120,6 @@ export function EvidenceUploadClient() {
                playSound={playSound}
                revealQueue={investigation.revealQueue}
                arbiterDeliberating={investigation.arbiterDeliberating}
-               arbiterStatus={investigation.arbiterStatus}
-               arbiterThinking={investigation.arbiterThinking}
-               hasStartedAnalysis={investigation.hasStartedAnalysis}
                overlayVisible={investigation.showLoadingOverlay}
              />
 
