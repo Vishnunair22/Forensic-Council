@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { storage } from "@/lib/storage";
 
 export function useSessionStorage<T>(
@@ -8,13 +8,17 @@ export function useSessionStorage<T>(
   initialValue: T,
   parseJson = false
 ): [T, (val: T | ((prev: T) => T)) => void] {
+  // Stabilize initialValue so a caller passing a literal `[]` or `{}` on every render
+  // doesn't cause readValue to change reference → effect re-runs → infinite re-render loop.
+  const initialValueRef = useRef(initialValue);
+
   const readValue = useCallback(() => {
-    // Explicitly handle overloads by branching on the literal boolean value
-    const val = parseJson 
-      ? storage.getItem(key, true, initialValue)
-      : storage.getItem(key, false, initialValue as unknown as string);
-    return (val as T | null) ?? initialValue;
-  }, [key, initialValue, parseJson]);
+    const fallback = initialValueRef.current;
+    const val = parseJson
+      ? storage.getItem(key, true, fallback)
+      : storage.getItem(key, false, fallback as unknown as string);
+    return (val as T | null) ?? fallback;
+  }, [key, parseJson]);
 
   const [state, setState] = useState<T>(readValue);
 
@@ -35,11 +39,13 @@ export function useSessionStorage<T>(
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
-      const nextValue = value instanceof Function ? value(state) : value;
-      setState(nextValue);
-      storage.setItem(key, nextValue, parseJson);
+      setState((prev) => {
+        const nextValue = value instanceof Function ? value(prev) : value;
+        storage.setItem(key, nextValue, parseJson);
+        return nextValue;
+      });
     },
-    [key, parseJson, state]
+    [key, parseJson]
   );
 
   return [state, setValue];
