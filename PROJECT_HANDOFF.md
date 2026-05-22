@@ -67,6 +67,65 @@ SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal R
 
 ---
 
+### 2026-05-22: Upload Success Modal → Analysis Progress Overlay Flow Audit
+
+**Status:** ✅ COMPLETE & SEALED
+
+### Flow Trace
+1. "Begin Analysis" → `HeroAuthActions.onStartAnalysis` → `setIsHandingOff(true)`, `setShowUpload(false)` (dialog closes) → `handleStartAnalysis()`
+2. `handleStartAnalysis` → `FC_SHOW_LOADING="true"` in sessionStorage → `GlobalLoadingOverlay` activates → `router.push("/evidence")`
+3. `GlobalLoadingOverlay` hides when `pathname === "/evidence"` (hand-off condition `show && pathname !== "/evidence"`)
+4. `EvidenceUploadClient` mounts → picks up pending file from `__pendingFileStore` → `investigation.showLoadingOverlay` drives `<LoadingOverlay>` during upload/init phase
+5. `ForensicProgressOverlay` shown during arbiter synthesis on result page
+
+### What Changed
+**LoadingOverlay.tsx**
+- `bg-[#02040A]` → `bg-surface-0` (arbitrary hex §21.1)
+- h1 `text-white` → `fc-text-primary` (§4.2)
+- Live text `text-white/60` → `fc-text-muted` (canonical class)
+- Entrance `duration: 0.14` → `duration: 0.16` (spec: 160ms; was 140ms)
+- `exitDuration = 0.35` default → `0.16` (350ms exceeded 200ms spec ceiling)
+
+**ForensicProgressOverlay.tsx**
+- h1 `text-white` → `fc-text-primary` (§4.2)
+- Live text `text-white/60` → `fc-text-muted` (canonical class)
+
+**EvidenceUploadClient.tsx (empty state)**
+- h1 `text-white` → `fc-text-primary` (§4.2)
+- h1 `font-extrabold tracking-tighter` → `font-heading font-black tracking-tight` (`tracking-tighter` not in allowed tracking scale)
+- Bespoke eyebrow `text-xs tracking-widest font-mono font-black` → `fc-eyebrow fc-text-faint`
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-Progress-Overlay (Upload Success Modal → Analysis Progress Overlay) — 2026-05-22
+  Files: LoadingOverlay.tsx, ForensicProgressOverlay.tsx, EvidenceUploadClient.tsx
+  Invariants:
+    - LoadingOverlay background is bg-surface-0 (not bg-[#02040A])
+    - LoadingOverlay and ForensicProgressOverlay h1 use fc-text-primary
+    - Live text in both overlays uses fc-text-muted (not text-white/60)
+    - LoadingOverlay entrance duration is 0.16s; exitDuration default is 0.16s
+    - EvidenceUploadClient empty state uses fc-eyebrow and fc-text-primary
+    - GlobalLoadingOverlay hides when pathname === "/evidence" (hand-off gate)
+```
+
+### Files Touched
+- [apps/web/src/components/ui/LoadingOverlay.tsx](apps/web/src/components/ui/LoadingOverlay.tsx)
+- [apps/web/src/components/ui/ForensicProgressOverlay.tsx](apps/web/src/components/ui/ForensicProgressOverlay.tsx)
+- [apps/web/src/components/pages/EvidenceUploadClient.tsx](apps/web/src/components/pages/EvidenceUploadClient.tsx)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| bg-surface-0 in LoadingOverlay | ✅ PASS | Arbitrary hex eliminated |
+| fc-text-primary on all h1s | ✅ PASS | Both overlays + empty state |
+| fc-text-muted on live text | ✅ PASS | Both overlays |
+| Entrance/exit durations compliant | ✅ PASS | 0.16s entrance, 0.16s exit |
+| fc-eyebrow on empty state label | ✅ PASS | Bespoke style replaced |
+
+---
+
 ### 2026-05-22: Upload Modal → Upload Success Modal Flow Audit
 
 **Status:** ✅ COMPLETE & SEALED

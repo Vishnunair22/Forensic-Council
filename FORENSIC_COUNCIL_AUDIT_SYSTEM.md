@@ -446,6 +446,16 @@ SECTION H — SEALED FLOW REGISTRY
       - AnimatePresence mode="sync" initial={false} governs the upload→success swap
       - Preview URL is created via URL.createObjectURL and revoked on unmount
 
+  SEALED: F-Progress-Overlay (Upload Success Modal → Analysis Progress Overlay) — 2026-05-22
+    Files: LoadingOverlay.tsx, ForensicProgressOverlay.tsx, EvidenceUploadClient.tsx
+    Invariants:
+      - LoadingOverlay background is bg-surface-0 (not arbitrary hex)
+      - LoadingOverlay and ForensicProgressOverlay h1 use fc-text-primary
+      - Live text in both overlays uses fc-text-muted (not text-white/60)
+      - LoadingOverlay entrance 0.16s; exitDuration default 0.16s (≤200ms)
+      - EvidenceUploadClient empty state uses fc-eyebrow fc-text-faint + font-heading font-black
+      - GlobalLoadingOverlay hides when pathname === "/evidence" (hand-off gate)
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────
