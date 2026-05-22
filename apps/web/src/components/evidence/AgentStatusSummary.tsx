@@ -61,36 +61,29 @@ export function AgentStatusSummary({
     : "active";
 
   return (
-    <div
-      className="rounded-2xl overflow-hidden min-w-[220px] max-w-[270px] flex flex-col"
-      style={{
-        background: "rgba(5,9,18,0.95)",
-        border: "1px solid rgba(165,200,255,0.08)",
-        boxShadow: "0 8px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)",
-      }}
-    >
+    <div className="fc-surface-quiet rounded-2xl overflow-hidden min-w-[220px] max-w-[270px] flex flex-col">
       {/* Pipeline signal header */}
-      <div className="px-5 pt-4 pb-3 border-b border-white/[0.06]">
+      <div className="px-5 pt-4 pb-3 border-b border-white/5">
         <div className="flex items-center justify-between mb-2.5">
           <span className="fc-eyebrow fc-text-muted">Pipeline</span>
           <span className={clsx(
             "text-xs font-mono font-bold tabular-nums",
             pipelineSignal === "flagged" ? "text-danger" :
-            pipelineSignal === "clear"   ? "text-[var(--color-success)]" :
-                                           "text-[var(--color-primary)]"
+            pipelineSignal === "clear"   ? "text-success" :
+                                           "text-primary"
           )}>
             {doneCount}/{total}
           </span>
         </div>
 
         {/* Progress bar */}
-        <div className="relative w-full h-[3px] bg-white/[0.08] rounded-full overflow-hidden">
+        <div className="relative w-full h-[3px] bg-white/8 rounded-full overflow-hidden">
           <motion.div
             className={clsx(
               "absolute top-0 bottom-0 left-0 rounded-full",
               pipelineSignal === "flagged" ? "bg-danger" :
-              pipelineSignal === "clear"   ? "bg-[var(--color-success)]" :
-                                             "bg-[var(--color-primary)]"
+              pipelineSignal === "clear"   ? "bg-success" :
+                                             "bg-primary"
             )}
             animate={{ width: total > 0 ? `${(doneCount / total) * 100}%` : "0%" }}
             transition={{ duration: 0.2, ease: "easeOut" }}
@@ -101,8 +94,8 @@ export function AgentStatusSummary({
         <p className={clsx(
           "text-xs font-semibold mt-2",
           pipelineSignal === "flagged" ? "text-danger" :
-          pipelineSignal === "clear"   ? "text-[var(--color-success)]" :
-                                         "text-[var(--color-primary)]"
+          pipelineSignal === "clear"   ? "text-success" :
+                                         "text-primary"
         )}>
           {pipelineSignal === "flagged"
             ? `${flaggedAgents.length} specialist${flaggedAgents.length > 1 ? "s" : ""} flagged`
@@ -127,16 +120,14 @@ export function AgentStatusSummary({
           return (
             <div
               key={agent.id}
-              className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors"
+              className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/2 transition-colors"
             >
-              {/* Agent icon */}
               <Icon className={clsx(
                 "w-3.5 h-3.5 shrink-0 transition-opacity",
                 status === "waiting" ? "opacity-30" : "",
                 status === "complete" || status === "running" ? accent.textClass : "text-white/30"
               )} />
 
-              {/* Name */}
               <span className={clsx(
                 "text-xs font-medium min-w-0 flex-1 truncate",
                 status === "waiting" ? "fc-text-faint" : "fc-text-secondary"
@@ -144,11 +135,10 @@ export function AgentStatusSummary({
                 {agent.name}
               </span>
 
-              {/* Status indicator */}
               {status === "running" && (
                 <span className="flex items-center gap-1 shrink-0">
                   <motion.div
-                    className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)]"
+                    className="w-1.5 h-1.5 rounded-full bg-primary"
                     animate={{ opacity: [1, 0.3, 1] }}
                     transition={{ duration: 1.2, repeat: Infinity }}
                   />
@@ -159,7 +149,7 @@ export function AgentStatusSummary({
                   "text-xs font-mono font-bold tabular-nums shrink-0",
                   isAlert ? "text-danger" :
                   (completed.agent_verdict === "INCONCLUSIVE") ? "text-warning" :
-                  "text-[var(--color-success)]"
+                  "text-success"
                 )}>
                   {confidence != null ? `${confidence}%` : normalizeVerdict(completed.agent_verdict)}
                 </span>
@@ -175,9 +165,9 @@ export function AgentStatusSummary({
         })}
       </div>
 
-      {/* Verdict strip — only when complete agents have verdicts */}
+      {/* Verdict strip — only when all complete */}
       {completedAgents.length > 0 && allDone && (
-        <div className="border-t border-white/[0.06] px-5 py-3">
+        <div className="border-t border-white/5 px-5 py-3">
           <div className="flex flex-wrap gap-1.5">
             {completedAgents
               .filter(a => a.agent_verdict)
@@ -203,8 +193,8 @@ export function AgentStatusSummary({
 
       {/* Skipped agents — compact footer */}
       {skippedAgents.length > 0 && (
-        <div className="border-t border-white/[0.06] px-5 py-3 flex items-center gap-2">
-          <SkipForward className="w-3 h-3 text-white/20 shrink-0" />
+        <div className="border-t border-white/5 px-5 py-3 flex items-center gap-2">
+          <SkipForward className="w-3 h-3 fc-text-faint shrink-0" />
           <span className="text-xs fc-text-faint truncate">
             {skippedAgents.map(a => a.name).join(", ")} skipped
           </span>

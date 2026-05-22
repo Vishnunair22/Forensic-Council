@@ -49,10 +49,10 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
 
   const getStatusDisplay = () => {
     if (isReady) return { label: "Consensus Ready", icon: CheckCircle2, color: "text-success", bg: "bg-success/12 border-success/40", border: "border-success/30" };
-    if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-[var(--color-primary)]", bg: "bg-[var(--color-primary)]/12 border-[var(--color-primary)]/40", border: "border-[var(--color-primary)]/30" };
+    if (isSynthesizing) return { label: "Synthesizing", icon: BrainCircuit, color: "text-primary", bg: "bg-primary/12 border-primary/40", border: "border-primary/30" };
     if (isPreWarmComplete) return { label: "Ready", icon: CheckCircle2, color: "text-success/70", bg: "bg-success/10 border-success/20", border: "border-success/20" };
     if (isPreWarming) return { label: "Preparing", icon: Zap, color: "text-warning", bg: "bg-warning/10 border-warning/20", border: "border-warning/20" };
-    return { label: "Awaiting Agents", icon: Activity, color: "fc-text-faint", bg: "bg-white/[0.06] border-white/15", border: "border-white/10" };
+    return { label: "Awaiting Agents", icon: Activity, color: "fc-text-faint", bg: "bg-white/6 border-white/15", border: "border-white/10" };
   };
 
   const display = getStatusDisplay();
@@ -103,7 +103,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
 
             <div>
               <div className="flex items-center gap-2 mb-1.5">
-                <h3 className="text-2xl font-heading font-bold text-white tracking-tight">Council Arbiter</h3>
+                <h3 className="text-2xl font-heading font-bold fc-text-primary tracking-tight">Council Arbiter</h3>
               </div>
               <div className="flex items-center gap-2">
                 <span className={clsx(
@@ -134,7 +134,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               <motion.div
                 className={clsx(
                   "h-full",
-                  isReady ? "bg-success" : "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-soft)]"
+                  isReady ? "bg-success" : "bg-gradient-to-r from-primary to-primary/60"
                 )}
                 initial={{ width: "0%" }}
                 animate={{
@@ -150,7 +150,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               {isReady ? (
                 <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
               ) : isPreWarming || isSynthesizing ? (
-                <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0 mt-0.5" />
+                <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0 mt-0.5" />
               ) : (
                 <Activity className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
               )}
@@ -158,11 +158,11 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={displayText}
-                    initial={{ opacity: 0, y: 3 }}
+                    initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -3 }}
+                    exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.16 }}
-                    className="text-xs text-white/80 leading-relaxed font-medium"
+                    className="text-xs fc-text-secondary leading-relaxed font-medium"
                   >
                     {displayText}
                   </motion.p>
@@ -183,7 +183,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               key={i}
               className={clsx(
                 "w-1 rounded-full transition-colors duration-500",
-                isReady ? "bg-success/40" : "bg-[var(--color-primary)]/30"
+                isReady ? "bg-success/40" : "bg-primary/30"
               )}
               animate={{
                 height: isReady ? 4 : [4, 10, 4],

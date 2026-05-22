@@ -290,7 +290,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
 
       {/* Detail (only when it adds information) */}
       {visibleDetail && (
-        <p className="text-sm text-white/60 leading-relaxed">{visibleDetail}</p>
+        <p className="text-sm fc-text-muted leading-relaxed">{visibleDetail}</p>
       )}
 
       {needsExpand && (
@@ -322,12 +322,12 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
   const hasSource = source && summaryFingerprint(source) !== summaryFingerprint(text);
   if (!text) return null;
   return (
-    <div className="border-t border-white/[0.07] pt-3.5 space-y-2.5">
+    <div className="border-t border-white/7 pt-3.5 space-y-2.5">
       <div className="flex items-center gap-2 fc-eyebrow fc-text-faint">
         <ListChecks className="w-3.5 h-3.5 text-primary/70" />
         Agent Brief
       </div>
-      <p className="text-sm text-white leading-relaxed font-medium">
+      <p className="text-sm fc-text-secondary leading-relaxed font-medium">
         {text}
       </p>
        {hasSource && (
@@ -350,7 +350,7 @@ function AgentSummaryText({ text, sourceText }: { text: string; sourceText?: str
          </button>
        )}
       {expanded && hasSource && (
-        <p className="rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2.5 text-xs leading-relaxed fc-text-faint">
+        <p className="rounded-lg border border-white/8 bg-white/2 px-3 py-2.5 text-xs leading-relaxed fc-text-faint">
           {source}
         </p>
       )}
@@ -511,10 +511,7 @@ export function AgentStatusCard({
   return (
     <motion.div
       layout
-      className={clsx(
-        "relative flex flex-col overflow-hidden fc-surface-quiet border-none",
-        (status === "waiting" || status === "queued") && "opacity-50"
-      )}
+      className="relative flex flex-col overflow-hidden fc-surface-quiet border-none"
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
@@ -528,7 +525,7 @@ export function AgentStatusCard({
 
             <div>
               <div className="flex items-center gap-2 mb-1.5">
-                <h3 className="text-2xl font-heading font-bold text-white tracking-tight">{name}</h3>
+                <h3 className="text-2xl font-heading font-bold fc-text-primary tracking-tight">{name}</h3>
                 {completedData?.degraded && (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -569,7 +566,7 @@ export function AgentStatusCard({
               transition={{ duration: 0.16 }}
               className="space-y-4"
             >
-              <div className="flex items-center gap-3 text-white/60">
+              <div className="flex items-center gap-3 fc-text-muted">
                 <motion.div key={progressDescriptor.label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }}>
                   {status === "checking" ? (
                     <Activity className="w-4 h-4 text-primary" />
