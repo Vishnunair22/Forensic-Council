@@ -109,33 +109,36 @@ function rankFinding(f: FindingPreview): number {
   return 4;
 }
 
-function extractHeadline(f: FindingPreview): string {
-  const ks = cleanFindingText(f.key_signal || "").trim();
-  if (ks) return ks;
-  const summary = cleanFindingText(f.summary || "").trim();
-  const firstSentence = summary.split(/(?<=\.)\s+/)[0];
-  if (firstSentence) return firstSentence;
-  if (f.verdict && f.verdict !== "INCONCLUSIVE") return `${normalizeVerdict(f.verdict)} signal reported.`;
-  if (f.tool) return `${fmtTool(f.tool)} completed without a detailed narrative.`;
-  return "Tool completed without a detailed narrative.";
+function confidenceTier(c: number): { label: string; colorClass: string } {
+  if (c >= 0.8) return { label: "High", colorClass: "text-primary" };
+  if (c >= 0.55) return { label: "Med", colorClass: "text-warning" };
+  return { label: "Low", colorClass: "fc-text-faint" };
 }
 
-function extractDetail(f: FindingPreview, headline: string): string {
-  const summary = cleanFindingText(f.summary || "").trim();
-  if (!summary || summary === headline) return "";
-  if (cleanFindingText(f.key_signal || "").trim() === headline) return summary;
-  const after = summary.slice(headline.length).replace(/^[.\s]+/, "").trim();
-  return after;
-}
+function buildUnifiedFindingText(f: FindingPreview): string {
+  const signal = cleanFindingText(f.key_signal || "").trim();
+  const full = cleanFindingText(f.summary || "").trim();
 
-function compactText(text: string, maxLen = 190): string {
-  const cleaned = cleanFindingText(text || "").trim();
-  if (!cleaned || cleaned.length <= maxLen) return cleaned;
-  const clipped = cleaned.slice(0, maxLen);
-  const sentenceMatch = clipped.match(/^(.{80,}?[.!?])\s/);
-  if (sentenceMatch?.[1]) return sentenceMatch[1];
-  const lastSpace = clipped.lastIndexOf(" ");
-  return `${lastSpace > 80 ? clipped.slice(0, lastSpace) : clipped}...`;
+  if (!signal && !full) {
+    if (f.verdict && f.verdict !== "INCONCLUSIVE" && f.verdict !== "CLEAN") {
+      return `${normalizeVerdict(f.verdict)} signal detected.`;
+    }
+    return "";
+  }
+
+  if (signal && full) {
+    // If the full summary already contains the signal, prefer the full text
+    const fp = summaryFingerprint(signal).slice(0, 60);
+    if (fp && summaryFingerprint(full).includes(fp)) return full;
+    if (summaryFingerprint(signal) === summaryFingerprint(full)) {
+      return full.length >= signal.length ? full : signal;
+    }
+    // Distinct content — join naturally
+    const sep = /[.!?]$/.test(signal) ? " " : ". ";
+    return `${signal}${sep}${full}`;
+  }
+
+  return full || signal;
 }
 
 function formatElapsed(seconds?: number | null): string | null {
@@ -207,24 +210,16 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const sev = (f.severity || "").toUpperCase();
   const verdict = normalizeVerdict(f.verdict);
   const elapsed = formatElapsed(f.elapsed_s);
-  const headline = extractHeadline(f);
+  const confidence = typeof f.confidence === "number" ? f.confidence : null;
+  const tier = confidence !== null ? confidenceTier(confidence) : null;
 
-  // IMPROVEMENT: If summary == headline, show first 2 sentences as detail
-  // instead of empty detail (the old "after headline slice" logic showed nothing)
-  const fullSummary = cleanFindingText(f.summary || "").trim();
-  const detail = extractDetail(f, headline) || 
-    (fullSummary !== headline && fullSummary.length > headline.length + 10
-      ? fullSummary.slice(headline.length).replace(/^[.\s]+/, "").trim()
-      : "");
+  const unifiedText = buildUnifiedFindingText(f);
+  const MAX_TEXT = 260;
+  const needsExpand = unifiedText.length > MAX_TEXT;
+  const visibleText = needsExpand && !expanded
+    ? unifiedText.slice(0, MAX_TEXT).trimEnd() + "…"
+    : unifiedText;
 
-  const MAX_DETAIL = 200;
-  const needsExpand = detail.length > MAX_DETAIL;
-  const visibleDetail = needsExpand && !expanded ? detail.slice(0, MAX_DETAIL).trimEnd() + "…" : detail;
-
-  // CLEAN presentation: only show badges that carry signal
-  // - Tool badge: always show (identifies the check)
-  // - Verdict badge: only when FLAGGED or NEEDS_REVIEW (not for CLEAN — it's the default)
-  // - Severity badge: only when HIGH/CRITICAL/MEDIUM
   const showVerdictBadge = f.verdict && f.verdict !== "CLEAN" && f.verdict !== "NOT_APPLICABLE";
   const showSeverityBadge = sev && ["CRITICAL", "HIGH", "MEDIUM"].includes(sev);
 
@@ -235,81 +230,81 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.05, duration: 0.16 }}
       className={clsx(
-        "relative py-3 pl-4 border-l transition-colors",
+        "py-3.5 pl-3 border-l-2 transition-colors",
         i > 0 && "border-t border-white/5",
-        isAlert ? "border-l-red-500/50" : "border-l-white/10"
+        isAlert ? "border-l-danger/40" : "border-l-white/10"
       )}
     >
-      {/* Top row: tool + verdict + severity badges + confidence */}
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        {f.tool && (
-          <span className={clsx("fc-badge", isAlert ? "fc-badge-danger" : "")}>
-            {fmtTool(f.tool)}
-          </span>
-        )}
-        {showVerdictBadge && (
-          <span className={clsx("fc-badge", isAlert ? "fc-badge-danger" : "fc-badge-success")}>
-            {verdict}
-          </span>
-        )}
-        {showSeverityBadge && (
-          <span className={clsx(
-            "fc-badge",
-            (sev === "CRITICAL" || sev === "HIGH") ? "fc-badge-danger" : "fc-badge-warning"
-          )}>
-            {sev}
-          </span>
-        )}
-        {f.degraded && (
-          <span className="fc-badge fc-badge-warning" title={f.fallback_reason || ""}>
-            Degraded
-          </span>
-        )}
-        {typeof f.confidence === "number" && (
-          <span className={clsx(
-            "ml-auto text-xs font-mono font-black tabular-nums shrink-0",
-            isAlert ? "text-danger" :
-            f.confidence >= 0.75 ? "text-primary" :
-            f.confidence >= 0.5 ? "text-warning" : "fc-text-faint"
-          )}>
-            {Math.round(f.confidence * 100)}%
-          </span>
+      {/* Header row: tool name left · confidence tier + % right */}
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {f.tool && (
+            <span className="text-xs font-mono font-bold fc-text-secondary tracking-wide">
+              {fmtTool(f.tool)}
+            </span>
+          )}
+          {showVerdictBadge && (
+            <span className={clsx("fc-badge", isAlert ? "fc-badge-danger" : "fc-badge-success")}>
+              {verdict}
+            </span>
+          )}
+          {showSeverityBadge && (
+            <span className={clsx(
+              "fc-badge",
+              (sev === "CRITICAL" || sev === "HIGH") ? "fc-badge-danger" : "fc-badge-warning"
+            )}>
+              {sev}
+            </span>
+          )}
+          {f.degraded && (
+            <span className="fc-badge fc-badge-warning" title={f.fallback_reason || ""}>
+              Degraded
+            </span>
+          )}
+        </div>
+        {tier && confidence !== null && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={clsx("fc-eyebrow", tier.colorClass)}>{tier.label}</span>
+            <span className={clsx(
+              "text-xs font-mono font-black tabular-nums",
+              isAlert ? "text-danger" :
+              confidence >= 0.75 ? "text-primary" :
+              confidence >= 0.5 ? "text-warning" : "fc-text-faint"
+            )}>
+              {Math.round(confidence * 100)}%
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Headline */}
-      {headline && (
+      {/* Unified finding paragraph — single cohesive block, no bold/normal split */}
+      {unifiedText && (
         <p className={clsx(
-          "text-sm font-semibold leading-snug mb-1.5",
-          isAlert ? "text-white" : "text-white/85",
-          !expanded && "line-clamp-2",
+          "text-sm leading-relaxed",
+          isAlert ? "fc-text-secondary" : "fc-text-muted"
         )}>
-          {headline}
+          {visibleText}
+          {needsExpand && (
+            <button
+              type="button"
+              onClick={() => setExpanded(e => !e)}
+              className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-mono font-bold text-primary/75 hover:text-primary transition-colors align-baseline"
+            >
+              {expanded
+                ? <><ChevronUp className="w-3 h-3" /><span>less</span></>
+                : <><ChevronDown className="w-3 h-3" /><span>more</span></>
+              }
+            </button>
+          )}
         </p>
       )}
 
-      {/* Detail (only when it adds information) */}
-      {visibleDetail && (
-        <p className="text-sm fc-text-muted leading-relaxed">{visibleDetail}</p>
-      )}
-
-      {needsExpand && (
-        <button
-          type="button"
-          onClick={() => setExpanded(e => !e)}
-          className="mt-1 inline-flex items-center gap-1 text-xs font-mono font-bold text-primary/75 hover:text-primary transition-colors"
-        >
-          {expanded
-            ? <><ChevronUp className="w-3.5 h-3.5" /><span>Show less</span></>
-            : <><ChevronDown className="w-3.5 h-3.5" /><span>Expand</span></>
-          }
-        </button>
-      )}
-
-      {/* Footer: section context and timing */}
+      {/* Footer: position · section · timing */}
       <div className="flex items-center gap-2 mt-2 fc-eyebrow fc-text-faint">
-        <span>Check {i + 1} of {total}</span>
-        {f.section && <><span className="text-white/20">/</span><span className="truncate">{f.section}</span></>}
+        <span>{i + 1}/{total}</span>
+        {f.section && (
+          <><span className="text-white/15">·</span><span className="truncate">{f.section}</span></>
+        )}
         {elapsed && <span className="ml-auto normal-case tracking-normal">{elapsed}</span>}
       </div>
     </motion.div>
@@ -372,22 +367,22 @@ function buildAgentBrief(
     return synthSummary;
   }
 
-  // 2. Fall back to a structured construction only when no synthesis is available.
+  // 2. Structural fallback — counts and aggregate signals only; never copies finding text.
   const verdict = normalizeVerdict(completedData.agent_verdict);
   const confidence = Math.round((completedData.confidence || 0) * 100);
-  const toolText = toolsRan === 1 ? "1 tool check" : `${toolsRan} tool checks`;
-  const alertFindings = findings.filter(isAlertFinding);
-
-  if (alertFindings.length > 0) {
-    const topSignal = compactText(extractHeadline(alertFindings[0]), 160);
-    return `${verdict} at ${confidence}% confidence after ${toolText}. Primary signal: ${topSignal}`;
+  const toolText = toolsRan === 1 ? "1 tool" : `${toolsRan} tools`;
+  const alertCount = findings.filter(isAlertFinding).length;
+  const failedCount = completedData.tools_failed ?? 0;
+  const parts = [`${verdict} at ${confidence}% confidence across ${toolText}`];
+  if (alertCount > 0) {
+    parts.push(`${alertCount} flagged signal${alertCount > 1 ? "s" : ""} detected`);
+  } else if (findings.length > 0) {
+    parts.push("no critical signals detected");
   }
-
-  if (findings.length > 0) {
-    return `${verdict} at ${confidence}% confidence after ${toolText}. No critical-severity signal detected in reviewed tools.`;
+  if (failedCount > 0) {
+    parts.push(`${failedCount} tool${failedCount > 1 ? "s" : ""} degraded`);
   }
-
-  return `${verdict} at ${confidence}% confidence after ${toolText}. The backend did not return detailed tool findings for this specialist.`;
+  return parts.join(" · ") + ".";
 }
 
 export function AgentStatusCard({
@@ -643,13 +638,17 @@ export function AgentStatusCard({
                <div className="flex items-center justify-between mb-3 px-1">
                  <span className="fc-eyebrow fc-text-faint">
                    {findings.length} finding{findings.length !== 1 ? "s" : ""}
-                   {toolsRan > findings.length ? ` · ${toolsRan} tools checked` : ""}
+                   {toolsRan > findings.length ? ` · ${toolsRan} tools` : ""}
                  </span>
+                 {(completedData?.tools_failed ?? 0) > 0 && (
+                   <span className="fc-badge fc-badge-warning">
+                     {completedData!.tools_failed} tool{completedData!.tools_failed! > 1 ? "s" : ""} degraded
+                   </span>
+                 )}
                </div>
                <div className="space-y-3">
-                 {/* --- Findings Surface --- */}
                  {(() => {
-                   const MAX_COLLAPSED = 3;
+                   const MAX_COLLAPSED = 2;
                    const alertFindings = findings.filter(isAlertFinding);
                    const nonAlertFindings = findings.filter(f => !isAlertFinding(f));
 
@@ -667,7 +666,7 @@ export function AgentStatusCard({
                    ));
                  })()}
 
-                 {findings.length > 3 && (
+                 {findings.length > 2 && (
                    <button
                      type="button"
                      onClick={() => onToggleExpand?.()}
@@ -675,15 +674,10 @@ export function AgentStatusCard({
                      aria-expanded={isExpanded}
                    >
                      {isExpanded
-                       ? <><ChevronUp className="w-4 h-4" /><span>Collapse to top 3 findings</span></>
-                       : <><ChevronDown className="w-4 h-4" /><span>
-                           Show all {findings.length} findings
-                           {toolsRan > findings.length
-                             ? ` (${toolsRan - findings.length} tool checks had no flagged signal)`
-                             : ""}
-                         </span></>
-                   }
-                 </button>
+                       ? <><ChevronUp className="w-4 h-4" /><span>See fewer findings</span></>
+                       : <><ChevronDown className="w-4 h-4" /><span>Show {findings.length - 2} more finding{findings.length - 2 !== 1 ? "s" : ""}</span></>
+                     }
+                   </button>
                  )}
                </div>
              </>
