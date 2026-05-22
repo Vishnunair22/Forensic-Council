@@ -12,6 +12,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { isAgentSupportedForMime, supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { AgentStatusCard } from "./AgentStatusCard";
 import { AgentStatusSummary } from "./AgentStatusSummary";
@@ -88,9 +89,9 @@ export function AgentProgressDisplay({
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
-    const sid = storage.getItem("forensic_session_id");
+    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
-      const raw = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
+      const raw = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, true);
       if (Array.isArray(raw) && raw.length) {
         return (raw as AgentUpdate[])
           .filter((a) => a.status !== "skipped")
@@ -287,7 +288,8 @@ export function AgentProgressDisplay({
               key="arbiter-card"
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, transition: { duration: 0.16 } }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.16 }}
               className="w-full max-w-lg mx-auto"
             >
               <ArbiterCard
@@ -312,6 +314,7 @@ export function AgentProgressDisplay({
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.16 }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">
@@ -354,6 +357,7 @@ export function AgentProgressDisplay({
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.16 }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">

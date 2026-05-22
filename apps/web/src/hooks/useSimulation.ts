@@ -4,10 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
-
-const HITL_CHECKPOINT_KEY = "forensic_hitl_checkpoint";
-const SESSION_ID_KEY = "forensic_session_id";
-const AUTH_TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
 import { SoundType } from "./useSound";
@@ -300,7 +297,7 @@ export const useSimulation = ({
                       created_at: new Date().toISOString(),
                     };
                     // Persist to storage so the modal survives a page refresh
-                    try { storage.setItem(HITL_CHECKPOINT_KEY, checkpoint, true); } catch { /* ignore */ }
+                    try { storage.setItem(STORAGE_KEYS.HITL_CHECKPOINT, checkpoint, true); } catch { /* ignore */ }
                     setHitlCheckpoint(checkpoint);
                   }
                   break;
@@ -633,8 +630,8 @@ export const useSimulation = ({
             setIsReconnecting(false);
             setReconnectStatusMessage(null);
             setSessionId(null);
-            try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
-            try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
+            try { storage.removeItem(STORAGE_KEYS.SESSION_ID); } catch { /* ignore */ }
+            try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
 
             // If connection was already established, set to error state
             if (wsConnectionReady) {
@@ -677,7 +674,7 @@ export const useSimulation = ({
                 if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
                 reconnectTimerRef.current = setTimeout(() => {
                   reconnectTimerRef.current = null;
-                  const currentSessionId = storage.getItem(SESSION_ID_KEY);
+                  const currentSessionId = storage.getItem(STORAGE_KEYS.SESSION_ID);
                   if (currentSessionId === targetSessionId) {
                     connectWebSocket(currentSessionId, true).catch(() => {});
                   }
@@ -714,7 +711,7 @@ export const useSimulation = ({
             // (that transition is WS-only via PIPELINE_PAUSED and is implicitly
             // restored by the HITL checkpoint sessionStorage key above).
             try {
-              const currentSid = targetSessionId || storage.getItem(SESSION_ID_KEY);
+              const currentSid = targetSessionId || storage.getItem(STORAGE_KEYS.SESSION_ID);
               if (currentSid) {
                 const st = await getArbiterStatus(currentSid);
                 if (st.status === "complete") {
@@ -817,7 +814,7 @@ export const useSimulation = ({
   useEffect(() => {
     let tokenExpiryTimeout: NodeJS.Timeout;
     const scheduleTokenExpiryCheck = () => {
-      const expiryStr = sessionOnlyStorage.getItem(AUTH_TOKEN_EXPIRY_KEY);
+      const expiryStr = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
       if (!expiryStr) return;
       const expiry = parseInt(expiryStr);
       const now = Date.now();
@@ -832,12 +829,12 @@ export const useSimulation = ({
         })
           .then((response) => {
             if (!response.ok) {
-              sessionOnlyStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+              sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
               setErrorMessage("Session refresh failed. Re-authentication will be attempted on the next API request.");
               return;
             }
 
-            const currentSessionId = sessionId || storage.getItem(SESSION_ID_KEY);
+            const currentSessionId = sessionId || storage.getItem(STORAGE_KEYS.SESSION_ID);
             if (currentSessionId) {
               connectWebSocket(currentSessionId, true);
             }
@@ -845,7 +842,7 @@ export const useSimulation = ({
             scheduleTokenExpiryCheck();
           })
           .catch(() => {
-            sessionOnlyStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+            sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
             setErrorMessage("Session refresh could not reach the backend. Keeping the current analysis view open.");
           });
       }, checkDelay);
@@ -860,7 +857,7 @@ export const useSimulation = ({
   // Restore any pending HITL checkpoint that survived a page refresh
   useEffect(() => {
     try {
-      const stored = storage.getItem<HITLCheckpoint>(HITL_CHECKPOINT_KEY, true);
+      const stored = storage.getItem<HITLCheckpoint>(STORAGE_KEYS.HITL_CHECKPOINT, true);
       if (stored) setHitlCheckpoint(stored);
     } catch { /* ignore */ }
   }, []);
@@ -873,8 +870,8 @@ export const useSimulation = ({
     completedAgentsRef.current = [];
     setAgentUpdates({});
     setHitlCheckpoint(null);
-    try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
-    try { storage.removeItem(SESSION_ID_KEY); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.SESSION_ID); } catch { /* ignore */ }
     setErrorMessage(null);
     setReconnectStatusMessage(null);
     setPipelineMessage("");
@@ -899,7 +896,7 @@ export const useSimulation = ({
     completedAgentsRef.current = [];
     setAgentUpdates({});
     setHitlCheckpoint(null);
-    try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
     setErrorMessage(null);
     setReconnectStatusMessage(null);
     setPipelineMessage("Preparing forensic agents...");
@@ -911,14 +908,14 @@ export const useSimulation = ({
   // Dismiss HITL checkpoint
   const dismissCheckpoint = useCallback(() => {
     setHitlCheckpoint(null);
-    try { storage.removeItem(HITL_CHECKPOINT_KEY); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
   }, []);
 
 
 
 const resumeInvestigation = useCallback(
     async (deep: boolean) => {
-      const targetId = storage.getItem(SESSION_ID_KEY);
+      const targetId = storage.getItem(STORAGE_KEYS.SESSION_ID);
       if (!targetId) {
         throw new SessionGoneError();
       }

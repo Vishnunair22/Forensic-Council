@@ -64,7 +64,7 @@ export function HeroAuthActions() {
     const openOnce = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
 
     if (params.get("upload") !== "1" && openOnce !== "1") {
-      sessionOnlyStorage.removeItem("forensic_auto_start");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
     }
     if (params.get("upload") === "1" || openOnce === "1") {
@@ -88,7 +88,7 @@ export function HeroAuthActions() {
     await savePendingEvidenceFile(selectedFile).catch((error) => {
       console.warn("[HeroAuthActions] could not persist pending file:", error);
     });
-    sessionOnlyStorage.setItem("forensic_auto_start", "true");
+    sessionOnlyStorage.setItem(STORAGE_KEYS.AUTO_START, "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
     sessionOnlyStorage.setItem(
       STORAGE_KEYS.FC_PENDING_FILE_META,

@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ResultClientRedirect } from "./ResultClientRedirect";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 export default async function ResultPage() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get("forensic_session_id")?.value;
+  const sessionId = cookieStore.get(STORAGE_KEYS.SESSION_ID)?.value;
 
   if (sessionId) {
     redirect(`/result/${sessionId}`);

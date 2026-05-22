@@ -233,7 +233,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       data-testid={`agent-finding-${i}`}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: i * 0.05, duration: 0.25 }}
+      transition={{ delay: i * 0.05, duration: 0.16 }}
       className={clsx(
         "relative py-3 pl-4 border-l transition-colors",
         i > 0 && "border-t border-white/5",
@@ -565,7 +565,8 @@ export function AgentStatusCard({
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.16 }}
               className="space-y-4"
             >
               <div className="flex items-center gap-3 text-white/60">
@@ -602,6 +603,7 @@ export function AgentStatusCard({
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.16 }}
               className="space-y-4"
             >
               <div className="flex items-end justify-between">

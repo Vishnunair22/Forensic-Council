@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { ShieldAlert, ArrowLeft, RefreshCw, Cpu } from "lucide-react";
 import { sessionOnlyStorage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 export function SessionExpiredClient() {
   const router = useRouter();
@@ -77,7 +78,7 @@ export function SessionExpiredClient() {
               <button
                 type="button"
                 onClick={() => {
-                  sessionOnlyStorage.setItem("fc_open_upload_once", "1");
+                  sessionOnlyStorage.setItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE, "1");
                   if (window.location.pathname === "/") {
                     window.dispatchEvent(new Event("fc:open-upload"));
                   } else {

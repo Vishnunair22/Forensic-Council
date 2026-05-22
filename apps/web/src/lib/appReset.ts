@@ -36,7 +36,7 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   // Preserve history before wiping all forensic keys
   let savedHistory: unknown[] = [];
   try {
-    const h = storage.getItem<unknown[]>("forensic_history", true);
+    const h = storage.getItem<unknown[]>(STORAGE_KEYS.HISTORY, true);
     if (Array.isArray(h)) savedHistory = h;
   } catch { /* ignore */ }
 
@@ -44,10 +44,10 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   sessionOnlyStorage.clearAllForensicKeys();
 
   if (savedHistory.length > 0) {
-    storage.setItem("forensic_history", savedHistory, true);
+    storage.setItem(STORAGE_KEYS.HISTORY, savedHistory, true);
   }
 
-  expireCookie("forensic_session_id");
+  expireCookie(STORAGE_KEYS.SESSION_ID);
   clearAuthCookies();
 
   document.body.removeAttribute("data-fc-loading");

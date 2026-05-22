@@ -2,8 +2,7 @@
  * Forensic Council — API Utilities
  */
 
-const _TOKEN_KEY = "forensic_auth_token";
-const _TOKEN_EXPIRY_KEY = "forensic_auth_token_expiry";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 export const isDev = process.env.NODE_ENV !== "production";
 
@@ -103,28 +102,28 @@ export async function getMutationHeaders(init?: HeadersInit): Promise<Headers> {
 
 export function setAuthToken(token: string, expiresInSec?: number): void {
   if (typeof window !== "undefined") {
-    sessionStorage.setItem(_TOKEN_KEY, token);
+    sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
     if (expiresInSec) {
-      sessionStorage.setItem(_TOKEN_EXPIRY_KEY, String(Date.now() + expiresInSec * 1000));
+      sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY, String(Date.now() + expiresInSec * 1000));
     }
   }
 }
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
-  const expiry = sessionStorage.getItem(_TOKEN_EXPIRY_KEY);
+  const expiry = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
   if (expiry && Date.now() > Number(expiry)) {
-    sessionStorage.removeItem(_TOKEN_KEY);
-    sessionStorage.removeItem(_TOKEN_EXPIRY_KEY);
+    sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+    sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
     return null;
   }
-  return sessionStorage.getItem(_TOKEN_KEY);
+  return sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
 }
 
 export function clearAuthToken(): void {
   if (typeof window !== "undefined") {
-    sessionStorage.removeItem(_TOKEN_KEY);
-    sessionStorage.removeItem(_TOKEN_EXPIRY_KEY);
+    sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+    sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
   }
 }
 

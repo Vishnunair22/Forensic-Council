@@ -12,6 +12,7 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
 import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
@@ -37,7 +38,7 @@ export function EvidenceUploadClient() {
     // On bfcache restore with no session, navigate home rather than reloading
     // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {
-      if (e.persisted && !storage.getItem("forensic_session_id")) {
+      if (e.persisted && !storage.getItem(STORAGE_KEYS.SESSION_ID)) {
         router.replace("/");
       }
     };
@@ -51,7 +52,7 @@ export function EvidenceUploadClient() {
     // stale values from effect-run time.
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       const hasPendingFile = !!__pendingFileStore.file;
-      const hasSessionId = !!storage.getItem("forensic_session_id");
+      const hasSessionId = !!storage.getItem(STORAGE_KEYS.SESSION_ID);
       const s = investigation.status;
       const isRunning = s === "analyzing" || s === "initiating" || s === "processing";
       if (hasPendingFile && !hasSessionId && isRunning) {

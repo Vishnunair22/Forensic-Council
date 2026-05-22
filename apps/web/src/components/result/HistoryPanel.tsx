@@ -11,6 +11,7 @@ import { type HistoryItem } from "@/lib/types";
 import { EvidenceThumbnail } from "./EvidenceThumbnail";
 import { useSessionStorage } from "@/hooks/useSessionStorage";
 import { motion, useReducedMotion } from "framer-motion";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 interface HistoryPanelProps {
   onDismiss: () => void;
@@ -18,7 +19,7 @@ interface HistoryPanelProps {
 }
 
 export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
-  const [history, setHistory] = useSessionStorage<HistoryItem[]>("forensic_history", [], true);
+  const [history, setHistory] = useSessionStorage<HistoryItem[]>(STORAGE_KEYS.HISTORY, [], true);
   const shouldReduceMotion = useReducedMotion();
 
   const removeItem = (e: React.MouseEvent, sessionId: string) => {

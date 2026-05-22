@@ -8,6 +8,7 @@ import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
 import { resetActiveInvestigation } from "@/lib/appReset";
 import { storage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 function getPageLabel(pathname: string): string {
   if (pathname === "/") return "Overview";
@@ -33,7 +34,7 @@ export function GlobalNavbar() {
     if (typeof window === "undefined") return;
 
     const checkSession = () => {
-      setHasActiveSession(!!storage.getItem("forensic_session_id"));
+      setHasActiveSession(!!storage.getItem(STORAGE_KEYS.SESSION_ID));
     };
 
     const handleVisibilityChange = () => {

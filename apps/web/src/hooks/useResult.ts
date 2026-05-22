@@ -31,19 +31,19 @@ interface SessionContext {
 
 function readSessionContext(sid: string | null): SessionContext | null {
   if (!sid) return null;
-  return storage.getItem<SessionContext>(`forensic_investigation_ctx:${sid}`, true) ?? null;
+  return storage.getItem<SessionContext>(`${STORAGE_KEYS.INVESTIGATION_CTX}:${sid}`, true) ?? null;
 }
 
 function readResultPhase(sid: string | null): "initial" | "deep" {
   if (!sid) return "initial";
-  const phase = storage.getItem(`forensic_result_phase:${sid}`);
+  const phase = storage.getItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`);
   return phase === "deep" ? "deep" : "initial";
 }
 
 function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): AgentUpdate[] {
   if (!sid) return [];
-  const deep = storage.getItem<AgentUpdate[]>(`forensic_deep_agents:${sid}`, true);
-  const initial = storage.getItem<AgentUpdate[]>(`forensic_initial_agents:${sid}`, true);
+  const deep = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`, true);
+  const initial = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, true);
   // When deep phase is active, ONLY return deep agents. Never fall back to initial agents
   // because that would cause initial findings to show as "deep analysis" findings.
   if (isDeep) {
@@ -83,7 +83,7 @@ export function useResult(initialSessionId?: string) {
   // Mount + hydrate from storage (client only). Runs once.
   useEffect(() => {
     const ready = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
-    const sid = initialSessionId ?? storage.getItem("forensic_session_id");
+    const sid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
     const ctx = readSessionContext(sid);
     const deep = readResultPhase(sid) === "deep";
 
@@ -91,13 +91,13 @@ export function useResult(initialSessionId?: string) {
     if (sid) setSessionId(sid);
     setIsDeepPhase(deep);
     if (sid) {
-      setThumbnail(storage.getItem(`forensic_thumbnail:${sid}`) ?? storage.getItem("forensic_thumbnail"));
+      setThumbnail(storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${sid}`) ?? storage.getItem(STORAGE_KEYS.THUMBNAIL));
     } else {
-      setThumbnail(storage.getItem("forensic_thumbnail"));
+      setThumbnail(storage.getItem(STORAGE_KEYS.THUMBNAIL));
     }
-    setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
-    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
-    setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
+    setMimeType(ctx?.mime_type ?? storage.getItem(STORAGE_KEYS.MIME_TYPE));
+    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem(STORAGE_KEYS.PIPELINE_START));
+    setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
     setAgentTimeline(loadAgentTimelineForSession(sid, deep));
 
     if (ready) {
@@ -138,18 +138,18 @@ export function useResult(initialSessionId?: string) {
       setArbiterMsg("Council deliberating on evidence...");
       setIsDeepPhase(readResultPhase(initialSessionId) === "deep");
       setThumbnail(
-        storage.getItem(`forensic_thumbnail:${initialSessionId}`) ??
-        storage.getItem("forensic_thumbnail")
+        storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${initialSessionId}`) ??
+        storage.getItem(STORAGE_KEYS.THUMBNAIL)
       );
-      setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
-      setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
-      setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
+      setMimeType(ctx?.mime_type ?? storage.getItem(STORAGE_KEYS.MIME_TYPE));
+      setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem(STORAGE_KEYS.PIPELINE_START));
+      setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
       setAgentTimeline(loadAgentTimelineForSession(initialSessionId, readResultPhase(initialSessionId) === "deep"));
     }
   }, [mounted, initialSessionId, sessionId]);
 
   const selectSession = useCallback((sid: string) => {
-    storage.setItem("forensic_session_id", sid);
+    storage.setItem(STORAGE_KEYS.SESSION_ID, sid);
     const ctx = readSessionContext(sid);
     const nextIsDeep = readResultPhase(sid) === "deep";
     setSessionId(sid);
@@ -160,10 +160,10 @@ export function useResult(initialSessionId?: string) {
     historySavedRef.current = false;
     setArbiterMsg("Council deliberating on evidence...");
     setIsDeepPhase(nextIsDeep);
-    setThumbnail(storage.getItem(`forensic_thumbnail:${sid}`) ?? storage.getItem("forensic_thumbnail"));
-    setMimeType(ctx?.mime_type ?? storage.getItem("forensic_mime_type"));
-    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem("forensic_pipeline_start"));
-    setFileName(ctx?.file_name ?? storage.getItem("forensic_file_name"));
+    setThumbnail(storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${sid}`) ?? storage.getItem(STORAGE_KEYS.THUMBNAIL));
+    setMimeType(ctx?.mime_type ?? storage.getItem(STORAGE_KEYS.MIME_TYPE));
+    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem(STORAGE_KEYS.PIPELINE_START));
+    setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
     setAgentTimeline(loadAgentTimelineForSession(sid, nextIsDeep));
   }, []);
 
@@ -297,7 +297,7 @@ export function useResult(initialSessionId?: string) {
       };
 
       try {
-        const stored = storage.getItem<HistoryItem[]>("forensic_history", true, []);
+        const stored = storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []);
         const filtered = (stored ?? []).filter((h) => !(h.sessionId === hItem.sessionId && h.type === hItem.type));
         // P-H-2: cap client-side history at 50 entries to prevent
         // unbounded localStorage growth and limit PII retention. Older
@@ -305,7 +305,7 @@ export function useResult(initialSessionId?: string) {
         // visible in the History panel.
         const HISTORY_MAX = 50;
         const next = [hItem, ...filtered].slice(0, HISTORY_MAX);
-        storage.setItem("forensic_history", next, true);
+        storage.setItem(STORAGE_KEYS.HISTORY, next, true);
         historySavedRef.current = true;
       } catch (e: unknown) {
         dbg.error("SessionStorage persistence failed", e);
@@ -317,15 +317,15 @@ export function useResult(initialSessionId?: string) {
     playSound("reset");
     const savedHistory = (() => {
       try {
-        return storage.getItem<HistoryItem[]>("forensic_history", true, []) ?? [];
+        return storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []) ?? [];
       } catch { return [] as HistoryItem[]; }
     })();
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
     if (savedHistory.length > 0) {
-      storage.setItem("forensic_history", savedHistory, true);
+      storage.setItem(STORAGE_KEYS.HISTORY, savedHistory, true);
     }
-    document.cookie = "forensic_session_id=; path=/; max-age=0; SameSite=Lax";
+    document.cookie = `${STORAGE_KEYS.SESSION_ID}=; path=/; max-age=0; SameSite=Lax`;
 
     window.dispatchEvent(new Event("fc:reset-home"));
     router.push(path);
