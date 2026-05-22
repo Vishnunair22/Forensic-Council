@@ -43,7 +43,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
     <motion.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, y: -4 }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, y: 4 }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       className="p-8 sm:p-10 flex flex-col text-left"
     >
@@ -62,12 +62,12 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
             Status: Secured
           </p>
-          <h2 className="text-3xl font-heading font-bold text-white">
+          <h2 className="text-3xl font-heading font-bold fc-text-primary">
             Evidence Ready
           </h2>
         </div>
 
-        <div className="relative overflow-hidden border border-white/10 rounded-2xl bg-white/[0.01]" aria-label={`Preview of ${file.name}`}>
+        <div className="relative overflow-hidden border border-white/10 rounded-2xl bg-white/1" aria-label={`Preview of ${file.name}`}>
           <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
             {isAudio && previewUrl ? (
               <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
@@ -108,7 +108,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
         <div className="flex items-center justify-between px-2 pt-2" aria-hidden="true">
           <div className="flex flex-col gap-1">
             <p
-              className="text-sm font-mono font-medium text-white truncate max-w-[300px]"
+              className="text-sm font-mono font-medium fc-text-primary truncate max-w-[300px]"
               title={file.name}
             >
               {file.name}
@@ -118,7 +118,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
             </span>
           </div>
           <div className="text-right">
-            <span className="text-sm font-mono font-bold text-white">
+            <span className="text-sm font-mono font-bold fc-text-primary">
               {(file.size / (1024 * 1024)).toFixed(2)} MB
             </span>
           </div>

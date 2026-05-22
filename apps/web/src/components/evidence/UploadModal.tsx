@@ -62,7 +62,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     <motion.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, y: -4 }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, y: 4 }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       className="p-8 sm:p-10 flex flex-col text-left"
     >
@@ -79,7 +79,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
           Evidence Intake
         </p>
-        <h2 className="text-3xl font-heading font-bold text-white">
+        <h2 className="text-3xl font-heading font-bold fc-text-primary">
           Upload Evidence
         </h2>
       </div>
@@ -115,7 +115,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
           <span
             className={`text-lg font-bold transition-colors duration-150 tracking-wide ${
-              isDragging ? "text-primary" : "text-white/80 group-hover:text-white"
+              isDragging ? "text-primary" : "fc-text-secondary group-hover:text-white"
             }`}
           >
             {isDragging ? "Drop Evidence" : "Select Evidence"}
@@ -142,7 +142,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
       {error && (
         <div className="mt-6 p-4 border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5 rounded-2xl">
-          <p id="upload-error" role="alert" className="text-sm font-mono text-[var(--color-danger)]">
+          <p id="upload-error" role="alert" className="text-sm font-mono fc-text-danger">
             {error}
           </p>
         </div>
@@ -150,7 +150,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
 
       {isSubmitting && !error && (
         <div className="mt-6 flex items-center gap-3">
-          <div className="w-2 h-2 bg-primary animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           <p role="status" aria-live="polite" className="text-xs font-mono tracking-widest text-primary/80">
             Preparing secure channel...
           </p>
