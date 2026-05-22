@@ -21,26 +21,19 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   arbiterControl.abort();
   queryClient?.clear();
 
-  storage.removeItem("forensic_session_id");
-  storage.removeItem("forensic_investigation_ctx");
-  storage.removeItem("forensic_thumbnail");
-  storage.removeItem("forensic_mime_type");
-  storage.removeItem("forensic_file_name");
-  storage.removeItem("forensic_case_id");
-  storage.removeItem("forensic_pipeline_start");
-  storage.removeItem("forensic_hitl_checkpoint");
-  storage.removeItem("forensic_auto_start");
-  storage.removeItem("forensic_initial_agents");
-  storage.removeItem("forensic_deep_agents");
+  // Preserve history before wiping all forensic keys
+  let savedHistory: unknown[] = [];
+  try {
+    const h = storage.getItem<unknown[]>("forensic_history", true);
+    if (Array.isArray(h)) savedHistory = h;
+  } catch { /* ignore */ }
 
-  Object.keys(localStorage).forEach((key) => {
-    if (
-      key.startsWith("forensic_initial_agents:") ||
-      key.startsWith("forensic_deep_agents:")
-    ) {
-      localStorage.removeItem(key);
-    }
-  });
+  storage.clearAllForensicKeys();
+  sessionOnlyStorage.clearAllForensicKeys();
+
+  if (savedHistory.length > 0) {
+    storage.setItem("forensic_history", savedHistory, true);
+  }
 
   expireCookie("forensic_session_id");
   clearAuthCookies();
@@ -53,9 +46,6 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   __pendingFileStore.authError = null;
   clearPendingEvidenceFile().catch(() => {});
 
-  sessionOnlyStorage.removeItem("forensic_auto_start");
-  sessionOnlyStorage.removeItem("fc_show_loading");
-  sessionOnlyStorage.removeItem("fc_open_upload_once");
   sessionOnlyStorage.setItem("fc_no_reconnect", "1");
 
   window.dispatchEvent(new Event("fc:reset-home"));

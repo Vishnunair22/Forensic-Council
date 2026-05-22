@@ -72,7 +72,7 @@ export function AgentStatusSummary({
       {/* Pipeline signal header */}
       <div className="px-5 pt-4 pb-3 border-b border-white/[0.06]">
         <div className="flex items-center justify-between mb-2.5">
-          <span className="fc-eyebrow text-white/50">Pipeline</span>
+          <span className="fc-eyebrow fc-text-muted">Pipeline</span>
           <span className={clsx(
             "text-xs font-mono font-bold tabular-nums",
             pipelineSignal === "flagged" ? "text-danger" :
@@ -93,7 +93,7 @@ export function AgentStatusSummary({
                                              "bg-[var(--color-primary)]"
             )}
             animate={{ width: total > 0 ? `${(doneCount / total) * 100}%` : "0%" }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
           />
         </div>
 
@@ -139,7 +139,7 @@ export function AgentStatusSummary({
               {/* Name */}
               <span className={clsx(
                 "text-xs font-medium min-w-0 flex-1 truncate",
-                status === "waiting" ? "text-white/30" : "text-white/70"
+                status === "waiting" ? "fc-text-faint" : "fc-text-secondary"
               )}>
                 {agent.name}
               </span>
@@ -188,7 +188,7 @@ export function AgentStatusSummary({
                   <span
                     key={a.agent_id}
                     className={clsx(
-                      "fc-badge text-[10px]",
+                      "fc-badge",
                       isAlert ? "fc-badge-danger" : isInconclusive ? "fc-badge-warning" : "fc-badge-success"
                     )}
                     title={`${a.agent_name}: ${normalizeVerdict(a.agent_verdict)}`}
@@ -205,7 +205,7 @@ export function AgentStatusSummary({
       {skippedAgents.length > 0 && (
         <div className="border-t border-white/[0.06] px-5 py-3 flex items-center gap-2">
           <SkipForward className="w-3 h-3 text-white/20 shrink-0" />
-          <span className="text-[11px] text-white/30 truncate">
+          <span className="text-xs fc-text-faint truncate">
             {skippedAgents.map(a => a.name).join(", ")} skipped
           </span>
         </div>

@@ -18,18 +18,18 @@ export const LandingBackground = () => {
           backgroundSize: "24px 24px"
         }}
       />
-      {/* Teal radial glow top-left */}
-      <div 
+      {/* Blue radial glow top-left */}
+      <div
         className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full filter blur-[120px] opacity-[0.04]"
         style={{
-          background: "radial-gradient(circle, #14B8A6 0%, transparent 70%)"
+          background: "radial-gradient(circle, #3b82f6 0%, transparent 70%)"
         }}
       />
-      {/* Muted slate-teal radial glow bottom-right */}
-      <div 
+      {/* Muted slate-blue radial glow bottom-right */}
+      <div
         className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full filter blur-[120px] opacity-[0.03]"
         style={{
-          background: "radial-gradient(circle, #0f766e 0%, transparent 70%)"
+          background: "radial-gradient(circle, #1d4ed8 0%, transparent 70%)"
         }}
       />
     </div>

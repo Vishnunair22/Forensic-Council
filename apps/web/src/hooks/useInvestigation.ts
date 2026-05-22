@@ -546,7 +546,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             ? `Please reselect "${pendingMeta.name}" to continue. Browsers do not allow restoring file handles after a hard refresh.`
             : "Please select the evidence file again to continue.",
         });
-        router.replace("/?upload=1");
         return;
       }
       sessionOnlyStorage.removeItem("forensic_auto_start");
@@ -572,7 +571,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     startPendingAnalysis();
     return () => { cancelled = true; };
-  }, [autoStartBlocking, router, triggerAnalysis]);
+  }, [autoStartBlocking, triggerAnalysis]);
 
   // Effect B — Reconnect existing session
   useEffect(() => {
@@ -622,7 +621,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             title: "Session expired",
             description: "This investigation session is no longer available. Please start a new analysis.",
           });
-          router.replace("/?upload=1");
           return;
         }
         if (st.status === "complete") {

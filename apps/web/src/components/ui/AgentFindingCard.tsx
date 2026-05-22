@@ -50,7 +50,7 @@ const COLOR_MAP: Record<string, { bg: string; border: string; text: string; ring
   cyan:   { bg: "bg-transparent", border: "border-primary/30",     text: "text-primary",      ring: "ring-primary/25" },
   blue:   { bg: "bg-transparent", border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
   amber:  { bg: "bg-transparent", border: "border-amber-500/30",   text: "text-amber-300",    ring: "ring-amber-500/25" },
-  teal:   { bg: "bg-transparent", border: "border-teal-500/30",    text: "text-teal-300",     ring: "ring-teal-500/25" },
+  teal:   { bg: "bg-transparent", border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
   violet: { bg: "bg-transparent", border: "border-violet-500/30",  text: "text-violet-300",   ring: "ring-violet-500/25" },
 };
 
@@ -536,9 +536,9 @@ export function AgentFindingCard({
 
                 {/* Deep Cross-Validation Column */}
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 text-teal-400">
-                    <Activity className="w-4 h-4 shrink-0 text-teal-400" />
-                    <h4 className="text-xs font-black tracking-wider font-mono text-teal-400">Deep Validation</h4>
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <Activity className="w-4 h-4 shrink-0 text-blue-400" />
+                    <h4 className="text-xs font-black tracking-wider font-mono text-blue-400">Deep Validation</h4>
                   </div>
                   <p className="text-[14px] text-white/70 leading-relaxed font-medium">
                     {parsedNarrative.deep_analysis}

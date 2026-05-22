@@ -270,7 +270,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
             "ml-auto text-xs font-mono font-black tabular-nums shrink-0",
             isAlert ? "text-danger" :
             f.confidence >= 0.75 ? "text-primary" :
-            f.confidence >= 0.5 ? "text-warning" : "text-white/50"
+            f.confidence >= 0.5 ? "text-warning" : "fc-text-faint"
           )}>
             {Math.round(f.confidence * 100)}%
           </span>

@@ -27,7 +27,7 @@ const CATEGORY_ICON = {
 
 const CATEGORY_COLOR: Record<string, string> = {
  image: "#22d3ee",
- video: "#2dd4bf",
+ video: "#38bdf8",
  audio: "#818cf8",
  doc: "#60a5fa",
 };
@@ -82,7 +82,7 @@ export function EvidenceThumbnail({
      >
       <Icon className="w-7 h-7" style={{ color }} aria-hidden="true" />
      </div>
-     <span className="text-xs font-mono font-bold tracking-wide text-white/50 capitalize">
+     <span className="text-xs font-mono font-bold tracking-wide fc-text-faint capitalize">
       {cat} Evidence
      </span>
      {fileName && (

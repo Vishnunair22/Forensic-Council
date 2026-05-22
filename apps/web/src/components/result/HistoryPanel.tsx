@@ -105,11 +105,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
             {history.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 gap-6">
                 <div className="relative w-24 h-24 flex items-center justify-center">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-0 rounded-full border border-white/5 border-dashed"
-                  />
+                  <div className="absolute inset-0 rounded-full border border-white/5 border-dashed" />
                   <HistoryIcon className="w-10 h-10 text-white/5" />
                 </div>
                 <div className="text-center">
@@ -132,11 +128,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                     <article aria-label={`View analysis for ${item.fileName}`}>
                       <div className="flex flex-col md:flex-row gap-6 items-center">
                         <div aria-hidden="true" className="relative w-16 h-16 shrink-0 flex items-center justify-center">
-                          <motion.div
-                            animate={shouldReduceMotion ? {} : { rotate: 360 }}
-                            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                            className="absolute inset-0 rounded-full border border-primary/10 border-dashed"
-                          />
+                          <div className="absolute inset-0 rounded-full border border-primary/10 border-dashed" />
                           <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/5">
                             <EvidenceThumbnail
                               thumbnail={item.thumbnail}
@@ -150,7 +142,7 @@ export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
                         <div className="flex-1 min-w-0">
                            <div className="flex items-center gap-3 mb-2">
                               <span className="fc-eyebrow fc-text-primary-accent">Session {item.sessionId.slice(-6)}</span>
-                              <span className="text-xs font-mono fc-text-faint">[{item.type} Analysis]</span>
+                              <span className="text-xs font-mono fc-text-faint capitalize">{item.type} Analysis</span>
                            </div>
                            <h4 className="text-lg font-heading font-bold text-white/80 truncate group-hover:text-white transition-colors">
                              {item.fileName}

@@ -39,13 +39,6 @@ export function HomeClient() {
           animate={prefersReducedMotion ? false : "show"}
           className="flex flex-col items-center text-center w-full max-w-4xl mx-auto z-10"
         >
-          {/* Eyebrow */}
-          <motion.div variants={itemVariants} className="flex items-center gap-3 mb-8">
-            <span className="fc-eyebrow fc-text-faint">
-              [ System Overview ]
-            </span>
-          </motion.div>
-
           {/* Headline */}
           <div className="space-y-6 mb-12 w-full">
             <motion.h1

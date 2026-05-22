@@ -140,7 +140,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
                 animate={{
                   width: isReady ? "100%" : isPreWarmComplete ? "85%" : isSynthesizing ? "65%" : isPreWarming ? "40%" : "5%"
                 }}
-                transition={{ duration: 1.5, ease: "circOut" }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
               />
             </div>
           </div>

@@ -165,9 +165,9 @@ The only allowed Framer Motion transition is `{ duration: 0.16, ease: "easeOut" 
 
 ## 3.6 Color
 
-Teal is the product accent and primary action identity.
+Registry Blue is the product accent and primary action identity.
 
-Teal should be used for:
+Registry Blue should be used for:
 
 ```txt
 Primary CTA buttons
@@ -179,7 +179,7 @@ Subtle hover tint
 Selected navigation
 ```
 
-Teal should not be used everywhere.
+Registry Blue should not be used everywhere.
 
 Semantic colors must only represent meaning:
 
@@ -187,7 +187,6 @@ Semantic colors must only represent meaning:
 Red:    danger, destructive action, deception, severe risk
 Amber:  caution, uncertainty, review needed
 Emerald: verified, authentic, complete
-Blue:   information or neutral process (use sparingly)
 ```
 
 Semantic colors must not be used as decorative glows.
@@ -205,10 +204,13 @@ Canonical globals.css tokens:
 ```css
 @theme {
   --color-background: #02040A;
-  --color-primary: #5eead4;       /* teal-300 */
-  --color-danger:  #f43f5e;
-  --color-warning: #f59e0b;
-  --color-success: #10b981;
+  --color-primary:     #3b82f6;   /* Registry Blue */
+  --color-primary-rgb: 59, 130, 246;
+  --color-accent:      #60a5fa;
+  --color-accent-rgb:  96, 165, 250;
+  --color-danger:      #ef4444;
+  --color-warning:     #f59e0b;
+  --color-success:     #10b981;
 }
 ```
 
@@ -229,11 +231,11 @@ Never use `text-white/X` with X < 55 for readable text. Use the canonical classe
 
 Do not create new text utility classes outside this hierarchy.
 
-## 4.3 Teal Brand Accent
+## 4.3 Registry Blue Brand Accent
 
-Teal is the primary action color. The canonical token is `--color-primary: #5eead4`.
+Registry Blue is the primary action color. The canonical token is `--color-primary: #3b82f6`.
 
-Use `text-primary`, `border-primary`, `bg-primary` via Tailwind. Do not hardcode teal hex values in component files.
+Use `text-primary`, `border-primary`, `bg-primary` via Tailwind. Do not hardcode hex values in component files.
 
 ## 4.4 Semantic Colors
 
@@ -468,13 +470,13 @@ Begin Analysis, Upload Evidence, Continue, Confirm, Generate Report, View Report
 ```
 
 Properties:
-- Background: deep teal frosted glass gradient
-- Color: `rgba(240,253,250,0.96)`
-- Border: `rgba(94,234,212,0.46)`
+- Background: deep blue frosted glass gradient
+- Color: `rgba(239,246,255,0.96)`
+- Border: `rgba(147,197,253,0.46)`
 - Min height: 44px
 - Transition: 160ms ease on all interactive properties
 - Disabled: opacity 0.48, no shadow
-- Neon box shadow: a restrained teal ambient shadow (`0 0 28px rgba(45,212,191,0.14)`) is part of the canonical style — this is not a "neon glow" violation because it is defined in the system
+- Ambient glow: a restrained blue ambient shadow (`0 0 28px rgba(96,165,250,0.14)`) is part of the canonical style — not a neon glow violation because it is defined in the system
 
 ## 7.2 Secondary Button
 
@@ -488,7 +490,7 @@ Properties:
 - Background: neutral white glass gradient
 - Color: `rgba(255,255,255,0.78)`
 - Border: `rgba(255,255,255,0.16)`
-- Hover: teal-tinted glass
+- Hover: blue-tinted glass
 - Min height: 40px
 
 ## 7.3 Ghost Button
@@ -544,7 +546,7 @@ Properties:
 Do not add hover:scale-* to buttons
 Do not add shadow-[0_0_*] beyond the canonical button shadow
 Do not use white primary buttons
-Do not use blue/purple CTA buttons
+Do not use white primary buttons outside the canonical fc-btn-primary class
 Do not use uppercase button labels
 ```
 
@@ -559,7 +561,7 @@ Text size in badges: `text-xs`. Do not use `text-[10px]` or `text-[11px]`.
 | Class             | Color    | Usage                               |
 |-------------------|----------|-------------------------------------|
 | `fc-badge`        | neutral  | General metadata tags               |
-| `fc-badge-active` | teal     | Live/active/running state           |
+| `fc-badge-active` | blue     | Live/active/running state           |
 | `fc-badge-danger` | red      | Error, deception, high-risk         |
 | `fc-badge-warning`| amber    | Uncertainty, review needed          |
 | `fc-badge-success`| emerald  | Verified, complete, authentic       |
@@ -594,7 +596,7 @@ Modal backdrop class:
 ```css
 .fc-modal-backdrop {
   background:
-    radial-gradient(circle at top, rgba(20,184,166,0.08), transparent 34%),
+    radial-gradient(circle at top, rgba(var(--color-primary-rgb),0.08), transparent 34%),
     rgba(0,0,0,0.58);
   backdrop-filter: blur(12px);
 }
@@ -632,7 +634,7 @@ Rules:
 ```txt
 Use fc-surface-quiet or fc-surface-elevated
 Border radius: rounded-2xl or rounded-3xl
-Teal border only for active/running state
+Blue border only for active/running state
 Semantic colors only for actual agent state (red = error, emerald = complete)
 No decorative glowing borders
 No uppercase labels
@@ -642,7 +644,7 @@ No terminal-style section headers
 Agent state border classes:
 
 ```css
-.fc-agent-active   { border-color: rgba(94,234,212,0.38); }
+.fc-agent-active   { border-color: rgba(147,197,253,0.38); }
 .fc-agent-complete { border-color: rgba(52,211,153,0.30); }
 .fc-agent-error    { border-color: rgba(248,113,113,0.34); }
 ```
@@ -660,8 +662,8 @@ Background:       rgba(255,255,255,0.055)
 Border:           rgba(255,255,255,0.14)
 Text:             rgba(255,255,255,0.96)
 Placeholder:      rgba(255,255,255,0.20) — placeholder opacity is exempt from the 55% rule
-Focus border:     rgba(94,234,212,0.52)
-Focus shadow:     0 0 0 3px rgba(45,212,191,0.12)
+Focus border:     rgba(147,197,253,0.52)
+Focus shadow:     0 0 0 3px rgba(96,165,250,0.12)
 Transition:       160ms ease
 ```
 
@@ -669,9 +671,9 @@ Transition:       160ms ease
 
 ```txt
 Border radius:    rounded-3xl (2rem)
-Border:           1px dashed rgba(94,234,212,0.34)
-Background:       teal-tinted glass, fc-surface-elevated equivalent
-Hover border:     rgba(94,234,212,0.58)
+Border:           1px dashed rgba(147,197,253,0.34)
+Background:       blue-tinted glass, fc-surface-elevated equivalent
+Hover border:     rgba(147,197,253,0.58)
 Transition:       160ms ease
 No scale on hover or drag-over
 ```
@@ -716,12 +718,12 @@ Rules:
 
 ```txt
 Height:       64px (h-16)
-Background:   frosted glass with teal bottom accent gradient
+Background:   frosted glass with blue bottom accent gradient
 Border:       1px solid rgba(255,255,255,0.08) on bottom
 z-index:      50 minimum
 No heavy glow
 No uppercase nav labels
-Teal only for active page indicator or primary CTA
+Blue only for active page indicator or primary CTA
 Readable page label pill on right side
 ```
 
@@ -782,7 +784,7 @@ Verdict color mapping:
 Authentic / verified:     emerald (--color-success)
 Manipulated / deceptive:  red (--color-danger)
 Uncertain / inconclusive: amber (--color-warning)
-Processing / active:      teal (--color-primary)
+Processing / active:      blue (--color-primary)
 ```
 
 ## 13.1 Print and PDF Export Mode
@@ -802,7 +804,7 @@ Primary text (fc-text-primary): → #000000
 Secondary text:                 → #1a1a1a
 Muted text:                     → #4a4a4a
 Faint text:                     → #6b7280
-Teal accent (#5eead4):          → #0f766e  (darker teal — printable, high-contrast on white)
+Blue accent (#3b82f6):          → #1d4ed8  (darker blue — printable, high-contrast on white)
 Glass borders:                  → #d1d5db  (gray-300)
 All box-shadow / blur:          → removed
 Badge backgrounds:              → semantic solid equivalents (danger → #dc2626, success → #15803d, etc.)
@@ -838,7 +840,7 @@ Rules:
 
 ```txt
 Use frosted glass sections
-Use teal CTA
+Use blue CTA (fc-btn-primary)
 Avoid white primary buttons
 Avoid excessive radial glows
 No forced uppercase
@@ -856,7 +858,7 @@ Rules:
 
 ```txt
 Upload area: large fc-surface-elevated glass panel
-Primary CTA: fc-btn-primary, teal
+Primary CTA: fc-btn-primary (Registry Blue)
 File metadata: fc-text-faint minimum (55%)
 Errors: clear, restrained — red semantic only
 Progress: visible via progress bar, not animated borders
@@ -874,7 +876,7 @@ Rules:
 Show current phase first (pipeline phase label)
 Show agent activity second (agent cards grid)
 Hide verbose logs behind disclosure (expandable card)
-Use teal for active analysis state
+Use blue (--color-primary) for active analysis state
 Use emerald only for completed checks
 Use amber only for review/uncertainty
 Use red only for failures or high-risk issues
@@ -1023,8 +1025,8 @@ Global CSS fallback in globals.css:
 ```txt
 Depth shadows using rgba(0,0,0,*):     Always allowed — pure black is depth
 fc-surface inset highlights:            Always allowed — part of glass material
-fc-btn-primary ambient teal shadow:     Allowed — defined in canonical button spec
-Focus ring:                             0 0 0 3px rgba(45,212,191,0.22) — allowed
+fc-btn-primary ambient blue shadow:     Allowed — defined in canonical button spec
+Focus ring:                             0 0 0 3px rgba(var(--color-accent-rgb),0.22) — allowed
 ```
 
 ## 19.2 Banned Shadows
@@ -1038,7 +1040,7 @@ Colored glow on badges:          Except canonical badge box-shadow (none by defa
 
 The distinction: `shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)]` is a **depth shadow** (black, allowed). `shadow-[0_0_30px_rgba(79,142,247,0.35)]` is a **neon glow** (colored, banned on containers).
 
-The `fc-btn-primary` box shadow includes a teal glow component — this is pre-approved as part of the button system and is not a violation.
+The `fc-btn-primary` box shadow includes a blue glow component — this is pre-approved as part of the button system and is not a violation.
 
 ---
 
@@ -1064,7 +1066,7 @@ All interactive elements must have visible focus.
   outline: none;
   box-shadow:
     0 0 0 6px rgba(79,142,247,0.18),
-    0 0 0 2px rgba(94,234,212,0.60);
+    0 0 0 2px rgba(147,197,253,0.60);
 }
 ```
 
@@ -1380,7 +1382,7 @@ A screen is compliant only if all of the following are true:
 
 **Color:**
 ```txt
-[ ] Teal used only for action/active/focus
+[ ] Blue (--color-primary) used only for action/active/focus
 [ ] Semantic colors (red/amber/emerald) used only for meaning
 [ ] No semantic radial glows as decoration
 ```
@@ -1402,7 +1404,7 @@ A screen is compliant only if all of the following are true:
 [ ] Print/PDF export sets data-print-mode="true" on <html> before triggering export
 [ ] All fc-surface-* classes render as white (#ffffff) with backdrop-filter: none in print mode
 [ ] All fc-text-* classes render as dark readable values in print mode
-[ ] Teal accent converts to #0f766e (high-contrast printable) in print mode
+[ ] Blue accent converts to #1d4ed8 (high-contrast printable) in print mode
 [ ] No glass borders, glows, or blur artifacts visible in exported PDF
 ```
 
@@ -1426,7 +1428,7 @@ All cards share the same glass language
 All modals use fc-surface-overlay + opacity/y entrance
 All buttons use canonical button classes
 All major UI elements have rounded edges
-Primary actions are teal pill buttons
+Primary actions are blue pill buttons (fc-btn-primary)
 Secondary actions are neutral glass pill buttons
 ```
 
@@ -1444,7 +1446,7 @@ No overly transparent panels behind important content
 ```txt
 Buttons have clear hover/focus/active/disabled states
 Hover never moves or scales elements (except whileTap: 0.98)
-Focus state is visible (teal ring)
+Focus state is visible (blue ring)
 Disabled state is obvious (opacity 0.48)
 Touch targets are large enough
 ```
@@ -1475,7 +1477,7 @@ Mute toggle exists and persists
 Trigger export with data-print-mode="true" set on <html>
 All glass surfaces render as white panels with black text
 No backdrop-filter artifacts in the exported file
-Teal accents are readable (#0f766e on white)
+Blue accents are readable (#1d4ed8 on white)
 Verdict, evidence identity, hash, and confidence score are all visible and legible
 Layout does not break or overflow on A4/Letter page width
 data-print-mode attribute is removed after the export dialog closes
@@ -1493,7 +1495,7 @@ The final UI should be:
 
 ```txt
 Glass-first
-Teal-accented
+Blue-accented (Registry Blue)
 Pill-shaped
 Readable
 Restrained
@@ -1505,4 +1507,4 @@ Consistent
 
 The app must never sacrifice clarity for visual effects.
 
-> Transparency is for depth. Teal is for action. Glass is the material. Evidence is the focus.
+> Transparency is for depth. Registry Blue is for action. Glass is the material. Evidence is the focus.

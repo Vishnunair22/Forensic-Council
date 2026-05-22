@@ -129,16 +129,16 @@ export function GlobalNavbar() {
         borderRadius: 0,
         border: "none",
         borderBottom: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 1px 0 rgba(94,234,212,0.10), 0 8px 40px rgba(0,0,0,0.45)",
+        boxShadow: "0 1px 0 rgba(147,197,253,0.10), 0 8px 40px rgba(0,0,0,0.45)",
       }}
     >
-      {/* Teal bottom accent gradient */}
+      {/* Blue bottom accent gradient */}
       <div
         aria-hidden="true"
         className="absolute bottom-0 inset-x-0 h-px pointer-events-none"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, rgba(94,234,212,0.18) 20%, rgba(20,184,166,0.42) 50%, rgba(94,234,212,0.18) 80%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, rgba(147,197,253,0.18) 20%, rgba(59,130,246,0.42) 50%, rgba(147,197,253,0.18) 80%, transparent 100%)",
         }}
       />
 
@@ -174,7 +174,7 @@ export function GlobalNavbar() {
           >
             <span
               className="w-1 h-1 rounded-full shrink-0"
-              style={{ background: "rgba(94,234,212,0.55)" }}
+              style={{ background: "rgba(147,197,253,0.55)" }}
             />
             <span className="fc-eyebrow fc-text-muted truncate tracking-widest">
               {pageLabel}
@@ -187,13 +187,13 @@ export function GlobalNavbar() {
               <span
                 className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
                 style={{
-                  background: "rgba(45,212,191,0.90)",
-                  boxShadow: "0 0 6px rgba(45,212,191,0.65)",
+                  background: "rgba(96,165,250,0.90)",
+                  boxShadow: "0 0 6px rgba(96,165,250,0.65)",
                 }}
               />
               <span
                 className="fc-eyebrow hidden md:inline"
-                style={{ color: "rgba(94,234,212,0.65)" }}
+                style={{ color: "rgba(147,197,253,0.65)" }}
               >
                 Session Active
               </span>

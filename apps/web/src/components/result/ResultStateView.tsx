@@ -45,7 +45,7 @@ export function ResultStateView({ type, message, onNew, onHome }: ResultStateVie
       </div>
       <div className="w-24 h-24 rounded-3xl fc-surface-elevated border-border-subtle flex items-center justify-center mb-10 shadow-2xl">
         <Icon
-          className={clsx("w-12 h-12", c.color, type === "loading" && "animate-pulse")}
+          className={clsx("w-12 h-12", c.color)}
           aria-hidden="true"
         />
       </div>
