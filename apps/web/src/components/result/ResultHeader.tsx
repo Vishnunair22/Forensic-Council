@@ -233,7 +233,7 @@ function MetricCell({
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
             className="h-full rounded-full"
             style={{ backgroundColor: color }}
           />

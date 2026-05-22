@@ -1,199 +1,314 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useState } from "react";
 import {
+  ArrowRight,
+  CheckSquare,
   History as HistoryIcon,
-  X,
-  ArrowRight
+  Image as ImageIcon,
+  Film,
+  FileText,
+  Mic,
+  Square,
+  Trash2,
 } from "lucide-react";
-import clsx from "clsx";
+import { clsx } from "clsx";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { type HistoryItem } from "@/lib/types";
-import { EvidenceThumbnail } from "./EvidenceThumbnail";
+import { getVerdictConfig } from "@/lib/verdict";
 import { useSessionStorage } from "@/hooks/useSessionStorage";
-import { motion, useReducedMotion } from "framer-motion";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 interface HistoryPanelProps {
   onDismiss: () => void;
   onSelect: (sessionId: string) => void;
+  currentSessionId?: string | null;
 }
 
-export function HistoryPanel({ onDismiss, onSelect }: HistoryPanelProps) {
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatHistoryDate(timestamp: number): string {
+  try {
+    const d = new Date(timestamp);
+    const day = d.getDate();
+    const mod = day % 100;
+    const ordinals = ["th", "st", "nd", "rd"];
+    const suffix = ordinals[(mod - 20) % 10] ?? ordinals[mod] ?? "th";
+    const month = d.toLocaleDateString("en-US", { month: "short" });
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return `${month} ${day}${suffix} ${year} · ${time}`;
+  } catch {
+    return new Date(timestamp).toLocaleString();
+  }
+}
+
+function mimeCategory(mime?: string | null): "image" | "video" | "audio" | "doc" {
+  if (!mime) return "doc";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  return "doc";
+}
+
+const CAT_ICON = { image: ImageIcon, video: Film, audio: Mic, doc: FileText } as const;
+const CAT_COLOR = { image: "#22d3ee", video: "#38bdf8", audio: "#818cf8", doc: "#60a5fa" } as const;
+
+function HistoryThumbnail({ thumbnail, mime, fileName }: { thumbnail?: string; mime?: string; fileName: string }) {
+  const cat = mimeCategory(mime);
+  const Icon = CAT_ICON[cat];
+  const color = CAT_COLOR[cat];
+
+  if ((cat === "image" || cat === "video") && thumbnail) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img src={thumbnail} alt={fileName} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+    );
+  }
+  return (
+    <div className="w-full h-full flex items-center justify-center" style={{ background: `${color}12` }}>
+      <Icon className="w-4 h-4" style={{ color }} />
+    </div>
+  );
+}
+
+function ConfidencePill({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  const color = pct >= 75 ? "text-success" : pct >= 50 ? "text-warning" : "text-danger";
+  return <span className={clsx("text-xs font-mono font-bold tabular-nums", color)}>{pct}%</span>;
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+export function HistoryPanel({ onDismiss, onSelect, currentSessionId }: HistoryPanelProps) {
   const [history, setHistory] = useSessionStorage<HistoryItem[]>(STORAGE_KEYS.HISTORY, [], true);
   const shouldReduceMotion = useReducedMotion();
 
-  const removeItem = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    setHistory((prev) => prev.filter((h) => h.sessionId !== sessionId));
-  };
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const [showConfirm, setShowConfirm] = React.useState(false);
+  const sorted = [...history].sort((a, b) => b.timestamp - a.timestamp);
+  const isSelectMode = selectedIds.size > 0;
+  const allSelected = sorted.length > 0 && selectedIds.size === sorted.length;
 
-  const clearAll = () => {
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sorted.map((h) => h.sessionId)));
+    }
+  }, [allSelected, sorted]);
+
+  const deleteSelected = useCallback(() => {
+    setHistory((prev) => prev.filter((h) => !selectedIds.has(h.sessionId)));
+    setSelectedIds(new Set());
+  }, [selectedIds, setHistory]);
+
+  const clearAll = useCallback(() => {
     setHistory([]);
-    setShowConfirm(false);
-  };
+    setSelectedIds(new Set());
+    setShowClearConfirm(false);
+  }, [setHistory]);
 
-  const getVerdictStyle = (verdict: string) => {
-    const v = (verdict || "").toUpperCase();
-    if (v.includes("MANIPULATED")) return "text-danger bg-danger/10 border-danger/30";
-    if (v.includes("SUSPICIOUS")) return "text-warning bg-warning/10 border-warning/30";
-    if (v.includes("AUTHENTIC")) return "text-success bg-success/10 border-success/30";
-    return "fc-text-faint bg-white/5 border-white/10";
-  };
+  const handleRowClick = useCallback((sessionId: string) => {
+    if (isSelectMode) {
+      toggleSelect(sessionId);
+    } else {
+      onSelect(sessionId);
+    }
+  }, [isSelectMode, toggleSelect, onSelect]);
 
   return (
-    <div className="w-full max-w-5xl mx-auto pb-32">
-      <div className="bg-transparent border border-white/5 rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-transparent">
+    <div className="w-full max-w-4xl mx-auto pb-32 relative">
+      <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
 
-          {/* --- Header --- */}
-          <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 border-b border-white/5 gap-6">
-            <div className="flex flex-col gap-2">
-               <h3 className="text-3xl font-heading font-bold text-white flex items-center gap-4">
-                 <HistoryIcon className="w-6 h-6 text-primary" />
-                 Investigation Archive
-               </h3>
-               <p className="fc-eyebrow fc-text-faint">
-                 Forensic Registry // Secure Storage V2
-               </p>
+        {/* ── Header ── */}
+        <div className="px-6 py-5 border-b border-white/[0.06] flex items-center gap-3">
+          <HistoryIcon className="w-4 h-4 text-primary/60 shrink-0" />
+          <h2 className="text-sm font-bold text-white/85 flex-1">Investigation Archive</h2>
+          <span className="fc-eyebrow fc-text-faint">{sorted.length} record{sorted.length === 1 ? "" : "s"}</span>
+
+          {/* Select all */}
+          {sorted.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              aria-label={allSelected ? "Deselect all" : "Select all"}
+              className="flex items-center gap-1.5 fc-eyebrow fc-text-faint hover:text-white/70 transition-colors px-2 py-1 rounded hover:bg-white/[0.04]"
+            >
+              {allSelected
+                ? <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                : <Square className="w-3.5 h-3.5" />
+              }
+              {allSelected ? "Deselect all" : "Select all"}
+            </button>
+          )}
+
+          {/* Clear All */}
+          {sorted.length > 0 && !showClearConfirm && (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="fc-eyebrow fc-text-faint hover:text-danger transition-colors px-2 py-1 rounded hover:bg-danger/5"
+            >
+              Clear all
+            </button>
+          )}
+          {showClearConfirm && (
+            <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 rounded-lg px-2 py-1">
+              <span className="fc-eyebrow text-danger">Confirm?</span>
+              <button type="button" onClick={clearAll} className="fc-eyebrow text-danger font-bold hover:text-white transition-colors">Yes</button>
+              <button type="button" onClick={() => setShowClearConfirm(false)} className="fc-eyebrow fc-text-faint hover:text-white/70 transition-colors">No</button>
             </div>
-
-            <div className="flex items-center gap-6">
-              {history.length > 0 && (
-                <>
-                  {showConfirm ? (
-                    <div className="flex items-center gap-3 bg-danger/10 p-2 rounded-xl border border-danger/20">
-                      <span className="text-xs font-mono text-danger font-bold tracking-wider px-2">Confirm?</span>
-                      <button
-                        type="button"
-                        onClick={clearAll}
-                        className="py-1 px-3 text-xs font-mono font-bold text-[#05070D] bg-danger rounded-md"
-                      >
-                        Yes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirm(false)}
-                        className="py-1 px-3 text-xs font-mono font-bold fc-text-secondary bg-white/5 rounded-md"
-                      >
-                        No
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirm(true)}
-                      className="fc-btn-secondary py-2 px-4 text-xs text-danger border-danger/20 hover:bg-danger/5"
-                    >
-                      Clear Archive
-                    </button>
-                  )}
-                </>
-              )}
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="fc-eyebrow fc-text-muted hover:text-primary-accent transition-colors"
-              >
-                Back To Analysis
-              </button>
-            </div>
-          </div>
-
-          {/* --- List --- */}
-          <div className="p-10">
-            {history.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-32 gap-6">
-                <div className="relative w-24 h-24 flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full border border-white/5 border-dashed" />
-                  <HistoryIcon className="w-10 h-10 text-white/5" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-heading font-bold fc-text-faint mb-2 tracking-widest">Archive Empty</p>
-                  <p className="text-xs font-mono fc-text-faint max-w-xs leading-relaxed">
-                    System awaiting initial analysis payloads for registry sync.
-                  </p>
-                </div>
-              </div>
-) : (
-              <div className="grid gap-6" role="list" aria-label="Investigation archive">
-                {[...history].sort((a,b) => b.timestamp - a.timestamp).map((item, i) => (
-                  <motion.div
-                    key={item.sessionId}
-                    initial={shouldReduceMotion ? {} : { opacity: 0, y: 4 }}
-                    animate={shouldReduceMotion ? {} : { opacity: 1, y: 0 }}
-                    transition={shouldReduceMotion ? { duration: 0 } : { delay: i * 0.05, duration: 0.16, ease: "easeOut" }}
-                    className="group relative p-6 cursor-pointer transition-colors duration-200 border-t border-white/5 first:border-t-0 bg-transparent hover:bg-white/[0.02]"
-                  >
-                    <article aria-label={`View analysis for ${item.fileName}`}>
-                      <div className="flex flex-col md:flex-row gap-6 items-center">
-                        <div aria-hidden="true" className="relative w-16 h-16 shrink-0 flex items-center justify-center">
-                          <div className="absolute inset-0 rounded-full border border-primary/10 border-dashed" />
-                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/5">
-                            <EvidenceThumbnail
-                              thumbnail={item.thumbnail}
-                              mimeType={item.mime}
-                              fileName={item.fileName}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                           <div className="flex items-center gap-3 mb-2">
-                              <span className="fc-eyebrow fc-text-primary-accent">Session {item.sessionId.slice(-6)}</span>
-                              <span className="text-xs font-mono fc-text-faint capitalize">{item.type} Analysis</span>
-                           </div>
-                           <h4 className="text-lg font-heading font-bold text-white/80 truncate group-hover:text-white transition-colors">
-                             {item.fileName}
-                           </h4>
-                        </div>
-
-                        <div className={clsx(
-                          "px-4 py-1.5 rounded border fc-eyebrow",
-                          getVerdictStyle(item.verdict)
-                        )}>
-                          {item.verdict?.replace(/_/g, " ")}
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <div className="text-right hidden lg:block">
-                             <div className="text-xs font-mono fc-text-faint">Timestamp</div>
-                             <div className="text-xs font-mono fc-text-muted">
-                               {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                             </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => removeItem(e, item.sessionId)}
-                            aria-label={`Remove ${item.fileName} from archive`}
-                            className="relative z-10 p-3 rounded-lg border border-white/5 text-white/20 hover:text-danger hover:border-danger/30 transition-all"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-
-                    <button
-                      type="button"
-                      onClick={() => onSelect(item.sessionId)}
-                      aria-label={`View analysis for ${item.fileName}`}
-                      className="absolute inset-0 rounded-2xl"
-                      style={{ zIndex: 1 }}
-                    />
-
-                    <div aria-hidden="true" className="absolute top-0 right-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                       <ArrowRight className="w-3 h-3 text-primary" />
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
+
+        {/* ── List ── */}
+        {sorted.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="w-12 h-12 rounded-full border border-white/[0.06] border-dashed flex items-center justify-center">
+              <HistoryIcon className="w-5 h-5 text-white/10" />
+            </div>
+            <p className="text-sm fc-text-faint">No investigations archived yet.</p>
+          </div>
+        ) : (
+          <div role="list" aria-label="Investigation archive">
+            {sorted.map((item, i) => {
+              const vc = getVerdictConfig(item.verdict);
+              const isCurrent = item.sessionId === currentSessionId;
+              const isSelected = selectedIds.has(item.sessionId);
+
+              return (
+                <motion.div
+                  key={item.sessionId}
+                  role="listitem"
+                  initial={shouldReduceMotion ? {} : { opacity: 0, y: 4 }}
+                  animate={shouldReduceMotion ? {} : { opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.03, duration: 0.16, ease: "easeOut" }}
+                  className={clsx(
+                    "group relative flex items-center gap-3 px-5 py-4 border-b border-white/[0.04] last:border-0 transition-colors duration-150",
+                    isSelected ? "bg-primary/[0.04]" : "hover:bg-white/[0.02]"
+                  )}
+                >
+                  {/* Checkbox */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSelect(item.sessionId)}
+                    aria-label={isSelected ? `Deselect ${item.fileName}` : `Select ${item.fileName}`}
+                    aria-pressed={isSelected}
+                    className={clsx(
+                      "shrink-0 w-4 h-4 flex items-center justify-center transition-opacity duration-150",
+                      isSelectMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}
+                  >
+                    {isSelected
+                      ? <CheckSquare className="w-4 h-4 text-primary" />
+                      : <Square className="w-4 h-4 fc-text-faint" />
+                    }
+                  </button>
+
+                  {/* Thumbnail */}
+                  <div className="shrink-0 w-10 h-10 rounded-lg border border-white/[0.08] overflow-hidden bg-white/[0.03]">
+                    <HistoryThumbnail thumbnail={item.thumbnail} mime={item.mime} fileName={item.fileName} />
+                  </div>
+
+                  {/* Main content — clickable area for row navigation / select */}
+                  <button
+                    type="button"
+                    onClick={() => handleRowClick(item.sessionId)}
+                    className="flex-1 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+                    aria-label={`${isSelectMode ? "Toggle selection for" : "View analysis for"} ${item.fileName}`}
+                  >
+                    {/* Row 1: filename + current badge + verdict */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-medium text-white/80 truncate flex-1 min-w-0">
+                        {item.fileName}
+                      </span>
+                      {isCurrent && (
+                        <span className="shrink-0 fc-eyebrow text-primary border border-primary/30 bg-primary/5 px-1.5 py-0.5 rounded">
+                          Current
+                        </span>
+                      )}
+                      <span className={clsx(
+                        "shrink-0 fc-eyebrow px-2 py-0.5 rounded border",
+                        vc.color === "emerald" && "text-success border-success/25 bg-success/5",
+                        vc.color === "red"     && "text-danger  border-danger/25  bg-danger/5",
+                        vc.color === "amber"   && "text-warning border-warning/25 bg-warning/5",
+                      )}>
+                        {vc.label}
+                      </span>
+                    </div>
+
+                    {/* Row 2: date · confidence */}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-xs font-mono fc-text-faint">{formatHistoryDate(item.timestamp)}</span>
+                      {item.confidence != null && (
+                        <>
+                          <span className="fc-text-faint text-xs">·</span>
+                          <ConfidencePill value={item.confidence} />
+                        </>
+                      )}
+                      <span className="fc-eyebrow fc-text-faint ml-0.5">{item.type}</span>
+                    </div>
+                  </button>
+
+                  {/* Arrow — always navigates, even in select mode */}
+                  <button
+                    type="button"
+                    onClick={() => onSelect(item.sessionId)}
+                    aria-label={`Open analysis for ${item.fileName}`}
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg border border-white/[0.08] fc-text-faint hover:text-white hover:border-white/[0.18] hover:bg-white/[0.05] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* ── Floating Delete Bar ── */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-5 py-3 rounded-2xl border border-white/[0.12] bg-background/95 backdrop-blur-xl shadow-2xl"
+          >
+            <span className="fc-eyebrow text-white/70">
+              {selectedIds.size} selected
+            </span>
+            <div className="h-4 w-px bg-white/[0.10]" />
+            <button
+              type="button"
+              onClick={deleteSelected}
+              className="flex items-center gap-2 fc-eyebrow text-danger hover:text-white hover:bg-danger px-3 py-1.5 rounded-lg border border-danger/30 hover:border-danger transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="fc-eyebrow fc-text-faint hover:text-white/70 transition-colors px-2 py-1 rounded"
+            >
+              Cancel
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

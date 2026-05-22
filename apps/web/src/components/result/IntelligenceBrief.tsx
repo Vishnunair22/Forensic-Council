@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertCircle, CheckCircle2, CircleDashed, FileText, Minus } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { cleanFindingText } from "@/lib/findingText";
@@ -122,7 +122,7 @@ export function IntelligenceBrief({
 function FindingDot({ severity }: { severity: "danger" | "warning" | "info" | "neutral" }) {
   const cfg = {
     danger:  { cls: "bg-danger/15 border-danger/35",   Icon: AlertCircle,  color: "text-danger"   },
-    warning: { cls: "bg-warning/10 border-warning/30",  Icon: Minus,        color: "text-warning"  },
+    warning: { cls: "bg-warning/10 border-warning/30",  Icon: AlertTriangle, color: "text-warning"  },
     info:    { cls: "bg-success/10 border-success/30",  Icon: CheckCircle2, color: "text-success"  },
     neutral: { cls: "bg-transparent border-white/[0.1]",Icon: CircleDashed, color: "fc-text-faint" },
   }[severity];
@@ -136,7 +136,7 @@ function FindingDot({ severity }: { severity: "danger" | "warning" | "info" | "n
 
 function classifyFinding(finding: string): "danger" | "warning" | "info" | "neutral" {
   const lower = finding.toLowerCase();
-  if (/tamper|manipulat|fabricat|synthetic|forged|splic|confirmed anomaly|malware|payload/.test(lower)) return "danger";
+  if (/tamper|manipulat|fabricat|synthetic|forged|splic|confirmed anomaly|malware|payload|deepfake|ai.generat|artificially generated|generated image/.test(lower)) return "danger";
   if (/limited|missing|absent|risk|cannot|inconclusive|warning|uncertain|coverage/.test(lower)) return "warning";
   if (/bypassed|not applicable|no readable text|no visible text/.test(lower)) return "neutral";
   return "info";

@@ -290,6 +290,7 @@ export function useResult(initialSessionId?: string) {
         sessionId: report.session_id,
         fileName: ctx?.file_name ?? fileName ?? "Unknown File",
         verdict: report.overall_verdict || "INCONCLUSIVE",
+        confidence: report.overall_confidence ?? undefined,
         timestamp: Date.now(),
         type: isDeepPhase ? "Deep" : "Initial",
         thumbnail: thumbnail || undefined,

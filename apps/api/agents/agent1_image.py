@@ -307,6 +307,35 @@ class Agent1Image(ForensicAgent):
             await self._publish_agent_context("initial", [finding])
             return
 
+        # 1b. [REACTIVE] extract_text_from_image: Gemini content identification triggers deepfake escalation
+        if tool_name == "extract_text_from_image":
+            ocr_ctx = self._tool_context.get("extract_text_from_image", {})
+            content_type = str(ocr_ctx.get("content_type") or "").lower()
+            content_desc = str(ocr_ctx.get("content_description") or "").lower()
+            combined = content_type + " " + content_desc
+
+            person_keywords = {"person", "people", "man", "woman", "face", "portrait", "selfie", "human"}
+            ai_keywords = {"ai", "generated", "synthetic", "diffusion", "gan", "artificial"}
+
+            has_person = any(k in combined for k in person_keywords)
+            has_ai_marker = any(k in combined for k in ai_keywords)
+
+            if has_person or has_ai_marker:
+                logger.info(
+                    f"Gemini OCR content_type='{content_type}' triggered deepfake escalation",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run deepfake_frequency_check for GAN/Diffusion artifacts",
+                    priority=14,
+                )
+            if has_ai_marker:
+                await self.inject_task(
+                    description="Run diffusion_artifact_detector to confirm AI generation",
+                    priority=19,
+                )
+            return
+
         # 2. If neural forensic tools flag high-confidence manipulation, inject localized ROI extraction
         if tool_name in {
             "neural_copy_move",

@@ -133,7 +133,7 @@ class ImageHandlers(BaseToolHandler):
         registry.register(
             "extract_text_from_image",
             self.extract_text_from_image_handler,
-            "Tiered OCR (EasyOCR -> Tesseract)",
+            "Gemini Multimodal OCR with EasyOCR and Tesseract fallback",
         )
         registry.register(
             "frequency_domain_analysis",

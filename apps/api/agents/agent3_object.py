@@ -61,8 +61,8 @@ class Agent3Object(ForensicAgent):
         return [
             "Run object_detection for scene object identification",
             "Run scene_incongruence for contextual anomaly detection",
-            "Run lighting_consistency for shadow and light direction analysis",
-            "Run contraband_database for risk object screening",
+            "Run lighting_correlation_initial for initial shadow and light direction audit",
+            "Run vector_contraband_search for risk object screening",
         ]
 
     @property

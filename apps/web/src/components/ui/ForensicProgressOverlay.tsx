@@ -8,6 +8,7 @@ interface ForensicProgressOverlayProps {
   liveText: string;
   telemetryLabel: string;
   showElapsed: boolean;
+  variant?: "arbiter" | "loading";
 }
 
 export function ForensicProgressOverlay({
@@ -15,6 +16,7 @@ export function ForensicProgressOverlay({
   liveText,
   telemetryLabel,
   showElapsed,
+  variant = "loading",
 }: ForensicProgressOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
   const prefersReducedMotion = useReducedMotion();
@@ -30,6 +32,15 @@ export function ForensicProgressOverlay({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const isArbiter = variant === "arbiter";
+  const borderColor    = isArbiter ? "border-success/40"  : "border-primary/40";
+  const indicatorBorder = isArbiter ? "border-success/30" : "border-primary/30";
+  const indicatorBg    = isArbiter ? "bg-success/5"       : "bg-primary/5";
+  const pulseDot       = isArbiter ? "bg-success"         : "bg-primary";
+  const badgeLabel     = isArbiter ? "Arbiter Active"     : "System Active";
+  const progressColor  = isArbiter ? "bg-success"         : "bg-primary";
+  const timerColor     = isArbiter ? "text-success"       : "text-primary";
+
   return (
     <motion.div
       aria-busy="true"
@@ -39,18 +50,18 @@ export function ForensicProgressOverlay({
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeOut" } }}
       transition={{ duration: 0.16, ease: "easeOut" }}
     >
-      <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-primary/40 pl-8 md:pl-12 py-4">
+      <div className={`relative z-10 w-full max-w-xl mx-auto border-l-2 ${borderColor} pl-8 md:pl-12 py-4`}>
         {/* Status indicator */}
         <div className="flex items-center gap-4 mb-10">
-          <div className="relative w-8 h-8 flex items-center justify-center border border-primary/30 rounded-sm bg-primary/5">
+          <div className={`relative w-8 h-8 flex items-center justify-center border ${indicatorBorder} rounded-md ${indicatorBg}`}>
             <motion.div
-              animate={{ opacity: [1, 0.3, 1] }}
+              animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className="w-3 h-3 bg-primary"
+              className={`w-3 h-3 ${pulseDot}`}
             />
           </div>
           <span className="fc-eyebrow fc-text-faint">
-            System Active
+            {badgeLabel}
           </span>
         </div>
 
@@ -87,12 +98,12 @@ export function ForensicProgressOverlay({
           <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-faint">
             <span>{telemetryLabel}</span>
             {showElapsed && (
-              <span className="text-primary">{formatTime(elapsed)}</span>
+              <span className={timerColor}>{formatTime(elapsed)}</span>
             )}
           </div>
           <div className="h-px w-full bg-white/10 relative overflow-hidden">
             <motion.div
-              className="absolute inset-y-0 left-0 bg-primary"
+              className={`absolute inset-y-0 left-0 ${progressColor}`}
               initial={{ width: "0%" }}
               animate={prefersReducedMotion ? {} : { width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"] }}
               transition={prefersReducedMotion ? {} : { duration: 3.5, times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1], repeat: Infinity, ease: "linear" }}

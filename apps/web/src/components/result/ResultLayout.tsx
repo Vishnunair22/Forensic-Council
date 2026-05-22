@@ -1,50 +1,41 @@
 "use client";
 
-import React, { useMemo, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clsx } from "clsx";
 import dynamic from "next/dynamic";
 import {
   ChevronDown,
-  Clock,
+  Download,
+  FileJson,
+  FileText,
   FileSearch,
   History as HistoryIcon,
-  Home as HomeIcon,
-  Plus,
-  ShieldAlert,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
 import type { AgentFindingDTO, ReportDTO } from "@/lib/api";
+import { API_BASE } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
-import { fmtDuration } from "@/lib/fmt";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
-import { ReportFooter } from "./ReportFooter";
-import { IntelligenceBrief } from "./IntelligenceBrief";
-import { DegradationBanner } from "./DegradationBanner";
-import { ActionDock } from "./ActionDock";
 import { ResultStateView } from "./ResultStateView";
+import { EvidenceHeader } from "./EvidenceHeader";
+import { VerdictSection } from "./VerdictSection";
+import { AgentsStrip } from "./AgentsStrip";
+import { KeyFindings } from "./KeyFindings";
+import { FindingsMetadata } from "./FindingsMetadata";
+import { ExecutionTimeline } from "./ExecutionTimeline";
+import { ReportIntegrity } from "./ReportIntegrity";
+import { PageNavigation } from "./PageNavigation";
 
 const AgentAnalysisTab = dynamic(
   () => import("./AgentAnalysisTab").then((m) => m.AgentAnalysisTab),
   { ssr: false },
 );
-const DeepModelTelemetry = dynamic(
-  () => import("@/components/result/DeepModelTelemetry").then((m) => m.DeepModelTelemetry),
-  { ssr: false },
-);
 const HistoryPanel = dynamic(
   () => import("./HistoryPanel").then((m) => m.HistoryPanel),
-  { ssr: false },
-);
-const TimelineTab = dynamic(
-  () => import("./TimelineTab").then((m) => m.TimelineTab),
-  { ssr: false },
-);
-const ResultHeader = dynamic(
-  () => import("./ResultHeader").then((m) => m.ResultHeader),
   { ssr: false },
 );
 
@@ -62,6 +53,13 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
     sessionChangeRef.current = initialSessionId;
     window.scrollTo(0, 0);
   }, [initialSessionId]);
+
+  // Capture the original session ID once — never overwritten when selectSession is called.
+  // Used to show "Current" badge in HistoryPanel.
+  const originalSessionIdRef = useRef<string | null>(null);
+  if (!originalSessionIdRef.current && rs.sessionId) {
+    originalSessionIdRef.current = rs.sessionId;
+  }
 
   const activeAgentIds = useMemo(() => {
     const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
@@ -81,7 +79,6 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
   const keyFindings = useMemo(() => buildKeyFindings(rs.report), [rs.report]);
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
-  const [showTimeline, setShowTimeline] = useState(false);
 
   if (!rs.mounted) {
     return (
@@ -93,7 +90,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   }
 
   return (
-    <div className="min-h-screen pb-48 pt-20 sm:pt-12 relative">
+    <div className="min-h-screen pb-24 pt-20 sm:pt-12 relative">
       {/* ── Arbiter/Loading overlay ── */}
       <AnimatePresence initial={false}>
         {(rs.state === "arbiter" || rs.state === "loading") && (
@@ -102,85 +99,73 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             liveText={rs.arbiterMsg || "Preparing final forensic report..."}
             telemetryLabel="Compiling agent findings"
             showElapsed
+            variant={rs.state === "arbiter" ? "arbiter" : "loading"}
           />
         )}
       </AnimatePresence>
 
-      {/* ── Secondary Tab Nav (Analysis / History) ── */}
+      {/* ── Tab Nav ── */}
       <nav
         className="fixed top-16 left-0 right-0 z-[40] border-b border-white/[0.06] bg-background/85 backdrop-blur-md"
         aria-label="Report sections"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-1">
-          {(["analysis", "history"] as Tab[]).map((tab) => (
-            <button
-              type="button"
-              key={tab}
-              role="tab"
-              id={`tab-${tab}`}
-              aria-selected={rs.activeTab === tab}
-              aria-controls={`tabpanel-${tab}`}
-              tabIndex={rs.activeTab === tab ? 0 : -1}
-              ref={(node) => { tabRefs.current[tab] = node; }}
-              onClick={() => rs.setActiveTab(tab)}
-              onKeyDown={(e) => {
-                if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-                e.preventDefault();
-                const next = rs.activeTab === "analysis" ? "history" : "analysis";
-                rs.setActiveTab(next);
-                requestAnimationFrame(() => tabRefs.current[next]?.focus());
-              }}
-              className={clsx(
-                "px-4 py-2 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-150 border",
-                rs.activeTab === tab
-                  ? "bg-white/[0.08] text-white border-white/20"
-                  : "fc-text-faint hover:text-white hover:bg-white/[0.05] border-transparent"
-              )}
-            >
-              {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
-              {tab === "analysis" ? "Analysis" : "History"}
-            </button>
-          ))}
-
-          {/* Spacer + inline nav shortcuts */}
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={rs.handleHome}
-              className="px-3 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 text-white/55 hover:text-white transition-colors rounded-full hover:bg-white/[0.04]"
-              aria-label="Back to Home"
-            >
-              <HomeIcon className="w-3 h-3" />
-              Home
-            </button>
-            <button
-              type="button"
-              onClick={rs.handleNew}
-              className="px-3 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 text-white/55 hover:text-white transition-colors rounded-full hover:bg-white/[0.04]"
-              aria-label="New Analysis"
-            >
-              <Plus className="w-3 h-3" />
-              New
-            </button>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-2">
+          {/* Centered pill tabs */}
+          <div className="flex-1 flex items-center justify-center gap-1">
+            {(["analysis", "history"] as Tab[]).map((tab) => (
+              <button
+                type="button"
+                key={tab}
+                role="tab"
+                id={`tab-${tab}`}
+                aria-selected={rs.activeTab === tab}
+                aria-controls={`tabpanel-${tab}`}
+                tabIndex={rs.activeTab === tab ? 0 : -1}
+                ref={(node) => { tabRefs.current[tab] = node; }}
+                onClick={() => rs.setActiveTab(tab)}
+                onKeyDown={(e) => {
+                  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                  e.preventDefault();
+                  const next = rs.activeTab === "analysis" ? "history" : "analysis";
+                  rs.setActiveTab(next);
+                  requestAnimationFrame(() => tabRefs.current[next]?.focus());
+                }}
+                className={clsx(
+                  "px-4 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-150 border",
+                  rs.activeTab === tab
+                    ? "bg-white/[0.08] text-white border-white/20"
+                    : "fc-text-faint hover:text-white hover:bg-white/[0.05] border-transparent"
+                )}
+              >
+                {tab === "analysis" ? <FileSearch className="w-3.5 h-3.5" /> : <HistoryIcon className="w-3.5 h-3.5" />}
+                {tab === "analysis" ? "Analysis" : "History"}
+              </button>
+            ))}
           </div>
+
+          {/* Export dropdown — right side */}
+          {rs.state === "ready" && rs.report && (
+            <ExportDropdown
+              report={rs.report}
+              sessionId={rs.sessionId ?? undefined}
+              onExportJson={rs.handleExport}
+            />
+          )}
         </div>
       </nav>
 
       {/* ── Main Content ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-0">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-4 space-y-0">
         {/* History tab panel */}
         {rs.activeTab === "history" && (
-          <div
-            role="tabpanel"
-            id="tabpanel-history"
-            aria-labelledby="tab-history"
-          >
+          <div role="tabpanel" id="tabpanel-history" aria-labelledby="tab-history">
             <HistoryPanel
               onDismiss={() => rs.setActiveTab("analysis")}
               onSelect={(sid) => {
                 rs.selectSession(sid);
                 rs.setActiveTab("analysis");
               }}
+              currentSessionId={originalSessionIdRef.current}
             />
           </div>
         )}
@@ -209,78 +194,59 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <ResultStateView type="empty" onNew={rs.handleNew} onHome={rs.handleHome} />
           )}
 
-          <AnimatePresence>
-            {rs.state === "arbiter" && (
-              <motion.div
-                key="inline-status"
-                exit={{ opacity: 0, transition: { duration: 0.16 } }}
-              >
-                <ResultInlineStatus message={rs.arbiterMsg} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {rs.state === "ready" && rs.report && (
             <motion.div
               initial="hidden"
               animate="visible"
               variants={{
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.18 } },
+                visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.12 } },
               }}
-              className="space-y-5"
+              className="space-y-4"
             >
-              {/* ── SECTION 1: Verdict Header ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                <ResultHeader
-                  report={rs.report}
-                  fileName={rs.fileName || rs.report.case_id || "Evidence"}
+              {/* 1. Evidence Header */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <EvidenceHeader
+                  fileName={rs.fileName}
                   mimeType={rs.mimeType}
                   thumbnail={rs.thumbnail}
-                  isDeepPhase={rs.isDeepPhase}
+                  pipelineStartAt={rs.pipelineStartAt}
+                  caseId={rs.report.case_id}
+                />
+              </motion.div>
+
+              {/* 2. Verdict + Metric Strip */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <VerdictSection
                   vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
                   confPct={toPct(rs.report.overall_confidence)}
                   manipPct={toPct(rs.report.manipulation_probability)}
                   errPct={toPct(rs.report.overall_error_rate)}
                   discordPct={toPct(rs.report.confidence_std_dev)}
-                  activeAgentIds={activeAgentIds}
-                  pipelineDuration={
-                    rs.pipelineStartAt && rs.report.signed_utc
-                      ? fmtDuration(rs.pipelineStartAt, rs.report.signed_utc)
-                      : null
-                  }
-                />
-              </motion.div>
-
-              {/* ── SECTION 2: Executive Brief + Key Findings ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                <IntelligenceBrief
-                  verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
-                  keyFindings={keyFindings}
-                  reliabilityNote={rs.report.reliability_note}
-                  uncertaintyStatement={rs.report.uncertainty_statement}
-                  coverageNote={rs.report.analysis_coverage_note}
-                  skippedAgents={rs.report.skipped_agents}
                   isDeepPhase={rs.isDeepPhase}
+                  agentCount={activeAgentIds.length}
+                  verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
                 />
               </motion.div>
 
-              {/* ── SECTION 3: Degradation Warnings (conditional) ── */}
-              {rs.report.degradation_flags && rs.report.degradation_flags.length > 0 && (
-                <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                  <DegradationBanner flags={rs.report.degradation_flags} />
+              {/* 3. Agents Strip */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <AgentsStrip
+                  perAgentMetrics={rs.report.per_agent_metrics}
+                  skippedAgents={rs.report.skipped_agents}
+                  activeAgentIds={activeAgentIds}
+                />
+              </motion.div>
+
+              {/* 4. Key Findings */}
+              {keyFindings.length > 0 && (
+                <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                  <KeyFindings findings={keyFindings} />
                 </motion.div>
               )}
 
-              {/* ── SECTION 4: Deep Model Telemetry (deep phase only) ── */}
-              {rs.isDeepPhase && (
-                <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                  <DeepModelTelemetry report={rs.report} />
-                </motion.div>
-              )}
-
-              {/* ── SECTION 5: Agent Forensic Findings ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
+              {/* 5. Agent Findings */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <AgentAnalysisTab
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -288,72 +254,156 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
-              {/* ── SECTION 6: Forensic Execution Timeline (collapsed by default) ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                <div className="flex items-center gap-3">
-                  <div className="h-px flex-1 bg-white/[0.05]" />
-                  <button
-                    type="button"
-                    onClick={() => setShowTimeline((v) => !v)}
-                    className="flex items-center gap-2 fc-eyebrow fc-text-faint hover:text-white/70 transition-colors px-3 py-2 rounded-lg hover:bg-white/[0.04] border border-transparent hover:border-white/[0.06]"
-                    aria-expanded={showTimeline}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    Execution Timeline
-                    <ChevronDown
-                      className={clsx(
-                        "w-3.5 h-3.5 transition-transform duration-300",
-                        showTimeline && "rotate-180"
-                      )}
-                    />
-                  </button>
-                  <div className="h-px flex-1 bg-white/[0.05]" />
-                </div>
-
-                {showTimeline && (
-                  <div className="mt-4">
-                    <TimelineTab
-                      report={rs.report}
-                      activeAgentIds={activeAgentIds}
-                      agentTimeline={rs.agentTimeline}
-                      pipelineStartAt={rs.pipelineStartAt}
-                    />
-                  </div>
-                )}
+              {/* 6. Analysis Metrics */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <FindingsMetadata
+                  report={rs.report}
+                  activeAgentIds={activeAgentIds}
+                />
               </motion.div>
 
-              {/* ── SECTION 7: Footer ── */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0 } }}>
-                <ReportFooter handleHome={rs.handleHome} />
+              {/* 7. Execution Timeline */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <ExecutionTimeline
+                  report={rs.report}
+                  activeAgentIds={activeAgentIds}
+                  agentTimeline={rs.agentTimeline}
+                  pipelineStartAt={rs.pipelineStartAt}
+                />
+              </motion.div>
+
+              {/* 8. Report Integrity */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <ReportIntegrity
+                  report={rs.report}
+                  sessionId={rs.sessionId}
+                  isDeepPhase={rs.isDeepPhase}
+                />
+              </motion.div>
+
+              {/* 9. Navigation */}
+              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <PageNavigation onHome={rs.handleHome} onNew={rs.handleNew} />
               </motion.div>
             </motion.div>
           )}
         </div>
       </div>
-
-      {/* ── Action Dock: always visible when analysis tab is active and not loading ── */}
-      {rs.activeTab === "analysis" && (rs.state === "ready" || rs.state === "empty") && (
-        <ActionDock
-          onHome={rs.handleHome}
-          onNew={rs.handleNew}
-          onExport={rs.handleExport}
-          sessionId={rs.sessionId ?? undefined}
-          showExport={rs.state === "ready"}
-        />
-      )}
     </div>
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────
+// ── ExportDropdown ───────────────────────────────────────────────────────────
 
-function ResultLoadingView({
-  title,
-  liveText,
+function ExportDropdown({
+  report,
+  sessionId,
+  onExportJson,
 }: {
-  title: string;
-  liveText: string;
+  report: ReportDTO;
+  sessionId?: string;
+  onExportJson: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handlePdf = useCallback(async () => {
+    if (!sessionId || exporting) return;
+    setExporting(true);
+    setOpen(false);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report/pdf`,
+        { credentials: "include" },
+      );
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `forensic-report-${(report.report_id ?? sessionId).slice(0, 8)}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+    } catch {
+      // fall through to JSON
+    } finally {
+      setExporting(false);
+    }
+    onExportJson();
+  }, [sessionId, exporting, report, onExportJson]);
+
+  const handleJson = useCallback(() => {
+    setOpen(false);
+    onExportJson();
+  }, [onExportJson]);
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={exporting}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.10] fc-text-faint hover:text-white hover:bg-white/[0.05] hover:border-white/[0.15] transition-all duration-150 fc-eyebrow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+        aria-label="Export report"
+        aria-expanded={open}
+      >
+        <Download className="w-3.5 h-3.5" />
+        Export
+        <ChevronDown className={clsx("w-3 h-3 transition-transform duration-150", open && "rotate-180")} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            transition={{ duration: 0.1, ease: "easeOut" }}
+            className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-white/[0.10] bg-background/95 backdrop-blur-xl shadow-xl py-1.5 z-50"
+          >
+            <button
+              type="button"
+              onClick={handlePdf}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs fc-text-muted hover:text-white hover:bg-white/[0.05] transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              PDF Report
+            </button>
+            <button
+              type="button"
+              onClick={handleJson}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs fc-text-muted hover:text-white hover:bg-white/[0.05] transition-colors"
+            >
+              <FileJson className="w-3.5 h-3.5 shrink-0" />
+              JSON Export
+            </button>
+            <div className="mx-3 my-1 h-px bg-white/[0.06]" />
+            <div className="flex items-center gap-2.5 px-4 py-2 text-xs fc-text-faint opacity-40 cursor-not-allowed select-none">
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              Docx — coming soon
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function ResultLoadingView({ title, liveText }: { title: string; liveText: string }) {
   return (
     <div className="min-h-screen bg-background" aria-busy="true" aria-label={title}>
       <ForensicProgressOverlay
@@ -361,24 +411,9 @@ function ResultLoadingView({
         liveText={liveText}
         telemetryLabel="Compiling agent findings"
         showElapsed
+        variant="arbiter"
       />
       <ResultSkeletonView />
-    </div>
-  );
-}
-
-function ResultInlineStatus({ message }: { message: string }) {
-  return (
-    <div className="min-h-[54vh] flex items-center justify-center">
-      <div className="w-full max-w-md fc-surface-quiet px-8 py-10 text-center">
-        <ShieldAlert className="w-12 h-12 text-primary/70 mx-auto mb-6" />
-        <div className="mt-6 fc-eyebrow text-primary/70">
-          Consensus Synthesis
-        </div>
-        <p className="mt-3 font-mono text-xs font-semibold leading-relaxed text-white/70">
-          {message || "Arbiter is compiling agent findings..."}
-        </p>
-      </div>
     </div>
   );
 }
@@ -386,26 +421,18 @@ function ResultInlineStatus({ message }: { message: string }) {
 function ResultSkeletonView() {
   return (
     <div className="min-h-screen opacity-35" aria-hidden="true">
-      <div className="max-w-7xl mx-auto px-6 pt-28 space-y-6">
-        <div className="p-8 space-y-8 fc-surface-quiet">
-          <div className="flex flex-col md:flex-row gap-6 items-center">
-            <div className="skeleton w-32 h-32 rounded-2xl" />
-            <div className="flex-1 space-y-4 w-full">
-              <div className="skeleton h-3.5 w-44 rounded-2xl" />
-              <div className="skeleton h-9 w-72 rounded-2xl" />
-              <div className="skeleton h-16 w-full rounded-2xl" />
-            </div>
-            <div className="skeleton w-28 h-28 rounded-2xl" />
-          </div>
-        </div>
-        <div className="skeleton h-52 fc-surface-quiet" />
-        <div className="skeleton h-72 fc-surface-quiet" />
+      <div className="max-w-4xl mx-auto px-6 pt-28 space-y-4">
+        <div className="skeleton h-28 rounded-2xl" />
+        <div className="skeleton h-44 rounded-2xl" />
+        <div className="skeleton h-12 rounded-2xl" />
+        <div className="skeleton h-36 rounded-2xl" />
+        <div className="skeleton h-64 rounded-2xl" />
       </div>
     </div>
   );
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function toPct(value: number | null | undefined): number {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? 0) * 100)));
@@ -427,24 +454,20 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
 
   (report.key_findings ?? []).forEach((finding) => push(finding));
 
-  if (findings.length > 0) {
-    return findings.slice(0, 4);
-  }
+  if (findings.length > 0) return findings.slice(0, 5);
 
-  if (findings.length === 0) {
-    const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
-      .map(([agentId, text]) => ({
-        agentId,
-        text: cleanFindingText(text),
-        priority: agentPriority(agentId),
-      }))
-      .filter((item) => item.text && !isLowValueFinding(item.text))
-      .sort((a, b) => a.priority - b.priority);
+  const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
+    .map(([agentId, text]) => ({
+      agentId,
+      text: cleanFindingText(text),
+      priority: agentPriority(agentId),
+    }))
+    .filter((item) => item.text && !isLowValueFinding(item.text))
+    .sort((a, b) => a.priority - b.priority);
 
-    for (const item of agentNarratives) {
-      if (findings.length >= 3) break;
-      push(item.text);
-    }
+  for (const item of agentNarratives) {
+    if (findings.length >= 3) break;
+    push(item.text);
   }
 
   if (findings.length === 0) {
@@ -503,15 +526,13 @@ function agentPriority(agentId: string): number {
   if (agentId === "Agent3") return 3;
   if (agentId === "Agent2") return 4;
   if (agentId === "Agent4") return 5;
-  return 10;
+  return 9;
 }
 
-function severityRank(severity: string): number {
-  switch (severity) {
-    case "CRITICAL": return 5;
-    case "HIGH": return 4;
-    case "MEDIUM": return 3;
-    case "LOW": return 2;
-    default: return 1;
-  }
+function severityRank(s: string): number {
+  if (s === "CRITICAL") return 5;
+  if (s === "HIGH") return 4;
+  if (s === "MEDIUM") return 3;
+  if (s === "LOW") return 2;
+  return 1;
 }
