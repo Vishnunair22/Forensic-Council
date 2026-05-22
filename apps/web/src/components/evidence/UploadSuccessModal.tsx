@@ -105,7 +105,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-2 pt-2" aria-hidden="true">
+        <div className="flex items-center justify-between px-2 pt-2">
           <div className="flex flex-col gap-1">
             <p
               className="text-sm font-mono font-medium fc-text-primary truncate max-w-[300px]"
@@ -130,7 +130,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           type="button"
           onClick={() => { playSound("click"); onNewUpload(); }}
           disabled={isStarting}
-          className="fc-btn-secondary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="fc-btn-secondary flex-1"
         >
           Reselect File
         </button>
@@ -146,7 +146,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
             }
           }}
           disabled={isStarting}
-          className="fc-btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="fc-btn-primary flex-1"
         >
           {isStarting ? (
             <>
