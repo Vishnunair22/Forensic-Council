@@ -67,6 +67,41 @@ SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal R
 
 ---
 
+### 2026-05-22: Upload Modal → File Picker Flow Audit
+
+**Status:** ✅ COMPLETE & SEALED
+
+### What Changed
+- **`accept` attribute wired to both MIME types and file extensions**: Previously only MIME types were passed; on Windows and some browsers `.tif`, `.avi`, `.flac`, `.m4a` are not reliably mapped to their MIME types so the native picker showed all files. `ALLOWED_EXTENSIONS` exported from `fileValidation.ts` and combined with `ALLOWED_MIME_TYPES` in the `accept` string.
+- **`dragLeave` child-element flicker fixed**: When the cursor moved from the dropzone background onto a child element (icon, label, hidden input), `dragLeave` fired on the parent and `isDragging` flickered to `false`. Added `if (e.currentTarget.contains(e.relatedTarget as Node)) return;` guard.
+- **Hidden file input removed from tab order**: The `opacity-0 absolute` file input defaulted to `tabIndex=0` — keyboard users would tab onto an invisible control after the `role="button"` div. Added `tabIndex={-1}`; the outer div owns all keyboard interaction.
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-Upload-FilePicker (Upload Modal → File Picker → File Selection) — 2026-05-22
+  Files: fileValidation.ts, UploadModal.tsx
+  Invariants:
+    - ALLOWED_EXTENSIONS is exported from fileValidation.ts
+    - File input accept = [...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS].join(",")
+    - handleDragLeave guards against child-element relatedTarget (no isDragging flicker)
+    - File input has tabIndex={-1} (keyboard nav owned by role=button parent div)
+```
+
+### Files Touched
+- [apps/web/src/lib/fileValidation.ts](apps/web/src/lib/fileValidation.ts)
+- [apps/web/src/components/evidence/UploadModal.tsx](apps/web/src/components/evidence/UploadModal.tsx)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| accept includes extensions | ✅ PASS | .tif .avi .flac .m4a etc. now in accept string |
+| dragLeave child guard present | ✅ PASS | relatedTarget check confirmed |
+| file input tabIndex={-1} | ✅ PASS | Removed from tab order |
+
+---
+
 ### 2026-05-22: CTA→Upload Modal Flow Audit — Design Compliance
 
 **Status:** ✅ COMPLETE & SEALED

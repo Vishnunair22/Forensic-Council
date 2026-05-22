@@ -430,6 +430,14 @@ SECTION H — SEALED FLOW REGISTRY
       - Both modals exit with y: 4 (same direction as entrance, not inverted y: -4)
       - UploadSuccessModal preview card uses bg-white/1 (no decimal opacity)
 
+  SEALED: F-Upload-FilePicker (Upload Modal → File Picker → File Selection) — 2026-05-22
+    Files: fileValidation.ts, UploadModal.tsx
+    Invariants:
+      - ALLOWED_EXTENSIONS is exported from fileValidation.ts
+      - File input accept = [...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS].join(",")
+      - handleDragLeave guards against child-element relatedTarget (no isDragging flicker)
+      - File input has tabIndex={-1} (keyboard nav owned by role=button parent div)
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────
