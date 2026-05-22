@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" dir="ltr" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <body className="font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip">
         <LandingBackground />
         <Suspense fallback={null}>
@@ -40,9 +40,7 @@ export default function RootLayout({
         </a>
 
         <QueryProvider>
-          <Suspense fallback={null}>
-            <GlobalLoadingOverlay />
-          </Suspense>
+          <GlobalLoadingOverlay />
           <GlobalNavbar />
           <main className="flex-1 relative z-10 pt-16" id="main-content">
             {children}

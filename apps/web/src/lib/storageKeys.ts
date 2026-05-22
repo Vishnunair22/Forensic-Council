@@ -24,4 +24,9 @@ export const STORAGE_KEYS = {
   // Agent State & Updates
   INITIAL_AGENTS: "forensic_initial_agents",
   DEEP_AGENTS: "forensic_deep_agents",
+
+  // Ephemeral flow-control flags (sessionStorage only, cleared by resetActiveInvestigation)
+  FC_SHOW_LOADING: "fc_show_loading",
+  FC_NO_RECONNECT: "fc_no_reconnect",
+  FC_REPORT_READY: "fc_report_ready",
 } as const;

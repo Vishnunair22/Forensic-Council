@@ -15,6 +15,7 @@ import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/types";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 export type Tab = "analysis" | "history";
 export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
@@ -81,7 +82,7 @@ export function useResult(initialSessionId?: string) {
 
   // Mount + hydrate from storage (client only). Runs once.
   useEffect(() => {
-    const ready = sessionOnlyStorage.getItem("fc_report_ready") === "1";
+    const ready = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
     const sid = initialSessionId ?? storage.getItem("forensic_session_id");
     const ctx = readSessionContext(sid);
     const deep = readResultPhase(sid) === "deep";
@@ -115,7 +116,7 @@ export function useResult(initialSessionId?: string) {
     if (!mounted) return;
     document.body.removeAttribute("data-fc-loading");
     if (reportAlreadyReady) {
-      sessionOnlyStorage.removeItem("fc_report_ready");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
       return;
     }
     if (minOverlayDone) return;

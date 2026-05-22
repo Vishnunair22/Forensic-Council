@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
 import { sessionOnlyStorage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { autoLoginAsInvestigator } from "@/lib/api";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import { savePendingEvidenceFile } from "@/lib/pendingFilePersistence";
@@ -64,7 +65,7 @@ export function HeroAuthActions() {
 
     if (params.get("upload") !== "1" && openOnce !== "1") {
       sessionOnlyStorage.removeItem("forensic_auto_start");
-      sessionOnlyStorage.removeItem("fc_show_loading");
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
     }
     if (params.get("upload") === "1" || openOnce === "1") {
       setShowUpload(true);
@@ -88,7 +89,7 @@ export function HeroAuthActions() {
       console.warn("[HeroAuthActions] could not persist pending file:", error);
     });
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
-    sessionOnlyStorage.setItem("fc_show_loading", "true");
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
     sessionOnlyStorage.setItem(
       "fc_pending_file_meta",
       JSON.stringify({

@@ -5,15 +5,22 @@ import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { sessionOnlyStorage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 export function GlobalLoadingOverlay() {
   const pathname = usePathname();
-  const [show, setShow] = useState(() => sessionOnlyStorage.getItem("fc_show_loading") === "true");
+  const [show, setShow] = useState(false);
+
+  // Read actual sessionStorage value after hydration (lazy initializer runs server-side
+  // where isBrowser=false and always returns false).
+  useEffect(() => {
+    setShow(sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true");
+  }, []);
 
   useEffect(() => {
     const handleStorageUpdate = (e: Event) => {
       const { key, value } = (e as CustomEvent<{ key: string; value: string | null }>).detail;
-      if (key === "fc_show_loading") {
+      if (key === STORAGE_KEYS.FC_SHOW_LOADING) {
         setShow(value === "true");
       }
     };

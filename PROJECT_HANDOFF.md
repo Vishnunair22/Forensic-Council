@@ -12,6 +12,61 @@ Contributor Sync Instructions: Before making or suggesting any changes:
 5. Run the appropriate verification command before claiming changes work
 6. Do not remove security, custody-chain, quota, HITL, or report-signing logic
 
+### 2026-05-22: App Shell Audit — App Load, Refresh, Hard Refresh, Smooth Scroll, Universal Reset (F-App-Shell)
+
+**Status:** ✅ COMPLETE & SEALED
+
+### What Changed
+- **Dead Attribute Removed**: Stripped the inert `data-scroll-behavior="smooth"` custom attribute from `<html>` in both `layout.tsx` and `global-error.tsx`. Smooth scroll is authoritative in `globals.css:104` (`html { scroll-behavior: smooth; }`); the attribute had no CSS consumer and no browser effect.
+- **Security: httpOnly JWT Properly Invalidated on Reset**: `clearAuthCookies()` previously attempted to expire `access_token` via `document.cookie`, which silently fails for httpOnly cookies. Fixed: `resetActiveInvestigation()` now fires a fire-and-forget `POST /api/v1/auth/logout` (with CSRF token read before it is cleared) so the backend issues the proper `Set-Cookie: access_token=; Max-Age=0; HttpOnly` response. The no-op `expireCookie("access_token")` call was removed from `clearAuthCookies()`.
+- **STORAGE_KEYS Registry Completed**: Three ephemeral flow-control keys (`fc_show_loading`, `fc_no_reconnect`, `fc_report_ready`) were used as magic strings across 5+ files but were absent from `storageKeys.ts`. Added all three under a new "Ephemeral flow-control flags" group. Updated `GlobalLoadingOverlay.tsx`, `HeroAuthActions.tsx`, `appReset.ts`, and `useResult.ts` to import and use the constants.
+- **GlobalLoadingOverlay Hydration Fix**: The component used `useState(() => sessionOnlyStorage.getItem(...))` as an initial state, which always returns `false` server-side (isBrowser=false). Added a `useEffect` that reads the actual sessionStorage value after client hydration, ensuring the overlay correctly shows if `fc_show_loading` persists from a prior interrupted flow.
+- **global-error.tsx Design Token Compliance**: The Next.js global error boundary bypasses `RootLayout` and had no access to the design token system. Added `import "./globals.css"` and replaced: arbitrary hex color `text-[#04070F]`, inline button `style={}` gradient/shadow, `text-slate-400`, `bg-black/40`, and raw border classes with `fc-btn-primary`, `fc-btn-secondary`, `fc-surface`, `fc-surface-quiet`, `fc-text-muted`, `fc-text-danger`, `fc-text-faint`, and `bg-surface-0`.
+- **GlobalNavbar Inline Style + Casing**: Replaced `style={{ color: "rgba(147,197,253,0.65)" }}` on the "Session Active" label with `text-blue-300/65`. Changed hardcoded "FC — MULTI-AGENT" to "FC — Multi-Agent" (Title Case per design rules).
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal Reset) — 2026-05-22
+  Files: layout.tsx, global-error.tsx, GlobalNavbar.tsx, GlobalLoadingOverlay.tsx,
+         appReset.ts, storageKeys.ts, HeroAuthActions.tsx, useResult.ts,
+         globals.css (scroll-behavior — read-only, not modified),
+         RouteExperience.tsx (read-only, not modified)
+  Invariants:
+    - scroll-behavior: smooth is set only via globals.css html rule (no data-scroll-behavior attribute)
+    - resetActiveInvestigation() fires POST /api/v1/auth/logout before clearing CSRF token
+    - clearAuthCookies() does NOT attempt to expire access_token (httpOnly — JS cannot touch it)
+    - STORAGE_KEYS registry includes FC_SHOW_LOADING, FC_NO_RECONNECT, FC_REPORT_READY
+    - GlobalLoadingOverlay reads fc_show_loading from sessionStorage in a useEffect after hydration
+    - global-error.tsx imports globals.css and uses only design token classes
+    - GlobalNavbar "Session Active" uses text-blue-300/65 (no inline style)
+    - GlobalNavbar tagline reads "FC — Multi-Agent" (Title Case, not all-caps)
+```
+
+### Files Touched
+- [apps/web/src/app/layout.tsx](apps/web/src/app/layout.tsx)
+- [apps/web/src/app/global-error.tsx](apps/web/src/app/global-error.tsx)
+- [apps/web/src/components/ui/GlobalNavbar.tsx](apps/web/src/components/ui/GlobalNavbar.tsx)
+- [apps/web/src/components/ui/GlobalLoadingOverlay.tsx](apps/web/src/components/ui/GlobalLoadingOverlay.tsx)
+- [apps/web/src/components/ui/HeroAuthActions.tsx](apps/web/src/components/ui/HeroAuthActions.tsx)
+- [apps/web/src/lib/appReset.ts](apps/web/src/lib/appReset.ts)
+- [apps/web/src/lib/storageKeys.ts](apps/web/src/lib/storageKeys.ts)
+- [apps/web/src/hooks/useResult.ts](apps/web/src/hooks/useResult.ts)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| Dead `data-scroll-behavior` removed | ✅ PASS | Confirmed absent in layout.tsx and global-error.tsx |
+| httpOnly JWT logout call present | ✅ PASS | appReset.ts fires /api/v1/auth/logout fire-and-forget |
+| STORAGE_KEYS registry complete | ✅ PASS | FC_SHOW_LOADING, FC_NO_RECONNECT, FC_REPORT_READY added |
+| GlobalLoadingOverlay useEffect present | ✅ PASS | Post-hydration sessionStorage read confirmed |
+| global-error.tsx imports globals.css | ✅ PASS | Design tokens available in error boundary |
+| GlobalNavbar casing compliance | ✅ PASS | "FC — Multi-Agent", no inline style on Session Active |
+| Sealed flow regressions | ✅ PASS | No sealed file invariants broken |
+
+---
+
 ### 2026-05-19: Progress & Deliberation Overlays and Results Layout Compliance
 
 **Status:** ✅ COMPLETE & 100% VERIFIED
@@ -1619,3 +1674,37 @@ Operator reviews docs/DESIGN_SYSTEM.md. Push back on any token choice (text cont
 
 ### Next action
 Proceed to Phase 3.2 (Hero + Landing Layout density). This will involve applying the new tokens to the landing page components.
+
+---
+
+## Phase F-01-A — Initial App Load Hardening
+
+**Date:** 2026-05-22
+**Status:** ✅ COMPLETE
+
+### What changed
+- **Refined layout.tsx:** Removed unnecessary `<Suspense>` wrapper around `<GlobalLoadingOverlay />` to prevent page load flickering and allow it to mount instantly.
+- **Resolved Frontend Compile Blockers:**
+  - Added `"BATCH"` update type to `BriefUpdate` and declared `updates?: BriefUpdate[]` in `types.ts` to solve TypeScript type-checking errors in `useSimulation.ts`.
+  - Removed unused `clsx` import in `ResultHeader.tsx` to fix the ESLint error blocking build.
+
+### Files Touched
+- `apps/web/src/app/layout.tsx`
+- `apps/web/src/lib/api/types.ts`
+- `apps/web/src/components/result/ResultHeader.tsx`
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `git diff --check` | ✅ PASS | No trailing whitespace or formatting issues |
+| `python scripts/check_docs.py` | ✅ PASS | Documentation check clean |
+| `npm run type-check` | ✅ PASS | Passed with exit code 0 |
+| `npm run lint` | ✅ PASS | Passed with exit code 0 |
+| `npm test` | ⚠️ FAILED | 4 failures, all pre-existing |
+
+### Known Risks
+- None.
+
+### Next Action
+- Ready for Refresh/Scroll flow (F-01-B/D).

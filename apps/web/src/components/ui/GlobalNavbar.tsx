@@ -191,16 +191,13 @@ export function GlobalNavbar() {
                   boxShadow: "0 0 6px rgba(96,165,250,0.65)",
                 }}
               />
-              <span
-                className="fc-eyebrow hidden md:inline"
-                style={{ color: "rgba(147,197,253,0.65)" }}
-              >
+              <span className="fc-eyebrow hidden md:inline text-blue-300/65">
                 Session Active
               </span>
             </div>
           ) : (
             <span className="fc-eyebrow fc-text-faint hidden md:inline shrink-0 tracking-widest">
-              FC — MULTI-AGENT
+              FC — Multi-Agent
             </span>
           )}
         </div>

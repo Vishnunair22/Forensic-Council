@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, RefreshCcw, Home } from "lucide-react";
 import Link from "next/link";
+import "./globals.css";
 
 export default function GlobalError({
   error,
@@ -19,16 +20,11 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en" data-scroll-behavior="smooth">
-      <body style={{ backgroundColor: "#05070D", color: "#F1F5F9" }}>
-        <div className="min-h-screen text-foreground flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+    <html lang="en">
+      <body className="bg-surface-0 min-h-screen fc-text-primary flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+        <div className="min-h-screen flex flex-col items-center justify-center w-full">
           <motion.div
-            className="relative max-w-md w-full p-8 rounded-3xl overflow-hidden flex flex-col items-center z-10 border border-red-500/15 bg-white/[0.03]"
-            style={{
-              backdropFilter: "blur(24px)",
-              boxShadow:
-                "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
-            }}
+            className="fc-surface relative max-w-md w-full p-8 rounded-3xl overflow-hidden flex flex-col items-center z-10"
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
@@ -36,18 +32,19 @@ export default function GlobalError({
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-400/30 to-transparent rounded-t-3xl" />
 
             <motion.div
-              className="w-16 h-16 bg-red-500/10 border border-red-500/25 rounded-2xl flex items-center justify-center mb-6"
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+              style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)" }}
               animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
             >
-              <AlertTriangle className="w-8 h-8 text-red-400" />
+              <AlertTriangle className="w-8 h-8 fc-text-danger" />
             </motion.div>
 
-            <h1 className="text-2xl font-bold mb-3 text-foreground">
+            <h1 className="text-2xl font-bold mb-3 fc-text-primary">
               Pipeline Interrupted
             </h1>
 
-            <p className="text-slate-400 mb-8 text-sm leading-relaxed text-center">
+            <p className="fc-text-muted mb-8 text-sm leading-relaxed text-center">
               An unexpected error occurred during the forensic analysis process. The
               system has safely halted — no data has been lost.
             </p>
@@ -55,33 +52,26 @@ export default function GlobalError({
             <div className="w-full space-y-3">
               <motion.button
                 onClick={() => reset()}
-                className="w-full py-3.5 rounded-full inline-flex items-center justify-center gap-2 font-bold text-[#04070F]"
-                style={{
-                  background: "linear-gradient(135deg, #93C5FD 0%, #3B82F6 60%, #2563EB 100%)",
-                  boxShadow: "0 10px 30px -8px rgba(79,142,247,0.6), inset 0 1px 0 rgba(255,255,255,0.35)",
-                }}
+                className="fc-btn-primary w-full"
                 whileTap={{ scale: 0.98 }}
               >
                 <RefreshCcw className="w-4 h-4" />
                 Retry Analysis
               </motion.button>
 
-              <Link
-                href="/"
-                className="w-full py-3.5 rounded-full inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
-              >
+              <Link href="/" className="fc-btn-secondary w-full">
                 <Home className="w-4 h-4" />
-                Return to Dashboard
+                Return To Home
               </Link>
             </div>
 
             {process.env.NODE_ENV === "development" && (
-              <div className="mt-6 p-4 bg-black/40 rounded-xl border border-red-500/20 w-full overflow-hidden text-left">
-                <p className="text-xs font-mono text-red-400 break-all leading-relaxed">
+              <div className="mt-6 p-4 fc-surface-quiet rounded-xl border border-red-500/20 w-full overflow-hidden text-left">
+                <p className="text-xs font-mono fc-text-danger break-all leading-relaxed">
                   {error.message}
                 </p>
                 {error.digest && (
-                  <p className="text-xs font-mono text-white/55 mt-1">
+                  <p className="text-xs font-mono fc-text-faint mt-1">
                     Digest: {error.digest}
                   </p>
                 )}

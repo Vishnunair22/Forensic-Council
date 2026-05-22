@@ -392,6 +392,19 @@ SECTION H — SEALED FLOW REGISTRY
       - Skeleton frames use fc-surface-quiet
       - Back/action buttons use pill shape
 
+  SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal Reset) — 2026-05-22
+    Files: layout.tsx, global-error.tsx, GlobalNavbar.tsx, GlobalLoadingOverlay.tsx,
+           appReset.ts, storageKeys.ts, HeroAuthActions.tsx, useResult.ts
+    Invariants:
+      - scroll-behavior: smooth set only in globals.css; no data-scroll-behavior attribute on <html>
+      - resetActiveInvestigation() fires POST /api/v1/auth/logout before clearing CSRF cookie
+      - clearAuthCookies() does NOT attempt to expire access_token (httpOnly — JS silent no-op)
+      - STORAGE_KEYS registry includes FC_SHOW_LOADING, FC_NO_RECONNECT, FC_REPORT_READY
+      - GlobalLoadingOverlay reads fc_show_loading in useEffect after hydration (not lazy initializer)
+      - global-error.tsx imports globals.css and uses only fc-* design token classes
+      - GlobalNavbar "Session Active" label uses text-blue-300/65 (no inline style color)
+      - GlobalNavbar tagline is "FC — Multi-Agent" (Title Case)
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────
