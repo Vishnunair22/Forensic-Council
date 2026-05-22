@@ -419,6 +419,17 @@ SECTION H — SEALED FLOW REGISTRY
       - HowWorksSection card div carries group class so hover glow activates
       - FC_OPEN_UPLOAD_ONCE and FC_PENDING_FILE_META registered in STORAGE_KEYS
 
+  SEALED: F-CTA-Upload-Modal (Landing CTA → Upload Modal flow) — 2026-05-22
+    Files: dialog.tsx, UploadModal.tsx, UploadSuccessModal.tsx
+    Invariants:
+      - dialog.tsx Radix CSS animation uses duration-[160ms] (not duration-150)
+      - UploadModal and UploadSuccessModal h2 use fc-text-primary (not text-white)
+      - UploadModal "Select Evidence" default text uses fc-text-secondary (canonical)
+      - UploadModal error text uses fc-text-danger (not text-[var(--color-danger)])
+      - Submitting status dot is rounded-full (animate-pulse requires rounded-full)
+      - Both modals exit with y: 4 (same direction as entrance, not inverted y: -4)
+      - UploadSuccessModal preview card uses bg-white/1 (no decimal opacity)
+
   [ADD NEW SEALED FLOWS BELOW AS THEY ARE COMPLETED]
 
 ─────────────────────────────────────────────────────────────────────────────

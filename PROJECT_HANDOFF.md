@@ -67,6 +67,58 @@ SEALED: F-App-Shell (App Load, Refresh, Hard Refresh, Smooth Scroll, Universal R
 
 ---
 
+### 2026-05-22: CTA→Upload Modal Flow Audit — Design Compliance
+
+**Status:** ✅ COMPLETE & SEALED
+
+### What Changed
+- **dialog.tsx animation duration**: `duration-150` → `duration-[160ms]` — Radix CSS animation was 10ms under the 160ms spec (§3.5)
+- **UploadModal h2**: `text-white` → `fc-text-primary` (§4.2)
+- **UploadModal "Select Evidence" text**: `text-white/80` → `fc-text-secondary` — use canonical class; group-hover:text-white kept (group-hover:fc-text-primary inert in Tailwind v4)
+- **UploadModal error text**: `text-[var(--color-danger)]` → `fc-text-danger` — canonical class exists and must be preferred
+- **UploadModal submitting dot**: `w-2 h-2 bg-primary animate-pulse` → added `rounded-full` — spec requires animate-pulse only on `w-*/rounded-full` status dots (§motion)
+- **UploadModal exit animation**: `y: -4` → `y: 4` — spec defines exit as same direction as entrance, not inverted
+- **UploadSuccessModal h2**: `text-white` → `fc-text-primary` (§4.2)
+- **UploadSuccessModal filename**: `text-white` → `fc-text-primary` (§4.2)
+- **UploadSuccessModal file size**: `text-white` → `fc-text-primary` (§4.2)
+- **UploadSuccessModal preview bg**: `bg-white/[0.01]` → `bg-white/1` — decimal opacity banned (§21.1)
+- **UploadSuccessModal exit animation**: `y: -4` → `y: 4` (same as UploadModal fix)
+
+### Sealed Flow Registry Entry
+```
+SEALED: F-CTA-Upload-Modal (Landing CTA → Upload Modal flow) — 2026-05-22
+  Files: dialog.tsx, UploadModal.tsx, UploadSuccessModal.tsx
+  Invariants:
+    - dialog.tsx Radix CSS animation uses duration-[160ms] (not duration-150)
+    - UploadModal and UploadSuccessModal h2 use fc-text-primary (not text-white)
+    - UploadModal "Select Evidence" default uses fc-text-secondary (canonical)
+    - UploadModal error text uses fc-text-danger (canonical class)
+    - Submitting status dot is rounded-full (animate-pulse requires rounded-full)
+    - Both modals exit with y: 4 (same direction as entrance, not y: -4)
+    - UploadSuccessModal preview card uses bg-white/1 (no decimal opacity)
+    - fc-text-faint on close button icons is permitted (decorative chrome in overlay)
+    - group-hover:text-white on interactive text is permitted (canonical brightening)
+```
+
+### Files Touched
+- [apps/web/src/components/ui/dialog.tsx](apps/web/src/components/ui/dialog.tsx)
+- [apps/web/src/components/evidence/UploadModal.tsx](apps/web/src/components/evidence/UploadModal.tsx)
+- [apps/web/src/components/evidence/UploadSuccessModal.tsx](apps/web/src/components/evidence/UploadSuccessModal.tsx)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | ✅ PASS | Zero TypeScript errors |
+| dialog.tsx animation 160ms | ✅ PASS | duration-[160ms] confirmed |
+| text-white eliminated | ✅ PASS | All 5 instances replaced with fc-text-primary |
+| Canonical error class | ✅ PASS | fc-text-danger in place |
+| Status dot rounded-full | ✅ PASS | animate-pulse compliant |
+| Exit animation direction | ✅ PASS | y: 4 in both modals |
+| Decimal opacity eliminated | ✅ PASS | bg-white/1 confirmed |
+
+---
+
 ### 2026-05-22: Landing Page Design Audit — Precision Frosted Glass Compliance
 
 **Status:** ✅ COMPLETE & SEALED
