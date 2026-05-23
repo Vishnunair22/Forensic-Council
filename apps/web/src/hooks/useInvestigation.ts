@@ -184,11 +184,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, []);
 
   const {
-    status,
-    agentUpdates,
-    completedAgents,
-    pipelineMessage,
-    pipelineThinking,
+    status = "idle",
+    agentUpdates = {}, // Add strict default
+    completedAgents = [], // Add strict default
+    pipelineMessage = "",
+    pipelineThinking = "",
     startSimulation,
     connectWebSocket,
     resumeInvestigation,
@@ -469,26 +469,26 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         if (savedAgents.length > 0) {
           restoreSimulationState(savedAgents, "awaiting_decision");
         }
-        connectWebSocket(sessionIdToUse, true)
-          .then(() => {
-            setAnalysisStreamReady(true);
-            setIsUploading(false);
-            setUploadPhaseText("Reconnected to existing analysis");
-          })
-          .catch((wsErr: unknown) => {
-            const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to reconnect to stream";
-            setIsUploading(false);
-            setShowLoadingOverlay(false);
-            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-            setWsConnectionError(wsErrMsg);
-          })
-          .finally(() => {
-            investigationInFlightRef.current = false;
-            __pendingFileStore.file = null;
-            clearPendingEvidenceFile().catch(() => {});
-            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_PENDING_FILE_META);
-            sessionExistsRef.current = true;
-          });
+      connectWebSocket(sessionIdToUse, true)
+        .then(() => {
+          setAnalysisStreamReady(true);
+          setIsUploading(false);
+          setUploadPhaseText("Reconnected to existing analysis");
+          __pendingFileStore.file = null;
+          clearPendingEvidenceFile().catch(() => {});
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_PENDING_FILE_META);
+          sessionExistsRef.current = true;
+        })
+        .catch((wsErr: unknown) => {
+          const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to reconnect to stream";
+          setIsUploading(false);
+          setShowLoadingOverlay(false);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+          setWsConnectionError(wsErrMsg);
+        })
+        .finally(() => {
+          investigationInFlightRef.current = false;
+        });
         return;
       }
 

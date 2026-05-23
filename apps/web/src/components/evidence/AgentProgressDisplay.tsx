@@ -77,7 +77,7 @@ interface ActiveAgentsPanelProps {
   getAgentStatus: (id: string) => AgentStatus;
 }
 
-function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAgentStatus }: ActiveAgentsPanelProps) {
+function ActiveAgentsPanel({ visibleAgents = [], agentUpdates = {}, completedAgents = [], getAgentStatus }: ActiveAgentsPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const prefersReducedMotion = useReducedMotion();
 
@@ -265,7 +265,7 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function AgentProgressDisplay({
-  agentUpdates,
+  agentUpdates = {}, // Add strict default
   completedAgents = [],
   progressText,
   allAgentsDone,

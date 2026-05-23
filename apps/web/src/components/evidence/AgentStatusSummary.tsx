@@ -26,10 +26,10 @@ function normalizeVerdict(v?: string): string {
 }
 
 export function AgentStatusSummary({
-  visibleAgents,
-  skippedAgents,
-  agentUpdates,
-  completedAgents,
+  visibleAgents = [],
+  skippedAgents = [],
+  agentUpdates = {}, // Add strict default
+  completedAgents = [], // Add strict default
 }: AgentStatusSummaryProps) {
   const getAgentStatus = (agentId: string) => {
     const completed = completedAgents?.find((c) => c.agent_id === agentId);

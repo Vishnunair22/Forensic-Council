@@ -340,11 +340,13 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
   // (non-httpOnly, always co-issued at login) as a readable session proxy.
   // When csrf_token is present, the httpOnly access_token is also present and
   // will be sent automatically in the WS HTTP upgrade — no subprotocol needed.
-  const hasAuthCookie =
-    typeof document !== "undefined" &&
-    /(?:^|;\s*)csrf_token=/.test(document.cookie);
-  const token = hasAuthCookie ? null : getAuthToken();
-  const protocols = token ? ["forensic-v1", `token.${token}`] : ["forensic-v1"];
+    const hasAuthCookie =
+      typeof document !== "undefined" &&
+      /(?:^|;\s*)csrf_token=/.test(document.cookie);
+    const token = hasAuthCookie ? null : getAuthToken();
+    // Sanitize token to prevent malformed URI headers crashing the WS constructor
+    const sanitizedToken = token ? encodeURIComponent(token) : null; 
+    const protocols = sanitizedToken ? ["forensic-v1", `token.${sanitizedToken}`] : ["forensic-v1"];
   const ws = new WebSocket(
     `${wsBase}/api/v1/sessions/${encodeURIComponent(sessionId)}/live`,
     protocols,

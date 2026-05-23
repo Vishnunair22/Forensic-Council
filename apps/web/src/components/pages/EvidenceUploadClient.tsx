@@ -68,7 +68,8 @@ export function EvidenceUploadClient() {
       const isRunning = s === "analyzing" || s === "initiating" || s === "processing";
       if (hasPendingFile && !hasSessionId && isRunning) {
         e.preventDefault();
-        return "";
+        e.returnValue = ""; // Modern browser compliance
+        return ""; // Legacy fallback
       }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
