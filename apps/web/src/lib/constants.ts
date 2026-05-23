@@ -1,13 +1,13 @@
 import {
   Image as ImageIcon,
-  Mic,
-  Crosshair,
-  Video,
-  FileCode2,
-  Scale,
-  UploadCloud,
-  Cpu,
-  FileSignature,
+    Mic,
+    Crosshair,
+    Video,
+    FileCode2,
+    Scale,
+    UploadCloud,
+    Cpu,
+    FileSignature,
 } from "lucide-react";
 
 export const AGENTS = [

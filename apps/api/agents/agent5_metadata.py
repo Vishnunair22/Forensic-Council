@@ -206,8 +206,6 @@ class Agent5Metadata(ForensicAgent):
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
             ]
 
-        if self._is_digital_image:
-            return core_tasks
         return core_tasks + [
             "Run exif_isolation_forest for ML-based field outlier detection",
             "Run timestamp_analysis for cross-field date and time consistency",

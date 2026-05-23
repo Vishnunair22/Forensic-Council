@@ -11,6 +11,7 @@ from pathlib import Path
 from core.handlers.base import BaseToolHandler
 from core.ml_subprocess import run_ml_tool
 from core.structured_logging import get_logger
+from tools.metadata_tools import _convert_to_degrees
 from tools.metadata_tools import camera_profile_match as real_camera_profile_match
 from tools.metadata_tools import exif_extract as real_exif_extract
 from tools.metadata_tools import file_structure_analysis as real_file_structure_analysis
@@ -26,6 +27,23 @@ logger = get_logger(__name__)
 
 class MetadataHandlers(BaseToolHandler):
     """Handles EXIF extraction, GPS validation, and provenance verification."""
+
+    @staticmethod
+    def _extract_gps_decimal(exif: dict) -> tuple[float | None, float | None]:
+        """Extract decimal-degree GPS from raw PIL EXIF fields (GPSLatitude tuples)."""
+        lat_raw = exif.get("GPSLatitude")
+        lon_raw = exif.get("GPSLongitude")
+        lat = _convert_to_degrees(lat_raw)
+        lon = _convert_to_degrees(lon_raw)
+        if lat is not None:
+            ref = str(exif.get("GPSLatitudeRef") or "").strip().upper()
+            if ref == "S":
+                lat = -lat
+        if lon is not None:
+            ref = str(exif.get("GPSLongitudeRef") or "").strip().upper()
+            if ref == "W":
+                lon = -lon
+        return lat, lon
 
     def register_tools(self, registry) -> None:
         """Register tools with the agent's ToolRegistry."""
@@ -146,10 +164,10 @@ class MetadataHandlers(BaseToolHandler):
         )
 
         exif = self.agent._tool_context.get("exif_extract", {})
-        gps = exif.get("gps_coordinates")
-        ts = exif.get("datetime_original")
+        gps_lat, gps_lon = self._extract_gps_decimal(exif)
+        ts = exif.get("DateTimeOriginal")
 
-        if not gps or not ts:
+        if gps_lat is None or gps_lon is None or not ts:
             result = {
                 "available": False,
                 "not_applicable": True,
@@ -166,9 +184,9 @@ class MetadataHandlers(BaseToolHandler):
                 artifact.file_path,
                 extra_args=[
                     "--lat",
-                    str(gps["latitude"]),
+                    str(gps_lat),
                     "--lon",
-                    str(gps["longitude"]),
+                    str(gps_lon),
                     "--time",
                     str(ts),
                 ],
@@ -203,20 +221,54 @@ class MetadataHandlers(BaseToolHandler):
         absent_fields = list(
             result.get("absent_fields") or result.get("absent_mandatory_fields") or []
         )
+        png_text_count = int(result.get("png_text_fields_count", 0))
+
+        # Compute human-readable file size
+        try:
+            raw_size = path.stat().st_size
+            for unit in ("B", "KB", "MB", "GB"):
+                if raw_size < 1024:
+                    file_size_human = f"{raw_size:.0f} {unit}"
+                    break
+                raw_size /= 1024
+            else:
+                file_size_human = f"{raw_size:.1f} TB"
+        except Exception:
+            file_size_human = ""
+
         result.setdefault("file_name", path.name)
+        result.setdefault("file_size_human", file_size_human)
         result.setdefault("mime_type", getattr(artifact, "mime_type", "") or "")
-        result.setdefault("total_fields_extracted", total_fields)
         result.setdefault("absent_mandatory_fields", absent_fields)
         result.setdefault("available", True)
         result.setdefault("court_defensible", True)
-        result.setdefault("confidence", 0.65 if total_fields == 0 else 0.75)
-        if total_fields == 0:
+
+        # When no EXIF IFD but PNG text chunks exist, report those as the field count
+        if total_fields == 0 and png_text_count > 0:
+            result.setdefault("total_fields_extracted", png_text_count)
             result.setdefault(
                 "file_format_note",
-                "No EXIF metadata block was present; EXIF-dependent checks are limited.",
+                f"No EXIF IFD block present. {png_text_count} PNG text chunk field(s) extracted "
+                f"(tEXt/iTXt). EXIF-dependent camera analysis is limited.",
             )
+            result.setdefault("confidence", 0.70)
+        else:
+            result.setdefault("total_fields_extracted", total_fields)
+            if total_fields == 0:
+                result.setdefault(
+                    "file_format_note",
+                    "No EXIF metadata block was present; EXIF-dependent checks are limited.",
+                )
+            result.setdefault("confidence", 0.65 if total_fields == 0 else 0.75)
+
         await self.agent._record_tool_result("exif_extract", result)
         return result
+
+    # MIME types that natively store metadata outside EXIF IFD — zero EXIF fields is expected
+    _LOSSLESS_NO_EXIF_MIMES = frozenset({
+        "image/png", "image/gif", "image/bmp", "image/webp",
+        "image/tiff",  # TIFF can carry EXIF but often doesn't
+    })
 
     async def metadata_anomaly_score_handler(self, input_data: dict, record: bool = True) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
@@ -230,13 +282,30 @@ class MetadataHandlers(BaseToolHandler):
             total_fields = (
                 int(exif.get("total_fields_extracted", 0) or 0) if isinstance(exif, dict) else 0
             )
+            mime = (getattr(artifact, "mime_type", "") or "").lower()
+            is_lossless = mime in self._LOSSLESS_NO_EXIF_MIMES
+
             score = 0.15
             if total_fields == 0:
-                score = 0.85  # High risk: completely stripped EXIF
+                if is_lossless:
+                    # Zero EXIF is normal for this format — not a manipulation signal
+                    score = 0.10
+                    note = (
+                        f"Zero EXIF IFD fields is expected for {mime}; "
+                        "format uses native metadata blocks, not EXIF. "
+                        "ML metadata scorer unavailable; low-risk baseline applied."
+                    )
+                else:
+                    score = 0.85  # High risk: completely stripped EXIF in a format that should have it
+                    note = "ML metadata scorer unavailable; zero EXIF fields in a format that typically carries them — high-risk baseline applied."
             elif len(absent) >= 10:
                 score = 0.65
+                note = "ML metadata scorer unavailable; many mandatory EXIF fields absent."
             elif len(absent) >= 5:
                 score = 0.45
+                note = "ML metadata scorer unavailable; several mandatory EXIF fields absent."
+            else:
+                note = "ML metadata scorer unavailable; used deterministic EXIF completeness fallback."
 
             result = {
                 "available": True,
@@ -246,7 +315,7 @@ class MetadataHandlers(BaseToolHandler):
                 "is_anomalous": score >= 0.6,
                 "anomalous_fields": absent[:8],
                 "confidence": max(0.55, 1.0 - score),
-                "note": "ML metadata scorer unavailable; used deterministic EXIF completeness fallback.",
+                "note": note,
             }
         if record:
             await self.agent._record_tool_result("metadata_anomaly_score", result)
@@ -258,9 +327,10 @@ class MetadataHandlers(BaseToolHandler):
         if not exif:
             exif = await real_exif_extract(artifact=artifact)
 
-        gps = exif.get("gps_coordinates")
-        ts = exif.get("datetime_original")
-        if not gps or not ts:
+        gps_lat, gps_lon = self._extract_gps_decimal(exif)
+        ts = exif.get("DateTimeOriginal")
+
+        if gps_lat is None or gps_lon is None or not ts:
             result = {
                 "available": False,
                 "not_applicable": True,
@@ -272,7 +342,7 @@ class MetadataHandlers(BaseToolHandler):
             return result
 
         result = await real_gps_timezone_validate(
-            gps_lat=gps["latitude"], gps_lon=gps["longitude"], timestamp_utc=ts
+            gps_lat=gps_lat, gps_lon=gps_lon, timestamp_utc=ts
         )
         await self.agent._record_tool_result("gps_timezone_validate", result)
         return result

@@ -495,6 +495,7 @@ Return ONLY a JSON object:
                 system_prompt="You are a Senior Forensic Analyst. Return ONLY valid JSON.",
                 user_content=prompt,
                 max_tokens=2000,
+                timeout_override=None,
                 json_mode=True,
             )
             if not raw:

@@ -64,7 +64,7 @@ export function HowWorksSection() {
               </div>
 
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10">
-                <item.icon className="w-6 h-6 text-white/80" />
+                <item.icon className="w-6 h-6 fc-text-secondary" />
               </div>
             </div>
 
@@ -81,7 +81,7 @@ export function HowWorksSection() {
               <div
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none"
                 style={{
-                  background: "radial-gradient(ellipse at 50% 0%, rgba(79,142,247,0.07), transparent 70%)",
+                  background: "radial-gradient(ellipse at 50% 0%, rgba(var(--color-primary-rgb),0.07), transparent 70%)",
                 }}
                 aria-hidden="true"
               />

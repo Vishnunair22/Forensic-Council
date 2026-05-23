@@ -174,6 +174,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     return () => {
       if (arbiterAbortControllerRef.current) {
         arbiterAbortControllerRef.current.abort();
+        arbiterAbortControllerRef.current = null;
       }
       if (minOverlayTimerRef.current) {
         clearTimeout(minOverlayTimerRef.current);
@@ -620,9 +621,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setShowLoadingOverlay(false);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
 
+    let effectCancelled = false;
     (async () => {
       try {
         const st = await withTimeout(getArbiterStatus(existingSessionId), 8_000);
+        if (effectCancelled) return;
         if (st.status === "not_found") {
           storage.removeItem(STORAGE_KEYS.SESSION_ID);
           storage.removeItem(STORAGE_KEYS.INVESTIGATION_CTX);
@@ -638,14 +641,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         }
       } catch { /* ignore poll errors during reconnect */ }
 
+      if (effectCancelled) return;
       connectWebSocket(existingSessionId, true)
-        .then(() => setAnalysisStreamReady(true))
+        .then(() => { if (!effectCancelled) setAnalysisStreamReady(true); })
         .catch((wsErr: unknown) => {
+          if (effectCancelled) return;
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
           setWsConnectionError(wsErrMsg);
           setShowLoadingOverlay(false);
         });
     })();
+    return () => { effectCancelled = true; };
   }, [autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
 
   const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
@@ -687,9 +693,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
-      // Navigate immediately — result page polls arbiter status natively via useResult.
-      // Synthesis runs on the backend; ForensicProgressOverlay on the result page
-      // handles the wait with live text, keeping UX identical but navigation instant.
+      arbiterAbortControllerRef.current = new AbortController();
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
+      if (!ok) throw new Error("Report synthesis timed out");
+      
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigated = true;
       router.push(`/result/${sid}`, { scroll: true });
@@ -701,9 +709,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       resumeInFlightRef.current = false;
       setIsNavigating(false);
-      if (!navigated) {
-        setArbiterDeliberating(false);
-      }
+      // Always clear the overlay — if navigation succeeded the evidence page
+      // is unmounting; if it failed we must let the user interact again.
+      setArbiterDeliberating(false);
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
@@ -819,6 +827,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
+      
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
       document.body.setAttribute("data-fc-loading", "1");
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
@@ -828,6 +838,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
     } finally {
       setIsNavigating(false);
+      // Always clear arbiter overlay — navigation either succeeded (page is
+      // transitioning away) or failed (user needs the UI to be interactive).
       setArbiterDeliberating(false);
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
@@ -921,18 +933,20 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     if (!showLoadingOverlay) return;
+    // Hard safety: if the overlay is still up after ANALYSIS_STARTUP_GRACE_MS,
+    // something is stuck. Just dismiss it — the WS/reconnect handlers manage
+    // the session-expired redirect path independently.
     const safety = setTimeout(() => {
-      // Hard safety: if the overlay is still up after 30s, something is stuck.
-      // We force a redirect to /session-expired as a safeguard.
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-      
-      if (!analysisStreamReady && (status === "idle" || status === "initiating")) {
-        router.push("/session-expired");
-      }
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
     }, ANALYSIS_STARTUP_GRACE_MS);
     return () => clearTimeout(safety);
-  }, [showLoadingOverlay, analysisStreamReady, status, router]);
+  // Only restart timer when showLoadingOverlay changes; don't chain on status
+  // to avoid a cascade of timer restarts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showLoadingOverlay]);
 
   // Sync loading state and progress messages to storage for GlobalLoadingOverlay
   useEffect(() => {

@@ -198,7 +198,8 @@ export function deriveSummary(finding: AgentFindingDTO): string {
  const picked = candidates.find((text) => !isTemplateText(text)) || "";
  if (picked) {
   const toolLabel = fmtTool((metadata.tool_name as string) || finding.finding_type);
-  const stripped = stripToolNamePrefix(picked.replace(/^Checked:\s*/i, ""), toolLabel);
+  let stripped = picked.replace(/^[a-z0-9_]+ reported (?:negative|positive|error) \(statement:\s*/i, "").replace(/\)\.?$/, "");
+  stripped = stripToolNamePrefix(stripped.replace(/^Checked:\s*/i, ""), toolLabel);
   return cleanFindingText(stripped);
  }
 
@@ -239,19 +240,19 @@ function getStatus(finding: AgentFindingDTO) {
 function confidenceTier(value: number): { label: string; badgeCls: string; iconCls: string; rowAccent: string } {
  if (value >= 0.75) return {
   label: "High",
-  badgeCls: "bg-transparent border-primary/30 text-primary",
+  badgeCls: "fc-badge fc-badge-active",
   iconCls: "bg-transparent border-primary/25 text-primary",
   rowAccent: "border-l-primary/40",
  };
  if (value >= 0.5) return {
   label: "Medium",
-  badgeCls: "bg-transparent border-warning/35 text-warning",
+  badgeCls: "fc-badge fc-badge-warning",
   iconCls: "bg-transparent border-warning/30 text-warning",
   rowAccent: "border-l-warning/40",
  };
  return {
   label: "Low",
-  badgeCls: "bg-transparent border-danger/30 text-danger",
+  badgeCls: "fc-badge fc-badge-danger",
   iconCls: "bg-transparent border-danger/25 text-danger",
   rowAccent: "border-l-danger/35",
  };
@@ -260,7 +261,7 @@ function confidenceTier(value: number): { label: string; badgeCls: string; iconC
 const STATUS_CONFIG = {
  flagged: {
   badge: "Flagged",
-  badgeCls: "bg-transparent border-warning/35 text-warning",
+  badgeCls: "fc-badge fc-badge-warning",
   iconCls: "bg-transparent border-warning/30 text-warning",
   rowAccent: "border-l-warning/55",
  },
@@ -272,19 +273,19 @@ const STATUS_CONFIG = {
  },
  error: {
   badge: "Error",
-  badgeCls: "bg-transparent border-danger/35 text-danger",
+  badgeCls: "fc-badge fc-badge-danger",
   iconCls: "bg-transparent border-danger/30 text-danger",
   rowAccent: "border-l-danger/45",
  },
  na: {
   badge: "N/A",
-  badgeCls: "bg-transparent border-white/12 fc-text-faint",
+  badgeCls: "fc-badge",
   iconCls: "bg-transparent border-white/10 fc-text-faint",
   rowAccent: "border-l-white/10",
  },
  inconclusive: {
   badge: "Inconclusive",
-  badgeCls: "bg-transparent border-white/15 fc-text-faint",
+  badgeCls: "fc-badge",
   iconCls: "bg-transparent border-white/12 fc-text-muted",
   rowAccent: "border-l-white/20",
  },
@@ -311,7 +312,29 @@ const METRIC_EMPHASIS_CLS: Record<Metric["emphasis"], { wrap: string; label: str
   label: "fc-text-muted",
   value: "fc-text-primary",
  },
-};
+ };
+
+export function BulletedText({ text, colorClass = "bg-white/20" }: { text: string; colorClass?: string }) {
+  if (!text) return null;
+  const points = text.split(/(?<=[.!?])\s+|\n+/).map(p => p.trim()).filter(p => p.length > 10);
+  
+  if (points.length <= 1) {
+    return <p className="text-sm fc-text-secondary leading-relaxed font-medium">{text}</p>;
+  }
+
+  return (
+    <ul className="space-y-2 mt-1">
+      {points.map((point, i) => (
+        <li key={i} className="flex items-start gap-2.5">
+          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${colorClass}`} />
+          <span className="text-sm fc-text-secondary leading-relaxed font-medium block">
+            {point}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 // ─── Confidence Bar ──────────────────────────────────────────────────────────
 export function ConfidenceBar({ value }: { value: number }) {
@@ -398,7 +421,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
        <Clock className="w-3.5 h-3.5" />{timingMs >= 1000 ? `${(timingMs / 1000).toFixed(1)}s` : `${timingMs}ms`}
       </span>
      )}
-     <span className={clsx("px-2.5 py-1 rounded-full border text-xs font-bold tracking-wide", cfg.badgeCls)}>
+     <span className={cfg.badgeCls}>
       {cfg.badge}
      </span>
      {status !== "na" && (
@@ -414,9 +437,9 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
    {/* Summary */}
    {summary && status !== "na" && (
-    <p className="text-sm fc-text-secondary leading-relaxed font-medium pl-[54px]">
-     {summary}
-    </p>
+    <div className="pl-[54px]">
+     <BulletedText text={summary} colorClass="bg-white/10" />
+    </div>
    )}
 
    {/* Metric chips — compact inline */}

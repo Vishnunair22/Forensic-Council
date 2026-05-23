@@ -14,7 +14,6 @@ interface VerdictSectionProps {
   discordPct: number;
   isDeepPhase: boolean;
   agentCount: number;
-  verdictSentence?: string | null;
 }
 
 const VERDICT_THEMES: Record<string, { color: string; colorRgb: string }> = {
@@ -31,16 +30,15 @@ export function VerdictSection({
   discordPct,
   isDeepPhase,
   agentCount,
-  verdictSentence,
 }: VerdictSectionProps) {
   const prefersReduced = useReducedMotion();
   const theme = VERDICT_THEMES[vc.color] ?? VERDICT_THEMES.amber;
   const VerdictIcon = vc.Icon;
 
   const agentLine = agentCount > 0
-    ? `Signed ${isDeepPhase ? "deep-analysis" : "initial-analysis"} report — ${agentCount} active agent${agentCount === 1 ? "" : "s"} · ${confPct}% aggregate confidence.`
+    ? `Signed ${isDeepPhase ? "deep-analysis" : "initial-analysis"} report · ${agentCount} active agent${agentCount === 1 ? "" : "s"} · ${confPct}% aggregate confidence.`
     : null;
-  const primaryText = verdictSentence ?? vc.desc;
+  const primaryText = vc.desc;
 
   return (
     <section className="relative flex flex-col overflow-hidden fc-surface">
@@ -61,7 +59,6 @@ export function VerdictSection({
                 backgroundColor: `rgba(${theme.colorRgb}, 0.09)`,
               }}
             >
-              {/* F-1: VerdictIcon is decorative — the h2 verdict label provides the accessible name. */}
               <VerdictIcon className="w-6 h-6" style={{ color: theme.color }} aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -109,12 +106,14 @@ export function VerdictSection({
           value={errPct}
           color={errPct > 20 ? "var(--color-warning)" : "var(--color-success-light)"}
           icon={Gauge}
+          inverted
         />
         <MetricCell
           label="Agent Spread"
           value={discordPct}
           color={discordPct > 20 ? "var(--color-warning)" : "var(--color-success-light)"}
           icon={Activity}
+          inverted
         />
       </div>
     </section>
@@ -126,23 +125,25 @@ function MetricCell({
   value,
   color,
   icon: Icon,
+  inverted = false,
 }: {
   label: string;
   value: number;
   color: string;
   icon: LucideIcon;
+  inverted?: boolean;
 }) {
   const prefersReduced = useReducedMotion();
-  const pct = `${Math.max(0, Math.min(100, value))}%`;
+  const clampedValue = Math.max(0, Math.min(100, value));
+  const barWidth = `${inverted ? 100 - clampedValue : clampedValue}%`;
+  const barColor = inverted ? "var(--color-success-light)" : color;
+
   return (
     <div className="px-4 md:px-5 py-4">
       <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-2">
-        {/* F-1: Icon is decorative — label text provides the accessible name. */}
         <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />
         <span className="truncate">{label}</span>
       </div>
-      {/* F-3: The numeric percentage above satisfies WCAG 1.4.1 — color is supplemental.
-           F-2: Progress bar is decorative (value conveyed by text). Mark the bar aria-hidden. */}
       <div className="flex items-center gap-3">
         <span className="text-xl font-mono font-bold tabular-nums shrink-0" style={{ color }}>
           {value}%
@@ -150,10 +151,10 @@ function MetricCell({
         <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden" aria-hidden="true">
           <motion.div
             initial={prefersReduced ? false : { width: 0 }}
-            animate={{ width: pct }}
+            animate={{ width: barWidth }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             className="h-full rounded-full"
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: barColor }}
           />
         </div>
       </div>

@@ -10,7 +10,7 @@ import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
@@ -44,6 +44,18 @@ export function EvidenceUploadClient() {
     window.addEventListener("pageshow", onShow);
     return () => window.removeEventListener("pageshow", onShow);
   }, [router]);
+
+  // Critical: clear the loading flag when this component unmounts (navigation away).
+  // GlobalLoadingOverlay lives in the root layout and reads FC_SHOW_LOADING from
+  // sessionStorage. Without this cleanup, the overlay persists on the result page
+  // and every subsequent page — which is the "app not refreshing" bug.
+  useEffect(() => {
+    return () => {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
+    };
+  }, []);
 
   useEffect(() => {
     // F-C-3: compute shouldWarn INSIDE the handler so the latest pending-file

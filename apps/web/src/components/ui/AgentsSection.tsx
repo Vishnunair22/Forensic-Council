@@ -58,7 +58,7 @@ export function AgentsSection() {
               className="relative w-12 h-12 flex items-center justify-center mb-5 shrink-0 rounded-2xl bg-white/5 border border-white/10"
               aria-hidden="true"
             >
-              <agent.icon className="w-5 h-5 text-white/80" />
+              <agent.icon className="w-5 h-5 fc-text-secondary" />
             </div>
 
             {/* Badge */}

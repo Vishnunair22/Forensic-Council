@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
   Clock,
@@ -21,6 +22,7 @@ import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
 import { fmtTool } from "@/lib/fmtTool";
 import {
+  BulletedText,
   ConfidenceBar,
   ToolRow,
   deriveSummary,
@@ -162,7 +164,7 @@ function cleanSummary(text: string, maxLen = 320) {
 }
 
 function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsDTO, narrative?: string) {
-  if (narrative && narrative.trim().length > 0) {
+  if (narrative && narrative.trim().length > 0 && !narrative.includes("(statement:") && !narrative.includes("reported negative")) {
     return cleanFindingText(narrative.trim());
   }
 
@@ -199,16 +201,16 @@ function normalizeVerdict(verdict?: string) {
 }
 
 function verdictClasses(verdict: string) {
-  if (verdict === "HIGH") return "bg-emerald-500/15 border border-emerald-500/35 text-emerald-300";
-  if (verdict === "MEDIUM") return "bg-amber-500/15 border border-amber-500/35 text-amber-300";
-  if (verdict === "LOW") return "bg-red-500/15 border border-red-500/35 text-red-300";
+  if (verdict === "HIGH") return "fc-badge fc-badge-active";
+  if (verdict === "MEDIUM") return "fc-badge fc-badge-warning";
+  if (verdict === "LOW") return "fc-badge fc-badge-danger";
   if (["SUSPICIOUS", "LIKELY_MANIPULATED", "INCONCLUSIVE", "ABSTAIN"].includes(verdict)) {
-    return "bg-amber-500/15 border border-amber-500/35 text-amber-300";
+    return "fc-badge fc-badge-warning";
   }
   if (["MANIPULATED", "TAMPERED"].includes(verdict)) {
-    return "bg-red-500/15 border border-red-500/35 text-red-300";
+    return "fc-badge fc-badge-danger";
   }
-  return "bg-white/[0.08] border border-white/[0.15] text-white/55";
+  return "fc-badge";
 }
 
 const INITIAL_TOOLS_PER_SECTION = 4;
@@ -226,7 +228,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
 
   return (
     <div className={clsx(
-      "rounded-2xl border-2 overflow-hidden bg-transparent transition-colors duration-300",
+      "rounded-2xl border overflow-hidden bg-transparent transition-colors duration-300",
       flagCfg.border
     )}>
       {/* Section header */}
@@ -300,9 +302,9 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
           {section.analysis && section.analysis.length > 30 && (
             <div className="px-5 py-4 border-t border-white/[0.06] flex items-start gap-2.5 bg-white/[0.02]">
               <Activity className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
-              <p className="text-[14px] fc-text-secondary leading-relaxed font-medium italic">
-                {section.analysis}
-              </p>
+              <div className="flex-1 italic">
+                <BulletedText text={section.analysis} colorClass="bg-primary/30" />
+              </div>
             </div>
           )}
         </div>
@@ -462,9 +464,9 @@ export function AgentFindingCard({
           {/* Name + meta */}
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-               <h3 className="text-[18px] font-black text-white tracking-tight">{meta.name}</h3>
+               <h3 className="text-lg font-black text-white tracking-tight">{meta.name}</h3>
               {metrics && (
-                <span className={clsx("px-2.5 py-1 rounded-full text-xs font-black tracking-wider", verdictClasses(displayVerdict))}>
+                <span className={verdictClasses(displayVerdict)}>
                   {displayVerdict === "HIGH" ? "High Confidence"
                     : displayVerdict === "MEDIUM" ? "Med Confidence"
                     : displayVerdict === "LOW" ? "Low Confidence"
@@ -472,7 +474,7 @@ export function AgentFindingCard({
                 </span>
               )}
               {anomalyCount > 0 && (
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-danger/15 border border-danger/35 text-danger text-xs font-black">
+                <span className="fc-badge fc-badge-danger flex items-center gap-1">
                   <AlertTriangle className="w-3.5 h-3.5" /> {anomalyCount}
                 </span>
               )}
@@ -524,59 +526,55 @@ export function AgentFindingCard({
       </button>
 
       {/* Expandable Content */}
-      <div
-        id={`agent-content-${agentId}`}
-        className={clsx(
-          "grid transition-all duration-[160ms] ease-in-out",
-          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="overflow-hidden">
-          <div className="px-6 pb-6 pt-3 space-y-4 animate-in fade-in duration-[160ms]">
+      <AnimatePresence initial={false}>
+        {open && (
+        <motion.div
+          id={`agent-content-${agentId}`}
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="overflow-hidden"
+        >
+          <div className="px-6 pb-6 pt-3 space-y-4">
 
             {/* Agent overview narrative — full text, no clamp */}
             {parsedNarrative ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 {/* Evidence Assessment Column */}
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 text-cyan-400">
-                    <ShieldCheck className="w-4 h-4 shrink-0 text-cyan-400" />
-                    <h4 className="text-xs font-black tracking-wider font-mono text-cyan-400">Evidence Assessment</h4>
+                  <div className="flex items-center gap-2 text-primary">
+                    <ShieldCheck className="w-4 h-4 shrink-0 text-primary" />
+                    <h4 className="text-xs font-black tracking-wider font-mono text-primary">Evidence Assessment</h4>
                   </div>
-                  <p className="text-[14px] fc-text-secondary leading-relaxed font-medium">
-                    {parsedNarrative.evidence_assessment}
-                  </p>
+                  <BulletedText text={parsedNarrative.evidence_assessment} colorClass="bg-primary/40" />
                 </div>
 
                 {/* Deep Cross-Validation Column */}
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Activity className="w-4 h-4 shrink-0 text-blue-400" />
-                    <h4 className="text-xs font-black tracking-wider font-mono text-blue-400">Deep Validation</h4>
+                  <div className="flex items-center gap-2 fc-text-primary">
+                    <Activity className="w-4 h-4 shrink-0" />
+                    <h4 className="text-xs font-black tracking-wider font-mono">Deep Validation</h4>
                   </div>
-                  <p className="text-[14px] fc-text-secondary leading-relaxed font-medium">
-                    {parsedNarrative.deep_analysis}
-                  </p>
+                  <BulletedText text={parsedNarrative.deep_analysis} colorClass="bg-white/25" />
                 </div>
 
                 {/* Reliability & Verdict Column */}
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 text-violet-400">
-                    <Shield className="w-4 h-4 shrink-0 text-violet-400" />
-                    <h4 className="text-xs font-black tracking-wider font-mono text-violet-400">Reliability & Verdict</h4>
+                  <div className="flex items-center gap-2 text-success">
+                    <Shield className="w-4 h-4 shrink-0 text-success" />
+                    <h4 className="text-xs font-black tracking-wider font-mono text-success">Reliability & Verdict</h4>
                   </div>
-                  <p className="text-[14px] fc-text-secondary leading-relaxed font-medium">
-                    {parsedNarrative.reliability_verdict}
-                  </p>
+                  <BulletedText text={parsedNarrative.reliability_verdict} colorClass="bg-success/40" />
                 </div>
               </div>
             ) : (
               overview && (
                 <div className="flex items-start gap-3 p-5 rounded-2xl bg-transparent border border-white/[0.08]">
                   <Activity className="w-4 h-4 text-primary/65 mt-1 shrink-0" />
-                  <p className="text-[15px] fc-text-secondary leading-relaxed font-medium">
-                    {overview}
-                  </p>
+                  <div className="flex-1">
+                    <BulletedText text={overview} colorClass="bg-primary/40" />
+                  </div>
                 </div>
               )
             )}
@@ -619,8 +617,9 @@ export function AgentFindingCard({
             )}
 
           </div>
-        </div>
-      </div>
+        </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -41,7 +41,9 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <div
+            className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
+          />
           <span className="fc-eyebrow fc-text-muted">
             Heavy-Compute Active
           </span>

@@ -145,22 +145,27 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
     ),
     # ── Metadata tools (Agent 5) ─────────────────────────────────────
     "exif_extract": lambda o: (
-        f"File: {o.get('file_name', 'unknown')} ({o.get('file_size_human', '')}) · {o.get('mime_type', '')}. "
+        f"File: {o.get('file_name', 'unknown')}"
+        + (f" ({o.get('file_size_human')})" if o.get("file_size_human") else "")
+        + (f" · {o.get('mime_type')}" if o.get("mime_type") else "")
+        + ". "
         + (
-            f"Device: {o.get('device_model', o.get('camera_make', '') + ' ' + o.get('camera_model', '')).strip()}. "
+            f"Device: {o.get('device_model', (o.get('camera_make', '') + ' ' + o.get('camera_model', '')).strip())}. "
             if o.get("device_model") or o.get("camera_make")
             else "Device: not recorded. "
         )
         + (
-            f"Captured: {o.get('datetime_original', '')}. "
-            if o.get("datetime_original")
+            f"Captured: {o.get('datetime_original') or o.get('DateTimeOriginal', '')}. "
+            if o.get("datetime_original") or o.get("DateTimeOriginal")
             else "Capture time: not in EXIF. "
         )
         + (f"Modified: {o.get('datetime_modified', '')}. " if o.get("datetime_modified") else "")
-        + (f"Software: {o.get('software', '')}. " if o.get("software") else "")
+        + (f"Software: {o.get('software') or o.get('Software', '')}. " if o.get("software") or o.get("Software") else "")
         + (f"Dimensions: {o.get('image_dimensions', '')}. " if o.get("image_dimensions") else "")
-        + f"GPS: {'Present' if o.get('gps_coordinates') else 'Absent'}. "
-        + f"{o.get('total_fields_extracted', 0)} EXIF field(s) extracted. "
+        + f"GPS: {'Present' if o.get('GPSLatitude') or o.get('gps_coordinates') else 'Absent'}. "
+        + f"{o.get('total_fields_extracted', 0)} metadata field(s) extracted"
+        + (f" ({o.get('png_text_fields_count')} from PNG text chunks)" if o.get("png_text_fields_count") else "")
+        + ". "
         + (
             f"Missing mandatory fields: {', '.join(str(f) for f in o.get('absent_mandatory_fields', [])[:5])}."
             if o.get("absent_mandatory_fields")
@@ -168,21 +173,14 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         )
     ),
     "gps_timezone_validate": lambda o: (
-        "No GPS coordinates embedded — location origin cannot be verified from metadata."
-        if o.get("plausible") is None
-        and any(
-            "no gps" in str(i).lower() or "no gps data" in str(i).lower()
-            for i in o.get("issues", [])
-        )
+        f"GPS-timezone validation not applicable: {o.get('reason', 'GPS or timestamp absent')}."
+        if o.get("not_applicable") or not o.get("available")
         else (
-            "No timestamp in EXIF — GPS-timezone cross-validation not possible."
-            if o.get("plausible") is None
-            and any("timestamp" in str(i).lower() for i in o.get("issues", []))
-            else (
-                "GPS-timezone is INCONSISTENT — " + "; ".join(o.get("issues", ["Unknown issue"]))
-                if o.get("plausible") is False
-                else f"GPS-timestamp timezone cross-validation passed. Timezone: {o.get('timezone', 'N/A')}."
-            )
+            f"GPS-timezone cross-validation passed. Timezone: {o.get('timezone', 'N/A')}"
+            + (f", country: {o.get('country_code', 'unknown')}" if o.get("country_code") else "")
+            + "."
+            if o.get("consistent")
+            else f"GPS-timezone INCONSISTENT. Timezone: {o.get('timezone', 'N/A')}. {o.get('error', '')}."
         )
     ),
     "steganography_scan": lambda o: (
@@ -190,10 +188,26 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"LSB deviation from random: {o.get('lsb_statistics', {}).get('average_deviation', 0):.4f}."
     ),
     "file_structure_analysis": lambda o: (
-        f"File structure: header {'valid' if o.get('header_valid') else 'INVALID'}, "
+        f"File structure ({o.get('format_detected', 'unknown')}): "
+        f"header {'valid' if o.get('header_valid') else 'INVALID'}, "
         f"trailer {'valid' if o.get('trailer_valid', True) else 'INVALID'}, "
-        f"appended data: {'YES — ' + str(o.get('file_size', 0)) + ' bytes' if o.get('has_appended_data') else 'none'}. "
+        f"appended data: {'YES — ' + str(o.get('appended_bytes', 0)) + ' byte(s)' if o.get('has_appended_data') else 'none'}. "
         f"Anomalies: {len(o.get('anomalies', []))} — {'; '.join(o.get('anomalies', [])) or 'none'}."
+        + (
+            " Embedded text metadata: "
+            + "; ".join(f"{k}={str(v)[:60]}" for k, v in list(o.get("text_metadata", {}).items())[:8])
+            + "."
+            if o.get("text_metadata")
+            else ""
+        )
+        + (
+            " Chunks present: "
+            + ", ".join(o.get("chunks", [])[:14])
+            + ("…" if len(o.get("chunks", [])) > 14 else "")
+            + "."
+            if o.get("chunks")
+            else ""
+        )
     ),
     "hex_signature_scan": lambda o: (
         f"Hex signature scan {'detected editing software: ' + ', '.join(o.get('software_signatures', [])) if o.get('editing_software_detected') else 'found no editing software signatures'} "
@@ -771,15 +785,30 @@ _TOOL_INTERPRETERS.update(
         ),
         "c2pa_validator": lambda o: _TOOL_INTERPRETERS["provenance_chain_verify"](o),
         "camera_profile_match": lambda o: (
-            f"Camera/device profile: {o.get('camera_make', o.get('make', 'Unknown'))} {o.get('camera_model', o.get('model', ''))}. "
+            f"Camera/device profile: "
+            f"{o.get('claimed_make', o.get('camera_make', o.get('make', 'Unknown'))) or 'Unknown'} "
+            f"{o.get('claimed_model', o.get('camera_model', o.get('model', ''))) or ''}. "
+            f"Completeness: {o.get('profile_completeness', 0):.0%}. "
             + (
-                "Declared device profile is inconsistent with metadata. "
-                if o.get("exif_fingerprint_suspicious") or o.get("profile_mismatch")
-                else "No device-profile contradiction was detected. "
+                "Profile anomalies: " + "; ".join(str(a) for a in o.get("anomalies", [])[:3]) + ". "
+                if o.get("anomalies")
+                else "Capture fields present — profile appears plausible. "
             )
-            + _flag_list(o)
+            + f"Verdict: {o.get('verdict', 'INCONCLUSIVE')}."
         ),
         "device_fingerprint_db": lambda o: _TOOL_INTERPRETERS["camera_profile_match"](o),
+        "prnu_sensor_verification": lambda o: (
+            f"Sensor noise uniformity (PRNU proxy): "
+            f"block variance CoV={o.get('block_variance_cov', 0):.4f}, "
+            f"outlier blocks {o.get('outlier_blocks', 0)}/{o.get('total_blocks', '?')} "
+            f"({o.get('outlier_ratio', 0):.1%}). "
+            + (
+                "MULTI-SOURCE NOISE SUSPECTED — inconsistent noise texture across regions; possible splicing."
+                if o.get("multi_source_suspected")
+                else "Noise texture appears uniform — consistent with single-sensor origin."
+            )
+            + (f" Note: {o.get('note', '')}" if o.get("degraded") else "")
+        ),
         "metadata_anomaly_scorer": lambda o: _TOOL_INTERPRETERS["metadata_anomaly_score"](o),
     }
 )

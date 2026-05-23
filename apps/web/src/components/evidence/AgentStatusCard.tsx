@@ -72,10 +72,10 @@ export interface AgentStatusCardProps {
 const statusConfig = {
   waiting:     { color: "fc-text-muted",   label: "Standby"   },
   queued:      { color: "fc-text-muted",   label: "Queued"    },
-  checking:    { color: "text-primary",    label: "Syncing" },
-  running:     { color: "text-primary",    label: "Scanning" },
-  complete:    { color: "text-primary",    label: "Verified"  },
-  error:       { color: "fc-text-danger",   label: "Error"     },
+  checking:    { color: "text-primary",    label: "Syncing"   },
+  running:     { color: "text-primary",    label: "Scanning"  },
+  complete:    { color: "text-success",    label: "Verified"  },
+  error:       { color: "fc-text-danger",  label: "Error"     },
   unsupported: { color: "fc-text-muted",   label: "Skipped"   },
   validating:  { color: "text-primary",    label: "Verifying" },
 };
@@ -110,7 +110,7 @@ function rankFinding(f: FindingPreview): number {
 }
 
 function confidenceTier(c: number): { label: string; colorClass: string } {
-  if (c >= 0.8) return { label: "High", colorClass: "text-primary" };
+  if (c >= 0.8) return { label: "High", colorClass: "text-success" };
   if (c >= 0.55) return { label: "Medium", colorClass: "text-warning" };
   return { label: "Low", colorClass: "fc-text-muted" };
 }
@@ -120,7 +120,7 @@ function buildUnifiedFindingText(f: FindingPreview): string {
   const full = cleanFindingText(f.summary || "").trim();
 
   if (!signal && !full) {
-    if (f.verdict && f.verdict !== "INCONCLUSIVE" && f.verdict !== "CLEAN") {
+    if (f.verdict && !["INCONCLUSIVE", "CLEAN", "AUTHENTIC", "NEGATIVE", "NOT_APPLICABLE"].includes(f.verdict.toUpperCase())) {
       return `${normalizeVerdict(f.verdict)} signal detected.`;
     }
     return "";
@@ -204,16 +204,13 @@ const _SEV_LABEL: Record<string, string> = {
   LOW:      "fc-text-muted",
 };
 
-function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: number }) {
+function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
   const [expanded, setExpanded] = useState(false);
   const prefersReduced = useReducedMotion();
   const isAlert = isAlertFinding(f);
   const isCritical = (f.severity || "").toUpperCase() === "CRITICAL";
   const isHigh = (f.severity || "").toUpperCase() === "HIGH";
   const isMedium = (f.severity || "").toUpperCase() === "MEDIUM";
-  const showSeverityBadge = isCritical || isHigh || isMedium;
-  const verdict = normalizeVerdict(f.verdict);
-  const showVerdictBadge = f.verdict && f.verdict !== "CLEAN" && f.verdict !== "NOT_APPLICABLE";
   const confidence = typeof f.confidence === "number" ? f.confidence : null;
   const elapsed = formatElapsed(f.elapsed_s);
 
@@ -224,14 +221,6 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
     ? unifiedText.slice(0, MAX_TEXT).trimEnd() + "…"
     : unifiedText;
 
-  // Severity accent color for left border
-  const accentBorder = isCritical || isHigh
-    ? "border-l-danger/50"
-    : isMedium
-    ? "border-l-warning/40"
-    : isAlert
-    ? "border-l-danger/30"
-    : "border-l-white/[0.08]";
 
   return (
     <motion.div
@@ -245,28 +234,15 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
         isMedium && "bg-warning/[0.02] border-warning/[0.08]",
       )}
     >
-      {/* Row 1: Tool label + severity + confidence */}
+      {/* Row 1: Tool label + tier + confidence */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
           {f.tool && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono font-medium fc-text-secondary shrink-0 tracking-wider">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08] text-xs font-mono font-medium fc-text-secondary shrink-0 tracking-wider">
               {fmtTool(f.tool)}
             </span>
           )}
-          {showSeverityBadge && (
-            <span className={clsx(
-              "fc-badge shrink-0",
-              (isCritical || isHigh) ? "fc-badge-danger" : "fc-badge-warning"
-            )}>
-              {(f.severity || "").toUpperCase()}
-            </span>
-          )}
-          {showVerdictBadge && isAlert && (
-            <span className="fc-badge fc-badge-danger shrink-0">
-              {verdict}
-            </span>
-          )}
-          {showVerdictBadge && !isAlert && confidence !== null && (
+          {confidence !== null && (
             <span className={clsx("fc-badge shrink-0 border", confidenceTier(confidence).colorClass,
               confidence >= 0.8 ? "border-primary/30 bg-primary/5"
               : confidence >= 0.55 ? "border-warning/30 bg-warning/5"
@@ -316,10 +292,8 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       )}
 
       {/* Row 3: Footer metadata — only render if there's meaningful content */}
-      {(f.section || elapsed) && (
+      {elapsed && (
         <div className="flex items-center gap-2 mt-2 fc-eyebrow fc-text-faint">
-          {f.section && <span className="truncate">{f.section}</span>}
-          {f.section && elapsed && <span>·</span>}
           {elapsed && <span className="ml-auto normal-case tracking-normal">{elapsed}</span>}
         </div>
       )}
@@ -335,8 +309,28 @@ interface AgentBriefProps {
 }
 
 function AgentBrief({ completedData, findings, toolsRan, isAlert }: AgentBriefProps) {
-  const synthSummary = cleanFindingText(completedData.summary || "").trim();
-  const hasSynthesis = !!synthSummary && !isTemplateSummary(synthSummary);
+  // Force string evaluation to prevent .match or .replace crashes if backend sends raw parsed JSON
+  const rawSummary = typeof completedData.summary === 'string' 
+    ? completedData.summary 
+    : (completedData.summary ? JSON.stringify(completedData.summary) : "");
+  
+  let synthSummary = cleanFindingText(rawSummary).trim();
+  let isJson = false;
+
+  const jsonMatch = rawSummary.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.evidence_assessment && parsed.reliability_verdict) {
+        synthSummary = `${parsed.evidence_assessment} ${parsed.reliability_verdict}`;
+        isJson = true;
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }
+
+  const hasSynthesis = !!synthSummary && (isJson || !isTemplateSummary(synthSummary));
 
   // Fallback: pick the most meaningful signals — alert findings first, then any with a key_signal
   const alertFindings = findings.filter(isAlertFinding);
@@ -671,7 +665,7 @@ export function AgentStatusCard({
                        : findings.slice(0, MAX_COLLAPSED);
 
                    return collapsedFindings.map((f, i) => (
-                     <FindingRow key={`${f.tool}-${i}`} f={f} i={i} total={findings.length} />
+                     <FindingRow key={`${f.tool}-${i}`} f={f} i={i} />
                    ));
                  })()}
 

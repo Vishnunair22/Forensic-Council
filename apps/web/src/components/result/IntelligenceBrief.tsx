@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, FileText } from "lucide-react";
+import { AlertCircle, AlertTriangle, Info, CircleDashed, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import clsx from "clsx";
 import { cleanFindingText } from "@/lib/findingText";
@@ -95,19 +95,28 @@ export function IntelligenceBrief({
 
         {/* Notes footer */}
         {(notes.length > 0 || skipped.length > 0) && (
-          <div className="pt-4 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="pt-4 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {notes.map((note) => (
               <div key={note.label}>
-                <div className="fc-eyebrow fc-text-muted mb-1">{note.label}</div>
-                <p className="text-xs fc-text-muted leading-relaxed">{note.value}</p>
+                <div className="fc-eyebrow fc-text-muted mb-1.5">{note.label}</div>
+                <p className="text-sm fc-text-secondary leading-relaxed">{note.value}</p>
               </div>
             ))}
             {skipped.length > 0 && (
               <div>
-                <div className="fc-eyebrow fc-text-muted mb-1">Skipped Agents</div>
-                <p className="text-xs fc-text-muted leading-relaxed">
+                <div className="fc-eyebrow fc-text-muted mb-1.5">Skipped Agents</div>
+                <p className="text-sm fc-text-secondary leading-relaxed">
                   {skipped
-                    .map(([agent, reason]) => `${agent}: ${cleanFindingText(reason, 80)}`)
+                    .map(([agent, reason]) => {
+                      const agentName = {
+                        "Agent1": "Image Forensics",
+                        "Agent2": "Audio Forensics",
+                        "Agent3": "Contextual Analysis",
+                        "Agent4": "Video Forensics",
+                        "Agent5": "Metadata Expert"
+                      }[agent] || agent;
+                      return `${agentName}: ${cleanFindingText(reason, 80)}`;
+                    })
                     .join("; ")}
                 </p>
               </div>
@@ -123,7 +132,7 @@ function FindingDot({ severity }: { severity: "danger" | "warning" | "info" | "n
   const cfg = {
     danger:  { cls: "bg-danger/15 border-danger/35",   Icon: AlertCircle,  color: "text-danger"   },
     warning: { cls: "bg-warning/10 border-warning/30",  Icon: AlertTriangle, color: "text-warning"  },
-    info:    { cls: "bg-success/10 border-success/30",  Icon: CheckCircle2, color: "text-success"  },
+    info:    { cls: "bg-primary/[0.08] border-primary/20",  Icon: Info,         color: "text-primary/70" },
     neutral: { cls: "bg-transparent border-white/[0.1]",Icon: CircleDashed, color: "fc-text-muted" },
   }[severity];
 

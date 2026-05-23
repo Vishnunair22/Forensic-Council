@@ -246,6 +246,9 @@ class Agent1Image(ForensicAgent):
         """Reactive task expansion based on pixel and semantic signals."""
         try:
             await self._on_tool_result_impl(finding)
+            # Ensure findings are progressively published to the UI to prevent hanging
+            phase = finding.metadata.get("analysis_phase", "initial")
+            await self._publish_agent_context(phase, [finding])
         except Exception as e:
             logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
 
@@ -304,7 +307,6 @@ class Agent1Image(ForensicAgent):
 
 
             await self.update_sub_task(f"Semantic Context: {image_type}")
-            await self._publish_agent_context("initial", [finding])
             return
 
         # 1b. [REACTIVE] extract_text_from_image: Gemini content identification triggers deepfake escalation
@@ -354,6 +356,4 @@ class Agent1Image(ForensicAgent):
                     priority=20,
                 )
 
-            await self._publish_agent_context(
-                "deep" if "neural" in tool_name else "initial", [finding]
-            )
+        return

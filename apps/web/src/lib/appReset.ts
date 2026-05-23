@@ -22,13 +22,17 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   if (typeof window === "undefined") return;
 
   // Expire the httpOnly access_token via backend Set-Cookie response (fire-and-forget).
-  // Must run before clearAuthCookies() wipes csrf_token.
+  // Only call logout if a CSRF token is present — meaning there is an active session.
+  // Firing this unconditionally (e.g. on logo click from home page) causes noisy
+  // 401s/403s in the console and wasted network round-trips.
   const csrfToken = readCookie("csrf_token");
-  fetch("/api/v1/auth/logout", {
-    method: "POST",
-    credentials: "include",
-    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
-  }).catch(() => {});
+  if (csrfToken) {
+    fetch("/api/v1/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-CSRF-Token": csrfToken },
+    }).catch(() => {});
+  }
 
   arbiterControl.abort();
   queryClient?.clear();

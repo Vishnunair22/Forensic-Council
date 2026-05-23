@@ -20,7 +20,6 @@ function mimeCategory(mime?: string | null): "image" | "video" | "audio" | "doc"
 }
 
 const CAT_ICON = { image: ImageIcon, video: Film, audio: Mic, doc: FileText } as const;
-const CAT_COLOR = { image: "#22d3ee", video: "#38bdf8", audio: "#818cf8", doc: "#60a5fa" } as const;
 
 function EvidencePreview({
   thumbnail,
@@ -33,7 +32,6 @@ function EvidencePreview({
 }) {
   const cat = mimeCategory(mimeType);
   const Icon = CAT_ICON[cat];
-  const color = CAT_COLOR[cat];
 
   if ((cat === "image" || cat === "video") && thumbnail) {
     return (
@@ -49,14 +47,8 @@ function EvidencePreview({
   }
 
   return (
-    <div
-      className="w-full h-full flex flex-col items-center justify-center gap-2"
-      style={{ background: `${color}10` }}
-    >
-      <Icon className="w-8 h-8 shrink-0" style={{ color }} aria-hidden="true" />
-      <span className="text-xs font-mono font-bold tracking-wide capitalize" style={{ color: `${color}80` }}>
-        {cat}
-      </span>
+    <div className="w-full h-full flex items-center justify-center bg-primary/[0.07]">
+      <Icon className="w-5 h-5 text-primary/60" aria-hidden="true" />
     </div>
   );
 }
@@ -71,7 +63,7 @@ function formatUploadDate(iso: string): string {
     const month = d.toLocaleDateString("en-US", { month: "long" });
     const year = d.getFullYear();
     const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    return `${month} ${day}${suffix} ${year} | ${time}`;
+    return `${month} ${day}${suffix} ${year} · ${time}`;
   } catch {
     return iso;
   }
@@ -91,36 +83,34 @@ export function EvidenceHeader({
   const displayName = fileName || "Evidence File";
 
   return (
-    <section className="relative flex flex-col overflow-hidden fc-surface">
-      <div className="flex items-start gap-5 p-5 sm:p-6">
-        {/* Square thumbnail */}
-        <div className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl border border-white/[0.08] overflow-hidden bg-white/[0.03]">
+    <section className="relative overflow-hidden fc-surface" aria-label="Evidence file">
+      <div className="flex items-center gap-3 px-5 py-3 sm:px-6">
+        {/* Compact thumbnail */}
+        <div className="shrink-0 w-10 h-10 rounded-lg border border-white/[0.08] overflow-hidden bg-white/[0.03]">
           <EvidencePreview thumbnail={thumbnail} mimeType={mimeType} fileName={displayName} />
         </div>
 
-        {/* File info */}
-        <div className="flex-1 min-w-0 py-0.5">
-          <h2 className="text-base sm:text-lg font-bold fc-text-primary leading-tight truncate">
-            {displayName}
-          </h2>
-          {mimeType && (
-            <p className="text-xs font-mono fc-text-muted mt-1">{mimeType}</p>
-          )}
+        {/* File identity */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-sm font-bold fc-text-primary truncate">{displayName}</span>
+            {mimeType && (
+              <span className="text-xs font-mono fc-text-muted shrink-0 hidden sm:inline">{mimeType}</span>
+            )}
+          </div>
           {pipelineStartAt && (
-            <div className="flex items-center gap-1.5 mt-3">
-              <Calendar className="w-3 h-3 fc-text-muted shrink-0" />
-              <span className="text-xs font-mono fc-text-muted">
-                Uploaded on {formatUploadDate(pipelineStartAt)}
-              </span>
+            <div className="flex items-center gap-1 mt-0.5">
+              <Calendar className="w-3 h-3 fc-text-muted shrink-0" aria-hidden="true" />
+              <span className="text-xs font-mono fc-text-muted">{formatUploadDate(pipelineStartAt)}</span>
             </div>
           )}
         </div>
 
-        {/* Case ID — desktop only */}
+        {/* Case ID */}
         {caseId && (
-          <div className="shrink-0 text-right hidden sm:block pt-0.5">
+          <div className="shrink-0 text-right hidden sm:block">
             <div className="fc-eyebrow fc-text-muted">Case</div>
-            <div className="text-xs font-mono fc-text-muted mt-1">{shortId(caseId)}</div>
+            <div className="text-xs font-mono fc-text-muted mt-0.5">{shortId(caseId)}</div>
           </div>
         )}
       </div>

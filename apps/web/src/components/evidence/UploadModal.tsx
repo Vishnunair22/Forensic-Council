@@ -106,13 +106,13 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             input?.click();
           }
         }}
-        className={`w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative transition-all duration-[160ms] rounded-2xl border border-dashed border-white/15 bg-white/[0.02] ${
-          isDragging ? "!border-solid border-primary bg-primary/5 cursor-copy" : "hover:border-primary/40 hover:bg-white/[0.04] cursor-pointer"
+        className={`fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative transition-all duration-[160ms] ${
+          isDragging ? "!border-solid !border-primary !bg-primary/5 cursor-copy" : "cursor-pointer"
         }`}
       >
         <CloudUpload
           className={`w-8 h-8 transition-colors duration-[160ms] ${
-            isDragging ? "text-primary" : "text-white/60 group-hover:text-white/80"
+            isDragging ? "text-primary" : "fc-text-muted group-hover:fc-text-primary"
           }`}
           strokeWidth={1.5}
           aria-hidden="true"
@@ -121,7 +121,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
           <span
             className={`text-lg font-bold transition-colors duration-[160ms] tracking-wide ${
-              isDragging ? "text-primary" : "fc-text-secondary group-hover:text-white"
+              isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
             }`}
           >
             {isDragging ? "Drop Evidence" : "Select Evidence"}

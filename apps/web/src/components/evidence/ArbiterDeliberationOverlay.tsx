@@ -26,12 +26,32 @@ export function ArbiterDeliberationOverlay({
       .trim();
   }, [liveText]);
 
-  const [displayText, setDisplayText] = React.useState(cleanLiveText);
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dynamicText, setDynamicText] = React.useState(cleanLiveText || "Compiling agent findings into the final report.");
+
   React.useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDisplayText(cleanLiveText), 80);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    if (cleanLiveText && cleanLiveText.length > 5 && !cleanLiveText.toLowerCase().includes("waiting for the council")) {
+       setDynamicText(cleanLiveText);
+       return;
+    }
+
+    const arbiterPhases = [
+      "Reviewing forensic agent telemetry...",
+      "Evaluating confidence intervals...",
+      "Cross-referencing anomaly signatures...",
+      "Synthesizing executive summary...",
+      "Drafting final Council verdict...",
+      "Finalizing cryptographic signature..."
+    ];
+
+    let phaseIndex = 0;
+    setDynamicText(arbiterPhases[0]);
+
+    const textInterval = setInterval(() => {
+      phaseIndex = (phaseIndex + 1) % arbiterPhases.length;
+      setDynamicText(arbiterPhases[phaseIndex]);
+    }, 4000);
+
+    return () => clearInterval(textInterval);
   }, [cleanLiveText]);
 
   const [elapsed, setElapsed] = React.useState(0);
@@ -53,7 +73,7 @@ export function ArbiterDeliberationOverlay({
           key="arbiter-overlay"
           aria-busy="true"
           aria-label="Consensus Synthesis in progress"
-          className="fixed inset-x-0 top-16 bottom-0 z-[9000] flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
+          className="fixed inset-x-0 top-16 bottom-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
           initial={prefersReducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeIn" } }}
@@ -64,12 +84,7 @@ export function ArbiterDeliberationOverlay({
             {/* Status indicator — same structure as LoadingOverlay, success tokens */}
             <div className="flex items-center gap-4 mb-10">
               <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-2xl bg-success/5">
-                <motion.div
-                  animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <ShieldCheck className="w-4 h-4 text-success" aria-hidden="true" />
-                </motion.div>
+                <ShieldCheck className="w-4 h-4 text-success" aria-hidden="true" />
               </div>
               <span className="fc-eyebrow fc-text-muted">
                 Council Arbiter
@@ -92,15 +107,19 @@ export function ArbiterDeliberationOverlay({
                   animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
                   transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
                 />
-                <p
+                <motion.p
                   id="arbiter-live-text"
                   className="text-xs md:text-sm font-mono fc-text-muted"
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"
+                  key={dynamicText}
+                  initial={prefersReducedMotion ? false : { opacity: 0.4, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  {displayText || "Compiling agent findings into the final report."}
-                </p>
+                  {dynamicText}
+                </motion.p>
               </div>
             </div>
 

@@ -22,32 +22,74 @@ interface AgentsStripProps {
   activeAgentIds: string[];
 }
 
+function agentVerdictStatus(metrics: AgentMetricsDTO | undefined): "danger" | "warning" | "success" | "neutral" {
+  if (!metrics) return "neutral";
+  const v = String((metrics as unknown as Record<string, unknown>).agent_verdict ?? "").toUpperCase();
+  if (/MANIPULATED|AI_GENERATED|TAMPERED/.test(v)) return "danger";
+  if (/SUSPICIOUS|INCONCLUSIVE|ABSTAIN|NEEDS_REVIEW/.test(v)) return "warning";
+  if (/AUTHENTIC|CLEAN|CERTAIN/.test(v)) return "success";
+  return "neutral";
+}
+
+const STATUS_DOT_CLS: Record<string, string> = {
+  danger:  "bg-danger",
+  warning: "bg-warning",
+  success: "bg-success",
+  neutral: "bg-white/25",
+};
+
 export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: AgentsStripProps) {
   const activeSet = new Set(activeAgentIds);
   const skippedSet = new Set(Object.keys(skippedAgents ?? {}));
 
   const activeCount = activeAgentIds.length;
-  const skippedCount = skippedSet.size;
+
+  const anomalyCount = activeAgentIds.filter((id) => {
+    const status = agentVerdictStatus(perAgentMetrics?.[id]);
+    return status === "danger";
+  }).length;
+
+  const suspiciousCount = activeAgentIds.filter((id) => {
+    const status = agentVerdictStatus(perAgentMetrics?.[id]);
+    return status === "warning";
+  }).length;
+
+  const summaryLabel = anomalyCount > 0
+    ? `${anomalyCount} anomal${anomalyCount === 1 ? "y" : "ies"} detected`
+    : suspiciousCount > 0
+      ? `${suspiciousCount} uncertain`
+      : activeCount > 0
+        ? "all clean"
+        : null;
 
   return (
-    <section className="relative flex items-center gap-4 flex-wrap px-5 py-4 fc-surface">
-      {/* Counts */}
+    <section className="relative flex items-center gap-4 flex-wrap px-5 py-3.5 fc-surface">
+      {/* Count + summary */}
       <div className="flex items-center gap-3 shrink-0">
         <div className="flex items-center gap-1.5">
-          <Cpu className="w-3.5 h-3.5 text-primary/60" />
-          <span className="fc-eyebrow fc-text-secondary">
-            {activeCount} active
-          </span>
+          <Cpu className="w-3.5 h-3.5 text-primary/60" aria-hidden="true" />
+          <span className="fc-eyebrow fc-text-secondary">{activeCount} agent{activeCount === 1 ? "" : "s"}</span>
         </div>
-        {skippedCount > 0 && (
+        {summaryLabel && (
           <>
-            <span className="fc-text-muted text-xs">·</span>
-            <span className="fc-eyebrow fc-text-muted">{skippedCount} skipped</span>
+            <span className="fc-text-muted text-xs" aria-hidden="true">·</span>
+            <span className={clsx(
+              "fc-eyebrow",
+              anomalyCount > 0 ? "text-danger" : suspiciousCount > 0 ? "text-warning" : "text-success"
+            )}>
+              {summaryLabel}
+            </span>
+          </>
+        )}
+        {skippedSet.size > 0 && (
+          <>
+            <span className="fc-text-muted text-xs" aria-hidden="true">·</span>
+            <span className="fc-eyebrow fc-text-muted">{skippedSet.size} skipped</span>
           </>
         )}
       </div>
 
-      <div className="h-4 w-px bg-white/[0.08] shrink-0 hidden sm:block" />
+      <div className="h-4 w-px bg-white/[0.08] shrink-0 hidden sm:block" aria-hidden="true" />
 
       {/* Agent badge row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -58,6 +100,7 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
           const metrics = perAgentMetrics?.[agentId];
           const label = AGENT_LABELS[agentId] ?? agentId;
           const confPct = metrics ? Math.round(metrics.confidence_score * 100) : null;
+          const verdictStatus = agentVerdictStatus(metrics);
 
           return (
             <div
@@ -66,12 +109,14 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
                 "flex items-center gap-1.5 px-2.5 py-1 rounded-full border fc-eyebrow transition-colors",
                 isActive
                   ? "border-white/[0.12] bg-white/[0.04]"
-                  : "border-white/[0.05] bg-transparent opacity-40"
+                  : "border-white/[0.05] bg-transparent opacity-35"
               )}
             >
               <span
-                className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ backgroundColor: isActive ? accent.color : "rgba(255,255,255,0.2)" }}
+                className={clsx(
+                  "w-1.5 h-1.5 rounded-full shrink-0",
+                  isActive ? STATUS_DOT_CLS[verdictStatus] : "bg-white/20"
+                )}
               />
               <span
                 className="text-xs font-mono font-bold"

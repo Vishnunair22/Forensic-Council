@@ -19,12 +19,39 @@ export function ForensicProgressOverlay({
   variant = "loading",
 }: ForensicProgressOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
+  const [dynamicText, setDynamicText] = useState(liveText);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const interval = setInterval(() => setElapsed((prev) => prev + 1), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (variant !== "arbiter") {
+      setDynamicText(liveText);
+      return;
+    }
+
+    const arbiterPhases = [
+      "Reviewing forensic agent telemetry...",
+      "Evaluating confidence intervals...",
+      "Cross-referencing anomaly signatures...",
+      "Synthesizing executive summary...",
+      "Drafting final Council verdict...",
+      "Finalizing cryptographic signature..."
+    ];
+
+    let phaseIndex = 0;
+    setDynamicText(arbiterPhases[0]);
+
+    const textInterval = setInterval(() => {
+      phaseIndex = (phaseIndex + 1) % arbiterPhases.length;
+      setDynamicText(arbiterPhases[phaseIndex]);
+    }, 4000);
+
+    return () => clearInterval(textInterval);
+  }, [variant, liveText]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -45,7 +72,7 @@ export function ForensicProgressOverlay({
     <motion.div
       aria-busy="true"
       aria-label={`${title} in progress, please wait`}
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
+      className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeOut" } }}
@@ -58,7 +85,7 @@ export function ForensicProgressOverlay({
             <motion.div
               animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className={`w-3 h-3 rounded-full ${pulseDot}`}
+              className={`w-2 h-2 rounded-full ${pulseDot}`}
             />
           </div>
           <span className="fc-eyebrow fc-text-muted">
@@ -82,15 +109,19 @@ export function ForensicProgressOverlay({
               animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
               transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
             />
-            <p
+            <motion.p
               id="forensic-live-text"
               className="text-xs md:text-sm font-mono fc-text-muted"
               role="status"
               aria-live="polite"
               aria-atomic="true"
+              key={dynamicText}
+              initial={prefersReducedMotion ? false : { opacity: 0.4, y: 2 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
             >
-              {liveText}
-            </p>
+              {dynamicText}
+            </motion.p>
           </div>
         </div>
 
@@ -102,9 +133,9 @@ export function ForensicProgressOverlay({
               <span className={timerColor}>{formatTime(elapsed)}</span>
             )}
           </div>
-          <div className="h-px w-full bg-white/10 relative overflow-hidden">
+          <div className="h-1.5 w-full bg-white/10 rounded-full relative overflow-hidden">
             <motion.div
-              className={`absolute inset-y-0 left-0 ${progressColor}`}
+              className={`absolute inset-y-0 left-0 rounded-full ${progressColor}`}
               initial={{ width: "0%" }}
               animate={prefersReducedMotion ? {} : { width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"] }}
               transition={prefersReducedMotion ? {} : { duration: 3.5, times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1], repeat: Infinity, ease: "linear" }}

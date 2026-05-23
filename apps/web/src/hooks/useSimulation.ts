@@ -106,6 +106,8 @@ export const useSimulation = ({
   });
   const reconnectAttemptsRef = useRef(0);
   const arbiterPollRef = useRef<NodeJS.Timeout | null>(null);
+  /** Guards async poll callbacks from setting state after the component unmounts. */
+  const isMountedRef = useRef(true);
 
   // Store callbacks in refs to avoid triggering effect on every render
   const onAgentCompleteRef = useRef(onAgentComplete);
@@ -534,12 +536,22 @@ export const useSimulation = ({
 
               dbg.log("[Simulation] Processing update from queue:", update);
 
+              // Guard: flushSync throws a React invariant if called during an
+              // active render or route transition (e.g. when router.push fires
+              // mid-processing). Always fall back to a plain call so we never
+              // crash the React tree to a blank page.
               try {
                 flushSync(() => {
                   applyUpdate(update);
                 });
-              } catch {
-                applyUpdate(update);
+              } catch (flushErr) {
+                // Swallow the flushSync invariant violation and apply the
+                // update without forced synchronous flushing. React will batch
+                // it normally on the next commit.
+                try { applyUpdate(update); } catch (applyErr) {
+                  dbg.warn("[Simulation] applyUpdate fallback also failed:", applyErr);
+                }
+                dbg.warn("[Simulation] flushSync failed (likely during navigation), fell back to async apply:", flushErr);
               }
             }
           } finally {
@@ -789,7 +801,9 @@ export const useSimulation = ({
   // fire every time connectWebSocket calls setSessionId(), killing the newly
   // created socket before it can connect (WebSocket closed before established).
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -973,13 +987,14 @@ const resumeInvestigation = useCallback(
       const startedAt = Date.now();
       // F-C-6: closure-local cancel flag so the in-flight async tick can't
       // dispatch setState on an unmounted/reset component after clearInterval.
+      // Also checked against isMountedRef so navigation unmounts don't bleed.
       let cancelled = false;
-      const guarded = (fn: () => void) => { if (!cancelled) fn(); };
+      const guarded = (fn: () => void) => { if (!cancelled && isMountedRef.current) fn(); };
       arbiterPollRef.current = setInterval(async () => {
-        if (cancelled) return;
+        if (cancelled || !isMountedRef.current) return;
         try {
           const st = await getArbiterStatus(targetId);
-          if (cancelled) return;
+          if (cancelled || !isMountedRef.current) return;
           if (st.status === "complete") {
             cancelled = true;
             if (arbiterPollRef.current) {

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { AlertTriangle, BarChart3 } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTool } from "@/lib/fmtTool";
 import { accentFor } from "@/lib/agentTheme";
@@ -12,16 +12,13 @@ interface FindingsMetadataProps {
   activeAgentIds: string[];
 }
 
-function toPct(v: number | null | undefined): string {
-  return `${Math.max(0, Math.min(100, Math.round(Number(v ?? 0) * 100)))}%`;
-}
-
 export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataProps) {
   const [showAllTools, setShowAllTools] = useState(false);
 
-  const totalFindings = Object.values(report.per_agent_findings ?? {})
-    .flat()
-    .length;
+  const allFindings = Object.values(report.per_agent_findings ?? {}).flat();
+  const positiveSignals = allFindings.filter(
+    (f) => f?.evidence_verdict === "POSITIVE"
+  ).length;
 
   const totalTools = activeAgentIds.reduce((sum, id) => {
     const m = report.per_agent_metrics?.[id];
@@ -39,14 +36,9 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
   }, 0);
 
   const stats = [
-    { label: "Confidence",       value: toPct(report.overall_confidence) },
-    { label: "Manip. Prob.",     value: toPct(report.manipulation_probability) },
-    { label: "Error Rate",       value: toPct(report.overall_error_rate) },
-    { label: "Agent Spread",     value: toPct(report.confidence_std_dev) },
-    { label: "Active Agents",    value: String(activeAgentIds.length) },
-    { label: "Total Findings",   value: String(totalFindings) },
-    { label: "Tools Called",     value: String(totalTools) },
-    { label: "Tools OK / Fail",  value: `${toolsOk} / ${toolsFailed}` },
+    { label: "Positive Signals", value: String(positiveSignals) },
+    { label: "Tools Invoked",    value: String(totalTools) },
+    { label: "Coverage",         value: `${toolsOk} / ${toolsOk + toolsFailed} succeeded` },
   ];
 
   // Build tool log from per-agent findings
@@ -80,8 +72,6 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
   const visibleTools = showAllTools ? toolRows : toolRows.slice(0, PAGE);
   const hiddenCount = toolRows.length - PAGE;
 
-  const flags = report.degradation_flags ?? [];
-
   return (
     <section className="relative flex flex-col overflow-hidden fc-surface" aria-label="Findings metadata">
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
@@ -91,7 +81,7 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
 
       <div className="p-6 space-y-6">
         {/* Stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {stats.map((s) => (
             <div key={s.label}>
               <div className="fc-eyebrow fc-text-muted mb-1">{s.label}</div>
@@ -120,6 +110,13 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
                     const accent = accentFor(row.agentId);
                     const verdictOk = /NEGATIVE|authentic|clean|NOT_APPLICABLE/i.test(row.verdict);
                     const verdictBad = /POSITIVE|manipul|tamper|forged|synthetic/i.test(row.verdict);
+                    
+                    let displayVerdict = row.verdict;
+                    if (displayVerdict === "NEGATIVE" || displayVerdict === "NO_ANOMALIES") displayVerdict = "Clean";
+                    if (displayVerdict === "POSITIVE") displayVerdict = "Flagged";
+                    if (displayVerdict === "INCONCLUSIVE") displayVerdict = "Inconclusive";
+                    if (displayVerdict === "NOT_APPLICABLE") displayVerdict = "Skipped";
+
                     return (
                       <tr key={`${row.agentId}-${row.index}`} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
                         <td className="px-3 py-2 fc-text-muted">{row.index}</td>
@@ -132,12 +129,12 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
                         </td>
                         <td className="px-3 py-2">
                           <span className={clsx(
-                            "text-xs font-mono",
+                            "text-xs font-mono whitespace-nowrap",
                             verdictOk && "text-success",
                             verdictBad && "text-danger",
                             !verdictOk && !verdictBad && "fc-text-muted"
                           )}>
-                            {row.verdict}
+                            {displayVerdict}
                           </span>
                         </td>
                       </tr>
@@ -158,47 +155,6 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
           </div>
         )}
 
-        {/* Arbiter notes (Groq-generated) */}
-        {(report.reliability_note || report.uncertainty_statement || report.analysis_coverage_note) && (
-          <div className="pt-4 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {report.reliability_note && (
-              <div>
-                <div className="fc-eyebrow fc-text-muted mb-1">Reliability</div>
-                <p className="text-xs fc-text-muted leading-relaxed">{report.reliability_note}</p>
-              </div>
-            )}
-            {report.uncertainty_statement && (
-              <div>
-                <div className="fc-eyebrow fc-text-muted mb-1">Uncertainty</div>
-                <p className="text-xs fc-text-muted leading-relaxed">{report.uncertainty_statement}</p>
-              </div>
-            )}
-            {report.analysis_coverage_note && (
-              <div>
-                <div className="fc-eyebrow fc-text-muted mb-1">Coverage</div>
-                <p className="text-xs fc-text-muted leading-relaxed">{report.analysis_coverage_note}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Degradation flags */}
-        {flags.length > 0 && (
-          <div className="pt-4 border-t border-white/[0.04]">
-            <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-3">
-              <AlertTriangle className="w-3 h-3 text-warning" />
-              Degradation Flags
-            </div>
-            <div className="space-y-1.5">
-              {flags.map((flag, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="w-1 h-1 rounded-full bg-warning/60 mt-1.5 shrink-0" />
-                  <p className="text-xs fc-text-muted">{flag}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );

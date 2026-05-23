@@ -466,8 +466,11 @@ class AgentInvestigationMixin:
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
 
+        self._tool_success_count = sum(1 for f in self._findings if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE")
+        self._tool_error_count = sum(1 for f in self._findings if f.evidence_verdict == "ERROR" or f.status == "INCOMPLETE")
+
         synthesis = await self._synthesize_findings_once(
-            self._findings, phase="initial", timeout_s=15.0
+            self._findings, phase="initial", timeout_s=90.0
         )
 
         if synthesis is None:
@@ -536,8 +539,12 @@ class AgentInvestigationMixin:
             f.metadata["analysis_phase"] = "deep"
 
         self._findings = self._findings + deep_findings
+
+        self._tool_success_count = sum(1 for f in self._findings if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE")
+        self._tool_error_count = sum(1 for f in self._findings if f.evidence_verdict == "ERROR" or f.status == "INCOMPLETE")
+
         synthesis = await self._synthesize_findings_once(
-            self._findings, phase="deep", timeout_s=20.0
+            self._findings, phase="deep", timeout_s=90.0
         )
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")

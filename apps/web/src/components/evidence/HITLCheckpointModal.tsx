@@ -100,7 +100,7 @@ export function HITLCheckpointModal({
          <ShieldAlert className="w-5 h-5 text-white/70" />
         </div>
         <div>
-         <DialogTitle className="text-2xl font-heading font-bold text-white tracking-tight">
+         <DialogTitle className="text-2xl font-heading font-bold fc-text-primary tracking-tight">
           Investigator Intervention
          </DialogTitle>
          <DialogDescription className="fc-eyebrow fc-text-muted mt-1">
@@ -119,7 +119,7 @@ export function HITLCheckpointModal({
         </div>
         <div className="border-l-2 border-primary pl-4 py-1 space-y-2 bg-primary/5">
          <h4 className="fc-eyebrow text-primary">Decision Required</h4>
-         <p className="text-sm text-white leading-relaxed font-bold">{checkpoint.decision_needed}</p>
+         <p className="text-sm fc-text-primary leading-relaxed font-bold">{checkpoint.decision_needed}</p>
         </div>
        </div>
 
@@ -158,20 +158,20 @@ export function HITLCheckpointModal({
             className={clsx(
               "p-4 border text-left transition-colors duration-[160ms] rounded-2xl text-sm relative outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               selectedDecision === option.value
-                ? "bg-primary/10 border-primary text-white"
-                : "border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+                ? "bg-primary/10 border-primary fc-text-primary"
+                : "border-white/10 bg-white/5 hover:bg-white/10 fc-text-secondary hover:fc-text-primary"
             )}
           >
            <div className="flex flex-col gap-1 relative z-10">
             <span className={clsx(
               "font-bold tracking-tight transition-colors",
-              selectedDecision === option.value ? "text-white" : ""
+              selectedDecision === option.value ? "fc-text-primary" : ""
             )}>
              {option.label}
             </span>
             <span className={clsx(
               "text-xs font-mono leading-tight transition-colors",
-              selectedDecision === option.value ? "text-white/70" : "fc-text-muted"
+              selectedDecision === option.value ? "fc-text-secondary" : "fc-text-muted"
             )}>
              {option.description}
             </span>
@@ -190,13 +190,13 @@ export function HITLCheckpointModal({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Enter forensic notes for this intervention..."
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-white/40 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:border-white/30 transition-colors min-h-[100px] resize-none"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm fc-text-primary placeholder:fc-text-faint outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:border-white/30 transition-colors min-h-[100px] resize-none"
           disabled={isSubmitting}
         />
         </div>
 
         {decisionError && (
-         <div role="alert" className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-bold text-center tracking-wide">
+         <div role="alert" className="p-3 rounded-xl bg-danger/10 border border-danger/20 fc-text-danger text-xs font-bold text-center tracking-wide">
           {decisionError}
          </div>
         )}
@@ -215,7 +215,7 @@ export function HITLCheckpointModal({
          type="button"
          onClick={handleSubmit}
          disabled={!selectedDecision || isSubmitting}
-         className="fc-btn-primary flex items-center gap-2 disabled:opacity-50"
+         className="fc-btn-primary flex items-center gap-2 disabled:opacity-[0.48]"
         >
         {isSubmitting ? (
          <>

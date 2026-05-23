@@ -106,7 +106,7 @@ export function GlobalNavbar() {
         router.refresh();
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        router.push("/", { scroll: true });
+        window.location.href = "/";
       }
       return;
     }

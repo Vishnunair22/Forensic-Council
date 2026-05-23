@@ -24,7 +24,7 @@ import { ResultStateView } from "./ResultStateView";
 import { EvidenceHeader } from "./EvidenceHeader";
 import { VerdictSection } from "./VerdictSection";
 import { AgentsStrip } from "./AgentsStrip";
-import { KeyFindings } from "./KeyFindings";
+import { IntelligenceBrief } from "./IntelligenceBrief";
 import { FindingsMetadata } from "./FindingsMetadata";
 import { ExecutionTimeline } from "./ExecutionTimeline";
 import { ReportIntegrity } from "./ReportIntegrity";
@@ -109,7 +109,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
       {/* ── Tab Nav ── */}
       <nav
-        className="fixed top-16 left-0 right-0 z-[40] border-b border-white/[0.06] bg-background/85 backdrop-blur-md"
+        className="fixed top-16 left-0 right-0 z-modal border-b border-white/[0.06] bg-background/85 backdrop-blur-md"
         aria-label="Report sections"
       >
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-2">
@@ -227,11 +227,32 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                   discordPct={toPct(rs.report.confidence_std_dev)}
                   isDeepPhase={rs.isDeepPhase}
                   agentCount={activeAgentIds.length}
-                  verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
                 />
               </motion.div>
 
-              {/* 3. Agents Strip */}
+              {/* 3. Degradation Banner — only when analysis was degraded */}
+              {(rs.report.degradation_flags ?? []).length > 0 && (
+                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                  <DegradationBanner flags={rs.report.degradation_flags ?? []} />
+                </motion.div>
+              )}
+
+              {/* 4. Intelligence Brief */}
+              {(keyFindings.length > 0 || rs.report.verdict_sentence || rs.report.executive_summary) && (
+                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                  <IntelligenceBrief
+                    verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
+                    keyFindings={keyFindings}
+                    reliabilityNote={rs.report.reliability_note}
+                    uncertaintyStatement={rs.report.uncertainty_statement}
+                    coverageNote={rs.report.analysis_coverage_note}
+                    skippedAgents={rs.report.skipped_agents}
+                    isDeepPhase={rs.isDeepPhase}
+                  />
+                </motion.div>
+              )}
+
+              {/* 4.5. Agents Strip — after narrative so verdict context is established */}
               <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <AgentsStrip
                   perAgentMetrics={rs.report.per_agent_metrics}
@@ -239,20 +260,6 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                   activeAgentIds={activeAgentIds}
                 />
               </motion.div>
-
-              {/* 3.5. Degradation Banner — only when analysis was degraded */}
-              {(rs.report.degradation_flags ?? []).length > 0 && (
-                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
-                  <DegradationBanner flags={rs.report.degradation_flags ?? []} />
-                </motion.div>
-              )}
-
-              {/* 4. Key Findings */}
-              {keyFindings.length > 0 && (
-                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
-                  <KeyFindings findings={keyFindings} />
-                </motion.div>
-              )}
 
               {/* 5. Agent Findings */}
               <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
@@ -384,11 +391,11 @@ function ExportDropdown({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={prefersReduced ? false : { opacity: 0, y: -4, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={prefersReduced ? {} : { opacity: 0, y: -4, scale: 0.97 }}
-            transition={{ duration: 0.1, ease: "easeOut" }}
-            className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-white/[0.10] bg-background/95 backdrop-blur-xl shadow-xl py-1.5 z-50"
+            initial={prefersReduced ? false : { opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={prefersReduced ? {} : { opacity: 0, y: -4 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute right-0 top-full mt-1.5 w-44 py-1.5 z-tooltip fc-surface-elevated overflow-hidden"
           >
             <button
               type="button"
@@ -406,11 +413,6 @@ function ExportDropdown({
               <FileJson className="w-3.5 h-3.5 shrink-0" />
               JSON Export
             </button>
-            <div className="mx-3 my-1 h-px bg-white/[0.06]" />
-            <div className="flex items-center gap-2.5 px-4 py-2 text-xs fc-text-faint opacity-40 cursor-not-allowed select-none">
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              Docx — coming soon
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -470,20 +472,13 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     findings.push(cleaned);
   };
 
-  // ── TIER 1: LLM key_findings (highest signal when not boilerplate) ──────────
-  (report.key_findings ?? []).forEach((f) => push(f));
-  if (findings.length >= 3) return findings.slice(0, 5);
-
-  // ── TIER 2: Narrative synthesis ──────────────────────────────────────────────
+  // ── TIER 1: Statistical & Narrative Synthesis (Highest Impact) ───────────────
   const conf    = typeof report.overall_confidence === "number" ? report.overall_confidence : null;
   const manip   = typeof report.manipulation_probability === "number" ? report.manipulation_probability : null;
   const errRate = typeof report.overall_error_rate === "number" ? report.overall_error_rate : null;
   const stdDev  = typeof report.confidence_std_dev === "number" ? report.confidence_std_dev : null;
-  const verdict = report.overall_verdict ?? "";
   const perAgentMetrics = report.per_agent_metrics ?? {};
-  const agentCount = Object.keys(perAgentMetrics).length;
-  const confPct = conf !== null ? Math.round(conf * 100) : null;
-
+  
   const AGENT_LABELS: Record<string, string> = {
     Agent1: "image forensics",
     Agent2: "audio forensics",
@@ -495,9 +490,9 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   const alertAgents: string[] = [];
   const highConfAuthAgents: string[] = [];
   for (const [agentId, m] of Object.entries(perAgentMetrics)) {
-    const agentConf    = (m as Record<string, unknown>).confidence_score as number ?? 0;
-    const agentErr     = (m as Record<string, unknown>).error_rate as number ?? 0;
-    const agentVerdict = (m as Record<string, unknown>).agent_verdict as string ?? "";
+    const agentConf    = (m as unknown as Record<string, unknown>).confidence_score as number ?? 0;
+    const agentErr     = (m as unknown as Record<string, unknown>).error_rate as number ?? 0;
+    const agentVerdict = (m as unknown as Record<string, unknown>).agent_verdict as string ?? "";
     const label = AGENT_LABELS[agentId] ?? agentId;
     if (agentVerdict === "MANIPULATED" || agentVerdict === "LIKELY_MANIPULATED") {
       alertAgents.push(`${label} (${Math.round(agentConf * 100)}% confidence)`);
@@ -506,24 +501,7 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     }
   }
 
-  // 1. Lead verdict sentence
-  if (verdict === "AUTHENTIC") {
-    const agentClause = agentCount > 0 ? ` across ${agentCount} independent forensic specialist${agentCount > 1 ? "s" : ""}` : "";
-    const confClause  = confPct !== null ? ` with ${confPct}% overall confidence` : "";
-    push(`The investigation completed and determined the submitted file to be authentic${agentClause}${confClause}. No indicators of manipulation, synthetic generation, or post-capture alteration were identified.`);
-  } else if (verdict === "LIKELY_AUTHENTIC") {
-    const confClause = confPct !== null ? ` at ${confPct}% confidence` : "";
-    push(`The investigation concluded the file is likely authentic${confClause}. The preponderance of forensic evidence supports an unmodified origin, with minor residual uncertainties that do not rise to the level of a manipulation flag.`);
-  } else if (verdict === "MANIPULATED") {
-    push(`The investigation confirmed active manipulation in the submitted file. Forensic evidence of tampering was identified across multiple analysis domains, and the file cannot be considered authentic.`);
-  } else if (verdict === "LIKELY_MANIPULATED") {
-    const confClause = confPct !== null ? ` with ${confPct}% overall confidence` : "";
-    push(`The investigation detected strong indicators of manipulation${confClause}. Multiple specialist agents reported anomalies inconsistent with an unmodified, authentic file.`);
-  } else if (verdict === "INCONCLUSIVE" || verdict === "ABSTAIN") {
-    push(`The forensic investigation returned an inconclusive determination. The evidence did not meet the threshold required for a definitive verdict, and independent verification by a qualified examiner is recommended.`);
-  }
-
-  // 2. Structural integrity / manipulation probability narrative
+  // 1. Structural integrity / manipulation probability narrative
   if (manip !== null) {
     if (manip >= 0.75) {
       push(`Structural and statistical analysis produced a ${Math.round(manip * 100)}% manipulation probability — a critically high signal indicating the file has likely been altered or fabricated. Multiple independent domains corroborate this finding.`);
@@ -536,7 +514,7 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     }
   }
 
-  // 3. Agent domain narrative
+  // 2. Agent domain narrative
   if (alertAgents.length > 0) {
     push(`Tampering signals were specifically flagged by ${alertAgents.join(" and ")}, each identifying anomalies in their domain that are inconsistent with an authentic, unmodified file.`);
   } else if (highConfAuthAgents.length >= 2) {
@@ -549,55 +527,41 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     push(`${label.charAt(0).toUpperCase()}${label.slice(1)} examined its domain and confirmed authentic characteristics with no anomalies detected.`);
   }
 
-  // 4. Agent discord
+  // 3. Agent discord
   if (stdDev !== null && stdDev >= 0.20) {
     push(`Specialist agents showed substantial disagreement, with a ${Math.round(stdDev * 100)}% confidence spread across the panel. This level of discord suggests contested or ambiguous evidence that warrants human review before any determination is relied upon.`);
   }
 
-  // 5. Coverage / error rate
+  // 4. Coverage / error rate
   if (errRate !== null && errRate < 0.05 && conf !== null && conf >= 0.80) {
     push(`All forensic examination tools ran to completion without errors, achieving full coverage across every analytical domain. The determination is supported by complete, uncompromised toolchain output.`);
   } else if (errRate !== null && errRate >= 0.30) {
     push(`A ${Math.round(errRate * 100)}% tool error rate was recorded during this analysis. Reduced coverage in affected domains may limit the completeness of the determination, and results should be interpreted accordingly.`);
   }
 
-  if (findings.length >= 3) return findings.slice(0, 5);
+  // ── TIER 2: LLM key_findings ─────────────────────────────────────────────────
+  (report.key_findings ?? []).forEach((f) => push(f));
 
-  // ── TIER 3: Agent narrative text (filtered for substance) ────────────────────
-  const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
-    .map(([agentId, text]) => ({
-      agentId,
-      text: cleanFindingText(text),
-      priority: agentPriority(agentId),
-    }))
-    .filter((item) => item.text && !isLowValueFinding(item.text))
-    .sort((a, b) => a.priority - b.priority);
+  // ── TIER 3: High-confidence tool findings ────────────────────────────────────
+  if (findings.length < 5) {
+    const toolFindings = Object.values(report.per_agent_findings ?? {})
+      .flat()
+      .filter(Boolean)
+      .map((finding) => ({
+        text: cleanToolSummary(finding),
+        confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
+        severity: finding.severity_tier ?? "INFO",
+      }))
+      .filter((item) => item.text && !isLowValueFinding(item.text))
+      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
 
-  for (const item of agentNarratives) {
-    if (findings.length >= 5) break;
-    push(item.text);
+    for (const item of toolFindings) {
+      if (findings.length >= 6) break;
+      push(item.text);
+    }
   }
 
-  if (findings.length >= 3) return findings.slice(0, 5);
-
-  // ── TIER 4: High-confidence tool findings ────────────────────────────────────
-  const toolFindings = Object.values(report.per_agent_findings ?? {})
-    .flat()
-    .filter(Boolean)
-    .map((finding) => ({
-      text: cleanToolSummary(finding),
-      confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
-      severity: finding.severity_tier ?? "INFO",
-    }))
-    .filter((item) => item.text && !isLowValueFinding(item.text))
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
-
-  for (const item of toolFindings) {
-    if (findings.length >= 5) break;
-    push(item.text);
-  }
-
-  return findings.slice(0, 5);
+  return findings.slice(0, 6);
 }
 
 function cleanToolSummary(finding: AgentFindingDTO): string {
@@ -607,15 +571,7 @@ function cleanToolSummary(finding: AgentFindingDTO): string {
   return cleanFindingText(llmSummary || finding.reasoning_summary || finding.court_statement || details);
 }
 
-function sameFinding(a: string, b: string): boolean {
-  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (!na || !nb) return false;
-  const aSlice = na.slice(0, Math.min(90, na.length));
-  const bSlice = nb.slice(0, Math.min(90, nb.length));
-  return na === nb || na.includes(bSlice) || nb.includes(aSlice);
-}
+
 
 function isLowValueFinding(text: string): boolean {
   const lower = text.toLowerCase();
@@ -626,23 +582,26 @@ function isLowValueFinding(text: string): boolean {
   if (lower.includes("no significant findings were identified")) return true;
   if (lower.includes("review the detailed findings below")) return true;
   if (lower.includes("forensic council has completed its multi-agent evaluation")) return true;
+  
+  // Specific noisy negative/clean findings
+  if (lower.includes("anomalies: 0 — none")) return true;
+  if (lower.includes("0 exif field(s)")) return true;
+  if (lower.includes("no exif metadata block")) return true;
+  if (lower.includes("hex signature scan found no")) return true;
+  if (lower.includes("matches the chain-of-custody record") || lower.includes("sha-256 intake hash matches")) return true;
+  if (lower.includes("file: the submitted file ()")) return true;
+  if (lower.includes("header valid, trailer valid, appended data: none")) return true;
+
   // Tool-echo negative results — these confirm tools ran, not that evidence is meaningful
   if (/^(file structure|exif metadata|file hash|hash verification|metadata extraction|structure analysis)\s+(found|confirmed|detected|showed|revealed)\s+(no|no anomalies|no changes|nothing)/.test(lower)) return true;
-  if (/found no (anomalies|issues|problems|changes|tampering|records|results)/.test(lower)) return true;
+  if (/found no (anomalies|issues|problems|changes|tampering|records|results|editing software)/.test(lower)) return true;
   if (/confirmed no (changes|anomalies|issues|tampering)/.test(lower)) return true;
   if (/no (device|capture time|gps|location) records/.test(lower)) return true;
   if (/^(no|none|n\/a|not applicable|not available|not detected|nothing)/i.test(lower)) return true;
   return false;
 }
 
-function agentPriority(agentId: string): number {
-  if (agentId === "Agent1") return 1;
-  if (agentId === "Agent5") return 2;
-  if (agentId === "Agent3") return 3;
-  if (agentId === "Agent2") return 4;
-  if (agentId === "Agent4") return 5;
-  return 9;
-}
+
 
 function severityRank(s: string): number {
   if (s === "CRITICAL") return 5;

@@ -82,6 +82,8 @@ _IMAGE_TOOLS: frozenset[str] = frozenset(
         "camera_profile_match",
         "astro_grounding",
         "gps_timezone_validate",
+        "steganography_scan",
+        "prnu_sensor_verification",
     }
 )
 

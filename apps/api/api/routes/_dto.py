@@ -32,8 +32,6 @@ def _clean_key_finding(text: str) -> str:
     lower = cleaned.lower()
     if "sha-256 intake check" in lower:
         return "SHA-256 intake hash matches the chain-of-custody record."
-    if "available: yes;" in lower and "header valid" in lower:
-        return "File structure check passed: size and header are valid."
     if "gemini_multimodal extracted" in lower:
         return "Gemini Vision OCR extracted minimal visible text."
     if lower.startswith("speaker diarization:"):
