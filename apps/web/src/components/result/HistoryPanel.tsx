@@ -65,8 +65,15 @@ function HistoryThumbnail({ thumbnail, mime, fileName }: { thumbnail?: string; m
     );
   }
   return (
-    <div className="w-full h-full flex items-center justify-center" style={{ background: `${color}12` }}>
-      <Icon className="w-4 h-4" style={{ color }} />
+    /* F-8 fix: icon fallback must have a text alternative when there is no img element.
+       Use role="img" + aria-label on the wrapper so AT announces the media type. */
+    <div
+      className="w-full h-full flex items-center justify-center"
+      style={{ background: `${color}12` }}
+      role="img"
+      aria-label={`${cat} file`}
+    >
+      <Icon className="w-4 h-4" style={{ color }} aria-hidden="true" />
     </div>
   );
 }

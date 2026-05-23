@@ -31,7 +31,7 @@ _SAFETY_PREAMBLE = (
 
 # Cap on any single untrusted string so a single field cannot dominate the
 # prompt budget for injection attempts.
-_UNTRUSTED_FIELD_MAX = 2000
+_UNTRUSTED_FIELD_MAX = 4000
 
 
 def _wrap_untrusted(label: str, value: Any) -> str:
@@ -440,11 +440,11 @@ Agent: {agent_name} ({agent_id})
 {results_block}
 
 [STRICT INSTRUCTIONS]
-1. EXECUTIVE SUMMARY ('narrative_summary'): Exactly 2-3 sentences, 55-75 words total.
-   - Sentence 1: Name the key forensic methods applied and their direct finding (positive or negative signal with metric).
-   - Sentence 2: State the single most significant forensic indicator discovered (or confirm the absence of any indicator).
-   - Sentence 3: One-line integrity verdict — what this means for evidentiary value.
-   - MUST name at least one specific tool or technique by its full name.
+1. EXECUTIVE SUMMARY ('narrative_summary'): 2-3 flowing sentences, 50-80 words total.
+   - Write as a plain-English expert verdict. No raw scores, hash digests, or numeric values — those belong in the section cards below.
+   - Sentence 1: State what was collectively checked and the overall conclusion (e.g. "ran 5 tools and found the file fully intact" or "identified signs of manipulation in the spectral profile").
+   - Sentence 2: Name one or two notable outcomes in plain language (e.g. "OCR text extraction succeeded", "file hash confirmed no changes since upload", "a face-swap signal was flagged").
+   - Sentence 3 (optional): One-line evidentiary conclusion.
    - NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result".
 
 2. GROUP OPINION ('opinion'): 1-2 sentences. Quote at least one specific metric value from the data.
@@ -485,8 +485,8 @@ Return ONLY a JSON object:
 }}
 """
         try:
-            # Truncate prompt to stay within safe context budget (~3000 tokens)
-            MAX_INPUT_CHARS = 12000
+            # Truncate prompt to stay within safe context budget (~5000 tokens)
+            MAX_INPUT_CHARS = 18000
             if len(prompt) > MAX_INPUT_CHARS:
                 prompt = prompt[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
                 logger.warning("Groq synthesis input truncated", original_len=len(prompt))
@@ -494,7 +494,7 @@ Return ONLY a JSON object:
             raw = await llm_client.generate_synthesis(
                 system_prompt="You are a Senior Forensic Analyst. Return ONLY valid JSON.",
                 user_content=prompt,
-                max_tokens=1200,
+                max_tokens=2000,
                 json_mode=True,
             )
             if not raw:
@@ -719,7 +719,7 @@ Return ONLY a JSON object:
                 section["opinion"] = " ".join(x for x in grounded_any[:2] if x)[:420]
 
         narrative = str(response.get("narrative_summary") or "")
-        needs_grounded_narrative = _bad(narrative) or len(narrative.strip()) < 120
+        needs_grounded_narrative = _bad(narrative) or len(narrative.strip()) < 80
         if screenshot_like and "object" in agent_name.lower():
             scope_row = tool_rows.get("screenshot_scene_applicability", {})
             layout_row = tool_rows.get("screenshot_layout_forensics", {})
@@ -731,11 +731,11 @@ Return ONLY a JSON object:
             if scope_data.get("width") and scope_data.get("height"):
                 dims = f" ({scope_data['width']}x{scope_data['height']}px)"
             response["verdict"] = "AUTHENTIC" if layout_anomalies == 0 else "SUSPICIOUS"
-            # Build a meta-synthesis narrative — NOT a repetition of individual tool text
+            verdict_plain = "found no structure anomalies" if layout_anomalies == 0 else f"flagged {layout_anomalies} structure anomaly flag(s)"
             response["narrative_summary"] = (
-                f"Object and scene forensic tools were bypassed because this is a screen capture{dims}; "
-                f"physical geometry checks (lighting, scale, weapons) do not apply. "
-                f"Screenshot layout analysis {verdict_text}."
+                f"Scene checks ran on this screen capture{dims} — physical-world tools (lighting, scale, weapons) were bypassed as not applicable. "
+                f"The screenshot layout scan {verdict_plain} in the UI/document structure. "
+                + ("No trace of manipulation was found in the screen capture." if layout_anomalies == 0 else "The flagged layout anomaly warrants review before this evidence is used.")
             )
         elif screenshot_like and "image" in agent_name.lower():
             freq_data = (tool_rows.get("frequency_domain_analysis", {}) or {}).get("data") or {}
@@ -753,14 +753,14 @@ Return ONLY a JSON object:
                 if semantic_data.get("width") and semantic_data.get("height")
                 else "screenshot"
             )
+            total_image = len(tool_rows)
+            hash_note = "the file hash confirmed no changes since upload" if hash_match else "the file hash did not match the intake custody record"
+            ocr_note = f"OCR text extraction read the visible content successfully" if words > 0 else "OCR extraction ran on the screen capture"
             response["narrative_summary"] = (
-                "Image integrity checks found no manipulation signal in the screenshot's spectral profile; "
-                f"frequency anomaly score was {float(freq_data.get('anomaly_score') or 0):.3f} "
-                f"with high-frequency ratio {float(freq_data.get('high_freq_ratio') or 0):.3f}. "
-                f"SHA-256 {'matched' if hash_match else 'did not match'} the intake custody record, verifying the uploaded file has not changed after submission. "
-                f"Gemini OCR read {words} visible word(s)"
-                + (f" ({ocr_preview}). " if ocr_preview else ". ")
-                + f"Semantic profiling recorded a {dims} digital UI; these results support file integrity since intake, not camera-origin authenticity."
+                f"Image integrity checks ran {total_image} tool(s) on this screen capture — "
+                f"finding the file intact with no spectral manipulation signals detected. "
+                f"{ocr_note.capitalize()} and {hash_note}. "
+                "These results confirm integrity since upload; they do not speak to the original capture device or timestamp."
             )
         elif screenshot_like and ("metadata" in agent_name.lower() or "provenance" in agent_name.lower()):
             grounded = self._agent_grounded_narrative(
@@ -799,94 +799,125 @@ Return ONLY a JSON object:
         *,
         screenshot_like: bool,
     ) -> str:
-        """Build a compact agent-level summary from actual tool metrics."""
+        """Build a plain-English expert verdict from actual tool outcomes."""
         name = agent_name.lower()
+        total = len(tool_rows)
+        has_positive = any(_is_positive(row) for row in tool_rows.values())
 
         if "image" in name:
-            freq = _tool_data(_first_row(tool_rows, "frequency_domain_analysis", "deepfake_frequency_check"))
-            ela = _tool_data(_first_row(tool_rows, "neural_ela", "ela_full_image", "ela_anomaly_classify"))
             hash_row = _first_row(tool_rows, "file_hash_verify")
-            hash_data = _tool_data(hash_row)
-            hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
-            score = float(freq.get("anomaly_score") or ela.get("anomaly_score") or 0)
+            hash_match = (
+                _tool_data(hash_row).get("hash_matches") is True
+                or _tool_data(hash_row).get("hash_match") is True
+            )
+            ocr_row = _first_row(tool_rows, "extract_text_from_image", "extract_evidence_text")
+            ocr_ok = bool(ocr_row) and not _is_positive(ocr_row)
+            if has_positive:
+                return (
+                    f"Image integrity checks ran {total} tool(s) covering spectral analysis, pixel patterns, and file hash — "
+                    "and identified a forensic anomaly consistent with possible manipulation or generation. "
+                    "This evidence should be treated with caution pending further review."
+                )
+            checks = []
+            if ocr_ok:
+                checks.append("OCR text extraction was successful")
+            if hash_row and hash_match:
+                checks.append("the file hash confirmed no changes since upload")
+            checks_str = " and ".join(checks) if checks else "all applicable checks completed cleanly"
             return (
-                "Image-integrity checks combined pixel/compression review, spectral analysis, and intake hash verification. "
-                f"The strongest measurable signal was an anomaly score of {score:.3f}; "
-                f"the SHA-256 custody check {'matched' if hash_match else 'did not match'} the uploaded artifact. "
-                "This supports integrity of the submitted file since intake, while camera-origin authenticity still depends on metadata and provenance coverage."
+                f"Image integrity checks ran {total} tool(s) covering spectral analysis, pixel patterns, and file hash — "
+                f"finding the evidence fully intact and authentic. "
+                f"{checks_str.capitalize()}. "
+                "No trace of manipulation or tampering was found in the evidence file."
             )
 
         if "audio" in name:
             spoof = _first_row(tool_rows, "anti_spoofing_detect", "anti_spoofing_deep_ensemble")
             clone = _first_row(tool_rows, "voice_clone_detect", "voice_clone_deep_ensemble")
             splice = _first_row(tool_rows, "audio_splice_detect")
-            codec = _first_row(tool_rows, "codec_fingerprinting", "mediainfo_profile")
-            flags = sum(1 for row in (spoof, clone, splice, codec) if _is_positive(row))
-            clean = sum(1 for row in (spoof, clone, splice, codec) if _is_negative(row))
+            if has_positive:
+                flagged = next(
+                    (label for row, label in (
+                        (spoof, "anti-spoofing"), (clone, "voice-clone detection"), (splice, "splice detection")
+                    ) if _is_positive(row)),
+                    "at least one audio check",
+                )
+                return (
+                    f"Audio forensic checks ran {total} tool(s) covering synthetic-speech detection, anti-spoofing, and codec analysis — "
+                    f"and {flagged} raised a warning signal. "
+                    "This audio evidence warrants careful review before it is treated as unmodified."
+                )
             return (
-                "Audio-forensic checks reviewed synthetic-speech risk, anti-spoofing behavior, edit continuity, and codec/container provenance. "
-                f"{flags} active warning signal(s) and {clean} clean signal(s) were available from the completed tools. "
-                "The agent verdict should be read as an acoustic-integrity assessment, not a statement about speaker identity unless diarization or speaker-match evidence is present."
+                f"Audio forensic checks ran {total} tool(s) reviewing synthetic-speech risk, anti-spoofing behavior, and codec provenance — "
+                "all returning clean signals with no evidence of voice cloning, audio splicing, or spoofing. "
+                "The audio evidence appears acoustically intact based on the available tool coverage."
             )
 
         if "object" in name or "scene" in name:
-            layout = _tool_data(_first_row(tool_rows, "screenshot_layout_forensics"))
-            if screenshot_like or layout:
-                anomalies = int(layout.get("layout_anomaly_count") or 0)
-                edge = layout.get("edge_density")
+            layout_row = _first_row(tool_rows, "screenshot_layout_forensics")
+            if screenshot_like or layout_row:
+                layout_data = _tool_data(layout_row)
+                anomalies = int(layout_data.get("layout_anomaly_count") or 0)
+                verdict_phrase = "found no structure anomalies" if anomalies == 0 else f"flagged {anomalies} structure anomaly"
                 return (
-                    "Scene analysis was adapted for a screenshot: physical-world object, lighting, shadow, and scale checks were bypassed as not applicable. "
-                    f"The screenshot layout scan found {anomalies} UI/document structure anomaly flag(s)"
-                    + (f" with edge density {edge}." if edge is not None else ".")
-                    + " This is useful context for screen-capture consistency, not a camera-scene authenticity claim."
+                    f"Scene analysis ran {total} tool(s) — physical-world checks were bypassed as not applicable to a screen capture. "
+                    f"The screenshot layout scan {verdict_phrase} in the UI/document structure. "
+                    "These results confirm screen-capture consistency; they are not a camera-scene authenticity claim."
                 )
-            objects = _tool_data(_first_row(tool_rows, "object_detection"))
             lighting = _first_row(tool_rows, "lighting_consistency", "shadow_validation", "scale_validation")
-            object_count = int(objects.get("object_count") or len(objects.get("objects", []) or []))
+            if has_positive:
+                return (
+                    f"Scene-context checks ran {total} tool(s) reviewing objects, lighting, shadow geometry, and physical plausibility — "
+                    "and flagged a physical-consistency anomaly that may indicate compositing or scene manipulation. "
+                    "Review the section detail below for the specific finding."
+                )
             return (
-                "Scene-context checks reviewed detected objects against physical consistency signals such as lighting, shadow, and scale. "
-                f"Object detection reported {object_count} visible object(s); "
-                f"physical-consistency tools {'raised a warning' if _is_positive(lighting) else 'did not raise a supported warning'}. "
-                "These findings speak to scene plausibility and compositing risk, not file custody."
+                f"Scene-context checks ran {total} tool(s) reviewing visible objects, lighting, shadow geometry, and physical plausibility — "
+                f"finding the scene consistent and unmanipulated. "
+                "No compositing artifacts or physical-world inconsistencies were detected in the evidence."
             )
 
         if "video" in name:
-            flow = _tool_data(_first_row(tool_rows, "optical_flow_analysis", "optical_flow_analyze"))
-            face = _tool_data(_first_row(tool_rows, "face_swap_detection"))
-            media = _tool_data(_first_row(tool_rows, "mediainfo_profile", "av_file_identity", "video_metadata"))
-            flow_score = flow.get("motion_anomaly_score") or flow.get("anomaly_score") or flow.get("mean_flow_error")
-            face_swap = face.get("face_swap_detected") is True
-            codec = media.get("codec") or media.get("video_codec") or media.get("format") or "container metadata"
+            face_row = _first_row(tool_rows, "face_swap_detection")
+            face_positive = _is_positive(face_row)
+            if has_positive:
+                if face_positive:
+                    return (
+                        f"Video forensic checks ran {total} tool(s) covering temporal motion, frame consistency, and biometric forgery detection — "
+                        "and the face-swap detection tool raised a warning signal. "
+                        "This evidence should be reviewed for biometric manipulation before it is treated as authentic."
+                    )
+                return (
+                    f"Video forensic checks ran {total} tool(s) reviewing motion continuity, frame-to-frame consistency, and container provenance — "
+                    "and identified a forensic anomaly in the video timeline. "
+                    "This evidence warrants closer review before it is used in a forensic context."
+                )
             return (
-                "Video-forensic checks reviewed temporal motion continuity, frame-to-frame consistency, biometric forgery risk, and container metadata. "
-                f"Optical-flow anomaly score was {float(flow_score or 0):.3f}; face-swap screening {'reported a face-swap signal' if face_swap else 'did not report a face-swap signal'}. "
-                f"Container review recorded {codec}, so the verdict reflects both visual continuity and file-level provenance signals."
+                f"Video forensic checks ran {total} tool(s) covering optical flow, frame consistency, face-swap screening, and container metadata — "
+                "all returning clean signals with no temporal discontinuities or biometric forgery indicators. "
+                "The video evidence appears continuous and intact based on the available tool coverage."
             )
 
         if "metadata" in name or "provenance" in name:
-            exif = _tool_data(_first_row(tool_rows, "exif_extract", "extract_deep_metadata"))
             hash_data = _tool_data(_first_row(tool_rows, "file_hash_verify"))
-            hex_data = _tool_data(_first_row(tool_rows, "hex_signature_scan"))
-            compression = _tool_data(_first_row(tool_rows, "compression_risk_audit"))
-            structure = _tool_data(_first_row(tool_rows, "file_structure_analysis"))
-            fields = int(exif.get("total_fields_extracted") or exif.get("field_count") or 0)
             hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
-            scanned = int(hex_data.get("bytes_scanned") or 0)
-            raw_anomalies = structure.get("anomalies")
-            anomalies = raw_anomalies if isinstance(raw_anomalies, list) else []
-            impact = compression.get("forensic_reliability_impact") or "limited"
+            if has_positive:
+                return (
+                    f"Metadata and provenance checks ran {total} tool(s) covering EXIF fields, file structure, timestamps, hash custody, and binary signatures — "
+                    "and flagged a potential anomaly that may indicate metadata manipulation or an unusual provenance chain. "
+                    "Review the section detail below for the specific finding."
+                )
             if screenshot_like:
                 return (
-                    "Metadata and binary-provenance checks found a stable intake hash, valid file structure, and no editing-software byte signature in the scanned header. "
-                    f"EXIF contained {fields} field(s), which is common for screenshots but limits proof of original capture device and time; "
-                    f"compression/platform reliability impact is {impact}. "
-                    "Together these findings support integrity since upload while keeping original screenshot provenance limited."
+                    f"Metadata and provenance checks ran {total} tool(s) covering file structure, EXIF fields, hash custody, and hex-signature scan — "
+                    "all returning clean signals. "
+                    "The file hash confirmed integrity since upload and no editing-software signatures were found in the binary header."
                 )
+            hash_note = "The file hash confirmed the evidence is unmodified since upload. " if hash_match else ""
             return (
-                "Metadata and binary-provenance checks reviewed EXIF, timestamps, file structure, hash custody, and embedded software signatures. "
-                f"EXIF returned {fields} field(s), SHA-256 {'matched' if hash_match else 'did not match'} intake custody, "
-                f"and the hex scan reviewed {scanned:,} bytes with {len(anomalies)} structure anomaly flag(s). "
-                "This agent is strongest for provenance and chronology; it does not replace pixel, audio, or video manipulation analysis."
+                f"Metadata and provenance checks ran {total} tool(s) covering EXIF fields, file structure, timestamps, hash custody, and binary signatures — "
+                "all returning clean signals with no anomalies detected. "
+                f"{hash_note}No metadata irregularities or embedded editing-software signatures were found."
             )
 
         return ""

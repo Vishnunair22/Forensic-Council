@@ -52,7 +52,7 @@ test("landing CTA routes selected file into evidence analysis overlay", async ({
 
   await expect(page.getByRole("dialog", { name: /upload evidence/i })).toBeVisible();
 
-  await page.getByLabel(/upload evidence file/i).setInputFiles({
+  await page.locator('#evidence-file-input').setInputFiles({
     name: "route-flow-evidence.png",
     mimeType: "image/png",
     buffer: makeValidPng(),

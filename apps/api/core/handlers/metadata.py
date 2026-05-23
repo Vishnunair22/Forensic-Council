@@ -418,17 +418,21 @@ class MetadataHandlers(BaseToolHandler):
             penalty = 0.45
             platform = "Social Media (Filename Signal)"
 
-        # 3. Stripped EXIF (Common social media signal, but also privacy tools)
+        # 3. Stripped EXIF (common after social-media re-encoding, but also caused by
+        # privacy tools, format converters, and modern phones stripping location data).
+        # Require very few fields (< 3) before applying a penalty — a file with 3-4 EXIF
+        # tags still has meaningful provenance signals and should not be penalised.
         total_fields = int(exif.get("total_fields_extracted", 0))
-        if penalty == 1.0 and total_fields < 5:
-            # If it looks like a standard camera filename, be more conservative about the penalty
+        if penalty == 1.0 and total_fields < 3:
+            # Camera filename → metadata was likely stripped by a privacy tool or transfer;
+            # apply only a small calibration penalty rather than a risk flag.
             is_camera_file = any(x in file_name for x in ("dsc", "img_", "p_", "mvc", "dcim"))
             if is_camera_file:
-                penalty = 0.88  # Slight penalty for lack of calibration data
+                penalty = 0.95  # Negligible — camera capture with privacy-stripped metadata
                 platform = "Camera Capture (Stripped Metadata)"
             else:
-                penalty = 0.60  # Higher risk if non-standard name AND stripped
-                platform = "Unknown (Stripped Metadata - High Compression Risk)"
+                penalty = 0.78  # Minor penalty — non-standard name with near-zero EXIF
+                platform = "Unknown (Stripped Metadata)"
 
         result = {
             "available": True,

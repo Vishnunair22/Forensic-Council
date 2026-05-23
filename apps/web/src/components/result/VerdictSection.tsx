@@ -61,7 +61,8 @@ export function VerdictSection({
                 backgroundColor: `rgba(${theme.colorRgb}, 0.09)`,
               }}
             >
-              <VerdictIcon className="w-6 h-6" style={{ color: theme.color }} />
+              {/* F-1: VerdictIcon is decorative — the h2 verdict label provides the accessible name. */}
+              <VerdictIcon className="w-6 h-6" style={{ color: theme.color }} aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <div className="fc-eyebrow" style={{ color: theme.color }}>
@@ -136,14 +137,17 @@ function MetricCell({
   return (
     <div className="px-4 md:px-5 py-4">
       <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-2">
-        <Icon className="w-3 h-3 shrink-0" />
+        {/* F-1: Icon is decorative — label text provides the accessible name. */}
+        <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />
         <span className="truncate">{label}</span>
       </div>
+      {/* F-3: The numeric percentage above satisfies WCAG 1.4.1 — color is supplemental.
+           F-2: Progress bar is decorative (value conveyed by text). Mark the bar aria-hidden. */}
       <div className="flex items-center gap-3">
         <span className="text-xl font-mono font-bold tabular-nums shrink-0" style={{ color }}>
           {value}%
         </span>
-        <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden">
+        <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden" aria-hidden="true">
           <motion.div
             initial={prefersReduced ? false : { width: 0 }}
             animate={{ width: pct }}

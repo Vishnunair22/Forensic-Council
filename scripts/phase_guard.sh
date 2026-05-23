@@ -74,6 +74,11 @@ fi
 # ── Phase 5: test upload → queued within 5s ──────────────────────────────────
 echo ""
 echo "Phase 5 — Upload → queued"
+# Load .env variables if not already present
+if [ -f .env ]; then
+  BOOTSTRAP_ADMIN_PASSWORD="${BOOTSTRAP_ADMIN_PASSWORD:-$(grep '^BOOTSTRAP_ADMIN_PASSWORD=' .env | cut -d'=' -f2- | tr -d '\r')}"
+  BOOTSTRAP_INVESTIGATOR_PASSWORD="${BOOTSTRAP_INVESTIGATOR_PASSWORD:-$(grep '^BOOTSTRAP_INVESTIGATOR_PASSWORD=' .env | cut -d'=' -f2- | tr -d '\r')}"
+fi
 # Fresh cookie jar for upload test — login with admin credentials
 LOGIN_PASS="${BOOTSTRAP_ADMIN_PASSWORD:-${BOOTSTRAP_INVESTIGATOR_PASSWORD:-}}"
 curl -s -c /tmp/pg_up_cookies.txt "$API/api/v1/health" > /dev/null 2>&1

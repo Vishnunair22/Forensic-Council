@@ -1303,7 +1303,7 @@ async def _await_deep_report_request(
 
     try:
         active_redis = pipeline._redis or await get_redis_client()
-        timeout = pipeline.config.hitl_decision_timeout or 3600
+        timeout = min(pipeline.config.hitl_decision_timeout or 120, 120)
         start_time = time.perf_counter()
 
         while (time.perf_counter() - start_time) < timeout:

@@ -137,6 +137,13 @@ class LLMClient:
         if not hasattr(LLMClient, "_global_semaphore"):
             LLMClient._global_semaphore = asyncio.Semaphore(4)
 
+        # Synthesis-specific serialization: multiple agents finishing simultaneously
+        # (especially on fast screenshot paths) would all call generate_synthesis()
+        # concurrently and exhaust the Groq TPM budget in one burst → all 429.
+        # Semaphore(1) serializes synthesis calls so each gets a fresh token window.
+        if not hasattr(LLMClient, "_synthesis_semaphore"):
+            LLMClient._synthesis_semaphore = asyncio.Semaphore(1)
+
     async def _get_client(self, timeout_override: float | None = None) -> httpx.AsyncClient:
         """Return a shared httpx.AsyncClient, creating it on first use.
 
@@ -637,37 +644,56 @@ class LLMClient:
         json_mode: bool = True,
     ) -> str:
         """Executive summary synthesis with cross-provider fallback support."""
+        async with LLMClient._synthesis_semaphore:
+            return await self._generate_synthesis_inner(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=max_tokens,
+                timeout_override=timeout_override,
+                json_mode=json_mode,
+            )
+
+    async def _generate_synthesis_inner(
+        self,
+        system_prompt: str,
+        user_content: str,
+        max_tokens: int | None = None,
+        timeout_override: float | None = None,
+        json_mode: bool = True,
+    ) -> str:
+        """Inner synthesis implementation — always called under _synthesis_semaphore."""
         with _tracer.start_as_current_span("llm.generate_synthesis"):
             if not self.is_available:
                 return ""
 
             tokens = max_tokens or min(self.max_tokens, 1500)
-            candidates = self._get_model_candidates()
+            candidates = list(self._get_model_candidates())
+
+            # Auto-append Gemini as a cross-provider synthesis fallback.
+            # Groq's free-tier TPM is routinely exhausted by concurrent ReAct
+            # reasoning calls before synthesis runs — Gemini escapes that bucket.
+            if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
+                gemini_candidate = f"gemini/{self.gemini_model}"
+                if gemini_candidate not in candidates:
+                    candidates.append(gemini_candidate)
+
             last_exc: Exception | None = None
 
             for model_spec in candidates:
-                # Resolve provider and model from spec (e.g. "gemini/gemini-2.5-flash")
-                target_provider = self.provider
-                target_model = model_spec
-                target_api_key = self.api_key
-
+                # Resolve provider / model / key from spec
                 if "/" in model_spec:
                     parts = model_spec.split("/", 1)
                     target_provider = parts[0].lower()
                     target_model = parts[1]
-                    if target_provider == "gemini":
-                        target_api_key = self.gemini_api_key
-                    else:
-                        target_api_key = self.api_key
+                    target_api_key = self.gemini_api_key if target_provider == "gemini" else self.api_key
                 else:
                     target_provider = self.provider
                     target_model = model_spec
                     target_api_key = self.api_key
 
-                if not target_api_key or target_api_key.startswith("REPLACE_"):
+                if not target_api_key or is_placeholder_secret(target_api_key):
                     continue
 
-                # Check quota guard before making the call
                 allowed, quota_result = await ProviderQuotaGuard.check_and_record(
                     target_provider, target_model
                 )
@@ -681,14 +707,16 @@ class LLMClient:
                     continue
 
                 try:
-                    # Dispatch to specific provider logic
+                    client = await self._get_client()
+                    req_timeout = timeout_override or 30.0
+
                     if target_provider == "groq":
                         url = "https://api.groq.com/openai/v1/chat/completions"
-                        headers = {
+                        req_headers = {
                             "Authorization": f"Bearer {target_api_key}",
                             "Content-Type": "application/json",
                         }
-                        payload = {
+                        payload: dict[str, Any] = {
                             "model": target_model,
                             "messages": [
                                 {"role": "system", "content": system_prompt},
@@ -699,21 +727,13 @@ class LLMClient:
                         }
                         if json_mode:
                             payload["response_format"] = {"type": "json_object"}
-
-                        client = await self._get_client()
-                        req_timeout = timeout_override or 15.0
-                        resp = await self._with_retry(
-                            lambda c=client, u=url, h=headers, p=payload, t=req_timeout: c.post(
-                                u, headers=h, json=p, timeout=t
-                            )
-                        )
-                        resp.raise_for_status()
-                        return resp.json()["choices"][0]["message"].get("content", "").strip()
+                        async with LLMClient._global_semaphore:
+                            resp = await client.post(url, headers=req_headers, json=payload, timeout=req_timeout)
 
                     elif target_provider == "gemini":
                         # M-C-4: Gemini key as header, not query string.
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"
-                        gemini_headers = {"x-goog-api-key": target_api_key}
+                        req_headers = {"x-goog-api-key": target_api_key}
                         payload = {
                             "contents": [
                                 {
@@ -725,15 +745,25 @@ class LLMClient:
                         }
                         if json_mode:
                             payload["generationConfig"]["responseMimeType"] = "application/json"
+                        async with LLMClient._global_semaphore:
+                            resp = await client.post(url, headers=req_headers, json=payload, timeout=req_timeout)
+                    else:
+                        continue
 
-                        client = await self._get_client()
-                        req_timeout = timeout_override or 15.0
-                        resp = await self._with_retry(
-                            lambda c=client, u=url, p=payload, h=gemini_headers, t=req_timeout: c.post(
-                                u, json=p, headers=h, timeout=t
-                            )
+                    # Fast-fail on 429 — skip to next candidate immediately.
+                    # Retrying the same rate-limited model wastes time: Groq's
+                    # token bucket takes ~60 s to refill, not 5 s.
+                    if resp.status_code == 429:
+                        logger.warning(
+                            f"Synthesis {target_provider}/{target_model} rate-limited — skipping to next candidate"
                         )
-                        resp.raise_for_status()
+                        continue
+
+                    resp.raise_for_status()
+
+                    if target_provider == "groq":
+                        return resp.json()["choices"][0]["message"].get("content", "").strip()
+                    else:
                         return (
                             resp.json()["candidates"][0]["content"]["parts"][0]
                             .get("text", "")

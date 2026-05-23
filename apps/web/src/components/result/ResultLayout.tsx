@@ -202,7 +202,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               animate="visible"
               variants={prefersReduced ? {} : {
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.12 } },
+                visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
               }}
               className="space-y-4"
             >
@@ -459,20 +459,111 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   if (!report) return [];
 
   const findings: string[] = [];
-  const summaryText = cleanFindingText(report.verdict_sentence || report.executive_summary);
+  const seen = new Set<string>();
+
   const push = (value: string | null | undefined) => {
     const cleaned = cleanFindingText(value);
     if (!cleaned || isLowValueFinding(cleaned)) return;
-    if (summaryText && sameFinding(summaryText, cleaned)) return;
-    if (!findings.some((existing) => sameFinding(existing, cleaned))) {
-      findings.push(cleaned);
-    }
+    const key = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 80);
+    if (seen.has(key)) return;
+    seen.add(key);
+    findings.push(cleaned);
   };
 
-  (report.key_findings ?? []).forEach((finding) => push(finding));
+  // ── TIER 1: LLM key_findings (highest signal when not boilerplate) ──────────
+  (report.key_findings ?? []).forEach((f) => push(f));
+  if (findings.length >= 3) return findings.slice(0, 5);
 
-  if (findings.length > 0) return findings.slice(0, 5);
+  // ── TIER 2: Narrative synthesis ──────────────────────────────────────────────
+  const conf    = typeof report.overall_confidence === "number" ? report.overall_confidence : null;
+  const manip   = typeof report.manipulation_probability === "number" ? report.manipulation_probability : null;
+  const errRate = typeof report.overall_error_rate === "number" ? report.overall_error_rate : null;
+  const stdDev  = typeof report.confidence_std_dev === "number" ? report.confidence_std_dev : null;
+  const verdict = report.overall_verdict ?? "";
+  const perAgentMetrics = report.per_agent_metrics ?? {};
+  const agentCount = Object.keys(perAgentMetrics).length;
+  const confPct = conf !== null ? Math.round(conf * 100) : null;
 
+  const AGENT_LABELS: Record<string, string> = {
+    Agent1: "image forensics",
+    Agent2: "audio forensics",
+    Agent3: "scene analysis",
+    Agent4: "video forensics",
+    Agent5: "metadata analysis",
+  };
+
+  const alertAgents: string[] = [];
+  const highConfAuthAgents: string[] = [];
+  for (const [agentId, m] of Object.entries(perAgentMetrics)) {
+    const agentConf    = (m as Record<string, unknown>).confidence_score as number ?? 0;
+    const agentErr     = (m as Record<string, unknown>).error_rate as number ?? 0;
+    const agentVerdict = (m as Record<string, unknown>).agent_verdict as string ?? "";
+    const label = AGENT_LABELS[agentId] ?? agentId;
+    if (agentVerdict === "MANIPULATED" || agentVerdict === "LIKELY_MANIPULATED") {
+      alertAgents.push(`${label} (${Math.round(agentConf * 100)}% confidence)`);
+    } else if (agentVerdict === "AUTHENTIC" && agentConf >= 0.80 && agentErr < 0.10) {
+      highConfAuthAgents.push(label);
+    }
+  }
+
+  // 1. Lead verdict sentence
+  if (verdict === "AUTHENTIC") {
+    const agentClause = agentCount > 0 ? ` across ${agentCount} independent forensic specialist${agentCount > 1 ? "s" : ""}` : "";
+    const confClause  = confPct !== null ? ` with ${confPct}% overall confidence` : "";
+    push(`The investigation completed and determined the submitted file to be authentic${agentClause}${confClause}. No indicators of manipulation, synthetic generation, or post-capture alteration were identified.`);
+  } else if (verdict === "LIKELY_AUTHENTIC") {
+    const confClause = confPct !== null ? ` at ${confPct}% confidence` : "";
+    push(`The investigation concluded the file is likely authentic${confClause}. The preponderance of forensic evidence supports an unmodified origin, with minor residual uncertainties that do not rise to the level of a manipulation flag.`);
+  } else if (verdict === "MANIPULATED") {
+    push(`The investigation confirmed active manipulation in the submitted file. Forensic evidence of tampering was identified across multiple analysis domains, and the file cannot be considered authentic.`);
+  } else if (verdict === "LIKELY_MANIPULATED") {
+    const confClause = confPct !== null ? ` with ${confPct}% overall confidence` : "";
+    push(`The investigation detected strong indicators of manipulation${confClause}. Multiple specialist agents reported anomalies inconsistent with an unmodified, authentic file.`);
+  } else if (verdict === "INCONCLUSIVE" || verdict === "ABSTAIN") {
+    push(`The forensic investigation returned an inconclusive determination. The evidence did not meet the threshold required for a definitive verdict, and independent verification by a qualified examiner is recommended.`);
+  }
+
+  // 2. Structural integrity / manipulation probability narrative
+  if (manip !== null) {
+    if (manip >= 0.75) {
+      push(`Structural and statistical analysis produced a ${Math.round(manip * 100)}% manipulation probability — a critically high signal indicating the file has likely been altered or fabricated. Multiple independent domains corroborate this finding.`);
+    } else if (manip >= 0.50) {
+      push(`Analysis returned a ${Math.round(manip * 100)}% manipulation probability, placing this file in contested territory. Significant anomalies were identified that are inconsistent with an authentic, unaltered source.`);
+    } else if (manip >= 0.20) {
+      push(`Manipulation probability stands at ${Math.round(manip * 100)}%, within an uncertain range. Some forensic signals are ambiguous and full authenticity cannot be confirmed or excluded without additional context.`);
+    } else if (manip < 0.10) {
+      push(`File structure, binary composition, and embedded data were examined and returned a ${Math.round(manip * 100)}% manipulation probability. The file's makeup is consistent with an unmodified original and shows no signs of synthetic or AI-generated content.`);
+    }
+  }
+
+  // 3. Agent domain narrative
+  if (alertAgents.length > 0) {
+    push(`Tampering signals were specifically flagged by ${alertAgents.join(" and ")}, each identifying anomalies in their domain that are inconsistent with an authentic, unmodified file.`);
+  } else if (highConfAuthAgents.length >= 2) {
+    const listed = highConfAuthAgents.length > 2
+      ? `${highConfAuthAgents.slice(0, -1).join(", ")}, and ${highConfAuthAgents.slice(-1)}`
+      : highConfAuthAgents.join(" and ");
+    push(`Specialist examination by ${listed} confirmed authentic characteristics across each domain, with no anomalies detected in file structure, statistical patterns, or embedded metadata.`);
+  } else if (highConfAuthAgents.length === 1) {
+    const label = highConfAuthAgents[0];
+    push(`${label.charAt(0).toUpperCase()}${label.slice(1)} examined its domain and confirmed authentic characteristics with no anomalies detected.`);
+  }
+
+  // 4. Agent discord
+  if (stdDev !== null && stdDev >= 0.20) {
+    push(`Specialist agents showed substantial disagreement, with a ${Math.round(stdDev * 100)}% confidence spread across the panel. This level of discord suggests contested or ambiguous evidence that warrants human review before any determination is relied upon.`);
+  }
+
+  // 5. Coverage / error rate
+  if (errRate !== null && errRate < 0.05 && conf !== null && conf >= 0.80) {
+    push(`All forensic examination tools ran to completion without errors, achieving full coverage across every analytical domain. The determination is supported by complete, uncompromised toolchain output.`);
+  } else if (errRate !== null && errRate >= 0.30) {
+    push(`A ${Math.round(errRate * 100)}% tool error rate was recorded during this analysis. Reduced coverage in affected domains may limit the completeness of the determination, and results should be interpreted accordingly.`);
+  }
+
+  if (findings.length >= 3) return findings.slice(0, 5);
+
+  // ── TIER 3: Agent narrative text (filtered for substance) ────────────────────
   const agentNarratives = Object.entries(report.per_agent_analysis ?? {})
     .map(([agentId, text]) => ({
       agentId,
@@ -483,29 +574,30 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     .sort((a, b) => a.priority - b.priority);
 
   for (const item of agentNarratives) {
-    if (findings.length >= 3) break;
+    if (findings.length >= 5) break;
     push(item.text);
   }
 
-  if (findings.length === 0) {
-    const toolFindings = Object.values(report.per_agent_findings ?? {})
-      .flat()
-      .filter(Boolean)
-      .map((finding) => ({
-        text: cleanToolSummary(finding),
-        confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
-        severity: finding.severity_tier ?? "INFO",
-      }))
-      .filter((item) => item.text && !isLowValueFinding(item.text))
-      .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+  if (findings.length >= 3) return findings.slice(0, 5);
 
-    for (const item of toolFindings) {
-      if (findings.length >= 3) break;
-      push(item.text);
-    }
+  // ── TIER 4: High-confidence tool findings ────────────────────────────────────
+  const toolFindings = Object.values(report.per_agent_findings ?? {})
+    .flat()
+    .filter(Boolean)
+    .map((finding) => ({
+      text: cleanToolSummary(finding),
+      confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
+      severity: finding.severity_tier ?? "INFO",
+    }))
+    .filter((item) => item.text && !isLowValueFinding(item.text))
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+
+  for (const item of toolFindings) {
+    if (findings.length >= 5) break;
+    push(item.text);
   }
 
-  return findings.slice(0, 3);
+  return findings.slice(0, 5);
 }
 
 function cleanToolSummary(finding: AgentFindingDTO): string {
@@ -527,14 +619,20 @@ function sameFinding(a: string, b: string): boolean {
 
 function isLowValueFinding(text: string): boolean {
   const lower = text.toLowerCase();
-  return (
-    lower.length < 24 ||
-    lower.includes("template") ||
-    lower.includes("lorem ipsum") ||
-    lower.includes("no significant findings were identified") ||
-    lower.includes("review the detailed findings below") ||
-    lower.includes("forensic council has completed its multi-agent evaluation")
-  );
+  if (lower.length < 24) return true;
+  // Boilerplate / template strings
+  if (lower.includes("template")) return true;
+  if (lower.includes("lorem ipsum")) return true;
+  if (lower.includes("no significant findings were identified")) return true;
+  if (lower.includes("review the detailed findings below")) return true;
+  if (lower.includes("forensic council has completed its multi-agent evaluation")) return true;
+  // Tool-echo negative results — these confirm tools ran, not that evidence is meaningful
+  if (/^(file structure|exif metadata|file hash|hash verification|metadata extraction|structure analysis)\s+(found|confirmed|detected|showed|revealed)\s+(no|no anomalies|no changes|nothing)/.test(lower)) return true;
+  if (/found no (anomalies|issues|problems|changes|tampering|records|results)/.test(lower)) return true;
+  if (/confirmed no (changes|anomalies|issues|tampering)/.test(lower)) return true;
+  if (/no (device|capture time|gps|location) records/.test(lower)) return true;
+  if (/^(no|none|n\/a|not applicable|not available|not detected|nothing)/i.test(lower)) return true;
+  return false;
 }
 
 function agentPriority(agentId: string): number {

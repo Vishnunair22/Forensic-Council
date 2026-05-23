@@ -664,7 +664,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         flags = []
         if self.config.llm_enable_post_synthesis and not llm_ok:
             flags.append("LLM synthesis bypassed")
-        if penalty < 1.0:
+        if penalty < 0.80:
             flags.append(f"Compression penalty applied ({round((1 - penalty) * 100)}%)")
         # Only flag missing Gemini when the report actually contains deep-phase findings —
         # Gemini is not part of initial analysis (Phase 1), so this check must be gated on

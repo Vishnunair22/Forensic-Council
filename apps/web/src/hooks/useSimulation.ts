@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 
 import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
 import { SoundType } from "./useSound";
@@ -630,8 +631,7 @@ export const useSimulation = ({
             setIsReconnecting(false);
             setReconnectStatusMessage(null);
             setSessionId(null);
-            try { storage.removeItem(STORAGE_KEYS.SESSION_ID); } catch { /* ignore */ }
-            try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+            clearInvestigationPersistence();
 
             // If connection was already established, set to error state
             if (wsConnectionReady) {

@@ -208,21 +208,30 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
   const [expanded, setExpanded] = useState(false);
   const prefersReduced = useReducedMotion();
   const isAlert = isAlertFinding(f);
-  const sev = (f.severity || "").toUpperCase();
+  const isCritical = (f.severity || "").toUpperCase() === "CRITICAL";
+  const isHigh = (f.severity || "").toUpperCase() === "HIGH";
+  const isMedium = (f.severity || "").toUpperCase() === "MEDIUM";
+  const showSeverityBadge = isCritical || isHigh || isMedium;
   const verdict = normalizeVerdict(f.verdict);
-  const elapsed = formatElapsed(f.elapsed_s);
+  const showVerdictBadge = f.verdict && f.verdict !== "CLEAN" && f.verdict !== "NOT_APPLICABLE";
   const confidence = typeof f.confidence === "number" ? f.confidence : null;
-  const tier = confidence !== null ? confidenceTier(confidence) : null;
+  const elapsed = formatElapsed(f.elapsed_s);
 
   const unifiedText = buildUnifiedFindingText(f);
-  const MAX_TEXT = 260;
+  const MAX_TEXT = 240;
   const needsExpand = unifiedText.length > MAX_TEXT;
   const visibleText = needsExpand && !expanded
     ? unifiedText.slice(0, MAX_TEXT).trimEnd() + "…"
     : unifiedText;
 
-  const showVerdictBadge = f.verdict && f.verdict !== "CLEAN" && f.verdict !== "NOT_APPLICABLE";
-  const showSeverityBadge = sev && ["CRITICAL", "HIGH", "MEDIUM"].includes(sev);
+  // Severity accent color for left border
+  const accentBorder = isCritical || isHigh
+    ? "border-l-danger/50"
+    : isMedium
+    ? "border-l-warning/40"
+    : isAlert
+    ? "border-l-danger/30"
+    : "border-l-white/[0.08]";
 
   return (
     <motion.div
@@ -231,65 +240,71 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: prefersReduced ? 0 : i * 0.05, duration: 0.16 }}
       className={clsx(
-        "py-3.5 pl-3 border-l-2 transition-colors",
-        i > 0 && "border-t border-white/5",
-        isAlert ? "border-l-danger/40" : "border-l-white/10"
+        "group rounded-xl border border-white/[0.05] bg-white/[0.02] px-3.5 py-3 transition-colors",
+        (isCritical || isHigh) && "bg-danger/[0.03] border-danger/[0.10]",
+        isMedium && "bg-warning/[0.02] border-warning/[0.08]",
       )}
     >
-      {/* Header row: tool name left · confidence tier + % right */}
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+      {/* Row 1: Tool label + severity + confidence */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
           {f.tool && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/8 border border-primary/15 text-xs font-mono font-semibold text-primary shrink-0 tracking-wide">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono font-medium fc-text-secondary shrink-0 tracking-wider">
               {fmtTool(f.tool)}
-            </span>
-          )}
-          {showVerdictBadge && (
-            <span className={clsx("fc-badge", isAlert ? "fc-badge-danger" : "fc-badge-success")}>
-              {verdict}
             </span>
           )}
           {showSeverityBadge && (
             <span className={clsx(
-              "fc-badge",
-              (sev === "CRITICAL" || sev === "HIGH") ? "fc-badge-danger" : "fc-badge-warning"
+              "fc-badge shrink-0",
+              (isCritical || isHigh) ? "fc-badge-danger" : "fc-badge-warning"
             )}>
-              {sev}
+              {(f.severity || "").toUpperCase()}
+            </span>
+          )}
+          {showVerdictBadge && isAlert && (
+            <span className="fc-badge fc-badge-danger shrink-0">
+              {verdict}
+            </span>
+          )}
+          {showVerdictBadge && !isAlert && confidence !== null && (
+            <span className={clsx("fc-badge shrink-0 border", confidenceTier(confidence).colorClass,
+              confidence >= 0.8 ? "border-primary/30 bg-primary/5"
+              : confidence >= 0.55 ? "border-warning/30 bg-warning/5"
+              : "border-white/20 bg-white/[0.03]"
+            )}>
+              {confidenceTier(confidence).label}
             </span>
           )}
           {f.degraded && (
-            <span className="fc-badge fc-badge-warning" title={f.fallback_reason || ""}>
+            <span className="fc-badge fc-badge-warning shrink-0" title={f.fallback_reason || ""}>
               Degraded
             </span>
           )}
         </div>
-        {tier && confidence !== null && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className={clsx("fc-eyebrow", tier.colorClass)}>{tier.label}</span>
-            <span className={clsx(
-              "text-xs font-mono font-black tabular-nums",
-              isAlert ? "text-danger" :
-              confidence >= 0.75 ? "text-primary" :
-              confidence >= 0.5 ? "text-warning" : "fc-text-muted"
-            )}>
-              {Math.round(confidence * 100)}%
-            </span>
-          </div>
+        {confidence !== null && (
+          <span className={clsx(
+            "text-xs font-mono font-bold tabular-nums shrink-0",
+            (isCritical || isHigh || isAlert) ? "text-danger" :
+            confidence >= 0.75 ? "text-success" :
+            confidence >= 0.5 ? "text-warning" : "fc-text-muted"
+          )}>
+            {Math.round(confidence * 100)}%
+          </span>
         )}
       </div>
 
-      {/* Unified finding paragraph — single cohesive block, no bold/normal split */}
+      {/* Row 2: Finding text */}
       {unifiedText && (
         <p className={clsx(
-          "text-sm leading-relaxed",
-          isAlert ? "fc-text-secondary" : "fc-text-muted"
+          "text-[13px] leading-relaxed",
+          (isCritical || isHigh || isAlert) ? "fc-text-secondary" : "fc-text-muted"
         )}>
           {visibleText}
           {needsExpand && (
             <button
               type="button"
               onClick={() => setExpanded(e => !e)}
-              className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-mono font-bold text-primary hover:text-primary/80 fc-transition fc-focus-ring rounded align-baseline"
+              className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] font-mono font-bold text-primary/70 hover:text-primary fc-transition rounded align-baseline"
             >
               {expanded
                 ? <><ChevronUp className="w-3 h-3" /><span>less</span></>
@@ -300,14 +315,14 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
         </p>
       )}
 
-      {/* Footer: position · section · timing */}
-      <div className="flex items-center gap-2 mt-2 fc-eyebrow fc-text-muted">
-        <span>{i + 1}/{total}</span>
-        {f.section && (
-          <><span className="fc-text-faint">·</span><span className="truncate">{f.section}</span></>
-        )}
-        {elapsed && <span className="ml-auto normal-case tracking-normal">{elapsed}</span>}
-      </div>
+      {/* Row 3: Footer metadata — only render if there's meaningful content */}
+      {(f.section || elapsed) && (
+        <div className="flex items-center gap-2 mt-2 fc-eyebrow fc-text-faint">
+          {f.section && <span className="truncate">{f.section}</span>}
+          {f.section && elapsed && <span>·</span>}
+          {elapsed && <span className="ml-auto normal-case tracking-normal">{elapsed}</span>}
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -617,22 +632,30 @@ export function AgentStatusCard({
       </div>
 
       {/* --- Findings Surface --- */}
-      <div className="px-6 py-5 relative z-10">
+      <div className="px-5 pb-5 pt-0 relative z-10">
         <AnimatePresence mode="wait">
            {status === "complete" && findings.length > 0 ? (
              <>
-               <div className="flex items-center justify-between mb-3 px-1">
-                 <span className="fc-eyebrow fc-text-muted">
-                   {findings.length} finding{findings.length !== 1 ? "s" : ""}
-                   {toolsRan > findings.length ? ` · ${toolsRan} tools` : ""}
-                 </span>
-                  {completedData && typeof completedData.tools_failed === "number" && completedData.tools_failed > 0 && (
-                    <span className="fc-badge fc-badge-warning">
-                      {completedData.tools_failed} tool{completedData.tools_failed > 1 ? "s" : ""} degraded
-                    </span>
-                  )}
+               {/* Findings header */}
+               <div className="flex items-center justify-between mb-3 px-0.5">
+                 <div className="flex items-center gap-2">
+                   <span className="fc-eyebrow fc-text-muted">
+                     {findings.length} finding{findings.length !== 1 ? "s" : ""}
+                   </span>
+                   {toolsRan > 0 && (
+                     <>
+                       <span className="fc-text-faint fc-eyebrow">·</span>
+                       <span className="fc-eyebrow fc-text-faint">{toolsRan} tool{toolsRan !== 1 ? "s" : ""} ran</span>
+                     </>
+                   )}
+                 </div>
+                 {completedData && typeof completedData.tools_failed === "number" && completedData.tools_failed > 0 && (
+                   <span className="fc-badge fc-badge-warning">
+                     {completedData.tools_failed} degraded
+                   </span>
+                 )}
                </div>
-               <div className="space-y-3">
+               <div className="space-y-2">
                  {(() => {
                    const MAX_COLLAPSED = 2;
                    const alertFindings = findings.filter(isAlertFinding);
@@ -656,7 +679,7 @@ export function AgentStatusCard({
                    <button
                      type="button"
                      onClick={() => onToggleExpand?.()}
-                     className="fc-btn-secondary w-full gap-2 mt-3 text-xs"
+                     className="fc-btn-secondary w-full gap-2 mt-2 text-xs"
                      aria-expanded={isExpanded}
                    >
                      {isExpanded

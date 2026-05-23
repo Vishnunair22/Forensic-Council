@@ -30,7 +30,6 @@ export function HomeClient() {
 
       {/* ── Hero ── */}
       <section id="hero" aria-labelledby="hero-heading" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pb-20 px-5 sm:px-6">
-        <div className="absolute inset-0 bg-grid-small opacity-10 pointer-events-none" aria-hidden="true" />
 
         <motion.div
           variants={prefersReducedMotion ? undefined : containerVariants}
@@ -43,7 +42,7 @@ export function HomeClient() {
             <motion.h1
               id="hero-heading"
               variants={itemVariants}
-              className="text-3xl lg:text-5xl xl:text-6xl font-bold leading-tight fc-text-primary tracking-tight"
+              className="text-3xl lg:text-5xl xl:text-6xl font-bold leading-tight fc-text-primary text-hero-gradient tracking-tight"
             >
               Multi-Agent Forensic
               <br />

@@ -29,7 +29,7 @@ describe("SessionExpiredPage", () => {
   it("routes back to the dashboard", () => {
     render(<SessionExpiredPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /return to dashboard/i }));
+    fireEvent.click(screen.getByRole("button", { name: /return to hub/i }));
 
     expect(mockPush).toHaveBeenCalledWith("/");
   });

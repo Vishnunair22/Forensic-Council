@@ -236,6 +236,27 @@ function getStatus(finding: AgentFindingDTO) {
  return "inconclusive" as const;
 }
 
+function confidenceTier(value: number): { label: string; badgeCls: string; iconCls: string; rowAccent: string } {
+ if (value >= 0.75) return {
+  label: "High",
+  badgeCls: "bg-transparent border-primary/30 text-primary",
+  iconCls: "bg-transparent border-primary/25 text-primary",
+  rowAccent: "border-l-primary/40",
+ };
+ if (value >= 0.5) return {
+  label: "Medium",
+  badgeCls: "bg-transparent border-warning/35 text-warning",
+  iconCls: "bg-transparent border-warning/30 text-warning",
+  rowAccent: "border-l-warning/40",
+ };
+ return {
+  label: "Low",
+  badgeCls: "bg-transparent border-danger/30 text-danger",
+  iconCls: "bg-transparent border-danger/25 text-danger",
+  rowAccent: "border-l-danger/35",
+ };
+}
+
 const STATUS_CONFIG = {
  flagged: {
   badge: "Flagged",
@@ -244,10 +265,10 @@ const STATUS_CONFIG = {
   rowAccent: "border-l-warning/55",
  },
  clean: {
-  badge: "Clean",
-  badgeCls: "bg-transparent border-primary/30 text-primary",
-  iconCls: "bg-transparent border-primary/25 text-primary",
-  rowAccent: "border-l-primary/40",
+  badge: "",
+  badgeCls: "",
+  iconCls: "",
+  rowAccent: "",
  },
  error: {
   badge: "Error",
@@ -323,10 +344,17 @@ export function ConfidenceBar({ value }: { value: number }) {
 export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast: boolean }) {
  const toolName = (finding.metadata?.tool_name as string) || finding.finding_type;
  const status = getStatus(finding);
- const cfg = STATUS_CONFIG[status];
+ const confidence = finding.raw_confidence_score ?? 0;
+ // Clean results use a confidence tier instead of a static "Clean" badge
+ const tier = status === "clean" ? confidenceTier(confidence) : null;
+ const cfg = {
+  badge:     tier?.label     ?? STATUS_CONFIG[status].badge,
+  badgeCls:  tier?.badgeCls  ?? STATUS_CONFIG[status].badgeCls,
+  iconCls:   tier?.iconCls   ?? STATUS_CONFIG[status].iconCls,
+  rowAccent: tier?.rowAccent ?? STATUS_CONFIG[status].rowAccent,
+ };
  const Icon = getToolIcon(toolName);
  const timingMs = (finding.metadata?.execution_time_ms as number) || null;
- const confidence = finding.raw_confidence_score ?? 0;
  const metrics = metricHighlights(finding.metadata);
  const summary = deriveSummary(finding);
  const isDegraded = !!(finding.metadata?.degraded || finding.metadata?.fallback_reason);

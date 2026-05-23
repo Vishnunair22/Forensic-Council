@@ -509,7 +509,7 @@ class ForensicCouncilPipeline:
                     type="AGENT_UPDATE",
                     session_id=str(session_id),
                     agent_id=None,
-                    message="Session active. Dispatching specialist agents...",
+                    message="",
                     data={"status": "processing", "thinking": "Allocating neural resources..."},
                 ),
             )

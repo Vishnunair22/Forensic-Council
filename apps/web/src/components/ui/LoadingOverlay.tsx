@@ -91,7 +91,7 @@ export function LoadingOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl lg:text-5xl xl:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
+            className="text-3xl lg:text-5xl xl:text-6xl font-heading font-black fc-text-primary text-hero-gradient tracking-tight leading-tight"
           >
             Forensic Analysis
           </motion.h1>
@@ -112,8 +112,8 @@ export function LoadingOverlay({
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="w-full max-w-md">
+        {/* Progress bar — decorative only; no aria-hidden wrapper needed here */}
+        <div className="w-full max-w-md" aria-hidden="true">
           <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-muted">
             <span>Workspace Setup</span>
           </div>

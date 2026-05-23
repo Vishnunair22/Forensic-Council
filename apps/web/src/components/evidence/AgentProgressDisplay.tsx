@@ -387,7 +387,7 @@ export function AgentProgressDisplay({
           transition={{ duration: 0.16, ease: "easeOut" }}
           className="flex flex-wrap items-center gap-3 mb-5"
         >
-          <h1 className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight">
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary text-hero-gradient tracking-tight leading-tight">
             {allAgentsDone && phase === "initial"
               ? "Initial Analysis"
               : phase === "deep"
@@ -524,7 +524,7 @@ export function AgentProgressDisplay({
 
       {/* ── Deep analysis decision gate ──────────────────────────────────── */}
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && (awaitingDecision || pipelineStatus === "awaiting_decision") && !arbiterDeliberating && (
+        {phase === "deep" && revealQueue.length === 0 && (awaitingDecision || pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}

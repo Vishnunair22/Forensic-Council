@@ -72,7 +72,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
             aria-label="Back to Home"
             className="fc-btn-secondary text-xs font-mono shrink-0 gap-2"
           >
-            <HomeIcon className="w-3.5 h-3.5" />
+            <HomeIcon className="w-3.5 h-3.5" aria-hidden="true" />
             Home
           </button>
 
@@ -83,7 +83,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
             aria-label="Start New Analysis"
             className="fc-btn-primary flex-1 text-xs gap-2"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             New Analysis
           </button>
 
@@ -96,7 +96,7 @@ export function ActionDock({ onHome, onNew, onExport, sessionId, showExport = tr
               aria-label={isExporting ? "Exporting report…" : "Export report"}
               className="fc-btn-secondary text-xs font-mono shrink-0 gap-2"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
               {isExporting ? "…" : "Export"}
             </button>
           )}

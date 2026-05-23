@@ -63,8 +63,9 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
           style={{ background: "rgba(165,200,255,0.95)", boxShadow: "0 0 6px rgba(79,142,247,0.8)" }}
         />
 
-        {/* FC mark */}
+        {/* FC mark — decorative icon text, hidden from AT */}
         <span
+          aria-hidden="true"
           className="relative z-10 font-mono font-black select-none"
           style={{
             fontSize: size === "lg" ? "11px" : "9px",
@@ -105,6 +106,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
         <AnimatePresence>
           {isHovered && (
             <motion.span
+              aria-hidden="true"
               initial={{ opacity: 0, y: -3 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -2 }}

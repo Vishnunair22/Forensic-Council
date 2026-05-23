@@ -705,3 +705,11 @@
   0%, 100% { opacity: 0.6; filter: blur(4px); }
   50%       { opacity: 1;   filter: blur(8px); }
 }
+
+/* F-4 fix: CSS keyframe for ArcGauge decorative dashed ring rotation.
+   The prefers-reduced-motion rule at the top of this file automatically
+   suppresses this animation (animation-duration: 0.01ms). */
+@keyframes arc-ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

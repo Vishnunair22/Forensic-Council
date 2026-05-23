@@ -105,8 +105,8 @@ const nextConfig: NextConfig = {
   webpack: (config: any, { dev }: { dev: boolean }) => {
     if (dev) {
       config.watchOptions = {
-        poll: 2000, // Increased from 500ms to 2000ms for stability on Windows
-        aggregateTimeout: 1000,
+        poll: 500,
+        aggregateTimeout: 300,
       };
       // Use relative, URL-encoded paths for source maps to avoid "illegal path"
       // errors with Windows absolute paths containing spaces.

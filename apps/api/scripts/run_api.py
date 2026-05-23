@@ -57,7 +57,10 @@ if __name__ == "__main__":
         host=os.getenv("API_HOST", "0.0.0.0"),
         port=int(os.getenv("API_PORT", "8000")),
         reload=reload_enabled and not is_production,
-        reload_dirs=["/app"] if reload_enabled and not is_production else None,
+        reload_dirs=[
+            "/app/core", "/app/api", "/app/agents",
+            "/app/tools", "/app/orchestration", "/app/scripts", "/app/config",
+        ] if reload_enabled and not is_production else None,
         log_level=settings.log_level.lower(),
         # In production: multiple workers are handled externally (e.g. gunicorn/k8s).
         # Single-worker uvicorn is correct here because the pipeline uses in-process

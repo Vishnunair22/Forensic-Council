@@ -111,9 +111,9 @@ export const HOW_IT_WORKS = [
 // start at 1.5 s
 export const ARBITER_POLL_INTERVAL_MS = 1500;
 
-// Maximum arbiter polling attempts before declaring a timeout.
-// 400 × up-to-3s ≈ 20-min max
-export const ARBITER_POLL_MAX_ATTEMPTS = 400;
+// Maximum arbiter polling attempts before declaring a graceful timeout.
+// 60 × up-to-3s ≈ 90s max — avoids indefinite hangs on backend stalls.
+export const ARBITER_POLL_MAX_ATTEMPTS = 60;
 
 // 30 s permits 50MB uploads and slow Redis/Docker cold starts without timing out.
 export const INVESTIGATION_REQUEST_TIMEOUT_MS = 30_000;

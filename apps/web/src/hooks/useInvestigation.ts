@@ -628,10 +628,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           storage.removeItem(STORAGE_KEYS.INVESTIGATION_CTX);
           resetSimulation();
           setShowLoadingOverlay(false);
-          toast.destructive({
-            title: "Session expired",
-            description: "This investigation session is no longer available. Please start a new analysis.",
-          });
+          router.push("/session-expired");
           return;
         }
         if (st.status === "complete") {
@@ -685,21 +682,21 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
     setIsNavigating(true);
     setArbiterDeliberating(true);
-    setArbiterLiveText("Final report synthesis requested. Compiling initial agent findings.");
+    setArbiterLiveText("Compiling agent findings...");
     let navigated = false;
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
-      // Remove fc_report_ready so the result page knows to poll for arbiter progress natively.
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
-      // Apply CSS bridge so no blank gap exists between this overlay and the result page.
+      // Navigate immediately — result page polls arbiter status natively via useResult.
+      // Synthesis runs on the backend; ForensicProgressOverlay on the result page
+      // handles the wait with live text, keeping UX identical but navigation instant.
       document.body.setAttribute("data-fc-loading", "1");
       navigated = true;
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
-        title: "Council synthesis failed",
-        description: err instanceof Error ? err.message : "Could not finalize verdict.",
+        title: "Could not start synthesis",
+        description: err instanceof Error ? err.message : "Could not resume the investigation.",
       });
     } finally {
       resumeInFlightRef.current = false;
@@ -925,21 +922,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     if (!showLoadingOverlay) return;
     const safety = setTimeout(() => {
-      // Hard safety: if the overlay is still up after 8s, something is stuck.
-      // We dismiss it to let the user see the current (possibly errored) state.
+      // Hard safety: if the overlay is still up after 30s, something is stuck.
+      // We force a redirect to /session-expired as a safeguard.
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       
       if (!analysisStreamReady && (status === "idle" || status === "initiating")) {
-        setWsConnectionError("Analysis startup timed out. Please try again.");
-        toast.destructive({
-          title: "Connection Timeout",
-          description: "The analysis stream did not start in time. Please refresh and try again.",
-        });
+        router.push("/session-expired");
       }
     }, ANALYSIS_STARTUP_GRACE_MS);
     return () => clearTimeout(safety);
-  }, [showLoadingOverlay, analysisStreamReady, status]);
+  }, [showLoadingOverlay, analysisStreamReady, status, router]);
 
   // Sync loading state and progress messages to storage for GlobalLoadingOverlay
   useEffect(() => {

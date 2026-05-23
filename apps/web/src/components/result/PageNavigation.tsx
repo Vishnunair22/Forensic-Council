@@ -16,7 +16,7 @@ export function PageNavigation({ onHome, onNew }: PageNavigationProps) {
         onClick={onNew}
         className="flex-1 fc-btn-primary"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-4 h-4" aria-hidden="true" />
         New Analysis
       </button>
       <button
@@ -24,7 +24,7 @@ export function PageNavigation({ onHome, onNew }: PageNavigationProps) {
         onClick={onHome}
         className="flex-1 fc-btn-secondary"
       >
-        <Home className="w-4 h-4" />
+        <Home className="w-4 h-4" aria-hidden="true" />
         Back to Home
       </button>
     </div>

@@ -9,14 +9,6 @@ interface ArbiterDeliberationOverlayProps {
   liveText?: string;
 }
 
-/**
- * ArbiterDeliberationOverlay
- *
- * Full-viewport overlay that appears immediately when `isVisible` becomes true,
- * preventing the blank-screen flash that occurred before ForensicProgressOverlay
- * had time to mount. Uses `initial={false}` on AnimatePresence so the first-frame
- * background is immediately painted — no 0→1 opacity gap.
- */
 export function ArbiterDeliberationOverlay({
   isVisible,
   liveText,
@@ -33,6 +25,14 @@ export function ArbiterDeliberationOverlay({
       .replace(/…/g, ".")
       .trim();
   }, [liveText]);
+
+  const [displayText, setDisplayText] = React.useState(cleanLiveText);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDisplayText(cleanLiveText), 80);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [cleanLiveText]);
 
   const [elapsed, setElapsed] = React.useState(0);
   React.useEffect(() => {
@@ -53,42 +53,45 @@ export function ArbiterDeliberationOverlay({
           key="arbiter-overlay"
           aria-busy="true"
           aria-label="Consensus Synthesis in progress"
-          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 bg-background/90 backdrop-blur-2xl"
+          className="fixed inset-x-0 top-16 bottom-0 z-[9000] flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
           initial={prefersReducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16 } }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeIn" } }}
           transition={{ duration: 0.16, ease: "easeOut" }}
         >
           <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-success/40 pl-8 md:pl-12 py-4">
-            {/* Status indicator */}
+
+            {/* Status indicator — same structure as LoadingOverlay, success tokens */}
             <div className="flex items-center gap-4 mb-10">
               <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-2xl bg-success/5">
                 <motion.div
                   animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-3 h-3 rounded-full bg-success"
-                />
+                >
+                  <ShieldCheck className="w-4 h-4 text-success" aria-hidden="true" />
+                </motion.div>
               </div>
               <span className="fc-eyebrow fc-text-muted">
-                Arbiter Active
+                Council Arbiter
               </span>
             </div>
 
-            {/* Title */}
+            {/* Title and live text — same structure as LoadingOverlay */}
             <div className="mb-12 space-y-5">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-8 h-8 text-success/70 shrink-0" />
-                <motion.h1
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.16, ease: "easeOut" }}
-                  className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
-                >
-                  Consensus Synthesis
-                </motion.h1>
-              </div>
+              <motion.h1
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+                className="text-3xl lg:text-5xl xl:text-6xl font-heading font-black fc-text-primary text-hero-gradient tracking-tight leading-tight"
+              >
+                Consensus Synthesis
+              </motion.h1>
               <div className="flex items-center gap-4">
-                <div className="w-1.5 h-1.5 bg-success/50 rounded-full animate-pulse" />
+                <motion.div
+                  className="w-1.5 h-1.5 bg-white/55 rounded-full"
+                  animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
+                  transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                />
                 <p
                   id="arbiter-live-text"
                   className="text-xs md:text-sm font-mono fc-text-muted"
@@ -96,20 +99,20 @@ export function ArbiterDeliberationOverlay({
                   aria-live="polite"
                   aria-atomic="true"
                 >
-                  {cleanLiveText || "Compiling agent findings into the final report."}
+                  {displayText || "Compiling agent findings into the final report."}
                 </p>
               </div>
             </div>
 
-            {/* Progress bar */}
-            <div className="w-full max-w-md">
+            {/* Progress bar — same h-1.5 track as LoadingOverlay; success fill + elapsed timer */}
+            <div className="w-full max-w-md" aria-hidden="true">
               <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-muted">
-                <span>Council Arbiter</span>
-                <span className="text-success">{formatTime(elapsed)}</span>
+                <span>Council Synthesis</span>
+                <span className="text-success font-mono tabular-nums">{formatTime(elapsed)}</span>
               </div>
-              <div className="h-px w-full bg-white/10 relative overflow-hidden">
+              <div className="h-1.5 w-full bg-white/10 rounded-full relative overflow-hidden">
                 <motion.div
-                  className="absolute inset-y-0 left-0 bg-success"
+                  className="absolute inset-y-0 left-0 bg-success rounded-full"
                   initial={{ width: "0%" }}
                   animate={prefersReducedMotion ? {} : {
                     width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"],
@@ -123,6 +126,7 @@ export function ArbiterDeliberationOverlay({
                 />
               </div>
             </div>
+
           </div>
         </motion.div>
       )}

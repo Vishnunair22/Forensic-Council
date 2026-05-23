@@ -168,7 +168,20 @@ def _detect_synthid_frequency_signal(file_path: str) -> float:
         return -1.0
 
     try:
-        img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+        # Pre-resize large files with PIL before cv2 to stay under the 2GB
+        # subprocess memory limit (cv2.imread loads the full raster before crop).
+        file_size = os.path.getsize(file_path)
+        if file_size > 5 * 1024 * 1024:
+            try:
+                from PIL import Image
+                pil_img = Image.open(file_path).convert("L")
+                pil_img.thumbnail((512, 512))
+                img = np.array(pil_img, dtype=np.uint8)
+            except Exception:
+                img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+        else:
+            img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+
         if img is None:
             return 0.0
 

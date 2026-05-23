@@ -54,7 +54,7 @@ function EvidencePreview({
       style={{ background: `${color}10` }}
     >
       <Icon className="w-8 h-8 shrink-0" style={{ color }} aria-hidden="true" />
-      <span className="text-xs font-mono font-bold tracking-wide" style={{ color: `${color}80` }}>
+      <span className="text-xs font-mono font-bold tracking-wide capitalize" style={{ color: `${color}80` }}>
         {cat}
       </span>
     </div>
@@ -100,9 +100,9 @@ export function EvidenceHeader({
 
         {/* File info */}
         <div className="flex-1 min-w-0 py-0.5">
-          <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate">
+          <h2 className="text-base sm:text-lg font-bold fc-text-primary leading-tight truncate">
             {displayName}
-          </h1>
+          </h2>
           {mimeType && (
             <p className="text-xs font-mono fc-text-muted mt-1">{mimeType}</p>
           )}

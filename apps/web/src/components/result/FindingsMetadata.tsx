@@ -105,14 +105,14 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
           <div>
             <div className="fc-eyebrow fc-text-muted mb-3">Tool Execution Log</div>
             <div className="border border-white/[0.06] rounded-xl overflow-hidden">
-               <table className="w-full text-xs font-mono">
+             <table className="w-full text-xs font-mono" aria-label="Tool execution log">
                 <thead>
                   <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                    <th className="px-3 py-2 text-left fc-text-muted font-medium">#</th>
-                    <th className="px-3 py-2 text-left fc-text-muted font-medium">Tool</th>
-                    <th className="px-3 py-2 text-left fc-text-muted font-medium hidden sm:table-cell">Agent</th>
-                    <th className="px-3 py-2 text-right fc-text-muted font-medium hidden md:table-cell">Duration</th>
-                    <th className="px-3 py-2 text-left fc-text-muted font-medium">Verdict</th>
+                    <th scope="col" className="px-3 py-2 text-left fc-text-muted font-medium">#</th>
+                    <th scope="col" className="px-3 py-2 text-left fc-text-muted font-medium">Tool</th>
+                    <th scope="col" className="px-3 py-2 text-left fc-text-muted font-medium hidden sm:table-cell">Agent</th>
+                    <th scope="col" className="px-3 py-2 text-right fc-text-muted font-medium hidden md:table-cell">Duration</th>
+                    <th scope="col" className="px-3 py-2 text-left fc-text-muted font-medium">Verdict</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -150,7 +150,7 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
               <button
                 type="button"
                 onClick={() => setShowAllTools(true)}
-                className="mt-2 fc-eyebrow fc-text-muted hover:text-white/70 transition-colors"
+                className="mt-2 fc-eyebrow fc-text-muted hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded px-1"
               >
                 Show {hiddenCount} more
               </button>

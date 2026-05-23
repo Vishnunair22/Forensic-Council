@@ -199,9 +199,9 @@ function normalizeVerdict(verdict?: string) {
 }
 
 function verdictClasses(verdict: string) {
-  if (["AUTHENTIC", "LIKELY_AUTHENTIC", "VERIFIED"].includes(verdict)) {
-    return "bg-emerald-500/15 border border-emerald-500/35 text-emerald-300";
-  }
+  if (verdict === "HIGH") return "bg-emerald-500/15 border border-emerald-500/35 text-emerald-300";
+  if (verdict === "MEDIUM") return "bg-amber-500/15 border border-amber-500/35 text-amber-300";
+  if (verdict === "LOW") return "bg-red-500/15 border border-red-500/35 text-red-300";
   if (["SUSPICIOUS", "LIKELY_MANIPULATED", "INCONCLUSIVE", "ABSTAIN"].includes(verdict)) {
     return "bg-amber-500/15 border border-amber-500/35 text-amber-300";
   }
@@ -401,11 +401,17 @@ export function AgentFindingCard({
   );
   const displayVerdict = useMemo(() => {
     const fromSummary = normalizeVerdict(agentSummary?.verdict);
-    if (fromSummary) return fromSummary;
-    if (anomalyCount > 0) return "SUSPICIOUS";
+    const isAuthenticLike = !fromSummary || ["AUTHENTIC", "LIKELY_AUTHENTIC", "VERIFIED"].includes(fromSummary);
+    if (anomalyCount > 0) return fromSummary && !isAuthenticLike ? fromSummary : "SUSPICIOUS";
     if ((metrics?.error_rate ?? 0) > 0.2) return "INCONCLUSIVE";
-    return "AUTHENTIC";
-  }, [agentSummary?.verdict, anomalyCount, metrics?.error_rate]);
+    // Replace authentic verdicts with a confidence tier
+    if (isAuthenticLike) {
+      if (confidence >= 0.75) return "HIGH";
+      if (confidence >= 0.5) return "MEDIUM";
+      return "LOW";
+    }
+    return fromSummary;
+  }, [agentSummary?.verdict, anomalyCount, metrics?.error_rate, confidence]);
 
   if (isSkipped) {
     return (
@@ -459,7 +465,10 @@ export function AgentFindingCard({
                <h3 className="text-[18px] font-black text-white tracking-tight">{meta.name}</h3>
               {metrics && (
                 <span className={clsx("px-2.5 py-1 rounded-full text-xs font-black tracking-wider", verdictClasses(displayVerdict))}>
-                  {displayVerdict.replace(/_/g, " ")}
+                  {displayVerdict === "HIGH" ? "High Confidence"
+                    : displayVerdict === "MEDIUM" ? "Med Confidence"
+                    : displayVerdict === "LOW" ? "Low Confidence"
+                    : displayVerdict.replace(/_/g, " ")}
                 </span>
               )}
               {anomalyCount > 0 && (

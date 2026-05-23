@@ -71,7 +71,7 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
   return (
     <section className="relative flex flex-col overflow-hidden fc-surface" aria-label="Report integrity">
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
-        <Shield className="w-4 h-4 text-primary/60" />
+        <Shield className="w-4 h-4 text-primary/60" aria-hidden="true" />
         <h2 className="text-sm font-bold fc-text-secondary">Report Integrity</h2>
         {signature && (
           <div className="ml-auto flex items-center gap-1.5 fc-eyebrow text-success">
@@ -104,7 +104,7 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
                 type="button"
                 onClick={handleCopyHash}
                 aria-label="Copy cryptographic hash"
-                className="flex items-center gap-1.5 fc-eyebrow fc-text-muted hover:text-primary-accent transition-colors rounded px-2 py-1 border border-white/[0.08] hover:border-white/[0.15] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 shrink-0"
+                className="flex items-center gap-1.5 fc-eyebrow fc-text-muted hover:text-primary transition-colors rounded px-2 py-1 border border-white/[0.08] hover:border-white/[0.15] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 shrink-0"
               >
                 {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
                 {copied ? "Copied" : "Copy"}

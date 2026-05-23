@@ -63,7 +63,7 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
             <div
               key={agentId}
               className={clsx(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded border fc-eyebrow transition-colors",
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-full border fc-eyebrow transition-colors",
                 isActive
                   ? "border-white/[0.12] bg-white/[0.04]"
                   : "border-white/[0.05] bg-transparent opacity-40"
@@ -83,7 +83,7 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
                 <span className="text-xs font-mono fc-text-muted">{confPct}%</span>
               )}
               {isSkipped && (
-                <span className="text-xs font-mono fc-text-muted">skip</span>
+                <span className="text-xs font-mono fc-text-muted">Skip</span>
               )}
             </div>
           );

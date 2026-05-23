@@ -12,7 +12,7 @@ import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 function getPageLabel(pathname: string): string {
   if (pathname === "/") return "Overview";
-  if (pathname.startsWith("/evidence")) return "Evidence Intake";
+  if (pathname.startsWith("/evidence")) return "";
   if (pathname.startsWith("/result")) return "Investigation";
   if (pathname.startsWith("/session-expired")) return "Session Expired";
   return "Forensic Council";
@@ -102,7 +102,12 @@ export function GlobalNavbar() {
 
     if (shouldReset) {
       resetActiveInvestigation(queryClient);
-      router.push("/", { scroll: true });
+      if (pathname === "/") {
+        router.refresh();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        router.push("/", { scroll: true });
+      }
       return;
     }
 
@@ -155,7 +160,7 @@ export function GlobalNavbar() {
           aria-label={
             hasActiveSession || pathname !== "/"
               ? "Reset and return to Forensic Council home"
-              : "Return to top"
+              : "Forensic Council — scroll to top"
           }
           aria-current={pathname === "/" ? "page" : undefined}
           className="flex items-center min-h-[44px] rounded-sm fc-transition fc-focus-ring outline-none shrink-0"
@@ -166,22 +171,24 @@ export function GlobalNavbar() {
         {/* Right side */}
         <div className="flex items-center gap-3 min-w-0">
           {/* Page label — hidden on smallest screens */}
-          <div
-            className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full shrink-0"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
-            }}
-          >
-            <span
-              className="w-1 h-1 rounded-full shrink-0"
-              style={{ background: "rgba(147,197,253,0.55)" }}
-              aria-hidden="true"
-            />
-            <span className="fc-eyebrow fc-text-muted truncate">
-              {pageLabel}
-            </span>
-          </div>
+          {pageLabel && (
+            <div
+              className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full shrink-0"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <span
+                className="w-1 h-1 rounded-full shrink-0"
+                style={{ background: "rgba(147,197,253,0.55)" }}
+                aria-hidden="true"
+              />
+              <span className="fc-eyebrow fc-text-muted truncate">
+                {pageLabel}
+              </span>
+            </div>
+          )}
 
           {/* Session indicator */}
           {hasActiveSession ? (
@@ -193,9 +200,6 @@ export function GlobalNavbar() {
                   boxShadow: "0 0 6px rgba(96,165,250,0.65)",
                 }}
               />
-              <span className="fc-eyebrow sr-only md:not-sr-only fc-text-muted" aria-live="polite">
-                Session Active
-              </span>
             </div>
           ) : (
             <span className="fc-eyebrow fc-text-faint hidden md:inline shrink-0">

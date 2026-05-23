@@ -44,9 +44,15 @@
         respond "ok" 200
     }
 
-    # Real backend health endpoint — exposed separately so external monitors can reach
-    # the real FastAPI /health without being swallowed by the frontend catch-all.
+    # Real backend health endpoints — exposed separately so external monitors can reach
+    # FastAPI /health and /live without being swallowed by the frontend catch-all.
     handle /health {
+        reverse_proxy backend:8000 {
+            header_up Host {host}
+        }
+    }
+
+    handle /live {
         reverse_proxy backend:8000 {
             header_up Host {host}
         }

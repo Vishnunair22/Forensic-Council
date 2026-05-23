@@ -3,12 +3,23 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
+/** F-5 fix: respects prefers-reduced-motion — immediately snaps to target instead of animating. */
 function useAnimatedValue(target: number, duration = 1000): number {
   const [display, setDisplay] = useState(0);
   const prevTarget = useRef(0);
   const raf = useRef<number>(0);
 
   useEffect(() => {
+    // F-5: Skip animation when user prefers reduced motion.
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      setDisplay(target);
+      prevTarget.current = target;
+      return;
+    }
+
     const start = prevTarget.current;
     const diff = target - start;
     if (diff === 0) return;
@@ -109,8 +120,8 @@ export function ArcGauge({
           className="overflow-visible"
         >
           <title id="arc-gauge-title">{`Confidence score: ${clampedValue}%`}</title>
-          {/* Outer Decorative Dashed Ring */}
-          <motion.circle
+          {/* F-4 fix: Outer Decorative Dashed Ring — CSS animation, not Framer Motion rotate. */}
+          <circle
             cx={cx}
             cy={cy}
             r={radius + 12}
@@ -118,9 +129,11 @@ export function ArcGauge({
             stroke="rgba(167,255,210,0.1)"
             strokeWidth="1"
             strokeDasharray="4 8"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-            style={{ originX: "50%", originY: "50%" }}
+            aria-hidden="true"
+            style={{
+              transformOrigin: `${cx}px ${cy}px`,
+              animation: "arc-ring-spin 40s linear infinite",
+            }}
           />
 
           {/* Track */}

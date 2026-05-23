@@ -25,7 +25,7 @@ export function SessionExpiredClient() {
           className="space-y-4"
         >
           <div className="flex items-center justify-center gap-2 fc-text-faint">
-            <ShieldAlert className="w-4 h-4 text-red-500" />
+            <ShieldAlert className="w-4 h-4 text-red-500" aria-hidden="true" />
             <span className="fc-eyebrow">
               Security Boundary
             </span>
@@ -47,7 +47,7 @@ export function SessionExpiredClient() {
           transition={{ duration: 0.16, delay: 0.08 }}
         >
           <GlassPanel className="p-10 rounded-3xl border border-border-subtle space-y-8 relative overflow-hidden">
-             <div className="absolute top-4 right-4 opacity-[0.03]">
+             <div className="absolute top-4 right-4 opacity-[0.03]" aria-hidden="true">
                 <Cpu className="w-12 h-12" />
              </div>
 
@@ -69,7 +69,7 @@ export function SessionExpiredClient() {
                 }}
                 className="w-full py-4 rounded-full bg-primary text-background text-sm font-black transition-all flex items-center justify-center gap-3 group"
                 data-testid="session-expired-home-cta"
-                aria-label="Return to dashboard"
+                aria-label="Return to Hub"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Return to Hub
@@ -87,6 +87,7 @@ export function SessionExpiredClient() {
                 }}
                 className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-sm font-black transition-all flex items-center justify-center gap-3"
                 data-testid="session-expired-retry-cta"
+                aria-label="New Intake — start a new forensic analysis"
               >
                 <RefreshCw className="w-4 h-4 opacity-60" />
                 New Intake
@@ -98,7 +99,7 @@ export function SessionExpiredClient() {
         {/* Micro-accent */}
         <div className="flex justify-center">
            <div className="h-[1px] w-12 bg-white/20" />
-           <div className="mx-4 fc-eyebrow fc-text-faint">System Halt</div>
+           <div className="mx-4 fc-eyebrow fc-text-faint">Security Boundary</div>
            <div className="h-[1px] w-12 bg-white/20" />
         </div>
       </div>
