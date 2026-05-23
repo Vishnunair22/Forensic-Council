@@ -442,10 +442,10 @@ export function AgentProgressDisplay({
       {/* ── Agent Cards Grid ────────────────────────────────────────────── */}
       <div className="w-full flex flex-col gap-5">
         <motion.div
-          className={`grid gap-5 ${
+          className={`grid gap-4 md:gap-5 xl:gap-6 ${
             visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
             : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
-            : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+            : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
           }`}
           variants={containerVariants}
           initial="hidden"

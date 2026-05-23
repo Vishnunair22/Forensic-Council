@@ -49,7 +49,9 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     setIsSubmitting(true);
     setError(null);
     playSound("success-chime");
-    onFileSelected(file);
+    setTimeout(() => {
+      onFileSelected(file);
+    }, 600);
   }, [onFileSelected, playSound, isSubmitting]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -83,7 +85,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
           Evidence Intake
         </p>
-        <h2 className="text-2xl font-heading font-bold fc-text-primary">
+        <h2 className="text-xl lg:text-2xl font-heading font-bold fc-text-primary">
           Upload Evidence
         </h2>
       </div>
@@ -104,12 +106,12 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             input?.click();
           }
         }}
-        className={`w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative transition-all duration-[160ms] fc-upload-zone ${
-          isDragging ? "border-primary cursor-copy" : "cursor-pointer"
+        className={`w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative transition-all duration-[160ms] rounded-2xl border border-dashed border-white/15 bg-white/[0.02] ${
+          isDragging ? "!border-solid border-primary bg-primary/5 cursor-copy" : "hover:border-primary/40 hover:bg-white/[0.04] cursor-pointer"
         }`}
       >
         <CloudUpload
-          className={`w-12 h-12 transition-colors duration-[160ms] ${
+          className={`w-8 h-8 transition-colors duration-[160ms] ${
             isDragging ? "text-primary" : "text-white/60 group-hover:text-white/80"
           }`}
           strokeWidth={1.5}

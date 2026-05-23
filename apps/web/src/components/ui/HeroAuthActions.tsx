@@ -147,7 +147,7 @@ export function HeroAuthActions() {
         className="group fc-btn-primary gap-3 px-10"
       >
         <span>Begin Analysis</span>
-        <ArrowRight className="w-5 h-5 fc-transition opacity-70 group-hover:opacity-100" aria-hidden="true" />
+        <ArrowRight className="w-4 h-4 fc-transition opacity-70 group-hover:opacity-100" aria-hidden="true" />
       </button>
 
       <Dialog

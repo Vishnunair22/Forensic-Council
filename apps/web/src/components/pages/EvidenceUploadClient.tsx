@@ -4,11 +4,10 @@ import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Shield } from "lucide-react";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
-import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
 import { storage } from "@/lib/storage";
@@ -77,15 +76,7 @@ export function EvidenceUploadClient() {
         liveText={investigation.arbiterLiveText}
       />
 
-      <AnimatePresence initial={false}>
-        {investigation.showLoadingOverlay && !investigation.arbiterDeliberating && (
-          <LoadingOverlay
-            liveText={investigation.uploadPhaseText || investigation.pipelineMessage || "Initializing workspace"}
-            dispatchedCount={Math.min(Object.keys(investigation.agentUpdates).filter(k => k !== "Arbiter").length, 5)}
-            playSound={playSound}
-          />
-        )}
-      </AnimatePresence>
+
 
       <div className="relative min-h-screen px-4 sm:px-6 py-10 sm:py-14">
         {investigation.wsConnectionError && !investigation.isReconnecting && (

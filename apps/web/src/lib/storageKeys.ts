@@ -31,6 +31,8 @@ export const STORAGE_KEYS = {
 
   // Ephemeral flow-control flags (sessionStorage only, cleared by resetActiveInvestigation)
   FC_SHOW_LOADING: "fc_show_loading",
+  FC_LOADING_TEXT: "fc_loading_text",
+  FC_LOADING_DISPATCHED: "fc_loading_dispatched",
   FC_NO_RECONNECT: "fc_no_reconnect",
   FC_REPORT_READY: "fc_report_ready",
   FC_OPEN_UPLOAD_ONCE: "fc_open_upload_once",

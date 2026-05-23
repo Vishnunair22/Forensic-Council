@@ -941,6 +941,24 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady, status]);
 
+  // Sync loading state and progress messages to storage for GlobalLoadingOverlay
+  useEffect(() => {
+    if (showLoadingOverlay) {
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
+      const currentText = uploadPhaseText || pipelineMessage || "Initializing workspace";
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_LOADING_TEXT, currentText);
+      const dispatchedCount = Math.min(
+        Object.keys(agentUpdates).filter((k) => k !== "Arbiter").length,
+        5
+      );
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_LOADING_DISPATCHED, String(dispatchedCount));
+    } else {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
+    }
+  }, [showLoadingOverlay, uploadPhaseText, pipelineMessage, agentUpdates]);
+
   return {
     file, setFile,
     validationError,

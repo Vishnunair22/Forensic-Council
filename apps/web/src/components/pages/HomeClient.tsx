@@ -43,7 +43,7 @@ export function HomeClient() {
             <motion.h1
               id="hero-heading"
               variants={itemVariants}
-              className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight fc-text-primary tracking-tight"
+              className="text-3xl lg:text-5xl xl:text-6xl font-bold leading-tight fc-text-primary tracking-tight"
             >
               Multi-Agent Forensic
               <br />

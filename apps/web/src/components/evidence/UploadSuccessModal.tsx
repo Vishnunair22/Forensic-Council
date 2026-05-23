@@ -62,7 +62,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
             Status: Secured
           </p>
-          <h2 className="text-2xl font-heading font-bold fc-text-primary">
+          <h2 className="text-xl lg:text-2xl font-heading font-bold fc-text-primary">
             Evidence Ready
           </h2>
         </div>
@@ -138,6 +138,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
         <button
           type="button"
           data-testid="upload-start-analysis"
+          autoFocus
           onClick={async () => {
             setIsStarting(true);
             try {

@@ -77,7 +77,7 @@ export function AgentStatusSummary({
         </div>
 
         {/* Progress bar */}
-        <div className="relative w-full h-[3px] bg-white/8 rounded-full overflow-hidden">
+        <div className="relative w-full h-1 bg-white/8 rounded-full overflow-hidden">
           <motion.div
             className={clsx(
               "absolute top-0 bottom-0 left-0 rounded-full",

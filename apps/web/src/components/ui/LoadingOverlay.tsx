@@ -91,7 +91,7 @@ export function LoadingOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
+            className="text-3xl lg:text-5xl xl:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
           >
             Forensic Analysis
           </motion.h1>
@@ -117,9 +117,9 @@ export function LoadingOverlay({
           <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-muted">
             <span>Workspace Setup</span>
           </div>
-          <div className="h-px w-full bg-white/10 relative overflow-hidden">
+          <div className="h-1.5 w-full bg-white/10 rounded-full relative overflow-hidden">
             <motion.div
-              className="absolute inset-y-0 left-0 bg-primary"
+              className="absolute inset-y-0 left-0 bg-primary rounded-full"
               initial={{ width: "0%" }}
               animate={prefersReducedMotion ? {} : { width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"] }}
               transition={prefersReducedMotion ? {} : { duration: 3.5, times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1], repeat: Infinity, ease: "linear" }}

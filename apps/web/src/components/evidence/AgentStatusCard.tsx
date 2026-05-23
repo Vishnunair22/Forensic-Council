@@ -240,7 +240,7 @@ function FindingRow({ f, i, total }: { f: FindingPreview; i: number; total: numb
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           {f.tool && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/8 border border-primary/15 text-xs font-mono font-semibold text-primary shrink-0 tracking-wide">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/8 border border-primary/15 text-xs font-mono font-semibold text-primary shrink-0 tracking-wide">
               {fmtTool(f.tool)}
             </span>
           )}
@@ -568,9 +568,9 @@ export function AgentStatusCard({
                       )}
                 </span>
               </div>
-              <div className="relative w-full h-1 bg-white/10 overflow-hidden">
+              <div className="relative w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <motion.div
-                  className="absolute top-0 bottom-0 bg-primary"
+                  className="absolute top-0 bottom-0 bg-primary rounded-full"
                   animate={{
                     width: status === "checking" ? "100%" : `${(currentToolIndex / liveTotal) * 100}%`,
                   }}
