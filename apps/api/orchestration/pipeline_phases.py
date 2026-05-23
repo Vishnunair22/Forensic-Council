@@ -848,6 +848,17 @@ async def run_agents_concurrent(
     ]
 
     # --- HITL Gate ----------------------------------------------------------
+    # Start the arbiter pre-warm with Phase 1 findings NOW so it runs concurrently
+    # while the investigator reads the initial results and makes the Accept/Deep decision.
+    # If deep analysis is chosen the resume endpoint cancels this via invalidate_pre_warm()
+    # and a fresh pre-warm is kicked off after the deep pass.
+    try:
+        _initial_norm = pipeline._normalize_agent_results(initial_results)
+        pipeline._pre_warm_task = asyncio.create_task(
+            pipeline._run_arbiter_pre_warm(_initial_norm, "")
+        )
+    except Exception as _pw_err:
+        logger.debug("Phase-1 pre-warm task creation failed", error=str(_pw_err))
 
     if not await _await_deep_analysis_decision(pipeline, session_id):
         logger.info("Deep analysis skipped by analyst decision", session_id=str(session_id))
@@ -1002,6 +1013,16 @@ async def run_agents_concurrent(
     logger.info(
         "Agent execution summary", active_agents=active_agents, skipped_agents=skipped_agents
     )
+
+    # Re-warm with complete (Phase 1 + deep) findings so the arbiter has the full
+    # evidence picture while the investigator reads the deep results and decides.
+    try:
+        _deep_norm = pipeline._normalize_agent_results(results)
+        pipeline._pre_warm_task = asyncio.create_task(
+            pipeline._run_arbiter_pre_warm(_deep_norm, "")
+        )
+    except Exception as _pw_err:
+        logger.debug("Phase-2 pre-warm task creation failed", error=str(_pw_err))
 
     await _await_deep_report_request(pipeline, session_id)
 

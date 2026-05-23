@@ -33,6 +33,7 @@ export interface AgentFindingCardProps {
   deepFindings: AgentFindingDTO[];
   metrics?: AgentMetricsDTO;
   narrative?: string;
+  narrativeStructured?: NonNullable<ReportDTO["per_agent_narrative_structured"]>[string];
   agentSummary?: NonNullable<ReportDTO["per_agent_summary"]>[string];
   phase?: "initial" | "deep";
   defaultOpen?: boolean;
@@ -207,7 +208,7 @@ function verdictClasses(verdict: string) {
   if (["MANIPULATED", "TAMPERED"].includes(verdict)) {
     return "bg-red-500/15 border border-red-500/35 text-red-300";
   }
-  return "bg-white/8 border border-white/15 text-white/55";
+  return "bg-white/[0.08] border border-white/[0.15] text-white/55";
 }
 
 const INITIAL_TOOLS_PER_SECTION = 4;
@@ -242,15 +243,15 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
           {section.label}
         </span>
         {section.keySignal && (
-          <span className="hidden md:block text-xs font-mono text-white/55 truncate max-w-[260px]">
+          <span className="hidden md:block text-xs font-mono fc-text-muted truncate max-w-[260px]">
             {section.keySignal}
           </span>
         )}
-        <span className="text-xs font-mono font-black text-white/55 shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
+        <span className="text-xs font-mono font-black fc-text-muted shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
           {section.findings.length} {section.findings.length === 1 ? "tool" : "tools"}
         </span>
         <span
-          className="flex items-center gap-1.5 text-xs font-black tracking-wide text-white/60 group-hover/section:text-white transition-colors"
+          className="flex items-center gap-1.5 text-xs font-black tracking-wide fc-text-muted group-hover/section:text-white transition-colors"
           aria-hidden="true"
         >
           {open ? "Hide" : "Show"}
@@ -289,17 +290,17 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
             <button
               type="button"
               onClick={() => setShowAll(false)}
-              className="w-full px-5 py-3 text-xs font-black tracking-wide fc-text-faint hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+              className="w-full px-5 py-3 text-xs font-black tracking-wide fc-text-muted hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
             >
               Collapse to top {INITIAL_TOOLS_PER_SECTION}
-              <ChevronDown className="w-3 h-3 rotate-180" />
+              <ChevronDown className="w-3.5 h-3.5 rotate-180" />
             </button>
           )}
 
           {section.analysis && section.analysis.length > 30 && (
             <div className="px-5 py-4 border-t border-white/[0.06] flex items-start gap-2.5 bg-white/[0.02]">
               <Activity className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
-              <p className="text-[14px] text-white/70 leading-relaxed font-medium italic">
+              <p className="text-[14px] fc-text-secondary leading-relaxed font-medium italic">
                 {section.analysis}
               </p>
             </div>
@@ -316,6 +317,7 @@ export function AgentFindingCard({
   deepFindings,
   metrics,
   narrative,
+  narrativeStructured,
   agentSummary,
   phase = "initial",
   defaultOpen = false,
@@ -349,7 +351,10 @@ export function AgentFindingCard({
   }, [realFindings]);
 
   const sections = useMemo(() => groupFindingsBySection(realFindings), [realFindings]);
+  // Prefer the typed structured narrative from the backend DTO; fall back to JSON
+  // parse of per_agent_analysis string (legacy path) if the field is absent.
   const parsedNarrative = useMemo(() => {
+    if (narrativeStructured?.evidence_assessment) return narrativeStructured;
     if (!narrative) return null;
     try {
       const cleanNarrative = narrative.trim();
@@ -375,7 +380,7 @@ export function AgentFindingCard({
       // Not valid JSON narrative format
     }
     return null;
-  }, [narrative]);
+  }, [narrative, narrativeStructured]);
 
   const overview = useMemo(() => {
     if (parsedNarrative) {
@@ -404,17 +409,17 @@ export function AgentFindingCard({
 
   if (isSkipped) {
     return (
-      <div className="fc-surface-quiet p-6 border border-white/[0.05] bg-white/[0.015] opacity-40 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-700">
+      <div className="p-6 opacity-40 flex items-center justify-between group grayscale hover:grayscale-0 transition-all duration-[160ms] fc-surface-quiet">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
             <meta.icon className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-white/65 tracking-wide">{meta.name}</h3>
-            <p className="text-xs font-mono font-bold fc-text-faint mt-0.5">{meta.role} · Protocol Skip</p>
+            <p className="text-xs font-mono font-bold fc-text-muted mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
-        <span className="text-xs font-bold tracking-wide fc-text-faint px-3 py-1.5 rounded-full border border-white/10">Not Applicable</span>
+        <span className="text-xs font-bold tracking-wide fc-text-muted px-3 py-1.5 rounded-full border border-white/10">Not Applicable</span>
       </div>
     );
   }
@@ -422,7 +427,7 @@ export function AgentFindingCard({
   return (
     <div
       className={clsx(
-        "rounded-2xl overflow-hidden transition-all duration-500 fc-surface-quiet",
+        "rounded-2xl overflow-hidden transition-all duration-[160ms] fc-surface-quiet",
         open
           ? clsx(theme.border, "ring-1", theme.ring)
           : "hover:border-white/15"
@@ -442,7 +447,7 @@ export function AgentFindingCard({
         <div className="flex items-center gap-4 relative z-10">
           {/* Agent icon */}
           <div className={clsx(
-            "w-[52px] h-[52px] rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all duration-500",
+            "w-[52px] h-[52px] rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all duration-[160ms]",
             theme.bg, theme.border, theme.text
           )}>
             <meta.icon className="w-6 h-6" />
@@ -451,7 +456,7 @@ export function AgentFindingCard({
           {/* Name + meta */}
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-[18px] font-black text-white tracking-tight">{meta.name}</h3>
+               <h3 className="text-[18px] font-black text-white tracking-tight">{meta.name}</h3>
               {metrics && (
                 <span className={clsx("px-2.5 py-1 rounded-full text-xs font-black tracking-wider", verdictClasses(displayVerdict))}>
                   {displayVerdict.replace(/_/g, " ")}
@@ -463,7 +468,7 @@ export function AgentFindingCard({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2.5 text-xs font-mono font-bold text-white/55 flex-wrap">
+            <div className="flex items-center gap-2.5 text-xs font-mono font-bold fc-text-muted flex-wrap">
               <span>{meta.role}</span>
               <span className="text-white/25">·</span>
               <span>{realFindings.length} checks</span>
@@ -476,7 +481,7 @@ export function AgentFindingCard({
               )}
             </div>
             {!open && overview && (
-              <p className="text-sm text-white/55 leading-relaxed font-medium line-clamp-3 italic">
+              <p className="text-sm fc-text-secondary leading-relaxed font-medium line-clamp-3 italic">
                 {overview}
               </p>
             )}
@@ -493,14 +498,14 @@ export function AgentFindingCard({
                 "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-black tracking-wide border transition-colors",
                 open
                   ? "border-white/20 bg-white/[0.06] text-white/85"
-                  : "border-white/10 bg-transparent text-white/60 group-hover:border-white/20 group-hover:text-white"
+                  : "border-white/10 bg-transparent fc-text-muted group-hover:border-white/20 group-hover:text-white"
               )}
               aria-hidden="true"
             >
               {open ? "Hide details" : "Show details"}
               <ChevronDown
                 className={clsx(
-                  "w-4 h-4 transition-transform duration-300",
+                  "w-4 h-4 transition-transform duration-[160ms]",
                   open && "rotate-180"
                 )}
               />
@@ -513,12 +518,12 @@ export function AgentFindingCard({
       <div
         id={`agent-content-${agentId}`}
         className={clsx(
-          "grid transition-all duration-500 ease-in-out",
+          "grid transition-all duration-[160ms] ease-in-out",
           open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         )}
       >
         <div className="overflow-hidden">
-          <div className="px-6 pb-6 pt-3 space-y-4 animate-in fade-in duration-300">
+          <div className="px-6 pb-6 pt-3 space-y-4 animate-in fade-in duration-[160ms]">
 
             {/* Agent overview narrative — full text, no clamp */}
             {parsedNarrative ? (
@@ -529,7 +534,7 @@ export function AgentFindingCard({
                     <ShieldCheck className="w-4 h-4 shrink-0 text-cyan-400" />
                     <h4 className="text-xs font-black tracking-wider font-mono text-cyan-400">Evidence Assessment</h4>
                   </div>
-                  <p className="text-[14px] text-white/70 leading-relaxed font-medium">
+                  <p className="text-[14px] fc-text-secondary leading-relaxed font-medium">
                     {parsedNarrative.evidence_assessment}
                   </p>
                 </div>
@@ -540,7 +545,7 @@ export function AgentFindingCard({
                     <Activity className="w-4 h-4 shrink-0 text-blue-400" />
                     <h4 className="text-xs font-black tracking-wider font-mono text-blue-400">Deep Validation</h4>
                   </div>
-                  <p className="text-[14px] text-white/70 leading-relaxed font-medium">
+                  <p className="text-[14px] fc-text-secondary leading-relaxed font-medium">
                     {parsedNarrative.deep_analysis}
                   </p>
                 </div>
@@ -551,7 +556,7 @@ export function AgentFindingCard({
                     <Shield className="w-4 h-4 shrink-0 text-violet-400" />
                     <h4 className="text-xs font-black tracking-wider font-mono text-violet-400">Reliability & Verdict</h4>
                   </div>
-                  <p className="text-[14px] text-white/70 leading-relaxed font-medium">
+                  <p className="text-[14px] fc-text-secondary leading-relaxed font-medium">
                     {parsedNarrative.reliability_verdict}
                   </p>
                 </div>
@@ -560,7 +565,7 @@ export function AgentFindingCard({
               overview && (
                 <div className="flex items-start gap-3 p-5 rounded-2xl bg-transparent border border-white/[0.08]">
                   <Activity className="w-4 h-4 text-primary/65 mt-1 shrink-0" />
-                  <p className="text-[15px] text-white/80 leading-relaxed font-medium">
+                  <p className="text-[15px] fc-text-secondary leading-relaxed font-medium">
                     {overview}
                   </p>
                 </div>

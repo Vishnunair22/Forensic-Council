@@ -128,13 +128,13 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-32 relative">
-      <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
+      <div className="rounded-2xl overflow-hidden fc-surface">
 
         {/* ── Header ── */}
         <div className="px-6 py-5 border-b border-white/[0.06] flex items-center gap-3">
           <HistoryIcon className="w-4 h-4 text-primary/60 shrink-0" />
-          <h2 className="text-sm font-bold text-white/85 flex-1">Investigation Archive</h2>
-          <span className="fc-eyebrow fc-text-faint">{sorted.length} record{sorted.length === 1 ? "" : "s"}</span>
+          <h2 className="text-sm font-bold fc-text-secondary flex-1">Investigation Archive</h2>
+          <span className="fc-eyebrow fc-text-muted">{sorted.length} record{sorted.length === 1 ? "" : "s"}</span>
 
           {/* Select all */}
           {sorted.length > 0 && (
@@ -142,7 +142,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
               type="button"
               onClick={toggleSelectAll}
               aria-label={allSelected ? "Deselect all" : "Select all"}
-              className="flex items-center gap-1.5 fc-eyebrow fc-text-faint hover:text-white/70 transition-colors px-2 py-1 rounded hover:bg-white/[0.04]"
+              className="flex items-center gap-1.5 fc-eyebrow fc-text-muted hover:text-white/70 transition-colors px-2 py-1 rounded hover:bg-white/[0.04]"
             >
               {allSelected
                 ? <CheckSquare className="w-3.5 h-3.5 text-primary" />
@@ -157,7 +157,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
             <button
               type="button"
               onClick={() => setShowClearConfirm(true)}
-              className="fc-eyebrow fc-text-faint hover:text-danger transition-colors px-2 py-1 rounded hover:bg-danger/5"
+              className="fc-eyebrow fc-text-muted hover:text-danger transition-colors px-2 py-1 rounded hover:bg-danger/5"
             >
               Clear all
             </button>
@@ -166,7 +166,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
             <div className="flex items-center gap-2 bg-danger/10 border border-danger/20 rounded-lg px-2 py-1">
               <span className="fc-eyebrow text-danger">Confirm?</span>
               <button type="button" onClick={clearAll} className="fc-eyebrow text-danger font-bold hover:text-white transition-colors">Yes</button>
-              <button type="button" onClick={() => setShowClearConfirm(false)} className="fc-eyebrow fc-text-faint hover:text-white/70 transition-colors">No</button>
+              <button type="button" onClick={() => setShowClearConfirm(false)} className="fc-eyebrow fc-text-muted hover:text-white/70 transition-colors">No</button>
             </div>
           )}
         </div>
@@ -177,7 +177,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
             <div className="w-12 h-12 rounded-full border border-white/[0.06] border-dashed flex items-center justify-center">
               <HistoryIcon className="w-5 h-5 text-white/10" />
             </div>
-            <p className="text-sm fc-text-faint">No investigations archived yet.</p>
+            <p className="text-sm fc-text-muted">No investigations archived yet.</p>
           </div>
         ) : (
           <div role="list" aria-label="Investigation archive">
@@ -194,7 +194,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
                   animate={shouldReduceMotion ? {} : { opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03, duration: 0.16, ease: "easeOut" }}
                   className={clsx(
-                    "group relative flex items-center gap-3 px-5 py-4 border-b border-white/[0.04] last:border-0 transition-colors duration-150",
+                    "group relative flex items-center gap-3 px-5 py-4 border-b border-white/[0.04] last:border-0 transition-colors duration-[160ms]",
                     isSelected ? "bg-primary/[0.04]" : "hover:bg-white/[0.02]"
                   )}
                 >
@@ -205,13 +205,13 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
                     aria-label={isSelected ? `Deselect ${item.fileName}` : `Select ${item.fileName}`}
                     aria-pressed={isSelected}
                     className={clsx(
-                      "shrink-0 w-4 h-4 flex items-center justify-center transition-opacity duration-150",
+                      "shrink-0 w-4 h-4 flex items-center justify-center transition-opacity duration-[160ms]",
                       isSelectMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                     )}
                   >
                     {isSelected
                       ? <CheckSquare className="w-4 h-4 text-primary" />
-                      : <Square className="w-4 h-4 fc-text-faint" />
+                      : <Square className="w-4 h-4 fc-text-muted" />
                     }
                   </button>
 
@@ -229,7 +229,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
                   >
                     {/* Row 1: filename + current badge + verdict */}
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium text-white/80 truncate flex-1 min-w-0">
+                      <span className="text-sm font-medium fc-text-secondary truncate flex-1 min-w-0">
                         {item.fileName}
                       </span>
                       {isCurrent && (
@@ -249,14 +249,14 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
 
                     {/* Row 2: date · confidence */}
                     <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-xs font-mono fc-text-faint">{formatHistoryDate(item.timestamp)}</span>
+                      <span className="text-xs font-mono fc-text-muted">{formatHistoryDate(item.timestamp)}</span>
                       {item.confidence != null && (
                         <>
-                          <span className="fc-text-faint text-xs">·</span>
+                          <span className="fc-text-muted text-xs">·</span>
                           <ConfidencePill value={item.confidence} />
                         </>
                       )}
-                      <span className="fc-eyebrow fc-text-faint ml-0.5">{item.type}</span>
+                      <span className="fc-eyebrow fc-text-muted ml-0.5">{item.type}</span>
                     </div>
                   </button>
 
@@ -265,7 +265,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
                     type="button"
                     onClick={() => onSelect(item.sessionId)}
                     aria-label={`Open analysis for ${item.fileName}`}
-                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg border border-white/[0.08] fc-text-faint hover:text-white hover:border-white/[0.18] hover:bg-white/[0.05] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg border border-white/[0.08] fc-text-muted hover:text-white hover:border-white/[0.18] hover:bg-white/[0.05] transition-all duration-[160ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   >
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
@@ -284,16 +284,16 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-5 py-3 rounded-2xl border border-white/[0.12] bg-background/95 backdrop-blur-xl shadow-2xl"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-5 py-3 rounded-2xl shadow-2xl fc-surface-overlay"
           >
-            <span className="fc-eyebrow text-white/70">
+            <span className="fc-eyebrow fc-text-secondary">
               {selectedIds.size} selected
             </span>
             <div className="h-4 w-px bg-white/[0.10]" />
             <button
               type="button"
               onClick={deleteSelected}
-              className="flex items-center gap-2 fc-eyebrow text-danger hover:text-white hover:bg-danger px-3 py-1.5 rounded-lg border border-danger/30 hover:border-danger transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/50"
+              className="flex items-center gap-2 fc-eyebrow text-danger hover:text-white hover:bg-danger px-3 py-1.5 rounded-lg border border-danger/30 hover:border-danger transition-all duration-[160ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/50"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Delete selected
@@ -301,7 +301,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
             <button
               type="button"
               onClick={() => setSelectedIds(new Set())}
-              className="fc-eyebrow fc-text-faint hover:text-white/70 transition-colors px-2 py-1 rounded"
+              className="fc-eyebrow fc-text-muted hover:text-white/70 transition-colors px-2 py-1 rounded"
             >
               Cancel
             </button>

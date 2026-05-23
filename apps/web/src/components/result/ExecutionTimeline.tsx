@@ -97,14 +97,14 @@ export function ExecutionTimeline({
   }
 
   return (
-    <section className="rounded-2xl border border-white/[0.06] overflow-hidden" aria-label="Execution timeline">
+    <section className="relative flex flex-col overflow-hidden fc-surface" aria-label="Execution timeline">
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-primary/60" />
-          <h2 className="text-sm font-bold text-white/85">Execution Timeline</h2>
+          <h2 className="text-sm font-bold fc-text-secondary">Execution Timeline</h2>
         </div>
         {pipelineStartAt && report.signed_utc && (
-          <span className="fc-eyebrow fc-text-faint">
+          <span className="fc-eyebrow fc-text-muted">
             Total: {fmtDuration(pipelineStartAt, report.signed_utc)}
           </span>
         )}
@@ -124,7 +124,7 @@ export function ExecutionTimeline({
                   className={clsx(
                     "absolute left-[26px] top-1 w-2.5 h-2.5 rounded-full border",
                     step.dot === "start"    && "bg-white/30 border-white/50",
-                    step.dot === "agent"    && "border-white/20",
+                    step.dot === "agent"    && "border-white/20 bg-transparent",
                     step.dot === "synthesis"&& "bg-success/20 border-success/40",
                     step.dot === "complete" && "bg-success border-success",
                     step.dot === "skip"     && "bg-transparent border-white/15"
@@ -140,7 +140,7 @@ export function ExecutionTimeline({
                     <p
                       className={clsx(
                         "text-sm font-medium leading-tight",
-                        step.dot === "skip" ? "fc-text-faint" : "text-white/75",
+                        step.dot === "skip" ? "fc-text-muted" : "fc-text-secondary",
                         step.dot === "complete" && "text-success"
                       )}
                       style={step.dot === "agent" && accent ? { color: accent.color } : undefined}
@@ -148,11 +148,11 @@ export function ExecutionTimeline({
                       {step.label}
                     </p>
                     {step.duration && (
-                      <p className="text-xs font-mono fc-text-faint mt-0.5">{step.duration}</p>
+                      <p className="text-xs font-mono fc-text-muted mt-0.5">{step.duration}</p>
                     )}
                   </div>
                   {step.time && (
-                    <span className="text-xs font-mono fc-text-faint shrink-0">{step.time}</span>
+                    <span className="text-xs font-mono fc-text-muted shrink-0">{step.time}</span>
                   )}
                 </div>
               </div>

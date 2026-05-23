@@ -543,11 +543,9 @@ class ForensicCouncilPipeline:
 
         arbiter_results = self._normalize_agent_results(agent_results)
 
-        # Pre-warm the arbiter metrics/verdict computation in the background
-        # while waiting for the HITL gate (Accept/Deep decision).
-        self._pre_warm_task = asyncio.create_task(
-            self._run_arbiter_pre_warm(arbiter_results, case_id)
-        )
+        # Pre-warm is now started inside run_agents_concurrent() after each phase
+        # so it runs concurrently with the HITL decision windows. _run_deliberation
+        # waits for the task and falls back to a synchronous pre-warm if needed.
         report = await self._run_deliberation(arbiter_results, case_id, session_id)
 
         try:

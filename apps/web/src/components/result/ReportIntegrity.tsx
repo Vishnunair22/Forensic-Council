@@ -69,10 +69,10 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
   ];
 
   return (
-    <section className="rounded-2xl border border-white/[0.06] overflow-hidden" aria-label="Report integrity">
+    <section className="relative flex flex-col overflow-hidden fc-surface" aria-label="Report integrity">
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
         <Shield className="w-4 h-4 text-primary/60" />
-        <h2 className="text-sm font-bold text-white/85">Report Integrity</h2>
+        <h2 className="text-sm font-bold fc-text-secondary">Report Integrity</h2>
         {signature && (
           <div className="ml-auto flex items-center gap-1.5 fc-eyebrow text-success">
             <Fingerprint className="w-3.5 h-3.5" />
@@ -86,8 +86,8 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {cells.map((c) => (
             <div key={c.label}>
-              <div className="fc-eyebrow fc-text-faint mb-1">{c.label}</div>
-              <div className="text-xs font-mono text-white/65">{c.value}</div>
+              <div className="fc-eyebrow fc-text-muted mb-1">{c.label}</div>
+              <div className="text-xs font-mono fc-text-muted">{c.value}</div>
             </div>
           ))}
         </div>
@@ -95,9 +95,9 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
         {/* Full hash row */}
         {signature && (
           <div className="pt-4 border-t border-white/[0.04]">
-            <div className="fc-eyebrow fc-text-faint mb-2">Cryptographic Hash</div>
+            <div className="fc-eyebrow fc-text-muted mb-2">Cryptographic Hash</div>
             <div className="flex items-center gap-3">
-              <p className="text-xs font-mono text-white/50 truncate flex-1 min-w-0">
+              <p className="text-xs font-mono fc-text-muted truncate flex-1 min-w-0">
                 {signature}
               </p>
               <button

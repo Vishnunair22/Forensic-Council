@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Activity, Gauge, ShieldAlert } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import type { VerdictConfig } from "@/lib/verdict";
 
@@ -33,6 +33,7 @@ export function VerdictSection({
   agentCount,
   verdictSentence,
 }: VerdictSectionProps) {
+  const prefersReduced = useReducedMotion();
   const theme = VERDICT_THEMES[vc.color] ?? VERDICT_THEMES.amber;
   const VerdictIcon = vc.Icon;
 
@@ -42,7 +43,7 @@ export function VerdictSection({
   const primaryText = verdictSentence ?? vc.desc;
 
   return (
-    <section className="rounded-2xl border border-white/[0.06] overflow-hidden">
+    <section className="relative flex flex-col overflow-hidden fc-surface">
       {/* Verdict Hero */}
       <div
         className="px-6 md:px-8 py-7"
@@ -67,7 +68,7 @@ export function VerdictSection({
                 Final Verdict · {isDeepPhase ? "Deep" : "Initial"} Analysis · Arbiter Signed
               </div>
               <motion.h2
-                initial={{ opacity: 0, y: 4 }}
+                initial={prefersReduced ? false : { opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.16, ease: "easeOut" }}
                 className="mt-1 text-3xl md:text-4xl font-heading font-bold leading-none tracking-tight"
@@ -87,7 +88,7 @@ export function VerdictSection({
         </div>
 
         {primaryText && (
-          <p className="mt-4 text-sm fc-text-muted leading-relaxed max-w-2xl">{primaryText}</p>
+          <p className="mt-4 text-sm fc-text-secondary leading-relaxed max-w-2xl">{primaryText}</p>
         )}
         {agentLine && (
           <p className="mt-1.5 text-xs font-mono fc-text-muted">{agentLine}</p>
@@ -130,6 +131,8 @@ function MetricCell({
   color: string;
   icon: LucideIcon;
 }) {
+  const prefersReduced = useReducedMotion();
+  const pct = `${Math.max(0, Math.min(100, value))}%`;
   return (
     <div className="px-4 md:px-5 py-4">
       <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-2">
@@ -142,8 +145,8 @@ function MetricCell({
         </span>
         <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden">
           <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+            initial={prefersReduced ? false : { width: 0 }}
+            animate={{ width: pct }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             className="h-full rounded-full"
             style={{ backgroundColor: color }}

@@ -31,7 +31,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
   );
 
   return (
-    <div className="fc-surface-elevated rounded-2xl overflow-hidden">
+    <div className="relative flex flex-col overflow-hidden fc-surface">
       {/* Header */}
       <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                 </div>
                 <div className="h-0.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-primary/60 transition-all duration-1000"
+                    className="h-full bg-primary/60 transition-[width] duration-200 ease-out"
                     style={{ width: `${avgConf}%` }}
                     role="progressbar"
                     aria-valuenow={avgConf}

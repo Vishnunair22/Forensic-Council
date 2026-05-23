@@ -55,6 +55,7 @@ export function AgentAnalysisTab({
               deepFindings={deepFindings}
               metrics={report?.per_agent_metrics?.[agentId]}
               narrative={report?.per_agent_analysis?.[agentId]}
+              narrativeStructured={report?.per_agent_narrative_structured?.[agentId]}
               agentSummary={report?.per_agent_summary?.[agentId]}
               phase={isDeepPhase ? "deep" : "initial"}
               defaultOpen={false}

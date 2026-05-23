@@ -29,7 +29,7 @@ export function ResultStateView({ type, message, onNew, onHome }: ResultStateVie
       icon: Search,
       title: "No Results Found",
       desc: "No active investigation session. Start a new one below.",
-      color: "fc-text-faint",
+      color: "fc-text-muted",
     },
   };
   const c = configs[type];
@@ -52,17 +52,17 @@ export function ResultStateView({ type, message, onNew, onHome }: ResultStateVie
       <h2 className="text-4xl font-black text-white tracking-tighter mb-4">
         {c.title}
       </h2>
-      <p className="text-base font-medium fc-text-faint max-w-sm mb-12 tracking-wide leading-relaxed">{c.desc}</p>
+      <p className="text-base font-medium fc-text-muted max-w-sm mb-12 tracking-wide leading-relaxed">{c.desc}</p>
 
       {(onNew || onHome) && (
         <div className="flex gap-4 flex-wrap justify-center">
           {onNew && (
-            <button type="button" onClick={onNew} className="fc-btn-primary px-10 py-4 tracking-wide font-bold !normal-case">
+            <button type="button" onClick={onNew} className="fc-btn-primary tracking-wide font-bold">
               New Investigation
             </button>
           )}
           {onHome && (
-            <button type="button" onClick={onHome} className="fc-btn-secondary px-10 py-4 tracking-wide font-bold !normal-case">
+            <button type="button" onClick={onHome} className="fc-btn-secondary tracking-wide font-bold">
               <HomeIcon className="w-4 h-4" /> Hub
             </button>
           )}

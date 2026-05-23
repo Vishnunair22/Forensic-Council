@@ -287,7 +287,7 @@ const METRIC_EMPHASIS_CLS: Record<Metric["emphasis"], { wrap: string; label: str
  },
  neutral: {
   wrap: "bg-transparent border-white/[0.10]",
-  label: "fc-text-faint",
+  label: "fc-text-muted",
   value: "fc-text-primary",
  },
 };
@@ -305,7 +305,7 @@ export function ConfidenceBar({ value }: { value: number }) {
      <div
       key={i}
       className={clsx(
-       "h-2 rounded-full transition-all duration-700",
+       "h-2 rounded-full transition-all duration-200",
        i < filled ? color : "bg-white/8",
        i < filled ? "w-8" : "w-2.5"
       )}
@@ -352,13 +352,13 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
        {fmtTool(toolName)}
       </span>
       {isDegraded && (
-       <span className="fc-eyebrow fc-text-faint border border-white/20 rounded px-1.5 py-0.5 shrink-0">
-        DEGRADED
+       <span className="fc-eyebrow fc-text-muted border border-white/20 rounded px-1.5 py-0.5 shrink-0">
+        Degraded
        </span>
       )}
       {isIncomplete && (
        <span className="flex items-center gap-1 fc-eyebrow text-warning border border-warning/35 bg-warning/12 rounded px-1.5 py-0.5 shrink-0">
-        <AlertTriangle className="w-3 h-3" /> INCOMPLETE
+        <AlertTriangle className="w-3 h-3" /> Incomplete
        </span>
       )}
      </div>
@@ -366,7 +366,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
     <div className="flex items-center gap-3 shrink-0">
      {timingMs && (
-      <span className="hidden sm:flex items-center gap-1 text-xs font-mono fc-text-faint">
+      <span className="hidden sm:flex items-center gap-1 text-xs font-mono fc-text-muted">
        <Clock className="w-3.5 h-3.5" />{timingMs >= 1000 ? `${(timingMs / 1000).toFixed(1)}s` : `${timingMs}ms`}
       </span>
      )}
@@ -386,7 +386,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
    {/* Summary */}
    {summary && status !== "na" && (
-    <p className="text-sm text-white/80 leading-relaxed font-medium pl-[54px]">
+    <p className="text-sm fc-text-secondary leading-relaxed font-medium pl-[54px]">
      {summary}
     </p>
    )}
@@ -418,7 +418,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
 
    {/* Status context — only show for actionable states */}
    {status === "na" && (
-    <div className="pl-[54px] flex items-center gap-2 text-xs fc-text-faint font-medium">
+    <div className="pl-[54px] flex items-center gap-2 text-xs fc-text-muted font-medium">
      <MinusCircle className="w-3.5 h-3.5 shrink-0" />
      Not applicable to this file type.
     </div>

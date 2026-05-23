@@ -556,6 +556,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       return;
     }
 
+    const validationError = validateEvidenceFile(pending);
+    if (validationError) {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      setAutoStartBlocking(false);
+      setShowLoadingOverlay(false);
+      toast.destructive({ title: "Evidence file rejected", description: validationError });
+      return;
+    }
+
     autoStartFiredRef.current = true;
     setFile(pending);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);

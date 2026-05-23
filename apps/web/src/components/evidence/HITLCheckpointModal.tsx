@@ -96,14 +96,14 @@ export function HITLCheckpointModal({
      <div className="p-8 space-y-6 flex flex-col text-left">
       <DialogHeader className="text-left space-y-2">
        <div className="flex items-center gap-3">
-        <div className="w-10 h-10 border border-white/20 bg-white/5 flex items-center justify-center rounded-xl">
+        <div className="w-10 h-10 border border-white/20 bg-white/5 flex items-center justify-center rounded-2xl">
          <ShieldAlert className="w-5 h-5 text-white/70" />
         </div>
         <div>
          <DialogTitle className="text-2xl font-heading font-bold text-white tracking-tight">
           Investigator Intervention
          </DialogTitle>
-         <DialogDescription className="fc-eyebrow fc-text-faint mt-1">
+         <DialogDescription className="fc-eyebrow fc-text-muted mt-1">
           Checkpoint ID: {checkpoint.checkpoint_id.slice(0, 8)} · {checkpoint.agent_name}
          </DialogDescription>
         </div>
@@ -114,18 +114,18 @@ export function HITLCheckpointModal({
        {/* Context Panels */}
        <div className="grid grid-cols-1 gap-4">
         <div className="border-l-2 border-white/20 pl-4 py-1 space-y-2">
-         <h4 className="fc-eyebrow fc-text-faint">Evidence Brief</h4>
-         <p className="text-sm text-white/80 leading-relaxed">{checkpoint.brief_text}</p>
+         <h4 className="fc-eyebrow fc-text-muted">Evidence Brief</h4>
+         <p className="text-sm fc-text-secondary leading-relaxed">{checkpoint.brief_text}</p>
         </div>
         <div className="border-l-2 border-primary pl-4 py-1 space-y-2 bg-primary/5">
-         <h4 className="fc-eyebrow text-primary/60">Decision Required</h4>
+         <h4 className="fc-eyebrow text-primary">Decision Required</h4>
          <p className="text-sm text-white leading-relaxed font-bold">{checkpoint.decision_needed}</p>
         </div>
        </div>
 
        {/* Decision Grid */}
        <div className="space-y-3 pt-4 border-t border-white/5">
-        <h4 className="fc-eyebrow fc-text-faint mb-2" id="protocol-selection-label">Protocol Selection</h4>
+        <h4 className="fc-eyebrow fc-text-muted mb-2" id="protocol-selection-label">Protocol Selection</h4>
         <div
           className="grid grid-cols-2 gap-3"
           role="radiogroup"
@@ -156,7 +156,7 @@ export function HITLCheckpointModal({
             tabIndex={selectedDecision === option.value || (!selectedDecision && option.value === "APPROVE") ? 0 : -1}
             onClick={() => setSelectedDecision(option.value)}
             className={clsx(
-              "p-4 border text-left transition-colors duration-200 rounded-2xl text-sm relative outline-none",
+              "p-4 border text-left transition-colors duration-[160ms] rounded-2xl text-sm relative outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
               selectedDecision === option.value
                 ? "bg-primary/10 border-primary text-white"
                 : "border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
@@ -171,7 +171,7 @@ export function HITLCheckpointModal({
             </span>
             <span className={clsx(
               "text-xs font-mono leading-tight transition-colors",
-              selectedDecision === option.value ? "text-white/70" : "fc-text-faint"
+              selectedDecision === option.value ? "text-white/70" : "fc-text-muted"
             )}>
              {option.description}
             </span>
@@ -183,20 +183,20 @@ export function HITLCheckpointModal({
 
         {/* Note input */}
         <div className="space-y-3">
-         <h4 className="fc-eyebrow fc-text-faint" id="hitl-notes-label">Supplemental Documentation</h4>
+         <h4 className="fc-eyebrow fc-text-muted" id="hitl-notes-label">Supplemental Documentation</h4>
          <textarea
           id="hitl-notes"
           aria-labelledby="hitl-notes-label"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Enter forensic notes for this intervention..."
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 transition-colors min-h-[100px] resize-none"
+          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-white/40 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:border-white/30 transition-colors min-h-[100px] resize-none"
           disabled={isSubmitting}
         />
         </div>
 
         {decisionError && (
-         <div role="alert" className="p-3 rounded bg-danger/10 border border-danger/20 text-danger text-xs font-bold text-center tracking-wide">
+         <div role="alert" className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-bold text-center tracking-wide">
           {decisionError}
          </div>
         )}
@@ -219,7 +219,7 @@ export function HITLCheckpointModal({
         >
         {isSubmitting ? (
          <>
-          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           Transmitting...
          </>
         ) : (

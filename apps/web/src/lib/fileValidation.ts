@@ -12,6 +12,8 @@ export const ALLOWED_EXTENSIONS = new Set([
   ".mp4",
   ".mov",
   ".avi",
+  ".mkv",
+  ".webm",
   ".wav",
   ".mp3",
   ".m4a",

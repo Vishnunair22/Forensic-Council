@@ -15,11 +15,11 @@ export function ReportFooter({ handleHome }: ReportFooterProps) {
       <button
         type="button"
         onClick={handleHome}
-        className="fc-btn-secondary px-10 py-4"
+        className="fc-btn-secondary"
         aria-label="Return to the home page"
       >
         <Home className="w-4 h-4 mr-2" aria-hidden="true" />
-        BACK TO HUB
+        Back to Hub
       </button>
 
     </footer>

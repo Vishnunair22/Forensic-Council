@@ -2,22 +2,23 @@
 
 import React from "react";
 import { AlertTriangle } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 interface DegradationBannerProps {
   flags: string[];
 }
 
 export function DegradationBanner({ flags }: DegradationBannerProps) {
+  const prefersReduced = useReducedMotion();
   if (!flags || flags.length === 0) return null;
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: -4 }}
+        initial={prefersReduced ? false : { opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.16, ease: "easeOut" }}
-        className="fc-surface-quiet border-warning/20 rounded-2xl overflow-hidden bg-transparent"
+        className="border border-warning/20 rounded-2xl overflow-hidden fc-surface-quiet"
       >
         <div className="px-5 py-3.5 border-b border-warning/10 bg-transparent flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-warning" />
@@ -25,7 +26,7 @@ export function DegradationBanner({ flags }: DegradationBannerProps) {
             Analysis Degradation Notice
           </span>
           <span className="fc-eyebrow text-warning ml-auto">
-            {flags.length} FLAG{flags.length !== 1 ? "S" : ""}
+            {flags.length} flag{flags.length !== 1 ? "s" : ""}
           </span>
         </div>
         <div className="p-4 space-y-2">
@@ -34,13 +35,13 @@ export function DegradationBanner({ flags }: DegradationBannerProps) {
               key={i}
               className="flex items-start gap-3 text-xs text-warning leading-relaxed"
             >
-              <span className="text-xs font-mono font-bold text-warning mt-0.5 shrink-0">
+               <span className="text-xs font-mono font-bold text-warning mt-0.5 shrink-0">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span>{flag}</span>
             </div>
           ))}
-          <p className="text-xs font-mono fc-text-faint pt-2 border-t border-warning/5">
+          <p className="text-xs font-mono fc-text-muted pt-2 border-t border-warning/5">
             Findings may reflect reduced analytical capacity. Consider this when interpreting results for court submission.
           </p>
         </div>

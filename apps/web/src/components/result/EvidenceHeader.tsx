@@ -54,7 +54,7 @@ function EvidencePreview({
       style={{ background: `${color}10` }}
     >
       <Icon className="w-8 h-8 shrink-0" style={{ color }} aria-hidden="true" />
-      <span className="text-[10px] font-mono font-bold uppercase tracking-wider" style={{ color: `${color}80` }}>
+      <span className="text-xs font-mono font-bold tracking-wide" style={{ color: `${color}80` }}>
         {cat}
       </span>
     </div>
@@ -91,7 +91,7 @@ export function EvidenceHeader({
   const displayName = fileName || "Evidence File";
 
   return (
-    <section className="rounded-2xl border border-white/[0.06] overflow-hidden">
+    <section className="relative flex flex-col overflow-hidden fc-surface">
       <div className="flex items-start gap-5 p-5 sm:p-6">
         {/* Square thumbnail */}
         <div className="shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl border border-white/[0.08] overflow-hidden bg-white/[0.03]">
@@ -104,12 +104,12 @@ export function EvidenceHeader({
             {displayName}
           </h1>
           {mimeType && (
-            <p className="text-xs font-mono fc-text-faint mt-1">{mimeType}</p>
+            <p className="text-xs font-mono fc-text-muted mt-1">{mimeType}</p>
           )}
           {pipelineStartAt && (
             <div className="flex items-center gap-1.5 mt-3">
-              <Calendar className="w-3 h-3 fc-text-faint shrink-0" />
-              <span className="text-xs font-mono fc-text-faint">
+              <Calendar className="w-3 h-3 fc-text-muted shrink-0" />
+              <span className="text-xs font-mono fc-text-muted">
                 Uploaded on {formatUploadDate(pipelineStartAt)}
               </span>
             </div>
@@ -119,8 +119,8 @@ export function EvidenceHeader({
         {/* Case ID — desktop only */}
         {caseId && (
           <div className="shrink-0 text-right hidden sm:block pt-0.5">
-            <div className="fc-eyebrow fc-text-faint">Case</div>
-            <div className="text-xs font-mono text-white/65 mt-1">{shortId(caseId)}</div>
+            <div className="fc-eyebrow fc-text-muted">Case</div>
+            <div className="text-xs font-mono fc-text-muted mt-1">{shortId(caseId)}</div>
           </div>
         )}
       </div>

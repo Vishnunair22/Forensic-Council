@@ -67,6 +67,8 @@ export const ALLOWED_MIME_TYPES = new Set([
   "video/mp4",
   "video/quicktime",
   "video/x-msvideo",
+  "video/webm",
+  "video/x-matroska",
   // Audio
   "audio/wav",
   "audio/x-wav",

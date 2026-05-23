@@ -33,9 +33,9 @@ export function HeroAuthActions() {
 
   // Manage body scroll lock centrally — no race between modal mounts/unmounts
   useEffect(() => {
-    document.body.style.overflow = showUpload || isHandingOff ? "hidden" : "";
+    document.body.style.overflow = showUpload ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [showUpload, isHandingOff]);
+  }, [showUpload]);
 
   // Listen for global reset and open-upload events dispatched by navbar / session-expired
   useEffect(() => {
@@ -101,8 +101,6 @@ export function HeroAuthActions() {
       true,
     );
 
-    // Brief pause so the loading overlay is visible before navigation
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
     router.push("/evidence", { scroll: true });
   }, [selectedFile, router]);
 
@@ -134,6 +132,7 @@ export function HeroAuthActions() {
   const closeUpload = useCallback(() => {
     setShowUpload(false);
     setSelectedFile(null);
+    setIsHandingOff(false);
     requestAnimationFrame(() => ctaRef.current?.focus());
   }, []);
 
@@ -148,7 +147,7 @@ export function HeroAuthActions() {
         className="group fc-btn-primary gap-3 px-10"
       >
         <span>Begin Analysis</span>
-        <ArrowRight className="w-5 h-5 transition-transform duration-[160ms] group-hover:translate-x-1" aria-hidden="true" />
+        <ArrowRight className="w-5 h-5 fc-transition opacity-70 group-hover:opacity-100" aria-hidden="true" />
       </button>
 
       <Dialog
@@ -162,7 +161,7 @@ export function HeroAuthActions() {
           <DialogTitle className="sr-only">
             {!selectedFile ? "Upload Evidence" : "Evidence Ready"}
           </DialogTitle>
-          <AnimatePresence mode="sync" initial={false}>
+          <AnimatePresence mode="wait" initial={false}>
             {!selectedFile ? (
               <UploadModal
                 key="upload-modal"

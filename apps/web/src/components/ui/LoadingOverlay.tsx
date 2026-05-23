@@ -58,7 +58,9 @@ export function LoadingOverlay({
 
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-surface-0"
+      aria-busy="true"
+      aria-label="Analysis in progress, please wait"
+      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={
@@ -71,11 +73,11 @@ export function LoadingOverlay({
       <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-primary/40 pl-8 md:pl-12 py-4">
         {/* Status indicator */}
         <div className="flex items-center gap-4 mb-10">
-          <div className="relative w-8 h-8 flex items-center justify-center border border-primary/30 rounded-xl bg-primary/5">
+          <div className="relative w-8 h-8 flex items-center justify-center border border-primary/30 rounded-2xl bg-primary/5">
             <motion.div
-              animate={{ opacity: [1, 0.3, 1] }}
+              animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className="w-3 h-3 bg-primary"
+              className="w-3 h-3 rounded-full bg-primary"
             />
           </div>
           <span className="fc-eyebrow fc-text-muted">
@@ -86,16 +88,12 @@ export function LoadingOverlay({
         {/* Title and live text */}
         <div className="mb-12 space-y-5">
           <motion.h1
-            key={displayText}
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl md:text-4xl font-heading font-black fc-text-primary tracking-tight"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
+            className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
           >
-            {displayText}
+            Forensic Analysis
           </motion.h1>
           <div className="flex items-center gap-4">
             <motion.div
@@ -103,8 +101,13 @@ export function LoadingOverlay({
               animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
               transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
             />
-            <p className="text-xs md:text-sm font-mono font-medium fc-text-muted tracking-wide">
-              Establishing secure forensic perimeter...
+            <p
+              className="text-xs md:text-sm font-mono fc-text-muted"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {displayText}
             </p>
           </div>
         </div>

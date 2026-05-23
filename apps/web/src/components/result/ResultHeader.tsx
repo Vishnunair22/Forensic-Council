@@ -75,7 +75,7 @@ export function ResultHeader({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/[0.06]">
+    <section className="relative flex flex-col overflow-hidden fc-surface">
 
       {/* ── Verdict Hero ── */}
       <div
@@ -118,11 +118,11 @@ export function ResultHeader({
             >
               {confPct}%
             </div>
-            <div className="fc-eyebrow fc-text-faint mt-2">Confidence</div>
+            <div className="fc-eyebrow fc-text-muted mt-2">Confidence</div>
           </div>
         </div>
 
-        <p className="mt-4 text-sm fc-text-muted leading-relaxed max-w-2xl">
+        <p className="mt-4 text-sm fc-text-secondary leading-relaxed max-w-2xl">
           {buildVerdictContext({
             confidence: confPct,
             agents: activeAgentIds.length,
@@ -164,19 +164,19 @@ export function ResultHeader({
             className="w-9 h-9 rounded-lg border border-white/10 shrink-0"
           />
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-white/90 truncate">{displayName}</h1>
+            <h1 className="text-sm font-bold fc-text-primary truncate">{displayName}</h1>
             <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-              {mimeType && <span className="fc-eyebrow fc-text-faint">{mimeType}</span>}
-              <span className="fc-text-faint text-xs">·</span>
-              <span className="fc-eyebrow fc-text-faint">Case {shortId(report.case_id)}</span>
-              <span className="fc-text-faint text-xs">·</span>
-              <span className="fc-eyebrow fc-text-faint">
+              {mimeType && <span className="fc-eyebrow fc-text-muted">{mimeType}</span>}
+              <span className="fc-text-muted text-xs">·</span>
+              <span className="fc-eyebrow fc-text-muted">Case {shortId(report.case_id)}</span>
+              <span className="fc-text-muted text-xs">·</span>
+              <span className="fc-eyebrow fc-text-muted">
                 {activeAgentIds.length} agent{activeAgentIds.length === 1 ? "" : "s"}
               </span>
               {pipelineDuration && (
                 <>
-                  <span className="fc-text-faint text-xs">·</span>
-                  <span className="fc-eyebrow fc-text-faint">{pipelineDuration}</span>
+                  <span className="fc-text-muted text-xs">·</span>
+                  <span className="fc-eyebrow fc-text-muted">{pipelineDuration}</span>
                 </>
               )}
             </div>
@@ -185,7 +185,7 @@ export function ResultHeader({
 
         {signature && (
           <div className="flex items-center gap-2 shrink-0">
-            <p className="text-xs font-mono fc-text-faint hidden md:block max-w-[180px] truncate">
+            <p className="text-xs font-mono fc-text-muted hidden md:block max-w-[180px] truncate">
               {signature.slice(0, 26)}…
             </p>
             <button
@@ -221,7 +221,7 @@ function MetricCell({
 }) {
   return (
     <div className="px-4 md:px-5 py-4">
-      <div className="flex items-center gap-1.5 fc-eyebrow fc-text-faint mb-2">
+      <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-2">
         <Icon className="w-3 h-3 shrink-0" />
         <span className="truncate">{label}</span>
       </div>

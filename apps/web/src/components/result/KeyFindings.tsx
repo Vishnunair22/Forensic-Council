@@ -2,7 +2,7 @@
 
 import React from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, Lightbulb } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { clsx } from "clsx";
 import { cleanFindingText } from "@/lib/findingText";
 
@@ -28,12 +28,13 @@ const SEVERITY_CFG = {
 } as const;
 
 export function KeyFindings({ findings }: KeyFindingsProps) {
+  const prefersReduced = useReducedMotion();
   const clean = findings.map((f) => cleanFindingText(f)).filter(Boolean) as string[];
   if (clean.length === 0) return null;
 
   return (
     <section
-      className="rounded-2xl border border-white/[0.06] overflow-hidden"
+      className="relative flex flex-col overflow-hidden fc-surface"
       aria-label="Key findings"
     >
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
@@ -50,15 +51,15 @@ export function KeyFindings({ findings }: KeyFindingsProps) {
           return (
             <motion.div
               key={`${i}-${finding.slice(0, 20)}`}
-              initial={{ opacity: 0, y: 4 }}
+              initial={prefersReduced ? false : { opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04, duration: 0.16, ease: "easeOut" }}
+              transition={{ delay: prefersReduced ? 0 : i * 0.04, duration: 0.16, ease: "easeOut" }}
               className="flex items-start gap-3"
             >
               <div className={clsx("w-5 h-5 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border", cfg.cls)}>
                 <Icon className={clsx("w-3 h-3", cfg.color)} />
               </div>
-              <p className="text-sm fc-text-muted leading-relaxed">{finding}</p>
+              <p className="text-sm fc-text-secondary leading-relaxed">{finding}</p>
             </motion.div>
           );
         })}

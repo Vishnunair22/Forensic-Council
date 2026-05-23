@@ -48,7 +48,7 @@ export function EvidenceThumbnail({
 
  return (
   <div
-   className={`relative overflow-hidden rounded-2xl border border-white/[0.06] bg-transparent flex items-center justify-center ${className}`}
+   className={`relative flex items-center justify-center overflow-hidden rounded-2xl fc-surface ${className}`}
    style={{ aspectRatio: "16/9" }}
    role="img"
    aria-label={label}
@@ -82,11 +82,11 @@ export function EvidenceThumbnail({
      >
       <Icon className="w-7 h-7" style={{ color }} aria-hidden="true" />
      </div>
-     <span className="text-xs font-mono font-bold tracking-wide fc-text-faint capitalize">
+     <span className="text-xs font-mono font-bold tracking-wide fc-text-muted capitalize">
       {cat} Evidence
      </span>
      {fileName && (
-      <span className="text-xs fc-text-faint truncate max-w-[140px]">
+      <span className="text-xs fc-text-muted truncate max-w-[140px]">
        {fileName}
       </span>
      )}

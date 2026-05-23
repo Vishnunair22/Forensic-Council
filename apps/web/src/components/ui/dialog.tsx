@@ -20,7 +20,9 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-[9999] transition-opacity duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      // z-50: portal appends to body after the navbar, so DOM order resolves
+      // the z-50 tie in the portal's favour — overlay appears above the navbar.
+      "fixed inset-0 z-50 transition-opacity duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       "fc-modal-backdrop",
       className,
     )}
@@ -38,9 +40,10 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[9999] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-[160ms]",
+        // Slide removed — inner motion.div (Framer) owns the y-entrance.
+        // Only Radix fade is kept so the dialog shell fades on close.
+        "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-[160ms]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "data-[state=open]:slide-in-from-top-1 data-[state=closed]:slide-out-to-top-1",
         "fc-surface-overlay overflow-hidden",
         className,
       )}
@@ -101,7 +104,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm fc-text-muted", className)}
     {...props}
   />
 ));

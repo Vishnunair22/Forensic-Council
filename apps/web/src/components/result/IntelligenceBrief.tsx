@@ -42,20 +42,20 @@ export function IntelligenceBrief({
 
   return (
     <section
-      className="rounded-2xl border border-white/[0.06] overflow-hidden"
+      className="relative flex flex-col overflow-hidden fc-surface"
       aria-label="Intelligence brief"
     >
       {/* Header row */}
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-primary/60" />
-          <h2 className="text-sm font-bold text-white/85">Intelligence Brief</h2>
+          <h2 className="text-sm font-bold fc-text-secondary">Intelligence Brief</h2>
         </div>
         <span className={clsx(
           "fc-eyebrow px-2.5 py-1 rounded border",
           isDeepPhase
             ? "text-success/75 border-success/20 bg-success/5"
-            : "fc-text-faint border-white/10"
+            : "fc-text-muted border-white/10"
         )}>
           {isDeepPhase ? "Deep Analysis" : "Initial Analysis"}
         </span>
@@ -64,7 +64,7 @@ export function IntelligenceBrief({
       <div className="p-6 md:p-7 space-y-5">
         {/* Arbiter summary — lead paragraph */}
         {cleanVerdictSentence && (
-          <p className="text-sm md:text-base text-white/80 leading-relaxed">
+          <p className="text-sm md:text-base fc-text-secondary leading-relaxed">
             {cleanVerdictSentence}
           </p>
         )}
@@ -72,7 +72,7 @@ export function IntelligenceBrief({
         {/* Key signals — compact list */}
         {cleanKeyFindings.length > 0 && (
           <div className={clsx(cleanVerdictSentence && "pt-4 border-t border-white/[0.04]")}>
-            <div className="fc-eyebrow fc-text-faint mb-3">Key Signals</div>
+            <div className="fc-eyebrow fc-text-muted mb-3">Key Signals</div>
             <div className="space-y-3">
               {cleanKeyFindings.map((finding, i) => {
                 const severity = classifyFinding(finding);
@@ -85,7 +85,7 @@ export function IntelligenceBrief({
                     className="flex items-start gap-3"
                   >
                     <FindingDot severity={severity} />
-                    <p className="text-sm fc-text-muted leading-relaxed">{finding}</p>
+                    <p className="text-sm fc-text-secondary leading-relaxed">{finding}</p>
                   </motion.div>
                 );
               })}
@@ -98,13 +98,13 @@ export function IntelligenceBrief({
           <div className="pt-4 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {notes.map((note) => (
               <div key={note.label}>
-                <div className="fc-eyebrow fc-text-faint mb-1">{note.label}</div>
+                <div className="fc-eyebrow fc-text-muted mb-1">{note.label}</div>
                 <p className="text-xs fc-text-muted leading-relaxed">{note.value}</p>
               </div>
             ))}
             {skipped.length > 0 && (
               <div>
-                <div className="fc-eyebrow fc-text-faint mb-1">Skipped Agents</div>
+                <div className="fc-eyebrow fc-text-muted mb-1">Skipped Agents</div>
                 <p className="text-xs fc-text-muted leading-relaxed">
                   {skipped
                     .map(([agent, reason]) => `${agent}: ${cleanFindingText(reason, 80)}`)
@@ -124,7 +124,7 @@ function FindingDot({ severity }: { severity: "danger" | "warning" | "info" | "n
     danger:  { cls: "bg-danger/15 border-danger/35",   Icon: AlertCircle,  color: "text-danger"   },
     warning: { cls: "bg-warning/10 border-warning/30",  Icon: AlertTriangle, color: "text-warning"  },
     info:    { cls: "bg-success/10 border-success/30",  Icon: CheckCircle2, color: "text-success"  },
-    neutral: { cls: "bg-transparent border-white/[0.1]",Icon: CircleDashed, color: "fc-text-faint" },
+    neutral: { cls: "bg-transparent border-white/[0.1]",Icon: CircleDashed, color: "fc-text-muted" },
   }[severity];
 
   return (

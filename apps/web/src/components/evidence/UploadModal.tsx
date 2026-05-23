@@ -68,28 +68,32 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       transition={{ duration: 0.16, ease: "easeOut" }}
       className="p-8 sm:p-10 flex flex-col text-left"
     >
+      {/* Close button */}
       <button
         type="button"
         onClick={closeModal}
-        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary transition-colors duration-[160ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-full"
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary fc-transition fc-focus-ring rounded-full cursor-pointer"
         aria-label="Close upload dialog"
       >
-        <X className="w-5 h-5" />
+        <X className="w-5 h-5" aria-hidden="true" />
       </button>
 
+      {/* Header */}
       <div className="mb-8">
         <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
           Evidence Intake
         </p>
-        <h2 className="text-3xl font-heading font-bold fc-text-primary">
+        <h2 className="text-2xl font-heading font-bold fc-text-primary">
           Upload Evidence
         </h2>
       </div>
 
+      {/* Drop zone */}
       <div
         data-testid="upload-dropzone"
         role="button"
         tabIndex={0}
+        aria-label="Upload evidence file. Drag and drop or press Enter to browse files."
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -100,29 +104,27 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             input?.click();
           }
         }}
-        className={`w-full py-16 px-8 cursor-pointer group flex flex-col items-center justify-center gap-4 relative transition-all duration-150 fc-upload-zone ${
-          isDragging
-            ? "border-primary"
-            : ""
+        className={`w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative transition-all duration-[160ms] fc-upload-zone ${
+          isDragging ? "border-primary cursor-copy" : "cursor-pointer"
         }`}
       >
         <CloudUpload
           className={`w-12 h-12 transition-colors duration-[160ms] ${
             isDragging ? "text-primary" : "text-white/60 group-hover:text-white/80"
           }`}
-          strokeWidth={1}
+          strokeWidth={1.5}
           aria-hidden="true"
         />
 
         <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
           <span
-            className={`text-lg font-bold transition-colors duration-150 tracking-wide ${
+            className={`text-lg font-bold transition-colors duration-[160ms] tracking-wide ${
               isDragging ? "text-primary" : "fc-text-secondary group-hover:text-white"
             }`}
           >
             {isDragging ? "Drop Evidence" : "Select Evidence"}
           </span>
-          <p id="upload-file-help" className="text-sm font-mono fc-text-muted max-w-[260px]">
+          <p id="upload-file-help" className="text-sm fc-text-muted max-w-[260px]">
             images, video, audio (max 50MB)
           </p>
         </div>
@@ -143,19 +145,31 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         />
       </div>
 
+      {/* Error message */}
       {error && (
-        <div className="mt-6 p-4 border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/5 rounded-2xl">
-          <p id="upload-error" role="alert" className="text-sm font-mono fc-text-danger">
+        <div
+          className="mt-6 p-4 rounded-2xl"
+          style={{
+            border: "1px solid rgba(var(--color-danger-rgb), 0.20)",
+            background: "rgba(var(--color-danger-rgb), 0.05)",
+          }}
+        >
+          <p id="upload-error" role="alert" className="text-sm fc-text-danger">
             {error}
           </p>
         </div>
       )}
 
+      {/* Submitting state */}
       {isSubmitting && !error && (
         <div className="mt-6 flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <p role="status" aria-live="polite" className="text-xs font-mono tracking-widest text-primary/80">
-            Preparing secure channel...
+          <div
+            className="w-4 h-4 rounded-full border-2 border-white/20 border-t-primary animate-spin flex-shrink-0"
+            role="status"
+            aria-label="Processing"
+          />
+          <p aria-live="polite" className="text-xs fc-text-muted">
+            Preparing secure channel…
           </p>
         </div>
       )}

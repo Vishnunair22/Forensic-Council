@@ -30,19 +30,19 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
   const skippedCount = skippedSet.size;
 
   return (
-    <section className="rounded-2xl border border-white/[0.06] px-5 py-4 flex items-center gap-4 flex-wrap">
+    <section className="relative flex items-center gap-4 flex-wrap px-5 py-4 fc-surface">
       {/* Counts */}
       <div className="flex items-center gap-3 shrink-0">
         <div className="flex items-center gap-1.5">
           <Cpu className="w-3.5 h-3.5 text-primary/60" />
-          <span className="fc-eyebrow text-white/70">
+          <span className="fc-eyebrow fc-text-secondary">
             {activeCount} active
           </span>
         </div>
         {skippedCount > 0 && (
           <>
-            <span className="fc-text-faint text-xs">·</span>
-            <span className="fc-eyebrow fc-text-faint">{skippedCount} skipped</span>
+            <span className="fc-text-muted text-xs">·</span>
+            <span className="fc-eyebrow fc-text-muted">{skippedCount} skipped</span>
           </>
         )}
       </div>
@@ -74,16 +74,16 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
                 style={{ backgroundColor: isActive ? accent.color : "rgba(255,255,255,0.2)" }}
               />
               <span
-                className="text-[10px] font-mono font-bold"
-                style={{ color: isActive ? accent.color : "rgba(255,255,255,0.3)" }}
+                className="text-xs font-mono font-bold"
+                style={{ color: isActive ? accent.color : undefined }}
               >
                 {label}
               </span>
               {isActive && confPct !== null && (
-                <span className="text-[10px] font-mono fc-text-faint">{confPct}%</span>
+                <span className="text-xs font-mono fc-text-muted">{confPct}%</span>
               )}
               {isSkipped && (
-                <span className="text-[10px] font-mono fc-text-faint">skip</span>
+                <span className="text-xs font-mono fc-text-muted">skip</span>
               )}
             </div>
           );

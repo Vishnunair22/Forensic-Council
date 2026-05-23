@@ -11,7 +11,7 @@ import {
   MinusCircle,
   Cpu,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { clsx } from "clsx";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage } from "@/lib/storage";
@@ -79,6 +79,7 @@ interface ActiveAgentsPanelProps {
 
 function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAgentStatus }: ActiveAgentsPanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const doneCount = visibleAgents.filter(a => {
     const s = getAgentStatus(a.id);
@@ -92,7 +93,7 @@ function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAg
         onClick={() => setExpanded(v => !v)}
         aria-expanded={expanded}
         aria-controls="active-agents-panel"
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition fc-focus-ring rounded-2xl"
       >
         <div className="flex items-center gap-2.5">
           <Activity className="w-4 h-4 text-primary shrink-0" />
@@ -114,9 +115,9 @@ function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAg
           <motion.div
             id="active-agents-panel"
             key="active-agents-panel"
-            initial={{ height: 0, opacity: 0 }}
+            initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            exit={prefersReducedMotion ? {} : { height: 0, opacity: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             className="overflow-hidden border-t border-white/5"
           >
@@ -157,7 +158,7 @@ function ActiveAgentsPanel({ visibleAgents, agentUpdates, completedAgents, getAg
 
                   {/* Name + live status */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold fc-text-primary leading-none">{agent.name}</p>
+                    <p className="text-sm font-medium fc-text-primary leading-none">{agent.name}</p>
                     <p className="text-xs fc-text-secondary mt-1 truncate leading-none">
                       {status === "running" && toolDesc.label}
                       {status === "checking" && "Synchronizing with pipeline..."}
@@ -201,6 +202,7 @@ interface SkippedAgentsPanelProps {
 
 function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const mimeCategory = mimeType?.split("/")?.[0] ?? "this";
   const reason = `Not applicable for ${mimeCategory} files`;
@@ -212,7 +214,7 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
         onClick={() => setExpanded(v => !v)}
         aria-expanded={expanded}
         aria-controls="skipped-agents-panel"
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition fc-focus-ring rounded-2xl"
       >
         <div className="flex items-center gap-2.5">
           <MinusCircle className="w-4 h-4 fc-text-muted shrink-0" />
@@ -229,9 +231,9 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
           <motion.div
             id="skipped-agents-panel"
             key="skipped-agents-panel"
-            initial={{ height: 0, opacity: 0 }}
+            initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            exit={prefersReducedMotion ? {} : { height: 0, opacity: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             className="overflow-hidden border-t border-white/5"
           >
@@ -280,6 +282,7 @@ export function AgentProgressDisplay({
   revealQueue = [],
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
+  const prefersReducedMotion = useReducedMotion();
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -372,19 +375,19 @@ export function AgentProgressDisplay({
 
   return (
     <div
-      className="flex flex-col w-full max-w-screen-2xl mx-auto gap-8 pb-24 pt-12"
+      className="flex flex-col w-full max-w-7xl mx-auto gap-8 pb-16 pt-2"
       aria-label="Agent forensic analysis progress"
     >
       {/* ── Page Header ─────────────────────────────────────────────────── */}
-      <div className="w-full px-2">
+      <div className="w-full">
         {/* Title + phase badge + live status */}
         <motion.div
-          initial={{ opacity: 0, y: 4 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.16, ease: "easeOut" }}
           className="flex flex-wrap items-center gap-3 mb-5"
         >
-          <h1 className="text-3xl md:text-4xl font-heading font-bold fc-text-primary tracking-tight">
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight">
             {allAgentsDone && phase === "initial"
               ? "Initial Analysis"
               : phase === "deep"
@@ -402,7 +405,7 @@ export function AgentProgressDisplay({
               : "Phase 2"}
           </span>
           <p
-            className="text-sm font-medium fc-text-secondary ml-auto hidden md:block"
+            className="text-sm font-normal fc-text-faint ml-auto hidden md:block"
             role="status"
             aria-live="polite"
             aria-atomic="false"
@@ -413,7 +416,7 @@ export function AgentProgressDisplay({
 
         {/* Active + Skipped panels */}
         <motion.div
-          initial={{ opacity: 0, y: 4 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.16, delay: 0.05, ease: "easeOut" }}
           className={clsx(

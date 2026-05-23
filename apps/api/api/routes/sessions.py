@@ -932,6 +932,16 @@ async def resume_investigation(
     pipeline.run_deep_analysis_flag = request.deep_analysis
     pipeline.deep_analysis_decision_event.set()
 
+    # If deep analysis is chosen, cancel the Phase-1 pre-warm that started during the
+    # HITL window — its initial-only findings would be stale for the final deliberation.
+    # A fresh pre-warm with complete (Phase 1 + deep) findings is started inside
+    # run_agents_concurrent() after the deep pass completes.
+    if request.deep_analysis:
+        try:
+            pipeline.invalidate_pre_warm()
+        except Exception as _pw_err:
+            _log.debug("Pre-warm invalidation skipped", error=str(_pw_err))
+
     synthesis_message = (
         "Deep analysis requested. Dispatching expanded forensic checks."
         if request.deep_analysis

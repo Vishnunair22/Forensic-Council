@@ -82,6 +82,20 @@ export interface ReportDTO {
       skipped: boolean;
     }
   >;
+  per_agent_narrative_structured?: Record<
+    string,
+    {
+      evidence_assessment: string;
+      deep_analysis: string;
+      reliability_verdict: string;
+    }
+  >;
+  summary_structured?: {
+    verdict_line?: string;
+    integrity_lines?: string[];
+    context_lines?: string[];
+    coverage_line?: string;
+  };
   degradation_flags?: string[];
   compression_penalty?: number;
   cross_modal_fusion?: Record<string, unknown>;

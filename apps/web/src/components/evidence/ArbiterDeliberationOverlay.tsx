@@ -62,7 +62,7 @@ export function ArbiterDeliberationOverlay({
           <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-success/40 pl-8 md:pl-12 py-4">
             {/* Status indicator */}
             <div className="flex items-center gap-4 mb-10">
-              <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-xl bg-success/5">
+              <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-2xl bg-success/5">
                 <motion.div
                   animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
@@ -77,12 +77,12 @@ export function ArbiterDeliberationOverlay({
             {/* Title */}
             <div className="mb-12 space-y-5">
               <div className="flex items-center gap-3">
-                <ShieldCheck className="w-7 h-7 text-success/70 shrink-0" />
+                <ShieldCheck className="w-8 h-8 text-success/70 shrink-0" />
                 <motion.h1
                   initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className="text-3xl md:text-4xl font-heading font-black fc-text-primary tracking-tight"
+                  className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
                 >
                   Consensus Synthesis
                 </motion.h1>
@@ -91,7 +91,7 @@ export function ArbiterDeliberationOverlay({
                 <div className="w-1.5 h-1.5 bg-success/50 rounded-full animate-pulse" />
                 <p
                   id="arbiter-live-text"
-                  className="text-xs md:text-sm font-mono font-medium fc-text-muted tracking-wide"
+                  className="text-xs md:text-sm font-mono fc-text-muted"
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"

@@ -44,7 +44,8 @@ export function ForensicProgressOverlay({
   return (
     <motion.div
       aria-busy="true"
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 selection:bg-transparent bg-background/90 backdrop-blur-2xl"
+      aria-label={`${title} in progress, please wait`}
+      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeOut" } }}
@@ -53,11 +54,11 @@ export function ForensicProgressOverlay({
       <div className={`relative z-10 w-full max-w-xl mx-auto border-l-2 ${borderColor} pl-8 md:pl-12 py-4`}>
         {/* Status indicator */}
         <div className="flex items-center gap-4 mb-10">
-          <div className={`relative w-8 h-8 flex items-center justify-center border ${indicatorBorder} rounded-xl ${indicatorBg}`}>
+          <div className={`relative w-8 h-8 flex items-center justify-center border ${indicatorBorder} rounded-2xl ${indicatorBg}`}>
             <motion.div
               animate={prefersReducedMotion ? {} : { opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              className={`w-3 h-3 ${pulseDot}`}
+              className={`w-3 h-3 rounded-full ${pulseDot}`}
             />
           </div>
           <span className="fc-eyebrow fc-text-muted">
@@ -71,7 +72,7 @@ export function ForensicProgressOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl md:text-4xl font-heading font-black fc-text-primary tracking-tight"
+            className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
           >
             {title}
           </motion.h1>
@@ -83,7 +84,7 @@ export function ForensicProgressOverlay({
             />
             <p
               id="forensic-live-text"
-              className="text-xs md:text-sm font-mono font-medium fc-text-muted tracking-wide"
+              className="text-xs md:text-sm font-mono fc-text-muted"
               role="status"
               aria-live="polite"
               aria-atomic="true"

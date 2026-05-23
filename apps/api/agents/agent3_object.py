@@ -97,8 +97,13 @@ class Agent3Object(ForensicAgent):
 
     @property
     def iteration_ceiling(self) -> int:
-        # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
-        base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
+        # deep_task_decomposition reads _tool_context which is empty at init time, so it
+        # always resolves to the no-detections branch (3 tasks). Use the max possible deep
+        # task count (5: secondary_classification + scale_validation + adversarial +
+        # lighting_consistency + gemini_deep_forensic) so the ceiling is never underestimated
+        # when Phase 1 detects objects and Phase 2 expands the task list at runtime.
+        max_deep_tasks = 5
+        base_count = len(self.task_decomposition) + max_deep_tasks
         return self._compute_ceiling(base_count)
 
     async def build_initial_thought(self) -> str:

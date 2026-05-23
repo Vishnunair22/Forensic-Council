@@ -1,10 +1,15 @@
 export function GlobalFooter() {
   return (
-    <footer className="w-full px-6 py-24 relative z-10 mt-auto bg-transparent">
-      <div className="max-w-5xl mx-auto flex flex-col items-center justify-center gap-4">
-        <p className="text-xs font-mono fc-text-faint tracking-wide text-center">
-          Forensic Council is an academic project and can occasionally make mistakes.
-        </p>
+    <footer className="w-full mt-auto relative z-10" role="contentinfo" aria-label="Site footer">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="border-t border-white/[0.06] py-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="text-xs fc-text-faint tracking-wide">
+            © {new Date().getFullYear()} Forensic Council
+          </span>
+          <p className="text-xs fc-text-muted text-center sm:text-right max-w-[56ch] leading-relaxed">
+            Academic project. Results may not be accurate — do not rely solely on this system in legal proceedings.
+          </p>
+        </div>
       </div>
     </footer>
   );

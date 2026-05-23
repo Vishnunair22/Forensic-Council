@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { GlobalNavbar } from "@/components/ui/GlobalNavbar";
 import { GlobalFooter } from "@/components/ui/GlobalFooter";
 import { RouteExperience } from "@/components/ui/RouteExperience";
@@ -8,6 +9,20 @@ import { QueryProvider } from "@/components/ui/QueryProvider";
 import { LandingBackground } from "@/components/ui/LandingBackground";
 import { GlobalLoadingOverlay } from "@/components/ui/GlobalLoadingOverlay";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+  weight: ["400", "500"],
+});
 
 export const metadata: Metadata = {
   title: { default: "Forensic Council", template: "%s | Forensic Council" },
@@ -26,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-clip">
         <LandingBackground />
         <Suspense fallback={null}>
@@ -34,7 +49,7 @@ export default function RootLayout({
         </Suspense>
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-2 focus:left-2 focus:px-4 focus:py-2 fc-surface-quiet font-bold"
+          className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:z-50 focus-visible:top-2 focus-visible:left-2 focus-visible:px-4 focus-visible:py-2 focus-visible:rounded-full fc-surface-elevated fc-text-primary font-semibold text-sm fc-focus-ring"
         >
           Skip to main content
         </a>

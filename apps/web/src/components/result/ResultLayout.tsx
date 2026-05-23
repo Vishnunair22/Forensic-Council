@@ -11,7 +11,7 @@ import {
   FileSearch,
   History as HistoryIcon,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { type Tab, useResult } from "@/hooks/useResult";
 import { getVerdictConfig } from "@/lib/verdict";
 import type { AgentFindingDTO, ReportDTO } from "@/lib/api";
@@ -29,6 +29,8 @@ import { FindingsMetadata } from "./FindingsMetadata";
 import { ExecutionTimeline } from "./ExecutionTimeline";
 import { ReportIntegrity } from "./ReportIntegrity";
 import { PageNavigation } from "./PageNavigation";
+import { DegradationBanner } from "./DegradationBanner";
+import { DeepModelTelemetry } from "./DeepModelTelemetry";
 
 const AgentAnalysisTab = dynamic(
   () => import("./AgentAnalysisTab").then((m) => m.AgentAnalysisTab),
@@ -45,6 +47,7 @@ interface ResultLayoutProps {
 
 export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const rs = useResult(initialSessionId);
+  const prefersReduced = useReducedMotion();
 
   const sessionChangeRef = useRef<string | undefined>(initialSessionId);
   useEffect(() => {
@@ -111,7 +114,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
       >
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-2">
           {/* Centered pill tabs */}
-          <div className="flex-1 flex items-center justify-center gap-1">
+          <div role="tablist" aria-label="Report sections" className="flex-1 flex items-center justify-center gap-1">
             {(["analysis", "history"] as Tab[]).map((tab) => (
               <button
                 type="button"
@@ -195,16 +198,16 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
           {rs.state === "ready" && rs.report && (
             <motion.div
-              initial="hidden"
+              initial={prefersReduced ? false : "hidden"}
               animate="visible"
-              variants={{
+              variants={prefersReduced ? {} : {
                 hidden: { opacity: 0 },
                 visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.12 } },
               }}
               className="space-y-4"
             >
               {/* 1. Evidence Header */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <EvidenceHeader
                   fileName={rs.fileName}
                   mimeType={rs.mimeType}
@@ -215,7 +218,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 2. Verdict + Metric Strip */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <VerdictSection
                   vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
                   confPct={toPct(rs.report.overall_confidence)}
@@ -229,7 +232,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 3. Agents Strip */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <AgentsStrip
                   perAgentMetrics={rs.report.per_agent_metrics}
                   skippedAgents={rs.report.skipped_agents}
@@ -237,15 +240,22 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
+              {/* 3.5. Degradation Banner — only when analysis was degraded */}
+              {(rs.report.degradation_flags ?? []).length > 0 && (
+                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                  <DegradationBanner flags={rs.report.degradation_flags ?? []} />
+                </motion.div>
+              )}
+
               {/* 4. Key Findings */}
               {keyFindings.length > 0 && (
-                <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                   <KeyFindings findings={keyFindings} />
                 </motion.div>
               )}
 
               {/* 5. Agent Findings */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <AgentAnalysisTab
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -253,8 +263,15 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
+              {/* 5.5. Deep Model Telemetry — only for deep analysis phase */}
+              {rs.isDeepPhase && (
+                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                  <DeepModelTelemetry report={rs.report} />
+                </motion.div>
+              )}
+
               {/* 6. Analysis Metrics */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <FindingsMetadata
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -262,7 +279,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 7. Execution Timeline */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <ExecutionTimeline
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -272,7 +289,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 8. Report Integrity */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <ReportIntegrity
                   report={rs.report}
                   sessionId={rs.sessionId}
@@ -281,7 +298,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 9. Navigation */}
-              <motion.div variants={{ hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <PageNavigation onHome={rs.handleHome} onNew={rs.handleNew} />
               </motion.div>
             </motion.div>
@@ -306,6 +323,7 @@ function ExportDropdown({
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const prefersReduced = useReducedMotion();
 
   useEffect(() => {
     if (!open) return;
@@ -366,9 +384,9 @@ function ExportDropdown({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            initial={prefersReduced ? false : { opacity: 0, y: -4, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            exit={prefersReduced ? {} : { opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.1, ease: "easeOut" }}
             className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-white/[0.10] bg-background/95 backdrop-blur-xl shadow-xl py-1.5 z-50"
           >

@@ -244,7 +244,7 @@ class ArbiterNarrativeMixin:
         ),
         "Agent3": (
             "Object & Scene Agent — "
-            "Phase 1: YOLOv11 Detection · Contraband CLIP Search · Lighting Correlation · "
+            "Phase 1: DETR-ResNet-50 Detection · Contraband CLIP Search · Lighting Correlation · "
             "Scene Incongruence | "
             "Phase 2: Secondary Classification · Scale Validation · "
             "Adversarial Robustness · Gemini Object-Scene Synthesis"

@@ -29,9 +29,8 @@ export function HomeClient() {
     <div className="relative min-h-screen">
 
       {/* ── Hero ── */}
-      <section id="hero" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pt-16 pb-20 px-5 sm:px-6">
-        {/* Grid background for structural precision */}
-        <div className="absolute inset-0 bg-grid-small opacity-10 pointer-events-none" />
+      <section id="hero" aria-labelledby="hero-heading" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pb-20 px-5 sm:px-6">
+        <div className="absolute inset-0 bg-grid-small opacity-10 pointer-events-none" aria-hidden="true" />
 
         <motion.div
           variants={prefersReducedMotion ? undefined : containerVariants}
@@ -42,8 +41,9 @@ export function HomeClient() {
           {/* Headline */}
           <div className="space-y-6 mb-12 w-full">
             <motion.h1
+              id="hero-heading"
               variants={itemVariants}
-              className="text-4xl sm:text-5xl md:text-6xl font-black leading-none fc-text-primary tracking-tight"
+              className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight fc-text-primary tracking-tight"
             >
               Multi-Agent Forensic
               <br />
@@ -52,7 +52,7 @@ export function HomeClient() {
 
             <motion.p
               variants={itemVariants}
-              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed max-w-2xl mx-auto"
+              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed max-w-[68ch] mx-auto"
             >
               Forensic Council deploys specialized AI agents to analyze digital evidence,
               synthesizing cohesive, cryptographically-signed reports with chain-of-custody integrity.
@@ -66,15 +66,15 @@ export function HomeClient() {
 
         </motion.div>
 
-        {/* Bottom fade */}
         <div
           className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
           style={{ background: "linear-gradient(to bottom, transparent, var(--color-background))" }}
+          aria-hidden="true"
         />
       </section>
 
       {/* ── Content sections ── */}
-      <section className="relative w-full px-4 sm:px-6 pb-20 max-w-7xl mx-auto space-y-20">
+      <div className="relative w-full px-4 sm:px-6 lg:px-8 pb-20 max-w-7xl mx-auto space-y-20">
         <div>
           <HowWorksSection />
         </div>
@@ -82,7 +82,7 @@ export function HomeClient() {
         <div>
           <AgentsSection />
         </div>
-      </section>
+      </div>
 
     </div>
   );

@@ -121,7 +121,7 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
-      className={`fixed top-0 inset-x-0 z-[10001] h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${
+      className={`fixed top-0 inset-x-0 z-50 h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${
         isVisible || isKeyboardUser
           ? "translate-y-0 opacity-100"
           : "-translate-y-full opacity-0 pointer-events-none"
@@ -158,7 +158,7 @@ export function GlobalNavbar() {
               : "Return to top"
           }
           aria-current={pathname === "/" ? "page" : undefined}
-          className="flex items-center rounded-sm fc-transition fc-focus-ring outline-none shrink-0"
+          className="flex items-center min-h-[44px] rounded-sm fc-transition fc-focus-ring outline-none shrink-0"
         >
           <BrandLogo size="sm" isHovered={isHovered} />
         </button>
@@ -176,8 +176,9 @@ export function GlobalNavbar() {
             <span
               className="w-1 h-1 rounded-full shrink-0"
               style={{ background: "rgba(147,197,253,0.55)" }}
+              aria-hidden="true"
             />
-            <span className="fc-eyebrow fc-text-muted truncate tracking-widest">
+            <span className="fc-eyebrow fc-text-muted truncate">
               {pageLabel}
             </span>
           </div>
@@ -192,12 +193,12 @@ export function GlobalNavbar() {
                   boxShadow: "0 0 6px rgba(96,165,250,0.65)",
                 }}
               />
-              <span className="fc-eyebrow hidden md:inline text-blue-300/65">
+              <span className="fc-eyebrow sr-only md:not-sr-only fc-text-muted" aria-live="polite">
                 Session Active
               </span>
             </div>
           ) : (
-            <span className="fc-eyebrow fc-text-faint hidden md:inline shrink-0 tracking-widest">
+            <span className="fc-eyebrow fc-text-faint hidden md:inline shrink-0">
               FC — Multi-Agent
             </span>
           )}

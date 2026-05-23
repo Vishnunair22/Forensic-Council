@@ -83,10 +83,10 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
   const flags = report.degradation_flags ?? [];
 
   return (
-    <section className="rounded-2xl border border-white/[0.06] overflow-hidden" aria-label="Findings metadata">
+    <section className="relative flex flex-col overflow-hidden fc-surface" aria-label="Findings metadata">
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
         <BarChart3 className="w-4 h-4 text-primary/60" />
-        <h2 className="text-sm font-bold text-white/85">Analysis Metrics</h2>
+        <h2 className="text-sm font-bold fc-text-secondary">Analysis Metrics</h2>
       </div>
 
       <div className="p-6 space-y-6">
@@ -94,8 +94,8 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {stats.map((s) => (
             <div key={s.label}>
-              <div className="fc-eyebrow fc-text-faint mb-1">{s.label}</div>
-              <div className="text-sm font-mono font-bold text-white/80">{s.value}</div>
+              <div className="fc-eyebrow fc-text-muted mb-1">{s.label}</div>
+              <div className="text-sm font-mono font-bold fc-text-secondary">{s.value}</div>
             </div>
           ))}
         </div>
@@ -103,39 +103,39 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
         {/* Tool log table */}
         {toolRows.length > 0 && (
           <div>
-            <div className="fc-eyebrow fc-text-faint mb-3">Tool Execution Log</div>
+            <div className="fc-eyebrow fc-text-muted mb-3">Tool Execution Log</div>
             <div className="border border-white/[0.06] rounded-xl overflow-hidden">
-              <table className="w-full text-xs font-mono">
+               <table className="w-full text-xs font-mono">
                 <thead>
                   <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                    <th className="px-3 py-2 text-left fc-text-faint font-normal">#</th>
-                    <th className="px-3 py-2 text-left fc-text-faint font-normal">Tool</th>
-                    <th className="px-3 py-2 text-left fc-text-faint font-normal hidden sm:table-cell">Agent</th>
-                    <th className="px-3 py-2 text-right fc-text-faint font-normal hidden md:table-cell">Duration</th>
-                    <th className="px-3 py-2 text-left fc-text-faint font-normal">Verdict</th>
+                    <th className="px-3 py-2 text-left fc-text-muted font-medium">#</th>
+                    <th className="px-3 py-2 text-left fc-text-muted font-medium">Tool</th>
+                    <th className="px-3 py-2 text-left fc-text-muted font-medium hidden sm:table-cell">Agent</th>
+                    <th className="px-3 py-2 text-right fc-text-muted font-medium hidden md:table-cell">Duration</th>
+                    <th className="px-3 py-2 text-left fc-text-muted font-medium">Verdict</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleTools.map((row) => {
                     const accent = accentFor(row.agentId);
-                    const verdictOk = /POSITIVE|authentic|clean/i.test(row.verdict);
-                    const verdictBad = /NEGATIVE|manipul|tamper|forged|synthetic/i.test(row.verdict);
+                    const verdictOk = /NEGATIVE|authentic|clean|NOT_APPLICABLE/i.test(row.verdict);
+                    const verdictBad = /POSITIVE|manipul|tamper|forged|synthetic/i.test(row.verdict);
                     return (
                       <tr key={`${row.agentId}-${row.index}`} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
-                        <td className="px-3 py-2 fc-text-faint">{row.index}</td>
-                        <td className="px-3 py-2 text-white/70 max-w-[160px] truncate">{fmtTool(row.toolName)}</td>
+                        <td className="px-3 py-2 fc-text-muted">{row.index}</td>
+                        <td className="px-3 py-2 fc-text-secondary max-w-[160px] truncate">{fmtTool(row.toolName)}</td>
                         <td className="px-3 py-2 hidden sm:table-cell">
-                          <span className="text-[10px]" style={{ color: accent.color }}>{row.agentId}</span>
+                          <span className="text-xs font-mono" style={{ color: accent.color }}>{row.agentId}</span>
                         </td>
-                        <td className="px-3 py-2 text-right fc-text-faint hidden md:table-cell">
+                        <td className="px-3 py-2 text-right fc-text-muted hidden md:table-cell">
                           {row.durationMs !== null ? `${row.durationMs}ms` : "—"}
                         </td>
                         <td className="px-3 py-2">
                           <span className={clsx(
-                            "text-[10px] uppercase tracking-wide",
+                            "text-xs font-mono",
                             verdictOk && "text-success",
                             verdictBad && "text-danger",
-                            !verdictOk && !verdictBad && "fc-text-faint"
+                            !verdictOk && !verdictBad && "fc-text-muted"
                           )}>
                             {row.verdict}
                           </span>
@@ -150,7 +150,7 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
               <button
                 type="button"
                 onClick={() => setShowAllTools(true)}
-                className="mt-2 fc-eyebrow fc-text-faint hover:text-white/70 transition-colors"
+                className="mt-2 fc-eyebrow fc-text-muted hover:text-white/70 transition-colors"
               >
                 Show {hiddenCount} more
               </button>
@@ -163,19 +163,19 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
           <div className="pt-4 border-t border-white/[0.04] grid grid-cols-1 sm:grid-cols-3 gap-4">
             {report.reliability_note && (
               <div>
-                <div className="fc-eyebrow fc-text-faint mb-1">Reliability</div>
+                <div className="fc-eyebrow fc-text-muted mb-1">Reliability</div>
                 <p className="text-xs fc-text-muted leading-relaxed">{report.reliability_note}</p>
               </div>
             )}
             {report.uncertainty_statement && (
               <div>
-                <div className="fc-eyebrow fc-text-faint mb-1">Uncertainty</div>
+                <div className="fc-eyebrow fc-text-muted mb-1">Uncertainty</div>
                 <p className="text-xs fc-text-muted leading-relaxed">{report.uncertainty_statement}</p>
               </div>
             )}
             {report.analysis_coverage_note && (
               <div>
-                <div className="fc-eyebrow fc-text-faint mb-1">Coverage</div>
+                <div className="fc-eyebrow fc-text-muted mb-1">Coverage</div>
                 <p className="text-xs fc-text-muted leading-relaxed">{report.analysis_coverage_note}</p>
               </div>
             )}
@@ -185,7 +185,7 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
         {/* Degradation flags */}
         {flags.length > 0 && (
           <div className="pt-4 border-t border-white/[0.04]">
-            <div className="flex items-center gap-1.5 fc-eyebrow fc-text-faint mb-3">
+            <div className="flex items-center gap-1.5 fc-eyebrow fc-text-muted mb-3">
               <AlertTriangle className="w-3 h-3 text-warning" />
               Degradation Flags
             </div>
