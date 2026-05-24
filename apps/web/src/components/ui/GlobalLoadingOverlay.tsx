@@ -67,8 +67,8 @@ export function GlobalLoadingOverlay() {
 
   // Route-change dismissal logic
   useEffect(() => {
-    if (!pathname.startsWith("/evidence")) {
-      // Left the evidence page — always dismiss immediately
+    if (pathname !== "/" && !pathname.startsWith("/evidence")) {
+      // Left the active pathways — always dismiss immediately
       dismiss();
       return;
     }
