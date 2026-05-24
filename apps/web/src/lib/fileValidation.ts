@@ -26,6 +26,10 @@ export function getFileExtension(name: string): string {
 }
 
 export function validateEvidenceFile(file: File): string | null {
+  if (file.size <= 0) {
+    return "File is empty or invalid.";
+  }
+
   if (file.size > MAX_UPLOAD_SIZE_BYTES) {
     return "File exceeds 50MB limit.";
   }
