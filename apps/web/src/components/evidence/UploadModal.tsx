@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { X, CloudUpload } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
@@ -80,18 +80,21 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         <X className="w-5 h-5" aria-hidden="true" />
       </button>
 
-      {/* Header */}
-      <div className="mb-8">
-        <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
-          Evidence Intake
-        </p>
-        <h2 className="text-xl lg:text-2xl font-heading font-bold fc-text-primary">
-          Upload Evidence
+      {/* Elevated Header */}
+      <div className="mb-8 border-b border-white/5 pb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+          <p className="text-xs font-mono font-semibold tracking-widest text-primary uppercase" aria-hidden="true">
+            Node: Alpha-7 Intake
+          </p>
+        </div>
+        <h2 className="text-2xl lg:text-3xl font-heading font-bold fc-text-primary tracking-tight">
+          Evidence Acquisition
         </h2>
       </div>
 
-      {/* Drop zone */}
-      <div
+      {/* Elevated Drop Zone */}
+      <motion.div
         data-testid="upload-dropzone"
         role="button"
         tabIndex={0}
@@ -102,32 +105,58 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            const input = e.currentTarget.querySelector<HTMLInputElement>("input[type='file']");
-            input?.click();
+            document.getElementById("evidence-file-input")?.click();
           }
         }}
-        className={`fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative transition-all duration-[160ms] ${
-          isDragging ? "!border-solid !border-primary !bg-primary/5 cursor-copy" : "cursor-pointer"
-        }`}
+        animate={isDragging ? "active" : "idle"}
+        variants={{
+          idle: {
+            scale: 1,
+            borderColor: "rgba(var(--color-primary-rgb), 0.2)",
+            backgroundColor: "rgba(var(--color-primary-rgb), 0.02)",
+          },
+          active: {
+            scale: 1.02,
+            borderColor: "rgba(var(--color-primary-rgb), 0.8)",
+            backgroundColor: "rgba(var(--color-primary-rgb), 0.08)",
+            boxShadow: "0 0 20px rgba(var(--color-primary-rgb), 0.15) inset",
+          },
+        }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
       >
+        {/* Simulated Scanner Laser (only visible when dragging) */}
+        <AnimatePresence>
+          {isDragging && (
+            <motion.div
+              initial={{ top: "0%", opacity: 0 }}
+              animate={{ top: ["0%", "100%", "0%"], opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ top: { duration: 2, repeat: Infinity, ease: "linear" }, opacity: { duration: 0.2 } }}
+              className="absolute left-0 right-0 h-[2px] bg-primary z-10 pointer-events-none"
+              style={{ boxShadow: "0 0 12px 2px rgba(var(--color-primary-rgb), 0.6)" }}
+              aria-hidden="true"
+            />
+          )}
+        </AnimatePresence>
+
         <CloudUpload
-          className={`w-8 h-8 transition-colors duration-[160ms] ${
-            isDragging ? "text-primary" : "fc-text-muted group-hover:fc-text-primary"
+          className={`w-10 h-10 transition-colors duration-300 relative z-20 ${
+            isDragging ? "text-primary drop-shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.5)]" : "fc-text-muted group-hover:fc-text-primary"
           }`}
-          strokeWidth={1.5}
+          strokeWidth={1.2}
           aria-hidden="true"
         />
 
-        <div className="flex flex-col items-center gap-2 pointer-events-none text-center">
-          <span
-            className={`text-lg font-bold transition-colors duration-[160ms] tracking-wide ${
+        <div className="flex flex-col items-center gap-2 pointer-events-none text-center relative z-20">
+          <span className={`text-lg font-bold tracking-widest uppercase transition-colors duration-300 ${
               isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
             }`}
           >
-            {isDragging ? "Drop Evidence" : "Select Evidence"}
+            {isDragging ? "Initiate Transfer" : "Select Evidence"}
           </span>
-          <p id="upload-file-help" className="text-sm fc-text-muted max-w-[260px]">
-            images, video, audio (max 50MB)
+          <p id="upload-file-help" className="text-xs font-mono fc-text-muted opacity-70 uppercase tracking-wider">
+            Supported: IMG, VID, AUD // Max 50MB
           </p>
         </div>
 
@@ -135,9 +164,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           type="file"
           id="evidence-file-input"
           tabIndex={-1}
-          aria-label="Upload evidence file"
-          aria-describedby={error ? "upload-file-help upload-error" : "upload-file-help"}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 z-30"
           accept={[...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS].join(",")}
           onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
           onChange={(e) => {
@@ -145,7 +172,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             if (file) selectFile(file);
           }}
         />
-      </div>
+      </motion.div>
 
       {/* Error message */}
       {error && (
@@ -162,19 +189,36 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
         </div>
       )}
 
-      {/* Submitting state */}
-      {isSubmitting && !error && (
-        <div className="mt-6 flex items-center gap-3">
-          <div
-            className="w-4 h-4 rounded-full border-2 border-white/20 border-t-primary animate-spin flex-shrink-0"
-            role="status"
-            aria-label="Processing"
-          />
-          <p aria-live="polite" className="text-xs fc-text-muted">
-            Preparing secure channel…
-          </p>
-        </div>
-      )}
+      {/* Submitting state — High Tech Handshake */}
+      <AnimatePresence>
+        {isSubmitting && !error && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-6 flex flex-col gap-2 overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-mono uppercase tracking-wider fc-text-primary animate-pulse" aria-live="assertive">
+                &gt; Establishing Secure Channel...
+              </p>
+              <span className="text-[10px] font-mono fc-text-muted">ENC: AES-256</span>
+            </div>
+            {/* Indeterminate Data Bar */}
+            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden relative" role="progressbar" aria-valuetext="Encrypting and uploading file">
+              <motion.div
+                className="absolute top-0 bottom-0 left-0 bg-primary"
+                initial={{ width: "0%", left: "0%" }}
+                animate={{
+                  width: ["20%", "40%", "20%"],
+                  left: ["0%", "100%", "0%"],
+                }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

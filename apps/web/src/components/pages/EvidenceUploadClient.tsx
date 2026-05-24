@@ -105,7 +105,12 @@ export function EvidenceUploadClient() {
         )}
 
         {showAgentProgress || investigation.handoffRecovering ? (
-          <>
+          <motion.div
+            initial={{ opacity: 0, scale: 1.02 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+            className="w-full max-w-7xl mx-auto"
+          >
              <AgentProgressDisplay
                agentUpdates={investigation.agentUpdates}
                completedAgents={investigation.validCompletedAgents}
@@ -134,7 +139,7 @@ export function EvidenceUploadClient() {
               onDecision={investigation.handleHITLDecision}
               onDismiss={investigation.dismissCheckpoint}
             />
-          </>
+          </motion.div>
         ) : (
 
           <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">

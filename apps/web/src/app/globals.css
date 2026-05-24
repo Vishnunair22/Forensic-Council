@@ -720,6 +720,11 @@
   50%       { opacity: 1;   filter: blur(8px); }
 }
 
+@keyframes shimmer {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(200%); }
+}
+
 /* F-4 fix: CSS keyframe for ArcGauge decorative dashed ring rotation.
    The prefers-reduced-motion rule at the top of this file automatically
    suppresses this animation (animation-duration: 0.01ms). */

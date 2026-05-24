@@ -21,6 +21,7 @@ export type SoundType =
   | "card_reveal"
   | "skipped_hide"
   | "reset"
+  | "stamp"
   | "hum";
 
 let globalCtx: AudioContext | null = null;
@@ -544,6 +545,30 @@ export function useSound() {
         g.connect(out);
         o.start(t);
         o.stop(t + 0.55);
+      } else if (type === "stamp") {
+        // Heavy low thump + metallic ring: report sealed
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(80, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.4);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.25, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        o.connect(g);
+        g.connect(out);
+        o.start(t);
+        o.stop(t + 0.55);
+        // Metallic ring overlay
+        const o2 = ctx.createOscillator();
+        const g2 = createSoftGain(ctx, 0.035, 0.005, 1.2);
+        o2.type = "triangle";
+        o2.frequency.setValueAtTime(1800, t);
+        o2.frequency.exponentialRampToValueAtTime(600, t + 0.6);
+        o2.connect(g2);
+        g2.connect(out);
+        o2.start(t + 0.06);
+        o2.stop(t + 0.7);
       }
     } catch (e: unknown) {
       // Audio is non-critical — swallow all errors silently

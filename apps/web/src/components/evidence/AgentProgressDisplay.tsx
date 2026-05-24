@@ -479,43 +479,57 @@ export function AgentProgressDisplay({
 
       </div>
 
-      {/* ── Initial analysis decision gate ──────────────────────────────── */}
+      {/* ── Elevated Initial Analysis Decision Gate ──────────────────────────────── */}
       <AnimatePresence>
         {(awaitingDecision || (allAgentsDone && phase === "initial" && !isNavigating && pipelineStatus !== "complete")) && revealQueue.length === 0 && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.16 }}
-            className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
+            initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8 relative z-20"
           >
-            <div className="fc-surface-elevated rounded-2xl px-4 py-4">
-              <p className="text-center text-sm fc-text-secondary mb-4">
-                Initial analysis complete — choose your next step
+            <div className="relative overflow-hidden bg-black/60 backdrop-blur-xl rounded-2xl p-6 md:p-8 border border-primary/30 shadow-[0_0_40px_rgba(var(--color-primary-rgb),0.15)]">
+              {/* Scanning laser line */}
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
+
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <Activity className="w-5 h-5 text-primary animate-pulse" />
+                <p className="text-center text-sm font-mono uppercase tracking-widest text-primary">
+                  System Prompt: Command Required
+                </p>
+              </div>
+
+              <p className="text-center text-base fc-text-secondary mb-8 max-w-md mx-auto">
+                Baseline heuristics complete. Do you wish to accept the current findings or deploy neural-net models for deep pixel/audio forensics?
               </p>
-              <div className="flex items-center gap-3">
+
+              <div className="flex flex-col sm:flex-row items-center gap-4">
                 <button
                   type="button"
                   data-testid="accept-analysis-btn"
                   onClick={onAcceptAnalysis}
                   disabled={isNavigating}
-                  aria-label="Accept initial analysis and generate final report"
-                  className="flex-1 fc-btn-secondary flex items-center justify-center gap-2"
+                  className="w-full sm:flex-1 fc-btn-secondary flex items-center justify-center gap-2 h-12"
                 >
                   {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  <span>Accept Result</span>
+                  <span>Accept Baseline</span>
                 </button>
+
                 <button
                   type="button"
                   data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating}
-                  aria-label="Run deep neural analysis with advanced models"
-                  className="flex-[1.5] fc-btn-primary flex items-center justify-center gap-2"
+                  className="w-full sm:flex-[1.5] relative group overflow-hidden fc-btn-primary flex items-center justify-center gap-2 h-12"
                 >
-                  {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                  <span>Deep Analysis</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {/* Hover Glare Effect */}
+                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                  <span className="relative z-10 flex items-center gap-2">
+                    {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cpu className="w-4 h-4" />}
+                    <span>Authorize Deep Analysis</span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </span>
                 </button>
               </div>
             </div>

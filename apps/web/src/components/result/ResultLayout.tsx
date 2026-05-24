@@ -18,6 +18,7 @@ import type { AgentFindingDTO, ReportDTO } from "@/lib/api";
 import { API_BASE } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
+import { toast } from "@/hooks/use-toast";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
@@ -362,7 +363,10 @@ function ExportDropdown({
         return;
       }
     } catch {
-      // fall through to JSON
+      toast.warning({
+        title: "PDF export unavailable",
+        description: "Downloading the report as JSON instead.",
+      });
     } finally {
       setExporting(false);
     }

@@ -16,7 +16,7 @@ import { clsx } from "clsx";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { type HistoryItem } from "@/lib/types";
 import { getVerdictConfig } from "@/lib/verdict";
-import { useSessionStorage } from "@/hooks/useSessionStorage";
+import { usePersistentStorage } from "@/hooks/usePersistentStorage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 interface HistoryPanelProps {
@@ -87,7 +87,7 @@ function ConfidencePill({ value }: { value: number }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) {
-  const [history, setHistory] = useSessionStorage<HistoryItem[]>(STORAGE_KEYS.HISTORY, [], true);
+  const [history, setHistory] = usePersistentStorage<HistoryItem[]>(STORAGE_KEYS.HISTORY, [], true);
   const shouldReduceMotion = useReducedMotion();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

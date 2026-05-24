@@ -177,11 +177,17 @@ export function HeroAuthActions() {
       >
         <DialogContent
           className="max-w-xl p-0"
+          aria-describedby="dialog-description"
           onFocusOutside={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">
             {!selectedFile ? "Upload Evidence" : "Evidence Ready"}
           </DialogTitle>
+          <p id="dialog-description" className="sr-only">
+            {!selectedFile
+              ? "Drag and drop or browse to select an evidence file for forensic analysis."
+              : "Evidence file has been received. Proceed to analysis or cancel."}
+          </p>
           <AnimatePresence mode="wait" initial={false}>
             {!selectedFile ? (
               <UploadModal
@@ -195,6 +201,7 @@ export function HeroAuthActions() {
                 file={selectedFile}
                 onNewUpload={() => setSelectedFile(null)}
                 onDismiss={closeUpload}
+                isHandingOff={isHandingOff}
                 onStartAnalysis={async () => {
                   if (isHandingOff) return;
                   playSound("scan");

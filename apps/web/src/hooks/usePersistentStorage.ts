@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { storage } from "@/lib/storage";
 
-export function useSessionStorage<T>(
+export function usePersistentStorage<T>(
   key: string,
   initialValue: T,
   parseJson = false

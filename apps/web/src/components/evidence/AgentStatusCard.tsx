@@ -633,7 +633,7 @@ export function AgentStatusCard({
         </div>
 
 
-        {/* --- Progress Section --- */}
+        {/* --- Upgraded Progress Section --- */}
         <AnimatePresence mode="wait">
           {(status === "running" || status === "checking") && (
             <motion.div
@@ -643,33 +643,60 @@ export function AgentStatusCard({
               transition={{ duration: 0.16 }}
               className="space-y-4"
             >
-              <div className="flex items-center gap-3 fc-text-muted min-w-0">
-                <motion.div key={progressDescriptor.label} initial={prefersReduced ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <motion.div
+                  key={progressDescriptor.label}
+                  initial={prefersReduced ? false : { opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="shrink-0 relative"
+                >
+                  {/* Pulsing ring behind icon */}
+                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
                   {status === "checking" ? (
-                    <Activity className="w-4 h-4 text-primary" />
+                    <Activity className="w-4 h-4 text-primary relative z-10" />
                   ) : (
-                    <ProgressIcon className="w-4 h-4 text-primary" />
+                    <ProgressIcon className="w-4 h-4 text-primary relative z-10" />
                   )}
                 </motion.div>
-                <span className="fc-eyebrow min-w-0 break-words">
+
+                {/* Terminal-style text */}
+                <span className="fc-eyebrow min-w-0 break-words text-primary/80 tracking-widest uppercase flex items-center">
+                  <span className="mr-2 opacity-50">&gt;</span>
                   {status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
-                    : (Math.max(liveTotal, currentToolIndex, 1) > 1 
+                    : (Math.max(liveTotal, currentToolIndex, 1) > 1
                         ? `${progressDescriptor.label} ${currentToolIndex}/${Math.max(liveTotal, currentToolIndex, 1)}`
                         : progressDescriptor.label
                       )}
+                  <motion.span
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+                    className="ml-1 inline-block w-1.5 h-3 bg-primary"
+                  />
                 </span>
               </div>
-              <div className="relative w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+
+              {/* Cyber-Tactical Progress Bar */}
+              <div className="relative w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/10 shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
+                {/* Segmented hash marks background */}
+                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNCIgaGVpZ2h0PSI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjQiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] opacity-50" />
+
                 <motion.div
-                  className="absolute top-0 bottom-0 bg-primary rounded-full"
+                  className="absolute top-0 bottom-0 bg-primary rounded-full relative overflow-hidden"
                   animate={{
                     width: status === "checking" ? "100%" : `${(currentToolIndex / liveTotal) * 100}%`,
                   }}
-                  transition={{ duration: 0.16 }}
-                />
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  style={{ boxShadow: "0 0 10px rgba(var(--color-primary-rgb), 0.5)" }}
+                >
+                  {/* Infinite Light Sweep effect */}
+                  <motion.div
+                    className="absolute top-0 bottom-0 left-0 w-full bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                    animate={{ x: ["-100%", "200%"] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                  />
+                </motion.div>
               </div>
-
             </motion.div>
           )}
 

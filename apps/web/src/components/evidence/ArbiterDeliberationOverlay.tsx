@@ -73,79 +73,80 @@ export function ArbiterDeliberationOverlay({
           key="arbiter-overlay"
           aria-busy="true"
           aria-label="Consensus Synthesis in progress"
-          className="fixed inset-x-0 top-16 bottom-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
+          className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-black/80 backdrop-blur-3xl overflow-hidden"
           initial={prefersReducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeIn" } }}
-          transition={{ duration: 0.16, ease: "easeOut" }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.3, ease: "easeIn" } }}
         >
-          <div className="relative z-10 w-full max-w-xl mx-auto border-l-2 border-success/40 pl-8 md:pl-12 py-4">
+          {/* --- Atmospheric Backgrounds --- */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] pointer-events-none z-0" />
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white,transparent)] opacity-40 z-0" />
 
-            {/* Status indicator — same structure as LoadingOverlay, success tokens */}
-            <div className="flex items-center gap-4 mb-10">
-              <div className="relative w-8 h-8 flex items-center justify-center border border-success/30 rounded-2xl bg-success/5">
-                <ShieldCheck className="w-4 h-4 text-success" aria-hidden="true" />
+          <div className="relative z-10 w-full max-w-2xl mx-auto p-10 bg-white/[0.02] border border-success/20 rounded-3xl shadow-[0_0_50px_rgba(var(--color-success-rgb),0.1)]">
+
+            <div className="flex items-center gap-4 mb-8">
+              <div className="relative w-10 h-10 flex items-center justify-center border border-success/40 rounded-xl bg-success/10 shadow-[0_0_15px_rgba(var(--color-success-rgb),0.4)]">
+                <ShieldCheck className="w-5 h-5 text-success" aria-hidden="true" />
               </div>
-              <span className="fc-eyebrow fc-text-muted">
-                Council Arbiter
+              <span className="text-sm font-mono uppercase tracking-widest text-success/80">
+                Council Arbiter Online
               </span>
             </div>
 
-            {/* Title and live text — same structure as LoadingOverlay */}
-            <div className="mb-12 space-y-5">
+            <div className="mb-12 space-y-4">
               <motion.h1
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.16, ease: "easeOut" }}
-                className="text-3xl lg:text-4xl xl:text-5xl font-heading font-black fc-text-primary text-hero-gradient tracking-tight leading-none whitespace-nowrap"
+                initial={prefersReducedMotion ? false : { opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="text-3xl md:text-5xl font-heading font-black text-white tracking-tight"
               >
                 Consensus Synthesis
               </motion.h1>
-              <div className="flex items-center gap-4">
-                <motion.div
-                  className="w-1.5 h-1.5 bg-white/55 rounded-full"
-                  animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
-                  transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                />
+
+              <div className="flex items-start gap-3 h-12">
+                <span className="text-success font-mono mt-0.5">&gt;</span>
                 <motion.p
                   id="arbiter-live-text"
-                  className="text-xs md:text-sm font-mono fc-text-muted"
+                  className="text-sm md:text-base font-mono text-success drop-shadow-[0_0_8px_rgba(var(--color-success-rgb),0.5)] leading-relaxed"
                   role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
                   key={dynamicText}
-                  initial={prefersReducedMotion ? false : { opacity: 0.4, y: 2 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   transition={{ duration: 0.2 }}
                 >
                   {dynamicText}
+                  <motion.span
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.4, repeat: Infinity, repeatType: "reverse" }}
+                    className="inline-block w-2 h-4 bg-success align-middle ml-1"
+                  />
                 </motion.p>
               </div>
             </div>
 
-            {/* Progress bar — same h-1.5 track as LoadingOverlay; success fill + elapsed timer */}
-            <div className="w-full max-w-md" aria-hidden="true">
-              <div className="flex items-center justify-between mb-4 fc-eyebrow fc-text-muted">
-                <span>Council Synthesis</span>
-                <span className="text-success font-mono tabular-nums">{formatTime(elapsed)}</span>
+            {/* Cryptographic Progress Track */}
+            <div className="w-full" aria-hidden="true">
+              <div className="flex items-center justify-between mb-3 text-xs font-mono text-success/60 uppercase tracking-widest">
+                <span>Encryption Status</span>
+                <span className="tabular-nums">T+{formatTime(elapsed)}</span>
               </div>
-              <div className="h-1.5 w-full bg-white/10 rounded-full relative overflow-hidden">
+              <div className="h-2 w-full bg-black/50 border border-success/20 rounded-full relative overflow-hidden">
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-success rounded-full"
+                  style={{ boxShadow: "0 0 10px rgba(var(--color-success-rgb), 0.8)" }}
                   initial={{ width: "0%" }}
                   animate={prefersReducedMotion ? {} : {
-                    width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"],
+                    width: ["0%", "25%", "35%", "65%", "70%", "90%", "95%", "100%"],
                   }}
                   transition={prefersReducedMotion ? {} : {
-                    duration: 3.5,
-                    times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1],
+                    duration: 4,
+                    times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 1],
                     repeat: Infinity,
-                    ease: "linear",
+                    ease: "easeInOut",
                   }}
                 />
               </div>
             </div>
-
           </div>
         </motion.div>
       )}

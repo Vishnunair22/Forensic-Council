@@ -52,24 +52,6 @@ logger = get_logger(__name__)
 _tracer = get_tracer("forensic-council.gemini")
 
 
-# Lazy import to avoid circular dependency at module load time
-def _record_gemini_call(model: str, tokens_in: int = 0, tokens_out: int = 0) -> None:
-    """Fire-and-forget quota recording — does not block the analysis pipeline."""
-    try:
-        import asyncio
-
-        from core.quota_meter import record_api_call
-
-        loop = asyncio.get_running_loop()
-        loop.create_task(record_api_call("gemini", model, tokens_in, tokens_out))
-    except Exception as quota_error:
-        logger.debug(
-            "Failed to record Gemini quota usage",
-            model=model,
-            error=str(quota_error),
-        )
-
-
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 _MAX_RETRIES = 5
 _BASE_BACKOFF = 2.0
@@ -878,7 +860,7 @@ class GeminiVisionClient:
                         )
                     # Record success in circuit breaker and per-session quota meter
                     self._circuit_breaker.record_success()
-                    _record_gemini_call(attempt_model)
+                    pass  # quota tracking removed
                     return finding
                 except _ModelUnavailableError as mue:
                     logger.warning(
