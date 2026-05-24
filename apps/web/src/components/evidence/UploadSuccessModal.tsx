@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { FileText, Music2, X } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 
 export interface UploadSuccessModalProps {
@@ -59,9 +59,12 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
 
       <div className="space-y-6 w-full mb-8">
         <div>
-          <p className="fc-eyebrow fc-text-muted mb-2" aria-hidden="true">
-            Status: Secured
-          </p>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
+            <p className="fc-eyebrow fc-text-success uppercase tracking-widest text-[11px]" aria-hidden="true">
+              Status: Secured
+            </p>
+          </div>
           <h2 className="text-xl lg:text-2xl font-heading font-bold fc-text-primary">
             Evidence Ready
           </h2>
@@ -70,12 +73,25 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
         <div role="region" aria-label={`Preview of ${file.name}`} className="relative overflow-hidden fc-surface-quiet">
           <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
             {isAudio && previewUrl ? (
-              <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
-                <Music2 className="w-8 h-8 fc-text-muted" aria-hidden="true" />
+              <div className="w-full px-6 py-8 flex flex-col items-center gap-5">
+                {/* Simulated Waveform Visualizer */}
+                <div className="flex items-end justify-center gap-1.5 h-16 w-full max-w-[280px]" aria-hidden="true">
+                  {[40, 60, 30, 80, 50, 70, 90, 45, 65, 85, 35, 55, 75, 40, 60, 30, 80, 50, 70, 90, 45].map((h, index) => (
+                    <div
+                      key={index}
+                      className="w-[3px] bg-primary/45 rounded-full fc-transition"
+                      style={{
+                        height: `${h}%`,
+                        animation: `fc-marker-blink ${1.2 + (index % 5) * 0.15}s ease-in-out infinite`,
+                      }}
+                    />
+                  ))}
+                </div>
+                
                 <audio
                   controls
                   src={previewUrl}
-                  className="w-full opacity-80 invert grayscale"
+                  className="w-full max-w-[320px] opacity-80 invert grayscale accent-primary scale-95"
                   aria-label={`Audio preview of ${file.name}`}
                 />
               </div>
@@ -98,9 +114,19 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
                 aria-label={`Video preview of ${file.name}`}
               />
             ) : (
-              <div className="flex flex-col items-center gap-3 fc-text-muted">
-                <FileText className="w-8 h-8" strokeWidth={1.5} aria-hidden="true" />
-                <span className="fc-eyebrow fc-text-muted">Data Secured</span>
+              <div className="flex flex-col items-center gap-4 relative z-10 py-6">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10 mb-1 relative">
+                  <FileText className="w-6 h-6 fc-text-secondary" strokeWidth={1.5} aria-hidden="true" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full ring-2 ring-[#02040A] animate-pulse" />
+                </div>
+                <div className="text-center">
+                  <span className="fc-eyebrow fc-text-secondary tracking-widest block mb-1">
+                    CRYPTOGRAPHIC LOCK
+                  </span>
+                  <p className="text-xs fc-text-muted font-mono">
+                    SHA-256 Hash Prepared
+                  </p>
+                </div>
               </div>
             )}
           </div>
