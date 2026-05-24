@@ -51,14 +51,14 @@ export function AgentsSection() {
               viewport: { once: true },
               transition: { duration: 0.16, delay: i * 0.04, ease: "easeOut" },
             })}
-            className="relative flex flex-col items-center text-center group overflow-hidden fc-surface-quiet rounded-2xl p-7 sm:p-8"
+            className="relative flex flex-col items-center text-center group overflow-hidden fc-surface-quiet rounded-2xl p-7 sm:p-8 fc-transition hover:border-primary/40 hover:scale-[1.01]"
           >
             {/* Icon */}
             <div
               className="relative w-12 h-12 flex items-center justify-center mb-5 shrink-0 rounded-2xl bg-white/5 border border-white/10"
               aria-hidden="true"
             >
-              <agent.icon className="w-5 h-5 fc-text-secondary" />
+              <agent.icon className="w-5 h-5 fc-text-secondary fc-transition group-hover:scale-105 group-hover:text-primary" />
             </div>
 
             {/* Badge */}
@@ -77,10 +77,10 @@ export function AgentsSection() {
             {/* Status — static dot, not animate-pulse; these agents are not running on the landing page */}
             <div className="mt-auto pt-5 border-t border-white/10 w-full flex items-center justify-center gap-2">
               <div
-                className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0"
+                className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0 fc-transition group-hover:bg-success group-hover:scale-110"
                 aria-hidden="true"
               />
-              <span className="text-xs fc-text-muted">
+              <span className="text-xs fc-text-muted fc-transition group-hover:text-primary">
                 {agent.name} · Operational
               </span>
             </div>
