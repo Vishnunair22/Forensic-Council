@@ -74,7 +74,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
       <button
         type="button"
         onClick={closeModal}
-        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary fc-transition fc-focus-ring rounded-full cursor-pointer"
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer"
         aria-label="Close upload dialog"
       >
         <X className="w-5 h-5" aria-hidden="true" />

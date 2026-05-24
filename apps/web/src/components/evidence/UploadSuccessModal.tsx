@@ -52,7 +52,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
         onClick={closeModal}
         aria-label="Close evidence dialog"
         data-testid="success-modal-close"
-        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary fc-transition fc-focus-ring rounded-full cursor-pointer"
+        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer"
       >
         <X className="w-5 h-5" aria-hidden="true" />
       </button>
@@ -67,7 +67,7 @@ export function UploadSuccessModal({ file, onNewUpload, onStartAnalysis, onDismi
           </h2>
         </div>
 
-        <div role="region" aria-label={`Preview of ${file.name}`} className="relative overflow-hidden border border-white/10 rounded-2xl bg-white/[0.03]">
+        <div role="region" aria-label={`Preview of ${file.name}`} className="relative overflow-hidden fc-surface-quiet">
           <div className="aspect-video w-full flex items-center justify-center overflow-hidden relative">
             {isAudio && previewUrl ? (
               <div className="w-full px-6 py-8 flex flex-col items-center gap-4">
