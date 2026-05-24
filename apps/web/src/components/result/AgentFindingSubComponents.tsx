@@ -295,21 +295,21 @@ const STATUS_CONFIG = {
 };
 
 const METRIC_EMPHASIS_CLS: Record<Metric["emphasis"], { wrap: string; label: string; value: string }> = {
- danger: {
-  wrap: "bg-transparent border-danger/30",
-  label: "text-danger/80",
-  value: "text-danger",
- },
- warn: {
-  wrap: "bg-transparent border-warning/25",
-  label: "text-warning/80",
-  value: "text-warning",
- },
- ok: {
-  wrap: "bg-transparent border-primary/22",
-  label: "text-primary/80",
-  value: "text-primary",
- },
+  danger: {
+   wrap: "bg-transparent border-danger/30",
+   label: "text-[#fca5a5]",
+   value: "text-danger",
+  },
+  warn: {
+   wrap: "bg-transparent border-warning/25",
+   label: "text-warning/80",
+   value: "text-warning",
+  },
+  ok: {
+   wrap: "bg-transparent border-primary/22",
+   label: "text-primary",
+   value: "text-primary",
+  },
  neutral: {
   wrap: "bg-transparent border-white/[0.10]",
   label: "fc-text-muted",
@@ -478,7 +478,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
     </div>
    )}
    {status === "error" && (
-    <div className="pl-[54px] flex items-center gap-2 text-xs text-danger/75 font-semibold">
+    <div className="pl-[54px] flex items-center gap-2 text-xs text-[#fca5a5] font-semibold">
      <XCircle className="w-3.5 h-3.5 shrink-0" />
      Tool did not complete — treat as a coverage gap.
     </div>

@@ -54,7 +54,7 @@ export function IntelligenceBrief({
         <span className={clsx(
           "fc-eyebrow px-2.5 py-1 rounded border",
           isDeepPhase
-            ? "text-success/75 border-success/20 bg-success/5"
+            ? "text-[#bbf7d0] border-success/20 bg-success/5"
             : "fc-text-muted border-white/10"
         )}>
           {isDeepPhase ? "Deep Analysis" : "Initial Analysis"}

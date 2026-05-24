@@ -154,7 +154,7 @@ export function ExecutionTimeline({
                   {isComplete ? (
                      <div className="w-2 h-2 rounded-full bg-success shadow-[0_0_8px_rgba(var(--color-success-rgb),0.8)]" />
                   ) : (
-                     <span className="text-[10px] font-mono leading-none" style={accent ? { color: accent.color } : {}}>+</span>
+                     <span className="text-[10px] font-mono leading-none" style={accent ? { color: accent.color } : {}} aria-hidden="true">+</span>
                   )}
                 </div>
 
@@ -163,7 +163,7 @@ export function ExecutionTimeline({
                     <p
                       className={clsx(
                         "text-sm font-mono tracking-wide uppercase",
-                        step.dot === "skip" ? "fc-text-muted opacity-50" : "fc-text-secondary",
+                        step.dot === "skip" ? "fc-text-muted" : "fc-text-secondary",
                         step.dot === "complete" && "text-success font-bold drop-shadow-sm"
                       )}
                       style={step.dot === "agent" && accent ? { color: accent.color } : undefined}
@@ -181,7 +181,7 @@ export function ExecutionTimeline({
                   {/* Server-style Timestamp */}
                   {step.time && (
                     <div className="shrink-0 bg-black/40 border border-white/5 rounded px-2 py-1 flex items-center">
-                      <span className="text-xs font-mono text-primary/70">{step.time}</span>
+                      <span className="text-xs font-mono text-primary">{step.time}</span>
                     </div>
                   )}
                 </div>

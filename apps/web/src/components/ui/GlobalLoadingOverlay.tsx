@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
@@ -15,9 +16,18 @@ import { STORAGE_KEYS } from "@/lib/storageKeys";
 const EVIDENCE_MAX_DISPLAY_MS = 8_000;
 
 export function GlobalLoadingOverlay() {
-  const [show, setShow] = useState(false);
-  const [liveText, setLiveText] = useState("Opening evidence analysis...");
-  const [dispatchedCount, setDispatchedCount] = useState(0);
+  const [show, setShow] = useState(() => sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true");
+  const [liveText, setLiveText] = useState(() => {
+    const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT);
+    return stored || "Opening evidence analysis...";
+  });
+  const [dispatchedCount, setDispatchedCount] = useState(() => {
+    const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
+    return stored ? parseInt(stored, 10) || 0 : 0;
+  });
+  const [arbiterTransition, setArbiterTransition] = useState(() =>
+    sessionOnlyStorage.getItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING) === "1"
+  );
   const pathname = usePathname();
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -33,16 +43,6 @@ export function GlobalLoadingOverlay() {
       safetyTimerRef.current = null;
     }
   };
-
-  // Hydrate from sessionStorage once on mount
-  useEffect(() => {
-    const shouldShow = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
-    setShow(shouldShow);
-    const storedText = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT);
-    if (storedText) setLiveText(storedText);
-    const storedCount = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-    if (storedCount) setDispatchedCount(parseInt(storedCount, 10) || 0);
-  }, []);
 
   // Listen for storage updates dispatched by useInvestigation
   useEffect(() => {
@@ -66,6 +66,8 @@ export function GlobalLoadingOverlay() {
         setLiveText(value || "Opening evidence analysis...");
       } else if (key === STORAGE_KEYS.FC_LOADING_DISPATCHED) {
         setDispatchedCount(value ? parseInt(value, 10) || 0 : 0);
+      } else if (key === STORAGE_KEYS.FC_ARBITER_TRANSITIONING) {
+        setArbiterTransition(value === "1");
       }
     };
     window.addEventListener("fc_storage_update", handleStorageUpdate);
@@ -75,7 +77,8 @@ export function GlobalLoadingOverlay() {
   // Route-change dismissal logic
   useEffect(() => {
     if (pathname !== "/" && !pathname.startsWith("/evidence")) {
-      // Left the active pathways — always dismiss immediately
+      // Left the active pathways — dismiss evidence loading overlay,
+      // but don't dismiss arbiter transition overlay (handled by useResult)
       dismiss();
       return;
     }
@@ -99,14 +102,20 @@ export function GlobalLoadingOverlay() {
   }, [pathname, show]);
 
   return (
-    <AnimatePresence>
-      {show && (
-        <LoadingOverlay
-          key="global-loading"
-          liveText={liveText}
-          dispatchedCount={dispatchedCount}
-        />
-      )}
-    </AnimatePresence>
+    <>
+      <AnimatePresence>
+        {show && !arbiterTransition && (
+          <LoadingOverlay
+            key="global-loading"
+            liveText={liveText}
+            dispatchedCount={dispatchedCount}
+          />
+        )}
+      </AnimatePresence>
+      <ArbiterDeliberationOverlay
+        isVisible={arbiterTransition}
+        liveText="Report confirmed ready. Loading result page..."
+      />
+    </>
   );
 }

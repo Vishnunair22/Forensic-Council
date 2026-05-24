@@ -87,7 +87,7 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
           {cells.map((c) => (
             <div key={c.label}>
               <div className="fc-eyebrow fc-text-muted mb-1">{c.label}</div>
-              <div className="text-xs font-mono fc-text-muted">{c.value}</div>
+              <div className="text-sm font-mono fc-text-muted">{c.value}</div>
             </div>
           ))}
         </div>
@@ -97,7 +97,7 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
           <div className="pt-4 border-t border-white/[0.04]">
             <div className="fc-eyebrow fc-text-muted mb-2">Cryptographic Hash</div>
             <div className="flex items-center gap-3">
-              <p className="text-xs font-mono fc-text-muted truncate flex-1 min-w-0">
+              <p className="text-sm font-mono fc-text-muted truncate flex-1 min-w-0">
                 {signature}
               </p>
               <button

@@ -160,7 +160,7 @@ function ActiveAgentsPanel({ visibleAgents = [], agentUpdates = {}, completedAge
                   {/* Name + live status */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium fc-text-primary leading-none">{agent.name}</p>
-                    <p className="text-xs fc-text-secondary mt-1 truncate leading-none">
+                    <p className="text-sm fc-text-secondary mt-1 truncate leading-none">
                       {status === "running" && toolDesc.label}
                       {status === "checking" && "Synchronizing with pipeline..."}
                       {status === "validating" && "Verifying chain of custody..."}
@@ -250,7 +250,7 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
                   <Icon className="w-4 h-4 shrink-0 fc-text-muted" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium fc-text-secondary leading-none">{agent.name}</p>
-                    <p className="text-xs fc-text-muted mt-1 leading-none">{reason}</p>
+                    <p className="text-sm fc-text-muted mt-1 leading-none">{reason}</p>
                   </div>
                   <span className="fc-eyebrow fc-text-muted shrink-0">N/A</span>
                 </div>
@@ -539,7 +539,7 @@ export function AgentProgressDisplay({
 
       {/* ── Deep analysis decision gate ──────────────────────────────────── */}
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && (awaitingDecision || pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
+        {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && (pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}

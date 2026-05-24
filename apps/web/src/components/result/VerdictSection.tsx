@@ -16,10 +16,10 @@ interface VerdictSectionProps {
   agentCount: number;
 }
 
-const VERDICT_THEMES: Record<string, { color: string; colorRgb: string }> = {
-  emerald: { color: "var(--color-success-light)", colorRgb: "var(--color-success-light-rgb)" },
-  red:     { color: "var(--color-danger)",        colorRgb: "var(--color-danger-rgb)"        },
-  amber:   { color: "var(--color-warning)",       colorRgb: "var(--color-warning-rgb)"       },
+const VERDICT_THEMES: Record<string, { color: string; colorRgb: string; labelColor: string }> = {
+  emerald: { color: "var(--color-success-light)", colorRgb: "var(--color-success-light-rgb)", labelColor: "var(--color-success-light)" },
+  red:     { color: "var(--color-danger)",        colorRgb: "var(--color-danger-rgb)",        labelColor: "#fca5a5" },
+  amber:   { color: "var(--color-warning)",       colorRgb: "var(--color-warning-rgb)",       labelColor: "var(--color-warning)" },
 };
 
 export function VerdictSection({
@@ -69,7 +69,7 @@ export function VerdictSection({
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: theme.color }} />
-                <div className="text-xs font-mono tracking-widest uppercase" style={{ color: theme.color }}>
+                <div className="text-xs font-mono tracking-widest uppercase" style={{ color: theme.labelColor }}>
                   Official Council Verdict &middot; {isDeepPhase ? "Deep" : "Initial"}
                 </div>
               </div>
@@ -103,7 +103,7 @@ export function VerdictSection({
         )}
 
         {agentCount > 0 && (
-          <p className="mt-3 text-xs font-mono fc-text-muted">
+          <p className="mt-3 text-xs font-mono" style={{ color: theme.labelColor }}>
             Signed {isDeepPhase ? "deep-analysis" : "initial-analysis"} report &middot; {agentCount} active agent{agentCount === 1 ? "" : "s"} &middot; {confPct}% aggregate confidence.
           </p>
         )}

@@ -95,7 +95,7 @@ export function FindingsMetadata({ report, activeAgentIds }: FindingsMetadataPro
           <div>
             <div className="fc-eyebrow fc-text-muted mb-3">Tool Execution Log</div>
             <div className="border border-white/[0.06] rounded-xl overflow-hidden">
-             <table className="w-full text-xs font-mono" aria-label="Tool execution log">
+             <table className="w-full text-sm font-mono" aria-label="Tool execution log">
                 <thead>
                   <tr className="border-b border-white/[0.06] bg-white/[0.02]">
                     <th scope="col" className="px-3 py-2 text-left fc-text-muted font-medium">#</th>

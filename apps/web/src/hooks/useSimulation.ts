@@ -1056,6 +1056,8 @@ const resumeInvestigation = useCallback(
     setIsDeepHITL(false);
     setPipelineMessage("Beginning deep analysis...");
     setPipelineThinking("");
+    setStatus("analyzing");
+    expectingPipelineCompleteRef.current = false;
   }, []);
 
 

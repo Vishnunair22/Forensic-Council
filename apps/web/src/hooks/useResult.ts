@@ -62,7 +62,12 @@ export function useResult(initialSessionId?: string) {
   // avoid server/client mismatch on first paint.
   const [mounted, setMounted] = useState(false);
   const [reportAlreadyReady, setReportAlreadyReady] = useState(false);
-  const [state, setState] = useState<PageState>("arbiter");
+  const [state, setState] = useState<PageState>(() => {
+    if (typeof window === "undefined") return "arbiter";
+    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1"
+      ? "ready"
+      : "arbiter";
+  });
   const [report, setReport] = useState<ReportDTO | null>(null);
   const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
   const [errorMsg, setErrorMsg] = useState("");
@@ -74,8 +79,14 @@ export function useResult(initialSessionId?: string) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [agentTimeline, setAgentTimeline] = useState<AgentUpdate[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId ?? null);
-  const [minOverlayDone, setMinOverlayDone] = useState(false);
-  const [arbiterComplete, setArbiterComplete] = useState(false);
+  const [minOverlayDone, setMinOverlayDone] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
+  });
+  const [arbiterComplete, setArbiterComplete] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
+  });
 
   const historySavedRef = useRef(false);
   const { playSound } = useSound();
@@ -102,10 +113,9 @@ export function useResult(initialSessionId?: string) {
     setAgentTimeline(loadAgentTimelineForSession(sid, deep));
 
     if (ready) {
-      setState("loading");
       setArbiterMsg("Decrypting forensic ledger...");
-      setMinOverlayDone(true);
-      setArbiterComplete(true);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
     }
 
     setMounted(true);
@@ -116,10 +126,7 @@ export function useResult(initialSessionId?: string) {
   useEffect(() => {
     if (!mounted) return;
     document.body.removeAttribute("data-fc-loading");
-    if (reportAlreadyReady) {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
-      return;
-    }
+    if (reportAlreadyReady) return;
     if (minOverlayDone) return;
     const timer = setTimeout(() => setMinOverlayDone(true), 800);
     return () => clearTimeout(timer);
@@ -253,7 +260,7 @@ export function useResult(initialSessionId?: string) {
         if (s.status === "complete") {
           setArbiterComplete(true);
           setArbiterMsg("Decrypting forensic ledger...");
-          setState("loading");
+          setState("ready");
           return;
         } else if (s.status === "error") {
           setErrorMsg(s.message || "Investigation failed");

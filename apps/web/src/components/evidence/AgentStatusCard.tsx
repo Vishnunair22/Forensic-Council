@@ -399,12 +399,12 @@ function AgentBrief({ completedData, findings, toolsRan }: AgentBriefProps) {
 
   // Render styling based on status
   const containerStyle = isAlert
-    ? "bg-danger/[0.02] border-danger/15 text-danger/90"
+    ? "bg-danger/[0.04] border-danger/20 text-[#fca5a5]"
     : isInconclusive
-    ? "bg-warning/[0.02] border-warning/15 text-warning/90"
+    ? "bg-warning/[0.04] border-warning/20 text-[#fde68a]"
     : isClean
-    ? "bg-success/[0.02] border-success/15 text-success/90"
-    : "bg-white/[0.01] border-white/5 text-white/90";
+    ? "bg-success/[0.04] border-success/20 text-[#bbf7d0]"
+    : "bg-white/[0.01] border-white/5 fc-text-primary";
 
   const iconColor = isAlert
     ? "text-danger"
@@ -442,7 +442,7 @@ function AgentBrief({ completedData, findings, toolsRan }: AgentBriefProps) {
         )}
       </div>
 
-      <div className={`text-xs md:text-sm leading-relaxed border p-3.5 rounded-xl transition-all duration-[160ms] ${containerStyle}`}>
+      <div className={`text-sm leading-relaxed border p-3.5 rounded-xl transition-all duration-[160ms] ${containerStyle}`}>
         {brief}
       </div>
     </div>
@@ -782,7 +782,7 @@ export function AgentStatusCard({
                    <button
                      type="button"
                      onClick={() => onToggleExpand?.()}
-                     className="fc-btn-secondary w-full gap-2 mt-2 text-xs"
+                      className="fc-btn-secondary w-full gap-2 mt-2 text-sm"
                      aria-expanded={isExpanded}
                    >
                      {isExpanded
@@ -813,7 +813,7 @@ export function AgentStatusCard({
                   animate={{ opacity: 1, y: 0 }}
                   exit={prefersReduced ? {} : { opacity: 0, transition: { duration: 0.1 } }}
                   transition={{ duration: 0.16 }}
-                  className="max-w-[280px] text-xs fc-text-muted font-normal leading-relaxed"
+                  className="max-w-[280px] text-sm fc-text-muted font-normal leading-relaxed"
                 >
                   {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                 </motion.p>
@@ -826,20 +826,20 @@ export function AgentStatusCard({
                <div className="w-12 h-12 rounded-2xl bg-transparent border border-white/5 flex items-center justify-center fc-text-muted">
                   <Activity className="w-6 h-6" />
                </div>
-               <p className="max-w-xs text-xs fc-text-muted font-normal leading-relaxed">
-                 {sanitizeThinking(thinking) || "Investigation is queued. Waiting for an available forensic worker..."}
+               <p className="max-w-xs text-sm fc-text-muted font-normal leading-relaxed">
+                  {sanitizeThinking(thinking) || "Investigation is queued. Waiting for an available forensic worker..."}
                </p>
             </div>
           ) : status === "waiting" ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-12">
-               <span className="text-xs fc-text-muted font-normal">Standing by — payload not yet received</span>
+               <span className="text-sm fc-text-muted font-normal">Standing by — payload not yet received</span>
             </div>
           ) : status === "unsupported" ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">
               <div className="w-12 h-12 rounded-2xl bg-transparent border border-white/5 flex items-center justify-center fc-text-muted">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <p className="max-w-xs text-xs fc-text-muted font-normal leading-relaxed">
+              <p className="max-w-xs text-sm fc-text-muted font-normal leading-relaxed">
                 {sanitizeThinking(liveUpdate?.thinking || thinking) ||
                   completedData?.message ||
                   "This specialist does not support the submitted file type."}

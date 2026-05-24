@@ -212,11 +212,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     completedAgentsRef.current = completedAgents;
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (completedAgents.length > 0 && status !== "idle" && sid) {
-      storage.setItem(
-        phase === "deep" ? `${STORAGE_KEYS.DEEP_AGENTS}:${sid}` : `${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`,
-        completedAgents,
-        true,
-      );
+      const key = phase === "deep" && status !== "awaiting_decision"
+        ? `${STORAGE_KEYS.DEEP_AGENTS}:${sid}`
+        : phase === "initial"
+          ? `${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`
+          : null;
+      if (key) storage.setItem(key, completedAgents, true);
     }
   }, [completedAgents, phase, status]);
 
@@ -358,7 +359,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
 
       try {
-        await authReadyRef.current;
+        await (__pendingFileStore.authPromise ?? Promise.resolve());
         if (getAuthToken() === null) {
           await autoLoginAsInvestigator().then(() => {
             storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
@@ -689,7 +690,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   };
 
   const handleAcceptAnalysis = useCallback(async () => {
-    if (isNavigating || resumeInFlightRef.current) return;
+    if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
     playSound("click");
     playSound("arbiter_start");
@@ -712,6 +713,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (!ok) throw new Error("Report synthesis timed out");
 
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
       router.push(`/result/${sid}`, { scroll: true });
@@ -735,25 +737,24 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const handleDeepAnalysis = useCallback(async () => {
     if (investigationInFlightRef.current || resumeInFlightRef.current) return;
     investigationInFlightRef.current = true;
+    resumeInFlightRef.current = true;
     playSound("click");
     playSound("scan");
     storage.setItem(STORAGE_KEYS.IS_DEEP, "true");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
+    // Capture the final initial-phase snapshot before any clearing
+    const initialAgentSnapshot = (completedAgentsRef.current as AgentUpdate[]).filter(
+      (a) => a.status !== "skipped",
+    );
     if (sid) {
       storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "deep");
-      // Save only non-skipped initial agents so the deep-phase card list stays correct
-      const nonSkipped = (completedAgentsRef.current as AgentUpdate[]).filter(
-        (a) => a.status !== "skipped",
-      );
-      storage.setItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, nonSkipped, true);
+      storage.setItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, initialAgentSnapshot, true);
       sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`, "deep");
-      // Remove any stale deep agents so the result page doesn't show initial findings
       storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
     }
     analysisCompleteSoundedRef.current = false;
     clearPipelineThinking();
     clearCompletedAgents();
-    // Also wipe the ref so the storage effect doesn't re-save the cleared array under the wrong key
     completedAgentsRef.current = [];
     setPhase("deep");
     try {
@@ -771,6 +772,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
     } finally {
       investigationInFlightRef.current = false;
+      resumeInFlightRef.current = false;
     }
   }, [playSound, resumeInvestigation, clearCompletedAgents, clearPipelineThinking, setSimulationPhase]);
 
@@ -831,7 +833,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [resetSimulation, playSound, router]);
 
   const handleViewResults = useCallback(async () => {
-    if (isNavigating || resumeInFlightRef.current) return;
+    if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
     playSound("click");
     playSound("arbiter_start");
@@ -852,6 +854,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (!ok) throw new Error("Report synthesis timed out");
 
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
       router.push(`/result/${sid}`, { scroll: true });

@@ -107,7 +107,7 @@ export function HeroAuthActions() {
 
     clearInvestigationPersistence();
     __pendingFileStore.file = selectedFile;
-    await savePendingEvidenceFile(selectedFile).catch((error) => {
+    savePendingEvidenceFile(selectedFile).catch((error) => {
       console.warn("[HeroAuthActions] could not persist pending file:", error);
     });
     sessionOnlyStorage.setItem(STORAGE_KEYS.AUTO_START, "true");

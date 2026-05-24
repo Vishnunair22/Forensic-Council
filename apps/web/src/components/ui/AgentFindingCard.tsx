@@ -490,7 +490,7 @@ export function AgentFindingCard({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2.5 text-xs font-mono font-bold fc-text-muted flex-wrap">
+            <div className="flex items-center gap-2.5 text-sm font-mono font-bold fc-text-muted flex-wrap">
               <span>{meta.role}</span>
               <span className="text-white/25">·</span>
               <span>{realFindings.length} checks</span>

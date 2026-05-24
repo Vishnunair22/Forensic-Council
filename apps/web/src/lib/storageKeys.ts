@@ -39,4 +39,5 @@ export const STORAGE_KEYS = {
   FC_PENDING_FILE_META: "fc_pending_file_meta",
   FC_RESUME_REQUESTED: "fc_resume_requested",
   FC_HANDOFF_FIRED: "fc_handoff_fired",
+  FC_ARBITER_TRANSITIONING: "fc_arbiter_transitioning",
 } as const;

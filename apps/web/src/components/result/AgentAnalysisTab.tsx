@@ -27,7 +27,7 @@ export function AgentAnalysisTab({
           transition={{ duration: 4, ease: "linear", repeat: Infinity }}
         />
         <TerminalSquare className="w-10 h-10 text-primary/20 mb-4" aria-hidden="true" />
-        <p className="text-sm font-mono uppercase tracking-widest text-white/40">No raw logs extracted.</p>
+        <p className="text-sm font-mono uppercase tracking-widest fc-text-muted">No raw logs extracted.</p>
       </div>
     );
   }
@@ -41,7 +41,7 @@ export function AgentAnalysisTab({
           </div>
           <h2 className="text-sm font-mono font-bold tracking-widest uppercase text-white/90">Diagnostic Logs</h2>
         </div>
-        <div className="bg-black/40 border border-white/10 px-2 py-0.5 rounded text-[10px] font-mono text-primary uppercase">
+        <div className="bg-black/40 border border-white/10 px-2 py-0.5 rounded text-xs font-mono text-primary uppercase">
           {activeAgentIds.length} Active Node{activeAgentIds.length === 1 ? "" : "s"}
         </div>
       </div>
