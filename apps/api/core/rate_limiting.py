@@ -105,7 +105,11 @@ return {1, redis.call('TTL', KEYS[1])}
 
 async def check_investigation_rate_limit(user_id: str, settings: Settings | None = None) -> None:
     """Limit investigation starts per user, failing open only for Redis failures."""
-    del settings
+    if settings is None:
+        from core.config import get_settings
+        settings = get_settings()
+    if settings.app_env == "development" or settings.debug:
+        return
     now = time.time()
     retry_after = USER_RATE_WINDOW_SECS
     try:
@@ -153,6 +157,12 @@ async def check_daily_cost_quota(
     settings: Settings | None = None,
 ) -> None:
     """Track coarse daily investigation cost before accepting a new upload."""
+    if settings is None:
+        from core.config import get_settings
+        settings = get_settings()
+    if settings.app_env == "development" or settings.debug:
+        return
+
     quota = _quota_for_role(user_role, settings)
     if quota <= 0:
         return

@@ -65,12 +65,12 @@
   --font-mono:    var(--font-jetbrains), "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
 
   /* ── Z-index scale (§25) ── */
-  --z-card:    10;
-  --z-sticky:  20;
-  --z-tooltip: 30;
-  --z-modal:   40;
-  --z-nav:     50;
-  --z-overlay: 60;
+  --z-index-card:    10;
+  --z-index-sticky:  20;
+  --z-index-tooltip: 30;
+  --z-index-modal:   40;
+  --z-index-nav:     50;
+  --z-index-overlay: 60;
 
   /* ── Timing ── */
   --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
@@ -150,6 +150,7 @@
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.04em;
+    white-space: nowrap;
     pointer-events: none;
   }
 

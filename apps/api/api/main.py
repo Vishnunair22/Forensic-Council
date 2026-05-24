@@ -669,6 +669,10 @@ async def rate_limit_middleware(request: Request, call_next):
     ) or request.method == "OPTIONS":
         return await call_next(request)
 
+    settings = _settings_from_app(request)
+    if settings.app_env == "development" or settings.debug:
+        return await call_next(request)
+
     # Identify user (IP or hashed token — never store raw tokens in Redis keys)
     ip = request.client.host if request.client else "unknown"
     auth_header = request.headers.get("Authorization", "")

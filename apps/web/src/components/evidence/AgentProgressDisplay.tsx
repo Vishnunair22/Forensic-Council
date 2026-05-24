@@ -65,7 +65,8 @@ const ALERT_VERDICTS = new Set([
 
 function normalizeVerdict(v?: string): string {
   if (!v) return "Pending";
-  return v.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  const str = typeof v === "string" ? v : String(v);
+  return str.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // ─── Active Agents Panel ────────────────────────────────────────────────────

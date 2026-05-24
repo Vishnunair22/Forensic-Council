@@ -94,7 +94,7 @@ const ALERT_VERDICTS = new Set([
 const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
 function normalizeVerdict(verdict?: string) {
-  const value = (verdict || "INCONCLUSIVE").replace(/_/g, " ");
+  const value = (typeof verdict === "string" ? verdict : (verdict ? String(verdict) : "INCONCLUSIVE")).replace(/_/g, " ");
   return value.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
@@ -446,31 +446,43 @@ export function AgentStatusCard({
   }, [status]);
 
 
-   const findings = React.useMemo(() => {
-     const raw = completedData?.findings_preview || [];
-     const deduped: FindingPreview[] = [];
-     const seen = new Set<string>();
-     for (const f of raw) {
-       const summaryText = (f.summary || "").trim();
-       const hasKeySignal = !!f.key_signal?.trim();
-       const hasVerdict = !!f.verdict && f.verdict !== "INCONCLUSIVE" && f.verdict !== "CLEAN";
-       const _confidence = typeof f.confidence === "number" ? f.confidence : 0;
-       
-       // Only drop the finding if it has no signal at all:
-       // - summary is a template AND no key_signal AND no flagged verdict
-       if (!hasKeySignal && !hasVerdict && isTemplateSummary(summaryText)) continue;
-       
-       // Dedup logic unchanged
-       const toolPart = f.tool || summaryText.slice(0, 90).toLowerCase().trim();
-       const fp = summaryFingerprint(summaryText || f.key_signal || "");
-       const key = `${toolPart}::${(f.verdict || "").toUpperCase()}::${(f.severity || "").toUpperCase()}::${fp}`;
-       if (!seen.has(key)) {
-         deduped.push(f);
-         seen.add(key);
-       }
-     }
-     return deduped.sort((a, b) => rankFinding(a) - rankFinding(b));
-   }, [completedData]);
+    const findings = React.useMemo(() => {
+      const raw = Array.isArray(completedData?.findings_preview) ? completedData.findings_preview : [];
+      const deduped: FindingPreview[] = [];
+      const seen = new Set<string>();
+      for (const f of raw) {
+        if (!f) continue;
+        const rawSummary = typeof f.summary === "string" ? f.summary : (f.summary ? String(f.summary) : "");
+        const rawKeySignal = typeof f.key_signal === "string" ? f.key_signal : (f.key_signal ? String(f.key_signal) : "");
+        const rawVerdict = typeof f.verdict === "string" ? f.verdict : (f.verdict ? String(f.verdict) : "");
+        const rawSeverity = typeof f.severity === "string" ? f.severity : (f.severity ? String(f.severity) : "");
+        const rawTool = typeof f.tool === "string" ? f.tool : (f.tool ? String(f.tool) : "");
+
+        const summaryText = rawSummary.trim();
+        const hasKeySignal = rawKeySignal.trim().length > 0;
+        const hasVerdict = rawVerdict.length > 0 && rawVerdict !== "INCONCLUSIVE" && rawVerdict !== "CLEAN";
+
+        // Only drop the finding if it has no signal at all:
+        // - summary is a template AND no key_signal AND no flagged verdict
+        if (!hasKeySignal && !hasVerdict && isTemplateSummary(summaryText)) continue;
+
+        const toolPart = rawTool || summaryText.slice(0, 90).toLowerCase().trim();
+        const fp = summaryFingerprint(summaryText || rawKeySignal);
+        const key = `${toolPart}::${rawVerdict.toUpperCase()}::${rawSeverity.toUpperCase()}::${fp}`;
+        if (!seen.has(key)) {
+          deduped.push({
+            ...f,
+            summary: rawSummary,
+            key_signal: rawKeySignal,
+            verdict: rawVerdict,
+            severity: rawSeverity,
+            tool: rawTool,
+          });
+          seen.add(key);
+        }
+      }
+      return deduped.sort((a, b) => rankFinding(a) - rankFinding(b));
+    }, [completedData]);
   const verdictScore = completedData?.verdict_score;
   const agentVerdict = completedData?.agent_verdict;
   const isAgentAlert =

@@ -19,7 +19,6 @@ import {
   AGENTS as AGENTS_DATA,
   INVESTIGATION_REQUEST_TIMEOUT_MS,
   ARBITER_POLL_INTERVAL_MS,
-  ANALYSIS_STARTUP_GRACE_MS,
 } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
@@ -689,17 +688,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText("Compiling agent findings...");
-    let navigated = false;
+    let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
-      
+
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
       document.body.setAttribute("data-fc-loading", "1");
-      navigated = true;
+      navigationStarted = true;
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -709,9 +708,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       resumeInFlightRef.current = false;
       setIsNavigating(false);
-      // Always clear the overlay — if navigation succeeded the evidence page
-      // is unmounting; if it failed we must let the user interact again.
-      setArbiterDeliberating(false);
+      // Only clear the overlay if navigation never started. If it did,
+      // the component will unmount when the result page loads — clearing
+      // state here would drop the overlay while the old page is still visible.
+      if (!navigationStarted) {
+        setArbiterDeliberating(false);
+      }
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
@@ -821,15 +823,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText("Final report synthesis requested. Compiling deep analysis findings.");
+    let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
-      
+
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
       document.body.setAttribute("data-fc-loading", "1");
+      navigationStarted = true;
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -838,9 +842,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
     } finally {
       setIsNavigating(false);
-      // Always clear arbiter overlay — navigation either succeeded (page is
-      // transitioning away) or failed (user needs the UI to be interactive).
-      setArbiterDeliberating(false);
+      if (!navigationStarted) {
+        setArbiterDeliberating(false);
+      }
     }
   }, [playSound, resumeInvestigation, router, isNavigating]);
 
@@ -888,64 +892,65 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     autoStartBlocking ||
     !!wsConnectionError;
 
-  // Safety dismissal for reconnects or very fast streams that update state
-  // before the connection promise settles.
-   useEffect(() => {
-     // Wait until the backend has transitioned out of initiating to dismiss.
-     // status !== "idle" && status !== "initiating" means we've started receiving real updates.
-     // Dismiss as soon as either the WS stream is ready (connection established)
-     // OR the pipeline has sent its first real status update. This prevents the
-     // gap between "WS open" and "first AGENT_UPDATE" from holding the overlay.
-     const isActuallyRunning =
-       (status !== "idle" && status !== "initiating") ||
-       (analysisStreamReady && status !== "idle");
-     
-     if (showLoadingOverlay) {
-       if (overlayStartTimeRef.current === 0) {
-         overlayStartTimeRef.current = Date.now();
-       }
-       
-       if (isActuallyRunning) {
-         const elapsed = Date.now() - overlayStartTimeRef.current;
-         const minDuration = 2500; // Keep overlay for at least 2.5s for perceived performance
- 
-         if (elapsed >= minDuration) {
-           setShowLoadingOverlay(false);
-           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-         } else if (!minOverlayTimerRef.current) {
-           minOverlayTimerRef.current = setTimeout(() => {
-             setShowLoadingOverlay(false);
-             sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-             minOverlayTimerRef.current = null;
-           }, minDuration - elapsed);
-         }
-       }
-     } else {
-       // If overlay is hidden, ensure timer is cleared and start time reset
-       if (minOverlayTimerRef.current) {
-         clearTimeout(minOverlayTimerRef.current);
-         minOverlayTimerRef.current = null;
-       }
-       overlayStartTimeRef.current = 0;
-     }
-   }, [showLoadingOverlay, status, analysisStreamReady]);
+  // Overlay dismissal: dismiss as soon as the WebSocket connection is
+  // established (analysisStreamReady) OR the pipeline sends its first
+  // real status update. A 1-second minimum keeps UX smooth; anything
+  // longer is perceived as "blank screen" if the WS is fast.
+  useEffect(() => {
+    // isActuallyRunning is true as soon as:
+    // 1. WS handshake completed (analysisStreamReady), or
+    // 2. Pipeline sent any status update beyond idle/initiating
+    const isActuallyRunning =
+      analysisStreamReady ||
+      (status !== "idle" && status !== "initiating");
+
+    if (showLoadingOverlay) {
+      if (overlayStartTimeRef.current === 0) {
+        overlayStartTimeRef.current = Date.now();
+      }
+
+      if (isActuallyRunning) {
+        const elapsed = Date.now() - overlayStartTimeRef.current;
+        const minDuration = 1000; // 1s minimum for perceived performance
+
+        if (elapsed >= minDuration) {
+          setShowLoadingOverlay(false);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        } else if (!minOverlayTimerRef.current) {
+          minOverlayTimerRef.current = setTimeout(() => {
+            setShowLoadingOverlay(false);
+            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+            minOverlayTimerRef.current = null;
+          }, minDuration - elapsed);
+        }
+      }
+    } else {
+      // If overlay is hidden, ensure timer is cleared and start time reset
+      if (minOverlayTimerRef.current) {
+        clearTimeout(minOverlayTimerRef.current);
+        minOverlayTimerRef.current = null;
+      }
+      overlayStartTimeRef.current = 0;
+    }
+  }, [showLoadingOverlay, status, analysisStreamReady]);
 
 
   useEffect(() => {
     if (!showLoadingOverlay) return;
-    // Hard safety: if the overlay is still up after ANALYSIS_STARTUP_GRACE_MS,
-    // something is stuck. Just dismiss it — the WS/reconnect handlers manage
-    // the session-expired redirect path independently.
+    // Hard safety: if the overlay is still up after 12 seconds, something
+    // is stuck (slow WS, failed auth, etc.). Dismiss unconditionally so the
+    // page is never permanently covered. WS/reconnect handlers independently
+    // manage session-expired redirects.
+    const OVERLAY_HARD_TIMEOUT_MS = 12_000;
     const safety = setTimeout(() => {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-    }, ANALYSIS_STARTUP_GRACE_MS);
+    }, OVERLAY_HARD_TIMEOUT_MS);
     return () => clearTimeout(safety);
   // Only restart timer when showLoadingOverlay changes; don't chain on status
   // to avoid a cascade of timer restarts.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLoadingOverlay]);
 
   // Sync loading state and progress messages to storage for GlobalLoadingOverlay
