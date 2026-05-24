@@ -207,6 +207,7 @@ export function HeroAuthActions() {
                   if (isHandingOff) return;
                   playSound("scan");
                   setIsHandingOff(true);
+                  setShowUpload(false);
                   sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
                   await handleStartAnalysis();
                 }}

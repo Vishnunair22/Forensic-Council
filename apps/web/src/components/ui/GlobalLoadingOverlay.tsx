@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { sessionOnlyStorage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 // Maximum time (ms) the GlobalLoadingOverlay can stay visible on /evidence.
@@ -52,7 +52,14 @@ export function GlobalLoadingOverlay() {
         if (value === "true") {
           setShow(true);
         } else {
-          // useInvestigation cleared the flag — dismiss immediately without dispatching updates back
+          // Grace guard: during handoff (home→evidence), transient dismiss events
+          // from resetSimulation or clearInvestigationPersistence should be ignored.
+          // Only the explicit useInvestigation overlay-dismissal effect (triggered by
+          // analysisStreamReady) and safety timers should hide the overlay.
+          const isMidHandoff =
+            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" &&
+            !storage.getItem(STORAGE_KEYS.SESSION_ID);
+          if (isMidHandoff) return;
           dismiss(false);
         }
       } else if (key === STORAGE_KEYS.FC_LOADING_TEXT) {

@@ -352,8 +352,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
       const caseId = "CASE-" + uuid;
 
-      setShowLoadingOverlay(true);
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
+      if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) !== "true") {
+        setShowLoadingOverlay(true);
+        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
+      }
 
       try {
         await authReadyRef.current;
@@ -584,14 +586,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_HANDOFF_FIRED, "1");
     setFile(pending);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
-    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_PENDING_FILE_META, JSON.stringify({
       name: pending.name,
       type: pending.type,
       size: pending.size,
       updatedAt: Date.now(),
     }), true);
-    setShowLoadingOverlay(true);
     triggerAnalysis(pending);
     };
 
