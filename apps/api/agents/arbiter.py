@@ -251,10 +251,17 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         except Exception as exc:
             logger.debug("Cross-modal fusion failed", error=str(exc))
 
+        has_deep_findings = any(
+            (f.get("metadata") or {}).get("analysis_phase") == "deep"
+            and not (f.get("metadata") or {}).get("gated", False)
+            for f in all_findings
+        )
+
         report = ForensicReport(
             session_id=self.session_id,
             case_id=case_id or f"case_{self.session_id}",
             executive_summary=narratives["executive_summary"],
+            is_deep_analysis=has_deep_findings,
             per_agent_findings=per_agent_findings,
             per_agent_metrics=per_agent_metrics,
             per_agent_analysis=narratives["per_agent_analysis"],
@@ -323,6 +330,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         If the same tool produces different verdicts (e.g. POSITIVE and NEGATIVE),
         both are preserved so the tribunal can deliberate on the inconsistency.
         Otherwise, the highest-confidence finding for a given key is kept.
+        Includes analysis_phase in the dedup key so initial and deep findings
+        for the same tool are both preserved.
         """
         seen, out = {}, []
         for f in findings:
@@ -338,12 +347,17 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             meta = f.get("metadata") or {}
             verdict = evidence_verdict_of(f)
 
-            # Key now includes verdict to ensure contradictions are not deduped away
+            tool = str(meta.get("tool_name", "")) or str(f.get("finding_type", ""))
+            unique_id = str(f.get("finding_id", "")) if not tool else ""
+            phase = str(meta.get("analysis_phase") or "initial")
+
+            # Key now includes verdict and phase to ensure contradictions and
+            # multi-phase findings are not deduped away
             key = (
                 str(f.get("agent_id", "")),
-                str(f.get("finding_type", "")),
-                str(meta.get("tool_name", "")),
+                tool or unique_id,
                 verdict,
+                phase,
             )
 
             if key in seen:

@@ -165,6 +165,10 @@ class ForensicReport(BaseModel):
             "and MUST display a DEGRADED ANALYSIS warning in any UI or printout."
         ),
     )
+    is_deep_analysis: bool = Field(
+        default=False,
+        description="Whether this report includes deep-phase findings.",
+    )
 
 
 # --- Verdict Constants ---

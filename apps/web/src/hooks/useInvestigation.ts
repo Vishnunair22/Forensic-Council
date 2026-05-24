@@ -196,6 +196,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     errorMessage: _errorMessage,
     dismissCheckpoint,
     clearCompletedAgents,
+    clearPipelineThinking,
     revealQueue,
     revealPending,
     restoreSimulationState,
@@ -742,6 +743,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
     }
     analysisCompleteSoundedRef.current = false;
+    clearPipelineThinking();
     clearCompletedAgents();
     // Also wipe the ref so the storage effect doesn't re-save the cleared array under the wrong key
     completedAgentsRef.current = [];
@@ -762,7 +764,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       investigationInFlightRef.current = false;
     }
-  }, [playSound, resumeInvestigation, clearCompletedAgents, setSimulationPhase]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents, clearPipelineThinking, setSimulationPhase]);
 
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);

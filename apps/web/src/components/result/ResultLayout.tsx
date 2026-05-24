@@ -271,8 +271,8 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
-              {/* 5.5. Deep Model Telemetry — only for deep analysis phase */}
-              {rs.isDeepPhase && (
+              {/* 5.5. Deep Model Telemetry — only when cross-modal fusion actually ran */}
+              {rs.report?.cross_modal_fusion && Object.keys(rs.report.cross_modal_fusion).length > 0 && (
                 <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                   <DeepModelTelemetry report={rs.report} />
                 </motion.div>

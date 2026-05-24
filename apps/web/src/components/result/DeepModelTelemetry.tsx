@@ -25,6 +25,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
   );
 
   if (deepFindings.length === 0) return null;
+  if (!report.cross_modal_fusion || Object.keys(report.cross_modal_fusion).length === 0) return null;
 
   const models = Array.from(
     new Set(deepFindings.map((f) => f.finding_type).filter(Boolean))

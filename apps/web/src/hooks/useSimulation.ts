@@ -74,6 +74,7 @@ export const useSimulation = ({
   const [hitlCheckpoint, setHitlCheckpoint] = useState<HITLCheckpoint | null>(
     null,
   );
+  const [isDeepHITL, setIsDeepHITL] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -457,6 +458,10 @@ export const useSimulation = ({
 
                 case "PIPELINE_PAUSED":
                   setStatus("awaiting_decision");
+                  setIsDeepHITL(
+                    (update.data as Record<string, unknown> | undefined)
+                      ?.status === "awaiting_deep_report",
+                  );
                   playSoundRef.current?.("think");
                   break;
 
@@ -891,6 +896,7 @@ export const useSimulation = ({
     completedAgentsRef.current = [];
     setAgentUpdates({});
     setHitlCheckpoint(null);
+    setIsDeepHITL(false);
     try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
     try { storage.removeItem(STORAGE_KEYS.SESSION_ID); } catch { /* ignore */ }
     setErrorMessage(null);
@@ -917,6 +923,7 @@ export const useSimulation = ({
     completedAgentsRef.current = [];
     setAgentUpdates({});
     setHitlCheckpoint(null);
+    setIsDeepHITL(false);
     try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
     setErrorMessage(null);
     setReconnectStatusMessage(null);
@@ -1038,10 +1045,15 @@ const resumeInvestigation = useCallback(
     [],
   );
 
+  const clearPipelineThinking = useCallback(() => {
+    setPipelineThinking("");
+  }, []);
+
   const clearCompletedAgents = useCallback(() => {
     setCompletedAgents([]);
     completedAgentsRef.current = [];
     setAgentUpdates({});
+    setIsDeepHITL(false);
     setPipelineMessage("Beginning deep analysis...");
     setPipelineThinking("");
   }, []);
@@ -1079,9 +1091,11 @@ const resumeInvestigation = useCallback(
     resetSimulation,
     dismissCheckpoint,
     clearCompletedAgents,
+    clearPipelineThinking,
     restoreSimulationState,
     setSimulationPhase,
     hitlCheckpoint,
+    isDeepHITL,
     errorMessage,
     revealQueue: [],
     revealPending: false,

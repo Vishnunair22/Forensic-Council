@@ -272,6 +272,7 @@ class ForensicCouncilPipeline:
                         tools_done = (
                             iteration if isinstance(iteration, int) and iteration > 0 else None
                         )
+                        current_phase = "deep" if getattr(self, "run_deep_analysis_flag", False) else "initial"
                         await broadcast_update(
                             ws_session_id,
                             BriefUpdate(
@@ -285,6 +286,7 @@ class ForensicCouncilPipeline:
                                     "thinking": thinking_text,
                                     "tool_name": tool_name,
                                     "tools_done": tools_done,
+                                    "analysis_phase": current_phase,
                                 },
                             ),
                         )
@@ -631,37 +633,39 @@ class ForensicCouncilPipeline:
         if hasattr(self, "inter_agent_bus"):
             await self.inter_agent_bus.stop()
 
-    async def _run_arbiter_pre_warm(self, agent_results: dict[str, Any], case_id: str) -> None:
+    async def _run_arbiter_pre_warm(self, agent_results: dict[str, Any], case_id: str, *, suppress_broadcasts: bool = False) -> None:
         """Background task to run arbiter pre-warm with UI broadcasting."""
         if not self.arbiter:
             return
         try:
-            from api.routes._session_state import broadcast_update
-            from api.schemas import BriefUpdate
+            if not suppress_broadcasts:
+                from api.routes._session_state import broadcast_update
+                from api.schemas import BriefUpdate
 
-            # Initial broadcast: arbiter preparation started.
-            await broadcast_update(
-                str(self._session_id),
-                BriefUpdate(
-                    type="ARBITER_UPDATE",
-                    session_id=str(self._session_id),
-                    message="Preparing council evidence weights.",
-                    data={"status": "pre_warming", "thinking": "Preparing council evidence weights."},
+                # Initial broadcast: arbiter preparation started.
+                await broadcast_update(
+                    str(self._session_id),
+                    BriefUpdate(
+                        type="ARBITER_UPDATE",
+                        session_id=str(self._session_id),
+                        message="Preparing council evidence weights.",
+                        data={"status": "pre_warming", "thinking": "Preparing council evidence weights."},
+                    )
                 )
-            )
 
             await self.arbiter.pre_warm(agent_results, case_id)
 
-            # Final pre-warm broadcast: metrics are ready for the user decision.
-            await broadcast_update(
-                str(self._session_id),
-                BriefUpdate(
-                    type="ARBITER_UPDATE",
-                    session_id=str(self._session_id),
-                    message="Council evidence weights are ready for your decision.",
-                    data={"status": "pre_warm_complete", "thinking": "Council evidence weights are ready for your decision."},
+            if not suppress_broadcasts:
+                # Final pre-warm broadcast: metrics are ready for the user decision.
+                await broadcast_update(
+                    str(self._session_id),
+                    BriefUpdate(
+                        type="ARBITER_UPDATE",
+                        session_id=str(self._session_id),
+                        message="Council evidence weights are ready for your decision.",
+                        data={"status": "pre_warm_complete", "thinking": "Council evidence weights are ready for your decision."},
+                    )
                 )
-            )
         except Exception as e:
             logger.warning(f"Arbiter pre-warm background task failed: {e}")
 

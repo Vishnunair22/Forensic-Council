@@ -283,3 +283,21 @@ end to end audit plan.md
 
 # ── Generated / Stale Files ──────────────────────────────────────────────────
 apps/web/jest-results.json
+
+# ── Session / Audit / Handoff docs (never commit) ────────────────────────────
+.ai-rules.md
+AUDIT_PROGRESS.md
+PROJECT_HANDOFF.md
+FORENSIC_COUNCIL_AUDIT_SYSTEM.md
+End-to-End_Audit_Plan_*.md
+docs/audits/
+docs/DOCUMENTATION_INVENTORY.md
+
+# ── AI Agent working dirs (opencode, claude, etc.) ───────────────────────────
+.opencode/
+
+# ── Backup / merge artefacts ─────────────────────────────────────────────────
+*.bak
+*.backup
+*.orig
+.directory

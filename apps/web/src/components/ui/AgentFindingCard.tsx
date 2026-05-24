@@ -561,7 +561,8 @@ export function AgentFindingCard({
                   <BulletedText text={parsedNarrative.evidence_assessment} colorClass="bg-primary/40" />
                 </div>
 
-                {/* Deep Cross-Validation Column */}
+                {/* Deep Cross-Validation Column — only shown in deep phase */}
+                {phase === "deep" && (
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                   <div className="flex items-center gap-2 fc-text-primary">
                     <Activity className="w-4 h-4 shrink-0" />
@@ -569,6 +570,7 @@ export function AgentFindingCard({
                   </div>
                   <BulletedText text={parsedNarrative.deep_analysis} colorClass="bg-white/25" />
                 </div>
+                )}
 
                 {/* Reliability & Verdict Column */}
                 <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">

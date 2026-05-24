@@ -206,6 +206,10 @@ export function useResult(initialSessionId?: string) {
     if (!finalReportData) return;
     setArbiterComplete(true);
     setReport(finalReportData);
+    // Use the report's authoritative is_deep_analysis field when available
+    if (finalReportData.is_deep_analysis === true || finalReportData.is_deep_analysis === false) {
+      setIsDeepPhase(finalReportData.is_deep_analysis);
+    }
     setState("ready");
     const id = setTimeout(() => {
       soundRef.current("arbiter_done");

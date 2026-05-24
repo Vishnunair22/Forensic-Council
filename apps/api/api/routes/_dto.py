@@ -151,12 +151,21 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         return True
 
     per_agent: dict = {}
+    degraded_findings_summary: dict[str, list[str]] = {}
     paf = _get_val(report, "per_agent_findings", {})
     for agent_id, findings in (paf or {}).items():
         try:
             real = [_to_finding_dto(f) for f in findings if _is_real_finding(f)]
             if real:
                 per_agent[agent_id] = real
+            degraded_tools = []
+            for f in findings:
+                d = _as_dict(f)
+                meta = d.get("metadata") or {}
+                if meta.get("degraded") or meta.get("fallback_reason"):
+                    degraded_tools.append(str(meta.get("tool_name") or d.get("finding_type", "unknown")))
+            if degraded_tools:
+                degraded_findings_summary[agent_id] = degraded_tools
         except Exception as e:
             logger.warning(
                 "Failed to convert findings for agent",
@@ -246,6 +255,8 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         per_agent_narrative_structured=dict(_get_val(report, "per_agent_narrative_structured", {}) or {}),
         summary_structured=dict(_get_val(report, "summary_structured", {}) or {}),
         degradation_flags=list(_get_val(report, "degradation_flags", []) or []),
+        degraded_findings_summary=degraded_findings_summary,
+        is_deep_analysis=bool(_get_val(report, "is_deep_analysis", False)),
         cross_modal_fusion=dict(_get_val(report, "cross_modal_fusion", {}) or {}),
     )
 

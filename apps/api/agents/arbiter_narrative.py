@@ -957,7 +957,7 @@ Write 2-3 sentences only. Do not use bullet points."""
                 )
                 if result:
                     vs, kf, rn = result
-                    return vs, _clean_key_findings(kf), rn
+                    return vs, kf, rn
             except Exception as exc:
                 logger.warning(f"Structured summary LLM call failed: {exc}")
 
@@ -1071,7 +1071,7 @@ Rules:
                     raw = raw[:-3].strip()
             data = json.loads(raw[raw.find("{") : raw.rfind("}") + 1])
             vs = str(data.get("verdict_sentence", ""))
-            kf = _clean_key_findings([str(x) for x in data.get("key_findings", []) if x])
+            kf = [str(x) for x in data.get("key_findings", []) if x]
             rn = str(data.get("reliability_note", ""))
             if vs and kf and rn:
                 return vs, kf, rn
@@ -1132,9 +1132,9 @@ Rules:
             key=_finding_importance,
             reverse=True,
         )[:5]
-        key_findings_list = _clean_key_findings([
+        key_findings_list = [
             _strip_rs_prefix(_truncate(f.get("reasoning_summary") or "")) for f in top
-        ])
+        ]
         if not key_findings_list:
             key_findings_list = ["No significant findings were identified."]
 
@@ -1205,7 +1205,9 @@ Rules:
         )
 
         has_deep_analysis = any(
-            (f.get("metadata") or {}).get("analysis_phase") == "deep" for f in all_findings
+            (f.get("metadata") or {}).get("analysis_phase") == "deep"
+            and not (f.get("metadata") or {}).get("gated", False)
+            for f in all_findings
         )
 
         if llm_enabled:

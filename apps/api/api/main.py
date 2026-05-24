@@ -182,6 +182,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "after reviewing the terms at https://ai.google.dev/terms"
         )
 
+    # MIME detection dependency check — assert libmagic/pymagic is functional
+    # before accepting any file upload requests.
+    try:
+        import magic
+
+        await asyncio.to_thread(magic.from_buffer, b"\x89PNG\r\n\x1a\n", mime=True)
+        logger.info("MIME detection dependency (libmagic) verified")
+    except ImportError as _mime_err:
+        logger.error(
+            "python-magic is not installed — file uploads will fail with HTTP 503. "
+            "Install it via: pip install python-magic-bin (Windows) or apt install libmagic1 (Linux)."
+        )
+    except Exception as _mime_err:
+        logger.error(
+            "libmagic MIME detection check failed — file uploads may 503. "
+            "Ensure libmagic is installed (e.g., apt install libmagic1).",
+            error=str(_mime_err),
+        )
+
     # Startup
     await start_monitoring(app.state)
     # Assertion: start_monitoring must populate heartbeat_monitor on app.state.

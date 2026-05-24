@@ -153,6 +153,7 @@ class ReportDTO(BaseModel):
     # Per-agent summary of degraded findings (agent → list of tool names that fell back).
     # Shown in the report header so investigators see fallback coverage at a glance.
     degraded_findings_summary: dict[str, list[str]] = Field(default_factory=dict)
+    is_deep_analysis: bool = False
     cross_modal_fusion: dict[str, Any] = Field(default_factory=dict)
 
 

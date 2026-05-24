@@ -376,6 +376,28 @@ async def run_agents_concurrent(
 
             aname = AGENT_NAMES.get(aid, aid)
             preview = []
+
+            # Humanized tool names for frontend progress display
+            tool_display_names = {
+                "extract_text_from_image": "Forensic OCR",
+                "file_hash_verify": "Hash Verification",
+                "analyze_image_content": "Semantic Audit",
+                "frequency_domain_analysis": "FFT Noise Scan",
+                "neural_fingerprint": "Neural Fingerprint",
+                "diffusion_artifact_detector": "Diffusion Scan",
+                "object_detection": "Structural Audit",
+                "scene_incongruence": "Contextual Scan",
+                "hex_signature_scan": "Binary Signature",
+                "compression_risk_audit": "Compression Scan",
+                "provenance_chain_verify": "C2PA Provenance",
+                "timestamp_analysis": "Chronology Audit",
+                "file_structure_analysis": "Structure Check",
+                "gemini_deep_forensic": "Multimodal Synthesis",
+            }
+
+            def _normalize_tool_name(raw: str) -> str:
+                return tool_display_names.get(raw, raw.replace("_", " ").title())
+
             synthesis = (
                 getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
             )
@@ -464,7 +486,7 @@ async def run_agents_concurrent(
                             continue
                         preview.append(
                             {
-                                "tool": tool_name,
+                                "tool": _normalize_tool_name(tool_name),
                                 "summary": summary[:560],
                                 "severity": section.get("severity") or "LOW",
                                 "verdict": str(synthesis_data.get("verdict") or "INCONCLUSIVE"),
@@ -540,13 +562,13 @@ async def run_agents_concurrent(
                         artifact=evidence_artifact,
                     )
                     if human_summary is None:
-                        continue
+                        human_summary = s[:240] if s else f"{tool or 'Tool'} completed."
 
                     if tool_key:
                         seen_raw_tools.add(tool_key)
                     preview.append(
                         {
-                            "tool": tool,
+                            "tool": _normalize_tool_name(str(tool or "")),
                             "summary": human_summary[:640],
                             "severity": sev,
                             "verdict": tv,
@@ -707,6 +729,9 @@ async def run_agents_concurrent(
                 f"{aid} file type validation in progress.",
                 agent_inst=inst,
             )
+            # Yield the event loop so the "validating" state renders in the UI
+            # before immediately overwriting with "running" or "skipped"
+            await asyncio.sleep(0)
 
             supported = inst.supports_uploaded_file
 
@@ -855,7 +880,7 @@ async def run_agents_concurrent(
     try:
         _initial_norm = pipeline._normalize_agent_results(initial_results)
         pipeline._pre_warm_task = asyncio.create_task(
-            pipeline._run_arbiter_pre_warm(_initial_norm, "")
+            pipeline._run_arbiter_pre_warm(_initial_norm, "", suppress_broadcasts=True)
         )
     except Exception as _pw_err:
         logger.debug("Phase-1 pre-warm task creation failed", error=str(_pw_err))
@@ -863,6 +888,24 @@ async def run_agents_concurrent(
     if not await _await_deep_analysis_decision(pipeline, session_id):
         logger.info("Deep analysis skipped by analyst decision", session_id=str(session_id))
         return initial_results
+
+    # Broadcast deep analysis start so the frontend transitions immediately
+    try:
+        from api.routes._session_state import broadcast_update
+        from api.schemas import BriefUpdate
+
+        await broadcast_update(
+            str(session_id),
+            BriefUpdate(
+                type="AGENT_UPDATE",
+                session_id=str(session_id),
+                agent_id=None,
+                message="Deep forensic analysis initiated.",
+                data={"status": "processing", "analysis_phase": "deep", "thinking": "Dispatching deep forensic tools..."},
+            ),
+        )
+    except Exception:
+        pass
 
     # --- Phase 2: Deep passes with early context sync ----------------------
 
@@ -954,7 +997,7 @@ async def run_agents_concurrent(
                     aid,
                     "complete",
                     f"{aid} deep analysis complete.",
-                    findings=deep_only if deep_only else None,
+                    findings=deep_only,
                     agent_inst=a_inst,
                     initial_tool_names=initial_tool_names,
                     analysis_phase="deep",
@@ -1150,10 +1193,10 @@ async def _await_deep_analysis_decision(
     # The frontend can legitimately call /resume a moment before the worker
     # reaches this pause gate (agent cards may finish revealing before this
     # coroutine writes the paused metadata). Preserve and consume that early
-    # decision instead of deleting it, otherwise deep analysis appears to start
-    # successfully from the API response but the worker waits forever here.
+    # decision atomically with GETDEL instead of the racy GET+DELETE pattern
+    # that could lose a decision written between the two operations.
     try:
-        raw_pre_gate_decision = await redis.get(decision_key)
+        raw_pre_gate_decision = await redis.getdel(decision_key)
         if raw_pre_gate_decision:
             decision = json.loads(raw_pre_gate_decision)
             if isinstance(decision, dict):
@@ -1164,10 +1207,22 @@ async def _await_deep_analysis_decision(
                     deep_analysis=pipeline.run_deep_analysis_flag,
                 )
                 return pipeline.run_deep_analysis_flag
+    except AttributeError:
+        # Redis < 6.2 does not support GETDEL; fall back to racy GET+DELETE
+        try:
+            raw_pre_gate_decision = await redis.get(decision_key)
+            if raw_pre_gate_decision:
+                decision = json.loads(raw_pre_gate_decision)
+                if isinstance(decision, dict):
+                    pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                    return pipeline.run_deep_analysis_flag
+        except Exception as pre_gate_err:
+            logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
+        finally:
+            await redis.delete(decision_key)
     except Exception as pre_gate_err:
         logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
-
-    await redis.delete(decision_key)
+        await redis.delete(decision_key)
 
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()
@@ -1303,7 +1358,7 @@ async def _await_deep_report_request(
 
     try:
         active_redis = pipeline._redis or await get_redis_client()
-        timeout = min(pipeline.config.hitl_decision_timeout or 120, 120)
+        timeout = pipeline.config.hitl_decision_timeout or 3600
         start_time = time.perf_counter()
 
         while (time.perf_counter() - start_time) < timeout:
