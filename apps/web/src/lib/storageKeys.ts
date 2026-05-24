@@ -38,4 +38,5 @@ export const STORAGE_KEYS = {
   FC_OPEN_UPLOAD_ONCE: "fc_open_upload_once",
   FC_PENDING_FILE_META: "fc_pending_file_meta",
   FC_RESUME_REQUESTED: "fc_resume_requested",
+  FC_HANDOFF_FIRED: "fc_handoff_fired",
 } as const;

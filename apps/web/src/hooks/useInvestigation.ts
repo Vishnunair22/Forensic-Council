@@ -296,6 +296,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setArbiterLiveText("");
     setWsConnectionError(null);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+    sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`);
@@ -494,6 +495,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         })
         .finally(() => {
           investigationInFlightRef.current = false;
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
         });
         return;
       }
@@ -521,6 +523,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           __pendingFileStore.file = null;
           clearPendingEvidenceFile().catch(() => {});
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_PENDING_FILE_META);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
@@ -530,6 +533,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   // Effect A — Auto-start from pending file (set by HeroAuthActions before navigating here)
   useEffect(() => {
+    // Guard: sessionStorage flag survives Strict Mode double-mount where refs
+    // are re-initialized. Prevents triggerAnalysis from firing twice.
+    if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1") return;
     if (autoStartFiredRef.current) return;
     let cancelled = false;
 
@@ -567,6 +573,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (validationError) {
       sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
       setAutoStartBlocking(false);
       setShowLoadingOverlay(false);
       toast.destructive({ title: "Evidence file rejected", description: validationError });
@@ -574,6 +581,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
 
     autoStartFiredRef.current = true;
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_HANDOFF_FIRED, "1");
     setFile(pending);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");

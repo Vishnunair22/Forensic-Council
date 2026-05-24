@@ -79,15 +79,16 @@ export function HeroAuthActions() {
     };
   }, [router]);
 
-  // Auto-open upload modal when returning from evidence page via ?upload=1
+  // Auto-open upload modal when returning from evidence page via ?upload=1.
+  // IMPORTANT: never clear AUTO_START or FC_SHOW_LOADING here — those are
+  // ephemeral flow-control flags managed by useInvestigation/handleStartAnalysis
+  // during route transitions. Clearing them here races against router.push and
+  // causes the loading overlay to flicker and the evidence page to lose its
+  // auto-start signal (the "loading loop" bug).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const openOnce = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
 
-    if (params.get("upload") !== "1" && openOnce !== "1") {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-    }
     if (params.get("upload") === "1" || openOnce === "1") {
       setShowUpload(true);
       setSelectedFile(null);

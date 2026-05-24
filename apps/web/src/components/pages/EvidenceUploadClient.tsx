@@ -45,17 +45,14 @@ export function EvidenceUploadClient() {
     return () => window.removeEventListener("pageshow", onShow);
   }, [router]);
 
-  // Critical: clear the loading flag when this component unmounts (navigation away).
-  // GlobalLoadingOverlay lives in the root layout and reads FC_SHOW_LOADING from
-  // sessionStorage. Without this cleanup, the overlay persists on the result page
-  // and every subsequent page — which is the "app not refreshing" bug.
-  useEffect(() => {
-    return () => {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-    };
-  }, []);
+  // Loading flag lifecycle is managed by GlobalLoadingOverlay (root layout) and
+  // useInvestigation's sync effect. GlobalLoadingOverlay reads FC_SHOW_LOADING
+  // from sessionStorage and dismisses itself based on pathname changes and a
+  // safety timer. useInvestigation sets/clears FC_SHOW_LOADING as the analysis
+  // progresses. Do NOT add a cleanup here that strips FC_SHOW_LOADING — in Strict
+  // Mode development this cleanup fires on the simulated unmount, dispatching
+  // fc_storage_update events that cause GlobalLoadingOverlay to hide prematurely,
+  // creating the "loading loop" flicker.
 
   useEffect(() => {
     // F-C-3: compute shouldWarn INSIDE the handler so the latest pending-file
