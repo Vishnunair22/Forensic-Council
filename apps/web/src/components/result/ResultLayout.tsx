@@ -499,7 +499,9 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
       ""
     ).toUpperCase();
     const label = AGENT_LABELS[agentId] ?? agentId;
-    if (agentVerdict === "MANIPULATED" || agentVerdict === "LIKELY_MANIPULATED") {
+    // Per-agent summary verdicts are SUSPICIOUS / INCONCLUSIVE / AUTHENTIC / NOT_APPLICABLE
+    // (arbiter._get_agent_summary never emits MANIPULATED/LIKELY_MANIPULATED at per-agent level).
+    if (agentVerdict === "SUSPICIOUS" || agentVerdict === "MANIPULATED" || agentVerdict === "LIKELY_MANIPULATED") {
       alertAgents.push(`${label} (${Math.round(agentConf * 100)}% confidence)`);
     } else if (agentVerdict === "AUTHENTIC" && agentConf >= 0.80 && agentErr < 0.10) {
       highConfAuthAgents.push(label);

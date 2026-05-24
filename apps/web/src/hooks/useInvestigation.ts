@@ -821,7 +821,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [resetSimulation, playSound, router]);
 
   const handleViewResults = useCallback(async () => {
-    if (isNavigating) return;
+    if (isNavigating || resumeInFlightRef.current) return;
+    resumeInFlightRef.current = true;
     playSound("click");
     playSound("arbiter_start");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
@@ -850,6 +851,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         description: err instanceof Error ? err.message : "Try again.",
       });
     } finally {
+      resumeInFlightRef.current = false;
       setIsNavigating(false);
       if (!navigationStarted) {
         setArbiterDeliberating(false);

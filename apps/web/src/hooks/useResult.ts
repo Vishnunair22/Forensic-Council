@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getArbiterStatus,
   getReport,
@@ -55,6 +55,7 @@ function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): Agent
 
 export function useResult(initialSessionId?: string) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // All storage-dependent state initialized to SSR-safe defaults.
   // Hydration from storage happens once after mount (see effect below) to
@@ -321,6 +322,7 @@ export function useResult(initialSessionId?: string) {
         return storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []) ?? [];
       } catch { return [] as HistoryItem[]; }
     })();
+    queryClient.clear();
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
     if (savedHistory.length > 0) {
@@ -330,7 +332,7 @@ export function useResult(initialSessionId?: string) {
 
     window.dispatchEvent(new Event("fc:reset-home"));
     router.push(path);
-  }, [playSound, router]);
+  }, [playSound, router, queryClient]);
 
   const handleNew = useCallback(() => _resetAndNavigate("/?upload=1"), [_resetAndNavigate]);
   const handleHome = useCallback(() => _resetAndNavigate("/#hero"), [_resetAndNavigate]);

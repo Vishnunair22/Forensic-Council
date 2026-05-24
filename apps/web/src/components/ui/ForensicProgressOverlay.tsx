@@ -33,6 +33,12 @@ export function ForensicProgressOverlay({
       return;
     }
 
+    const isGenericWaiting = /council deliberating|preparing final|waiting for the council/i.test(liveText || "");
+    if (liveText && liveText.length > 5 && !isGenericWaiting) {
+      setDynamicText(liveText);
+      return;
+    }
+
     const arbiterPhases = [
       "Reviewing forensic agent telemetry...",
       "Evaluating confidence intervals...",

@@ -305,6 +305,11 @@ export const useSimulation = ({
                   }
                   break;
 
+                case "HITL_EXPIRED":
+                  setHitlCheckpoint(null);
+                  try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+                  break;
+
                 case "AGENT_COMPLETE":
                   if (update.agent_id) {
                     const normalizedCompleteId = update.agent_id;
@@ -576,6 +581,7 @@ export const useSimulation = ({
               "ERROR",
               "PIPELINE_PAUSED",
               "HITL_CHECKPOINT",
+              "HITL_EXPIRED",
               "PIPELINE_QUARANTINED",
             ].includes(update.type);
             // Proactive trim: keep queue under limit BEFORE pushing so
@@ -589,6 +595,7 @@ export const useSimulation = ({
                     "ERROR",
                     "PIPELINE_PAUSED",
                     "HITL_CHECKPOINT",
+                    "HITL_EXPIRED",
                     "PIPELINE_QUARANTINED",
                   ].includes(m.type),
               );

@@ -188,6 +188,7 @@ export function deriveSummary(finding: AgentFindingDTO): string {
  const metadata = finding.metadata || {};
  const candidates = [
   metadata.llm_refined_summary,
+  finding.court_statement,
   metadata.raw_tool_summary,
   metadata.analysis_summary,
   metadata.summary,
@@ -224,6 +225,8 @@ export function summaryRichness(finding: AgentFindingDTO): number {
  if (verdict === "ERROR") score -= 1;
  const conf = finding.raw_confidence_score ?? finding.confidence_raw ?? 0;
  score += Math.round(conf * 2);
+ // Reward synthesis-annotated findings so they win dedup over stale pre-synthesis duplicates
+ if (finding.metadata?.section_id) score += 2;
  return score;
 }
 
@@ -367,7 +370,7 @@ export function ConfidenceBar({ value }: { value: number }) {
 export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast: boolean }) {
  const toolName = (finding.metadata?.tool_name as string) || finding.finding_type;
  const status = getStatus(finding);
- const confidence = finding.raw_confidence_score ?? 0;
+ const confidence = finding.raw_confidence_score ?? finding.confidence_raw ?? 0;
  // Clean results use a confidence tier instead of a static "Clean" badge
  const tier = status === "clean" ? confidenceTier(confidence) : null;
  const cfg = {

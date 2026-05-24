@@ -278,43 +278,53 @@ class ArbiterNarrativeMixin:
         ]
         
         assessment_parts = []
-        for f in initial_f:
+        for f in sorted(initial_f, key=_finding_importance, reverse=True)[:12]:
             meta = f.get("metadata") or {}
             tool_name = meta.get("tool_name") or f.get("finding_type", "")
             verdict = evidence_verdict_of(f)
-            statement = f.get("court_statement") or f.get("reasoning_summary") or ""
+            statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
+            conf = confidence_of(f)
+            conf_str = f" ({round(conf * 100)}% confidence)" if conf is not None else ""
             if verdict == "NOT_APPLICABLE":
-                reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable"
-                assessment_parts.append(f"{tool_name} was bypassed because it is {reason}.")
+                reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable to this file type"
+                assessment_parts.append(f"{tool_name} was bypassed — {reason}.")
             elif verdict == "ERROR":
                 assessment_parts.append(f"{tool_name} failed to execute successfully.")
+            elif verdict == "POSITIVE":
+                detail = f" {statement}" if statement else ""
+                assessment_parts.append(f"{tool_name} flagged a manipulation indicator{conf_str}.{detail}")
             else:
-                s_part = f" (statement: {statement})" if statement else ""
-                assessment_parts.append(f"{tool_name} reported {verdict.lower()}{s_part}.")
-                
+                detail = f" {statement}" if statement else ""
+                assessment_parts.append(f"{tool_name} returned {verdict.lower()}{conf_str}.{detail}")
+
         evidence_assessment = " ".join(assessment_parts) or "No initial findings were reported for assessment."
-        
+
         deep_f = [f for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
         if not deep_f:
-            deep_analysis = "Deep analysis was not executed or no deep findings were reported for this agent."
+            deep_analysis = "Deep analysis was not executed for this agent."
         else:
             deep_parts = []
-            for f in deep_f:
+            for f in sorted(deep_f, key=_finding_importance, reverse=True)[:8]:
                 meta = f.get("metadata") or {}
                 tool_name = meta.get("tool_name") or f.get("finding_type", "")
                 verdict = evidence_verdict_of(f)
-                statement = f.get("court_statement") or f.get("reasoning_summary") or ""
+                statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
+                conf = confidence_of(f)
+                conf_str = f" ({round(conf * 100)}% confidence)" if conf is not None else ""
                 if meta.get("gated") or meta.get("skipped"):
                     reason = meta.get("reason") or "no prior suspicious signal"
-                    deep_parts.append(f"{tool_name} was gated and skipped ({reason}).")
+                    deep_parts.append(f"{tool_name} was gated — {reason}.")
                 elif verdict == "NOT_APPLICABLE":
-                    deep_parts.append(f"{tool_name} was bypassed.")
+                    deep_parts.append(f"{tool_name} was not applicable and bypassed.")
                 elif verdict == "ERROR":
-                    deep_parts.append(f"{tool_name} failed.")
+                    deep_parts.append(f"{tool_name} failed in deep analysis.")
+                elif verdict == "POSITIVE":
+                    detail = f" {statement}" if statement else ""
+                    deep_parts.append(f"{tool_name} (deep) confirmed a manipulation indicator{conf_str}.{detail}")
                 else:
-                    s_part = f" ({statement})" if statement else ""
-                    deep_parts.append(f"{tool_name} deep scan reported {verdict.lower()}{s_part}.")
-            deep_analysis = " ".join(deep_parts)
+                    detail = f" {statement}" if statement else ""
+                    deep_parts.append(f"{tool_name} (deep) returned {verdict.lower()}{conf_str}.{detail}")
+            deep_analysis = " ".join(deep_parts) or "No deep findings were produced."
             
         confidence_pct = round(metrics.get("confidence_score", 0) * 100)
         error_rate_pct = round(metrics.get("error_rate", 0) * 100)
@@ -486,7 +496,7 @@ Do NOT use bullet points in the JSON values. Write in continuous prose. Interpre
             raw = await client.generate_synthesis(
                 system_prompt=_SAFETY_PREAMBLE + "\n" + system_prompt,
                 user_content=user_content,
-                max_tokens=1600,
+                max_tokens=900,
                 json_mode=True,
             )
             if raw:
@@ -1081,15 +1091,22 @@ Rules:
         contested_count: int,
         analysis_coverage_note: str,
     ) -> tuple[str, list[str], str]:
-        _VERDICT_PHRASES = {
-            "AUTHENTIC": "Evidence appears authentic (no manipulation signals).",
-            "LIKELY_AUTHENTIC": "Evidence is likely authentic (no significant indicators).",
-            "INCONCLUSIVE": "Analysis is inconclusive (insufficient data).",
-            "LIKELY_MANIPULATED": "Evidence shows probable manipulation signals.",
-            "MANIPULATED": "Strong manipulation indicators detected (multiple independent signals).",
-            "ABSTAIN": "Insufficient evidence to render a verdict.",
+        _VERDICT_LABELS = {
+            "AUTHENTIC": "No manipulation signals detected",
+            "LIKELY_AUTHENTIC": "Evidence is likely authentic",
+            "SUSPICIOUS": "Suspicious signals were identified",
+            "INCONCLUSIVE": "Analysis produced inconclusive results",
+            "LIKELY_MANIPULATED": "Probable manipulation indicators detected",
+            "MANIPULATED": "Strong manipulation indicators detected",
+            "ABSTAIN": "Insufficient evidence to render a verdict",
         }
-        verdict_sentence = _VERDICT_PHRASES.get(overall_verdict, f"Verdict: {overall_verdict}.")
+        _va = "agent" if applicable_agent_count == 1 else "agents"
+        _conf_str = f" — {overall_confidence * 100:.0f}% confidence across {applicable_agent_count} active {_va}"
+        if manipulation_probability > 0.05:
+            _conf_str += f"; {manipulation_probability * 100:.0f}% manipulation probability"
+        if overall_error_rate > 0.10:
+            _conf_str += f"; {overall_error_rate * 100:.0f}% tool error rate"
+        verdict_sentence = f"{_VERDICT_LABELS.get(overall_verdict, overall_verdict)}{_conf_str}."
 
         def _strip_rs_prefix(s: str) -> str:
             idx = s.find(":")
@@ -1317,7 +1334,10 @@ Rules:
             try:
                 # overall investigation timeout budget is ML_SUBPROCESS_TIMEOUT_S (default 120s)
                 overall_timeout = getattr(self.config, "ml_subprocess_timeout_s", 120.0) or 120.0
-                timeout_budget = max(30.0, float(overall_timeout) * 0.25)
+                # Use 60% of the investigation budget (min 120s) so the arbiter can survive
+                # a Groq TPM window refresh (60s) or a Gemini quota cycle without timing out
+                # and silently falling back to template-generated narratives.
+                timeout_budget = max(120.0, float(overall_timeout) * 0.60)
 
                 (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.wait_for(
                     asyncio.gather(
@@ -1356,8 +1376,6 @@ Rules:
         narrative_warnings = []
         if not llm_enabled:
             narrative_warnings.append("Narrative generated from templates (LLM unavailable)")
-        elif use_llm and not llm_enabled:
-            narrative_warnings.append("Narrative degraded: LLM health check failed")
 
         raw = self._postprocess_narratives(
             v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt,

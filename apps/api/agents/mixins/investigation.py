@@ -167,6 +167,38 @@ class AgentInvestigationMixin:
                 error=str(exc),
             )
 
+    def _apply_synthesis_sections(
+        self,
+        findings: list[AgentFinding],
+        sections: list[dict[str, Any]],
+    ) -> None:
+        """Write section metadata + refined summaries from a synthesis result back onto findings."""
+        for section in sections:
+            if section.get("flag") in ("bad", "warn", "ok", "info"):
+                flag = section["flag"]
+            else:
+                sev = section.get("severity", "LOW")
+                flag = (
+                    "bad" if sev in ("HIGH", "CRITICAL")
+                    else ("warn" if sev == "MEDIUM" else "ok")
+                )
+            key_signal = str(section.get("key_signal") or "").strip()
+            opinion = section.get("opinion")
+            for item in section.get("refined_findings", []):
+                tool_name = item.get("tool")
+                friendly_text = item.get("user_friendly_summary")
+                if not tool_name:
+                    continue
+                for f in findings:
+                    if (f.metadata.get("tool_name") or f.finding_type) == tool_name:
+                        if friendly_text:
+                            f.metadata["llm_refined_summary"] = friendly_text
+                        f.metadata["section_id"] = section.get("id")
+                        f.metadata["section_label"] = section.get("label")
+                        f.metadata["section_flag"] = flag
+                        f.metadata["llm_synthesis"] = opinion
+                        f.metadata["section_key_signal"] = key_signal
+
     async def _synthesize_findings_once(
         self,
         findings: list[AgentFinding],
@@ -194,32 +226,7 @@ class AgentInvestigationMixin:
                 self._agent_confidence = synthesis_result.get("agent_confidence")
                 self._agent_error_rate = synthesis_result.get("agent_error_rate")
                 self._agent_synthesis = synthesis_result
-
-                # Apply refined summaries and section metadata back to findings
-                sections = synthesis_result.get("sections", [])
-                for section in sections:
-                    refined = section.get("refined_findings", [])
-                    for item in refined:
-                        tool_name = item.get("tool")
-                        friendly_text = item.get("user_friendly_summary")
-                        if tool_name and friendly_text:
-                            for f in findings:
-                                # Match by tool_name in metadata or finding_type
-                                f_tool = f.metadata.get("tool_name") or f.finding_type
-                                if f_tool == tool_name:
-                                    f.metadata["llm_refined_summary"] = friendly_text
-                                    f.metadata["section_id"] = section.get("id")
-                                    f.metadata["section_label"] = section.get("label")
-                                    # Map severity to frontend-friendly flags
-                                    sev = section.get("severity", "LOW")
-                                    f.metadata["section_flag"] = (
-                                        "bad"
-                                        if sev in ("HIGH", "CRITICAL")
-                                        else ("warn" if sev == "MEDIUM" else "ok")
-                                    )
-                                    # Also store the section-level opinion for context
-                                    f.metadata["llm_synthesis"] = section.get("opinion")
-
+                self._apply_synthesis_sections(findings, synthesis_result.get("sections", []))
                 return synthesis_result
         except Exception as e:
             logger.warning(f"{phase.title()} synthesis failed: {e}", exc_info=True)
@@ -475,8 +482,10 @@ class AgentInvestigationMixin:
 
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
+            self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         if not synthesis or not synthesis.get("sections"):
             synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
+            self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         self._agent_confidence = synthesis["agent_confidence"]
         self._agent_error_rate = synthesis["agent_error_rate"]
         self._agent_synthesis = synthesis
@@ -548,8 +557,10 @@ class AgentInvestigationMixin:
         )
         if synthesis is None:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
+            self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         if not synthesis or not synthesis.get("sections"):
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
+            self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         self._agent_confidence = synthesis["agent_confidence"]
         self._agent_error_rate = synthesis["agent_error_rate"]
         self._agent_synthesis = synthesis

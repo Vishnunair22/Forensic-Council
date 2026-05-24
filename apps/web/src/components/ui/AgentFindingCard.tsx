@@ -119,13 +119,19 @@ function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] {
   });
 }
 
+const FLAG_ORDER: Record<string, number> = { bad: 0, warn: 1, ok: 2, info: 3 };
+
+function worstFlag(a: string, b: string): string {
+  return (FLAG_ORDER[a] ?? 4) <= (FLAG_ORDER[b] ?? 4) ? a : b;
+}
+
 function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
   const groupMap = new Map<string, Section>();
 
   for (const f of findings) {
     const sectionId = (f.metadata?.section_id as string) || "other";
     const sectionLabel = (f.metadata?.section_label as string) || "Other Analysis";
-    const sectionFlag = (f.metadata?.section_flag as string) || "info";
+    const fFlag = (f.metadata?.section_flag as string) || "info";
     const keySignal = cleanFindingText((f.metadata?.section_key_signal as string) || "");
     const analysis = cleanFindingText((f.metadata?.llm_synthesis as string) || "");
 
@@ -134,19 +140,24 @@ function groupFindingsBySection(findings: AgentFindingDTO[]): Section[] {
       group = {
         id: sectionId,
         label: sectionLabel,
-        flag: sectionFlag,
+        flag: fFlag,
         keySignal,
         analysis,
         findings: [],
       };
       groupMap.set(sectionId, group);
+    } else {
+      // Escalate section flag to the worst severity seen across all findings
+      group.flag = worstFlag(group.flag, fFlag);
+      // Use the first non-empty key signal and analysis we encounter
+      if (!group.keySignal && keySignal) group.keySignal = keySignal;
+      if (!group.analysis && analysis) group.analysis = analysis;
     }
     group.findings.push(f);
   }
 
-  const flagOrder: Record<string, number> = { bad: 0, warn: 1, ok: 2, info: 3 };
   const sorted = Array.from(groupMap.values()).sort(
-    (a, b) => (flagOrder[a.flag] ?? 4) - (flagOrder[b.flag] ?? 4)
+    (a, b) => (FLAG_ORDER[a.flag] ?? 4) - (FLAG_ORDER[b.flag] ?? 4)
   );
   // Within each section, surface richer findings first.
   for (const sec of sorted) {
@@ -164,7 +175,7 @@ function cleanSummary(text: string, maxLen = 320) {
 }
 
 function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsDTO, narrative?: string) {
-  if (narrative && narrative.trim().length > 0 && !narrative.includes("(statement:") && !narrative.includes("reported negative")) {
+  if (narrative && narrative.trim().length > 0) {
     return cleanFindingText(narrative.trim());
   }
 
@@ -187,7 +198,7 @@ function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsD
         : "The agent found no decisive manipulation signal";
 
   const highlights = top
-    .map((f) => cleanSummary((f.metadata?.llm_refined_summary as string) || f.reasoning_summary || "", 220))
+    .map((f) => cleanSummary(deriveSummary(f), 220))
     .filter(Boolean)
     .join(" ");
 

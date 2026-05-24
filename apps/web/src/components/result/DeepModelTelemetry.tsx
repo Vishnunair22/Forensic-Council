@@ -57,7 +57,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
             const modelFindings = deepFindings.filter((f) => f.finding_type === model);
             const count = modelFindings.length;
             const avgConf = Math.round(
-              (modelFindings.reduce((acc, f) => acc + (f.raw_confidence_score || 0), 0) / count) * 100,
+              (modelFindings.reduce((acc, f) => acc + (f.raw_confidence_score ?? f.confidence_raw ?? 0), 0) / count) * 100,
             );
 
             return (

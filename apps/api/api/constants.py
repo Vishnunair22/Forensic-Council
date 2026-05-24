@@ -15,6 +15,8 @@ _EXACT_MIME_EXT_MAP: dict[str, frozenset] = {
     "video/mp4": frozenset({".mp4"}),
     "video/quicktime": frozenset({".mov"}),
     "video/x-msvideo": frozenset({".avi"}),
+    "video/x-matroska": frozenset({".mkv"}),
+    "video/webm": frozenset({".webm"}),
     "audio/wav": frozenset({".wav"}),
     "audio/x-wav": frozenset({".wav"}),
     "audio/mpeg": frozenset({".mp3"}),

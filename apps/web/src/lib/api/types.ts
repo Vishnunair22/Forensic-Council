@@ -11,6 +11,7 @@ export interface AgentFindingDTO {
   confidence_raw: number | null;
   evidence_verdict?: "POSITIVE" | "NEGATIVE" | "INCONCLUSIVE" | "NOT_APPLICABLE" | "ERROR";
   calibrated: boolean;
+  calibration_status?: "TRAINED" | "UNCALIBRATED";
   raw_confidence_score: number | null;
   court_statement: string | null;
   robustness_caveat: boolean;
@@ -107,6 +108,7 @@ export interface BriefUpdate {
   type:
     | "AGENT_UPDATE"
     | "HITL_CHECKPOINT"
+    | "HITL_EXPIRED"
     | "AGENT_COMPLETE"
     | "PIPELINE_COMPLETE"
     | "ERROR"

@@ -472,6 +472,7 @@ Return ONLY a JSON object:
     {{
       "id": "group_id",
       "label": "Group Label",
+      "key_signal": "4-8 word phrase: the most decisive finding in this group (e.g. 'No GAN artifacts in spectral profile' or 'ENF splice at 2.3s detected'). If no standout signal, leave blank.",
       "opinion": "1-2 sentence technical opinion with specific metric reference.",
       "severity": "LOW|MEDIUM|HIGH|CRITICAL",
       "refined_findings": [
@@ -635,33 +636,39 @@ Return ONLY a JSON object:
                     metric_text = f" Key metrics: {', '.join(metric_bits)}." if metric_bits else ""
                     if finding.get("tool_limitation"):
                         summary = (
-                            f"{tool.replace('_', ' ').title()} did not produce a usable signal; "
-                            f"this is a coverage limitation, not evidence of tampering.{metric_text}"
+                            f"{tool.replace('_', ' ').title()} did not produce a usable result; "
+                            f"treat this as a coverage gap, not evidence of tampering.{metric_text}"
                         )
                     elif verdict.upper() == "POSITIVE":
                         summary = (
-                            f"{tool.replace('_', ' ').title()} found a forensic warning signal "
-                            f"at {conf:.0%} confidence.{metric_text}"
+                            f"{tool.replace('_', ' ').title()} returned a manipulation indicator "
+                            f"at {conf:.0%} confidence — review the metrics below.{metric_text}"
                         )
                     elif verdict.upper() == "NEGATIVE":
                         summary = (
-                            f"{tool.replace('_', ' ').title()} found no supported anomaly "
-                            f"at {conf:.0%} confidence.{metric_text}"
+                            f"{tool.replace('_', ' ').title()} confirmed no anomaly "
+                            f"at {conf:.0%} confidence for its specific test.{metric_text}"
                         )
                     else:
                         summary = (
-                            f"{tool.replace('_', ' ').title()} was inconclusive "
+                            f"{tool.replace('_', ' ').title()} returned an inconclusive result "
                             f"at {conf:.0%} confidence.{metric_text}"
                         )
                     refined.append({"tool": tool, "user_friendly_summary": summary})
+                top_signal = next(
+                    (r["user_friendly_summary"] for r in refined if r.get("user_friendly_summary")), ""
+                )
+                if group_positive:
+                    opinion = f"{group['label']}: at least one tool flagged a manipulation indicator. {top_signal}"[:420]
+                elif group_limited:
+                    opinion = f"{group['label']}: some tools did not complete — treat as coverage gaps only. {top_signal}"[:420]
+                else:
+                    opinion = top_signal[:420] if top_signal else f"{group['label']} returned clean signals across all applicable tools."
                 sections.append(
                     {
                         "id": group["id"],
                         "label": group["label"],
-                        "opinion": (
-                            f"{group['label']} completed with "
-                            f"{len(group.get('findings', []))} model/tool result(s)."
-                        ),
+                        "opinion": opinion,
                         "severity": "MEDIUM" if group_positive or group_limited else "LOW",
                         "refined_findings": refined,
                     }
