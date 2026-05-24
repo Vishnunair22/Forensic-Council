@@ -307,6 +307,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     resetSimulationHook();
   }, [resetSimulationHook]);
 
+  // Pipe live WebSocket/resume arbiter text into the overlay while it is visible
+  useEffect(() => {
+    if (!arbiterDeliberating || !arbiterThinking) return;
+    setArbiterLiveText(arbiterThinking);
+  }, [arbiterDeliberating, arbiterThinking]);
+
   const triggerAnalysis = useCallback(
     async (targetFile: File) => {
       if (!targetFile) return;
@@ -743,7 +749,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       setSimulationPhase("deep");
       await resumeInvestigation(true);
-      if (sid) await connectWebSocket(sid, true);
+      // Do NOT reconnect the WebSocket here — the existing connection is still live
+      // after PIPELINE_PAUSED and will receive deep-phase AGENT_UPDATE messages.
+      // Closing and reopening creates a race window where backend messages sent
+      // immediately after /resume are lost, leaving all agents stuck in "checking".
     } catch (err) {
       playSound("error");
       toast.destructive({
@@ -753,7 +762,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       investigationInFlightRef.current = false;
     }
-  }, [playSound, resumeInvestigation, clearCompletedAgents, connectWebSocket, setSimulationPhase]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents, setSimulationPhase]);
 
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);

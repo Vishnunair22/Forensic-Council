@@ -14,15 +14,36 @@ import { autoLoginAsInvestigator } from "@/lib/api";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import { savePendingEvidenceFile } from "@/lib/pendingFilePersistence";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { resetActiveInvestigation } from "@/lib/appReset";
+import { toast } from "@/hooks/use-toast";
+
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
 
 export function HeroAuthActions() {
   const router = useRouter();
   const { playSound } = useSound();
+  const queryClient = useQueryClient();
 
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("session_expired") === "true") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("session_expired");
+      window.history.replaceState({}, "", url.toString());
+
+      toast.destructive({
+        title: "Session Expired",
+        description: "Your session has expired due to inactivity. Please begin a new analysis.",
+      });
+
+      resetActiveInvestigation(queryClient);
+    }
+  }, [queryClient]);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
 

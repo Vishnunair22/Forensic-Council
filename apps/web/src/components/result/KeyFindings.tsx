@@ -72,7 +72,7 @@ export function KeyFindings({ findings }: KeyFindingsProps) {
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2.5">
         <Icon className={clsx("w-4 h-4 shrink-0", cfg.iconCls)} />
         <h2 className="text-sm font-bold fc-text-primary">Key Findings</h2>
-        <span className={clsx("ml-auto text-[10px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full border", cfg.badgeCls)}>
+        <span className={clsx("ml-auto text-xs font-semibold tracking-wide px-2.5 py-1 rounded-full border", cfg.badgeCls)}>
           {cfg.label}
         </span>
       </div>
@@ -91,7 +91,7 @@ export function KeyFindings({ findings }: KeyFindingsProps) {
               className={clsx("w-1.5 h-1.5 rounded-full shrink-0 mt-[0.45em]", DOT_COLOR[severities[i]])}
               aria-hidden="true"
             />
-            <p className="text-sm leading-[1.65] fc-text-secondary">{finding}</p>
+            <p className="text-base leading-relaxed fc-text-secondary">{finding}</p>
           </motion.div>
         ))}
       </div>

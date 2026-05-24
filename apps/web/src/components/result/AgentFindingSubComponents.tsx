@@ -319,7 +319,7 @@ export function BulletedText({ text, colorClass = "bg-white/20" }: { text: strin
   const points = text.split(/(?<=[.!?])\s+|\n+/).map(p => p.trim()).filter(p => p.length > 10);
   
   if (points.length <= 1) {
-    return <p className="text-sm fc-text-secondary leading-relaxed font-medium">{text}</p>;
+    return <p className="text-base fc-text-primary leading-relaxed font-medium">{text}</p>;
   }
 
   return (
@@ -327,7 +327,7 @@ export function BulletedText({ text, colorClass = "bg-white/20" }: { text: strin
       {points.map((point, i) => (
         <li key={i} className="flex items-start gap-2.5">
           <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${colorClass}`} />
-          <span className="text-sm fc-text-secondary leading-relaxed font-medium block">
+          <span className="text-base fc-text-primary leading-relaxed font-medium block">
             {point}
           </span>
         </li>

@@ -256,6 +256,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
                 <AgentsStrip
                   perAgentMetrics={rs.report.per_agent_metrics}
+                  perAgentSummary={rs.report.per_agent_summary}
                   skippedAgents={rs.report.skipped_agents}
                   activeAgentIds={activeAgentIds}
                 />
@@ -490,9 +491,13 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   const alertAgents: string[] = [];
   const highConfAuthAgents: string[] = [];
   for (const [agentId, m] of Object.entries(perAgentMetrics)) {
-    const agentConf    = (m as unknown as Record<string, unknown>).confidence_score as number ?? 0;
-    const agentErr     = (m as unknown as Record<string, unknown>).error_rate as number ?? 0;
-    const agentVerdict = (m as unknown as Record<string, unknown>).agent_verdict as string ?? "";
+    const agentConf    = m.confidence_score ?? 0;
+    const agentErr     = m.error_rate ?? 0;
+    const agentVerdict = (
+      report.per_agent_summary?.[agentId]?.verdict ??
+      (m as unknown as Record<string, unknown>).agent_verdict as string ??
+      ""
+    ).toUpperCase();
     const label = AGENT_LABELS[agentId] ?? agentId;
     if (agentVerdict === "MANIPULATED" || agentVerdict === "LIKELY_MANIPULATED") {
       alertAgents.push(`${label} (${Math.round(agentConf * 100)}% confidence)`);

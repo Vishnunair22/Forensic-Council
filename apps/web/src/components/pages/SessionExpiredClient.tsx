@@ -1,14 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { ShieldAlert, ArrowLeft, RefreshCw, Cpu } from "lucide-react";
 import { sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { resetActiveInvestigation } from "@/lib/appReset";
 
 export function SessionExpiredClient() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    resetActiveInvestigation(queryClient);
+  }, [queryClient]);
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16 overflow-hidden">

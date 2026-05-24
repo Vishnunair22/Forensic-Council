@@ -18,13 +18,20 @@ const AGENT_LABELS: Record<string, string> = {
 
 interface AgentsStripProps {
   perAgentMetrics?: Record<string, AgentMetricsDTO>;
+  perAgentSummary?: Record<string, { verdict: string }>;
   skippedAgents?: Record<string, string>;
   activeAgentIds: string[];
 }
 
-function agentVerdictStatus(metrics: AgentMetricsDTO | undefined): "danger" | "warning" | "success" | "neutral" {
-  if (!metrics) return "neutral";
-  const v = String((metrics as unknown as Record<string, unknown>).agent_verdict ?? "").toUpperCase();
+function agentVerdictStatus(
+  metrics: AgentMetricsDTO | undefined,
+  summary: { verdict: string } | undefined,
+): "danger" | "warning" | "success" | "neutral" {
+  if (!metrics && !summary) return "neutral";
+  const v = (
+    summary?.verdict ??
+    String((metrics as unknown as Record<string, unknown>)?.agent_verdict ?? "")
+  ).toUpperCase();
   if (/MANIPULATED|AI_GENERATED|TAMPERED/.test(v)) return "danger";
   if (/SUSPICIOUS|INCONCLUSIVE|ABSTAIN|NEEDS_REVIEW/.test(v)) return "warning";
   if (/AUTHENTIC|CLEAN|CERTAIN/.test(v)) return "success";
@@ -38,19 +45,19 @@ const STATUS_DOT_CLS: Record<string, string> = {
   neutral: "bg-white/25",
 };
 
-export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: AgentsStripProps) {
+export function AgentsStrip({ perAgentMetrics, perAgentSummary, skippedAgents, activeAgentIds }: AgentsStripProps) {
   const activeSet = new Set(activeAgentIds);
   const skippedSet = new Set(Object.keys(skippedAgents ?? {}));
 
   const activeCount = activeAgentIds.length;
 
   const anomalyCount = activeAgentIds.filter((id) => {
-    const status = agentVerdictStatus(perAgentMetrics?.[id]);
+    const status = agentVerdictStatus(perAgentMetrics?.[id], perAgentSummary?.[id]);
     return status === "danger";
   }).length;
 
   const suspiciousCount = activeAgentIds.filter((id) => {
-    const status = agentVerdictStatus(perAgentMetrics?.[id]);
+    const status = agentVerdictStatus(perAgentMetrics?.[id], perAgentSummary?.[id]);
     return status === "warning";
   }).length;
 
@@ -100,7 +107,7 @@ export function AgentsStrip({ perAgentMetrics, skippedAgents, activeAgentIds }: 
           const metrics = perAgentMetrics?.[agentId];
           const label = AGENT_LABELS[agentId] ?? agentId;
           const confPct = metrics ? Math.round(metrics.confidence_score * 100) : null;
-          const verdictStatus = agentVerdictStatus(metrics);
+          const verdictStatus = agentVerdictStatus(metrics, perAgentSummary?.[agentId]);
 
           return (
             <div

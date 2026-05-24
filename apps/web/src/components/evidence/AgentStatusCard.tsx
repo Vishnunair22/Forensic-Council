@@ -14,6 +14,9 @@ import {
   ChevronDown,
   ChevronUp,
   ListChecks,
+  CheckCircle2,
+  HelpCircle,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -32,6 +35,11 @@ const TEMPLATE_SUMMARY_RE = [
   /^checked:?\s*$/i,
   /^no diagnostic output\.?$/i,
   /^(?:check|scan|run)\s+(?:ok|complete|finished)\.?$/i,
+  // Backend-generated formulaic summaries — not meaningful LLM synthesis
+  /\bis the strongest agent signal:/i,
+  /\bat \d+%? confidence across \d+ applicable findings/i,
+  /\bagent (?:returned|determined|concluded):\s*\w/i,
+  /^negative at \d+%? confidence/i,
 ];
 
 function isTemplateSummary(text: string): boolean {
@@ -272,15 +280,15 @@ function FindingRow({ f, i }: { f: FindingPreview; i: number }) {
       {/* Row 2: Finding text */}
       {unifiedText && (
         <p className={clsx(
-          "text-[13px] leading-relaxed",
-          (isCritical || isHigh || isAlert) ? "fc-text-secondary" : "fc-text-muted"
+          "text-base leading-relaxed",
+          (isCritical || isHigh || isAlert) ? "fc-text-primary" : "fc-text-secondary"
         )}>
           {visibleText}
           {needsExpand && (
             <button
               type="button"
               onClick={() => setExpanded(e => !e)}
-              className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] font-mono font-bold text-primary/70 hover:text-primary fc-transition rounded align-baseline"
+              className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-mono font-bold text-primary/70 hover:text-primary fc-transition rounded align-baseline"
             >
               {expanded
                 ? <><ChevronUp className="w-3 h-3" /><span>less</span></>
@@ -305,17 +313,14 @@ interface AgentBriefProps {
   completedData: AgentUpdate;
   findings: FindingPreview[];
   toolsRan: number;
-  isAlert: boolean;
 }
 
-function AgentBrief({ completedData, findings, toolsRan, isAlert }: AgentBriefProps) {
-  // Force string evaluation to prevent .match or .replace crashes if backend sends raw parsed JSON
-  const rawSummary = typeof completedData.summary === 'string' 
-    ? completedData.summary 
-    : (completedData.summary ? JSON.stringify(completedData.summary) : "");
-  
+function AgentBrief({ completedData, findings, toolsRan }: AgentBriefProps) {
+  const rawSummary = typeof completedData.summary === "string"
+    ? completedData.summary
+    : completedData.summary ? JSON.stringify(completedData.summary) : "";
+
   let synthSummary = cleanFindingText(rawSummary).trim();
-  let isJson = false;
 
   const jsonMatch = rawSummary.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
@@ -323,63 +328,123 @@ function AgentBrief({ completedData, findings, toolsRan, isAlert }: AgentBriefPr
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.evidence_assessment && parsed.reliability_verdict) {
         synthSummary = `${parsed.evidence_assessment} ${parsed.reliability_verdict}`;
-        isJson = true;
       }
-    } catch {
-      // Ignore JSON parse errors
-    }
+    } catch { /* ignore */ }
   }
 
-  const hasSynthesis = !!synthSummary && (isJson || !isTemplateSummary(synthSummary));
+  const verdict = (completedData.agent_verdict ?? "").toUpperCase();
+  const isAlert = ALERT_VERDICTS.has(verdict) || (completedData.verdict_score ?? 0) > 0.6;
+  const isInconclusive = verdict === "INCONCLUSIVE";
+  const isClean = verdict === "AUTHENTIC" || verdict === "CLEAN" || verdict === "NEGATIVE";
 
-  // Fallback: pick the most meaningful signals — alert findings first, then any with a key_signal
-  const alertFindings = findings.filter(isAlertFinding);
-  const signalPool = alertFindings.length > 0 ? alertFindings : findings.filter(f => !!f.key_signal?.trim());
-  const topSignals = signalPool
-    .slice(0, 3)
-    .map(f => cleanFindingText(f.key_signal || f.summary || "").trim())
-    .filter(s => s && !isTemplateSummary(s));
+  // Pick a single high-impact statement.
+  // Priority: real LLM synthesis → worst section flag key_signal → top finding signal.
+  const brief = (() => {
+    if (synthSummary && !isTemplateSummary(synthSummary)) return synthSummary;
+
+    // Section flags are already section-level synthesis — prefer over raw tool text.
+    const FLAG_RANK: Record<string, number> = { bad: 0, warn: 1, ok: 2, info: 3 };
+    const sections = [...(completedData.section_flags ?? [])].sort(
+      (a, b) => (FLAG_RANK[a.flag] ?? 4) - (FLAG_RANK[b.flag] ?? 4),
+    );
+    for (const sec of sections) {
+      const s = cleanFindingText(sec.key_signal || "").trim();
+      if (s && !isTemplateSummary(s)) return s;
+    }
+
+    // Last resort: the single highest-ranked finding that has its own key_signal.
+    for (const f of findings) {
+      const s = cleanFindingText(f.key_signal || "").trim();
+      if (s && !isTemplateSummary(s)) return s;
+    }
+
+    // Synthesise from agent-level data — never duplicates a tool finding.
+    const conf = Math.round(completedData.confidence * 100);
+    const n = completedData.tools_ran ?? findings.length;
+    const alertCount = findings.filter(isAlertFinding).length;
+
+    // Use section labels to name what was examined; fall back to a check count.
+    const sectionLabels = sections
+      .map(s => cleanFindingText(s.label || "").trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const domainPhrase = sectionLabels.length >= 2
+      ? `${sectionLabels.slice(0, -1).join(", ")} and ${sectionLabels.at(-1)}`
+      : sectionLabels.length === 1
+        ? sectionLabels[0]
+        : `${n} forensic check${n !== 1 ? "s" : ""}`;
+
+    if (isAlert) {
+      const anomalyClause = alertCount > 0
+        ? `${alertCount} active anomaly flag${alertCount === 1 ? "" : "s"} raised`
+        : `critical anomalies flagged`;
+      return `Critical anomalies detected in ${domainPhrase} (${conf}% confidence). ${anomalyClause} — structural composition and metadata analysis indicate active manipulation or synthetic tampering.`;
+    }
+    if (isClean) {
+      return `Verification of ${domainPhrase} completed successfully (${conf}% confidence). All specialized scans returned clean signals, showing no indications of digital alteration, AI generation, or structural anomalies.`;
+    }
+    if (isInconclusive) {
+      return `Specialist analysis of ${domainPhrase} is inconclusive (${conf}% confidence). Sensor noise, metadata gaps, or compression artifacts limit detection confidence, yielding ambiguous signals.`;
+    }
+    if (n > 0) {
+      return `Intake screening of ${domainPhrase} completed (${conf}% confidence). ${n} diagnostic scans executed, establishing baseline parameters without flagging decisive manipulation indicators.`;
+    }
+
+    return null;
+  })();
 
   const failedCount = completedData.tools_failed ?? 0;
 
-  if (!hasSynthesis && topSignals.length === 0) return null;
+  if (!brief) return null;
+
+  // Render styling based on status
+  const containerStyle = isAlert
+    ? "bg-danger/[0.02] border-danger/15 text-danger/90"
+    : isInconclusive
+    ? "bg-warning/[0.02] border-warning/15 text-warning/90"
+    : isClean
+    ? "bg-success/[0.02] border-success/15 text-success/90"
+    : "bg-white/[0.01] border-white/5 text-white/90";
+
+  const iconColor = isAlert
+    ? "text-danger"
+    : isInconclusive
+    ? "text-warning"
+    : isClean
+    ? "text-success"
+    : "text-primary";
+
+  const StatusIcon = isAlert
+    ? ShieldAlert
+    : isInconclusive
+    ? HelpCircle
+    : isClean
+    ? CheckCircle2
+    : ListChecks;
 
   return (
-    <div className="border-t border-white/[0.07] pt-3.5 space-y-2.5">
-      <div className="flex items-center gap-2 fc-eyebrow fc-text-muted">
-        <ListChecks className="w-3.5 h-3.5 text-primary shrink-0" />
-        Agent Brief
+    <div className="border-t border-white/[0.07] pt-4 mt-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 fc-eyebrow fc-text-muted">
+          <StatusIcon className={`w-3.5 h-3.5 ${iconColor} shrink-0`} />
+          <span>Agent Brief</span>
+        </div>
+        {(toolsRan > 0 || failedCount > 0) && (
+          <div className="flex items-center gap-1.5 text-xs font-mono fc-text-muted tracking-wider">
+            <span>{toolsRan} tool{toolsRan !== 1 ? "s" : ""} active</span>
+            {failedCount > 0 && (
+              <>
+                <span>·</span>
+                <span className="text-warning">{failedCount} degraded</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {hasSynthesis ? (
-        <p className="text-sm fc-text-secondary leading-relaxed">
-          {synthSummary}
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {topSignals.map((signal, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className={clsx(
-                "mt-[5px] w-1.5 h-1.5 rounded-full shrink-0",
-                isAlert ? "bg-danger" : "bg-white/40"
-              )} />
-              <span className="text-sm fc-text-secondary leading-snug">{signal}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {(toolsRan > 0 || failedCount > 0) && (
-        <div className="flex items-center gap-2 fc-eyebrow fc-text-muted">
-          <span>{toolsRan} tool{toolsRan !== 1 ? "s" : ""} ran</span>
-          {failedCount > 0 && (
-            <>
-              <span>·</span>
-              <span className="fc-text-warning">{failedCount} degraded</span>
-            </>
-          )}
-        </div>
-      )}
+      <div className={`text-xs md:text-sm leading-relaxed border p-3.5 rounded-xl transition-all duration-[160ms] ${containerStyle}`}>
+        {brief}
+      </div>
     </div>
   );
 }
@@ -517,7 +582,13 @@ export function AgentStatusCard({
   return (
     <motion.div
       layout={prefersReduced ? false : true}
-      className="relative flex flex-col overflow-hidden fc-surface"
+      className={clsx(
+        "relative flex flex-col overflow-hidden transition-all duration-[160ms]",
+        isExpanded ? "fc-surface-elevated" : "fc-surface-quiet",
+        (status === "running" || status === "checking" || status === "validating") && "fc-agent-active",
+        status === "complete" && "fc-agent-complete",
+        status === "error" && "fc-agent-error"
+      )}
       data-testid={`agent-card-${agentId}`}
     >
       {/* --- Card Header --- */}
@@ -630,7 +701,6 @@ export function AgentStatusCard({
                  completedData={completedData}
                  findings={findings}
                  toolsRan={toolsRan}
-                 isAlert={isAgentAlert}
                />
             </motion.div>
           )}
