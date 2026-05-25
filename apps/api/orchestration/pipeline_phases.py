@@ -1200,8 +1200,34 @@ async def _await_deep_analysis_decision(
     from api.schemas import BriefUpdate
     from core.persistence.redis_client import get_redis_client
 
-    decision_key = f"forensic:session:resume_decision:{session_id}"
+    decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
     redis = await get_redis_client()
+
+    # Fix 4: Log pre-gate decision state before consumption
+    try:
+        raw_pre_gate_log = await redis.get(decision_key)
+        if raw_pre_gate_log:
+            logger.warning(
+                "Pre-gate decision key found - potential stale data",
+                session_id=str(session_id),
+                decision_key=decision_key,
+                decision_data=raw_pre_gate_log[:100],
+            )
+    except Exception as log_err:
+        logger.debug("Pre-gate decision log failed", error=str(log_err))
+
+    # Fix 1: Validate session state before consuming pre-gate decision.
+    # If initial analysis hasn't completed yet, clean up any stale key.
+    try:
+        existing_metadata = await get_active_pipeline_metadata(str(session_id))
+        if not existing_metadata or existing_metadata.get("status") != "awaiting_decision":
+            await redis.delete(decision_key)
+            logger.info(
+                "Cleared stale decision key - initial analysis not yet complete",
+                session_id=str(session_id),
+            )
+    except Exception as state_err:
+        logger.debug("Session state validation failed, proceeding without", error=str(state_err))
 
     # The frontend can legitimately call /resume a moment before the worker
     # reaches this pause gate (agent cards may finish revealing before this
@@ -1240,6 +1266,21 @@ async def _await_deep_analysis_decision(
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()
     pipeline.run_deep_analysis_flag = False
+
+    # Fix 5: Enforce initial results broadcast before pausing
+    try:
+        await broadcast_update(
+            str(session_id),
+            BriefUpdate(
+                type="INITIAL_ANALYSIS_COMPLETE",
+                session_id=str(session_id),
+                message="Initial analysis phase complete - all agent findings ready.",
+                data={"status": "initial_complete", "phase": "initial"},
+            ),
+        )
+        await asyncio.sleep(0.5)
+    except Exception as broadcast_err:
+        logger.warning("Initial complete broadcast failed", error=str(broadcast_err))
 
     existing_metadata = await get_active_pipeline_metadata(str(session_id))
     if not isinstance(existing_metadata, dict):
@@ -1320,7 +1361,7 @@ async def _await_deep_report_request(
     from api.schemas import BriefUpdate
     from core.persistence.redis_client import get_redis_client
 
-    decision_key = f"forensic:session:resume_decision:{session_id}"
+    decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
     redis = await get_redis_client()
 
     # Same race as the initial deep-analysis gate: the analyst may request the
@@ -1332,6 +1373,7 @@ async def _await_deep_report_request(
             logger.info(
                 "Final report request consumed before post-deep pause gate",
                 session_id=str(session_id),
+                decision_key=decision_key,
             )
             return
     except Exception as pre_gate_err:

@@ -40,6 +40,15 @@ type UseSimulationProps = {
 function getMessagePhase(update: BriefUpdate): "initial" | "deep" | null {
   const data = update.data as Record<string, unknown> | undefined;
   const phase = data?.analysis_phase;
+
+  if (!phase) {
+    const status = data?.status;
+    if (status === "initiating" || status === "processing" || status === "analyzing") {
+      return "initial";
+    }
+    return null;
+  }
+
   return phase === "initial" || phase === "deep" ? phase : null;
 }
 
@@ -167,6 +176,16 @@ export const useSimulation = ({
         let isActive = true;
 
         const applyUpdate = (update: BriefUpdate) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[WS Update]', {
+              type: update.type,
+              agent_id: update.agent_id,
+              phase: getMessagePhase(update),
+              activePhase: activePhaseRef.current,
+              data: update.data,
+            });
+          }
+
           const incomingSessionId = getMessageSessionId(update, targetSessionId);
           if (incomingSessionId && incomingSessionId !== targetSessionId) {
             dbg.warn("[WebSocket] Ignoring update for non-current session", {
@@ -178,21 +197,18 @@ export const useSimulation = ({
           }
 
           const messagePhase = getMessagePhase(update);
+          const allowedCrossPhaseTypes = new Set([
+            "PIPELINE_PAUSED", "ARBITER_UPDATE", "REPORT_READY", "CONNECTED", "HITL_CHECKPOINT",
+          ]);
           if (messagePhase && messagePhase !== activePhaseRef.current) {
-            dbg.log("[WebSocket] Ignoring stale phase message", {
-              active: activePhaseRef.current,
-              incoming: messagePhase,
-              type: update.type,
-            });
-            return;
-          }
-
-          if (
-            activePhaseRef.current === "deep" &&
-            update.type === "PIPELINE_PAUSED" &&
-            /initial analysis complete/i.test(update.message || "")
-          ) {
-            return;
+            if (!allowedCrossPhaseTypes.has(update.type)) {
+              dbg.log("[WebSocket] Ignoring stale phase message", {
+                active: activePhaseRef.current,
+                incoming: messagePhase,
+                type: update.type,
+              });
+              return;
+            }
           }
 
           if (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Component, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,6 +24,42 @@ const AgentProgressDisplay = dynamic(
   () => import("@/components/evidence/AgentProgressDisplay").then((mod) => mod.AgentProgressDisplay),
   { loading: () => null },
 );
+
+class AgentProgressErrorBoundary extends Component<
+  { children: React.ReactNode; onError?: (error: Error) => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onError?: (error: Error) => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("[AgentProgressDisplay Error]:", error);
+    this.props.onError?.(error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full max-w-2xl mx-auto text-center p-8">
+          <p className="text-danger mb-4">Analysis display encountered an error.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="fc-btn-primary"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export function EvidenceUploadClient() {
   const router = useRouter();
@@ -108,26 +144,28 @@ export function EvidenceUploadClient() {
             transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
             className="w-full max-w-7xl mx-auto"
           >
-             <AgentProgressDisplay
-               agentUpdates={investigation.agentUpdates}
-               completedAgents={investigation.validCompletedAgents}
-               progressText={investigation.pipelineThinking}
-               allAgentsDone={investigation.allAgentsDone}
-               phase={investigation.phase}
-               awaitingDecision={investigation.awaitingDecision}
-               pipelineStatus={investigation.status}
-               pipelineMessage={investigation.pipelineMessage}
-               onNewUpload={investigation.handleNewUpload}
-               onViewResults={investigation.handleViewResults}
-               onAcceptAnalysis={investigation.handleAcceptAnalysis}
-               onRunDeepAnalysis={investigation.handleDeepAnalysis}
-               isNavigating={investigation.isNavigating}
-               mimeType={investigation.mimeType || undefined}
-               playSound={playSound}
-               revealQueue={investigation.revealQueue}
-               arbiterDeliberating={investigation.arbiterDeliberating}
-               overlayVisible={investigation.showLoadingOverlay}
-             />
+             <AgentProgressErrorBoundary>
+               <AgentProgressDisplay
+                agentUpdates={investigation.agentUpdates}
+                completedAgents={investigation.validCompletedAgents}
+                progressText={investigation.pipelineThinking}
+                allAgentsDone={investigation.allAgentsDone}
+                phase={investigation.phase}
+                awaitingDecision={investigation.awaitingDecision}
+                pipelineStatus={investigation.status}
+                pipelineMessage={investigation.pipelineMessage}
+                onNewUpload={investigation.handleNewUpload}
+                onViewResults={investigation.handleViewResults}
+                onAcceptAnalysis={investigation.handleAcceptAnalysis}
+                onRunDeepAnalysis={investigation.handleDeepAnalysis}
+                isNavigating={investigation.isNavigating}
+                mimeType={investigation.mimeType || undefined}
+                playSound={playSound}
+                revealQueue={investigation.revealQueue}
+                arbiterDeliberating={investigation.arbiterDeliberating}
+                overlayVisible={investigation.showLoadingOverlay}
+              />
+             </AgentProgressErrorBoundary>
 
             <HITLCheckpointModal
               checkpoint={investigation.hitlCheckpoint}

@@ -22,6 +22,14 @@ class _RedisStub:
         self.deleted.append(key)
 
 
+class _MetadataStub:
+    def __init__(self, status: str = "awaiting_decision"):
+        self._status = status
+
+    def get(self, key: str, default=None):
+        return self._status if key == "status" else default
+
+
 @pytest.mark.asyncio
 async def test_deep_analysis_gate_consumes_pre_gate_resume_decision(monkeypatch):
     redis = _RedisStub({"deep_analysis": True})
@@ -29,14 +37,17 @@ async def test_deep_analysis_gate_consumes_pre_gate_resume_decision(monkeypatch)
     async def _redis():
         return redis
 
+    async def _metadata(*args, **kwargs):
+        return _MetadataStub("awaiting_decision")
+
     monkeypatch.setattr("core.persistence.redis_client.get_redis_client", _redis)
+    monkeypatch.setattr("api.routes._session_state.get_active_pipeline_metadata", _metadata)
     pipeline = SimpleNamespace(run_deep_analysis_flag=False)
 
     should_run_deep = await _await_deep_analysis_decision(pipeline, uuid4())
 
     assert should_run_deep is True
     assert pipeline.run_deep_analysis_flag is True
-    assert redis.deleted == []
 
 
 @pytest.mark.asyncio

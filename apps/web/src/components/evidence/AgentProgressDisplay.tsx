@@ -81,6 +81,8 @@ interface ActiveAgentsPanelProps {
 function ActiveAgentsPanel({ visibleAgents = [], agentUpdates = {}, completedAgents = [], getAgentStatus }: ActiveAgentsPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const prefersReducedMotion = useReducedMotion();
+  const safeAgentUpdates = agentUpdates || {};
+  const safeCompletedAgents = completedAgents || [];
 
   const doneCount = visibleAgents.filter(a => {
     const s = getAgentStatus(a.id);
@@ -124,8 +126,8 @@ function ActiveAgentsPanel({ visibleAgents = [], agentUpdates = {}, completedAge
           >
             {visibleAgents.map((agent) => {
               const status = getAgentStatus(agent.id);
-              const liveUpdate = agentUpdates[agent.id];
-              const completed = completedAgents?.find(c => c.agent_id === agent.id);
+              const liveUpdate = safeAgentUpdates[agent.id];
+              const completed = safeCompletedAgents.find(c => c.agent_id === agent.id);
               const accent = accentFor(agent.id);
               const Icon = AGENT_ICONS[agent.id] ?? Cpu;
               const toolDesc = getLiveProgressDescriptor(
@@ -266,14 +268,14 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function AgentProgressDisplay({
-  agentUpdates = {}, // Add strict default
+  agentUpdates = {},
   completedAgents = [],
-  progressText,
-  allAgentsDone,
-  phase,
-  awaitingDecision,
-  pipelineStatus,
-  pipelineMessage,
+  progressText = "",
+  allAgentsDone = false,
+  phase = "initial",
+  awaitingDecision = false,
+  pipelineStatus = "idle",
+  pipelineMessage = "",
   onNewUpload,
   onViewResults,
   onAcceptAnalysis,
@@ -285,6 +287,8 @@ export function AgentProgressDisplay({
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const safeAgentUpdates = agentUpdates || {};
+  const safeCompletedAgents = completedAgents || [];
 
   useEffect(() => {
     if (!mimeType) return;
@@ -309,10 +313,10 @@ export function AgentProgressDisplay({
   }, [phase, mimeType]);
 
   const visibleAgents = useMemo((): Agent[] => {
-    return allValidAgents
-      .filter((a): boolean => {
-        const completed = completedAgents?.find((c) => c.agent_id === a.id);
-        const liveStatus = agentUpdates[a.id]?.status;
+      return allValidAgents
+        .filter((a): boolean => {
+          const completed = safeCompletedAgents.find((c) => c.agent_id === a.id);
+          const liveStatus = safeAgentUpdates[a.id]?.status;
         if (completed?.status === "skipped" || liveStatus === "skipped") return false;
         const agentVerdict = (completed as unknown as { agent_verdict?: unknown })?.agent_verdict;
         if (agentVerdict === "NOT_APPLICABLE") return false;
@@ -320,7 +324,7 @@ export function AgentProgressDisplay({
         if (!mimeType) return true;
         return isAgentSupportedForMime(a.id, mimeType);
       });
-  }, [phase, initialAgentIds, mimeType, completedAgents, agentUpdates]);
+  }, [phase, initialAgentIds, mimeType, safeCompletedAgents, safeAgentUpdates]);
 
   const skippedAgents = useMemo(() => {
     if (!mimeType) return [];
@@ -332,13 +336,13 @@ export function AgentProgressDisplay({
   );
 
   const getAgentStatus = (agentId: string): AgentStatus => {
-    const completed = completedAgents?.find((c) => c.agent_id === agentId);
+    const completed = safeCompletedAgents.find((c) => c.agent_id === agentId);
     if (completed) {
       if (completed.status === "skipped") return "unsupported";
       return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
     }
 
-    const liveStatus = agentUpdates[agentId]?.status;
+    const liveStatus = safeAgentUpdates[agentId]?.status;
     if (liveStatus === "error" || liveStatus === "failed") return "error";
     if (liveStatus === "skipped") return "unsupported";
     if (liveStatus === "complete") return "complete";
@@ -347,10 +351,10 @@ export function AgentProgressDisplay({
 
     const isSupported = isAgentSupportedForMime(agentId, mimeType);
     if (!isSupported) {
-      return agentUpdates[agentId] ? "unsupported" : "waiting";
+      return safeAgentUpdates[agentId] ? "unsupported" : "waiting";
     }
 
-    if (agentUpdates[agentId]) return "running";
+    if (safeAgentUpdates[agentId]) return "running";
     if (isQueuePending) return "queued";
     if (pipelineStatus === "analyzing" || pipelineStatus === "initiating" || pipelineStatus === "processing") {
       return "checking";
@@ -427,8 +431,8 @@ export function AgentProgressDisplay({
         >
           <ActiveAgentsPanel
             visibleAgents={visibleAgents}
-            agentUpdates={agentUpdates}
-            completedAgents={completedAgents}
+            agentUpdates={safeAgentUpdates}
+            completedAgents={safeCompletedAgents}
             getAgentStatus={getAgentStatus}
           />
           {skippedAgents.length > 0 && (
@@ -465,9 +469,9 @@ export function AgentProgressDisplay({
                   name={agent.name}
                   badge={agent.badge}
                   status={getAgentStatus(agent.id)}
-                  thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
-                  liveUpdate={agentUpdates[agent.id]}
-                  completedData={completedAgents?.find((c) => c.agent_id === agent.id)}
+                  thinking={safeAgentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
+                  liveUpdate={safeAgentUpdates[agent.id]}
+                  completedData={safeCompletedAgents.find((c) => c.agent_id === agent.id)}
                   phase={phase}
                   isExpanded={!!expandedCards[agent.id]}
                   onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
@@ -539,7 +543,7 @@ export function AgentProgressDisplay({
 
       {/* ── Deep analysis decision gate ──────────────────────────────────── */}
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && (pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
+        {phase === "deep" && revealQueue.length === 0 && safeCompletedAgents.length > 0 && (pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}

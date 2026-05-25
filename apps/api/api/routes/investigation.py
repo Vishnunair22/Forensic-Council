@@ -247,22 +247,29 @@ async def _supersede_prior_investigations(
             )
             await redis.delete(f"forensic:replay:{session_id}")
             await redis.delete(f"forensic:session:resume_decision:{session_id}")
+            await redis.delete(f"forensic:session:resume_decision:{session_id}:initial_to_deep")
+            await redis.delete(f"forensic:session:resume_decision:{session_id}:deep_to_report")
             try:
                 await redis.hdel(task_hash, session_id)
             except Exception:
                 logger.debug("Failed to delete superseded task metadata", session_id=session_id)
 
             try:
-                await redis.set(
+                for decision_key in [
+                    f"forensic:session:resume_decision:{session_id}:initial_to_deep",
+                    f"forensic:session:resume_decision:{session_id}:deep_to_report",
                     f"forensic:session:resume_decision:{session_id}",
-                    {
-                        "deep_analysis": False,
-                        "decided_by": investigator_user_id,
-                        "decided_at": datetime.now(UTC).isoformat(),
-                        "superseded_by": keep_session_id,
-                    },
-                    ex=300,
-                )
+                ]:
+                    await redis.set(
+                        decision_key,
+                        {
+                            "deep_analysis": False,
+                            "decided_by": investigator_user_id,
+                            "decided_at": datetime.now(UTC).isoformat(),
+                            "superseded_by": keep_session_id,
+                        },
+                        ex=300,
+                    )
                 await redis.client.publish(
                     "forensic:notify_decision",
                     json.dumps({"session_id": session_id, "deep_analysis": False}),

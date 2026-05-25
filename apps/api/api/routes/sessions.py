@@ -190,6 +190,8 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
         f"forensic:session:metadata:{session_id}",
         f"forensic:replay:{session_id}",
         f"forensic:session:resume_decision:{session_id}",
+        f"forensic:session:resume_decision:{session_id}:initial_to_deep",
+        f"forensic:session:resume_decision:{session_id}:deep_to_report",
     )
     await redis.hdel("forensic:investigation:tasks", session_id)
 
@@ -833,9 +835,15 @@ async def resume_investigation(
             detail="You do not have access to this investigation",
         )
 
-    # Check for existing decision key (idempotency)
+    # Determine phase-scoped decision key from pipeline state
     redis = await get_redis_client()
-    decision_key = f"forensic:session:resume_decision:{session_id}"
+    pipeline_status = metadata.get("status", "")
+    if pipeline_status == "awaiting_deep_report":
+        decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
+    else:
+        decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
+
+    # Check for existing decision key (idempotency)
     existing_decision = await redis.get(decision_key)
     if existing_decision:
         _log.info(

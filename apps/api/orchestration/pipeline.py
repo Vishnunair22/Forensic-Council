@@ -126,6 +126,7 @@ class ForensicCouncilPipeline:
                     data={
                         "status": "initiating",
                         "thinking": "Establishing secure neural bridge...",
+                        "analysis_phase": "initial",
                     },
                 ),
             )
@@ -145,6 +146,7 @@ class ForensicCouncilPipeline:
                             data={
                                 "status": "initiating",
                                 "thinking": "Syncing with Qdrant vector space...",
+                                "analysis_phase": "initial",
                             },
                         ),
                     )
@@ -171,6 +173,7 @@ class ForensicCouncilPipeline:
                             data={
                                 "status": "initiating",
                                 "thinking": "Securing Postgres persistence layer...",
+                                "analysis_phase": "initial",
                             },
                         ),
                     )
@@ -368,7 +371,7 @@ class ForensicCouncilPipeline:
                         session_id=str(session_id),
                         agent_id=None,
                         message=msg,
-                        data={"status": "deliberating", "thinking": msg},
+                        data={"status": "deliberating", "thinking": msg, "analysis_phase": "initial"},
                     ),
                 )
                 existing = await get_active_pipeline_metadata(str(session_id)) or {}
@@ -450,6 +453,29 @@ class ForensicCouncilPipeline:
         # Defensive pre-flight clear: Ensure no stale Redis/WAL keys exist for this session ID
         await self._clear_working_memory_for_session(session_id)
 
+        # Fix 3: Clear any stale decision keys from previous sessions or crashes
+        try:
+            from core.persistence.redis_client import get_redis_client
+            redis = await get_redis_client()
+            decision_patterns = [
+                f"forensic:session:resume_decision:{session_id}:*",
+                f"forensic:session:resume_decision:{session_id}",
+            ]
+            for pattern in decision_patterns:
+                if "*" in pattern:
+                    cursor = 0
+                    while True:
+                        cursor, keys = await redis.scan(cursor, match=pattern, count=100)
+                        if keys:
+                            await redis.delete(*keys)
+                        if cursor == 0:
+                            break
+                else:
+                    await redis.delete(pattern)
+            logger.info("Cleared stale decision keys for session", session_id=str(session_id))
+        except Exception as cleanup_err:
+            logger.debug("Decision key cleanup failed (non-critical)", error=str(cleanup_err))
+
         try:
             from api.routes._session_state import broadcast_update
             from api.schemas import BriefUpdate
@@ -461,7 +487,7 @@ class ForensicCouncilPipeline:
                     session_id=str(session_id),
                     agent_id=None,
                     message="Forensic pipeline initialized. Ingesting evidence...",
-                    data={"status": "initiating", "thinking": "Securing evidence artifacts..."},
+                    data={"status": "initiating", "thinking": "Securing evidence artifacts...", "analysis_phase": "initial"},
                 ),
             )
         except Exception as _e:
@@ -482,7 +508,7 @@ class ForensicCouncilPipeline:
                     session_id=str(session_id),
                     agent_id=None,
                     message="Evidence secured. Initializing forensic session...",
-                    data={"status": "processing", "thinking": "Validating chain of custody..."},
+                    data={"status": "processing", "thinking": "Validating chain of custody...", "analysis_phase": "initial"},
                 ),
             )
         except Exception as _e:
@@ -512,7 +538,7 @@ class ForensicCouncilPipeline:
                     session_id=str(session_id),
                     agent_id=None,
                     message="",
-                    data={"status": "processing", "thinking": "Allocating neural resources..."},
+                    data={"status": "processing", "thinking": "Allocating neural resources...", "analysis_phase": "initial"},
                 ),
             )
         except Exception as _e:
