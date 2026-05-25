@@ -53,14 +53,17 @@ export function GlobalLoadingOverlay() {
         if (value === "true") {
           setShow(true);
         } else {
-          // Grace guard: during handoff (home→evidence), transient dismiss events
-          // from resetSimulation or clearInvestigationPersistence should be ignored.
-          // Only the explicit useInvestigation overlay-dismissal effect (triggered by
-          // analysisStreamReady) and safety timers should hide the overlay.
-          const isMidHandoff =
+          // Grace guard: block dismissal only during the narrow handoff window
+          // (FC_SHOW_LOADING is still "true" in sessionStorage, meaning
+          // useInvestigation hasn't explicitly requested dismissal yet).
+          // Once useInvestigation calls removeItem(FC_SHOW_LOADING), that IS
+          // an intentional dismiss — always honour it, even if SESSION_ID
+          // isn't set yet (e.g. upload failed, auth failed, WS failed).
+          const isGracePeriod =
             sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" &&
-            !storage.getItem(STORAGE_KEYS.SESSION_ID);
-          if (isMidHandoff) return;
+            !storage.getItem(STORAGE_KEYS.SESSION_ID) &&
+            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+          if (isGracePeriod) return;
           dismiss(false);
         }
       } else if (key === STORAGE_KEYS.FC_LOADING_TEXT) {

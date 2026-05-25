@@ -314,6 +314,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setArbiterLiveText(arbiterThinking);
   }, [arbiterDeliberating, arbiterThinking]);
 
+  const [mimeType, setMimeType] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    if (__pendingFileStore.file?.type) return __pendingFileStore.file.type;
+    return storage.getItem(STORAGE_KEYS.MIME_TYPE) || null;
+  });
+
+  useEffect(() => {
+    setMimeType(storage.getItem(STORAGE_KEYS.MIME_TYPE) || file?.type || null);
+  }, [file]);
+
   const triggerAnalysis = useCallback(
     async (targetFile: File) => {
       if (!targetFile) return;
@@ -910,16 +920,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some((v) => v.id === c.agent_id)
   );
-
-  const [mimeType, setMimeType] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    if (__pendingFileStore.file?.type) return __pendingFileStore.file.type;
-    return storage.getItem(STORAGE_KEYS.MIME_TYPE) || null;
-  });
-
-  useEffect(() => {
-    setMimeType(storage.getItem(STORAGE_KEYS.MIME_TYPE) || file?.type || null);
-  }, [file]);
 
   const expectedAgentIds = useMemo(() => supportedAgentIdsForMime(mimeType), [mimeType]);
 
