@@ -14,10 +14,17 @@ import { STORAGE_KEYS } from "@/lib/storageKeys";
 // is only a navigation-gap bridge. If the evidence page hooks don't dismiss
 // it within this window (e.g. auth error / WS failure), we force-dismiss so
 // the page isn't permanently covered.
-const EVIDENCE_MAX_DISPLAY_MS = 8_000;
+const EVIDENCE_MAX_DISPLAY_MS = 5_000;
 
 export function GlobalLoadingOverlay() {
-  const [show, setShow] = useState(() => sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true");
+  const pathname = usePathname();
+  const [show, setShow] = useState(() => {
+    if (typeof window !== "undefined" && pathname !== "/evidence") {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      return false;
+    }
+    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+  });
   const [liveText, setLiveText] = useState(() => {
     const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT);
     return stored || "Opening evidence analysis...";
@@ -29,7 +36,6 @@ export function GlobalLoadingOverlay() {
   const [arbiterTransition, setArbiterTransition] = useState(() =>
     sessionOnlyStorage.getItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING) === "1"
   );
-  const pathname = usePathname();
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismiss = (clearStorage = true) => {
@@ -44,6 +50,12 @@ export function GlobalLoadingOverlay() {
       safetyTimerRef.current = null;
     }
   };
+
+  useEffect(() => {
+    if (pathname !== "/evidence") {
+      dismiss();
+    }
+  }, [pathname]);
 
   // Listen for storage updates dispatched by useInvestigation
   useEffect(() => {
@@ -119,7 +131,7 @@ export function GlobalLoadingOverlay() {
         )}
       </AnimatePresence>
       <ArbiterDeliberationOverlay
-        isVisible={arbiterTransition}
+        isVisible={arbiterTransition && pathname !== "/evidence"}
         liveText="Report confirmed ready. Loading result page..."
       />
     </>

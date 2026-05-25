@@ -1,0 +1,245 @@
+  console.error
+    [api] Report validation failed. Falling back to passthrough. [
+      {
+        "validation": "uuid",
+        "code": "invalid_string",
+        "message": "Invalid uuid",
+        "path": [
+          "session_id"
+        ]
+      },
+      {
+        "validation": "uuid",
+        "code": "invalid_string",
+        "message": "Invalid uuid",
+        "path": [
+          "report_id"
+        ]
+      }
+    ]
+
+    [0m [90m 52 |[39m   [36mif[39m (result[33m.[39msuccess) [36mreturn[39m result[33m.[39mdata [36mas[39m unknown [36mas[39m [33mReportDTO[39m[33m;[39m
+     [90m 53 |[39m
+    [31m[1m>[22m[39m[90m 54 |[39m   dbg[33m.[39merror(
+     [90m    |[39m       [31m[1m^[22m[39m
+     [90m 55 |[39m     [32m"[api] Report validation failed. Falling back to passthrough."[39m[33m,[39m
+     [90m 56 |[39m     result[33m.[39merror[33m.[39mmessage[33m,[39m
+     [90m 57 |[39m   )[33m;[39m[0m
+
+      at error (src/lib/api/client.ts:54:7)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:334:20)
+
+  console.error
+    [telemetry] schema_validation_error: {
+      schema: 'ReportDTO',
+      error: [
+        {
+          validation: 'uuid',
+          code: 'invalid_string',
+          message: 'Invalid uuid',
+          path: [Array]
+        },
+        {
+          validation: 'uuid',
+          code: 'invalid_string',
+          message: 'Invalid uuid',
+          path: [Array]
+        }
+      ],
+      url: 'http://localhost/'
+    }
+
+    [0m [90m 57 |[39m   )[33m;[39m
+     [90m 58 |[39m
+    [31m[1m>[22m[39m[90m 59 |[39m   console[33m.[39merror([32m"[telemetry] schema_validation_error:"[39m[33m,[39m {
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 60 |[39m     schema[33m:[39m [32m"ReportDTO"[39m[33m,[39m
+     [90m 61 |[39m     error[33m:[39m result[33m.[39merror[33m.[39merrors[33m,[39m
+     [90m 62 |[39m     url[33m:[39m [36mtypeof[39m window [33m!==[39m [32m"undefined"[39m [33m?[39m window[33m.[39mlocation[33m.[39mhref [33m:[39m [32m"server"[39m[33m,[39m[0m
+
+      at error (src/lib/api/client.ts:59:11)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:334:20)
+
+  console.warn
+    [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:383:43)
+
+  console.warn
+    [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:392:47)
+
+  console.warn
+    [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:399:43)
+
+  console.warn
+    [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:409:43)
+
+  console.warn
+    [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:419:43)
+
+  console.error
+    [api] Report validation failed. Falling back to passthrough. [
+      {
+        "code": "invalid_type",
+        "expected": "string",
+        "received": "undefined",
+        "path": [
+          "session_id"
+        ],
+        "message": "Required"
+      },
+      {
+        "code": "invalid_type",
+        "expected": "string",
+        "received": "undefined",
+        "path": [
+          "report_id"
+        ],
+        "message": "Required"
+      },
+      {
+        "code": "invalid_type",
+        "expected": "string",
+        "received": "undefined",
+        "path": [
+          "case_id"
+        ],
+        "message": "Required"
+      },
+      {
+        "expected": "'AUTHENTIC' | 'LIKELY_AUTHENTIC' | 'INCONCLUSIVE' | 'SUSPICIOUS' | 'LIKELY_MANIPULATED' | 'MANIPULATED' | 'ABSTAIN' | 'NOT_APPLICABLE'",
+        "received": "undefined",
+        "code": "invalid_type",
+        "path": [
+          "overall_verdict"
+        ],
+        "message": "Required"
+      },
+      {
+        "code": "invalid_type",
+        "expected": "number",
+        "received": "undefined",
+        "path": [
+          "overall_confidence"
+        ],
+        "message": "Required"
+      }
+    ]
+
+    [0m [90m 52 |[39m   [36mif[39m (result[33m.[39msuccess) [36mreturn[39m result[33m.[39mdata [36mas[39m unknown [36mas[39m [33mReportDTO[39m[33m;[39m
+     [90m 53 |[39m
+    [31m[1m>[22m[39m[90m 54 |[39m   dbg[33m.[39merror(
+     [90m    |[39m       [31m[1m^[22m[39m
+     [90m 55 |[39m     [32m"[api] Report validation failed. Falling back to passthrough."[39m[33m,[39m
+     [90m 56 |[39m     result[33m.[39merror[33m.[39mmessage[33m,[39m
+     [90m 57 |[39m   )[33m;[39m[0m
+
+      at error (src/lib/api/client.ts:54:7)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:433:22)
+
+PASS tests/unit/lib/api.test.ts (18.335 s)
+  token helpers
+    √ stores and retrieves a token (5 ms)
+    √ does not store an expiry when expiresIn is omitted (2 ms)
+    √ clears expired tokens (2 ms)
+    √ clears both storage keys (1 ms)
+    √ treats stored token as authenticated
+  auth API
+    √ login submits form-encoded credentials and returns payload (2154 ms)
+    √ autoLoginAsInvestigator posts to the demo route (2 ms)
+    √ logout posts with cookie credentials (2169 ms)
+    √ ensureAuthenticated returns after a healthy /me check (4 ms)
+    √ ensureAuthenticated falls back to demo login when /me is unauthorized (1 ms)
+  investigation API
+    √ starts an investigation with multipart upload (2130 ms)
+    √ gets report in progress on 202 (2 ms)
+    √ gets a completed report on 200 (65 ms)
+    √ gets agent brief text (1 ms)
+    √ gets checkpoints (1 ms)
+    √ submits a HITL decision (2196 ms)
+  live socket
+    √ creates a session-scoped websocket URL (8 ms)
+    √ does not send an AUTH message on open (3 ms)
+    √ resolves connected on CONNECTED (3 ms)
+    √ resolves connected on first AGENT_UPDATE (4 ms)
+    √ rejects on websocket error (24 ms)
+  getReport schema fallback
+    √ getReport falls back gracefully on schema mismatch without crashing (11 ms)
+    √ getReport returns valid parsed report on success
+  pollForReport
+    √ resolves after an in-progress poll turns complete (17 ms)
+  DuplicateInvestigationError handling
+    √ throws DuplicateInvestigationError for string detail with session ID (2179 ms)
+    √ throws DuplicateInvestigationError for object with existing_session_id (2204 ms)
+    √ throws DuplicateInvestigationError for structured detail with code (2196 ms)
+    √ throws normal Error for 409 without session id (2188 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       28 passed, 28 total
+Snapshots:   0 total
+Time:        19.132 s, estimated 21 s
+Ran all test suites matching tests/unit/lib/api.test.ts.

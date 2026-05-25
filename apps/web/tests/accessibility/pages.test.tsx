@@ -15,6 +15,12 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: jest.fn(() => ({
+    clear: jest.fn(),
+  })),
+}));
+
 jest.mock("@/components/evidence/UploadModal", () => ({
   UploadModal: () => <div>Upload modal</div>,
 }));

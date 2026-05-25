@@ -1,0 +1,1439 @@
+
+> forensic-council-frontend@1.7.0 test
+> jest --passWithNoTests
+
+PASS tests/unit/lib/schemas_utils.test.ts
+PASS tests/unit/components/LoadingOverlay.test.tsx
+PASS tests/unit/app/routes.test.ts
+PASS tests/unit/lib/sse.test.ts
+  ● Console
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:96:36)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:102:36)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:107:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:116:21)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:121:21)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:127:21)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:132:21)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:141:21)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:150:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:156:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:162:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:168:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:185:36)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/sse.test.ts:190:21)
+
+PASS tests/unit/lib/websocket_flow.test.ts
+  ● Console
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:88:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:95:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:106:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:112:43)
+
+    console.error
+      [api] Report validation failed. Falling back to passthrough. [
+        {
+          "validation": "uuid",
+          "code": "invalid_string",
+          "message": "Invalid uuid",
+          "path": [
+            "session_id"
+          ]
+        },
+        {
+          "validation": "uuid",
+          "code": "invalid_string",
+          "message": "Invalid uuid",
+          "path": [
+            "report_id"
+          ]
+        }
+      ]
+
+    [0m [90m 52 |[39m   [36mif[39m (result[33m.[39msuccess) [36mreturn[39m result[33m.[39mdata [36mas[39m unknown [36mas[39m [33mReportDTO[39m[33m;[39m
+     [90m 53 |[39m
+    [31m[1m>[22m[39m[90m 54 |[39m   dbg[33m.[39merror(
+     [90m    |[39m       [31m[1m^[22m[39m
+     [90m 55 |[39m     [32m"[api] Report validation failed. Falling back to passthrough."[39m[33m,[39m
+     [90m 56 |[39m     result[33m.[39merror[33m.[39mmessage[33m,[39m
+     [90m 57 |[39m   )[33m;[39m[0m
+
+      at error (src/lib/api/client.ts:54:7)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:149:20)
+
+    console.error
+      [telemetry] schema_validation_error: {
+        schema: 'ReportDTO',
+        error: [
+          {
+            validation: 'uuid',
+            code: 'invalid_string',
+            message: 'Invalid uuid',
+            path: [Array]
+          },
+          {
+            validation: 'uuid',
+            code: 'invalid_string',
+            message: 'Invalid uuid',
+            path: [Array]
+          }
+        ],
+        url: 'http://localhost/'
+      }
+
+    [0m [90m 57 |[39m   )[33m;[39m
+     [90m 58 |[39m
+    [31m[1m>[22m[39m[90m 59 |[39m   console[33m.[39merror([32m"[telemetry] schema_validation_error:"[39m[33m,[39m {
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 60 |[39m     schema[33m:[39m [32m"ReportDTO"[39m[33m,[39m
+     [90m 61 |[39m     error[33m:[39m result[33m.[39merror[33m.[39merrors[33m,[39m
+     [90m 62 |[39m     url[33m:[39m [36mtypeof[39m window [33m!==[39m [32m"undefined"[39m [33m?[39m window[33m.[39mlocation[33m.[39mhref [33m:[39m [32m"server"[39m[33m,[39m[0m
+
+      at error (src/lib/api/client.ts:59:11)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:149:20)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:157:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:164:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:176:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/websocket_flow.test.ts:188:43)
+
+PASS tests/integration/page_flows.test.tsx
+PASS tests/storage.test.ts
+PASS tests/unit/lib/investigationStorage.test.ts
+PASS tests/unit/hooks/useSimulation.test.ts (5.119 s)
+  ● Console
+
+    console.warn
+      [api] getArbiterStatus error: ReferenceError: fetch is not defined
+          at getArbiterStatus (D:\Forensic Council\apps\web\src\lib\api\client.ts:515:22)
+          at D:\Forensic Council\apps\web\src\hooks\useSimulation.ts:766:50
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+    [0m [90m 529 |[39m     [36mreturn[39m response[33m.[39mjson()[33m;[39m
+     [90m 530 |[39m   } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 531 |[39m     dbg[33m.[39mwarn([32m"[api] getArbiterStatus error:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m         [31m[1m^[22m[39m
+     [90m 532 |[39m     [36mreturn[39m {
+     [90m 533 |[39m       status[33m:[39m [32m"unreachable"[39m[33m,[39m
+     [90m 534 |[39m       message[33m:[39m error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Backend unreachable"[39m[33m,[39m[0m
+
+      at warn (src/lib/api/client.ts:531:9)
+      at src/hooks/useSimulation.ts:766:50
+
+    console.warn
+      [api] getArbiterStatus error: ReferenceError: fetch is not defined
+          at getArbiterStatus (D:\Forensic Council\apps\web\src\lib\api\client.ts:515:22)
+          at D:\Forensic Council\apps\web\src\hooks\useSimulation.ts:766:50
+
+    [0m [90m 529 |[39m     [36mreturn[39m response[33m.[39mjson()[33m;[39m
+     [90m 530 |[39m   } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 531 |[39m     dbg[33m.[39mwarn([32m"[api] getArbiterStatus error:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m         [31m[1m^[22m[39m
+     [90m 532 |[39m     [36mreturn[39m {
+     [90m 533 |[39m       status[33m:[39m [32m"unreachable"[39m[33m,[39m
+     [90m 534 |[39m       message[33m:[39m error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Backend unreachable"[39m[33m,[39m[0m
+
+      at warn (src/lib/api/client.ts:531:9)
+      at src/hooks/useSimulation.ts:766:50
+
+    console.log
+      [WebSocket] Received update, adding to queue: {
+        type: 'AGENT_UPDATE',
+        agent_id: null,
+        message: 'Starting analysis...',
+        data: { thinking: 'System is warming up' }
+      }
+
+      at log (src/hooks/useSimulation.ts:598:17)
+          at Array.forEach (<anonymous>)
+
+    console.log
+      [Simulation] Processing update from queue: {
+        type: 'AGENT_UPDATE',
+        agent_id: null,
+        message: 'Starting analysis...',
+        data: { thinking: 'System is warming up' }
+      }
+
+      at log (src/hooks/useSimulation.ts:563:19)
+          at Array.forEach (<anonymous>)
+
+    console.warn
+      [api] getArbiterStatus error: ReferenceError: fetch is not defined
+          at getArbiterStatus (D:\Forensic Council\apps\web\src\lib\api\client.ts:515:22)
+          at D:\Forensic Council\apps\web\src\hooks\useSimulation.ts:766:50
+
+    [0m [90m 529 |[39m     [36mreturn[39m response[33m.[39mjson()[33m;[39m
+     [90m 530 |[39m   } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 531 |[39m     dbg[33m.[39mwarn([32m"[api] getArbiterStatus error:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m         [31m[1m^[22m[39m
+     [90m 532 |[39m     [36mreturn[39m {
+     [90m 533 |[39m       status[33m:[39m [32m"unreachable"[39m[33m,[39m
+     [90m 534 |[39m       message[33m:[39m error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Backend unreachable"[39m[33m,[39m[0m
+
+      at warn (src/lib/api/client.ts:531:9)
+      at src/hooks/useSimulation.ts:766:50
+
+    console.log
+      [WebSocket] Received update, adding to queue: {
+        type: 'AGENT_COMPLETE',
+        agent_id: 'Agent1',
+        agent_name: 'Image Integrity',
+        message: 'No manipulation found',
+        data: { confidence: 0.98, status: 'complete', agent_verdict: 'CLEAN' }
+      }
+
+      at log (src/hooks/useSimulation.ts:598:17)
+          at Array.forEach (<anonymous>)
+
+    console.log
+      [Simulation] Processing update from queue: {
+        type: 'AGENT_COMPLETE',
+        agent_id: 'Agent1',
+        agent_name: 'Image Integrity',
+        message: 'No manipulation found',
+        data: { confidence: 0.98, status: 'complete', agent_verdict: 'CLEAN' }
+      }
+
+      at log (src/hooks/useSimulation.ts:563:19)
+          at Array.forEach (<anonymous>)
+
+    console.warn
+      [api] getArbiterStatus error: ReferenceError: fetch is not defined
+          at getArbiterStatus (D:\Forensic Council\apps\web\src\lib\api\client.ts:515:22)
+          at D:\Forensic Council\apps\web\src\hooks\useSimulation.ts:766:50
+
+    [0m [90m 529 |[39m     [36mreturn[39m response[33m.[39mjson()[33m;[39m
+     [90m 530 |[39m   } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 531 |[39m     dbg[33m.[39mwarn([32m"[api] getArbiterStatus error:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m         [31m[1m^[22m[39m
+     [90m 532 |[39m     [36mreturn[39m {
+     [90m 533 |[39m       status[33m:[39m [32m"unreachable"[39m[33m,[39m
+     [90m 534 |[39m       message[33m:[39m error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Backend unreachable"[39m[33m,[39m[0m
+
+      at warn (src/lib/api/client.ts:531:9)
+      at src/hooks/useSimulation.ts:766:50
+
+    console.log
+      [WebSocket] Received update, adding to queue: {
+        type: 'AGENT_COMPLETE',
+        agent_id: 'Agent2',
+        agent_name: 'Audio Forensics',
+        message: 'Agent2 skipped immediately: this agent does not support the submitted file type.',
+        data: {
+          confidence: 0,
+          findings_count: 0,
+          status: 'skipped',
+          error: 'Unsupported file type.'
+        }
+      }
+
+      at log (src/hooks/useSimulation.ts:598:17)
+          at Array.forEach (<anonymous>)
+
+    console.log
+      [Simulation] Processing update from queue: {
+        type: 'AGENT_COMPLETE',
+        agent_id: 'Agent2',
+        agent_name: 'Audio Forensics',
+        message: 'Agent2 skipped immediately: this agent does not support the submitted file type.',
+        data: {
+          confidence: 0,
+          findings_count: 0,
+          status: 'skipped',
+          error: 'Unsupported file type.'
+        }
+      }
+
+      at log (src/hooks/useSimulation.ts:563:19)
+          at Array.forEach (<anonymous>)
+
+    console.warn
+      [api] getArbiterStatus error: ReferenceError: fetch is not defined
+          at getArbiterStatus (D:\Forensic Council\apps\web\src\lib\api\client.ts:515:22)
+          at D:\Forensic Council\apps\web\src\hooks\useSimulation.ts:766:50
+
+    [0m [90m 529 |[39m     [36mreturn[39m response[33m.[39mjson()[33m;[39m
+     [90m 530 |[39m   } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 531 |[39m     dbg[33m.[39mwarn([32m"[api] getArbiterStatus error:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m         [31m[1m^[22m[39m
+     [90m 532 |[39m     [36mreturn[39m {
+     [90m 533 |[39m       status[33m:[39m [32m"unreachable"[39m[33m,[39m
+     [90m 534 |[39m       message[33m:[39m error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Backend unreachable"[39m[33m,[39m[0m
+
+      at warn (src/lib/api/client.ts:531:9)
+      at src/hooks/useSimulation.ts:766:50
+
+    console.log
+      [WebSocket] Received update, adding to queue: {
+        type: 'HITL_CHECKPOINT',
+        session_id: 'test-session',
+        agent_id: 'Agent2',
+        agent_name: 'Metadata Expert',
+        message: 'Potential spoofing detected',
+        data: { checkpoint_id: 'cp-123' }
+      }
+
+      at log (src/hooks/useSimulation.ts:598:17)
+          at Array.forEach (<anonymous>)
+
+    console.log
+      [Simulation] Processing update from queue: {
+        type: 'HITL_CHECKPOINT',
+        session_id: 'test-session',
+        agent_id: 'Agent2',
+        agent_name: 'Metadata Expert',
+        message: 'Potential spoofing detected',
+        data: { checkpoint_id: 'cp-123' }
+      }
+
+      at log (src/hooks/useSimulation.ts:563:19)
+          at Array.forEach (<anonymous>)
+
+    console.warn
+      [api] getArbiterStatus error: ReferenceError: fetch is not defined
+          at getArbiterStatus (D:\Forensic Council\apps\web\src\lib\api\client.ts:515:22)
+          at D:\Forensic Council\apps\web\src\hooks\useSimulation.ts:766:50
+
+    [0m [90m 529 |[39m     [36mreturn[39m response[33m.[39mjson()[33m;[39m
+     [90m 530 |[39m   } [36mcatch[39m (error) {
+    [31m[1m>[22m[39m[90m 531 |[39m     dbg[33m.[39mwarn([32m"[api] getArbiterStatus error:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m         [31m[1m^[22m[39m
+     [90m 532 |[39m     [36mreturn[39m {
+     [90m 533 |[39m       status[33m:[39m [32m"unreachable"[39m[33m,[39m
+     [90m 534 |[39m       message[33m:[39m error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Backend unreachable"[39m[33m,[39m[0m
+
+      at warn (src/lib/api/client.ts:531:9)
+      at src/hooks/useSimulation.ts:766:50
+
+    console.log
+      [WebSocket] Received update, adding to queue: { type: 'ERROR', message: 'Backend connection lost' }
+
+      at log (src/hooks/useSimulation.ts:598:17)
+          at Array.forEach (<anonymous>)
+
+    console.log
+      [Simulation] Processing update from queue: { type: 'ERROR', message: 'Backend connection lost' }
+
+      at log (src/hooks/useSimulation.ts:563:19)
+          at Array.forEach (<anonymous>)
+
+    console.error
+      [WebSocket] Error: Backend connection lost
+
+    [0m [90m 507 |[39m
+     [90m 508 |[39m                 [36mcase[39m [32m"ERROR"[39m[33m:[39m
+    [31m[1m>[22m[39m[90m 509 |[39m                   dbg[33m.[39merror([32m"[WebSocket] Error:"[39m[33m,[39m update[33m.[39mmessage)[33m;[39m
+     [90m     |[39m                       [31m[1m^[22m[39m
+     [90m 510 |[39m                   expectingPipelineCompleteRef[33m.[39mcurrent [33m=[39m [36mfalse[39m[33m;[39m
+     [90m 511 |[39m                   setErrorMessage(update[33m.[39mmessage [33m||[39m [32m"Investigation failed"[39m)[33m;[39m
+     [90m 512 |[39m                   setStatus([32m"error"[39m)[33m;[39m[0m
+
+      at error (src/hooks/useSimulation.ts:509:23)
+      at applyUpdate (src/hooks/useSimulation.ts:571:19)
+      at process.env.NODE_ENV.exports.flushSync (node_modules/react-dom/cjs/react-dom.development.js:136:18)
+      at processQueue (src/hooks/useSimulation.ts:570:26)
+      at processQueue (src/hooks/useSimulation.ts:634:13)
+      at l (tests/unit/hooks/useSimulation.test.ts:37:58)
+          at Array.forEach (<anonymous>)
+      at Object.forEach [as dispatchMessage] (tests/unit/hooks/useSimulation.test.ts:37:38)
+      at dispatchMessage (tests/unit/hooks/useSimulation.test.ts:189:14)
+      at node_modules/@testing-library/react/dist/act-compat.js:47:24
+      at process.env.NODE_ENV.exports.act (node_modules/react/cjs/react.development.js:814:22)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at Object.<anonymous> (tests/unit/hooks/useSimulation.test.ts:188:8)
+
+PASS tests/unit/app/session-expired.test.tsx (5.041 s)
+PASS tests/accessibility/pages.test.tsx (5.226 s)
+  ● Console
+
+    console.error
+      An update to ForwardRef(LoadableComponent) inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18758:19
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:16409:11)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom-client.development.js:8262:24)
+      at node_modules/react-dom/cjs/react-dom-client.development.js:8247:11
+      at callback (node_modules/next/src/shared/lib/loadable.shared-runtime.tsx:236:48)
+          at Set.forEach (<anonymous>)
+      at LoadableSubscription.forEach (node_modules/next/src/shared/lib/loadable.shared-runtime.tsx:236:21)
+      at _update (node_modules/next/src/shared/lib/loadable.shared-runtime.tsx:218:14)
+
+    console.error
+      An update to ForwardRef(LoadableComponent) inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18758:19
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:16409:11)
+      at forceStoreRerender (node_modules/react-dom/cjs/react-dom-client.development.js:8262:24)
+      at node_modules/react-dom/cjs/react-dom-client.development.js:8247:11
+      at callback (node_modules/next/src/shared/lib/loadable.shared-runtime.tsx:236:48)
+          at Set.forEach (<anonymous>)
+      at LoadableSubscription.forEach (node_modules/next/src/shared/lib/loadable.shared-runtime.tsx:236:21)
+      at _update (node_modules/next/src/shared/lib/loadable.shared-runtime.tsx:218:14)
+
+PASS tests/accessibility/hitl_completion.test.tsx (5.718 s)
+  ● Console
+
+    console.error
+      An update to HITLCheckpointModal inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+    [0m [90m 82 |[39m    setDecisionError([36mnull[39m)[33m;[39m
+     [90m 83 |[39m    [36mawait[39m onDecision(selectedDecision[33m,[39m note)[33m;[39m
+    [31m[1m>[22m[39m[90m 84 |[39m    setSelectedDecision([36mnull[39m)[33m;[39m
+     [90m    |[39m    [31m[1m^[22m[39m
+     [90m 85 |[39m    setNote([32m""[39m)[33m;[39m
+     [90m 86 |[39m   } [36mcatch[39m (error) {
+     [90m 87 |[39m    setDecisionError(error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Protocol submission failed."[39m)[33m;[39m[0m
+
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18758:19
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (node_modules/react-dom/cjs/react-dom-client.development.js:9170:13)
+      at dispatchSetState (node_modules/react-dom/cjs/react-dom-client.development.js:9127:7)
+      at setSelectedDecision (src/components/evidence/HITLCheckpointModal.tsx:84:4)
+
+    console.error
+      An update to HITLCheckpointModal inside a test was not wrapped in act(...).
+      
+      When testing, code that causes React state updates should be wrapped into act(...):
+      
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+      
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+    [0m [90m 83 |[39m    [36mawait[39m onDecision(selectedDecision[33m,[39m note)[33m;[39m
+     [90m 84 |[39m    setSelectedDecision([36mnull[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 85 |[39m    setNote([32m""[39m)[33m;[39m
+     [90m    |[39m    [31m[1m^[22m[39m
+     [90m 86 |[39m   } [36mcatch[39m (error) {
+     [90m 87 |[39m    setDecisionError(error [36minstanceof[39m [33mError[39m [33m?[39m error[33m.[39mmessage [33m:[39m [32m"Protocol submission failed."[39m)[33m;[39m
+     [90m 88 |[39m   }[0m
+
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18758:19
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (node_modules/react-dom/cjs/react-dom-client.development.js:9170:13)
+      at dispatchSetState (node_modules/react-dom/cjs/react-dom-client.development.js:9127:7)
+      at setNote (src/components/evidence/HITLCheckpointModal.tsx:85:4)
+
+FAIL tests/unit/components/HeroAuthActions.test.tsx (6.011 s)
+  ● Console
+
+    console.warn
+      Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+    [0m [90m 76 |[39m     render([33m<[39m[33mHeroAuthActions[39m [33m/[39m[33m>[39m)[33m;[39m
+     [90m 77 |[39m
+    [31m[1m>[22m[39m[90m 78 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/upload a file to begin analysis/i[39m }))[33m;[39m
+     [90m    |[39m               [31m[1m^[22m[39m
+     [90m 79 |[39m
+     [90m 80 |[39m     expect(mockPlaySound)[33m.[39mtoHaveBeenCalledWith([32m"envelope-open"[39m)[33m;[39m
+     [90m 81 |[39m     expect(screen[33m.[39mgetByTestId([32m"upload-modal"[39m))[33m.[39mtoBeInTheDocument()[33m;[39m[0m
+
+      at node_modules/@radix-ui/react-dialog/src/dialog.tsx:543:36
+      at Object.react_stack_bottom_frame (node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+      at commitHookPassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15519:11)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom-client.development.js:18432:9)
+      at flushPendingEffects (node_modules/react-dom/cjs/react-dom-client.development.js:18358:14)
+      at flushSpawnedWork (node_modules/react-dom/cjs/react-dom-client.development.js:18323:44)
+      at commitRoot (node_modules/react-dom/cjs/react-dom-client.development.js:17955:9)
+      at performWorkOnRoot (node_modules/react-dom/cjs/react-dom-client.development.js:16667:15)
+      at performSyncWorkOnRoot (node_modules/react-dom/cjs/react-dom-client.development.js:18972:7)
+      at flushSyncWorkAcrossRoots_impl (node_modules/react-dom/cjs/react-dom-client.development.js:18814:21)
+      at processRootScheduleInMicrotask (node_modules/react-dom/cjs/react-dom-client.development.js:18853:9)
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18982:11
+      at flushActQueue (node_modules/react/cjs/react.development.js:590:34)
+      at process.env.NODE_ENV.exports.act (node_modules/react/cjs/react.development.js:884:10)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at Object.eventWrapper (node_modules/@testing-library/react/dist/pure.js:106:28)
+      at fireEvent (node_modules/@testing-library/dom/dist/events.js:12:35)
+      at fireEvent.<computed> [as click] (node_modules/@testing-library/dom/dist/events.js:110:36)
+      at fireEvent.<computed> [as click] (node_modules/@testing-library/react/dist/fire-event.js:15:52)
+      at Object.click (tests/unit/components/HeroAuthActions.test.tsx:78:15)
+
+    console.warn
+      Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+    [0m [90m 85 |[39m     render([33m<[39m[33mHeroAuthActions[39m [33m/[39m[33m>[39m)[33m;[39m
+     [90m 86 |[39m
+    [31m[1m>[22m[39m[90m 87 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/upload a file to begin analysis/i[39m }))[33m;[39m
+     [90m    |[39m               [31m[1m^[22m[39m
+     [90m 88 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/select test file/i[39m }))[33m;[39m
+     [90m 89 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/start analysis/i[39m }))[33m;[39m
+     [90m 90 |[39m[0m
+
+      at node_modules/@radix-ui/react-dialog/src/dialog.tsx:543:36
+      at Object.react_stack_bottom_frame (node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+      at commitHookPassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15519:11)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom-client.development.js:18432:9)
+      at flushPendingEffects (node_modules/react-dom/cjs/react-dom-client.development.js:18358:14)
+      at flushSpawnedWork (node_modules/react-dom/cjs/react-dom-client.development.js:18323:44)
+      at commitRoot (node_modules/react-dom/cjs/react-dom-client.development.js:17955:9)
+      at performWorkOnRoot (node_modules/react-dom/cjs/react-dom-client.development.js:16667:15)
+      at performSyncWorkOnRoot (node_modules/react-dom/cjs/react-dom-client.development.js:18972:7)
+      at flushSyncWorkAcrossRoots_impl (node_modules/react-dom/cjs/react-dom-client.development.js:18814:21)
+      at processRootScheduleInMicrotask (node_modules/react-dom/cjs/react-dom-client.development.js:18853:9)
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18982:11
+      at flushActQueue (node_modules/react/cjs/react.development.js:590:34)
+      at process.env.NODE_ENV.exports.act (node_modules/react/cjs/react.development.js:884:10)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at Object.eventWrapper (node_modules/@testing-library/react/dist/pure.js:106:28)
+      at fireEvent (node_modules/@testing-library/dom/dist/events.js:12:35)
+      at fireEvent.<computed> [as click] (node_modules/@testing-library/dom/dist/events.js:110:36)
+      at fireEvent.<computed> [as click] (node_modules/@testing-library/react/dist/fire-event.js:15:52)
+      at Object.click (tests/unit/components/HeroAuthActions.test.tsx:87:15)
+
+    console.warn
+      [HeroAuthActions] could not persist pending file: Error: IndexedDB is unavailable
+          at D:\Forensic Council\apps\web\src\lib\pendingFilePersistence.ts:10:14
+          at new Promise (<anonymous>)
+          at openDb (D:\Forensic Council\apps\web\src\lib\pendingFilePersistence.ts:8:10)
+          at openDb (D:\Forensic Council\apps\web\src\lib\pendingFilePersistence.ts:30:20)
+          at withStore (D:\Forensic Council\apps\web\src\lib\pendingFilePersistence.ts:45:9)
+          at D:\Forensic Council\apps\web\src\components\ui\HeroAuthActions.tsx:110:28
+          at handleStartAnalysis (D:\Forensic Council\apps\web\src\components\ui\HeroAuthActions.tsx:212:25)
+          at executeDispatch (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:19116:9)
+          at runWithFiberInDEV (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:874:13)
+          at processDispatchQueue (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:19166:19)
+          at D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:19767:9
+          at batchedUpdates$1 (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:3255:40)
+          at dispatchEventForPluginEventSystem (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:19320:7)
+          at dispatchEvent (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:23585:11)
+          at dispatchDiscreteEvent (D:\Forensic Council\apps\web\node_modules\react-dom\cjs\react-dom-client.development.js:23553:11)
+          at HTMLBodyElement.callTheUserObjectsOperation (D:\Forensic Council\apps\web\node_modules\jsdom\lib\jsdom\living\generated\EventListener.js:26:30)
+          at innerInvokeEventListeners (D:\Forensic Council\apps\web\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:350:25)
+          at invokeEventListeners (D:\Forensic Council\apps\web\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:286:3)
+          at HTMLButtonElementImpl._dispatch (D:\Forensic Council\apps\web\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:233:9)
+          at HTMLButtonElementImpl.dispatchEvent (D:\Forensic Council\apps\web\node_modules\jsdom\lib\jsdom\living\events\EventTarget-impl.js:104:17)
+          at HTMLButtonElement.dispatchEvent (D:\Forensic Council\apps\web\node_modules\jsdom\lib\jsdom\living\generated\EventTarget.js:241:34)
+          at D:\Forensic Council\apps\web\node_modules\@testing-library\dom\dist\events.js:19:20
+          at D:\Forensic Council\apps\web\node_modules\@testing-library\react\dist\pure.js:107:16
+          at D:\Forensic Council\apps\web\node_modules\@testing-library\react\dist\act-compat.js:47:24
+          at process.env.NODE_ENV.exports.act (D:\Forensic Council\apps\web\node_modules\react\cjs\react.development.js:814:22)
+          at D:\Forensic Council\apps\web\node_modules\@testing-library\react\dist\act-compat.js:46:25
+          at Object.eventWrapper (D:\Forensic Council\apps\web\node_modules\@testing-library\react\dist\pure.js:106:28)
+          at fireEvent (D:\Forensic Council\apps\web\node_modules\@testing-library\dom\dist\events.js:12:35)
+          at fireEvent.<computed> [as click] (D:\Forensic Council\apps\web\node_modules\@testing-library\dom\dist\events.js:110:36)
+          at fireEvent.<computed> [as click] (D:\Forensic Council\apps\web\node_modules\@testing-library\react\dist\fire-event.js:15:52)
+          at Object.click (D:\Forensic Council\apps\web\tests\unit\components\HeroAuthActions.test.tsx:89:15)
+          at Promise.finally.completed (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:1561:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:1501:10)
+          at _callCircusTest (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:1011:40)
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+          at _runTest (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:951:3)
+          at D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:853:7
+          at _runTestsForDescribeBlock (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:866:11)
+          at _runTestsForDescribeBlock (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:861:11)
+          at run (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:765:3)
+          at runAndTransformResultsToJestFormat (D:\Forensic Council\apps\web\node_modules\jest-circus\build\jestAdapterInit.js:1993:21)
+          at jestAdapter (D:\Forensic Council\apps\web\node_modules\jest-circus\build\runner.js:111:19)
+          at runTestInternal (D:\Forensic Council\apps\web\node_modules\jest-runner\build\testWorker.js:276:16)
+          at runTest (D:\Forensic Council\apps\web\node_modules\jest-runner\build\testWorker.js:344:7)
+          at Object.worker (D:\Forensic Council\apps\web\node_modules\jest-runner\build\testWorker.js:498:12)
+
+    [0m [90m 109 |[39m     __pendingFileStore[33m.[39mfile [33m=[39m selectedFile[33m;[39m
+     [90m 110 |[39m     savePendingEvidenceFile(selectedFile)[33m.[39m[36mcatch[39m((error) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 111 |[39m       console[33m.[39mwarn([32m"[HeroAuthActions] could not persist pending file:"[39m[33m,[39m error)[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 112 |[39m     })[33m;[39m
+     [90m 113 |[39m     sessionOnlyStorage[33m.[39msetItem([33mSTORAGE_KEYS[39m[33m.[39m[33mAUTO_START[39m[33m,[39m [32m"true"[39m)[33m;[39m
+     [90m 114 |[39m     sessionOnlyStorage[33m.[39msetItem([33mSTORAGE_KEYS[39m[33m.[39m[33mFC_SHOW_LOADING[39m[33m,[39m [32m"true"[39m)[33m;[39m[0m
+
+      at warn (src/components/ui/HeroAuthActions.tsx:111:15)
+
+    console.warn
+      Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+    [0m [90m 102 |[39m     render([33m<[39m[33mHeroAuthActions[39m [33m/[39m[33m>[39m)[33m;[39m
+     [90m 103 |[39m
+    [31m[1m>[22m[39m[90m 104 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/upload a file to begin analysis/i[39m }))[33m;[39m
+     [90m     |[39m               [31m[1m^[22m[39m
+     [90m 105 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/select test file/i[39m }))[33m;[39m
+     [90m 106 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/choose another/i[39m }))[33m;[39m
+     [90m 107 |[39m[0m
+
+      at node_modules/@radix-ui/react-dialog/src/dialog.tsx:543:36
+      at Object.react_stack_bottom_frame (node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+      at runWithFiberInDEV (node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at commitHookEffectListMount (node_modules/react-dom/cjs/react-dom-client.development.js:13249:29)
+      at commitHookPassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:13336:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15484:13)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15718:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15476:11)
+      at recursivelyTraversePassiveMountEffects (node_modules/react-dom/cjs/react-dom-client.development.js:15439:11)
+      at commitPassiveMountOnFiber (node_modules/react-dom/cjs/react-dom-client.development.js:15519:11)
+      at flushPassiveEffects (node_modules/react-dom/cjs/react-dom-client.development.js:18432:9)
+      at flushPendingEffects (node_modules/react-dom/cjs/react-dom-client.development.js:18358:14)
+      at flushSpawnedWork (node_modules/react-dom/cjs/react-dom-client.development.js:18323:44)
+      at commitRoot (node_modules/react-dom/cjs/react-dom-client.development.js:17955:9)
+      at performWorkOnRoot (node_modules/react-dom/cjs/react-dom-client.development.js:16667:15)
+      at performSyncWorkOnRoot (node_modules/react-dom/cjs/react-dom-client.development.js:18972:7)
+      at flushSyncWorkAcrossRoots_impl (node_modules/react-dom/cjs/react-dom-client.development.js:18814:21)
+      at processRootScheduleInMicrotask (node_modules/react-dom/cjs/react-dom-client.development.js:18853:9)
+      at node_modules/react-dom/cjs/react-dom-client.development.js:18982:11
+      at flushActQueue (node_modules/react/cjs/react.development.js:590:34)
+      at process.env.NODE_ENV.exports.act (node_modules/react/cjs/react.development.js:884:10)
+      at node_modules/@testing-library/react/dist/act-compat.js:46:25
+      at Object.eventWrapper (node_modules/@testing-library/react/dist/pure.js:106:28)
+      at fireEvent (node_modules/@testing-library/dom/dist/events.js:12:35)
+      at fireEvent.<computed> [as click] (node_modules/@testing-library/dom/dist/events.js:110:36)
+      at fireEvent.<computed> [as click] (node_modules/@testing-library/react/dist/fire-event.js:15:52)
+      at Object.click (tests/unit/components/HeroAuthActions.test.tsx:104:15)
+
+  ● HeroAuthActions › starts analysis with a smooth evidence-page handoff
+
+    TestingLibraryElementError: Unable to find an element with the text: /opening evidence analysis/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body[39m
+      [33mstyle[39m=[32m""[39m
+    [36m>[39m
+      [36m<div>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Upload a file to begin analysis"[39m
+          [33mclass[39m=[32m"group fc-btn-primary gap-3 px-10"[39m
+          [33mdata-testid[39m=[32m"hero-cta-begin"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span>[39m
+            [0mBegin Analysis[0m
+          [36m</span>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-arrow-right w-4 h-4 fc-transition opacity-70 group-hover:opacity-100"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M5 12h14"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m12 5 7 7-7 7"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</body>[39m
+
+    [0m [90m  96 |[39m     expect(sessionOnlyStorage[33m.[39mgetItem([32m"forensic_auto_start"[39m))[33m.[39mtoBe([32m"true"[39m)[33m;[39m
+     [90m  97 |[39m     expect(sessionOnlyStorage[33m.[39mgetItem([32m"fc_show_loading"[39m))[33m.[39mtoBe([32m"true"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m  98 |[39m     expect(screen[33m.[39mgetByText([35m/opening evidence analysis/i[39m))[33m.[39mtoBeInTheDocument()[33m;[39m
+     [90m     |[39m                   [31m[1m^[22m[39m
+     [90m  99 |[39m   })[33m;[39m
+     [90m 100 |[39m
+     [90m 101 |[39m   it([32m"lets users choose another file before starting"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+      at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at Object.getByText (tests/unit/components/HeroAuthActions.test.tsx:98:19)
+
+  ● HeroAuthActions › lets users choose another file before starting
+
+    TestingLibraryElementError: Unable to find an element by: [data-testid="upload-modal"]
+
+    Ignored nodes: comments, script, style
+    [36m<body[39m
+      [33mdata-scroll-locked[39m=[32m"1"[39m
+      [33mstyle[39m=[32m"overflow: hidden; pointer-events: none;"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mdata-aria-hidden[39m=[32m"true"[39m
+        [33mdata-radix-focus-guard[39m=[32m""[39m
+        [33mstyle[39m=[32m"outline: none; opacity: 0; position: fixed; pointer-events: none;"[39m
+        [33mtabindex[39m=[32m"0"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mdata-aria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Upload a file to begin analysis"[39m
+          [33mclass[39m=[32m"group fc-btn-primary gap-3 px-10"[39m
+          [33mdata-testid[39m=[32m"hero-cta-begin"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span>[39m
+            [0mBegin Analysis[0m
+          [36m</span>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-arrow-right w-4 h-4 fc-transition opacity-70 group-hover:opacity-100"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M5 12h14"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m12 5 7 7-7 7"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mclass[39m=[32m"fixed inset-0 z-50 transition-opacity duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fc-modal-backdrop"[39m
+        [33mdata-aria-hidden[39m=[32m"true"[39m
+        [33mdata-state[39m=[32m"open"[39m
+        [33mstyle[39m=[32m"pointer-events: auto;"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33maria-describedby[39m=[32m"dialog-description"[39m
+        [33maria-labelledby[39m=[32m"radix-_r_7_"[39m
+        [33mclass[39m=[32m"fixed left-[50%] top-[50%] z-50 w-full translate-x-[-50%] translate-y-[-50%] duration-[160ms] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fc-surface-overlay overflow-hidden max-w-xl p-0"[39m
+        [33mdata-state[39m=[32m"open"[39m
+        [33mid[39m=[32m"radix-_r_6_"[39m
+        [33mrole[39m=[32m"dialog"[39m
+        [33mstyle[39m=[32m"pointer-events: auto;"[39m
+        [33mtabindex[39m=[32m"-1"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"text-lg font-semibold leading-none tracking-tight sr-only"[39m
+          [33mid[39m=[32m"radix-_r_7_"[39m
+        [36m>[39m
+          [0mEvidence Ready[0m
+        [36m</h2>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"sr-only"[39m
+          [33mid[39m=[32m"dialog-description"[39m
+        [36m>[39m
+          [0mEvidence file has been received. Proceed to analysis or cancel.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mdata-testid[39m=[32m"upload-success-modal"[39m
+        [36m>[39m
+          [36m<span>[39m
+            [0mevidence.jpg[0m
+          [36m</span>[39m
+          [36m<button>[39m
+            [0mChoose Another[0m
+          [36m</button>[39m
+          [36m<button>[39m
+            [0mStart Analysis[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mdata-aria-hidden[39m=[32m"true"[39m
+        [33mdata-radix-focus-guard[39m=[32m""[39m
+        [33mstyle[39m=[32m"outline: none; opacity: 0; position: fixed; pointer-events: none;"[39m
+        [33mtabindex[39m=[32m"0"[39m
+      [36m/>[39m
+    [36m</body>[39m
+
+    [0m [90m 106 |[39m     fireEvent[33m.[39mclick(screen[33m.[39mgetByRole([32m"button"[39m[33m,[39m { name[33m:[39m [35m/choose another/i[39m }))[33m;[39m
+     [90m 107 |[39m
+    [31m[1m>[22m[39m[90m 108 |[39m     expect(screen[33m.[39mgetByTestId([32m"upload-modal"[39m))[33m.[39mtoBeInTheDocument()[33m;[39m
+     [90m     |[39m                   [31m[1m^[22m[39m
+     [90m 109 |[39m     expect(mockPush)[33m.[39mnot[33m.[39mtoHaveBeenCalled()[33m;[39m
+     [90m 110 |[39m   })[33m;[39m
+     [90m 111 |[39m[0m
+
+      at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+      at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at Object.getByTestId (tests/unit/components/HeroAuthActions.test.tsx:108:19)
+
+PASS tests/accessibility/accessibility.test.tsx (6.381 s)
+PASS tests/unit/components/components.test.tsx (7.034 s)
+PASS tests/unit/hooks/useInvestigation.test.ts (8.767 s)
+PASS tests/unit/lib/api.test.ts (21.172 s)
+  ● Console
+
+    console.error
+      [api] Report validation failed. Falling back to passthrough. [
+        {
+          "validation": "uuid",
+          "code": "invalid_string",
+          "message": "Invalid uuid",
+          "path": [
+            "session_id"
+          ]
+        },
+        {
+          "validation": "uuid",
+          "code": "invalid_string",
+          "message": "Invalid uuid",
+          "path": [
+            "report_id"
+          ]
+        }
+      ]
+
+    [0m [90m 52 |[39m   [36mif[39m (result[33m.[39msuccess) [36mreturn[39m result[33m.[39mdata [36mas[39m unknown [36mas[39m [33mReportDTO[39m[33m;[39m
+     [90m 53 |[39m
+    [31m[1m>[22m[39m[90m 54 |[39m   dbg[33m.[39merror(
+     [90m    |[39m       [31m[1m^[22m[39m
+     [90m 55 |[39m     [32m"[api] Report validation failed. Falling back to passthrough."[39m[33m,[39m
+     [90m 56 |[39m     result[33m.[39merror[33m.[39mmessage[33m,[39m
+     [90m 57 |[39m   )[33m;[39m[0m
+
+      at error (src/lib/api/client.ts:54:7)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:334:20)
+
+    console.error
+      [telemetry] schema_validation_error: {
+        schema: 'ReportDTO',
+        error: [
+          {
+            validation: 'uuid',
+            code: 'invalid_string',
+            message: 'Invalid uuid',
+            path: [Array]
+          },
+          {
+            validation: 'uuid',
+            code: 'invalid_string',
+            message: 'Invalid uuid',
+            path: [Array]
+          }
+        ],
+        url: 'http://localhost/'
+      }
+
+    [0m [90m 57 |[39m   )[33m;[39m
+     [90m 58 |[39m
+    [31m[1m>[22m[39m[90m 59 |[39m   console[33m.[39merror([32m"[telemetry] schema_validation_error:"[39m[33m,[39m {
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 60 |[39m     schema[33m:[39m [32m"ReportDTO"[39m[33m,[39m
+     [90m 61 |[39m     error[33m:[39m result[33m.[39merror[33m.[39merrors[33m,[39m
+     [90m 62 |[39m     url[33m:[39m [36mtypeof[39m window [33m!==[39m [32m"undefined"[39m [33m?[39m window[33m.[39mlocation[33m.[39mhref [33m:[39m [32m"server"[39m[33m,[39m[0m
+
+      at error (src/lib/api/client.ts:59:11)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:334:20)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:383:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:392:47)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:399:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:409:43)
+
+    console.warn
+      [FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to ws://localhost. Ensure your reverse proxy forwards WS upgrades to the backend.
+
+    [0m [90m 51 |[39m   [90m// Production fallback: same host (valid only if a WS-capable reverse proxy handles upgrades)[39m
+     [90m 52 |[39m   [36mconst[39m protocol [33m=[39m window[33m.[39mlocation[33m.[39mprotocol [33m===[39m [32m"https:"[39m [33m?[39m [32m"wss:"[39m [33m:[39m [32m"ws:"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 53 |[39m   console[33m.[39mwarn(
+     [90m    |[39m           [31m[1m^[22m[39m
+     [90m 54 |[39m     [32m"[FC] NEXT_PUBLIC_API_URL not set — WebSocket will connect to"[39m[33m,[39m
+     [90m 55 |[39m     [32m`${protocol}//${window.location.host}. Ensure your reverse proxy forwards WS upgrades to the backend.`[39m
+     [90m 56 |[39m   )[33m;[39m[0m
+
+      at warn (src/lib/api/utils.ts:53:11)
+      at createLiveSocket (src/lib/api/client.ts:332:27)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:419:43)
+
+    console.error
+      [api] Report validation failed. Falling back to passthrough. [
+        {
+          "code": "invalid_type",
+          "expected": "string",
+          "received": "undefined",
+          "path": [
+            "session_id"
+          ],
+          "message": "Required"
+        },
+        {
+          "code": "invalid_type",
+          "expected": "string",
+          "received": "undefined",
+          "path": [
+            "report_id"
+          ],
+          "message": "Required"
+        },
+        {
+          "code": "invalid_type",
+          "expected": "string",
+          "received": "undefined",
+          "path": [
+            "case_id"
+          ],
+          "message": "Required"
+        },
+        {
+          "expected": "'AUTHENTIC' | 'LIKELY_AUTHENTIC' | 'INCONCLUSIVE' | 'SUSPICIOUS' | 'LIKELY_MANIPULATED' | 'MANIPULATED' | 'ABSTAIN' | 'NOT_APPLICABLE'",
+          "received": "undefined",
+          "code": "invalid_type",
+          "path": [
+            "overall_verdict"
+          ],
+          "message": "Required"
+        },
+        {
+          "code": "invalid_type",
+          "expected": "number",
+          "received": "undefined",
+          "path": [
+            "overall_confidence"
+          ],
+          "message": "Required"
+        }
+      ]
+
+    [0m [90m 52 |[39m   [36mif[39m (result[33m.[39msuccess) [36mreturn[39m result[33m.[39mdata [36mas[39m unknown [36mas[39m [33mReportDTO[39m[33m;[39m
+     [90m 53 |[39m
+    [31m[1m>[22m[39m[90m 54 |[39m   dbg[33m.[39merror(
+     [90m    |[39m       [31m[1m^[22m[39m
+     [90m 55 |[39m     [32m"[api] Report validation failed. Falling back to passthrough."[39m[33m,[39m
+     [90m 56 |[39m     result[33m.[39merror[33m.[39mmessage[33m,[39m
+     [90m 57 |[39m   )[33m;[39m[0m
+
+      at error (src/lib/api/client.ts:54:7)
+      at _parseReportDTO (src/lib/api/client.ts:509:42)
+      at handleAuthError (src/lib/api/client.ts:191:12)
+      at Object.<anonymous> (tests/unit/lib/api.test.ts:433:22)
+
+
+Test Suites: 1 failed, 16 passed, 17 total
+Tests:       2 failed, 251 passed, 253 total
+Snapshots:   0 total
+Time:        38.424 s
+Ran all test suites.

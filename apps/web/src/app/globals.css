@@ -107,10 +107,16 @@
 @layer base {
   html {
     background-color: var(--color-background);
-    scroll-behavior: smooth;
+    scroll-padding-top: 64px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   body {

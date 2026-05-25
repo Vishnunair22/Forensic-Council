@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, useEffect } from "react";
+import { Component, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
@@ -68,8 +68,31 @@ export function EvidenceUploadClient() {
   const prefersReducedMotion = useReducedMotion();
   const investigation = useInvestigation(playSound);
 
+  const [isMounted, setIsMounted] = useState(false);
+  const [handoffPending, setHandoffPending] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const autoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
+    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+    return autoStart || showLoading;
+  });
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setIsMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (handoffPending) {
+      const timer = setTimeout(() => {
+        setHandoffPending(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [handoffPending]);
+
   useEffect(() => {
     document.body.style.overflow = "";
+    window.scrollTo({ top: 0, behavior: "instant" });
     // On bfcache restore with no session, navigate home rather than reloading
     // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {
@@ -122,8 +145,6 @@ export function EvidenceUploadClient() {
         liveText={investigation.arbiterLiveText}
       />
 
-
-
       <div className="relative min-h-screen px-4 sm:px-6 py-10 sm:py-14">
         {investigation.wsConnectionError && !investigation.isReconnecting && (
           <ForensicErrorModal
@@ -137,76 +158,79 @@ export function EvidenceUploadClient() {
           />
         )}
 
-        {showAgentProgress || investigation.handoffRecovering ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
-            className="w-full max-w-7xl mx-auto"
-          >
-             <AgentProgressErrorBoundary>
-               <AgentProgressDisplay
-                agentUpdates={investigation.agentUpdates}
-                completedAgents={investigation.validCompletedAgents}
-                progressText={investigation.pipelineThinking}
-                allAgentsDone={investigation.allAgentsDone}
-                phase={investigation.phase}
-                awaitingDecision={investigation.awaitingDecision}
-                pipelineStatus={investigation.status}
-                pipelineMessage={investigation.pipelineMessage}
-                onNewUpload={investigation.handleNewUpload}
-                onViewResults={investigation.handleViewResults}
-                onAcceptAnalysis={investigation.handleAcceptAnalysis}
-                onRunDeepAnalysis={investigation.handleDeepAnalysis}
-                isNavigating={investigation.isNavigating}
-                mimeType={investigation.mimeType || undefined}
-                playSound={playSound}
-                revealQueue={investigation.revealQueue}
-                arbiterDeliberating={investigation.arbiterDeliberating}
-                overlayVisible={investigation.showLoadingOverlay}
-              />
-             </AgentProgressErrorBoundary>
-
-            <HITLCheckpointModal
-              checkpoint={investigation.hitlCheckpoint}
-              isOpen={!!investigation.hitlCheckpoint}
-              isSubmitting={investigation.isSubmittingHITL}
-              onDecision={investigation.handleHITLDecision}
-              onDismiss={investigation.dismissCheckpoint}
-            />
-          </motion.div>
-        ) : (
-
-          <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
+        {showAgentProgress || investigation.handoffRecovering || handoffPending ? (
+          isMounted && (
             <motion.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.16 }}
-              className="text-center space-y-6"
+              initial={{ opacity: 0, scale: 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+              className="w-full max-w-7xl mx-auto"
             >
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Shield className="w-4 h-4 fc-text-muted" />
-                <span className="fc-eyebrow fc-text-muted">
-                  Intake Protocol
-                </span>
-              </div>
-              <h1 className="text-4xl font-heading font-black tracking-tight fc-text-primary">
-                No Evidence Queued
-              </h1>
-              <p className="fc-text-secondary text-base max-w-sm mx-auto leading-relaxed">
-                Return to the home page to upload evidence and begin a new investigation.
-              </p>
-              <button
-                onClick={() => {
-                  resetActiveInvestigation(queryClient);
-                  router.push("/");
-                }}
-                className="fc-btn-primary mt-4"
-              >
-                Return Home
-              </button>
+               <AgentProgressErrorBoundary>
+                 <AgentProgressDisplay
+                  agentUpdates={investigation.agentUpdates}
+                  completedAgents={investigation.validCompletedAgents}
+                  progressText={investigation.pipelineThinking}
+                  allAgentsDone={investigation.allAgentsDone}
+                  phase={investigation.phase}
+                  awaitingDecision={investigation.awaitingDecision}
+                  pipelineStatus={investigation.status}
+                  pipelineMessage={investigation.pipelineMessage}
+                  onNewUpload={investigation.handleNewUpload}
+                  onViewResults={investigation.handleViewResults}
+                  onAcceptAnalysis={investigation.handleAcceptAnalysis}
+                  onRunDeepAnalysis={investigation.handleDeepAnalysis}
+                  isNavigating={investigation.isNavigating}
+                  mimeType={investigation.mimeType || undefined}
+                  playSound={playSound}
+                  revealQueue={investigation.revealQueue}
+                  arbiterDeliberating={investigation.arbiterDeliberating}
+                  overlayVisible={investigation.showLoadingOverlay}
+                />
+               </AgentProgressErrorBoundary>
+
+              <HITLCheckpointModal
+                checkpoint={investigation.hitlCheckpoint}
+                isOpen={!!investigation.hitlCheckpoint}
+                isSubmitting={investigation.isSubmittingHITL}
+                onDecision={investigation.handleHITLDecision}
+                onDismiss={investigation.dismissCheckpoint}
+              />
             </motion.div>
-          </section>
+          )
+        ) : (
+          isMounted && (
+            <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
+              <motion.div
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16 }}
+                className="text-center space-y-6"
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 fc-text-muted" />
+                  <span className="fc-eyebrow fc-text-muted">
+                    Intake Protocol
+                  </span>
+                </div>
+                <h1 className="text-4xl font-heading font-black tracking-tight fc-text-primary">
+                  No Evidence Queued
+                </h1>
+                <p className="fc-text-secondary text-base max-w-sm mx-auto leading-relaxed">
+                  Return to the home page to upload evidence and begin a new investigation.
+                </p>
+                <button
+                  onClick={() => {
+                    resetActiveInvestigation(queryClient);
+                    router.push("/");
+                  }}
+                  className="fc-btn-primary mt-4"
+                >
+                  Return Home
+                </button>
+              </motion.div>
+            </section>
+          )
         )}
       </div>
     </>

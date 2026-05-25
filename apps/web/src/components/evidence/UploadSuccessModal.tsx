@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Lock, FileBadge2, ArrowRight, X } from "lucide-react";
+import { Lock, ArrowRight, X, Play, Mic, FileText, Archive, File } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { formatBytes } from "@/lib/utils";
 
 export interface UploadSuccessModalProps {
   file: File;
-  onNewUpload: () => void;
   onStartAnalysis: () => Promise<void> | void;
   onDismiss: () => void;
   isHandingOff?: boolean;
@@ -16,11 +15,101 @@ export interface UploadSuccessModalProps {
 
 export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHandingOff = false }: UploadSuccessModalProps) {
   const { playSound } = useSound();
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    let url: string | null = null;
+    const isImageOrVideo = file.type.startsWith("image/") || file.type.startsWith("video/");
+    if (isImageOrVideo) {
+      url = URL.createObjectURL(file);
+      setObjectUrl(url);
+    }
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [file]);
 
   const closeModal = useCallback(() => {
     playSound("click");
     onDismiss();
   }, [playSound, onDismiss]);
+
+  const handleVideoMetadata = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.pause();
+      const duration = videoRef.current.duration;
+      if (!isNaN(duration) && isFinite(duration)) {
+        const mins = Math.floor(duration / 60);
+        const secs = Math.floor(duration % 60);
+        setVideoDuration(`${mins}:${secs < 10 ? "0" : ""}${secs}`);
+      }
+    }
+  };
+
+  // Helper to resolve icon and colors for fallback non-media files
+  const getFileCategoryDetails = () => {
+    const type = file.type || "";
+    const name = file.name || "";
+    if (type.startsWith("audio/")) {
+      return {
+        icon: Mic,
+        accentClass: "from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400",
+        label: "Audio Evidence",
+      };
+    }
+    if (type === "application/pdf" || name.endsWith(".pdf")) {
+      return {
+        icon: FileText,
+        accentClass: "from-red-500/20 to-red-600/10 border-red-500/30 text-red-400",
+        label: "PDF Document",
+      };
+    }
+    if (
+      type === "application/msword" ||
+      type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      name.endsWith(".doc") ||
+      name.endsWith(".docx")
+    ) {
+      return {
+        icon: FileText,
+        accentClass: "from-blue-400/20 to-blue-500/10 border-blue-400/30 text-blue-300",
+        label: "Word Document",
+      };
+    }
+    if (
+      type === "application/zip" ||
+      type === "application/x-tar" ||
+      type === "application/x-gzip" ||
+      type === "application/x-bzip2" ||
+      type === "application/x-7z-compressed" ||
+      name.endsWith(".zip") ||
+      name.endsWith(".tar") ||
+      name.endsWith(".gz") ||
+      name.endsWith(".7z")
+    ) {
+      return {
+        icon: Archive,
+        accentClass: "from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400",
+        label: "Compressed Archive",
+      };
+    }
+    return {
+      icon: File,
+      accentClass: "from-zinc-500/20 to-zinc-600/10 border-zinc-500/30 text-zinc-400",
+      label: "Binary Evidence",
+    };
+  };
+
+  const fileCategory = getFileCategoryDetails();
+  const CategoryIcon = fileCategory.icon;
+  const extension = file.name.includes(".") 
+    ? file.name.substring(file.name.lastIndexOf(".")).toLowerCase() 
+    : "";
 
   return (
     <motion.div
@@ -29,7 +118,7 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
       animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
       exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      className="p-8 sm:p-10 flex flex-col text-left relative overflow-hidden"
+      className="p-6 sm:p-8 flex flex-col text-left relative overflow-hidden max-h-[90vh] md:max-h-none"
     >
       {/* Background Secure Pattern */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" aria-hidden="true" />
@@ -39,69 +128,146 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
         onClick={closeModal}
         aria-label="Close evidence dialog"
         data-testid="success-modal-close"
-        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer z-20"
+        className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer z-20"
       >
-        <X className="w-5 h-5" aria-hidden="true" />
+        <X className="w-4 h-4" aria-hidden="true" />
       </button>
 
-      <div className="mb-6 flex items-center justify-between relative z-10">
+      <div className="mb-5 flex items-center justify-between relative z-10">
         <div className="flex items-center gap-3">
           <motion.div
             initial={{ rotate: -90, opacity: 0 }}
             animate={{ rotate: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="w-10 h-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary"
+            className="w-9 h-9 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary"
           >
-            <Lock className="w-5 h-5" aria-hidden="true" />
+            <Lock className="w-4.5 h-4.5" aria-hidden="true" />
           </motion.div>
           <div>
-            <p className="text-xs font-mono fc-text-muted uppercase tracking-wider">Status: Secured</p>
-            <h2 className="text-xl font-heading font-bold fc-text-primary">Evidence Sealed</h2>
+            <p className="text-[10px] font-mono fc-text-muted uppercase tracking-wider">Status: Secured</p>
+            <h2 className="text-lg font-heading font-bold fc-text-primary">Evidence Sealed</h2>
           </div>
         </div>
       </div>
 
-      {/* Telemetry Readout Box */}
-      <motion.div
-        initial={{ height: 0, opacity: 0 }}
-        animate={{ height: "auto", opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.2 }}
-        className="bg-black/40 border border-white/10 rounded-xl p-5 mb-8 overflow-hidden relative"
-      >
+      {/* Two-Zone Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-5 bg-black/40 border border-white/10 rounded-xl p-4 mb-6 overflow-hidden relative">
         <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/50" />
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <FileBadge2 className="w-8 h-8 fc-text-secondary" />
-            <div className="overflow-hidden">
-              <p className="text-sm font-medium fc-text-primary truncate" title={file.name}>{file.name}</p>
-              <p className="text-xs font-mono fc-text-muted mt-1">{formatBytes(file.size)} &bull; {file.type || 'Unknown Format'}</p>
+
+        {/* Left Zone: File Preview Thumbnail */}
+        <div className="md:col-span-2 flex flex-col items-center justify-center relative overflow-hidden bg-black/30 border border-white/5 rounded-lg min-h-[140px] max-h-[180px] md:max-h-none aspect-video md:aspect-auto">
+          <motion.div
+            className="w-full h-full flex flex-col items-center justify-center relative"
+            initial={{ scale: 0.9, opacity: 0, filter: "blur(4px)" }}
+            animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, duration: 0.35 }}
+          >
+            {objectUrl && file.type.startsWith("image/") ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={objectUrl}
+                  alt={file.name}
+                  className="w-full h-full object-cover rounded-lg"
+                />
+                {/* Scanline Sweep animation */}
+                <motion.div
+                  initial={{ top: "0%", opacity: 1 }}
+                  animate={{ top: "100%", opacity: 0 }}
+                  transition={{ duration: 1.5, ease: "easeInOut" }}
+                  className="absolute left-0 right-0 h-[2px] bg-primary/80 shadow-[0_0_8px_var(--color-primary)] pointer-events-none z-10"
+                />
+              </>
+            ) : objectUrl && file.type.startsWith("video/") ? (
+              <div className="w-full h-full relative flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  src={objectUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  onLoadedMetadata={handleVideoMetadata}
+                  className="w-full h-full object-cover rounded-lg"
+                />
+                {/* Play Button Overlay */}
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10">
+                  <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/90">
+                    <Play className="w-4 h-4 ml-0.5" />
+                  </div>
+                </div>
+                {/* Duration Badge */}
+                {videoDuration && (
+                  <div className="absolute bottom-2 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[10px] font-mono text-white/90 border border-white/10 z-10">
+                    {videoDuration}
+                  </div>
+                )}
+                {/* Scanline Sweep animation */}
+                <motion.div
+                  initial={{ top: "0%", opacity: 1 }}
+                  animate={{ top: "100%", opacity: 0 }}
+                  transition={{ duration: 1.5, ease: "easeInOut" }}
+                  className="absolute left-0 right-0 h-[2px] bg-primary/80 shadow-[0_0_8px_var(--color-primary)] pointer-events-none z-10"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-3 text-center">
+                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${fileCategory.accentClass} flex items-center justify-center border mb-2`}>
+                  <CategoryIcon className="w-7 h-7" />
+                </div>
+                <span className="text-[10px] font-mono tracking-wider fc-text-muted uppercase">
+                  {fileCategory.label}
+                </span>
+              </div>
+            )}
+          </motion.div>
+        </div>
+
+        {/* Right Zone: Metadata Strip */}
+        <div className="md:col-span-3 flex flex-col justify-between py-1 min-w-0">
+          <div className="flex flex-col gap-2.5 min-w-0">
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                <span className="text-sm font-semibold fc-text-primary truncate max-w-[80%]" title={file.name}>
+                  {file.name}
+                </span>
+                {extension && (
+                  <span className="fc-badge fc-badge-active shrink-0 text-[10px] px-1.5 py-0">
+                    {extension}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-mono fc-text-muted mt-1 leading-none">
+                {formatBytes(file.size)} &bull; {file.type || "Unknown Format"}
+              </p>
+            </div>
+
+            {/* Fake Cryptographic Hash Generation for Visual Drama */}
+            <div className="pt-2.5 border-t border-white/5 flex flex-col gap-1 min-w-0">
+              <span className="text-[9px] font-mono fc-text-muted uppercase tracking-wider leading-none">
+                SHA-256 Checksum
+              </span>
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-[10px] font-mono text-primary truncate leading-none"
+              >
+                {btoa(file.name + file.size).substring(0, 24).toLowerCase()}...
+              </motion.span>
             </div>
           </div>
-
-          {/* Fake Cryptographic Hash Generation for Visual Drama */}
-          <div className="mt-2 pt-3 border-t border-white/5 flex justify-between items-center">
-            <span className="text-[10px] font-mono fc-text-muted uppercase">SHA-256 Checksum</span>
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="text-[10px] font-mono text-primary truncate max-w-[200px]"
-            >
-              {btoa(file.name + file.size).substring(0, 24).toLowerCase()}...
-            </motion.span>
-          </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Actions */}
       <div className="flex gap-3 relative z-10 mt-auto">
-        <button onClick={onDismiss} className="fc-btn-secondary flex-1">
+        <button onClick={onDismiss} className="fc-btn-secondary flex-1 text-sm py-2">
           Cancel
         </button>
         <button
           onClick={onStartAnalysis}
           disabled={isHandingOff}
-          className="fc-btn-primary flex-[2] group relative overflow-hidden"
+          className="fc-btn-primary flex-[2] group relative overflow-hidden text-sm py-2"
         >
           <span className="relative z-10 flex items-center justify-center gap-2">
             {isHandingOff ? "Initializing Agents..." : "Deploy Council"}

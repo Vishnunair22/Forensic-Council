@@ -55,6 +55,15 @@ export function GlobalNavbar() {
     };
   }, []);
 
+  const isMounted = useRef(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      isMounted.current = true;
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (prefersReducedMotion) {
@@ -63,6 +72,7 @@ export function GlobalNavbar() {
     }
 
     const handleScroll = () => {
+      if (!isMounted.current) return;
       const currentScrollY = window.scrollY;
       if (currentScrollY < 60) {
         setIsVisible(true);

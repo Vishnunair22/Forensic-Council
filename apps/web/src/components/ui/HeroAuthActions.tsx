@@ -200,15 +200,15 @@ export function HeroAuthActions() {
               <UploadSuccessModal
                 key="success-modal"
                 file={selectedFile}
-                onNewUpload={() => setSelectedFile(null)}
                 onDismiss={closeUpload}
                 isHandingOff={isHandingOff}
                 onStartAnalysis={async () => {
                   if (isHandingOff) return;
                   playSound("scan");
                   setIsHandingOff(true);
-                  setShowUpload(false);
                   sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
+                  window.dispatchEvent(new Event("fc_storage_update"));
+                  setShowUpload(false);
                   await handleStartAnalysis();
                 }}
               />

@@ -85,7 +85,22 @@ describe("AgentProgressDisplay", () => {
   });
 
   describe("awaiting decision state", () => {
-    const awaitProps = { ...progressDefaults, awaitingDecision: true, allAgentsDone: true };
+    const awaitProps = {
+      ...progressDefaults,
+      awaitingDecision: true,
+      allAgentsDone: true,
+      completedAgents: [
+        {
+          agent_id: "Agent1",
+          agent_name: "Image Forensics",
+          message: "Initial analysis complete",
+          status: "complete",
+          confidence: 0.95,
+          findings_count: 1,
+          agent_verdict: "CLEAN",
+        },
+      ],
+    };
     it("shows Accept Analysis button", () => {
       render(<AgentProgressDisplay {...awaitProps} />);
       expect(screen.getByRole("button", { name: /accept|finalize/i })).toBeInTheDocument();
@@ -151,7 +166,7 @@ describe("AgentProgressDisplay", () => {
     }];
     it("shows agent name", () => {
       render(<AgentProgressDisplay {...progressDefaults} completedAgents={completed} />);
-      expect(screen.getByText(/Image Forensics/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Image Forensics/i).length).toBeGreaterThan(0);
     });
 
     it("lets completed data override stale running progress", () => {

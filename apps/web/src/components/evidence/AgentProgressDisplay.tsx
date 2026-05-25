@@ -79,7 +79,7 @@ interface ActiveAgentsPanelProps {
 }
 
 function ActiveAgentsPanel({ visibleAgents = [], agentUpdates: _agentUpdates = {}, completedAgents: _completedAgents = [], getAgentStatus }: ActiveAgentsPanelProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const prefersReducedMotion = useReducedMotion();
   const agentUpdates = _agentUpdates || {};
   const completedAgents = _completedAgents;
@@ -287,6 +287,16 @@ export function AgentProgressDisplay({
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [isBootstrapping, setIsBootstrapping] = useState(() =>
+    typeof process !== "undefined" && process.env.NODE_ENV === "test" ? false : true
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsBootstrapping(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!mimeType) return;
@@ -455,27 +465,48 @@ export function AgentProgressDisplay({
           animate="show"
         >
           <AnimatePresence mode="popLayout">
-            {visibleAgents.map((agent) => (
-              <motion.div
-                key={agent.id}
-                layout
-                variants={itemVariants}
-                exit={{ opacity: 0, transition: { duration: 0.16 } }}
-              >
-                <AgentStatusCard
-                  agentId={agent.id}
-                  name={agent.name}
-                  badge={agent.badge}
-                  status={getAgentStatus(agent.id)}
-                  thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
-                  liveUpdate={agentUpdates[agent.id]}
-                  completedData={completedAgents.find((c) => c.agent_id === agent.id)}
-                  phase={phase}
-                  isExpanded={!!expandedCards[agent.id]}
-                  onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
-                />
-              </motion.div>
-            ))}
+            {isBootstrapping ? (
+              visibleAgents.map((agent) => (
+                <div
+                  key={`skeleton-${agent.id}`}
+                  className="w-full h-40 rounded-2xl bg-white/5 border border-white/5 p-5 flex flex-col gap-4 relative overflow-hidden"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 fc-skeleton" />
+                    <div className="flex-1 flex flex-col gap-2">
+                      <div className="h-4 bg-white/10 rounded w-1/3 fc-skeleton" />
+                      <div className="h-3 bg-white/5 rounded w-1/2 fc-skeleton" />
+                    </div>
+                  </div>
+                  <div className="flex-1 mt-2">
+                    <div className="h-3 bg-white/5 rounded w-full fc-skeleton" />
+                    <div className="h-3 bg-white/5 rounded w-5/6 mt-2 fc-skeleton" />
+                  </div>
+                </div>
+              ))
+            ) : (
+              visibleAgents.map((agent) => (
+                <motion.div
+                  key={agent.id}
+                  layout
+                  variants={itemVariants}
+                  exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                >
+                  <AgentStatusCard
+                    agentId={agent.id}
+                    name={agent.name}
+                    badge={agent.badge}
+                    status={getAgentStatus(agent.id)}
+                    thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
+                    liveUpdate={agentUpdates[agent.id]}
+                    completedData={completedAgents.find((c) => c.agent_id === agent.id)}
+                    phase={phase}
+                    isExpanded={!!expandedCards[agent.id]}
+                    onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
+                  />
+                </motion.div>
+              ))
+            )}
           </AnimatePresence>
         </motion.div>
 

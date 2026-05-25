@@ -134,7 +134,7 @@ describe("No Color-Only Information", () => {
       {...baseProgress}
       completedAgents={[{ agent_id: "AGT-01", agent_name: "Image Forensics", message: "Done", status: "complete", confidence: 0.9, findings_count: 0 }]}
     />);
-    expect(screen.getByText(/Image Forensics/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Image Forensics/i).length).toBeGreaterThan(0);
   });
 
   it("phase label is text-based", () => {

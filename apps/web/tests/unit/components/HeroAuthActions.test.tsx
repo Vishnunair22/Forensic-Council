@@ -16,6 +16,12 @@ jest.mock("@/hooks/useSound", () => ({
   useSound: () => ({ playSound: mockPlaySound }),
 }));
 
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: jest.fn(() => ({
+    clear: jest.fn(),
+  })),
+}));
+
 jest.mock("@/components/evidence/UploadModal", () => ({
   UploadModal: ({
     onClose,

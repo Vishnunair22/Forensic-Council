@@ -17,11 +17,11 @@ jest.mock("@/hooks/useSimulation", () => ({
 
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
-  startInvestigation: jest.fn(),
-  submitHITLDecision: jest.fn(),
-  autoLoginAsInvestigator: jest.fn(),
-  getArbiterStatus: jest.fn(),
-  getReport: jest.fn(),
+  startInvestigation: jest.fn(() => Promise.resolve({ session_id: "test-sid" })),
+  submitHITLDecision: jest.fn(() => Promise.resolve({})),
+  autoLoginAsInvestigator: jest.fn(() => Promise.resolve({ access_token: "test-token" })),
+  getArbiterStatus: jest.fn(() => Promise.resolve({ status: "complete", message: "done" })),
+  getReport: jest.fn(() => Promise.resolve({ report_id: "rep-id" })),
 }));
 
 if (typeof window !== "undefined") {
@@ -64,6 +64,7 @@ function setupSimulationMock(
     // mock entry the call would throw TypeError and the re-entry guard
     // wouldn't be reached, masking the test's real intent.
     setSimulationPhase: jest.fn(),
+    clearPipelineThinking: jest.fn(),
     revealQueue: [],
     revealPending: false,
   });
@@ -91,7 +92,7 @@ describe("useInvestigation Hook", () => {
 
   test("handleFile sets the file or validation error", () => {
     const { result } = renderHook(() => useInvestigation(mockPlaySound));
-    const testFile = new File([""], "test.jpg", { type: "image/jpeg" });
+    const testFile = new File(["test"], "test.jpg", { type: "image/jpeg" });
     act(() => { result.current.handleFile(testFile); });
     expect(result.current.file).toBe(testFile);
   });

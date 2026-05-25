@@ -8,6 +8,12 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: jest.fn(() => ({
+    clear: jest.fn(),
+  })),
+}));
+
 describe("SessionExpiredPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();

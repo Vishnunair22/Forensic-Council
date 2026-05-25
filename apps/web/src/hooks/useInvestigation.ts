@@ -953,7 +953,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   // Overlay dismissal: dismiss as soon as the WebSocket connection is
   // established (analysisStreamReady) OR the pipeline sends its first
   // real status update. An 800ms minimum keeps UX smooth.
-  const SAFETY_TIMEOUT_MS = 10_000;
+  const SAFETY_TIMEOUT_MS = 5_000;
   const MIN_DISPLAY_MS = 800;
   useEffect(() => {
     if (!showLoadingOverlay) return;
