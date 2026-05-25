@@ -1,5 +1,8 @@
 "use client";
 
+// ROLE: In-page overlay prop-driven by useInvestigation.
+// Receives liveText and dispatchedCount to display analysis progress.
+
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";

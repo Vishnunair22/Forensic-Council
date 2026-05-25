@@ -5,6 +5,12 @@ Implements the core THOUGHT → ACTION → OBSERVATION reasoning loop
 with Human-in-the-Loop (HITL) checkpoints for forensic analysis.
 """
 
+# NOTE: Future refactor should split this module into:
+# - react_loop_engine.py (ReActLoopEngine class and core logic)
+# - react_step_types.py (ReActStep, AgentFinding, ReActLoopResult models)
+# - llm_step_generator.py (LLM-based step generation factory)
+# This would improve maintainability and reduce the 1200+ line file size.
+
 from __future__ import annotations
 
 import asyncio

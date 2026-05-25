@@ -1,6 +1,13 @@
 """
 Arbiter Verdict Data Models and Scoring Logic.
 Extracted from arbiter.py to improve maintainability.
+
+DELEGATION PATTERN:
+  - arbiter_verdict.py defines core verdict data models (ForensicReport, AgentMetrics)
+    and scoring functions (evidence_verdict_of, confidence_of, calculate_manipulation_probability)
+  - arbiter_narrative.py contains ArbiterNarrativeMixin for LLM-driven narrative synthesis
+  - arbiter.py (CouncilArbiter) composes both modules via multiple inheritance
+  - This separation allows verdict data/logic to evolve independently from narrative synthesis
 """
 
 from __future__ import annotations

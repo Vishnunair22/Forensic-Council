@@ -202,11 +202,6 @@ ENV YOLO_MODEL_NAME="${YOLO_MODEL_NAME}" \
 # CI builds, not just those with PRELOAD_MODELS=1. (P1-DOCKER-004 fix, audit v6→v7)
 RUN python scripts/validate_ml_tools.py
 
-# Create valid default calibration models at build time if not pre-bundled.
-# Delegated to a script so import failures from core.calibration surface
-# with a clear message at build.
-RUN python scripts/preseed_calibration.py
-
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
 # /opt/forensic-model-cache on first startup.
