@@ -37,6 +37,43 @@ jest.mock("@/components/ui/LoadingOverlay", () => ({
   LoadingOverlay: () => React.createElement("div", { "data-testid": "loading-overlay" }),
 }));
 
+describe("BUG-07 — Safety timer uses remaining time on remount", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("overlay dismisses within 5s safety window", () => {
+    render(<GlobalLoadingOverlay />);
+    expect(screen.getByTestId("loading-overlay")).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(screen.queryByTestId("loading-overlay")).not.toBeInTheDocument();
+  });
+
+  it("overlay dismisses on fc_storage_update with null value", () => {
+    render(<GlobalLoadingOverlay />);
+    expect(screen.getByTestId("loading-overlay")).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("fc_storage_update", {
+          detail: { key: "fc_show_loading", value: null },
+        }),
+      );
+    });
+
+    expect(screen.queryByTestId("loading-overlay")).not.toBeInTheDocument();
+  });
+});
+
 describe("BUG-21 — No ArbiterDeliberationOverlay in GlobalLoadingOverlay", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -95,7 +132,6 @@ describe("BUG-21 — No ArbiterDeliberationOverlay in GlobalLoadingOverlay", () 
       );
     });
 
-    // Should still be visible because FC_ARBITER_TRANSITIONING is no longer handled
     expect(screen.getByTestId("loading-overlay")).toBeInTheDocument();
   });
 });

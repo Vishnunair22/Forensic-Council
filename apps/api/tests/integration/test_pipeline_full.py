@@ -13,7 +13,7 @@ Covers:
 import os
 from typing import Any
 from unittest.mock import AsyncMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -309,3 +309,122 @@ class TestSessionManager:
             SessionStatus.INITIALIZING,
             SessionStatus.RUNNING,
         )
+
+
+# ── Pipeline result normalization tests (from test_pipeline_e2e.py) ─────────────
+
+
+class TestNormalizeAgentResults:
+    """Tests for agent result normalization in pipeline."""
+
+    def test_normalize_with_pydantic_findings(self):
+        from orchestration.agent_factory import AgentLoopResult
+        from orchestration.pipeline import ForensicCouncilPipeline
+
+        pipeline = ForensicCouncilPipeline()
+
+        if hasattr(pipeline, "_normalize_agent_results"):
+
+            class MockFinding:
+                def model_dump(self, mode="json"):
+                    return {"agent_id": "Agent1", "confidence": 0.8, "verdict": "AUTHENTIC"}
+
+            agent_result = AgentLoopResult(
+                agent_id="Agent1",
+                findings=[MockFinding()],
+                reflection_report={},
+                react_chain=[],
+                error=None,
+            )
+
+            result = pipeline._normalize_agent_results([agent_result])
+
+            assert isinstance(result, dict)
+            assert "Agent1" in result
+            assert len(result["Agent1"]["findings"]) == 1
+            assert isinstance(result["Agent1"]["findings"][0], dict)
+
+    def test_normalize_with_dict_findings(self):
+        from orchestration.agent_factory import AgentLoopResult
+        from orchestration.pipeline import ForensicCouncilPipeline
+
+        pipeline = ForensicCouncilPipeline()
+
+        if hasattr(pipeline, "_normalize_agent_results"):
+            agent_result = AgentLoopResult(
+                agent_id="Agent1",
+                findings=[{"agent_id": "Agent1", "confidence": 0.9}],
+                reflection_report={},
+                react_chain=[],
+                error=None,
+            )
+
+            result = pipeline._normalize_agent_results([agent_result])
+
+            assert isinstance(result, dict)
+            assert "Agent1" in result
+            assert len(result["Agent1"]["findings"]) == 1
+            assert result["Agent1"]["findings"][0]["confidence"] == 0.9
+
+    def test_normalize_with_error_result(self):
+        from orchestration.agent_factory import AgentLoopResult
+        from orchestration.pipeline import ForensicCouncilPipeline
+
+        pipeline = ForensicCouncilPipeline()
+
+        if hasattr(pipeline, "_normalize_agent_results"):
+            agent_result = AgentLoopResult(
+                agent_id="Agent1",
+                findings=[],
+                reflection_report={},
+                react_chain=[],
+                error="Connection failed",
+            )
+
+            result = pipeline._normalize_agent_results([agent_result])
+
+            assert isinstance(result, dict)
+            assert "Agent1" in result
+            assert result["Agent1"]["agent_had_error"] is True
+            assert len(result["Agent1"]["findings"]) == 1
+            assert "error" in result["Agent1"]["findings"][0]["finding_type"]
+
+
+class TestPipelineInitializationExtended:
+    """Tests for pipeline initialization."""
+
+    async def test_pipeline_initializes_with_session_id(self):
+        from orchestration.pipeline import ForensicCouncilPipeline
+
+        pipeline = ForensicCouncilPipeline()
+
+        with (
+            patch(
+                "core.persistence.redis_client.get_redis_client", new_callable=AsyncMock
+            ) as m_redis,
+        ):
+            m_redis.return_value = None
+
+            with patch(
+                "core.persistence.postgres_client.get_postgres_client", new_callable=AsyncMock
+            ):
+                with patch(
+                    "core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock
+                ):
+                    test_session_id = uuid.UUID("12345678-1234-1234-1234-123456789012")
+                    await pipeline._initialize_components(test_session_id)
+
+                    assert pipeline.working_memory is not None
+                    assert pipeline.episodic_memory is not None
+
+    async def test_pipeline_deep_analysis_flag(self):
+        from orchestration.pipeline import ForensicCouncilPipeline
+
+        pipeline = ForensicCouncilPipeline()
+
+        if hasattr(pipeline, "run_deep_analysis_flag"):
+            pipeline.run_deep_analysis_flag = True
+            assert pipeline.run_deep_analysis_flag is True
+
+            pipeline.run_deep_analysis_flag = False
+            assert pipeline.run_deep_analysis_flag is False
