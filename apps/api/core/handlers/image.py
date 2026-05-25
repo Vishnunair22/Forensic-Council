@@ -186,11 +186,16 @@ class ImageHandlers(BaseToolHandler):
         """
         Return True if any Phase-1 or Phase-2 tool already flagged manipulation.
         Used to gate expensive ManTra-Net inference.
+
+        Checks three signal layers:
+          1. Local tool context (results from tools already run in this agent)
+          2. Accumulated AgentFinding list (structured verdicts + confidence + reasoning)
+          3. Cross-agent signals from Agent 3 (object/context anomalies)
         """
         ctx = self.agent._tool_context
         freq = ctx.get("frequency_domain_analysis", {})
 
-        # Local signals
+        # Layer 1: Local tool context signals
         local_signal = any(
             [
                 ctx.get("neural_ela", {}).get("manipulation_detected", False),
@@ -211,7 +216,29 @@ class ImageHandlers(BaseToolHandler):
         if local_signal:
             return True
 
-        # Cross-agent signals from Agent 3 (Object & Context)
+        # Layer 2: Accumulated AgentFinding list
+        findings = getattr(self.agent, "_findings", [])
+        if findings:
+            tampering_keywords = {
+                "manipulation", "splicing", "copy.move", "tamper",
+                "forgery", "anomalous", "ai.generated", "synthetic",
+                "diffusion", "gan", "deepfake", "inconsistent",
+            }
+            for f in findings:
+                ev = str(getattr(f, "evidence_verdict", "")).upper()
+                conf = getattr(f, "confidence_raw", None) or 0.0
+                reason = str(getattr(f, "reasoning_summary", "")).lower()
+                # POSITIVE verdict with any confidence
+                if ev == "POSITIVE":
+                    return True
+                # High-confidence SUSPICIOUS or TAMPERED verdict
+                if ev in ("SUSPICIOUS", "TAMPERED", "MANIPULATED") and conf > 0.4:
+                    return True
+                # Keyword match in reasoning with moderate confidence
+                if any(kw in reason for kw in tampering_keywords) and conf > 0.5:
+                    return True
+
+        # Layer 3: Cross-agent signals from Agent 3 (Object & Context)
         try:
             from core.agent_registry import AgentID
 

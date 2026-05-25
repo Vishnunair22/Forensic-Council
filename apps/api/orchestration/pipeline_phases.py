@@ -986,7 +986,64 @@ async def run_agents_concurrent(
                 initial_tool_names=_initial_tool_names,
                 analysis_phase="deep",
             )
-            result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
+
+            # Progress monitor: polls working memory every 3s to show per-tool progress
+            _progress_stop = asyncio.Event()
+
+            async def _deep_progress_monitor():
+                _last_current = ""
+                while not _progress_stop.is_set():
+                    try:
+                        _deep_aid = f"{aid}_deep"
+                        _state = await a_inst.working_memory.get_state(
+                            a_inst.session_id, _deep_aid
+                        )
+                        if _state and _state.tasks:
+                            _in_progress = [
+                                t for t in _state.tasks if t.status == "IN_PROGRESS"
+                            ]
+                            _done = [t for t in _state.tasks if t.status == "COMPLETE"]
+                            _current = _in_progress[0].description if _in_progress else ""
+                            if _current and _current != _last_current:
+                                await _broadcast_agent_status(
+                                    aid,
+                                    "running",
+                                    f"Deep: {_current}",
+                                    agent_inst=a_inst,
+                                    initial_tool_names=_initial_tool_names,
+                                    analysis_phase="deep",
+                                )
+                                _last_current = _current
+                            if _done and not _in_progress:
+                                await _broadcast_agent_status(
+                                    aid,
+                                    "running",
+                                    f"{aid} deep analysis aggregating results.",
+                                    agent_inst=a_inst,
+                                    initial_tool_names=_initial_tool_names,
+                                    analysis_phase="deep",
+                                )
+                    except Exception:
+                        pass
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.shield(_progress_stop.wait()), timeout=3.0
+                        )
+                    except TimeoutError:
+                        pass
+                    except asyncio.CancelledError:
+                        break
+
+            _monitor_task = asyncio.create_task(_deep_progress_monitor())
+            try:
+                result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
+            finally:
+                _progress_stop.set()
+                _monitor_task.cancel()
+                try:
+                    await _monitor_task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
             if result.error:
                 await _broadcast_agent_status(

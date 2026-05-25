@@ -112,30 +112,41 @@ class Agent1Image(ForensicAgent):
         """
         Phase 2 — Deep Neural Forensics (heavy, runs in background after Phase 1).
 
-        anomaly_tracer (ManTra-Net) is gated inside its handler — it only fires
-        when Phase-1 or earlier Phase-2 tools reported a tampering signal.
+        Tools are ordered by signal-to-cost ratio: fast high-signal tools first
+        so the UI shows progress and the agent can gate expensive tools early.
+
+        Gating:
+          - anomaly_tracer (ManTra-Net) — only fires when Phase-1 or earlier
+            Phase-2 tools reported a tampering signal.
+          - adversarial_robustness_check — only when splicing/copy-move confirmed.
         """
-        base = [
+        if self._is_screen_capture or self._is_digital_capture:
+            return [
+                "Run neural_fingerprint for conceptual similarity detection",
+                "Run diffusion_artifact_detector for AI-generation signatures",
+                "Run synthid_watermark_detect for SynthID and AI watermark detection",
+                "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
+            ]
+
+        # Natural photos: fast high-signal tools first, heavy tools later
+        tasks = [
             "Run diffusion_artifact_detector for AI-generation signatures",
             "Run synthid_watermark_detect for SynthID and AI watermark detection",
             "Run f3_net_frequency for AI-GAN artifact detection",
-            "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
+            "Run neural_splicing for ViT-based region composition analysis",
+            "Run neural_copy_move for dual-branch copy-move detection",
         ]
-        if self._is_screen_capture or self._is_digital_capture:
-            return base + ["Run neural_fingerprint for conceptual similarity detection"]
-        base.insert(0, "Run neural_copy_move for dual-branch copy-move detection")
-        base.insert(0, "Run neural_splicing for ViT-based region composition analysis")
-        # Only add anomaly_tracer if not lossless (as it relies heavily on JPEG noise/ghosts)
+        # anomaly_tracer relies heavily on JPEG noise/ghosts — skip for lossless
         if not self._is_lossless:
-            base.insert(-1, "Run anomaly_tracer for ManTra-Net universal anomaly tracing")
-        # adversarial_robustness_check is expensive — only warranted when splicing or
-        # copy-move is confirmed, as anti-forensic perturbations are only meaningful
-        # in that context.
-        base.insert(
-            -1,
+            tasks.append("Run anomaly_tracer for ManTra-Net universal anomaly tracing")
+        # adversarial_robustness_check is expensive — gated inside its handler
+        tasks.append(
             "Run adversarial_robustness_check for anti-forensics perturbation stability check if splicing or copy-move was detected",
         )
-        return base
+        tasks.append(
+            "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding"
+        )
+        return tasks
 
     @property
     def supported_file_types(self) -> list[str]:

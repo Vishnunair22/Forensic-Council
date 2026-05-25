@@ -18,6 +18,13 @@ from core.tracing import PipelineTrace
 logger = get_logger(__name__)
 
 
+_TAMPERING_INDICATOR_KEYWORDS = {
+    "manipulation", "splicing", "copy.move", "tamper",
+    "forgery", "anomalous", "ai.generated", "synthetic",
+    "diffusion", "gan", "deepfake", "inconsistent",
+}
+
+
 class AgentInvestigationMixin:
     """
     Mixin handling the ReAct investigation loop and various pass types.
@@ -301,6 +308,97 @@ class AgentInvestigationMixin:
                 error=str(exc),
             )
 
+    def _build_initial_findings_summary(self, phase: str = "initial") -> str:
+        """Build a concise text summary of Phase-1 findings for deep analysis context."""
+        findings = getattr(self, "_findings", [])
+        if not findings:
+            return "No prior findings available."
+        actionable = [
+            f for f in findings
+            if f.status != "NOT_APPLICABLE" and f.evidence_verdict != "NOT_APPLICABLE"
+        ]
+        if not actionable:
+            return "No actionable findings from prior phase."
+
+        positive = [f for f in actionable if f.evidence_verdict == "POSITIVE"]
+        suspicious = [
+            f for f in actionable
+            if str(f.evidence_verdict or "").upper() in ("SUSPICIOUS", "TAMPERED", "MANIPULATED")
+        ]
+        negative = [f for f in actionable if f.evidence_verdict == "NEGATIVE"]
+        inconclusive = [f for f in actionable if f.evidence_verdict == "INCONCLUSIVE"]
+
+        lines = [f"{self.agent_name} — {phase.title()} Phase Summary:"]
+        if positive:
+            lines.append(f"  POSITIVE findings: {len(positive)}")
+            for f in positive[:3]:
+                tool = f.metadata.get("tool_name", f.finding_type)
+                lines.append(f"    - {tool}: conf={f.confidence_raw:.2f}")
+        if suspicious:
+            lines.append(f"  SUSPICIOUS findings: {len(suspicious)}")
+            for f in suspicious[:2]:
+                tool = f.metadata.get("tool_name", f.finding_type)
+                lines.append(f"    - {tool}: conf={f.confidence_raw:.2f}")
+        if negative:
+            lines.append(f"  CLEAN findings: {len(negative)}")
+        if inconclusive:
+            lines.append(f"  INCONCLUSIVE findings: {len(inconclusive)}")
+
+        highest_conf = max(
+            (f.confidence_raw for f in actionable if f.confidence_raw is not None), default=0.0
+        )
+        lines.append(f"  Highest confidence: {highest_conf:.2f}")
+        total_tools = len(actionable)
+        error_count = sum(
+            1 for f in actionable if f.status == "INCOMPLETE" or f.evidence_verdict == "ERROR"
+        )
+        if error_count:
+            lines.append(f"  Tool errors: {error_count}/{total_tools}")
+        return "\n".join(lines)
+
+    def _generate_agent_brief(self, phase: str) -> dict[str, Any]:
+        """Generate a structured agent brief summarizing findings for this phase."""
+        findings = getattr(self, "_findings", [])
+        phase_findings = [
+            f for f in findings if f.metadata.get("analysis_phase", "initial") == phase
+        ] if phase else findings
+
+        actionable = [
+            f for f in phase_findings
+            if f.status != "NOT_APPLICABLE" and f.evidence_verdict != "NOT_APPLICABLE"
+        ]
+        tool_names = sorted({
+            str(f.metadata.get("tool_name") or f.finding_type)
+            for f in actionable
+        })
+        positive_count = sum(1 for f in actionable if f.evidence_verdict == "POSITIVE")
+        suspicious_count = sum(
+            1 for f in actionable
+            if str(f.evidence_verdict or "").upper() in ("SUSPICIOUS", "TAMPERED", "MANIPULATED")
+        )
+        negative_count = sum(1 for f in actionable if f.evidence_verdict == "NEGATIVE")
+        error_count = sum(
+            1 for f in actionable if f.status == "INCOMPLETE" or f.evidence_verdict == "ERROR"
+        )
+
+        tampering_signals = positive_count + suspicious_count
+        brief = {
+            "agent_name": self.agent_name,
+            "phase": phase,
+            "total_findings": len(phase_findings),
+            "actionable_findings": len(actionable),
+            "tools_used": tool_names,
+            "tool_count": len(tool_names),
+            "positive_count": positive_count,
+            "suspicious_count": suspicious_count,
+            "negative_count": negative_count,
+            "error_count": error_count,
+            "tampering_signal_count": tampering_signals,
+            "has_tampering_signals": tampering_signals > 0,
+        }
+        self._agent_brief = brief
+        return brief
+
     def _build_deterministic_synthesis(
         self,
         findings: list[AgentFinding],
@@ -453,6 +551,7 @@ class AgentInvestigationMixin:
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             agent=self,
             hitl_timeout=540.0,
+            per_tool_timeout=120.0,
         )
 
         llm_generator = None
@@ -519,6 +618,19 @@ class AgentInvestigationMixin:
 
         for f in self._findings:
             f.metadata["analysis_phase"] = "initial"
+
+        # Build initial findings summary for deep context enrichment (Fix 4)
+        initial_summary = self._build_initial_findings_summary(phase="initial")
+        self._initial_findings_summary = initial_summary
+        try:
+            await self.working_memory.update_state(
+                session_id=self.session_id,
+                agent_id=self.agent_id,
+                updates={"initial_findings_summary": initial_summary},
+            )
+        except Exception as wm_err:
+            logger.debug("Failed to store initial findings summary", error=str(wm_err))
+
         self._tool_registry = await self.build_tool_registry()
 
         deep_agent_id = f"{self.agent_id}_deep"
@@ -538,12 +650,19 @@ class AgentInvestigationMixin:
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             agent=self,
             hitl_timeout=540.0,
+            per_tool_timeout=300.0,
+        )
+
+        # Enriched deep initial thought referencing Phase-1 findings (Fix 4)
+        enriched_thought = (
+            f"DEEP ANALYSIS PASS — {self.agent_name}. Running {len(deep_tasks)} deep tools. "
+            f"Phase-1 context:\n{initial_summary}"
         )
 
         self._reactive_expansion_agent_id = deep_agent_id
         try:
             loop_result = await loop_engine.run(
-                initial_thought=f"DEEP ANALYSIS PASS — {self.agent_name}. Running {len(deep_tasks)} tools.",
+                initial_thought=enriched_thought,
                 tool_registry=self._tool_registry,
                 llm_generator=None,
             )
@@ -560,6 +679,9 @@ class AgentInvestigationMixin:
         self._tool_success_count = sum(1 for f in self._findings if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE")
         self._tool_error_count = sum(1 for f in self._findings if f.evidence_verdict == "ERROR" or f.status == "INCOMPLETE")
 
+        # Generate agent brief (Fix 5)
+        self._generate_agent_brief(phase="deep")
+
         synthesis = await self._synthesize_findings_once(
             self._findings, phase="deep", timeout_s=90.0
         )
@@ -572,6 +694,14 @@ class AgentInvestigationMixin:
         self._agent_confidence = synthesis["agent_confidence"]
         self._agent_error_rate = synthesis["agent_error_rate"]
         self._agent_synthesis = synthesis
+
+        # Enrich synthesis with agent brief and initial context (Fix 5 + Fix 6)
+        if isinstance(synthesis, dict):
+            brief = getattr(self, "_agent_brief", None)
+            if brief:
+                synthesis["agent_brief"] = brief
+            synthesis["initial_findings_summary"] = initial_summary
+
         await self._publish_agent_context("deep", self._findings)
         self._reflection_report = await self.self_reflection_pass(self._findings)
         await deep_trace.complete({"deep_finding_count": len(deep_findings)})

@@ -781,6 +781,7 @@ class ReActLoopEngine:
         hitl_timeout: float = 3600.0,
         heavy_tool_semaphore: asyncio.Semaphore | None = None,
         agent: Any | None = None,
+        per_tool_timeout: float = 120.0,
     ) -> None:
         """
         Initialize the ReAct loop engine.
@@ -794,6 +795,8 @@ class ReActLoopEngine:
             redis_client: Redis client for HITL checkpoint storage
             hitl_timeout: Timeout in seconds for waiting on HITL resume (default 3600s = 1 hour)
             heavy_tool_semaphore: Shared semaphore for throttling heavy CPU/GPU tools
+            per_tool_timeout: Per-tool execution timeout in seconds (default 120s).
+                              Prevents a single slow tool from hanging the entire deep pass.
         """
         self.agent_id = agent_id
         self.session_id = session_id
@@ -804,6 +807,7 @@ class ReActLoopEngine:
         self.hitl_timeout = hitl_timeout
         self.heavy_tool_semaphore = heavy_tool_semaphore
         self.agent = agent
+        self.per_tool_timeout = per_tool_timeout
 
         # Internal state
         self._current_iteration = 0
@@ -1375,13 +1379,16 @@ class ReActLoopEngine:
                     await trace.start()
 
                     try:
-                        tool_result = await tool_registry.call(
-                            tool_name=next_step.tool_name,
-                            input_data=next_step.tool_input or {},
-                            agent_id=self.agent_id,
-                            session_id=self.session_id,
-                            custody_logger=self.custody_logger,
-                            semaphore=self.heavy_tool_semaphore,
+                        tool_result = await asyncio.wait_for(
+                            tool_registry.call(
+                                tool_name=next_step.tool_name,
+                                input_data=next_step.tool_input or {},
+                                agent_id=self.agent_id,
+                                session_id=self.session_id,
+                                custody_logger=self.custody_logger,
+                                semaphore=self.heavy_tool_semaphore,
+                            ),
+                            timeout=self.per_tool_timeout,
                         )
                         _tool_span.set_attribute("tool_success", tool_result.success)
 
