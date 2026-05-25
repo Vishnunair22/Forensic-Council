@@ -81,6 +81,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self._pre_warm_agent_results: dict[str, dict[str, Any]] | None = None
         self._pre_warm_case_id: str = ""
         self._pre_warm_report: ForensicReport | None = None
+        self._pre_warm_used_llm: bool = False
 
     async def pre_warm(
         self,
@@ -96,6 +97,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         """
         self._pre_warm_agent_results = agent_results
         self._pre_warm_case_id = case_id
+        self._pre_warm_used_llm = False
         self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False)
         return self._pre_warm_report
 
@@ -105,12 +107,19 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             raise RuntimeError("Arbiter has no cached agent findings to finalise")
         if not use_llm and self._pre_warm_report is not None:
             return self._pre_warm_report
+        if use_llm and self._pre_warm_report is not None and self._pre_warm_used_llm:
+            return self._pre_warm_report
+        if use_llm and self._pre_warm_report is not None and not self._pre_warm_used_llm:
+            logger.info("Pre-warm report was built without LLM; re-running with LLM synthesis")
+            self._pre_warm_report = None
         report = await self.deliberate(
             self._pre_warm_agent_results,
             self._pre_warm_case_id,
             use_llm=use_llm,
         )
-        if not use_llm:
+        if use_llm:
+            self._pre_warm_used_llm = True
+        else:
             self._pre_warm_report = report
         return report
 

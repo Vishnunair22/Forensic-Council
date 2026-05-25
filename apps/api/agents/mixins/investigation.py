@@ -519,8 +519,7 @@ class AgentInvestigationMixin:
 
         for f in self._findings:
             f.metadata["analysis_phase"] = "initial"
-        if self._tool_registry is None:
-            self._tool_registry = await self.build_tool_registry()
+        self._tool_registry = await self.build_tool_registry()
 
         deep_agent_id = f"{self.agent_id}_deep"
         self._deep_wm_namespace = deep_agent_id

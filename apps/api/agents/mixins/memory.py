@@ -48,33 +48,32 @@ class AgentMemoryMixin:
         Allows handlers to push fine-grained progress (e.g. 'Frame 45/100').
         """
         try:
-            # ReActLoopEngine stores the current task_id in working memory state
-            state = await self.working_memory.get_state(self.session_id, self.agent_id)
-            # Find the first 'IN_PROGRESS' task
+            active_ns = getattr(self, "_deep_wm_namespace", None) or self.agent_id
+            state = await self.working_memory.get_state(self.session_id, active_ns)
             inprogress = [t for t in state.tasks if t.status == TaskStatus.IN_PROGRESS]
             if inprogress:
                 task = inprogress[0]
                 await self.working_memory.update_task(
                     session_id=self.session_id,
-                    agent_id=self.agent_id,
+                    agent_id=active_ns,
                     task_id=task.task_id,
                     status=TaskStatus.IN_PROGRESS,
                     sub_task_info=sub_info,
                 )
 
-            # Also update deep namespace if active
+            # Also update base namespace if deep is active
             deep_ns = getattr(self, "_deep_wm_namespace", None)
             if deep_ns:
-                state_deep = await self.working_memory.get_state(self.session_id, deep_ns)
-                inprogress_deep = [
-                    t for t in state_deep.tasks if t.status == TaskStatus.IN_PROGRESS
+                state_base = await self.working_memory.get_state(self.session_id, self.agent_id)
+                inprogress_base = [
+                    t for t in state_base.tasks if t.status == TaskStatus.IN_PROGRESS
                 ]
-                if inprogress_deep:
-                    task_d = inprogress_deep[0]
+                if inprogress_base:
+                    task_b = inprogress_base[0]
                     await self.working_memory.update_task(
                         session_id=self.session_id,
-                        agent_id=deep_ns,
-                        task_id=task_d.task_id,
+                        agent_id=self.agent_id,
+                        task_id=task_b.task_id,
                         status=TaskStatus.IN_PROGRESS,
                         sub_task_info=sub_info,
                     )
@@ -92,17 +91,17 @@ class AgentMemoryMixin:
         display_name = tool_name.replace("_", " ").title()
         error_text = f"{display_name} failed — continuing…"
         try:
+            active_ns = getattr(self, "_deep_wm_namespace", None) or self.agent_id
             await self.working_memory.update_state(
                 session_id=self.session_id,
-                agent_id=self.agent_id,
+                agent_id=active_ns,
                 updates={"last_tool_error": error_text},
             )
-            # Also write to deep namespace so heartbeat surfaces errors during deep pass
-            deep_ns = getattr(self, "_deep_wm_namespace", None)
-            if deep_ns:
+            # Also write to base namespace for heartbeat
+            if active_ns != self.agent_id:
                 await self.working_memory.update_state(
                     session_id=self.session_id,
-                    agent_id=deep_ns,
+                    agent_id=self.agent_id,
                     updates={"last_tool_error": error_text},
                 )
         except Exception as e:

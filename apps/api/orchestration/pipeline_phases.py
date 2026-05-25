@@ -471,10 +471,7 @@ async def run_agents_concurrent(
                         tool_name = str(item.get("tool") or "").strip()
                         if not tool_name:
                             continue
-                        if restrict_to_actual and tool_name not in actual_tools:
-                            continue
-                        # Suppress initial-phase tools from deep-phase synthesis preview
-                        if initial_tool_names and tool_name in initial_tool_names:
+                        if restrict_to_actual and (tool_name not in actual_tools or tool_name in (initial_tool_names or set())):
                             continue
                         if tool_name in PREVIEW_EXCLUDED_TOOLS:
                             continue
@@ -1002,10 +999,11 @@ async def run_agents_concurrent(
                     analysis_phase="deep",
                 )
             else:
-                # Broadcast only findings produced in the deep pass.
-                # result.findings = initial + deep combined; slice off the initial prefix.
-                initial_count = len(a_init) if a_init else 0
-                deep_only = (result.findings or [])[initial_count:]
+                # Broadcast only findings produced in the deep pass, identified by phase tag.
+                deep_only = [
+                    f for f in (result.findings or [])
+                    if (f.get("metadata") or {}).get("analysis_phase") == "deep"
+                ]
                 await _broadcast_agent_status(
                     aid,
                     "complete",
@@ -1130,7 +1128,6 @@ async def _run_agent_deep_only(
     with _tracer.start_as_current_span(f"agent.{agent_id}.deep_pass") as span:
         span.set_attribute("agent_id", agent_id)
         try:
-            initial_count = len(initial_findings)
             logger.info(f"Running {agent_id} deep investigation")
             deep_timeout = 600.0
             await asyncio.wait_for(
@@ -1138,12 +1135,14 @@ async def _run_agent_deep_only(
                 timeout=deep_timeout,
             )
             all_findings = getattr(agent, "_findings", initial_findings)
-            for idx in range(initial_count, len(all_findings)):
-                finding = all_findings[idx]
-                if not isinstance(finding.metadata, dict):
-                    finding.metadata = {}
-                finding.metadata["analysis_phase"] = "deep"
+            for finding in all_findings:
                 meta = finding.metadata
+                if not isinstance(meta, dict):
+                    meta = {}
+                    finding.metadata = meta
+                phase = meta.get("analysis_phase", "")
+                if phase != "deep":
+                    continue
                 reason_str = str(meta.get("reason") or meta.get("skipped_reason") or "").lower()
                 is_gated = (
                     meta.get("skipped") is True
@@ -1153,9 +1152,10 @@ async def _run_agent_deep_only(
                     or "not warranted" in reason_str
                 )
                 if is_gated:
-                    finding.metadata["gated"] = True
+                    meta["gated"] = True
 
-            deep_count = max(0, len(all_findings) - initial_count)
+            deep_only = [f for f in all_findings if (f.metadata or {}).get("analysis_phase") == "deep"]
+            deep_count = len(deep_only)
             span.set_attribute("deep_finding_count", deep_count)
             span.set_attribute("total_finding_count", len(all_findings))
             return AgentLoopResult(
