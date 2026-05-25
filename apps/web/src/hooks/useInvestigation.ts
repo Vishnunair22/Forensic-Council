@@ -704,6 +704,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText("Compiling agent findings...");
+    const ARBITER_MIN_DISPLAY_MS = 4000;
+    const _arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
@@ -711,6 +713,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
+
+      // Ensure minimum overlay display time so the arbiter transition doesn't
+      // flash-dismiss when the pre-warmed report resolves in <1s.
+      const _elapsed = Date.now() - _arbiterStartTime;
+      if (_elapsed < ARBITER_MIN_DISPLAY_MS) {
+        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - _elapsed));
+      }
 
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
@@ -846,6 +855,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText("Final report synthesis requested. Compiling deep analysis findings.");
+    const ARBITER_MIN_DISPLAY_MS = 4000;
+    const _arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
@@ -853,6 +864,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
+
+      // Ensure minimum overlay display time so the arbiter transition doesn't
+      // flash-dismiss when the pre-warmed report resolves in <1s.
+      const _elapsed = Date.now() - _arbiterStartTime;
+      if (_elapsed < ARBITER_MIN_DISPLAY_MS) {
+        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - _elapsed));
+      }
 
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");

@@ -445,7 +445,7 @@ async def run_agents_concurrent(
                 # When findings is None (deep phase with no new tool findings), allow ALL
                 # synthesis sections through so the deep card can still show LLM-refined summaries.
                 actual_tools: set[str] = set()
-                restrict_to_actual = bool(findings)
+                restrict_to_actual = bool(findings) or bool(initial_tool_names)
                 for existing_finding in findings or []:
                     existing_meta = (
                         existing_finding.metadata
@@ -597,13 +597,22 @@ async def run_agents_concurrent(
                 _append_synthesis_sections(synthesis)
                 # Always deduplicate by tool name — synthesis sections often overlap with
                 # raw tool findings. Synthesis (LLM-refined) entries take precedence.
+                # Also filter out any tool that was already run in the initial phase
+                # (even synthesis-wrapped versions of initial tools) to prevent
+                # deep-phase cards from showing initial-phase findings.
                 seen_tools: set[str] = set()
+                _norm_initial_tools: set[str] = set()
+                if initial_tool_names:
+                    for _raw_tn in initial_tool_names:
+                        _norm_initial_tools.add(_normalize_tool_name(_raw_tn))
                 # Two-pass: synthesis entries first (they are appended after `before`), then raw
                 priority_preview = preview[before:] + preview[:before]
                 deduped = []
                 for item in priority_preview:
                     tool_key = str(item.get("tool") or "")
                     if tool_key and tool_key in seen_tools:
+                        continue
+                    if initial_tool_names and tool_key in _norm_initial_tools:
                         continue
                     if tool_key:
                         seen_tools.add(tool_key)
@@ -958,12 +967,26 @@ async def run_agents_concurrent(
                 supports_file_type=False,
             )
 
+        # Build initial tool set BEFORE any deep-phase broadcast so the "running"
+        # and "error" status updates also suppress initial-phase narrative/synthesis.
+        _initial_tool_names: set[str] = set()
+        for _f in a_init or []:
+            _m = (
+                _f.metadata if hasattr(_f, "metadata")
+                else _f.get("metadata", {}) if isinstance(_f, dict)
+                else {}
+            )
+            _t = _m.get("tool_name") if isinstance(_m, dict) else None
+            if _t:
+                _initial_tool_names.add(str(_t))
+
         try:
             await _broadcast_agent_status(
                 aid,
                 "running",
                 f"{aid} deep analysis in progress.",
                 agent_inst=a_inst,
+                initial_tool_names=_initial_tool_names,
                 analysis_phase="deep",
             )
             result = await _run_agent_deep_only(pipeline, a_inst, aid, a_init, a_supported)
@@ -975,6 +998,7 @@ async def run_agents_concurrent(
                     f"{aid} error: {result.error}",
                     error=result.error,
                     agent_inst=a_inst,
+                    initial_tool_names=_initial_tool_names,
                     analysis_phase="deep",
                 )
             else:
@@ -982,24 +1006,13 @@ async def run_agents_concurrent(
                 # result.findings = initial + deep combined; slice off the initial prefix.
                 initial_count = len(a_init) if a_init else 0
                 deep_only = (result.findings or [])[initial_count:]
-                # Build initial tool set so synthesis dedup can suppress initial-phase items
-                initial_tool_names: set[str] = set()
-                for _f in a_init or []:
-                    _m = (
-                        _f.metadata if hasattr(_f, "metadata")
-                        else _f.get("metadata", {}) if isinstance(_f, dict)
-                        else {}
-                    )
-                    _t = _m.get("tool_name") if isinstance(_m, dict) else None
-                    if _t:
-                        initial_tool_names.add(str(_t))
                 await _broadcast_agent_status(
                     aid,
                     "complete",
                     f"{aid} deep analysis complete.",
                     findings=deep_only,
                     agent_inst=a_inst,
-                    initial_tool_names=initial_tool_names,
+                    initial_tool_names=_initial_tool_names,
                     analysis_phase="deep",
                 )
 
@@ -1119,7 +1132,7 @@ async def _run_agent_deep_only(
         try:
             initial_count = len(initial_findings)
             logger.info(f"Running {agent_id} deep investigation")
-            deep_timeout = min(float(pipeline.config.investigation_timeout), 600.0)
+            deep_timeout = 600.0
             await asyncio.wait_for(
                 agent.run_deep_investigation(),
                 timeout=deep_timeout,
