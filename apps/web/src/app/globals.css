@@ -107,6 +107,7 @@
 @layer base {
   html {
     background-color: var(--color-background);
+    overflow-x: hidden;
     scroll-padding-top: 64px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

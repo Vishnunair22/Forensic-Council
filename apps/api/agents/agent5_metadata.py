@@ -170,7 +170,6 @@ class Agent5Metadata(ForensicAgent):
                 "Run file_hash_verify against ingestion hash",
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
                 "Run hex_signature_scan for raw-byte software signatures",
-                "Run compression_risk_audit to check for social media footprints",
                 "Run av_file_identity for AV container identity pre-screen",
                 "Run mediainfo_profile for stream and codec provenance",
             ]

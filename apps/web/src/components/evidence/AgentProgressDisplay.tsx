@@ -79,7 +79,7 @@ interface ActiveAgentsPanelProps {
 }
 
 function ActiveAgentsPanel({ visibleAgents = [], agentUpdates: _agentUpdates = {}, completedAgents: _completedAgents = [], getAgentStatus }: ActiveAgentsPanelProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const agentUpdates = _agentUpdates || {};
   const completedAgents = _completedAgents;
@@ -200,15 +200,17 @@ function ActiveAgentsPanel({ visibleAgents = [], agentUpdates: _agentUpdates = {
 
 interface SkippedAgentsPanelProps {
   skippedAgents: Agent[];
+  agentUpdates: Record<string, { status: string; thinking: string; tools_done?: number; tools_total?: number; tool_name?: string }>;
   mimeType?: string;
 }
 
-function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps) {
+function SkippedAgentsPanel({ skippedAgents, agentUpdates, mimeType }: SkippedAgentsPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const prefersReducedMotion = useReducedMotion();
 
   const mimeCategory = mimeType?.split("/")?.[0] ?? "this";
-  const reason = `Not applicable for ${mimeCategory} files`;
+  const fallbackReason = `Not applicable for ${mimeCategory} files`;
+  const getReason = (agentId: string) => agentUpdates[agentId]?.thinking || fallbackReason;
 
   return (
     <div className="fc-surface-quiet rounded-2xl overflow-hidden">
@@ -252,7 +254,7 @@ function SkippedAgentsPanel({ skippedAgents, mimeType }: SkippedAgentsPanelProps
                   <Icon className="w-4 h-4 shrink-0 fc-text-muted" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium fc-text-secondary leading-none">{agent.name}</p>
-                    <p className="text-sm fc-text-muted mt-1 leading-none">{reason}</p>
+                    <p className="text-sm fc-text-muted mt-1 leading-none">{getReason(agent.id)}</p>
                   </div>
                   <span className="fc-eyebrow fc-text-muted shrink-0">N/A</span>
                 </div>
@@ -418,7 +420,7 @@ export function AgentProgressDisplay({
               : "Phase 2"}
           </span>
           <p
-            className="text-sm font-normal fc-text-faint ml-auto hidden md:block"
+            className="text-sm font-normal fc-text-secondary ml-auto hidden md:block"
             role="status"
             aria-live="polite"
             aria-atomic="false"
@@ -446,6 +448,7 @@ export function AgentProgressDisplay({
           {skippedAgents.length > 0 && (
             <SkippedAgentsPanel
               skippedAgents={skippedAgents}
+              agentUpdates={agentUpdates}
               mimeType={mimeType}
             />
           )}
@@ -528,7 +531,7 @@ export function AgentProgressDisplay({
 
               <div className="flex items-center justify-center gap-3 mb-6">
                 <Activity className="w-5 h-5 text-primary animate-pulse" />
-                <p className="text-center text-sm font-mono uppercase tracking-widest text-primary">
+                <p className="text-center text-base font-mono font-medium text-primary">
                   System Prompt: Command Required
                 </p>
               </div>

@@ -215,7 +215,7 @@ class AgentInvestigationMixin:
         self,
         findings: list[AgentFinding],
         phase: str,
-        timeout_s: float = 15.0,
+        timeout_s: float = 20.0,
     ) -> dict[str, Any] | None:
         """Run one bounded post-analysis synthesis call for card/report narration."""
         if not (self.config.llm_enable_post_synthesis and self.config.llm_api_key):

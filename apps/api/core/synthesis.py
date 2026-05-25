@@ -414,8 +414,10 @@ class SynthesisService:
                     }
                 )
 
+            # Cap to 5 highest-confidence findings per group to stay within context budget
+            tools_summary.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
             grouped_sections_data.append(
-                {"id": grp["id"], "label": grp["label"], "findings": tools_summary}
+                {"id": grp["id"], "label": grp["label"], "findings": tools_summary[:5]}
             )
 
         # Construct Groq Synthesis Prompt. S-H-5: filename and tool results
@@ -424,20 +426,14 @@ class SynthesisService:
         # data, not instructions.
         filename_block = _wrap_untrusted("filename", str(evidence_artifact.file_path))
         results_block = _wrap_untrusted("tool_results", grouped_sections_data)
-        prompt = f"""
-[SYSTEM: FORENSIC ANALYST SYNTHESIS]
+
+        # Build system prompt with role instructions (no evidence data)
+        system_prompt = f"""[SYSTEM: FORENSIC ANALYST SYNTHESIS]
 You are a Senior Forensic Analyst at the National Cyber Forensics Institute.
 Synthesize raw tool findings from {agent_name} into a precise, court-defensible narrative.
 Every sentence must be specific and grounded in the actual tool data — no generalities.
 
 {_SAFETY_PREAMBLE}
-[EVIDENCE CONTEXT]
-{filename_block}
-MIME: {evidence_artifact.mime_type}
-Agent: {agent_name} ({agent_id})
-
-[RAW TOOL RESULTS]
-{results_block}
 
 [STRICT INSTRUCTIONS]
 1. EXECUTIVE SUMMARY ('narrative_summary'): 2-3 flowing sentences, 50-80 words total.
@@ -458,11 +454,13 @@ Agent: {agent_name} ({agent_id})
    - Spell out abbreviations: "Error Level Analysis" not "ELA", "Photo Response Non-Uniformity" not "PRNU".
    - For NEGATIVE/NOT_APPLICABLE results: state what was checked and what was confirmed absent.
 
-4. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals. Tool failures and NOT_APPLICABLE are coverage gaps only.
+4. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals. Tool failures, timeouts, and NOT_APPLICABLE are coverage gaps only — never evidence of manipulation.
 
 5. Screenshots: State what was actually checked (OCR text content, layout structure, hash integrity since intake, binary container, compression codec). Do not claim camera authenticity.
 
 6. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result".
+
+7. TOOL TIMEOUTS & ERRORS: A tool that timed out or returned an error is a coverage gap — not evidence of manipulation or authenticity. Do not treat missing data as suspicious.
 
 Return ONLY a JSON object:
 {{
@@ -485,17 +483,27 @@ Return ONLY a JSON object:
   ]
 }}
 """
+
+        # Build user content with evidence data only
+        user_content = f"""[EVIDENCE CONTEXT]
+{filename_block}
+MIME: {evidence_artifact.mime_type}
+Agent: {agent_name} ({agent_id})
+
+[RAW TOOL RESULTS]
+{results_block}
+"""
         try:
-            # Truncate prompt to stay within safe context budget (~5000 tokens)
+            # Truncate user content to stay within safe context budget (~5000 tokens)
             MAX_INPUT_CHARS = 18000
-            if len(prompt) > MAX_INPUT_CHARS:
-                prompt = prompt[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
-                logger.warning("Groq synthesis input truncated", original_len=len(prompt))
+            if len(user_content) > MAX_INPUT_CHARS:
+                user_content = user_content[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
+                logger.warning("Groq synthesis input truncated", original_len=len(user_content))
 
             raw = await llm_client.generate_synthesis(
-                system_prompt="You are a Senior Forensic Analyst. Return ONLY valid JSON.",
-                user_content=prompt,
-                max_tokens=2000,
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=3200,
                 timeout_override=None,
                 json_mode=True,
             )

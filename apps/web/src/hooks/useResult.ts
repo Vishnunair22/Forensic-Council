@@ -123,12 +123,20 @@ export function useResult(initialSessionId?: string) {
   }, []);
 
   // Transition smoothness: ensure overlay shows for at least 800ms.
+  // data-fc-loading CSS backstop is removed only AFTER the minimum overlay
+  // timer fires (or when reportAlreadyReady skips it), so the body::before
+  // bridge stays in place until result content is visible.
   useEffect(() => {
     if (!mounted) return;
-    document.body.removeAttribute("data-fc-loading");
-    if (reportAlreadyReady) return;
+    if (reportAlreadyReady || minOverlayDone) {
+      document.body.removeAttribute("data-fc-loading");
+      if (reportAlreadyReady) return;
+    }
     if (minOverlayDone) return;
-    const timer = setTimeout(() => setMinOverlayDone(true), 800);
+    const timer = setTimeout(() => {
+      setMinOverlayDone(true);
+      document.body.removeAttribute("data-fc-loading");
+    }, 800);
     return () => clearTimeout(timer);
   }, [mounted, sessionId, reportAlreadyReady, minOverlayDone]);
 

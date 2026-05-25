@@ -4,7 +4,7 @@ set -euo pipefail
 # ── Forensic Council — One-Command Dev Boot ───────────────────────────────────
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-COMPOSE="docker compose -f $ROOT/infra/docker-compose.yml -f $ROOT/infra/docker-compose.dev.yml --env-file $ROOT/.env"
+COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.dev.yml" --env-file "$ROOT/.env")
 
 echo "🔍 Checking .env..."
 if [[ ! -f "$ROOT/.env" ]]; then
@@ -59,10 +59,10 @@ fi
 echo "✅ .env validation passed."
 
 echo "🐳 Building images..."
-$COMPOSE build --parallel
+"${COMPOSE[@]}" build --parallel
 
 echo "🚀 Starting services..."
-$COMPOSE up -d
+"${COMPOSE[@]}" up -d
 
 # PRELOAD_MODELS=1 (default) bakes models into the image. When the build
 # cache is cold or volumes are empty, first-start can download several GB.
@@ -79,7 +79,7 @@ while [ $ELAPSED -lt $TIMEOUT_SEC ]; do
     echo "✅ API healthy on http://localhost:8000 (after ${ELAPSED}s)"
     break
   fi
-  if [ "$DOWNLOAD_NOTED" -eq 0 ] && $COMPOSE logs --tail 50 backend 2>/dev/null | grep -q "ML cache incomplete - downloading models"; then
+  if [ "$DOWNLOAD_NOTED" -eq 0 ] && "${COMPOSE[@]}" logs --tail 50 backend 2>/dev/null | grep -q "ML cache incomplete - downloading models"; then
     echo "ℹ  Backend is downloading ML models on first run — this can take 15–40 min."
     DOWNLOAD_NOTED=1
   fi
@@ -91,7 +91,7 @@ while [ $ELAPSED -lt $TIMEOUT_SEC ]; do
 done
 if [[ "$STATUS" != "ok" ]]; then
   echo "❌ API did not become healthy in ${TIMEOUT_SEC}s."
-  echo "   Run: $COMPOSE logs backend"
+  echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml logs backend"
   exit 1
 fi
 echo "⏳ Waiting for Caddy health route..."

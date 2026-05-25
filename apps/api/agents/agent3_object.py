@@ -58,6 +58,15 @@ class Agent3Object(ForensicAgent):
                 "Run screenshot_scene_applicability for screen-capture object/scene scope",
                 "Run screenshot_layout_forensics for UI and document layout anomaly scan",
             ]
+        file_type = (self.evidence_artifact.mime_type or "").lower()
+        if file_type.startswith("video/"):
+            return [
+                "Run frame_extraction for video frame sampling and scene segmentation",
+                "Run object_detection for scene object identification",
+                "Run scene_incongruence for contextual anomaly detection",
+                "Run lighting_correlation_initial for initial shadow and light direction audit",
+                "Run vector_contraband_search for risk object screening",
+            ]
         return [
             "Run object_detection for scene object identification",
             "Run scene_incongruence for contextual anomaly detection",

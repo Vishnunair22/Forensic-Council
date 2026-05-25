@@ -107,7 +107,12 @@ export function HeroAuthActions() {
 
     clearInvestigationPersistence();
     __pendingFileStore.file = selectedFile;
-    savePendingEvidenceFile(selectedFile).catch((error) => {
+    await Promise.race([
+      savePendingEvidenceFile(selectedFile),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("savePendingEvidenceFile timed out")), 2000),
+      ),
+    ]).catch((error) => {
       console.warn("[HeroAuthActions] could not persist pending file:", error);
     });
     sessionOnlyStorage.setItem(STORAGE_KEYS.AUTO_START, "true");
@@ -123,6 +128,7 @@ export function HeroAuthActions() {
       true,
     );
 
+    setShowUpload(false);
     router.push("/evidence", { scroll: true });
   }, [selectedFile, router]);
 
@@ -202,13 +208,15 @@ export function HeroAuthActions() {
                 file={selectedFile}
                 onDismiss={closeUpload}
                 isHandingOff={isHandingOff}
-                onStartAnalysis={async () => {
+                  onStartAnalysis={async () => {
                   if (isHandingOff) return;
                   playSound("scan");
                   setIsHandingOff(true);
-                  sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
-                  window.dispatchEvent(new Event("fc_storage_update"));
-                  setShowUpload(false);
+                  window.dispatchEvent(
+                    new CustomEvent("fc_storage_update", {
+                      detail: { key: STORAGE_KEYS.FC_SHOW_LOADING, value: "true" },
+                    }),
+                  );
                   await handleStartAnalysis();
                 }}
               />

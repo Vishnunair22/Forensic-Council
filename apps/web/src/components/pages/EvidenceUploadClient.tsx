@@ -82,6 +82,12 @@ export function EvidenceUploadClient() {
   }, []);
 
   useEffect(() => {
+    const handleReset = () => setHandoffPending(false);
+    window.addEventListener("fc:reset-home", handleReset);
+    return () => window.removeEventListener("fc:reset-home", handleReset);
+  }, []);
+
+  useEffect(() => {
     if (handoffPending) {
       const timer = setTimeout(() => {
         setHandoffPending(false);

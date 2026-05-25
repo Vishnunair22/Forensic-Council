@@ -574,8 +574,8 @@ class Settings(BaseSettings):
         default=4096, description="Maximum tokens for LLM responses (Groq: up to 32768)"
     )
     llm_timeout: float = Field(
-        default=15.0,
-        description="Timeout for LLM API calls in seconds (reduced from 30s to fit within per-agent timeout budget)",
+        default=12.0,
+        description="Timeout for LLM API calls in seconds (inner call timeout — outer asyncio wait_for is 20s to allow clean logging)",
     )
     llm_enable_react_reasoning: bool = Field(
         default=False,

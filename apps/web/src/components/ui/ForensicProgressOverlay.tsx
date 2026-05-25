@@ -81,7 +81,7 @@ export function ForensicProgressOverlay({
       className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeOut" } }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.4, ease: "easeIn" } }}
       transition={{ duration: 0.16, ease: "easeOut" }}
     >
       <div className={`relative z-10 w-full max-w-xl mx-auto border-l-2 ${borderColor} pl-8 md:pl-12 py-4`}>

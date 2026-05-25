@@ -496,7 +496,7 @@ Do NOT use bullet points in the JSON values. Write in continuous prose. Interpre
             raw = await client.generate_synthesis(
                 system_prompt=_SAFETY_PREAMBLE + "\n" + system_prompt,
                 user_content=user_content,
-                max_tokens=900,
+                max_tokens=1400,
                 json_mode=True,
             )
             if raw:
@@ -511,6 +511,32 @@ Do NOT use bullet points in the JSON values. Write in continuous prose. Interpre
                     return json.dumps(parsed)
         except Exception as e:
             logger.debug(f"Per-agent narrative Groq parsing/call failed for {agent_id}: {e}")
+
+        # Retry once with simplified 2-key schema before programmatic fallback
+        try:
+            retry_prompt = system_prompt + (
+                "\n\nIMPORTANT: Return ONLY a JSON with TWO keys: "
+                '"evidence_assessment" and "reliability_verdict". '
+                "Omit deep_analysis. Each value must be one sentence, max 40 words."
+            )
+            raw2 = await client.generate_synthesis(
+                system_prompt=_SAFETY_PREAMBLE + "\n" + retry_prompt,
+                user_content=user_content,
+                max_tokens=800,
+                json_mode=True,
+            )
+            if raw2:
+                raw2_clean = raw2.strip()
+                if raw2_clean.startswith("```"):
+                    raw2_clean = raw2_clean.split("```", 2)[-1].lstrip("json").strip()
+                    if raw2_clean.endswith("```"):
+                        raw2_clean = raw2_clean[:-3].strip()
+                parsed2 = json.loads(raw2_clean[raw2_clean.find("{") : raw2_clean.rfind("}") + 1])
+                if "evidence_assessment" in parsed2 and "reliability_verdict" in parsed2:
+                    parsed2.setdefault("deep_analysis", "")
+                    return json.dumps(parsed2)
+        except Exception as retry_err:
+            logger.debug(f"Per-agent narrative retry also failed for {agent_id}: {retry_err}")
 
         return self._programmatic_agent_narrative(agent_id, findings, metrics)
 
@@ -665,11 +691,11 @@ Your summary must be:
 - Specific: cite the decisive tool findings, verdict, confidence, and material caveats
 - Free of speculation — only state what the data shows
 - Explicit about tool failures and low-confidence findings
-- Coverage context: {analysis_coverage_note} (Note any tool failures explicitly)
 
 Do NOT use boilerplate such as "multi-agent forensic analysis was conducted".
 Do NOT use bullet points. Return only the 2-3 line summary text.
-Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — explain WHY based on the numbers."""
+Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — explain WHY based on the numbers.
+If RAG context contradicts the computed finding data, trust the finding data, not the RAG context."""
 
         # --- RAG: Inject relevant forensic knowledge citations into user context ---
         rag_context_block = ""
@@ -683,7 +709,7 @@ Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — expla
                 query=query,
                 finding_types=finding_types_for_rag,
                 top_k=3,
-                min_relevance=0.12,
+                min_relevance=0.25,
             )
             if citations:
                 rag_context_block = "\n\n" + rag.build_arbiter_context(citations, max_chars=800)
@@ -694,6 +720,7 @@ Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — expla
         # S-H-5: wrap user-derived tool / RAG / Gemini content in
         # UNTRUSTED markers. The verdict template fields below are derived
         # from server-side counters and are safe to embed plain.
+        coverage_block = _wrap_untrusted("analysis_coverage_note", analysis_coverage_note)
         findings_block = _wrap_untrusted("top_findings_digest", findings_digest)
         untrusted_extras = ""
         if gemini_section:
@@ -710,6 +737,8 @@ Reference the computed verdict: {overall_verdict or "REVIEW REQUIRED"} — expla
 - Contested findings (agents disagree): {contested}
 - Gemini vision findings: {len(gemini_findings or [])}
 - Computed verdict: {overall_verdict}{verdict_line}
+- Analysis coverage:
+{coverage_block}
 
 Top findings by confidence (classical tools):
 {findings_block}{untrusted_extras}
@@ -1028,7 +1057,7 @@ Respond ONLY with valid JSON (no markdown):
 
 Rules:
 - verdict_sentence: state the verdict and primary reason in ≤25 words.
-- key_findings: exactly 3-5 plain English bullet items, each ≤50 words. Ensure findings are complete, authoritative sentences.
+- key_findings: exactly 3-5 plain English items. Each key_finding must be one sentence only, maximum 25 words. Ensure findings are complete, authoritative sentences.
 - reliability_note: ≤20 words. Cite confidence %, error rate, and note if any tools used fallbacks."""
 
         analysis_mode = (
@@ -1059,7 +1088,7 @@ Rules:
             raw = await client.generate_synthesis(
                 system_prompt=_SAFETY_PREAMBLE + "\n" + system_prompt,
                 user_content=user_content,
-                max_tokens=700,
+                max_tokens=1400,
                 json_mode=True,
             )
             if not raw:
@@ -1341,9 +1370,29 @@ Rules:
                 # and silently falling back to template-generated narratives.
                 timeout_budget = max(120.0, float(overall_timeout) * 0.60)
 
+                # Stagger synthesis tasks ~500ms apart to avoid simultaneous
+                # Groq TPM-limit bursts that would 429 all tasks at once.
+                async def _staggered(coro, delay: float):
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    return await coro
+
+                # Stagger independent synthesis tasks to avoid simultaneous
+                # Groq TPM-limit bursts. t_narratives() has its own Semaphore(3).
+                async def _staggered_structured():
+                    return await t_structured()
+
+                async def _staggered_executive():
+                    await asyncio.sleep(0.5)
+                    return await t_executive()
+
+                async def _staggered_uncertainty():
+                    await asyncio.sleep(1.0)
+                    return await t_uncertainty()
+
                 (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.wait_for(
                     asyncio.gather(
-                        t_structured(), t_narratives(), t_executive(), t_uncertainty()
+                        _staggered_structured(), t_narratives(), _staggered_executive(), _staggered_uncertainty()
                     ),
                     timeout=timeout_budget
                 )

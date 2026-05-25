@@ -660,7 +660,7 @@ export function AgentStatusCard({
                 </motion.div>
 
                 {/* Terminal-style text */}
-                <span className="fc-eyebrow min-w-0 break-words text-primary/80 tracking-widest uppercase flex items-center">
+                <span className="text-sm font-medium min-w-0 break-words text-primary flex items-center">
                   <span className="mr-2 opacity-50">&gt;</span>
                   {status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")

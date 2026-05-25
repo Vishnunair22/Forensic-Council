@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { flushSync } from "react-dom";
 import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
@@ -33,10 +31,8 @@ export function GlobalLoadingOverlay() {
     const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
     return stored ? parseInt(stored, 10) || 0 : 0;
   });
-  const [arbiterTransition, setArbiterTransition] = useState(() =>
-    sessionOnlyStorage.getItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING) === "1"
-  );
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountTimeRef = useRef(Date.now());
 
   const dismiss = (clearStorage = true) => {
     setShow(false);
@@ -82,10 +78,6 @@ export function GlobalLoadingOverlay() {
         setLiveText(value || "Opening evidence analysis...");
       } else if (key === STORAGE_KEYS.FC_LOADING_DISPATCHED) {
         setDispatchedCount(value ? parseInt(value, 10) || 0 : 0);
-      } else if (key === STORAGE_KEYS.FC_ARBITER_TRANSITIONING) {
-        flushSync(() => {
-          setArbiterTransition(value === "1");
-        });
       }
     };
     window.addEventListener("fc_storage_update", handleStorageUpdate);
@@ -95,8 +87,6 @@ export function GlobalLoadingOverlay() {
   // Route-change dismissal logic
   useEffect(() => {
     if (pathname !== "/" && !pathname.startsWith("/evidence")) {
-      // Left the active pathways — dismiss evidence loading overlay,
-      // but don't dismiss arbiter transition overlay (handled by useResult)
       dismiss();
       return;
     }
@@ -106,9 +96,11 @@ export function GlobalLoadingOverlay() {
     // within EVIDENCE_MAX_DISPLAY_MS, force-dismiss so the page is visible.
     if (show) {
       if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
+      const elapsed = Date.now() - mountTimeRef.current;
+      const remaining = Math.max(0, EVIDENCE_MAX_DISPLAY_MS - elapsed);
       safetyTimerRef.current = setTimeout(() => {
         dismiss();
-      }, EVIDENCE_MAX_DISPLAY_MS);
+      }, remaining);
     }
 
     return () => {
@@ -120,20 +112,14 @@ export function GlobalLoadingOverlay() {
   }, [pathname, show]);
 
   return (
-    <>
-      <AnimatePresence>
-        {show && !arbiterTransition && (
-          <LoadingOverlay
-            key="global-loading"
-            liveText={liveText}
-            dispatchedCount={dispatchedCount}
-          />
-        )}
-      </AnimatePresence>
-      <ArbiterDeliberationOverlay
-        isVisible={arbiterTransition && pathname !== "/evidence"}
-        liveText="Report confirmed ready. Loading result page..."
-      />
-    </>
+    <AnimatePresence>
+      {show && (
+        <LoadingOverlay
+          key="global-loading"
+          liveText={liveText}
+          dispatchedCount={dispatchedCount}
+        />
+      )}
+    </AnimatePresence>
   );
 }

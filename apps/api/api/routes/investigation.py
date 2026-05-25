@@ -332,7 +332,7 @@ async def start_investigation(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # Read a small chunk of bytes in-memory to detect the true MIME type before writing to disk
-    head = await file.read(2048)
+    head = await file.read(8192)
     await file.seek(0)
 
     actual_mime = await _detect_mime_from_head(head)

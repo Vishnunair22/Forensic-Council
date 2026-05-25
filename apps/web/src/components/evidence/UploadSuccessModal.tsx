@@ -150,12 +150,10 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
         </div>
       </div>
 
-      {/* Two-Zone Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-5 bg-black/40 border border-white/10 rounded-xl p-4 mb-6 overflow-hidden relative">
-        <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary/50" />
-
-        {/* Left Zone: File Preview Thumbnail */}
-        <div className="md:col-span-2 flex flex-col items-center justify-center relative overflow-hidden bg-black/30 border border-white/5 rounded-lg min-h-[140px] max-h-[180px] md:max-h-none aspect-video md:aspect-auto">
+      {/* Stacked Card: full-width preview + metadata footer */}
+      <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden mb-6">
+        {/* Preview Zone */}
+        <div className="relative overflow-hidden bg-black/30 border-b border-white/5 min-h-[180px] max-h-[260px] flex items-center justify-center">
           <motion.div
             className="w-full h-full flex flex-col items-center justify-center relative"
             initial={{ scale: 0.9, opacity: 0, filter: "blur(4px)" }}
@@ -168,9 +166,8 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
                 <img
                   src={objectUrl}
                   alt={file.name}
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover"
                 />
-                {/* Scanline Sweep animation */}
                 <motion.div
                   initial={{ top: "0%", opacity: 1 }}
                   animate={{ top: "100%", opacity: 0 }}
@@ -187,21 +184,18 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
                   playsInline
                   preload="metadata"
                   onLoadedMetadata={handleVideoMetadata}
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover"
                 />
-                {/* Play Button Overlay */}
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10">
                   <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/90">
                     <Play className="w-4 h-4 ml-0.5" />
                   </div>
                 </div>
-                {/* Duration Badge */}
                 {videoDuration && (
                   <div className="absolute bottom-2 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[10px] font-mono text-white/90 border border-white/10 z-10">
                     {videoDuration}
                   </div>
                 )}
-                {/* Scanline Sweep animation */}
                 <motion.div
                   initial={{ top: "0%", opacity: 1 }}
                   animate={{ top: "100%", opacity: 0 }}
@@ -210,7 +204,7 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
                 />
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center p-3 text-center">
+              <div className="flex flex-col items-center justify-center p-4 text-center">
                 <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${fileCategory.accentClass} flex items-center justify-center border mb-2`}>
                   <CategoryIcon className="w-7 h-7" />
                 </div>
@@ -222,39 +216,33 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
           </motion.div>
         </div>
 
-        {/* Right Zone: Metadata Strip */}
-        <div className="md:col-span-3 flex flex-col justify-between py-1 min-w-0">
-          <div className="flex flex-col gap-2.5 min-w-0">
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                <span className="text-sm font-semibold fc-text-primary truncate max-w-[80%]" title={file.name}>
-                  {file.name}
-                </span>
-                {extension && (
-                  <span className="fc-badge fc-badge-active shrink-0 text-[10px] px-1.5 py-0">
-                    {extension}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs font-mono fc-text-muted mt-1 leading-none">
-                {formatBytes(file.size)} &bull; {file.type || "Unknown Format"}
-              </p>
-            </div>
-
-            {/* Fake Cryptographic Hash Generation for Visual Drama */}
-            <div className="pt-2.5 border-t border-white/5 flex flex-col gap-1 min-w-0">
-              <span className="text-[9px] font-mono fc-text-muted uppercase tracking-wider leading-none">
-                SHA-256 Checksum
+        {/* Metadata Footer */}
+        <div className="p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold fc-text-primary truncate max-w-[65%]" title={file.name}>
+              {file.name}
+            </span>
+            {extension && (
+              <span className="fc-badge fc-badge-active shrink-0 text-[10px] px-1.5 py-0">
+                {extension}
               </span>
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="text-[10px] font-mono text-primary truncate leading-none"
-              >
-                {btoa(file.name + file.size).substring(0, 24).toLowerCase()}...
-              </motion.span>
-            </div>
+            )}
+            <span className="text-xs font-mono fc-text-muted ml-auto">
+              {formatBytes(file.size)}
+            </span>
+          </div>
+          <div className="pt-2 border-t border-white/5 flex flex-col gap-1">
+            <span className="text-[9px] font-mono fc-text-muted uppercase tracking-wider">
+              SHA-256 Checksum
+            </span>
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="text-[10px] font-mono text-primary truncate"
+            >
+              {btoa(file.name + file.size).substring(0, 24).toLowerCase()}...
+            </motion.span>
           </div>
         </div>
       </div>

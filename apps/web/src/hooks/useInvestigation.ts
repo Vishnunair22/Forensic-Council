@@ -752,6 +752,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
       toast.destructive({
         title: "Could not start synthesis",
         description: err instanceof Error ? err.message : "Could not resume the investigation.",
@@ -903,6 +905,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
       toast.destructive({
         title: "Could not load report",
         description: err instanceof Error ? err.message : "Try again.",

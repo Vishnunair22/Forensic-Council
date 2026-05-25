@@ -96,7 +96,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   return (
     <div className="min-h-screen pb-24 pt-20 sm:pt-12 relative">
       {/* ── Arbiter/Loading overlay ── */}
-      <AnimatePresence initial={false}>
+      <AnimatePresence>
         {(rs.state === "arbiter" || rs.state === "loading") && (
           <ForensicProgressOverlay
             title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
