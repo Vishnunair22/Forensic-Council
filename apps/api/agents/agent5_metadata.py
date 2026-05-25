@@ -326,9 +326,10 @@ class Agent5Metadata(ForensicAgent):
                     f"Editing software signature detected: {software}; injecting hex audit",
                     agent_id=self.agent_id,
                 )
+                _wm_agent_id = getattr(self, "_reactive_expansion_agent_id", None) or self.agent_id
                 await self.working_memory.create_task(
                     session_id=self.session_id,
-                    agent_id=self.agent_id,
+                    agent_id=_wm_agent_id,
                     description="Run file_structure_analysis for hidden hex-level manipulation artifacts",
                     status=TaskStatus.PENDING,
                     priority=15,
@@ -341,9 +342,10 @@ class Agent5Metadata(ForensicAgent):
                     "High metadata anomaly score; injecting provenance chain audit",
                     agent_id=self.agent_id,
                 )
+                _wm_agent_id = getattr(self, "_reactive_expansion_agent_id", None) or self.agent_id
                 await self.working_memory.create_task(
                     session_id=self.session_id,
-                    agent_id=self.agent_id,
+                    agent_id=_wm_agent_id,
                     description="Run provenance_chain_verify for C2PA/JUMBF integrity check",
                     status=TaskStatus.PENDING,
                     priority=10,
