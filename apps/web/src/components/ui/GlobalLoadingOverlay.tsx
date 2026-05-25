@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { flushSync } from "react-dom";
 import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -67,7 +68,9 @@ export function GlobalLoadingOverlay() {
       } else if (key === STORAGE_KEYS.FC_LOADING_DISPATCHED) {
         setDispatchedCount(value ? parseInt(value, 10) || 0 : 0);
       } else if (key === STORAGE_KEYS.FC_ARBITER_TRANSITIONING) {
-        setArbiterTransition(value === "1");
+        flushSync(() => {
+          setArbiterTransition(value === "1");
+        });
       }
     };
     window.addEventListener("fc_storage_update", handleStorageUpdate);

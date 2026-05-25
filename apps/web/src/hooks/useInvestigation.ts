@@ -716,6 +716,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
+      await new Promise<void>((r) => requestAnimationFrame(r));
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -857,6 +858,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
+      await new Promise<void>((r) => requestAnimationFrame(r));
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({

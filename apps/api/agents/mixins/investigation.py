@@ -49,8 +49,12 @@ class AgentInvestigationMixin:
         Used for reactive task decomposition based on intermediate findings.
         """
         try:
+            reactive_agent_id = getattr(self, "_reactive_expansion_agent_id", None)
+            target_agent_id = reactive_agent_id or self.agent_id
+            phase = "deep" if reactive_agent_id else "initial"
+
             # Check if task already exists to avoid duplication loops
-            state = await self.working_memory.get_state(self.session_id, self.agent_id)
+            state = await self.working_memory.get_state(self.session_id, target_agent_id)
             for existing in state.tasks:
                 if existing.description.lower() == description.lower() and existing.status in ("PENDING", "IN_PROGRESS"):
                     logger.debug(f"Task already exists, skipping injection: {description}", agent_id=self.agent_id)
@@ -58,11 +62,11 @@ class AgentInvestigationMixin:
 
             await self.working_memory.create_task(
                 session_id=self.session_id,
-                agent_id=self.agent_id,
+                agent_id=target_agent_id,
                 description=description,
                 priority=priority,
             )
-            logger.info("Dynamic task injected", agent_id=self.agent_id, task=description)
+            logger.info("Dynamic task injected", agent_id=self.agent_id, task=description, phase=phase)
 
             # Check if analysis is still active to avoid stale telemetry cycling
             if getattr(self, "_investigation_completed", False):
@@ -74,7 +78,7 @@ class AgentInvestigationMixin:
 
             # Issue 4.6 Fix: Broadcast updated tools_total
             try:
-                state = await self.working_memory.get_state(self.session_id, self.agent_id)
+                state = await self.working_memory.get_state(self.session_id, target_agent_id)
                 new_total = len([t for t in state.tasks if t.status in ("PENDING", "IN_PROGRESS")])
                 from api.routes._session_state import broadcast_update
                 from api.schemas import BriefUpdate
@@ -90,6 +94,7 @@ class AgentInvestigationMixin:
                             "status": "running",
                             "thinking": description,
                             "tools_total": new_total,
+                            "analysis_phase": phase,
                         },
                     ),
                 )
@@ -536,11 +541,15 @@ class AgentInvestigationMixin:
             hitl_timeout=540.0,
         )
 
-        loop_result = await loop_engine.run(
-            initial_thought=f"DEEP ANALYSIS PASS — {self.agent_name}. Running {len(deep_tasks)} tools.",
-            tool_registry=self._tool_registry,
-            llm_generator=None,
-        )
+        self._reactive_expansion_agent_id = deep_agent_id
+        try:
+            loop_result = await loop_engine.run(
+                initial_thought=f"DEEP ANALYSIS PASS — {self.agent_name}. Running {len(deep_tasks)} tools.",
+                tool_registry=self._tool_registry,
+                llm_generator=None,
+            )
+        finally:
+            self._reactive_expansion_agent_id = None
 
         deep_findings = loop_result.findings
         for f in deep_findings:

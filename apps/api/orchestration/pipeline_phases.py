@@ -651,7 +651,7 @@ async def run_agents_concurrent(
                         if status == "validating"
                         else None,
                         "tools_done": 0 if status in ("validating", "running") else None,
-                        "tools_total": len(getattr(agent_inst, "task_decomposition", []) or [])
+                        "tools_total": len(getattr(agent_inst, "deep_task_decomposition" if analysis_phase == "deep" else "task_decomposition", []) or [])
                         if agent_inst is not None and status == "running"
                         else 1
                         if status == "validating"
