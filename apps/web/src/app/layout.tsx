@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/Toaster";
 import { QueryProvider } from "@/components/ui/QueryProvider";
 import { LandingBackground } from "@/components/ui/LandingBackground";
 import { GlobalLoadingOverlay } from "@/components/ui/GlobalLoadingOverlay";
+import { RootErrorBoundary } from "@/components/ui/RootErrorBoundary";
 import "./globals.css";
 
 const inter = Inter({
@@ -54,16 +55,18 @@ export default function RootLayout({
           Skip to main content
         </a>
 
-        <QueryProvider>
-          <GlobalLoadingOverlay />
-          <GlobalNavbar />
-          <main className="flex-1 relative z-10 pt-16" id="main-content" tabIndex={-1} style={{ outline: "none" }}>
-            {children}
-          </main>
+        <RootErrorBoundary>
+          <QueryProvider>
+            <GlobalLoadingOverlay />
+            <GlobalNavbar />
+            <main className="flex-1 relative z-10 pt-16" id="main-content" tabIndex={-1} style={{ outline: "none" }}>
+              {children}
+            </main>
 
-          <GlobalFooter />
-          <Toaster />
-        </QueryProvider>
+            <GlobalFooter />
+            <Toaster />
+          </QueryProvider>
+        </RootErrorBoundary>
       </body>
     </html>
   );

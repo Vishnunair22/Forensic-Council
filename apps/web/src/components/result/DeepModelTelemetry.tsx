@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Cpu, Zap } from "lucide-react";
+import { Cpu } from "lucide-react";
 import { motion } from "framer-motion";
 import { ReportDTO } from "@/lib/api";
 

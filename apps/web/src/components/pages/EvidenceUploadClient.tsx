@@ -10,7 +10,7 @@ import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
-import { storage, sessionOnlyStorage } from "@/lib/storage";
+import { storage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";

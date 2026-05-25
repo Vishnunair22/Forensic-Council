@@ -643,6 +643,16 @@ export const useSimulation = ({
         connected.catch(() => {});
         wsRef.current = ws;
 
+        // Add 15s connection timeout for WebSocket
+        const connectionTimeoutPromise = new Promise<void>((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            ws.close();
+            reject(new Error("WebSocket connection timeout (15s)"));
+          }, 15000);
+          connected.finally(() => clearTimeout(timeoutId));
+        });
+        const racedConnection = Promise.race([connected, connectionTimeoutPromise]);
+
         // Wire up message handler.
         // createLiveSocket attaches a bootstrap listener via addEventListener (to resolve 'connected').
         // Use addEventListener here too so both handlers fire independently and neither overwrites the other.
@@ -738,7 +748,7 @@ export const useSimulation = ({
         // Wait for connection - resolve or reject based on outcome.
         // On success (including reconnects) rehydrate state from the arbiter status
         // endpoint so missed WS messages during the gap don't leave the UI stale.
-        connected
+        racedConnection
           .then(async () => {
             wsConnectionReady = true;
             reconnectAttemptsRef.current = 0; // Reset backoff on successful connect

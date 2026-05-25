@@ -45,6 +45,7 @@ export interface ReportDTO {
   report_id: string;
   session_id: string;
   case_id: string;
+  is_deep_analysis?: boolean;
   executive_summary?: string;
   per_agent_findings?: Record<string, AgentFindingDTO[]>;
   per_agent_metrics?: Record<string, AgentMetricsDTO>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Lock, FileBadge2, ArrowRight, X } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { formatBytes } from "@/lib/utils";

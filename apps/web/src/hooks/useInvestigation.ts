@@ -31,9 +31,12 @@ import { validateEvidenceFile } from "@/lib/fileValidation";
 import { clearPendingEvidenceFile, loadPendingEvidenceFile } from "@/lib/pendingFilePersistence";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+function withTimeout<T>(p: Promise<T>, ms: number, cleanup?: () => void): Promise<T> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("request timed out")), ms);
+    const t = setTimeout(() => {
+      cleanup?.();
+      reject(new Error("request timed out"));
+    }, ms);
     p.then(
       (v) => {
         clearTimeout(t);
@@ -41,6 +44,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
       },
       (e) => {
         clearTimeout(t);
+        cleanup?.();
         reject(e);
       },
     );
@@ -165,8 +169,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const lastSessionIdRef = useRef<string | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
-  const minOverlayTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const overlayStartTimeRef = useRef<number>(0);
   const resumeInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -174,10 +176,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (arbiterAbortControllerRef.current) {
         arbiterAbortControllerRef.current.abort();
         arbiterAbortControllerRef.current = null;
-      }
-      if (minOverlayTimerRef.current) {
-        clearTimeout(minOverlayTimerRef.current);
-        minOverlayTimerRef.current = null;
       }
     };
   }, []);
@@ -494,7 +492,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           setIsUploading(false);
           setShowLoadingOverlay(false);
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+          storage.removeItem(STORAGE_KEYS.SESSION_ID);
+          lastSessionIdRef.current = null;
           setWsConnectionError(wsErrMsg);
+          playSound("error");
+          toast.destructive({
+            title: "Reconnection Failed",
+            description: `${wsErrMsg}. Please try uploading again.`,
+          });
         })
         .finally(() => {
           investigationInFlightRef.current = false;
@@ -518,8 +524,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           setIsUploading(false);
           setShowLoadingOverlay(false);
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+          storage.removeItem(STORAGE_KEYS.SESSION_ID);
+          lastSessionIdRef.current = null;
           resetSimulation();
           setWsConnectionError(wsErrMsg);
+          playSound("error");
+          toast.destructive({
+            title: "Connection Failed",
+            description: `${wsErrMsg}. Please try uploading again.`,
+          });
         })
         .finally(() => {
           investigationInFlightRef.current = false;
@@ -725,7 +739,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
-      await new Promise<void>((r) => requestAnimationFrame(r));
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -876,7 +890,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
-      await new Promise<void>((r) => requestAnimationFrame(r));
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
       router.push(`/result/${sid}`, { scroll: true });
     } catch (err) {
       toast.destructive({
@@ -938,64 +952,34 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   // Overlay dismissal: dismiss as soon as the WebSocket connection is
   // established (analysisStreamReady) OR the pipeline sends its first
-  // real status update. A 1-second minimum keeps UX smooth; anything
-  // longer is perceived as "blank screen" if the WS is fast.
+  // real status update. An 800ms minimum keeps UX smooth.
+  const SAFETY_TIMEOUT_MS = 10_000;
+  const MIN_DISPLAY_MS = 800;
   useEffect(() => {
-    // isActuallyRunning is true as soon as:
-    // 1. WS handshake completed (analysisStreamReady), or
-    // 2. Pipeline sent any status update beyond idle/initiating
-    const isActuallyRunning =
+    if (!showLoadingOverlay) return;
+
+    const shouldDismiss =
       analysisStreamReady ||
       (status !== "idle" && status !== "initiating");
 
-    if (showLoadingOverlay) {
-      if (overlayStartTimeRef.current === 0) {
-        overlayStartTimeRef.current = Date.now();
-      }
-
-      if (isActuallyRunning) {
-        const elapsed = Date.now() - overlayStartTimeRef.current;
-        const minDuration = 1000; // 1s minimum for perceived performance
-
-        if (elapsed >= minDuration) {
-          setShowLoadingOverlay(false);
-          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-        } else if (!minOverlayTimerRef.current) {
-          minOverlayTimerRef.current = setTimeout(() => {
-            setShowLoadingOverlay(false);
-            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-            minOverlayTimerRef.current = null;
-          }, minDuration - elapsed);
-        }
-      }
-    } else {
-      // If overlay is hidden, ensure timer is cleared and start time reset
-      if (minOverlayTimerRef.current) {
-        clearTimeout(minOverlayTimerRef.current);
-        minOverlayTimerRef.current = null;
-      }
-      overlayStartTimeRef.current = 0;
+    if (shouldDismiss) {
+      const timer = setTimeout(() => {
+        setShowLoadingOverlay(false);
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
+      }, MIN_DISPLAY_MS);
+      return () => clearTimeout(timer);
     }
-  }, [showLoadingOverlay, status, analysisStreamReady]);
 
-
-  useEffect(() => {
-    if (!showLoadingOverlay) return;
-    // Hard safety: if the overlay is still up after 12 seconds, something
-    // is stuck (slow WS, failed auth, etc.). Dismiss unconditionally so the
-    // page is never permanently covered. WS/reconnect handlers independently
-    // manage session-expired redirects.
-    const OVERLAY_HARD_TIMEOUT_MS = 12_000;
     const safety = setTimeout(() => {
       setShowLoadingOverlay(false);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-    }, OVERLAY_HARD_TIMEOUT_MS);
+    }, SAFETY_TIMEOUT_MS);
     return () => clearTimeout(safety);
-  // Only restart timer when showLoadingOverlay changes; don't chain on status
-  // to avoid a cascade of timer restarts.
-  }, [showLoadingOverlay]);
+  }, [showLoadingOverlay, analysisStreamReady, status]);
 
   // Sync loading state and progress messages to storage for GlobalLoadingOverlay
   useEffect(() => {
