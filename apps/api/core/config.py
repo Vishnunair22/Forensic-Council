@@ -637,7 +637,7 @@ class Settings(BaseSettings):
         ),
     )
     gemini_timeout: float = Field(
-        default=30.0,
+        default=55.0,
         description="Timeout for Gemini API calls in seconds.",
     )
     gemini_max_concurrent: int = Field(
@@ -903,7 +903,7 @@ class Settings(BaseSettings):
                 if "replace_me" in _val.lower() or "replace" in _val.lower():
                     raise ValueError(
                         f"{_name} still contains a placeholder value. "
-                        "Run infra/generate_production_keys.sh --write to populate real secrets."
+                        "Run infra/generate_production_keys.sh --update to populate real secrets."
                     )
             if not self.qdrant_api_key or "replace_me" in (self.qdrant_api_key or "").lower():
                 raise ValueError(

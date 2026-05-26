@@ -43,7 +43,7 @@ package-lock.json text eol=lf merge=binary
 uv.lock text eol=lf merge=binary
 
 # Common binary assets
-*.svg text eol=lf
+*.svg -text
 *.zip binary
 *.tar.gz binary
 *.pdf binary
