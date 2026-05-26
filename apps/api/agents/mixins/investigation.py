@@ -457,10 +457,10 @@ class AgentInvestigationMixin:
 
         # Force high-integrity clean signals into the list so "hash matched" and
         # "EXIF found" are always cited, even when they rank below positive findings.
-        _HIGH_INTEGRITY_TOOLS = {"file_hash_verify", "hash_verify", "exif_extract", "file_structure_analysis"}
+        _high_integrity_tools = {"file_hash_verify", "hash_verify", "exif_extract", "file_structure_analysis"}
         high_integrity = [
             f for f in actionable
-            if str(f.metadata.get("tool_name") or f.finding_type) in _HIGH_INTEGRITY_TOOLS
+            if str(f.metadata.get("tool_name") or f.finding_type) in _high_integrity_tools
         ]
         sorted_findings = sorted(
             actionable,
@@ -481,7 +481,7 @@ class AgentInvestigationMixin:
 
         if top_findings:
             primary = top_findings[0]
-            verdict_word = str(primary.evidence_verdict or "").lower()
+            str(primary.evidence_verdict or "").lower()
             primary_summary = primary.reasoning_summary.strip()
             if str(primary.evidence_verdict).upper() == "POSITIVE":
                 narrative = f"{_tool_name(primary)} flagged a manipulation indicator: {primary_summary[:180]}"

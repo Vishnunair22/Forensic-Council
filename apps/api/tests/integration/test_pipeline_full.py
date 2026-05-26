@@ -411,7 +411,7 @@ class TestPipelineInitializationExtended:
                 with patch(
                     "core.persistence.qdrant_client.get_qdrant_client", new_callable=AsyncMock
                 ):
-                    test_session_id = uuid.UUID("12345678-1234-1234-1234-123456789012")
+                    test_session_id = UUID("12345678-1234-1234-1234-123456789012")
                     await pipeline._initialize_components(test_session_id)
 
                     assert pipeline.working_memory is not None

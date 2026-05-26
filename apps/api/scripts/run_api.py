@@ -22,7 +22,8 @@ ensure_bcrypt_compat()
 # own poll watcher, but the Rust code still hits the same EIO on first watch().
 # Block the module before uvicorn is imported so its supervisors/__init__.py
 # falls through to the pure-Python StatReload (os.stat polling) instead.
-import os as _os, sys as _sys  # noqa: E402
+import os as _os  # noqa: E402
+import sys as _sys  # noqa: E402
 
 if _os.getenv("WATCHFILES_FORCE_POLLING", "").lower() in ("1", "true", "yes"):
     _sys.modules.setdefault("uvicorn.supervisors.watchfilesreload", None)  # type: ignore[arg-type]

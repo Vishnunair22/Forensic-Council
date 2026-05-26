@@ -17,6 +17,8 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from agents.arbiter_verdict import (
     AGENT_NAMES,
     ForensicReport,
@@ -26,7 +28,6 @@ from agents.arbiter_verdict import (
 from core.llm_client import LLMClient
 from core.signing import sign_content
 from core.structured_logging import get_logger
-from pydantic import BaseModel, Field
 
 
 class ArbiterSynthesis(BaseModel):
@@ -341,7 +342,7 @@ class ArbiterNarrativeMixin:
             for f in findings
             if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"
         ]
-        
+
         assessment_parts = []
         for f in sorted(initial_f, key=_finding_importance, reverse=True)[:12]:
             meta = f.get("metadata") or {}
@@ -1489,7 +1490,7 @@ Rules:
                     ),
                     timeout=timeout_budget
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     "Arbiter LLM synthesis timed out; falling back to template-generated narratives",
                     timeout_limit=timeout_budget

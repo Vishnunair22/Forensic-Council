@@ -4,8 +4,6 @@ import os
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-import pytest
-
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")

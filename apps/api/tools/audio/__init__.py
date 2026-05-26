@@ -21,6 +21,7 @@ from tools.audio.splice import run_audio_splice_detect as audio_splice_detect
 from tools.audio.synthesis import run_anti_spoofing_detect as anti_spoofing_detect
 from tools.audio.synthesis import run_codec_fingerprint as codec_fingerprint
 
+
 async def av_sync_verify(*, artifact=None, **_kwargs) -> dict:
     """Validate audio/video sync when video context is available."""
     mime = (getattr(artifact, "mime_type", "") or "").lower()

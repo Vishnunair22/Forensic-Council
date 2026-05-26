@@ -94,10 +94,10 @@ describe("AgentProgressDisplay", () => {
           agent_id: "Agent1",
           agent_name: "Image Forensics",
           message: "Initial analysis complete",
-          status: "complete",
+          status: "complete" as const,
           confidence: 0.95,
           findings_count: 1,
-          agent_verdict: "CLEAN",
+          agent_verdict: "CLEAN" as const,
         },
       ],
     };
@@ -185,10 +185,10 @@ describe("AgentProgressDisplay", () => {
             agent_id: "Agent1",
             agent_name: "Image Forensics",
             message: "Initial analysis complete",
-            status: "complete",
+            status: "complete" as const,
             confidence: 0.95,
             findings_count: 1,
-            agent_verdict: "CLEAN",
+            agent_verdict: "CLEAN" as const,
           }]}
         />,
       );

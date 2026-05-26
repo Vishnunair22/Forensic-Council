@@ -944,7 +944,7 @@ class ForensicCouncilPipeline:
         if mime and mime != "application/octet-stream":
             return mime
 
-        _PIL_FORMAT_TO_MIME = {
+        _pil_format_to_mime = {
             "JPEG": "image/jpeg",
             "PNG": "image/png",
             "GIF": "image/gif",
@@ -963,8 +963,8 @@ class ForensicCouncilPipeline:
 
             with Image.open(file_path) as _img:
                 pil_format = (_img.format or "").upper()
-            if pil_format in _PIL_FORMAT_TO_MIME:
-                return _PIL_FORMAT_TO_MIME[pil_format]
+            if pil_format in _pil_format_to_mime:
+                return _pil_format_to_mime[pil_format]
         except Exception:
             pass
         return mime or "application/octet-stream"

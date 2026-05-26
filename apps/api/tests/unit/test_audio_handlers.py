@@ -101,8 +101,9 @@ class TestAudioHandlers:
     @pytest.mark.asyncio
     async def test_audio_extraction_failure_graceful_degradation(self, mock_agent):
         """Test that _audio_artifact returns degraded result on ffmpeg failure."""
-        from core.handlers.audio import AudioHandlers
         from unittest.mock import patch
+
+        from core.handlers.audio import AudioHandlers
 
         mock_agent._extracted_audio_artifact = None
         mock_agent.evidence_artifact.mime_type = "video/mp4"

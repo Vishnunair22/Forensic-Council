@@ -71,6 +71,7 @@ _WARMUP_SCRIPTS = {
     "exif_isolation_forest.py",
     "astro_grounding_engine.py",
     "metadata_anomaly_scorer.py",
+    "c2pa_validator.py",
 }
 
 # ── Worker-process pool ────────────────────────────────────────────────────

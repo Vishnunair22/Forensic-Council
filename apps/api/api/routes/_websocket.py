@@ -52,8 +52,8 @@ async def live_updates(websocket: WebSocket, session_id: str):
             token_data = await decode_token(auth_token)
             user_id = token_data.user_id
             token_role = getattr(token_data, "role", None)
-        except Exception:
-            pass
+        except Exception as auth_err:
+            logger.debug("WebSocket auth token decode failed", error=str(auth_err))
 
     if not user_id or user_id == "anonymous":
         await websocket.close(code=4001, reason="Auth required")

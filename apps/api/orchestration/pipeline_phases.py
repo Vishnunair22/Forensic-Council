@@ -311,7 +311,7 @@ def _humanize_initial_finding(
             "completed; review detailed tool metrics",
             "analysis complete",
         )
-        _TOOL_NEGATIVE_NARRATIVES = {
+        _tool_negative_narratives = {
             "neural_fingerprint": (
                 "Neural fingerprint recorded. No match to known synthetic or AI-generated "
                 "image signatures in the reference library."
@@ -358,8 +358,8 @@ def _humanize_initial_finding(
         }
         if any(p in clean_text.lower() for p in generic_patterns):
             tool_key = (tool_name or "").lower()
-            if tool_key in _TOOL_NEGATIVE_NARRATIVES:
-                narrative = _TOOL_NEGATIVE_NARRATIVES[tool_key]
+            if tool_key in _tool_negative_narratives:
+                narrative = _tool_negative_narratives[tool_key]
                 if metric_note:
                     return f"{narrative} ({metric_note})"
                 return narrative
@@ -373,8 +373,8 @@ def _humanize_initial_finding(
 
     # Enrich the fallback with structured metadata fields if available.
     metric_note = _metric_digest(metadata)
-    confidence_val = metadata.get("confidence") or metadata.get("score")
-    verdict_val = str(metadata.get("verdict") or evidence_verdict or "").upper()
+    metadata.get("confidence") or metadata.get("score")
+    str(metadata.get("verdict") or evidence_verdict or "").upper()
 
     enriched = text
     # Append key metric only if it adds new information
@@ -635,8 +635,8 @@ async def run_agents_concurrent(
                     )
 
                 # Sort by severity to surface high-signal findings first
-                _SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
-                preview.sort(key=lambda x: _SEV_RANK.get(x.get("severity") or "LOW", 0), reverse=True)
+                _sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+                preview.sort(key=lambda x: _sev_rank.get(x.get("severity") or "LOW", 0), reverse=True)
             if isinstance(synthesis, dict) and synthesis.get("sections"):
                 before = len(preview)
                 _append_synthesis_sections(synthesis)
@@ -852,7 +852,7 @@ async def run_agents_concurrent(
                 agent_inst=agent,
             )
             return agent, initial_findings, "complete"
-        except (asyncio.TimeoutError, TimeoutError) as e:
+        except TimeoutError as e:
             # Per-agent timeout (Fix 4): collect whatever findings the agent
             # accumulated before the deadline and continue the pipeline in a
             # degraded state.  Never re-raise — one slow agent must not abort

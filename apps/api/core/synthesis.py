@@ -632,7 +632,7 @@ Agent: {agent_name} ({agent_id})
                     tool = finding.get("tool", "unknown")
                     data = finding.get("data", {}) if isinstance(finding.get("data"), dict) else {}
                     verdict = str(finding.get("evidence_verdict") or finding.get("status") or "INCONCLUSIVE")
-                    conf = float(finding.get("confidence") or 0.0)
+                    float(finding.get("confidence") or 0.0)
                     group_positive = group_positive or verdict.upper() == "POSITIVE"
                     group_limited = group_limited or bool(finding.get("tool_limitation"))
                     metric_bits = [
@@ -738,7 +738,6 @@ Agent: {agent_name} ({agent_id})
             layout_row = tool_rows.get("screenshot_layout_forensics", {})
             layout_anomalies = int((scope_row.get("data") or {}).get("layout_anomaly_count") or
                                    (layout_row.get("data") or {}).get("layout_anomaly_count") or 0)
-            verdict_text = "found no UI/document structure anomalies" if layout_anomalies == 0 else f"found {layout_anomalies} layout anomaly flag(s)"
             dims = ""
             scope_data = scope_row.get("data") or {}
             if scope_data.get("width") and scope_data.get("height"):
@@ -751,13 +750,12 @@ Agent: {agent_name} ({agent_id})
                 + ("No trace of manipulation was found in the screen capture." if layout_anomalies == 0 else "The flagged layout anomaly warrants review before this evidence is used.")
             )
         elif screenshot_like and "image" in agent_name.lower():
-            freq_data = (tool_rows.get("frequency_domain_analysis", {}) or {}).get("data") or {}
             hash_data = (tool_rows.get("file_hash_verify", {}) or {}).get("data") or {}
             ocr_data = (tool_rows.get("extract_text_from_image", {}) or {}).get("data") or {}
             semantic_data = (tool_rows.get("analyze_image_content", {}) or {}).get("data") or {}
             hash_match = hash_data.get("hash_matches") is True or hash_data.get("hash_match") is True
             words = int(ocr_data.get("word_count") or 0)
-            ocr_preview = _clean_preview_text(
+            _clean_preview_text(
                 ocr_data.get("text") or ocr_data.get("full_text") or ocr_data.get("ocr_text_preview") or "",
                 130,
             )
@@ -768,7 +766,7 @@ Agent: {agent_name} ({agent_id})
             )
             total_image = len(tool_rows)
             hash_note = "the file hash confirmed no changes since upload" if hash_match else "the file hash did not match the intake custody record"
-            ocr_note = f"OCR text extraction read the visible content successfully" if words > 0 else "OCR extraction ran on the screen capture"
+            ocr_note = "OCR text extraction read the visible content successfully" if words > 0 else "OCR extraction ran on the screen capture"
             response["narrative_summary"] = (
                 f"Image integrity checks ran {total_image} tool(s) on this screen capture — "
                 f"finding the file intact with no spectral manipulation signals detected. "
@@ -877,7 +875,7 @@ Agent: {agent_name} ({agent_id})
                     f"The screenshot layout scan {verdict_phrase} in the UI/document structure. "
                     "These results confirm screen-capture consistency; they are not a camera-scene authenticity claim."
                 )
-            lighting = _first_row(tool_rows, "lighting_consistency", "shadow_validation", "scale_validation")
+            _first_row(tool_rows, "lighting_consistency", "shadow_validation", "scale_validation")
             if has_positive:
                 return (
                     f"Scene-context checks ran {total} tool(s) reviewing objects, lighting, shadow geometry, and physical plausibility — "

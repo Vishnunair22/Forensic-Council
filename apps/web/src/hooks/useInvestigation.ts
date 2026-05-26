@@ -931,7 +931,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      router.push(`/result/${encodeURIComponent(sessionId)}`);
+      router.push(`/result/${encodeURIComponent(sid)}`);
+    } catch (err) {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
+      toast.destructive({
+        title: "Could not start synthesis",
+        description: err instanceof Error ? err.message : "Could not resume the investigation.",
+      });
+    } finally {
+      resumeInFlightRef.current = false;
       setIsNavigating(false);
       if (!navigationStarted) {
         setArbiterDeliberating(false);

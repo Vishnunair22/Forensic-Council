@@ -133,7 +133,7 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
         return html.escape(str(v))
 
     verdict = esc(tmpl["verdict"])
-    confidence = tmpl["confidence"]
+    tmpl["confidence"]
     case_id = esc(tmpl["case_id"])
     narrative = esc(tmpl["narrative"])
     agents = tmpl["agents"]
@@ -336,29 +336,36 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
 
     # Title
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "FORENSIC COUNCIL -- CONFIDENTIAL REPORT", ln=True, align="C")
+    pdf.cell(0, 10, "FORENSIC COUNCIL -- CONFIDENTIAL REPORT", align="C")
+    pdf.ln(10)
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 6, f"Session: {session_id}", ln=True)
-    pdf.cell(0, 6, f"Case: {report_dict.get('case_id', 'N/A')}", ln=True)
-    pdf.cell(0, 6, f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}", ln=True)
+    pdf.cell(0, 6, f"Session: {session_id}")
+    pdf.ln(6)
+    pdf.cell(0, 6, f"Case: {report_dict.get('case_id', 'N/A')}")
+    pdf.ln(6)
+    pdf.cell(0, 6, f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
+    pdf.ln(6)
     pdf.ln(6)
 
     # Verdict
     pdf.set_font("Helvetica", "B", 12)
     verdict = report_dict.get("overall_verdict", report_dict.get("verdict", "INCONCLUSIVE"))
     prob = float(report_dict.get("manipulation_probability", 0.0))
-    pdf.cell(0, 8, f"VERDICT: {verdict}  |  Manipulation Probability: {prob:.1%}", ln=True)
+    pdf.cell(0, 8, f"VERDICT: {verdict}  |  Manipulation Probability: {prob:.1%}")
+    pdf.ln(8)
     pdf.ln(4)
 
     # Executive summary
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 7, "Executive Summary", ln=True)
+    pdf.cell(0, 7, "Executive Summary")
+    pdf.ln(7)
     pdf.set_font("Helvetica", "", 9)
     narrative = str(report_dict.get("executive_summary", report_dict.get("narrative", report_dict.get("summary", "No summary."))))
     for line in textwrap.wrap(_safe_latin1(narrative), width=90):
-        pdf.cell(0, 5, line, ln=True)
+        pdf.cell(0, 5, line)
+        pdf.ln(5)
     pdf.ln(4)
 
     # Verdict sentence
@@ -366,7 +373,8 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
     if vs:
         pdf.set_font("Helvetica", "I", 9)
         for line in textwrap.wrap(_safe_latin1(str(vs)), width=90):
-            pdf.cell(0, 5, line, ln=True)
+            pdf.cell(0, 5, line)
+            pdf.ln(5)
         pdf.ln(2)
 
     # Findings summary
@@ -379,7 +387,8 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
     findings = all_findings or report_dict.get("findings", [])
     if findings:
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 7, f"Findings ({len(findings)} total)", ln=True)
+        pdf.cell(0, 7, f"Findings ({len(findings)} total)")
+        pdf.ln(7)
         pdf.set_font("Helvetica", "", 8)
         for f in findings[:20]:  # Cap at 20 to avoid overflow
             if not isinstance(f, dict):
@@ -388,14 +397,17 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
             fconf = f.get("confidence_raw")
             conf_str = f"{float(fconf):.0%}" if fconf is not None else "N/A"
             everd = f.get("evidence_verdict", "?")[:20]
-            pdf.cell(0, 5, f"  [{everd}] {ftype} - Conf: {conf_str}", ln=True)
+            pdf.cell(0, 5, f"  [{everd}] {ftype} - Conf: {conf_str}")
+            pdf.ln(5)
 
     # Hash
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 6, "Report Integrity (SHA-256):", ln=True)
+    pdf.cell(0, 6, "Report Integrity (SHA-256):")
+    pdf.ln(6)
     pdf.set_font("Courier", "", 8)
-    pdf.cell(0, 5, report_dict.get("report_hash", "N/A")[:80], ln=True)
+    pdf.cell(0, 5, report_dict.get("report_hash", "N/A")[:80])
+    pdf.ln(5)
 
     return pdf
 

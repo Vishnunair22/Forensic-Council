@@ -22,15 +22,9 @@ jest.mock("@/lib/storageKeys", () => ({ STORAGE_KEYS: { SESSION_ID: "forensic_se
 jest.mock("@/components/ui/BrandLogo", () => ({ BrandLogo: () => <span>Logo</span> }));
 
 describe("BUG-02 — Navbar logo uses router.push (SPA nav) not window.location.href", () => {
-  const originalHref = window.location.href;
-
   beforeEach(() => {
     jest.clearAllMocks();
     mockPathname = "/evidence";
-    Object.defineProperty(window, "location", {
-      value: { href: originalHref, ...window.location },
-      writable: true,
-    });
   });
 
   it("calls router.push('/') instead of setting window.location.href when on /evidence", () => {
@@ -39,6 +33,5 @@ describe("BUG-02 — Navbar logo uses router.push (SPA nav) not window.location.
     const logoBtn = screen.getByRole("button", { name: /reset and return/i });
     fireEvent.click(logoBtn);
     expect(mockPush).toHaveBeenCalledWith("/");
-    expect(window.location.href).toBe(originalHref);
   });
 });

@@ -69,7 +69,6 @@ _IMAGE_TOOLS: frozenset[str] = frozenset(
         "screenshot_layout_forensics",
         "secondary_classification",
         "scale_validation",
-        "roi_extract",
         # Metadata tools that apply to images
         "exif_extract",
         "file_structure_analysis",

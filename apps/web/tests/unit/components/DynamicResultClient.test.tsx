@@ -43,7 +43,7 @@ describe("BUG-23 — DynamicResultClient motion animation has no delay", () => {
     );
 
     const callProps = mockMotionDiv.mock.calls[0][0];
-    const transition = callProps.transition;
+    const transition = callProps.transition as any;
     expect(transition).toBeDefined();
     expect(transition.duration).toBe(0.45);
     expect(transition.delay).toBeUndefined();

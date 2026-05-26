@@ -46,6 +46,8 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # Gemini API latency (60s quota refresh cycle on Free tier). 180s gives
     # adequate headroom for a single 429 retry without killing the tool.
     "gemini_deep_forensic": 180.0,
+    "provenance_chain_verify": 20.0,
+    "c2pa_validator": 20.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0

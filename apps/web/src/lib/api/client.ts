@@ -333,9 +333,6 @@ export function createLiveSocket(sessionId: string): { ws: WebSocket; connected:
   // as an HttpOnly cookie in the WS upgrade request (post-demo-login).
   // If no csrf_token (proxy for auth readiness) is present, the caller
   // must re-auth before opening the socket.
-    const hasAuthCookie =
-      typeof document !== "undefined" &&
-      /(?:^|;\s*)csrf_token=/.test(document.cookie);
   const ws = new WebSocket(
     `${wsBase}/api/v1/sessions/${encodeURIComponent(sessionId)}/live`,
     ["forensic-v1"],

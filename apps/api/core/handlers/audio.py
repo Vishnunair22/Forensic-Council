@@ -35,10 +35,20 @@ from core.ml_subprocess import run_ml_tool
 from core.structured_logging import get_logger
 from tools.audio import (
     anti_spoofing_detect as real_anti_spoofing_detect,
+)
+from tools.audio import (
     av_sync_verify as real_av_sync_verify,
+)
+from tools.audio import (
     background_noise_consistency as real_background_noise_consistency,
+)
+from tools.audio import (
     codec_fingerprint as real_codec_fingerprint,
+)
+from tools.audio import (
     prosody_analyze as real_prosody_analyze,
+)
+from tools.audio import (
     speaker_diarize as real_speaker_diarize,
 )
 from tools.ml_tools.audio_splice_detector import detect_audio_splices  # sync

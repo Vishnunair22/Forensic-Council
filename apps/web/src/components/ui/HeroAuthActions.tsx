@@ -215,7 +215,7 @@ export function HeroAuthActions() {
               <UploadSuccessModal
                 key="success-modal"
                 file={selectedFile}
-                onDismiss={closeUpload}
+                onDismiss={() => setSelectedFile(null)}
                 isHandingOff={isHandingOff}
                   onStartAnalysis={async () => {
                   if (isHandingOff) return;

@@ -299,7 +299,6 @@ class TestWorkingMemoryWithRedis:
 
     @pytest.mark.asyncio
     async def test_update_task_uses_lua_script(self):
-        import json
         wm, redis = self._make_wm_with_redis()
         sid = uuid4()
         await wm.initialize(sid, "Agent1", ["Task A"])
@@ -329,7 +328,6 @@ class TestWorkingMemoryWithRedis:
 
     @pytest.mark.asyncio
     async def test_update_state_uses_lua_when_redis_available(self):
-        import json
         wm, redis = self._make_wm_with_redis()
         sid = uuid4()
         await wm.initialize(sid, "Agent1", ["Task A"])

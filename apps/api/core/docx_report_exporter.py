@@ -36,9 +36,9 @@ async def export_report_docx(report_dict: dict[str, Any], session_id: str) -> by
     """Export a ForensicReport as a DOCX file (bytes)."""
     try:
         from docx import Document
-        from docx.shared import Inches, Pt, RGBColor
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.table import WD_TABLE_ALIGNMENT
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Pt, RGBColor
     except ImportError:
         logger.warning("python-docx is not installed")
         return None

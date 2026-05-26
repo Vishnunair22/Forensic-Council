@@ -12,6 +12,10 @@ from typing import Any
 
 from PIL import ExifTags, Image
 
+from core.structured_logging import get_logger
+
+logger = get_logger(__name__)
+
 try:
     from timezonefinder import TimezoneFinder
 except Exception:  # pragma: no cover - optional dependency
@@ -246,7 +250,8 @@ def _get_exif_data(image: Image.Image, file_path: str | None = None) -> dict[str
         if isinstance(info_val, bytes):
             try:
                 info_val = info_val.decode("utf-8", errors="replace")
-            except Exception:
+            except Exception as decode_err:
+                logger.debug("Failed to decode PNG info chunk", key=info_key, error=str(decode_err))
                 continue
         if not isinstance(info_val, str) or not info_val.strip():
             continue
@@ -414,7 +419,7 @@ async def steganography_scan(*, artifact: Any = None, file_path: str | None = No
         # numpy unavailable — basic extrema-only path
         try:
             with Image.open(path) as img:
-                extrema = img.convert("L").getextrema()
+                img.convert("L").getextrema()
             return {
                 "available": True,
                 "stego_suspected": False,
@@ -494,7 +499,7 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
 
     # Filesystem timestamps
     fs_modified = _parse_dt(stat.get("modified_time"))
-    fs_created = _parse_dt(stat.get("created_time"))
+    _parse_dt(stat.get("created_time"))
 
     # EXIF timestamps (open image only for EXIF-bearing formats)
     exif_original: datetime | None = None

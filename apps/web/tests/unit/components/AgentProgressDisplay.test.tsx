@@ -40,16 +40,14 @@ jest.mock("@/lib/tool-progress", () => ({
 jest.mock("@/lib/appReset", () => ({ resetActiveInvestigation: jest.fn() }));
 jest.mock("@/hooks/useSound", () => ({ useSound: () => ({ playSound: jest.fn() }) }));
 
-const AGENTS_MOCK = [
-  { id: "Agent1", name: "Image Forensics" },
-  { id: "Agent2", name: "Audio Forensics" },
-  { id: "Agent3", name: "Object Detection" },
-  { id: "Agent4", name: "Video Forensics" },
-  { id: "Agent5", name: "Metadata" },
-];
-
 jest.mock("@/lib/constants", () => ({
-  AGENTS: AGENTS_MOCK,
+  AGENTS: [
+    { id: "Agent1", name: "Image Forensics" },
+    { id: "Agent2", name: "Audio Forensics" },
+    { id: "Agent3", name: "Object Detection" },
+    { id: "Agent4", name: "Video Forensics" },
+    { id: "Agent5", name: "Metadata" },
+  ],
 }));
 
 jest.mock("@/components/evidence/AgentStatusCard", () => ({

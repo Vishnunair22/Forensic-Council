@@ -1,9 +1,7 @@
 import io
-import tempfile
-import os
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -161,7 +159,6 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
 @pytest.mark.asyncio
 async def test_start_investigation_returns_503_when_redis_dedup_fails(monkeypatch):
     """be-G-1: if Redis is unavailable during dedup check, return 503 and clean up the tmp file."""
-    import hashlib
 
     file_obj = io.BytesIO(
         b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
@@ -172,7 +169,6 @@ async def test_start_investigation_returns_503_when_redis_dedup_fails(monkeypatc
 
     unlinked_paths: list[str] = []
 
-    original_unlink = Path.unlink
 
     def fake_unlink(self, missing_ok=False):
         unlinked_paths.append(str(self))

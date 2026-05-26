@@ -405,7 +405,7 @@ function ExportDropdown({
     } finally {
       setExporting(false);
     }
-  }, [sessionId, exporting, report, onExportJson]);
+  }, [sessionId, exporting, report]);
 
   const handleJson = useCallback(() => {
     setOpen(false);

@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
+import { GlobalLoadingOverlay } from "@/components/ui/GlobalLoadingOverlay";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { sessionOnlyStorage, storage } from "@/lib/storage";
 
@@ -10,6 +11,7 @@ const mockPlaySound = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, prefetch: mockPrefetch }),
+  usePathname: () => "/",
 }));
 
 jest.mock("@/hooks/useSound", () => ({
@@ -46,20 +48,27 @@ jest.mock("@/components/evidence/UploadModal", () => ({
 jest.mock("@/components/evidence/UploadSuccessModal", () => ({
   UploadSuccessModal: ({
     file,
-    onNewUpload,
+    onDismiss,
     onStartAnalysis,
   }: {
     file: File;
-    onNewUpload: () => void;
+    onDismiss: () => void;
     onStartAnalysis: () => void;
   }) => (
     <div data-testid="upload-success-modal">
       <span>{file.name}</span>
-      <button onClick={onNewUpload}>Choose Another</button>
+      <button onClick={onDismiss}>Choose Another</button>
       <button onClick={onStartAnalysis}>Start Analysis</button>
     </div>
   ),
 }));
+
+const renderWithOverlay = () => render(
+  <>
+    <HeroAuthActions />
+    <GlobalLoadingOverlay />
+  </>
+);
 
 describe("HeroAuthActions", () => {
   beforeEach(() => {
@@ -73,7 +82,7 @@ describe("HeroAuthActions", () => {
   });
 
   it("opens the upload modal when the CTA is clicked", () => {
-    render(<HeroAuthActions />);
+    renderWithOverlay();
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
 
@@ -82,7 +91,7 @@ describe("HeroAuthActions", () => {
   });
 
   it("starts analysis with a smooth evidence-page handoff", async () => {
-    render(<HeroAuthActions />);
+    renderWithOverlay();
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
     fireEvent.click(screen.getByRole("button", { name: /select test file/i }));
@@ -99,7 +108,7 @@ describe("HeroAuthActions", () => {
   });
 
   it("lets users choose another file before starting", () => {
-    render(<HeroAuthActions />);
+    renderWithOverlay();
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
     fireEvent.click(screen.getByRole("button", { name: /select test file/i }));
@@ -110,7 +119,7 @@ describe("HeroAuthActions", () => {
   });
 
   it("prefetches the evidence route for a faster handoff", () => {
-    render(<HeroAuthActions />);
+    renderWithOverlay();
 
     expect(mockPrefetch).toHaveBeenCalledWith("/evidence");
   });

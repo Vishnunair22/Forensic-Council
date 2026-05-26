@@ -235,15 +235,15 @@ async def _event_generator(
                 event_id = f"{session_id}:{_event_index}"
                 _event_index += 1
                 yield f"id: {event_id}\ndata: {json.dumps(msg)}\n\n"
-            except (asyncio.TimeoutError, TimeoutError):
+            except TimeoutError:
                 # Keepalive
                 yield ": keepalive\n\n"
     except Exception as stream_exc:
         logger.error("SSE event generator error", session_id=session_id, error=str(stream_exc))
         try:
             yield f"event: error\ndata: {json.dumps({'type': 'ERROR', 'message': str(stream_exc)})}\n\n"
-        except Exception:
-            pass
+        except Exception as yield_err:
+            logger.warning("Failed to yield SSE error event", error=str(yield_err))
     finally:
         # Cancel Redis pub/sub listener
         if redis_task is not None:
@@ -304,14 +304,12 @@ async def sse_progress(
         from api.routes._authz import assert_session_access
         await assert_session_access(session_id, current_user)
     except Exception as auth_exc:
+        status_code = auth_exc.status_code if isinstance(auth_exc, HTTPException) else 403
+        error_msg = str(auth_exc.detail) if hasattr(auth_exc, "detail") else str(auth_exc)
         # If authentication or authorization fails, return a text/event-stream StreamingResponse
         # that immediately emits the error event and terminates, preventing HTML/JSON fallback.
         async def error_generator():
-            yield f"event: error\ndata: {json.dumps({'type': 'ERROR', 'message': str(auth_exc)})}\n\n"
-
-        status_code = 403
-        if isinstance(auth_exc, HTTPException):
-            status_code = auth_exc.status_code
+            yield f"event: error\ndata: {json.dumps({'type': 'ERROR', 'message': error_msg})}\n\n"
 
         return StreamingResponse(
             error_generator(),

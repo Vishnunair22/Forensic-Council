@@ -346,8 +346,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             pdf_available = probe_pdf_libs()
             logger.info("PDF export library availability", **pdf_available)
-        except Exception:
-            pass
+        except Exception as pdf_err:
+            logger.warning("Failed to probe PDF export library availability", error=str(pdf_err))
 
         if not settings.gemini_api_key_policy_ok:
             logger.info("Skipping Gemini model availability check (policy not acknowledged)")

@@ -366,13 +366,13 @@ def _extract_text_easyocr_sync(
     import time
     logger.info(f"[OCR] Starting EasyOCR sync text extraction for {file_path}")
     start_time = time.time()
-    
+
     logger.info("[OCR] Fetching EasyOCR reader instance...")
     reader_start = time.time()
     reader = _get_easyocr_reader()
     reader_duration = time.time() - reader_start
     logger.info(f"[OCR] EasyOCR reader fetched in {reader_duration:.3f}s")
-    
+
     if reader is None:
         logger.warning("[OCR] EasyOCR reader is not available")
         return {"easyocr_available": False}
@@ -444,7 +444,7 @@ async def extract_text_easyocr(
     from core.config import get_settings
     settings = get_settings()
     total_timeout = getattr(settings, "ocr_tool_timeout", 60.0)
-    
+
     # Allocate 70% to EasyOCR and 30% to Tesseract fallback
     easyocr_timeout = max(30.0, total_timeout * 0.7)
     tesseract_timeout = max(20.0, total_timeout * 0.3)

@@ -2,7 +2,11 @@
 Smoke test upload script — runs inside the API container.
 Called by phase_guard.sh via: docker exec forensic_api python3 /app/scripts/smoke_upload.py
 """
-import struct, zlib, json, os, sys
+import json
+import os
+import struct
+import sys
+import zlib
 
 
 def make_png() -> bytes:

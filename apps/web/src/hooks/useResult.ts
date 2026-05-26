@@ -260,7 +260,7 @@ export function useResult(initialSessionId?: string) {
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let pollStart = Date.now();
+    const pollStart = Date.now();
     let pollInterval = ARBITER_POLL_INTERVAL_MS;
 
     const activeSessionId = sessionId;

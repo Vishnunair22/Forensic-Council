@@ -122,6 +122,11 @@ async def _write_file(path: Path, chunks: list[bytes]) -> None:
     await asyncio.to_thread(_write)
 
 
+def _append_chunk(path: Path, chunk: bytes) -> None:
+    with path.open("ab") as f:
+        f.write(chunk)
+
+
 async def run_investigation_task(
     session_id: str,
     pipeline: ForensicCouncilPipeline,
