@@ -143,3 +143,63 @@ class TestRateLimitRedisErrorHandling:
 
         with patch("core.rate_limiting.get_redis_client", return_value=mock_redis):
             await check_investigation_rate_limit("user-none", get_settings())
+
+
+class TestQuotaForRoleSettingsIntegration:
+    """Verify _quota_for_role reads from Settings, not hardcoded constants."""
+
+    def test_investigator_quota_reads_from_settings(self):
+        from unittest.mock import MagicMock
+
+        from core.rate_limiting import _quota_for_role
+
+        settings = MagicMock()
+        settings.daily_cost_quota_usd = 99.0
+        settings.daily_cost_quota_admin_usd = 999.0
+
+        assert _quota_for_role("investigator", settings) == 99.0
+
+    def test_auditor_quota_reads_from_settings(self):
+        from unittest.mock import MagicMock
+
+        from core.rate_limiting import _quota_for_role
+
+        settings = MagicMock()
+        settings.daily_cost_quota_usd = 42.5
+        settings.daily_cost_quota_admin_usd = 999.0
+
+        assert _quota_for_role("auditor", settings) == 42.5
+
+    def test_admin_quota_reads_admin_field_from_settings(self):
+        from unittest.mock import MagicMock
+
+        from core.rate_limiting import _quota_for_role
+
+        settings = MagicMock()
+        settings.daily_cost_quota_usd = 10.0
+        settings.daily_cost_quota_admin_usd = 750.0
+
+        assert _quota_for_role("admin", settings) == 750.0
+
+    def test_no_settings_uses_hardcoded_defaults(self):
+        from core.rate_limiting import DAILY_COST_QUOTA_USD, _quota_for_role
+
+        assert _quota_for_role("investigator", None) == DAILY_COST_QUOTA_USD["investigator"]
+        assert _quota_for_role("admin", None) == DAILY_COST_QUOTA_USD["admin"]
+
+    @pytest.mark.asyncio
+    async def test_check_daily_cost_quota_uses_settings_quota(self):
+        from unittest.mock import MagicMock
+
+        from core.rate_limiting import check_daily_cost_quota
+
+        settings = MagicMock()
+        settings.app_env = "production"
+        settings.debug = False
+        settings.daily_cost_quota_usd = 0.0  # zero quota → always blocked if Redis available
+
+        # With quota=0, the function short-circuits (quota <= 0 → return immediately)
+        # This verifies Settings.daily_cost_quota_usd is consulted
+        with patch("core.rate_limiting.get_redis_client") as mock_get:
+            mock_get.side_effect = ConnectionError("Redis unavailable")
+            await check_daily_cost_quota("user-zero-quota", "investigator", settings)

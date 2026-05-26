@@ -46,10 +46,10 @@ for var in APP_ENV DOMAIN CADDY_SITE_ADDRESS CORS_ALLOWED_ORIGINS GEMINI_API_KEY
     DOMAIN)   [ "$v" != "localhost" ] || { echo "FAIL: DOMAIN is localhost"; exit 1; };;
     CADDY_SITE_ADDRESS)
       [ -n "$v" ] || { echo "FAIL: CADDY_SITE_ADDRESS must be set in production"; exit 1; }
-      echo "$v" | grep -q "localhost" && { echo "FAIL: CADDY_SITE_ADDRESS points at localhost"; exit 1; }
+      echo "$v" | grep -qw "localhost" && { echo "FAIL: CADDY_SITE_ADDRESS points at localhost"; exit 1; }
       echo "$v" | grep -qE "^https?://" || { echo "FAIL: CADDY_SITE_ADDRESS must start with http:// or https://"; exit 1; }
       ;;
-    CORS_ALLOWED_ORIGINS) echo "$v" | grep -q "localhost" && { echo "FAIL: CORS contains localhost"; exit 1; };;
+    CORS_ALLOWED_ORIGINS) echo "$v" | grep -qw "localhost" && { echo "FAIL: CORS contains localhost"; exit 1; };;
     GEMINI_API_KEY_POLICY_OK) [ "$v" = "true" ] || { echo "FAIL: Gemini policy not acknowledged"; exit 1; };;
   esac
 done

@@ -72,13 +72,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+from core.exceptions import VerificationError
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
-
-
-class VerificationError(Exception):
-    """Raised when a compatibility Signer verification fails."""
 
 
 class Signer:

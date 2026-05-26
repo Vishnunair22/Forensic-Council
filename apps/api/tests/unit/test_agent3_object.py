@@ -73,7 +73,7 @@ def _agent_for_mime(mime_type: str) -> Agent3Object:
     )
 
 
-class TestAgent3VideoTaskDecomposition:
+class TestAgent3ObjectTaskDecomposition:
     def test_video_task_includes_frame_extraction(self):
         agent = _agent_for_mime("video/mp4")
         tasks = agent.task_decomposition

@@ -45,8 +45,11 @@ if [ "${1:-}" = "--update" ]; then
     fi
     for var in SIGNING_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD QDRANT_API_KEY BOOTSTRAP_ADMIN_PASSWORD BOOTSTRAP_INVESTIGATOR_PASSWORD DEMO_PASSWORD METRICS_SCRAPE_TOKEN; do
         val=$(eval echo \$$var)
-        # Use sed to replace placeholders. On macOS/BSD, sed -i '' is needed, but we target Linux/Debian.
-        sed -i "s|^${var}=.*|${var}=${val}|" .env
+        if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+            sed -i '' "s|^${var}=.*|${var}=${val}|" .env
+        else
+            sed -i "s|^${var}=.*|${var}=${val}|" .env
+        fi
     done
     echo "SUCCESS: .env updated with fresh keys."
 else

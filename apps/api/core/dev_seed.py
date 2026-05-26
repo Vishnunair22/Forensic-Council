@@ -1,9 +1,9 @@
 """
-Database Migration System
-=========================
+Development database seeder / fallback migration runner.
 
-Version-controlled database migrations for production deployments.
-Tracks applied migrations and ensures idempotent schema updates.
+Used in dev and test environments when Alembic has not been run.
+Alembic is the authoritative migration system for production;
+this module exists as a fast-path fallback for local dev startup.
 """
 
 import asyncio
@@ -651,8 +651,8 @@ class MigrationManager:
             if self._owned_client and not self._connected:
                 # If we were never connected, we definitely don't have the singleton yet.
                 pass
-            # However, status() is often used as a one-off. We'll let thecaller
-            # decide when to disconnect the manager via manager.disconnect().
+            # However, status() is often used as a one-off. We'll let the
+            # caller decide when to disconnect the manager via manager.disconnect().
             pass
 
 

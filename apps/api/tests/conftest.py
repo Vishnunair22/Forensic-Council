@@ -203,7 +203,7 @@ def client(mock_redis, mock_postgres, mock_qdrant):
         patch("core.persistence.get_redis_client", new_callable=AsyncMock, return_value=mock_redis),
         patch("core.persistence.get_postgres_client", new_callable=AsyncMock, return_value=mock_postgres),
         patch("core.persistence.get_qdrant_client", new_callable=AsyncMock, return_value=mock_qdrant),
-        patch("core.migrations.run_migrations", new_callable=AsyncMock),
+        patch("core.dev_seed.run_migrations", new_callable=AsyncMock),
         patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
     ]
     for patcher in patches:

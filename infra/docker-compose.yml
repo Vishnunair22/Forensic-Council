@@ -320,7 +320,7 @@ services:
       - SETGID
       - DAC_OVERRIDE
       - FOWNER
-    stop_grace_period: 150s
+    stop_grace_period: 300s
     volumes:
       # Source code bind mounts — uvicorn --reload picks up changes instantly.
       # Individual subdirectories are mounted so .venv (and /app/storage) are NOT
@@ -457,8 +457,6 @@ services:
       frontend:
         condition: service_healthy
       backend:
-        condition: service_healthy
-      worker:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/lb-health 2>&1 | head -1"]

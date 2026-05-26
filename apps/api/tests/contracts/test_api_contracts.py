@@ -174,7 +174,7 @@ def client():
         patch("core.persistence.get_redis_client", new_callable=AsyncMock, return_value=redis_mock),
         patch("core.persistence.get_postgres_client", new_callable=AsyncMock, return_value=pg_mock),
         patch("core.persistence.get_qdrant_client", new_callable=AsyncMock, return_value=qdrant_mock),
-        patch("core.migrations.run_migrations", new_callable=AsyncMock),
+        patch("core.dev_seed.run_migrations", new_callable=AsyncMock),
         patch("scripts.init_db.bootstrap_users", new_callable=AsyncMock),
         patch("api.routes.investigation._detect_mime_from_head", new_callable=AsyncMock, return_value="image/jpeg"),
         patch("api.routes.investigation.run_investigation_task", new_callable=AsyncMock),

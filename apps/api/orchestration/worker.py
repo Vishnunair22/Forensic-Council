@@ -70,7 +70,7 @@ async def main() -> None:
         except Exception as exc:
             logger.warning("ML warmup failed in worker", error=str(exc))
 
-    asyncio.create_task(_warmup_background())
+    _warmup_task = asyncio.create_task(_warmup_background())
 
     shutdown = asyncio.Event()
 
@@ -294,6 +294,11 @@ async def main() -> None:
     except Exception as exc:
         logger.critical("Worker crashed", error=str(exc), exc_info=True)
     finally:
+        _warmup_task.cancel()
+        try:
+            await _warmup_task
+        except (asyncio.CancelledError, Exception):
+            pass
         cleanup_task.cancel()
         try:
             await cleanup_task

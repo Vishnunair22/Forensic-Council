@@ -172,6 +172,54 @@ Accept      Deep                   │
 
 ---
 
+## State Enum Reference
+
+### SessionStatus (`orchestration/session_manager.py`)
+| Value | Meaning |
+|-------|---------|
+| `INITIALIZING` | Session created, pipeline not yet started |
+| `RUNNING` | Agents actively executing |
+| `AWAITING_HITL` | Paused at an agent-level HITL checkpoint |
+| `COMPLETED` | Pipeline finished (initial or deep pass) |
+| `FAILED` | Unrecoverable error |
+
+### WebSocket Message Types (`api/schemas.py` — `BriefUpdate.type`)
+| Type | Meaning |
+|------|---------|
+| `CONNECTED` | WebSocket connection established |
+| `AGENT_UPDATE` | Agent progress update |
+| `AGENT_COMPLETE` | Individual agent finished |
+| `PIPELINE_PAUSED` | Pipeline reached HITL gate; `run_deep_analysis_flag` awaiting human decision |
+| `HITL_CHECKPOINT` | Agent-level ReAct loop paused for human decision |
+| `HITL_EXPIRED` | HITL timeout elapsed; auto-skipping deep pass |
+| `PIPELINE_COMPLETE` | All agents complete; arbiter synthesizing |
+| `REPORT_READY` | Arbiter report finalized |
+| `ARBITER_UPDATE` | Arbiter deliberation progress |
+| `PIPELINE_QUARANTINED` | Evidence quarantined; pipeline halted |
+| `ERROR` | Unrecoverable pipeline error |
+
+### HITLCheckpointStatus / HITLCheckpointReason (`core/hitl.py`)
+| Status | Description |
+|--------|-------------|
+| `PAUSED` | Triggered by: `CONTESTED_FINDING`, `TOOL_UNAVAILABLE`, `SEVERITY_THRESHOLD_BREACH`, `TRIBUNAL_ESCALATION` |
+| `RESUMED` | Human approved or auto-timeout elapsed |
+| `OVERRIDDEN` | Human overrode agent findings |
+| `TERMINATED` | Human terminated the investigation |
+
+### Arbiter Status Values (pipeline metadata — `pipeline_phases.py`)
+Returned by `getArbiterStatus()` frontend call; drives Effect B reconnect logic:
+| Value | Meaning |
+|-------|---------|
+| `running` | Pipeline still executing |
+| `awaiting_decision` | Initial pass complete; `PIPELINE_PAUSED` sent; waiting for Accept or Deep |
+| `complete` | Arbiter report ready; navigate to `/result/{sid}` |
+| `not_found` | Session expired or never started; clear and reset |
+
+### `run_deep_analysis_flag`
+Boolean stored in pipeline Redis metadata. Set by `POST /sessions/{sid}/resume {deep_analysis: bool}`. `false` → arbiter synthesizes initial pass only. `true` → all agents re-run in deep phase before arbiter.
+
+---
+
 ## Key State Transitions
 
 ### `handleAcceptAnalysis` (Accept Initial → Arbiter synthesizes)

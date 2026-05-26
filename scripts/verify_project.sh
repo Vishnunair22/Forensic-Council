@@ -71,8 +71,12 @@ case "$MODE" in
     uv run ruff check . 2>&1 | tail -10 || fail "ruff check failed"
     pass "ruff"
 
-    uv run pyright 2>&1 | tail -10 || fail "pyright failed"
-    pass "pyright"
+    if uv run pyright --version >/dev/null 2>&1; then
+      uv run pyright 2>&1 | tail -10 || fail "pyright failed"
+      pass "pyright"
+    else
+      echo "SKIP: pyright not installed (run: uv sync --extra dev)"
+    fi
 
     uv run pytest tests/unit tests/security tests/infra -q --tb=short 2>&1 | tail -10 || fail "pytest unit/security/infra failed"
     pass "pytest unit/security/infra"

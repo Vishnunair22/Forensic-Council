@@ -36,6 +36,11 @@ except ImportError:
     FastAPIInstrumentor = None  # type: ignore[assignment]
     Resource = None  # type: ignore[assignment]
 
+# Set to True only after setup_observability completes successfully.
+# get_tracer returns a NoOp tracer until then so call-sites are safe even
+# if they run before lifespan (e.g. module-level tracer = get_tracer()).
+_otel_initialized: bool = False
+
 
 def setup_observability(app, settings) -> None:
     """
@@ -54,6 +59,8 @@ def setup_observability(app, settings) -> None:
     compose/k8s sets the endpoint — exactly the environments where
     pre-prod regressions surface.
     """
+    global _otel_initialized
+
     if not OTEL_AVAILABLE:
         return
 
@@ -76,19 +83,19 @@ def setup_observability(app, settings) -> None:
     # Automatically measure every HTTP request
     FastAPIInstrumentor.instrument_app(app)
 
+    _otel_initialized = True
+
 
 def get_tracer(name: str = "forensic-council"):
     """
     Return an OpenTelemetry tracer instance.
 
-    When OTel is not available or not in production, returns a no-op tracer
-    so call-sites can use ``tracer.start_as_current_span()`` without
-    guarding every invocation.
+    Returns a no-op tracer when OTel is not installed or setup_observability
+    has not been called, so call-sites need no guards.
     """
-    if OTEL_AVAILABLE:
+    if OTEL_AVAILABLE and _otel_initialized:
         return trace.get_tracer(name)
-    # No-op tracer — all spans are silently discarded
-    return trace.get_tracer(name) if OTEL_AVAILABLE else _NoOpTracer()
+    return _NoOpTracer()
 
 
 class _NoOpSpan:

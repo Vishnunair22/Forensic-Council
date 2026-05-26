@@ -28,4 +28,9 @@ services:
     ports:
       - "${FRONTEND_HOST_PORT:-3000}:3000"
     environment:
+      # NOTE: Setting NEXT_PUBLIC_API_URL to port 8000 routes browser requests
+      # directly to the backend, bypassing Caddy (no CSRF cookies, no rate limiting,
+      # no security headers). This is intentional for dev convenience — CSRF-protected
+      # flows (auth, demo login) must be tested through Caddy (http://localhost) not
+      # the direct backend port.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}

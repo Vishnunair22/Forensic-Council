@@ -4,7 +4,7 @@ set -euo pipefail
 MODE="${1:-dev}"
 end=$((SECONDS + 900))
 
-EXPECTED_DEV=(
+EXPECTED=(
   forensic_redis
   forensic_qdrant
   forensic_postgres
@@ -14,12 +14,6 @@ EXPECTED_DEV=(
   forensic_caddy
   forensic_prometheus
 )
-
-if [[ "$MODE" == "prod" ]]; then
-  EXPECTED=("${EXPECTED_DEV[@]}")
-else
-  EXPECTED=("${EXPECTED_DEV[@]}")
-fi
 
 while [ "$SECONDS" -lt "$end" ]; do
   bad=()

@@ -8,7 +8,7 @@ is always in sync with what the application expects.
 
 This script must NOT maintain its own SCHEMA_SQL — doing so causes drift
 whenever a new migration is added.  All schema definitions live in
-core/migrations.py.
+core/dev_seed.py.
 
 Usage:
     python scripts/init_db.py
@@ -32,7 +32,7 @@ configure_root_logger("INFO")
 
 try:
     from core.config import get_settings
-    from core.migrations import MigrationManager
+    from core.dev_seed import MigrationManager
     from core.persistence.postgres_client import PostgresClient
 except Exception as e:
     print(f"\n[FATAL] Configuration error: {e}")

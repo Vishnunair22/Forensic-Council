@@ -41,6 +41,7 @@ class PipelineTrace:
         self.start_time = datetime.now(UTC)
         self.end_time: datetime | None = None
         self.status = "STARTED"
+        self._started = False
 
     async def start(self) -> None:
         """Persist the start of the trace to PostgreSQL."""
@@ -63,9 +64,14 @@ class PipelineTrace:
             )
         except Exception as e:
             logger.warning("Failed to persist trace start", trace_id=self.trace_id, error=str(e))
+        finally:
+            self._started = True
 
     async def complete(self, metadata_update: dict[str, Any] | None = None) -> None:
         """Mark the trace as successfully completed and persist to DB."""
+        if not self._started:
+            logger.warning("complete() called before start()", trace_id=self.trace_id)
+            return
         self.status = "COMPLETED"
         self.end_time = datetime.now(UTC)
         if metadata_update:
@@ -94,6 +100,9 @@ class PipelineTrace:
 
     async def fail(self, error: str, metadata_update: dict[str, Any] | None = None) -> None:
         """Mark the trace as failed and persist error details."""
+        if not self._started:
+            logger.warning("fail() called before start()", trace_id=self.trace_id)
+            return
         self.status = "FAILED"
         self.end_time = datetime.now(UTC)
         self.metadata["error"] = error

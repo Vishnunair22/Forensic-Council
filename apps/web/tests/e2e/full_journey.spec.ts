@@ -1,3 +1,5 @@
+// Fully mocked E2E journey — no running backend required. All API routes and
+// the WebSocket connection are intercepted via page.route() in setupMockRoutes().
 import { test, expect, type Page } from "@playwright/test";
 import { emitMockLiveSocketComplete, installMockLiveSocket } from "./helpers/mockLiveSocket";
 

@@ -225,6 +225,12 @@ async def decode_token(token: str) -> TokenData:
 _recently_blacklisted: OrderedDict[str, float] = OrderedDict()  # token_hash -> expiry_timestamp
 _LOCAL_BLACKLIST_MAX_SIZE = 10000  # prevent unbounded memory growth
 
+# Short-TTL cache for per-user is_disabled status to avoid hitting DB on every request.
+# Entries are evicted after _USER_STATUS_CACHE_TTL seconds, so a disabled account
+# takes at most that long to take effect for already-authenticated sessions.
+_user_status_cache: dict[str, tuple[bool, float]] = {}  # user_id -> (is_disabled, expires_at)
+_USER_STATUS_CACHE_TTL = 30.0
+
 # Background cleanup task handle (set during lifespan startup)
 _cleanup_task: object | None = None
 _last_cleanup_time: float = 0.0
@@ -421,20 +427,17 @@ async def blacklist_token(token: str, expires_in_seconds: int) -> None:
 def _extract_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> str | None:
     if credentials:
         return credentials.credentials
-    
+
     cookies = getattr(request, "cookies", None)
     token = None
-    if cookies and not "mock" in type(cookies).__name__.lower() and hasattr(cookies, "get"):
+    if cookies and hasattr(cookies, "get"):
         token = cookies.get("access_token")
-        
+
     if not token:
         qp = getattr(request, "query_params", None)
-        if qp and not "mock" in type(qp).__name__.lower() and hasattr(qp, "get"):
+        if qp and hasattr(qp, "get"):
             token = qp.get("token") or qp.get("access_token")
-            
-    if not token and isinstance(cookies, dict):
-        token = cookies.get("access_token")
-        
+
     return token
 
 
@@ -457,36 +460,43 @@ async def get_current_user(
 
     token_data = await decode_token(token)
 
-    # Verify user account status against database.
-    # In production, we always verify to ensure disabled accounts are rejected instantly.
-    # In development, we degrade gracefully if the database is unavailable or uninitialized
-    # (e.g. during first-run migrations).
-    try:
-        from core.persistence.postgres_client import get_postgres_client
+    # Verify user account status against database with a 30s TTL cache so disabled
+    # accounts propagate within one cache window without hammering the DB on every request.
+    import time as _time
+    _now = _time.time()
+    _cached = _user_status_cache.get(token_data.user_id)
+    if _cached and _now < _cached[1]:
+        if _cached[0]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+    else:
+        try:
+            from core.persistence.postgres_client import get_postgres_client
 
-        postgres = await get_postgres_client()
-        if postgres:
-            query = "SELECT is_disabled FROM users WHERE user_id = $1"
-            row = await postgres.fetch_one(query, token_data.user_id)
-            if row and row.get("is_disabled"):
+            postgres = await get_postgres_client()
+            if postgres:
+                query = "SELECT is_disabled FROM users WHERE user_id = $1"
+                row = await postgres.fetch_one(query, token_data.user_id)
+                is_disabled = bool(row and row.get("is_disabled"))
+                _user_status_cache[token_data.user_id] = (is_disabled, _now + _USER_STATUS_CACHE_TTL)
+                if is_disabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="User account is disabled",
+                    )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Failed to verify account status", error=str(e))
+            if get_settings().app_env == "production":
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="User account is disabled",
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service unavailable",
+                ) from None
+            else:
+                logger.warning(
+                    "Skipping database account status check (non-production). "
+                    "The 'users' table may be missing or the database is uninitialized."
                 )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to verify account status", error=str(e))
-        if get_settings().app_env == "production":
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Authentication service unavailable",
-            ) from None
-        else:
-            logger.warning(
-                "Skipping database account status check (non-production). "
-                "The 'users' table may be missing or the database is uninitialized."
-            )
 
     user = User(
         user_id=token_data.user_id,

@@ -4,7 +4,7 @@ set -euo pipefail
 # ── Forensic Council — One-Command Production Boot ────────────────────────────
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-COMPOSE="docker compose -f $ROOT/infra/docker-compose.yml -f $ROOT/infra/docker-compose.prod.yml --env-file $ROOT/.env"
+COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.prod.yml" --env-file "$ROOT/.env")
 
 echo "🔍 Checking .env..."
 [[ -f "$ROOT/.env" ]] || { echo "ERROR: .env not found. Run ./infra/generate_production_keys.sh"; exit 1; }
@@ -13,10 +13,10 @@ echo "🔐 Running production readiness validation..."
 "$ROOT/infra/validate_production_readiness.sh"
 
 echo "🐳 Building production images..."
-$COMPOSE build --parallel
+"${COMPOSE[@]}" build --parallel
 
 echo "🚀 Starting production services..."
-$COMPOSE up -d
+"${COMPOSE[@]}" up -d
 
 DOMAIN_VALUE="$(grep '^DOMAIN=' "$ROOT/.env" | cut -d= -f2- || echo 'localhost')"
 CADDY_SITE_ADDRESS_VALUE="$(grep '^CADDY_SITE_ADDRESS=' "$ROOT/.env" | cut -d= -f2- || true)"
@@ -48,6 +48,6 @@ done
 echo ""
 echo "════════════════════════════════════════"
 echo "  Forensic Council — PRODUCTION running"
-echo "  Web UI  → https://${DOMAIN_VALUE}"
+echo "  Web UI  → ${HEALTH_URL%/health}"
 echo "  Health  → $HEALTH_URL"
 echo "════════════════════════════════════════"

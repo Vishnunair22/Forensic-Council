@@ -18,4 +18,4 @@ class EvidenceVerdict(StrEnum):
     GENUINE = "GENUINE"  # Authenticated as real
     CLEAN = "CLEAN"  # No audio/tampering anomalies
     INCONCLUSIVE = "INCONCLUSIVE"  # Insufficient evidence
-    ADVERSARIAL_EVASION = "adversarial_evasion_suspected"  # Perturbation evasion
+    ADVERSARIAL_EVASION = "ADVERSARIAL_EVASION"  # Perturbation evasion

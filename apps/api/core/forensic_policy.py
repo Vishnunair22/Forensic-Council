@@ -70,7 +70,7 @@ class ForensicPolicy:
         "ocr_analysis": 0.40,
     }
 
-    DEFAULT_TOOL_RELIABILITY = 0.65
+    DEFAULT_TOOL_RELIABILITY = 0.50
 
     # --- Scoring Constants ---
     SINGLE_SIGNAL_DECAY: float = 0.55
@@ -115,6 +115,11 @@ class ForensicPolicy:
 
     @classmethod
     def is_suspicious(cls, confidence: float, error_rate: float) -> bool:
-        """Check if metrics meet the SUSPICIOUS threshold."""
+        """Check if metrics meet the SUSPICIOUS threshold.
+
+        NOTE: A finding can satisfy both is_authentic and is_suspicious when
+        confidence >= 0.75 and error_rate is in (0.15, 0.40].  Callers must
+        check is_authentic first and treat is_suspicious as a fallback tier.
+        """
         # Suspicious = medium/high error rate but still some usable confidence
         return confidence >= cls.AGENT_SUSPICIOUS_CONF and error_rate > cls.AGENT_SUSPICIOUS_ERR

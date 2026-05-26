@@ -28,8 +28,13 @@ fi
 
 echo ""
 echo "POST /api/auth/demo through frontend/Caddy"
-curl -fsS \
+DEMO_RESP=$(curl -fsS \
   -X POST http://localhost/api/auth/demo \
   -H 'Content-Type: application/json' \
-  -d '{}' | head -c 500
+  -d '{}')
+echo "$DEMO_RESP" | head -c 500
 echo
+if ! echo "$DEMO_RESP" | grep -q '"access_token"'; then
+  echo "FAIL: demo auth response missing access_token" >&2
+  exit 1
+fi

@@ -50,7 +50,7 @@ class ConfidenceCalibrator:
         """
         Calibrate a heuristic score using reliability weighting.
 
-        Formula: (1 - severity) * reliability + noise_floor
+        Formula: base_bias + (raw_severity * reliability * 0.45), capped at 0.95
         """
         reliability = ConfidenceCalibrator.RELIABILITY_MAP.get(reliability_tag, 0.50)
         # Higher severity (higher probability of manipulation) should result in

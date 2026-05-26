@@ -51,6 +51,9 @@ echo "Cleaning logs..."
 rm -rf logs 2>/dev/null || true
 find . -name "*.log" -type f -delete 2>/dev/null || true
 
+echo "Cleaning API reports..."
+find apps/api/reports -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
+
 if [[ "$DEEP" == "true" ]]; then
     echo "Deep clean: removing model caches and uploaded evidence..."
     rm -rf apps/api/cache/ apps/api/.cache/ 2>/dev/null || true

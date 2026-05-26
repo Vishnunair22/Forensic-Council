@@ -78,7 +78,7 @@ def client():
         patch("core.persistence.redis_client.get_redis_client", new=mock_get_redis),
         patch("core.persistence.postgres_client.get_postgres_client", new=mock_get_pg),
         patch("core.persistence.qdrant_client.get_qdrant_client", new=mock_get_qdrant),
-        patch("core.migrations.run_migrations", new=mock_noop),
+        patch("core.dev_seed.run_migrations", new=mock_noop),
         patch("scripts.init_db.bootstrap_users", new=mock_noop),
         patch("core.auth.is_token_blacklisted", new=mock_noop),
     ]
