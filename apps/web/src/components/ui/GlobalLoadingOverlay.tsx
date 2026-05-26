@@ -9,6 +9,7 @@ import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { EVIDENCE_MAX_DISPLAY_MS } from "@/lib/timings";
 
 export function GlobalLoadingOverlay() {
@@ -18,7 +19,18 @@ export function GlobalLoadingOverlay() {
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
       return false;
     }
-    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+    if (showLoading) {
+      const guard = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
+      if (guard) {
+        const guardTime = parseInt(guard, 10);
+        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file) {
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+          return false;
+        }
+      }
+    }
+    return showLoading;
   });
   const [liveText, setLiveText] = useState(() => {
     const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT);
@@ -45,6 +57,9 @@ export function GlobalLoadingOverlay() {
   };
 
   useEffect(() => {
+    if (pathname === "/" && sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true") {
+      return;
+    }
     if (pathname !== "/evidence") {
       dismiss();
     }
@@ -68,7 +83,8 @@ export function GlobalLoadingOverlay() {
           const isGracePeriod =
             sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" &&
             !storage.getItem(STORAGE_KEYS.SESSION_ID) &&
-            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true" &&
+            __pendingFileStore.file !== null;
           if (isGracePeriod) return;
           dismiss(false);
         }

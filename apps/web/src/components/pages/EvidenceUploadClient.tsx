@@ -88,13 +88,13 @@ export function EvidenceUploadClient() {
   }, []);
 
   useEffect(() => {
-    if (handoffPending) {
+    if (handoffPending && investigation.status === "idle" && !investigation.isUploading) {
       const timer = setTimeout(() => {
         setHandoffPending(false);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [handoffPending]);
+  }, [handoffPending, investigation.status, investigation.isUploading]);
 
   useEffect(() => {
     document.body.style.overflow = "";
@@ -184,8 +184,7 @@ export function EvidenceUploadClient() {
         )}
 
         {showAgentProgress || investigation.handoffRecovering || handoffPending ? (
-          isMounted && (
-            <motion.div
+          <motion.div
               initial={{ opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
@@ -222,7 +221,6 @@ export function EvidenceUploadClient() {
                 onDismiss={investigation.dismissCheckpoint}
               />
             </motion.div>
-          )
         ) : (
           isMounted && (
             <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">

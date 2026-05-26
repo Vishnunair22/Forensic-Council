@@ -124,6 +124,7 @@ export function HeroAuthActions() {
     }
     sessionOnlyStorage.setItem(STORAGE_KEYS.AUTO_START, "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
+    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD, String(Date.now()));
     sessionOnlyStorage.setItem(
       STORAGE_KEYS.FC_PENDING_FILE_META,
       JSON.stringify({

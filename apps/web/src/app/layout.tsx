@@ -46,6 +46,8 @@ export default function RootLayout({
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans text-foreground antialiased min-h-screen flex flex-col overflow-x-hidden">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <LandingBackground />
         <Suspense fallback={null}>
           <RouteExperience />

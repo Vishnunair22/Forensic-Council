@@ -40,4 +40,5 @@ export const STORAGE_KEYS = {
   FC_RESUME_REQUESTED: "fc_resume_requested",
   FC_HANDOFF_FIRED: "fc_handoff_fired",
   FC_ARBITER_TRANSITIONING: "fc_arbiter_transitioning",
+  FC_HARD_REFRESH_GUARD: "fc_hard_refresh_guard",
 } as const;

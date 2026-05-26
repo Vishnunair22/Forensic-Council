@@ -592,11 +592,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (cancelled) return;
     if (!pending) {
       if (autoStartBlocking || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
-        clearInvestigationPersistence();
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-        setAutoStartBlocking(false);
-        setShowLoadingOverlay(false);
         const pendingMeta = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_PENDING_FILE_META, true, null) as { name: string } | null;
         toast.destructive({
           title: "File selection was lost after refresh",
@@ -604,6 +599,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             ? `Please reselect "${pendingMeta.name}" to continue. Browsers do not allow restoring file handles after a hard refresh.`
             : "Please select the evidence file again to continue.",
         });
+        clearInvestigationPersistence();
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        setAutoStartBlocking(false);
+        setShowLoadingOverlay(false);
         return;
       }
       sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
@@ -644,6 +644,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   // Effect B — Reconnect existing session
   useEffect(() => {
     if (autoStartFiredRef.current) return;
+    if (sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") return;
     if (__pendingFileStore.file || autoStartBlocking || isUploading) return;
     if (status !== "idle" && status !== "error") return;
 
