@@ -10,7 +10,7 @@ import {
   type ReportResponse,
   dbg
 } from "@/lib/api";
-import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS, UI_STRINGS } from "@/lib/constants";
+import { ARBITER_POLL_INTERVAL_MS, UI_STRINGS } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/types";
@@ -196,7 +196,7 @@ export function useResult(initialSessionId?: string) {
       if (!sessionId) throw new Error("Missing session ID");
       return getReport(sessionId);
     },
-    enabled: !!sessionId && minOverlayDone && arbiterComplete,
+    enabled: !!sessionId && mounted,
     staleTime: 60_000,
     retry: 3,
     refetchInterval: (query) => {
@@ -221,6 +221,7 @@ export function useResult(initialSessionId?: string) {
     if (!finalReportData) return;
     setArbiterComplete(true);
     setReport(finalReportData);
+    setErrorMsg("");
     // Use the report's authoritative is_deep_analysis field when available
     if (finalReportData.is_deep_analysis === true || finalReportData.is_deep_analysis === false) {
       setIsDeepPhase(finalReportData.is_deep_analysis);
@@ -259,7 +260,7 @@ export function useResult(initialSessionId?: string) {
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let attempts = 0;
+    let pollStart = Date.now();
     let pollInterval = ARBITER_POLL_INTERVAL_MS;
 
     const activeSessionId = sessionId;
@@ -280,6 +281,13 @@ export function useResult(initialSessionId?: string) {
           setErrorMsg(s.message || "Investigation failed");
           setState("error");
           return;
+        } else if (s.status === "not_found") {
+          if (Date.now() - pollStart > 30000) {
+            setErrorMsg("Investigation session not found. It may have expired.");
+            setState("error");
+            return;
+          }
+          setArbiterMsg("Initializing investigation...");
         } else {
           setArbiterMsg(s.message || "Council deliberating...");
         }
@@ -288,12 +296,9 @@ export function useResult(initialSessionId?: string) {
         dbg.error("Polling error", e);
       }
 
-      attempts++;
-      if (!cancelled && attempts < ARBITER_POLL_MAX_ATTEMPTS) {
+      if (!cancelled) {
         timer = setTimeout(poll, pollInterval);
         pollInterval = Math.min(pollInterval * 1.3, 3000);
-      } else if (!cancelled) {
-        router.push("/session-expired");
       }
     }
 
@@ -351,11 +356,8 @@ export function useResult(initialSessionId?: string) {
       } catch { return [] as HistoryItem[]; }
     })();
     queryClient.clear();
-    storage.clearAllForensicKeys();
+    storage.clearAllForensicKeys(savedHistory.length > 0);
     sessionOnlyStorage.clearAllForensicKeys();
-    if (savedHistory.length > 0) {
-      storage.setItem(STORAGE_KEYS.HISTORY, savedHistory, true);
-    }
     document.cookie = `${STORAGE_KEYS.SESSION_ID}=; path=/; max-age=0; SameSite=Lax`;
 
     window.dispatchEvent(new Event("fc:reset-home"));
@@ -371,10 +373,10 @@ export function useResult(initialSessionId?: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `forensic-report-${(report.report_id ?? "unknown").slice(0, 8)}.json`;
+    a.download = `forensic-report-${(report.report_id || sessionId || "unknown").slice(0, 8)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [report]);
+  }, [report, sessionId]);
 
   return {
     state,

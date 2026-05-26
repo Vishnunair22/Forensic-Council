@@ -29,9 +29,12 @@ export function HeroAuthActions() {
   const [showUpload, setShowUpload] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  const sessionExpiredHandledRef = useRef(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("session_expired") === "true") {
+    if (params.get("session_expired") === "true" && !sessionExpiredHandledRef.current) {
+      sessionExpiredHandledRef.current = true;
       const url = new URL(window.location.href);
       url.searchParams.delete("session_expired");
       window.history.replaceState({}, "", url.toString());
@@ -71,11 +74,18 @@ export function HeroAuthActions() {
       setIsHandingOff(false);
       router.prefetch?.("/evidence");
     };
+    const handleSessionExpired = () => {
+      const queryClient = undefined;
+      resetActiveInvestigation(queryClient);
+      router.push("/?session_expired=true");
+    };
     window.addEventListener("fc:reset-home", handleReset);
     window.addEventListener("fc:open-upload", handleOpen);
+    window.addEventListener("fc:session-expired", handleSessionExpired);
     return () => {
       window.removeEventListener("fc:reset-home", handleReset);
       window.removeEventListener("fc:open-upload", handleOpen);
+      window.removeEventListener("fc:session-expired", handleSessionExpired);
     };
   }, [router]);
 
@@ -107,14 +117,11 @@ export function HeroAuthActions() {
 
     clearInvestigationPersistence();
     __pendingFileStore.file = selectedFile;
-    await Promise.race([
-      savePendingEvidenceFile(selectedFile),
-      new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error("savePendingEvidenceFile timed out")), 2000),
-      ),
-    ]).catch((error) => {
+    try {
+      await savePendingEvidenceFile(selectedFile);
+    } catch (error) {
       console.warn("[HeroAuthActions] could not persist pending file:", error);
-    });
+    }
     sessionOnlyStorage.setItem(STORAGE_KEYS.AUTO_START, "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
     sessionOnlyStorage.setItem(
@@ -161,6 +168,8 @@ export function HeroAuthActions() {
     setShowUpload(false);
     setSelectedFile(null);
     setIsHandingOff(false);
+    __pendingFileStore.authPromise = null;
+    __pendingFileStore.authError = null;
     requestAnimationFrame(() => ctaRef.current?.focus());
   }, []);
 

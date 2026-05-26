@@ -73,10 +73,14 @@ export function ReportIntegrity({ report, sessionId, isDeepPhase }: ReportIntegr
       <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-2">
         <Shield className="w-4 h-4 text-primary/60" aria-hidden="true" />
         <h2 className="text-sm font-bold fc-text-secondary">Report Integrity</h2>
-        {signature && (
+        {signature ? (
           <div className="ml-auto flex items-center gap-1.5 fc-eyebrow text-success">
             <Fingerprint className="w-3.5 h-3.5" />
             Verified
+          </div>
+        ) : (
+          <div className="ml-auto flex items-center gap-1.5 fc-eyebrow text-muted">
+            Signed key store unavailable in development
           </div>
         )}
       </div>

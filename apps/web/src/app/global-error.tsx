@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { motion } from "framer-motion";
 import { AlertTriangle, RefreshCcw, Home } from "lucide-react";
 import Link from "next/link";
 import "./globals.css";
@@ -23,21 +22,12 @@ export default function GlobalError({
     <html lang="en">
       <body className="bg-surface-0 min-h-screen fc-text-primary flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
         <div className="min-h-screen flex flex-col items-center justify-center w-full">
-          <motion.div
-            className="fc-surface relative max-w-md w-full p-8 rounded-3xl overflow-hidden flex flex-col items-center z-10"
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
-          >
+          <div className="fc-surface relative max-w-md w-full p-8 rounded-3xl overflow-hidden flex flex-col items-center z-10">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
-            <motion.div
-              className="w-16 h-16 rounded-2xl bg-danger/10 border border-danger/25 flex items-center justify-center mb-6"
-              animate={{ opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            >
+            <div className="w-16 h-16 rounded-2xl bg-danger/10 border border-danger/25 flex items-center justify-center mb-6">
               <AlertTriangle className="w-8 h-8 fc-text-danger" />
-            </motion.div>
+            </div>
 
             <h1 className="text-2xl font-bold mb-3 fc-text-primary">
               Pipeline Interrupted
@@ -49,14 +39,13 @@ export default function GlobalError({
             </p>
 
             <div className="w-full space-y-3">
-              <motion.button
+              <button
                 onClick={() => reset()}
                 className="fc-btn-primary w-full"
-                whileTap={{ scale: 0.98 }}
               >
                 <RefreshCcw className="w-4 h-4" />
                 Retry Analysis
-              </motion.button>
+              </button>
 
               <Link href="/" className="fc-btn-secondary w-full">
                 <Home className="w-4 h-4" />
@@ -76,7 +65,7 @@ export default function GlobalError({
                 )}
               </div>
             )}
-          </motion.div>
+          </div>
         </div>
       </body>
     </html>

@@ -173,6 +173,16 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
     except Exception as exc:
         logger.debug("Failed to broadcast termination", session_id=session_id, error=str(exc))
 
+    # Publish SESSION_TERMINATED on the control channel for multi-replica WS cleanup
+    try:
+        redis = await get_redis_client()
+        await redis.publish(
+            f"forensic:control:{session_id}",
+            json.dumps({"type": "SESSION_TERMINATED", "reason": "Investigation terminated by user."}),
+        )
+    except Exception as exc:
+        logger.debug("Failed to publish SESSION_TERMINATED", session_id=session_id, error=str(exc))
+
     # Give subscribers a moment to receive the broadcast before tearing
     # down the websocket. 50 ms is the smallest delay that empirically
     # gives in-process subscribers time to flush without delaying response.
@@ -355,7 +365,18 @@ async def get_arbiter_status(
         except Exception as _e:
             logger.debug("DB status check failed", session_id=session_id, error=str(_e))
 
-        # 4. Live in-process fallback (covers Redis + Postgres simultaneously degraded)
+        # 4. Stale session guard — return not_found after 30s of no real data
+        try:
+            if metadata and metadata.get("created_at"):
+                from datetime import UTC, datetime
+                created = datetime.fromisoformat(metadata["created_at"])
+                elapsed = (datetime.now(UTC) - created).total_seconds()
+                if elapsed > 30 and metadata.get("status") == "running" and not get_active_pipeline(session_id):
+                    return {"status": "not_found", "message": "Session creation did not complete."}
+        except Exception:
+            pass
+
+        # 5. Live in-process fallback (covers Redis + Postgres simultaneously degraded)
         try:
             from orchestration.pipeline_registry import get_pipeline
 
@@ -468,8 +489,12 @@ async def get_session_report(
                         "message": "Investigation still in progress",
                     },
                 )
-            if status == "completed" and db_row.get("report_data"):
-                # Re-hydrate from the stored JSON dict
+            if status == "completed":
+                if not db_row.get("report_data"):
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Report payload missing",
+                    )
                 from api.schemas import ReportDTO as _RD
 
                 from ._dto import _clean_key_findings, _rebuild_finding
@@ -675,6 +700,73 @@ async def download_report_pdf(
                 "X-PDF-Fallback-Reason": "pdf_export_error",
             },
         )
+
+
+# ============================================================================
+# DOCX REPORT EXPORT ENDPOINT
+# ============================================================================
+
+
+@router.get("/{session_id}/report/docx")
+async def download_report_docx(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Download the forensic report as a DOCX file.
+
+    Uses python-docx to generate a court-ready Word document.
+    """
+    from fastapi.responses import Response
+
+    report_or_response = await get_session_report(session_id, current_user)
+
+    if isinstance(report_or_response, JSONResponse):
+        return report_or_response
+
+    report_dict = report_or_response.model_dump(mode="json")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+    try:
+        from core.docx_report_exporter import export_report_docx
+
+        docx_bytes = await export_report_docx(report_dict, session_id)
+
+        if docx_bytes:
+            filename = f"forensic_report_{session_id}_{timestamp}.docx"
+            return Response(
+                content=docx_bytes,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "X-Content-Type-Options": "nosniff",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                },
+            )
+        else:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "DOCX export library not available."},
+                headers={
+                    "X-Export-Unavailable": "docx",
+                },
+            )
+    except ImportError:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "DOCX export library (python-docx) is not installed."},
+            headers={
+                "X-Export-Unavailable": "docx",
+            },
+        )
+    except Exception as e:
+        logger.error(
+            "DOCX export failed",
+            session_id=session_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="DOCX export failed.")
 
 
 # ============================================================================
@@ -916,39 +1008,30 @@ async def resume_investigation(
             else "Final report synthesis already running",
         }
 
-    # Now write the decision key
-    await redis.set(
-        decision_key,
-        json.dumps(
-            {
-                "deep_analysis": request.deep_analysis,
-                "decided_by": current_user.user_id,
-                "decided_at": datetime.now(UTC).isoformat(),
-            }
-        ),
-        ex=14400,
+    # Now write the decision key + publish atomically using a Redis transaction
+    decision_payload = json.dumps(
+        {
+            "deep_analysis": request.deep_analysis,
+            "decided_by": current_user.user_id,
+            "decided_at": datetime.now(UTC).isoformat(),
+        }
     )
+    publish_payload = json.dumps(
+        {
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+        }
+    )
+    async with redis.client.pipeline(transaction=True) as pipe:
+        pipe.set(decision_key, decision_payload, ex=14400)
+        pipe.publish("forensic:notify_decision", publish_payload)
+        await pipe.execute()
 
     # Dual signaling for deployments where Redis is the single point of truth
     # but the pipeline may run in a different process/worker.
     # First try in-process get_active_pipeline, then fall back to registry.
     pipeline = get_active_pipeline(session_id)
     if pipeline is None:
-        # Publish decision to Redis for the worker process
-        try:
-            if redis:
-                await redis.publish(
-                    "forensic:notify_decision",
-                    json.dumps(
-                        {
-                            "session_id": session_id,
-                            "deep_analysis": request.deep_analysis,
-                        }
-                    ),
-                )
-        except Exception as e:
-            _log.warning("Failed to publish deep analysis decision to Redis", error=str(e))
-
         # D-C-4 (B-H-6): atomic CAS instead of RMW. The worker, pipeline,
         # and other API handlers all write this key concurrently; without
         # WATCH the last writer silently clobbers concurrent status updates.

@@ -47,7 +47,7 @@ _REPORT_TTL_SECONDS = 604800  # 7 Days (Hot cache for review)
 # Replay Buffer (Race Condition Prevention)
 REPLAY_BUFFER_KEY_PREFIX = "forensic:replay:"
 REPLAY_BUFFER_MAX_LEN = 50
-REPLAY_BUFFER_TTL = 300  # 5 minutes
+REPLAY_BUFFER_TTL = 1800  # 30 minutes — long enough for any pipeline phase including HITL
 
 # ── In-process state stores ────────────────────────────────────────────────────
 # These must remain in-memory because they hold live Python objects (pipeline

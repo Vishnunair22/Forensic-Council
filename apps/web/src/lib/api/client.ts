@@ -36,7 +36,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       document.cookie = "fc_session=; Max-Age=0; path=/";
     }
     if (typeof window !== "undefined") {
-      window.location.href = "/?session_expired=true";
+      window.dispatchEvent(new CustomEvent("fc:session-expired"));
     }
   }
   return response;
@@ -152,7 +152,7 @@ let _pendingAuth: Promise<TokenResponse> | null = null;
 export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
   if (_pendingAuth) return _pendingAuth;
 
-  _pendingAuth = (async () => {
+  const promise = (async (): Promise<TokenResponse> => {
     const maxRetries = 3;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -167,9 +167,6 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
         }
 
         const data: TokenResponse = await response.json();
-        if (data.access_token && typeof data.expires_in === "number") {
-          setAuthToken(data.access_token, data.expires_in);
-        }
         return data;
       } catch (err) {
         if (attempt === maxRetries) throw err;
@@ -179,8 +176,10 @@ export async function autoLoginAsInvestigator(): Promise<TokenResponse> {
     throw new Error("Demo login exhausted retries");
   })();
 
+  _pendingAuth = promise;
+
   try {
-    return await _pendingAuth;
+    return await promise;
   } finally {
     _pendingAuth = null;
   }
@@ -330,26 +329,16 @@ export async function submitHITLDecision(decision: HITLDecisionRequest): Promise
 
 export function createLiveSocket(sessionId: string): { ws: WebSocket; connected: Promise<void> } {
   const wsBase = getWSBase();  // Call function, not use constant
-  // C-H-4: prefer the httpOnly access_token cookie which the backend
-  // already accepts (_websocket.py:60-64). Only fall back to embedding
-  // the bearer in the Sec-WebSocket-Protocol when no cookie is present
-  // (true cross-origin clients, etc.). Subprotocol headers are visible
-  // to every intermediary and are written to Caddy's access log; this
-  // path leaks the JWT every WS open.
-  // access_token is httpOnly (never in document.cookie). Use csrf_token
-  // (non-httpOnly, always co-issued at login) as a readable session proxy.
-  // When csrf_token is present, the httpOnly access_token is also present and
-  // will be sent automatically in the WS HTTP upgrade — no subprotocol needed.
+  // Use only the forensic-v1 subprotocol. The access_token is always sent
+  // as an HttpOnly cookie in the WS upgrade request (post-demo-login).
+  // If no csrf_token (proxy for auth readiness) is present, the caller
+  // must re-auth before opening the socket.
     const hasAuthCookie =
       typeof document !== "undefined" &&
       /(?:^|;\s*)csrf_token=/.test(document.cookie);
-    const token = hasAuthCookie ? null : getAuthToken();
-    // Sanitize token to prevent malformed URI headers crashing the WS constructor
-    const sanitizedToken = token ? encodeURIComponent(token) : null; 
-    const protocols = sanitizedToken ? ["forensic-v1", `token.${sanitizedToken}`] : ["forensic-v1"];
   const ws = new WebSocket(
     `${wsBase}/api/v1/sessions/${encodeURIComponent(sessionId)}/live`,
-    protocols,
+    ["forensic-v1"],
   );
 
   const connected = new Promise<void>((resolve, reject) => {
@@ -427,13 +416,7 @@ export function connectLiveSSE(
   function connect() {
     if (closed) return;
 
-    const hasAuthCookie =
-      typeof document !== "undefined" &&
-      /(?:^|;\s*)csrf_token=/.test(document.cookie);
-    const token = hasAuthCookie ? null : getAuthToken();
-    const url = token
-      ? `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/progress?token=${encodeURIComponent(token)}`
-      : `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/progress`;
+    const url = `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/progress`;
 
     es = new EventSource(url, { withCredentials: true });
 

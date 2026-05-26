@@ -42,5 +42,13 @@ export function validateEvidenceFile(file: File): string | null {
     return `File type "${file.type || ext || "unknown"}" is not supported.`;
   }
 
+  if (!hasAllowedMime && hasAllowedExt) {
+    return `File type "${file.type || "unknown"}" is not recognized. Please verify the file type before upload.`;
+  }
+
+  if (hasAllowedMime && !hasAllowedExt) {
+    return `File extension "${ext || "unknown"}" does not match content type "${file.type}".`;
+  }
+
   return null;
 }

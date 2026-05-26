@@ -489,7 +489,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem(STORAGE_KEYS.PIPELINE_START, pipelineStart);
       storage.setItem(`${STORAGE_KEYS.PIPELINE_START}:${sessionIdToUse}`, pipelineStart);
 
-      if (thumbnailDataUrl) {
+      if (thumbnailDataUrl && !isDuplicateSession) {
         storage.setItem(`${STORAGE_KEYS.THUMBNAIL}:${sessionIdToUse}`, thumbnailDataUrl);
       }
 
@@ -745,15 +745,19 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText(UI_STRINGS.COMPILING_FINDINGS);
-    const ARBITER_MIN_DISPLAY_MS = 4000;
+    const ARBITER_MIN_DISPLAY_MS = 1500;
     const _arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
-      if (!ok) throw new Error("Report synthesis timed out");
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      if (!ok) {
+        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+        router.push(`/result/${encodeURIComponent(sid)}`);
+        return;
+      }
 
       // Ensure minimum overlay display time so the arbiter transition doesn't
       // flash-dismiss when the pre-warmed report resolves in <1s.
@@ -898,7 +902,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText(UI_STRINGS.FINAL_SYNTHESIS);
-    const ARBITER_MIN_DISPLAY_MS = 4000;
+    const ARBITER_MIN_DISPLAY_MS = 1500;
     const _arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
@@ -908,8 +912,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         await resumeInvestigation(false);
       }
       arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
-      if (!ok) throw new Error("Report synthesis timed out");
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      if (!ok) {
+        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+        router.push(`/result/${encodeURIComponent(sid)}`);
+        return;
+      }
 
       // Ensure minimum overlay display time so the arbiter transition doesn't
       // flash-dismiss when the pre-warmed report resolves in <1s.
@@ -923,16 +931,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      router.push(`/result/${sid}`, { scroll: true });
-    } catch (err) {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
-      toast.destructive({
-        title: "Could not load report",
-        description: err instanceof Error ? err.message : "Try again.",
-      });
-    } finally {
-      resumeInFlightRef.current = false;
+      router.push(`/result/${encodeURIComponent(sessionId)}`);
       setIsNavigating(false);
       if (!navigationStarted) {
         setArbiterDeliberating(false);

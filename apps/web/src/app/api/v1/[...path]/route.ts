@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { backendUrlFor, getBackendBaseUrls } from "@/lib/backendTargets";
 
-// DISABLE_NEXT_API_PROXY: set to "1" in production Docker to force all API
+// DISABLE_NEXT_API_PROXY: defaults to "1" in production to force all API
 // traffic through Caddy (prevents a second auth/CSRF surface on port 3000).
-// Leave unset in dev so direct localhost:3000 works for local testing.
-const DISABLE_NEXT_API_PROXY = process.env.DISABLE_NEXT_API_PROXY === "1";
+// Override to "0" in prod if the proxy is intentionally kept on. Leave unset
+// in dev so direct localhost:3000 works for local testing.
+const DISABLE_NEXT_API_PROXY =
+  process.env.DISABLE_NEXT_API_PROXY ?? (process.env.NODE_ENV === "production" ? "1" : "") === "1";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -59,7 +61,7 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
         headers,
         body,
         redirect: "manual",
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(apiPath.startsWith("/api/v1/report") ? 60_000 : 30_000),
       });
       if (RETRYABLE_STATUSES.has(upstream.status)) {
         const isIdempotent = ["GET", "HEAD", "OPTIONS", "PUT", "DELETE"].includes(req.method);

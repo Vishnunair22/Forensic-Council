@@ -340,6 +340,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.free_tier_mode:
             pass
 
+        # Probe PDF export library availability
+        try:
+            from core.pdf_report_exporter import probe_pdf_libs
+
+            pdf_available = probe_pdf_libs()
+            logger.info("PDF export library availability", **pdf_available)
+        except Exception:
+            pass
+
         if not settings.gemini_api_key_policy_ok:
             logger.info("Skipping Gemini model availability check (policy not acknowledged)")
         else:
@@ -665,7 +674,7 @@ async def csrf_middleware(request: Request, call_next):
             )
         return response
 
-    if settings.app_env == "testing":
+    if os.environ.get("FC_TEST_SHORTCUTS") == "1":
         return await call_next(request)
 
     # State-changing request — validate CSRF token
@@ -713,7 +722,7 @@ async def rate_limit_middleware(request: Request, call_next):
         return await call_next(request)
 
     settings = _settings_from_app(request)
-    if settings.app_env == "development" or settings.debug:
+    if settings.app_env == "development":
         return await call_next(request)
 
     # Identify user (IP or hashed token — never store raw tokens in Redis keys)
@@ -1102,6 +1111,14 @@ async def health_check(request: Request):
         if settings.debug:
             checks["redis_debug"] = f"{type(e).__name__}: {str(e)[:100]}"
         overall_healthy = False
+
+    # ── PDF Export libs ────────────────────────────────────────────────────────
+    try:
+        from core.pdf_report_exporter import probe_pdf_libs
+
+        checks["pdf_export"] = probe_pdf_libs()
+    except Exception as _pdf_err:
+        checks["pdf_export"] = {"weasyprint": False, "fpdf2": False}
 
     # ── Qdrant ─────────────────────────────────────────────────────────────────
     try:

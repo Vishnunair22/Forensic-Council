@@ -118,8 +118,10 @@ async def submit_decision(
         decision: The decision including session_id, checkpoint_id, agent_id,
                   and the decision type (APPROVE, REDIRECT, OVERRIDE, TERMINATE, TRIBUNAL)
     """
-    # Idempotency check: has this decision already been processed?
-    cache_key = f"hitl_decision:{decision.checkpoint_id}:{decision.decision}"
+    # Idempotency check: has this checkpoint already been decided?
+    # Use checkpoint_id only so a user changing their mind (APPROVE -> REDIRECT)
+    # is rejected — the first decision stands.
+    cache_key = f"hitl_decision:{decision.checkpoint_id}"
 
     redis = None
     try:

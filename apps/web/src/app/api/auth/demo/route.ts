@@ -36,7 +36,8 @@ export async function POST() {
     );
   }
 
-  const nextResponse = NextResponse.json(data, { status: response.status });
+  const { access_token: _at, csrf_token: _ct, token_type: _tt, ...safeData } = data;
+  const nextResponse = NextResponse.json(safeData, { status: response.status });
 
   const getSetCookie = response.headers?.getSetCookie?.bind(response.headers);
   const setCookie = response.headers?.get("set-cookie");

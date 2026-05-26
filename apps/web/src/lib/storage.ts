@@ -6,7 +6,7 @@ interface AppStorage {
   getItem<T>(key: string, parseJson: true, fallback?: T | null): T | null;
   setItem(key: string, value: unknown, stringify?: boolean): void;
   removeItem(key: string): void;
-  clearAllForensicKeys(): void;
+  clearAllForensicKeys(keepHistory?: boolean): void;
 }
 
 function createStorage(store: Storage): AppStorage {
@@ -60,13 +60,14 @@ function createStorage(store: Storage): AppStorage {
       }
     },
 
-    clearAllForensicKeys(): void {
+    clearAllForensicKeys(keepHistory = false): void {
       if (!isBrowser) return;
       try {
         const keysToRemove: string[] = [];
         for (let i = 0; i < store.length; i++) {
           const key = store.key(i);
           if ((key?.startsWith("forensic_") || key?.startsWith("fc_")) && key !== "forensic_investigator_id") {
+            if (keepHistory && key === "forensic_history") continue;
             keysToRemove.push(key);
           }
         }

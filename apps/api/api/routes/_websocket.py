@@ -26,6 +26,7 @@ from core.structured_logging import get_logger
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 logger = get_logger(__name__)
 
+_ws_lock = asyncio.Lock()
 _ACTIVE_WS_CONNECTIONS = 0
 MAX_MESSAGES_PER_MINUTE = 100
 IDLE_TIMEOUT = 300
@@ -34,75 +35,51 @@ IDLE_TIMEOUT = 300
 @router.websocket("/{session_id}/live")
 async def live_updates(websocket: WebSocket, session_id: str):
     global _ACTIVE_WS_CONNECTIONS
-    settings = get_settings()  # Fix NameError
+    settings = get_settings()
     max_ws = getattr(settings, "max_ws_connections", 1000)
 
-    if _ACTIVE_WS_CONNECTIONS >= max_ws:
-        await websocket.accept(subprotocol="forensic-v1")
-        await websocket.send_json({"type": "ERROR", "message": "Server busy"})
-        await websocket.close(code=1013, reason="Server busy")
-        return
-
-    _ACTIVE_WS_CONNECTIONS += 1
-    try:
-        await _live_updates_impl(websocket, session_id)
-    finally:
-        _ACTIVE_WS_CONNECTIONS -= 1
-
-
-async def _live_updates_impl(websocket: WebSocket, session_id: str):
-    """
-    WebSocket endpoint for live investigation updates.
-
-    Bridges messages from the background worker via Redis Pub/Sub.
-    """
-    # ── 1. Accept WebSocket and Authenticate ─────────────────────────────────
-    await websocket.accept(subprotocol="forensic-v1")
-
+    # Authenticate BEFORE accept — read cookies/headers on the raw ASGI scope
     auth_token = (
         websocket.cookies.get("fc_session")
         or websocket.cookies.get("sessionid")
         or websocket.cookies.get("access_token")
     )
 
-    # Also check query param token (for clients that can't set cookies/subprotocols)
-    if not auth_token:
-        auth_token = websocket.query_params.get("token") or None
-
-    if not auth_token:
-        for protocol in websocket.scope.get("subprotocols", []):
-            if protocol.startswith("token."):
-                auth_token = protocol[6:]
-                break
-
-    if auth_token:
-        logger.info("Extracted WebSocket auth token", session_id=session_id)
-
-    if not auth_token:
-        logger.warning("WebSocket auth failed: No token found", session_id=session_id)
-        await websocket.send_json({"type": "ERROR", "message": "Auth required"})
-        await websocket.close(code=4001)
-        return
-
     user_id = "anonymous"
     token_role: str | None = None
-    try:
-        token_data = await decode_token(auth_token)
-        user_id = token_data.user_id
-        # S-H-4: read the role from the SIGNED JWT, not from session metadata.
-        # Metadata is writable by the session owner; trusting it for role
-        # would let any user self-promote to ADMIN/AUDITOR for the duration
-        # of the WebSocket.
-        token_role = getattr(token_data, "role", None)
-    except Exception as e:
-        logger.warning(
-            "WebSocket auth failed: Invalid token",
-            session_id=session_id,
-            error=str(e),
-        )
-        await websocket.send_json({"type": "ERROR", "message": "Invalid token"})
-        await websocket.close(code=4001)
+    if auth_token:
+        try:
+            token_data = await decode_token(auth_token)
+            user_id = token_data.user_id
+            token_role = getattr(token_data, "role", None)
+        except Exception:
+            pass
+
+    if not user_id or user_id == "anonymous":
+        await websocket.close(code=4001, reason="Auth required")
         return
+
+    async with _ws_lock:
+        if _ACTIVE_WS_CONNECTIONS >= max_ws:
+            await websocket.close(code=1013, reason="Server busy")
+            return
+        _ACTIVE_WS_CONNECTIONS += 1
+
+    try:
+        await _live_updates_impl(websocket, session_id, user_id, token_role)
+    finally:
+        async with _ws_lock:
+            _ACTIVE_WS_CONNECTIONS -= 1
+
+
+async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str, token_role: str | None):
+    """
+    WebSocket endpoint for live investigation updates.
+
+    Bridges messages from the background worker via Redis Pub/Sub.
+    """
+    # ── 1. Accept now that auth passed ─────────────────────────────────────────
+    await websocket.accept(subprotocol="forensic-v1")
 
     # ── 2. Wait for session metadata ─────────────────────────────────────────
     # Metadata is written to Redis by start_investigation() before the HTTP
@@ -213,9 +190,10 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
             )
             pubsub = dedicated_redis.pubsub()
             channel = f"forensic:updates:{session_id}"
+            control_channel = f"forensic:control:{session_id}"
             replay_key = f"forensic:replay:{session_id}"
 
-            await pubsub.subscribe(channel)
+            await pubsub.subscribe(channel, control_channel)
 
             dedicated_redis_any: Any = dedicated_redis
             replay_messages = await dedicated_redis_any.lrange(replay_key, 0, -1)
@@ -234,6 +212,14 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
 
             async for message in pubsub.listen():
                 if message["type"] == "message":
+                    channel_name = message.get("channel", "")
+                    if channel_name == control_channel:
+                        payload = json.loads(message["data"])
+                        if payload.get("type") == "SESSION_TERMINATED":
+                            await websocket.send_json({"type": "ERROR", "message": payload.get("reason", "Session terminated")})
+                            await websocket.close(code=1000, reason="Session terminated")
+                            return
+                        continue
                     data = json.loads(message["data"])
                     await websocket.send_json(data)
                     last_activity = time.time()
@@ -278,11 +264,13 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
                     )
 
     async def send_ping():
+        nonlocal last_activity
         try:
             while True:
                 await asyncio.sleep(ping_interval)
                 try:
                     await websocket.send_json({"type": "PING", "timestamp": time.time()})
+                    last_activity = time.time()
                 except Exception:
                     break
         except asyncio.CancelledError:
@@ -291,6 +279,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str):
             logger.debug("Ping task failed", session_id=session_id, error=str(e))
 
     async def monitor_idle():
+        nonlocal last_activity
         try:
             while True:
                 await asyncio.sleep(10)

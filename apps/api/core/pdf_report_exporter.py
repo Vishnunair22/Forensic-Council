@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import html
 import textwrap
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,23 @@ from typing import Any
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _normalize_report_for_template(report_dict: dict[str, Any]) -> dict[str, Any]:
+    """Map DTO field names to template-friendly view-model keys."""
+    return {
+        "verdict": report_dict.get("overall_verdict", "INCONCLUSIVE"),
+        "confidence": report_dict.get("overall_confidence", report_dict.get("confidence", 0.0)),
+        "case_id": report_dict.get("case_id", "UNKNOWN"),
+        "narrative": report_dict.get("executive_summary", report_dict.get("narrative", report_dict.get("summary", "No narrative generated."))),
+        "agents": report_dict.get("per_agent_metrics", report_dict.get("agent_metrics", report_dict.get("agents", {}))),
+        "findings": report_dict.get("per_agent_findings", report_dict.get("findings", [])),
+        "created": report_dict.get("signed_utc", report_dict.get("created_utc", datetime.now(UTC).isoformat())),
+        "report_hash": report_dict.get("report_hash", "N/A"),
+        "manipulation_probability": report_dict.get("manipulation_probability", report_dict.get("overall_confidence", 0.0)),
+        "calibrated": report_dict.get("calibrated", False),
+        "session_id": report_dict.get("session_id", ""),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +86,7 @@ _REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
   .agent-header {{ background: #f0f0ff; padding: 6pt 12pt; border-radius: 4pt;
                    font-weight: bold; font-size: 9pt; color: #2a2a6e; }}
   .narrative {{ font-size: 9.5pt; line-height: 1.6; color: #222; white-space: pre-wrap;
+                word-break: break-word; overflow-wrap: anywhere;
                 background: #fafafa; border: 1pt solid #e0e0f0; border-radius: 4pt;
                 padding: 12pt; }}
   .custody-table {{ width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 8pt; }}
@@ -107,16 +126,21 @@ def _verdict_colors(verdict: str) -> tuple[str, str, str]:
 
 
 def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
-    """Build the HTML body from a ForensicReport dict."""
-    verdict = report_dict.get("verdict", "INCONCLUSIVE")
-    confidence = report_dict.get("final_confidence", report_dict.get("confidence", 0.0))
-    case_id = report_dict.get("case_id", "UNKNOWN")
-    narrative = report_dict.get("narrative", report_dict.get("summary", "No narrative generated."))
-    agents = report_dict.get("agent_metrics", report_dict.get("agents", {}))
-    findings = report_dict.get("findings", [])
-    created = report_dict.get("created_utc", datetime.now(UTC).isoformat())
-    report_hash = report_dict.get("report_hash", "N/A")
-    manipulation_probability = report_dict.get("manipulation_probability", confidence)
+    """Build the HTML body from a ForensicReport dict, using normalized template fields."""
+    tmpl = _normalize_report_for_template(report_dict)
+
+    def esc(v: Any) -> str:
+        return html.escape(str(v))
+
+    verdict = esc(tmpl["verdict"])
+    confidence = tmpl["confidence"]
+    case_id = esc(tmpl["case_id"])
+    narrative = esc(tmpl["narrative"])
+    agents = tmpl["agents"]
+    findings_raw = tmpl["findings"]
+    created = esc(tmpl["created"])
+    report_hash = esc(tmpl["report_hash"])
+    manipulation_probability = tmpl["manipulation_probability"]
 
     verdict_bg, verdict_color, finding_color = _verdict_colors(verdict)
 
@@ -126,7 +150,7 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
   <div class="sub">Multi-Agent Forensic Evidence Analysis Report</div>
   <div class="meta">
     Case ID: {case_id}<br>
-    Session: {session_id}<br>
+    Session: {esc(session_id)}<br>
     Generated: {created}
   </div>
   <div class="verdict-box">
@@ -143,13 +167,20 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
 </div>""")
 
     # Agent findings section
-    if findings or agents:
+    findings_list: list[dict] = []
+    if isinstance(findings_raw, dict):
+        for agent_findings in findings_raw.values():
+            if isinstance(agent_findings, list):
+                findings_list.extend(agent_findings)
+    elif isinstance(findings_raw, list):
+        findings_list = findings_raw
+
+    if findings_list or agents:
         agent_html_parts = []
 
-        # Group findings by agent
         by_agent: dict[str, list[dict]] = {}
-        for f in (findings if isinstance(findings, list) else []):
-            aid = f.get("agent_id", "Unknown") if isinstance(f, dict) else "Unknown"
+        for f in findings_list:
+            aid = esc(f.get("agent_id", "Unknown")) if isinstance(f, dict) else "Unknown"
             by_agent.setdefault(aid, []).append(f)
 
         for agent_id, agent_findings in sorted(by_agent.items()):
@@ -157,11 +188,11 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
             for f in agent_findings:
                 if not isinstance(f, dict):
                     continue
-                ftype = f.get("finding_type", "Unknown")
-                fsummary = f.get("reasoning_summary", "")[:300]
+                ftype = esc(f.get("finding_type", "Unknown"))
+                fsummary = esc(f.get("reasoning_summary", "")[:300])
                 fconf = f.get("confidence_raw") or f.get("raw_confidence_score")
                 cal_status = f.get("calibration_status", "UNCALIBRATED")
-                everd = f.get("evidence_verdict", "INCONCLUSIVE")
+                everd = esc(f.get("evidence_verdict", "INCONCLUSIVE"))
 
                 cal_badge = ""
                 if cal_status == "UNCALIBRATED":
@@ -171,11 +202,11 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
                 finding_items.append(f"""<div class="finding">
   <div class="ftype">{ftype}{cal_badge}</div>
   <div class="fsummary">{fsummary}</div>
-  <div class="fconf">Verdict: {everd} | Confidence: {conf_str} | Status: {f.get('status', '')}</div>
+  <div class="fconf">Verdict: {everd} | Confidence: {conf_str} | Status: {esc(f.get('status', ''))}</div>
 </div>""")
 
             agent_html_parts.append(f"""<div class="agent-section">
-  <div class="agent-header">{agent_id}</div>
+  <div class="agent-header">{esc(agent_id)}</div>
   {"".join(finding_items) if finding_items else '<p style="color:#888;font-size:9pt;">No findings recorded.</p>'}
 </div>""")
 
@@ -192,15 +223,15 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
   <h3>Custody Metadata</h3>
   <table class="custody-table">
     <tr><th>Field</th><th>Value</th></tr>
-    <tr><td>Session ID</td><td>{session_id}</td></tr>
+    <tr><td>Session ID</td><td>{esc(session_id)}</td></tr>
     <tr><td>Case ID</td><td>{case_id}</td></tr>
     <tr><td>Report Generated</td><td>{created}</td></tr>
     <tr><td>Verdict</td><td>{verdict}</td></tr>
     <tr><td>Manipulation Probability</td><td>{float(manipulation_probability):.1%}</td></tr>
-    <tr><td>Calibration Status</td><td>{'TRAINED' if report_dict.get('calibrated') else 'UNCALIBRATED ⚠️'}</td></tr>
+    <tr><td>Calibration Status</td><td>{'TRAINED' if tmpl.get('calibrated') else 'UNCALIBRATED'}</td></tr>
   </table>
   <p style="font-size:8pt;color:#888;margin-top:8pt;">
-    ⚠️ UNCALIBRATED means confidence scores are engineering defaults, not trained on labelled forensic data.
+    UNCALIBRATED means confidence scores are engineering defaults, not trained on labelled forensic data.
     These scores should not be relied upon as calibrated probabilities in legal proceedings.
   </p>
 </div>""")
@@ -246,14 +277,6 @@ async def export_report_pdf(
         HTML file is always written to reports/ directory.
     """
     html = await export_report_html(report_dict, session_id)
-
-    # --- Write HTML to /tmp (world-writable, survives appuser restrictions) ---
-    try:
-        html_path = Path("/tmp") / f"{session_id}_report.html"
-        html_path.write_text(html, encoding="utf-8")
-        logger.info("HTML report written", path=str(html_path))
-    except Exception as _html_write_err:
-        logger.debug("Could not write HTML fallback", error=str(_html_write_err))
 
     # --- Try WeasyPrint ---
     try:
@@ -375,3 +398,19 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
     pdf.cell(0, 5, report_dict.get("report_hash", "N/A")[:80], ln=True)
 
     return pdf
+
+
+def probe_pdf_libs() -> dict[str, bool]:
+    """Probe availability of PDF generation libraries at startup."""
+    result: dict[str, bool] = {}
+    try:
+        import weasyprint  # noqa: F401
+        result["weasyprint"] = True
+    except ImportError:
+        result["weasyprint"] = False
+    try:
+        from fpdf import FPDF  # noqa: F401
+        result["fpdf2"] = True
+    except ImportError:
+        result["fpdf2"] = False
+    return result

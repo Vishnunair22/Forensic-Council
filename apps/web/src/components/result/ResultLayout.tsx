@@ -187,7 +187,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             onRetry={rs.handleNew}
           />
 
-          {rs.state === "error" && (
+          {rs.state === "error" && !rs.errorMsg && (
             <div className="flex flex-col items-center justify-center py-32 opacity-20">
               <p className="font-mono text-xs">Analysis Pipeline Halted</p>
             </div>
@@ -320,6 +320,28 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
 // ── ExportDropdown ───────────────────────────────────────────────────────────
 
+function getFileExtension(contentType: string | null, headers: Headers): string {
+  if (contentType?.includes("application/pdf")) return ".pdf";
+  if (headers.get("X-PDF-Fallback") === "true") {
+    if (contentType?.includes("text/html")) return ".html";
+    return ".json";
+  }
+  if (contentType?.includes("text/html")) return ".html";
+  if (contentType?.includes("application/json")) return ".json";
+  return ".pdf";
+}
+
+function getFileTypeLabel(contentType: string | null, headers: Headers): string {
+  if (contentType?.includes("application/pdf")) return "PDF";
+  if (headers.get("X-PDF-Fallback") === "true") {
+    if (contentType?.includes("text/html")) return "HTML";
+    return "JSON";
+  }
+  if (contentType?.includes("text/html")) return "HTML";
+  if (contentType?.includes("application/json")) return "JSON";
+  return "PDF";
+}
+
 function ExportDropdown({
   report,
   sessionId,
@@ -353,15 +375,28 @@ function ExportDropdown({
         { credentials: "include" },
       );
       if (res.ok) {
+        const contentType = res.headers.get("Content-Type");
+        const ext = getFileExtension(contentType, res.headers);
+        const label = getFileTypeLabel(contentType, res.headers);
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `forensic-report-${(report.report_id ?? sessionId).slice(0, 8)}.pdf`;
+        a.download = `forensic-report-${(report.report_id ?? sessionId).slice(0, 8)}${ext}`;
         a.click();
         URL.revokeObjectURL(url);
+        if (ext !== ".pdf") {
+          toast.warning({
+            title: `PDF unavailable — downloaded ${label}`,
+            description: "Install WeasyPrint on the server for PDF generation.",
+          });
+        }
         return;
       }
+      toast.warning({
+        title: "PDF export unavailable",
+        description: "Downloading the report as JSON instead.",
+      });
     } catch {
       toast.warning({
         title: "PDF export unavailable",
@@ -370,13 +405,47 @@ function ExportDropdown({
     } finally {
       setExporting(false);
     }
-    onExportJson();
   }, [sessionId, exporting, report, onExportJson]);
 
   const handleJson = useCallback(() => {
     setOpen(false);
     onExportJson();
   }, [onExportJson]);
+
+  const handleDocx = useCallback(async () => {
+    if (!sessionId || exporting) return;
+    setExporting(true);
+    setOpen(false);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report/docx`,
+        { credentials: "include" },
+      );
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `forensic-report-${(report.report_id ?? sessionId).slice(0, 8)}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+      if (res.status === 503) {
+        toast.warning({
+          title: "DOCX export unavailable",
+          description: "Install python-docx on the server.",
+        });
+      }
+    } catch {
+      toast.warning({
+        title: "DOCX export unavailable",
+        description: "Could not download the DOCX file.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [sessionId, exporting, report]);
 
   return (
     <div className="relative shrink-0" ref={ref}>
@@ -409,6 +478,14 @@ function ExportDropdown({
             >
               <FileText className="w-3.5 h-3.5 shrink-0" />
               PDF Report
+            </button>
+            <button
+              type="button"
+              onClick={handleDocx}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs fc-text-muted hover:text-white hover:bg-white/[0.05] transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              Word (.docx)
             </button>
             <button
               type="button"

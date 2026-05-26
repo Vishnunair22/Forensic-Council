@@ -114,9 +114,12 @@ async def _detect_mime_from_head(head: bytes) -> str:
         ) from exc
 
 
-def _append_chunk(path: Path, chunk: bytes) -> None:
-    with path.open("ab") as f:
-        f.write(chunk)
+async def _write_file(path: Path, chunks: list[bytes]) -> None:
+    def _write():
+        with path.open("ab") as f:
+            for chunk in chunks:
+                f.write(chunk)
+    await asyncio.to_thread(_write)
 
 
 async def run_investigation_task(
@@ -253,7 +256,7 @@ async def _supersede_prior_investigations(
                             "decided_at": datetime.now(UTC).isoformat(),
                             "superseded_by": keep_session_id,
                         },
-                        ex=300,
+                        ex=settings.investigation_timeout,
                     )
                 await redis.client.publish(
                     "forensic:notify_decision",
@@ -370,6 +373,7 @@ async def start_investigation(
         hasher = hashlib.sha256()
         total_size = 0
         tmp_path.write_bytes(b"")
+        chunks: list[bytes] = []
         while True:
             chunk = await file.read(1024 * 1024)
             if not chunk:
@@ -379,7 +383,10 @@ async def start_investigation(
                 tmp_path.unlink(missing_ok=True)
                 raise HTTPException(status_code=400, detail="File size exceeds limit.")
             hasher.update(chunk)
-            await asyncio.to_thread(_append_chunk, tmp_path, chunk)
+            chunks.append(chunk)
+
+        if chunks:
+            await _write_file(tmp_path, chunks)
 
         if total_size == 0:
             tmp_path.unlink(missing_ok=True)
@@ -485,7 +492,7 @@ async def start_investigation(
                     "Image integrity check failed; file may be corrupted.",
                     error=str(verify_error),
                 )
-                if getattr(settings, "app_env", "testing") != "production" and not tmp_path.exists():
+                if settings.app_env == "testing":
                     logger.debug("Skipping image verification for mocked test upload")
                 else:
                     tmp_path.unlink(missing_ok=True)

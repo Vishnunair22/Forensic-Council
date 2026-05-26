@@ -696,14 +696,24 @@ export const useSimulation = ({
             setSessionId(null);
             clearInvestigationPersistence();
 
+            const closeCodeMessages: Record<number, string> = {
+              4001: "Authentication failed. Please refresh the page.",
+              4003: "You do not have access to this investigation.",
+              4004: "Investigation session not found. It may have expired.",
+              4010: "Investigation interrupted by server restart. Please start a new analysis.",
+              1011: "Server error. Please refresh and try again.",
+              1013: "Server is temporarily unavailable. Please try again later.",
+            };
+            const friendlyMessage = closeCodeMessages[event.code] || event.reason || "Investigation interrupted. Please restart.";
+
             // If connection was already established, set to error state
             if (wsConnectionReady) {
-              setErrorMessage(event.reason || "Investigation interrupted. Please restart.");
+              setErrorMessage(friendlyMessage);
               setStatus("error");
             }
             // Reject the pending promise if it hasn't resolved
             if (!wsConnectionReady) {
-              reject(new Error(event.reason || `Terminal Error (code ${event.code})`));
+              reject(new Error(friendlyMessage));
             }
             return;
           }
