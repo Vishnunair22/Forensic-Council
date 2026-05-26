@@ -60,7 +60,7 @@ function createStorage(store: Storage): AppStorage {
         const keysToRemove: string[] = [];
         for (let i = 0; i < store.length; i++) {
           const key = store.key(i);
-          if (key?.startsWith("forensic_") || key?.startsWith("fc_")) {
+          if ((key?.startsWith("forensic_") || key?.startsWith("fc_")) && key !== "forensic_investigator_id") {
             keysToRemove.push(key);
           }
         }

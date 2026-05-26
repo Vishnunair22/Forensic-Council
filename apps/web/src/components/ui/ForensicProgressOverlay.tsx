@@ -1,5 +1,8 @@
 "use client";
 
+// ROLE: Agent analysis in-progress display shown during arbiter deliberation.
+// Used by ArbiterNarrativeMixin to show "Arbiter Active" progress state.
+
 import { useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 

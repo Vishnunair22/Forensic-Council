@@ -1,4 +1,9 @@
 "use client";
+/**
+ * BOUNDARY: Owns file selection, upload, authentication, session creation,
+ * loading overlay lifecycle, and navigation after analysis completes.
+ * Delegates streaming agent state to: useSimulation (via sessionId handoff).
+ */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";

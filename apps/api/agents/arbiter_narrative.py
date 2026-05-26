@@ -1,6 +1,12 @@
 """
 Arbiter Narrative Synthesis Mixin.
 Extracted from arbiter.py to improve maintainability.
+
+DELEGATION PATTERN:
+  - arbiter_verdict.py defines ForensicReport model and evidence_verdict_of()
+  - arbiter_narrative.py contains ArbiterNarrativeMixin with LLM-driven synthesis
+  - arbiter.py (CouncilArbiter) inherits both, delegating narrative tasks here
+  - This separation allows narrative logic to evolve independently from verdict logic
 """
 
 from __future__ import annotations

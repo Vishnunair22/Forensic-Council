@@ -1,5 +1,8 @@
 "use client";
 
+// ROLE: Root-level route-transition overlay that bridges navigation gaps.
+// Delegates to useInvestigation for page-specific loading after /evidence arrives.
+
 import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";

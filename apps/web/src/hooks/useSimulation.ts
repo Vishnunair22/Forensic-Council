@@ -1,4 +1,9 @@
 "use client";
+/**
+ * BOUNDARY: Owns SSE stream connection, agent update events, HITL checkpoint
+ * state, arbiter live text, and reconnect logic.
+ * Receives: sessionId from useInvestigation after upload succeeds.
+ */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { flushSync } from "react-dom";
