@@ -27,12 +27,28 @@ export type SoundType =
 let globalCtx: AudioContext | null = null;
 // Chrome's autoplay policy: AudioContext must be created/resumed after a user gesture.
 let _masterVolume = 0.55;
-let _isMuted = false;
+
+const _MUTE_STORAGE_KEY = "fc_sound_muted";
+function _loadMuted(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(_MUTE_STORAGE_KEY) === "true";
+  } catch { return false; }
+}
+let _isMuted = _loadMuted();
 
 export function setMasterVolume(v: number) { _masterVolume = Math.max(0, Math.min(1, v)); }
 export function getMasterVolume() { return _masterVolume; }
-export function setMuted(m: boolean) { _isMuted = m; }
+export function setMuted(m: boolean) {
+  _isMuted = m;
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(_MUTE_STORAGE_KEY, String(m));
+      window.dispatchEvent(new CustomEvent("fc_mute_change", { detail: m }));
+    }
+  } catch { /* storage quota — non-critical */ }
+}
 export function getMuted() { return _isMuted; }
+export function toggleMuted() { setMuted(!_isMuted); return !_isMuted; }
 
 type AudioContextConstructor = new () => AudioContext;
 
@@ -105,6 +121,20 @@ function createSoftGain(
 export function useSound() {
   // Lazy-attach gesture listeners on first hook call so import is side-effect free.
   _ensureUnlockListeners();
+  const [isMuted, setIsMutedState] = useState(_isMuted);
+
+  useEffect(() => {
+    const onMuteChange = (e: Event) => setIsMutedState((e as CustomEvent<boolean>).detail);
+    window.addEventListener("fc_mute_change", onMuteChange);
+    return () => window.removeEventListener("fc_mute_change", onMuteChange);
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const next = toggleMuted();
+    setIsMutedState(next);
+    return next;
+  }, []);
+
   const playSound = useCallback((type: SoundType) => {
     try {
       if (typeof window === "undefined") return;
@@ -576,5 +606,5 @@ export function useSound() {
     }
   }, []);
 
-  return { playSound };
+  return { playSound, isMuted, toggleMute };
 }

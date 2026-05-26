@@ -21,6 +21,7 @@ REQUIRED_DEV_VARS=(
   JWT_SECRET_KEY
   POSTGRES_PASSWORD
   REDIS_PASSWORD
+  QDRANT_API_KEY
   BOOTSTRAP_ADMIN_PASSWORD
   BOOTSTRAP_INVESTIGATOR_PASSWORD
   DEMO_PASSWORD
@@ -94,6 +95,29 @@ if [[ "$STATUS" != "ok" ]]; then
   echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml logs backend"
   exit 1
 fi
+
+echo "⏳ Waiting for worker readiness (up to 5 min)..."
+WORKER_OK=0
+for i in $(seq 1 30); do
+  if "${COMPOSE[@]}" exec -T worker python /app/scripts/worker_healthcheck.py > /dev/null 2>&1; then
+    echo "✅ Worker healthy (after $((i * 10))s)"
+    WORKER_OK=1
+    break
+  fi
+  sleep 10
+done
+if [[ "$WORKER_OK" -eq 0 ]]; then
+  echo "⚠️  Worker did not report healthy. Investigations will queue but may not process."
+  echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml logs worker"
+fi
+
+echo "⏳ Verifying ML model cache..."
+if "${COMPOSE[@]}" exec -T backend python scripts/model_cache_check.py > /dev/null 2>&1; then
+  echo "✅ ML model cache verified."
+else
+  echo "⚠️  ML model cache check failed or models still loading. First analysis may be slow."
+fi
+
 echo "⏳ Waiting for Caddy health route..."
 for i in $(seq 1 12); do
   if curl -sf http://localhost/health > /dev/null 2>&1; then

@@ -3,8 +3,8 @@
 export const LandingBackground = () => {
   return (
     <div
-      className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
-      style={{ background: "var(--color-background)" }}
+      className="fixed inset-0 pointer-events-none overflow-hidden"
+      style={{ zIndex: -10, background: "var(--color-background)" }}
       aria-hidden="true"
     >
       {/* Micro-grid pattern */}

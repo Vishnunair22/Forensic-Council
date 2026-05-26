@@ -21,18 +21,28 @@ export function clearAuthCookies() {
 export function resetActiveInvestigation(queryClient?: QueryClient) {
   if (typeof window === "undefined") return;
 
-  // Expire the httpOnly access_token via backend Set-Cookie response (fire-and-forget).
-  // Always attempt server-side logout to ensure session is properly terminated.
-  // Without a CSRF token, the request may fail, but we still want to try.
   const csrfToken = readCookie("csrf_token");
-  const headers: Record<string, string> = {};
+  const mutationHeaders: Record<string, string> = {};
   if (csrfToken) {
-    headers["X-CSRF-Token"] = csrfToken;
+    mutationHeaders["X-CSRF-Token"] = csrfToken;
   }
+
+  // Terminate the backend pipeline for any running session before wiping local
+  // state.  Fire-and-forget: local cleanup proceeds regardless of response.
+  const runningSessionId = storage.getItem(STORAGE_KEYS.SESSION_ID);
+  if (runningSessionId) {
+    fetch(`/api/v1/sessions/${encodeURIComponent(runningSessionId)}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: mutationHeaders,
+    }).catch(() => {});
+  }
+
+  // Expire the httpOnly access_token via backend Set-Cookie response.
   fetch("/api/v1/auth/logout", {
     method: "POST",
     credentials: "include",
-    headers,
+    headers: mutationHeaders,
   }).catch(() => {});
 
   arbiterControl.abort();

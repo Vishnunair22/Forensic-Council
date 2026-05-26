@@ -1,28 +1,7 @@
 import type { NextConfig } from "next";
 import path from "path";
-
-/**
- * Chrome DevTools maps stack frames using source-map `sources` paths. Bare
- * Windows paths with spaces can be rejected as "illegal path"; keep dev-source
- * paths virtual and URL-encoded so Chrome does not treat them as host files.
- */
-function devtoolModulePathForChrome(resourcePath: string): string {
-  if (!resourcePath) return "webpack://forensic-council/unknown";
-  // Strip webpack loader prefixes (e.g. 'next-swc-loader!src/api.ts' -> 'src/api.ts')
-  const cleanPath = (resourcePath.split("!").pop() || resourcePath).replace(/\\/g, "/");
-  const cwd = process.cwd().replace(/\\/g, "/");
-  const withoutCwd = cleanPath.startsWith(`${cwd}/`)
-    ? cleanPath.slice(cwd.length + 1)
-    : cleanPath.replace(/^[A-Za-z]:\//, "");
-
-  const encodedPath = withoutCwd
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  return `webpack://forensic-council/${encodedPath || "unknown"}`;
-}
+// Turbopack is the default dev engine in Next.js 15. The webpack() override
+// and WATCHPACK_POLLING/CHOKIDAR env vars were removed — they are webpack-only.
 
 const nextConfig: NextConfig = {
   // ── Output ────────────────────────────────────────────────────────────────
@@ -68,10 +47,11 @@ const nextConfig: NextConfig = {
 
 
   // ── Turbopack (Next.js 15 default build engine) ───────────────────────────
-  // Declaring an explicit Turbopack config suppresses the
-  // "webpack config + no turbopack config" warning when Turbopack is enabled.
-  // The webpack config below is retained for the default Next.js dev server on
-  // Windows Docker bind mounts.
+  // Next.js 15 uses Turbopack by default for `next dev`. Declaring an explicit
+  // Turbopack config makes that choice unambiguous and suppresses the
+  // "no turbopack config found" warning.
+  // Dev file-watching in Docker uses Turbopack's own watcher — WATCHPACK_POLLING
+  // and CHOKIDAR_USEPOLLING are webpack-only knobs and are not needed.
   turbopack: {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
   },
@@ -93,38 +73,10 @@ const nextConfig: NextConfig = {
     parallelServerBuildTraces: process.env.NEXT_PARALLEL_SERVER_BUILD_TRACES === "1",
   },
 
-  // ── Dev-mode file watcher (Windows + Docker fallback) ────────────────────
-  // The Docker dev command uses `next dev` (webpack mode — webpack is the
-  // default in 15.5.x; --no-turbopack is not a valid flag in this build) so
-  // that WATCHPACK_POLLING=true and the poll interval below take effect.
-  // Turbopack ignores these vars; without polling, inotify events from the
-  // Windows host → WSL2 → container bind mount are silently dropped and HMR
-  // stops working. The source-map template also avoids Chrome "illegal path"
-  // errors for host paths with spaces.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  webpack: (config: any, { dev }: { dev: boolean }) => {
-    if (dev) {
-      config.watchOptions = {
-        poll: 500,
-        aggregateTimeout: 300,
-      };
-      // Use relative, URL-encoded paths for source maps to avoid "illegal path"
-      // errors with Windows absolute paths containing spaces.
-      config.output = {
-        ...config.output,
-        devtoolModuleFilenameTemplate: (info: { resourcePath: string }) =>
-          devtoolModulePathForChrome(info.resourcePath),
-      };
-    }
-    return config;
-  },
-
   // ── Image optimisation ────────────────────────────────────────────────────
   images: {
     // Next.js built-in WebP/AVIF conversion for any <Image> components.
     formats: ["image/avif", "image/webp"],
-    // Immutable cache: 1 year. Images are content-hashed so this is safe.
-    minimumCacheTTL: 31_536_000,
   },
 
   // ── Backend API Proxy ─────────────────────────────────────────────────────
@@ -148,7 +100,8 @@ const nextConfig: NextConfig = {
         // HTML pages — never cache: browser must revalidate on every visit.
         // Next.js 15 defaults to s-maxage=31536000 for static pages which
         // causes stale HTML to persist in the browser cache across deploys.
-        source: "/(evidence|result|session-expired)",
+        // The (.*) suffix ensures /result/[sessionId] and any nested paths match.
+        source: "/(evidence|result|session-expired)(.*)",
         headers: [
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
         ],

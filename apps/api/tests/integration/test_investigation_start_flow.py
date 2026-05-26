@@ -1,10 +1,12 @@
 import io
+import tempfile
+import os
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 
 from api.routes import investigation as investigation_routes
 from orchestration import investigation_runner
@@ -154,3 +156,71 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
         investigator_id="REQ-12345",
         original_filename="fake-file.jpg",
     )
+
+
+@pytest.mark.asyncio
+async def test_start_investigation_returns_503_when_redis_dedup_fails(monkeypatch):
+    """be-G-1: if Redis is unavailable during dedup check, return 503 and clean up the tmp file."""
+    import hashlib
+
+    file_obj = io.BytesIO(
+        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"
+    )
+    upload = UploadFile(filename="evidence.jpg", file=file_obj)
+    upload.size = len(file_obj.getvalue())
+    upload.headers = {"content-type": "image/jpeg"}
+
+    unlinked_paths: list[str] = []
+
+    original_unlink = Path.unlink
+
+    def fake_unlink(self, missing_ok=False):
+        unlinked_paths.append(str(self))
+
+    monkeypatch.setattr(Path, "unlink", fake_unlink)
+    monkeypatch.setattr(investigation_routes, "check_investigation_rate_limit", AsyncMock())
+    monkeypatch.setattr(investigation_routes, "check_daily_cost_quota", AsyncMock())
+
+    class FakeMagic:
+        @staticmethod
+        def from_buffer(_head, mime=True):
+            return "image/jpeg"
+
+    monkeypatch.setitem(__import__("sys").modules, "magic", FakeMagic)
+
+    class FakeImage:
+        size = (10, 10)
+
+        def verify(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("PIL.Image.open", lambda *_args, **_kwargs: FakeImage())
+
+    async def redis_raises():
+        raise ConnectionError("Redis is down")
+
+    monkeypatch.setattr(
+        "core.persistence.redis_client.get_redis_client",
+        redis_raises,
+    )
+
+    user = SimpleNamespace(user_id="tester", role=SimpleNamespace(value="investigator"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await investigation_routes.start_investigation(
+            file=upload,
+            case_id="CASE-9999999999",
+            investigator_id="REQ-99999",
+            current_user=user,
+        )
+
+    assert exc_info.value.status_code == 503, (
+        "Redis dedup failure must return 503, not fall through silently"
+    )
+    assert unlinked_paths, "Tmp file must be unlinked when Redis dedup raises"

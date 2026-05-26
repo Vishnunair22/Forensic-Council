@@ -19,7 +19,7 @@ export default function NotFound() {
      <h1 className="text-3xl font-black text-foreground tracking-tight">
       Page Not Found
      </h1>
-     <p className="text-slate-500 text-sm leading-relaxed max-w-xs mx-auto">
+     <p className="fc-text-muted text-sm leading-relaxed max-w-xs mx-auto">
       This route does not exist. The investigation system only serves
       defined forensic pipeline endpoints.
      </p>
@@ -35,7 +35,7 @@ export default function NotFound() {
      </Link>
      <Link
        href="/?upload=1"
-       className="flex-1 py-3 rounded-xl inline-flex items-center justify-center gap-2 font-semibold text-white/80 bg-white/[0.04] border border-white/[0.09] hover:bg-primary/[0.07] hover:border-primary/28 hover:text-primary transition-colors"
+       className="fc-btn-ghost flex-1 py-3"
      >
       <ArrowLeft className="w-4 h-4" aria-hidden="true" />
       New Investigation

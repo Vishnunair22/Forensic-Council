@@ -145,21 +145,7 @@
     pointer-events: none;
   }
 
-  body[data-fc-loading="1"]::after {
-    content: "Consensus Synthesis";
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    z-index: 10000;
-    transform: translate(-50%, -50%);
-    color: rgba(165, 200, 255, 0.72);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    pointer-events: none;
-  }
+  /* Loading label is rendered by GlobalLoadingOverlay — no CSS pseudo needed. */
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
@@ -270,11 +256,6 @@
       background: rgba(255,255,255,0.07);
     }
   }
-  @keyframes skeleton-shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
   /* ── Landing background animations ── */
   @keyframes fc-marker-blink {
     0%, 100% { opacity: 0.22; }

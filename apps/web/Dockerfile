@@ -83,6 +83,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/server ./apps/web/
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
+# Assert the standalone server entry-point is present. This fails fast if
+# outputFileTracingRoot or the Next.js standalone layout ever changes.
+RUN test -f /app/apps/web/server.js || { echo "ERROR: standalone server not found at /app/apps/web/server.js — check outputFileTracingRoot in next.config.ts"; exit 1; }
+
 RUN echo '# Bake check: if NEXT_PUBLIC_API_URL changes you MUST rebuild this image' >> /app/.bake_notice
 
 # Switch to non-root user before the process starts

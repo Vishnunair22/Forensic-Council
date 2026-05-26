@@ -72,41 +72,7 @@ echo "[2/3] Validating docker compose config..."
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env config -q
 echo "OK"
 
-# 3. Optional dev-tool checks (tool absent = skip; tool present + failure = fail)
-echo "[3/3] Optional dev-tool checks..."
-for tool in npm pre-commit uv; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        echo "  SKIP: $tool not installed (optional)"
-        continue
-    fi
-done
-
-# Only run lint/test if tools available
-if command -v pre-commit >/dev/null 2>&1; then
-    echo "  Running pre-commit..."
-    pre-commit run --all-files || echo "  SKIP pre-commit"
-fi
-
-if command -v npm >/dev/null 2>&1 && [ -f apps/web/package.json ]; then
-    echo "  Running npm ci..."
-    (cd apps/web && npm ci --prefer-offline --no-audit --no-fund) || { echo "FAILED: npm ci failed"; exit 1; }
-    echo "  Running npm type-check..."
-    (cd apps/web && npm run type-check) || { echo "FAILED: frontend type-check failed"; exit 1; }
-    echo "  Running npm lint..."
-    (cd apps/web && npm run lint) || { echo "FAILED: npm lint failed"; exit 1; }
-    echo "  Running npm test..."
-    (cd apps/web && npm run test -- --runInBand) || { echo "FAILED: npm test failed"; exit 1; }
-    echo "  Running npm build..."
-    (cd apps/web && npm run build) || { echo "FAILED: frontend build failed"; exit 1; }
-fi
-
-if command -v uv >/dev/null 2>&1 && [ -f apps/api/pyproject.toml ]; then
-    echo "  Running backend lint..."
-    (cd apps/api && uv run ruff check .) || { echo "FAILED: backend lint failed"; exit 1; }
-    echo "  Running backend pyright..."
-    (cd apps/api && uv run pyright) || { echo "FAILED: backend pyright failed"; exit 1; }
-fi
-
 echo "----------------------------------------------------"
 echo "SUCCESS: Production readiness check passed!"
 echo "----------------------------------------------------"
+echo "  Tip: run ./infra/validate_repo_health.sh to also lint/test the codebase (CI step, not required for deployment)."

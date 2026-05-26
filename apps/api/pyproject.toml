@@ -2,8 +2,9 @@
 name = "forensic_council"
 version = "1.7.0"
 description = "Multi-Agent Forensic Evidence Analysis System"
-# Docker and CI run Python 3.12. The broader range is kept in sync with uv.lock.
-requires-python = ">=3.11,<3.15"
+# Pinned to 3.12: praat-parselmouth and librosa lack wheels for 3.13+,
+# and Docker/CI both pin to 3.12. Widen only after those packages ship 3.13 wheels.
+requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 authors = [
     { name = "Forensic Council Team" }

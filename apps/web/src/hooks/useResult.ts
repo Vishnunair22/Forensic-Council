@@ -10,7 +10,7 @@ import {
   type ReportResponse,
   dbg
 } from "@/lib/api";
-import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS } from "@/lib/constants";
+import { ARBITER_POLL_INTERVAL_MS, ARBITER_POLL_MAX_ATTEMPTS, UI_STRINGS } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/types";
@@ -113,7 +113,7 @@ export function useResult(initialSessionId?: string) {
     setAgentTimeline(loadAgentTimelineForSession(sid, deep));
 
     if (ready) {
-      setArbiterMsg("Decrypting forensic ledger...");
+      setArbiterMsg(UI_STRINGS.DECRYPTING_LEDGER);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
     }
@@ -235,10 +235,15 @@ export function useResult(initialSessionId?: string) {
 
   useEffect(() => {
     if (reportQueryError && arbiterComplete) {
+      const msg = reportQueryError instanceof Error ? reportQueryError.message : "";
+      if (msg.includes("404")) {
+        router.push("/session-expired");
+        return;
+      }
       setErrorMsg("Failed to retrieve report. Please refresh.");
       setState("error");
     }
-  }, [reportQueryError, arbiterComplete]);
+  }, [reportQueryError, arbiterComplete, router]);
 
 // ── Arbiter status polling ───────────────────────────────────────────────────
    useEffect(() => {
@@ -247,14 +252,6 @@ export function useResult(initialSessionId?: string) {
     // Pre-flight session validation: ensure sessionId maps to a valid investigation
     if (!sessionId) {
       setState("empty");
-      return;
-    }
-
-    // Validate session exists in storage before polling
-    const storedSession = storage.getItem(STORAGE_KEYS.SESSION_ID);
-    if (sessionId !== storedSession) {
-      dbg.warn("[useResult] Session mismatch, redirecting to session-expired");
-      router.push("/session-expired");
       return;
     }
 
@@ -296,8 +293,7 @@ export function useResult(initialSessionId?: string) {
         timer = setTimeout(poll, pollInterval);
         pollInterval = Math.min(pollInterval * 1.3, 3000);
       } else if (!cancelled) {
-        setErrorMsg("Arbiter timed out. Session expired.");
-        setState("error");
+        router.push("/session-expired");
       }
     }
 
@@ -306,7 +302,7 @@ export function useResult(initialSessionId?: string) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [mounted, sessionId, arbiterComplete]);
+  }, [mounted, sessionId, arbiterComplete, router]);
 
   // History Persistence (Client Side Only)
   // F-H-10: mark historySavedRef true only AFTER the storage write succeeds,
@@ -329,12 +325,16 @@ export function useResult(initialSessionId?: string) {
       try {
         const stored = storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []);
         const filtered = (stored ?? []).filter((h) => !(h.sessionId === hItem.sessionId && h.type === hItem.type));
-        // P-H-2: cap client-side history at 50 entries to prevent
-        // unbounded localStorage growth and limit PII retention. Older
-        // entries are dropped FIFO; the most recent investigations stay
-        // visible in the History panel.
         const HISTORY_MAX = 50;
-        const next = [hItem, ...filtered].slice(0, HISTORY_MAX);
+        const THUMBNAIL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const next = [hItem, ...filtered]
+          .slice(0, HISTORY_MAX)
+          .map((h) =>
+            h.thumbnail && now - h.timestamp > THUMBNAIL_MAX_AGE_MS
+              ? { ...h, thumbnail: undefined }
+              : h,
+          );
         storage.setItem(STORAGE_KEYS.HISTORY, next, true);
         historySavedRef.current = true;
       } catch (e: unknown) {

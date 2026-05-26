@@ -9,7 +9,6 @@ Orchestration logic has been moved to orchestration/investigation_runner.py.
 import asyncio
 import hashlib
 import json
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -91,8 +90,6 @@ _ALLOWED_EXTENSIONS = frozenset(
     }
 )
 
-_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-\.]{1,128}$")
-
 # B-H-3: hold strong references to deferred-cleanup tasks so the GC
 # can't collect them mid-sleep and silently skip the file unlink.
 _deferred_cleanup_tasks: set[asyncio.Task[Any]] = set()
@@ -120,18 +117,6 @@ async def _detect_mime_from_head(head: bytes) -> str:
 def _append_chunk(path: Path, chunk: bytes) -> None:
     with path.open("ab") as f:
         f.write(chunk)
-
-
-def _validate_safe_id(value: str, field_name: str) -> None:
-    """Raise 422 if value contains unsafe characters."""
-    if not _SAFE_ID_RE.match(value):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Invalid {field_name}: must be 1-128 characters, "
-                "alphanumeric with hyphens, underscores, and dots only."
-            ),
-        )
 
 
 async def run_investigation_task(
@@ -469,9 +454,14 @@ async def start_investigation(
             raise
         except Exception as exc:
             logger.error(
-                "Evidence deduplication failed — Redis unavailable, allowing through",
+                "Evidence deduplication failed — Redis unavailable",
                 error=str(exc),
             )
+            tmp_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=503,
+                detail="Investigation service temporarily unavailable — Redis unreachable. Please retry.",
+            ) from exc
 
         if actual_mime.startswith("image/") and actual_mime != "image/gif":
             try:

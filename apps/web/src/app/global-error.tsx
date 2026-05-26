@@ -29,11 +29,10 @@ export default function GlobalError({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
           >
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-red-400/30 to-transparent rounded-t-3xl" />
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
             <motion.div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
-              style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.25)" }}
+              className="w-16 h-16 rounded-2xl bg-danger/10 border border-danger/25 flex items-center justify-center mb-6"
               animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
             >

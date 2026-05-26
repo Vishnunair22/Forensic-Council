@@ -39,6 +39,12 @@ function createStorage(store: Storage): AppStorage {
         );
       } catch (e: unknown) {
         if (isDev) console.warn(`[storage] Error writing key "${key}":`, e);
+        const isQuota =
+          e instanceof DOMException &&
+          (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED");
+        if (isQuota) {
+          window.dispatchEvent(new CustomEvent("fc_storage_quota_exceeded", { detail: { key } }));
+        }
       }
     },
 

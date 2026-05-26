@@ -41,7 +41,7 @@ export default function RouteError({
           System <span className="text-danger">Interrupted</span>
         </h1>
 
-        <p className="text-slate-400 mb-8 text-sm leading-relaxed text-center">
+        <p className="fc-text-muted mb-8 text-sm leading-relaxed text-center">
           An unexpected error occurred during the forensic analysis process. The
           system has safely halted — no data has been lost.
         </p>

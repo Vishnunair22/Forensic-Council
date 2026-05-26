@@ -45,6 +45,28 @@ for i in $(seq 1 120); do
   sleep 5
 done
 
+echo "⏳ Waiting for worker readiness (up to 5 min)..."
+WORKER_OK=0
+for i in $(seq 1 30); do
+  if "${COMPOSE[@]}" exec -T worker python /app/scripts/worker_healthcheck.py > /dev/null 2>&1; then
+    echo "✅ Worker healthy"
+    WORKER_OK=1
+    break
+  fi
+  sleep 10
+done
+if [[ "$WORKER_OK" -eq 0 ]]; then
+  echo "⚠️  Worker did not report healthy. Check logs before accepting investigations."
+  echo "   Run: docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml logs worker"
+fi
+
+echo "⏳ Verifying ML model cache..."
+if "${COMPOSE[@]}" exec -T backend python scripts/model_cache_check.py > /dev/null 2>&1; then
+  echo "✅ ML model cache verified."
+else
+  echo "⚠️  ML model cache check failed. First analysis may trigger a slow model download."
+fi
+
 echo ""
 echo "════════════════════════════════════════"
 echo "  Forensic Council — PRODUCTION running"

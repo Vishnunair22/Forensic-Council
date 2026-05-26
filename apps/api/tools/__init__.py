@@ -5,7 +5,7 @@ Tools Module
 Forensic analysis tools for evidence processing.
 """
 
-from tools.audio_tools import (
+from tools.audio import (
     anti_spoofing_detect,
     background_noise_consistency,
     codec_fingerprint,

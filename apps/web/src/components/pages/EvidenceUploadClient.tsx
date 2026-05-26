@@ -123,20 +123,39 @@ export function EvidenceUploadClient() {
     // F-C-3: compute shouldWarn INSIDE the handler so the latest pending-file
     // and session state are read at unload time. The previous closure captured
     // stale values from effect-run time.
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+    const isUploadInProgress = () => {
       const hasPendingFile = !!__pendingFileStore.file;
       const hasSessionId = !!storage.getItem(STORAGE_KEYS.SESSION_ID);
       const s = investigation.status;
       const isRunning = s === "analyzing" || s === "initiating" || s === "processing";
-      if (hasPendingFile && !hasSessionId && isRunning) {
+      return hasPendingFile && !hasSessionId && isRunning;
+    };
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isUploadInProgress()) {
         e.preventDefault();
         e.returnValue = ""; // Modern browser compliance
         return ""; // Legacy fallback
       }
     };
+
+    // Covers browser back/forward (including iOS Safari which skips beforeunload on route changes)
+    const onPopState = () => {
+      if (isUploadInProgress()) {
+        const confirmed = window.confirm(
+          "An upload is in progress. Leaving this page will cancel it. Continue?"
+        );
+        if (!confirmed) {
+          window.history.pushState(null, "", window.location.href);
+        }
+      }
+    };
+
     window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("popstate", onPopState);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("popstate", onPopState);
     };
   }, [investigation.status]);
 

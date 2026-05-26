@@ -100,7 +100,7 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
     }
     return {
       icon: File,
-      accentClass: "from-zinc-500/20 to-zinc-600/10 border-zinc-500/30 text-zinc-400",
+      accentClass: "from-white/[0.06] to-white/[0.03] border-white/[0.12] fc-text-muted",
       label: "Binary Evidence",
     };
   };

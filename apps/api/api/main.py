@@ -78,6 +78,7 @@ def _cors_allowed_origins_from_env() -> list[str]:
 
 
 _settings_import_error: Exception | None = None
+_settings_for_import = None
 try:
     _settings_for_import = get_settings()
 except Exception as exc:
@@ -110,6 +111,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "environment variables are set. Run: cp .env.example .env and fill all values."
         )
     app.state.settings = settings
+
+    if _settings_import_error is not None:
+        # Routes were not loaded at module import time because settings failed.
+        # Mark the app so the startup_gate_middleware refuses all API requests
+        # with 503 rather than returning misleading 404s.
+        app.state.startup_failed = True
+        logger.error(
+            "Settings failed to load at module import — API started without routes. "
+            "All requests will return 503 until the server is restarted with valid configuration.",
+            error=str(_settings_import_error),
+        )
     try:
         _env_max = int(os.environ.get("FORENSIC_MAX_WORKERS", "0"))
     except ValueError:
@@ -492,6 +504,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning(f"Graceful wait failed: {e}")
 
+    # 3.5 Drain pending deferred-cleanup tasks (tmp file unlinks scheduled 600 s out)
+    try:
+        from api.routes.investigation import _deferred_cleanup_tasks
+
+        pending_cleanups = [t for t in list(_deferred_cleanup_tasks) if not t.done()]
+        if pending_cleanups:
+            logger.info("Awaiting deferred cleanup tasks", count=len(pending_cleanups))
+            await asyncio.gather(*pending_cleanups, return_exceptions=True)
+    except Exception as e:
+        logger.warning("Deferred cleanup drain failed", error=str(e))
+
     # 4. Close in-flight pipeline connections
     try:
         from api.routes.investigation import cleanup_connections
@@ -603,6 +626,7 @@ _CSRF_EXEMPT_PATHS = {
     "/api/v1/health/ml-tools",
     "/api/v1/health/tools",
     "/api/v1/auth/login",
+    "/api/v1/auth/logout",
     "/api/v1/auth/refresh",
     "/docs",
     "/redoc",
@@ -910,6 +934,31 @@ async def diagnostic_middleware(request: Request, call_next):
         path=request.url.path,
         origin=origin,
     )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def startup_gate_middleware(request: Request, call_next):
+    """Refuse all requests with 503 when settings failed at module import.
+
+    When _settings_import_error is set, routes are not registered (the import
+    block at the bottom of this file is skipped). Without this gate every API
+    call returns a misleading 404 instead of a clear service-unavailable.
+    Health/liveness probes are exempted so orchestrators can detect the broken
+    state without triggering restart loops on a healthy liveness path.
+    """
+    if getattr(request.app.state, "startup_failed", False):
+        if request.url.path in {"/live", "/api/v1/live"}:
+            return await call_next(request)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "API configuration error — server started without valid settings. "
+                    "Check environment variables and restart."
+                )
+            },
+        )
     return await call_next(request)
 
 

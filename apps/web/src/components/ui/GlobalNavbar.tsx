@@ -4,11 +4,18 @@ import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useReducedMotion } from "framer-motion";
+import { Volume2, VolumeX } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
 import { resetActiveInvestigation } from "@/lib/appReset";
 import { storage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 function getPageLabel(pathname: string): string {
   if (pathname === "/") return "Overview";
@@ -21,13 +28,14 @@ function getPageLabel(pathname: string): string {
 export function GlobalNavbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { playSound } = useSound();
+  const { playSound, isMuted, toggleMute } = useSound();
   const prefersReducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isKeyboardUser, setIsKeyboardUser] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -104,29 +112,95 @@ export function GlobalNavbar() {
     };
   }, []);
 
+  const executeReset = useCallback(() => {
+    resetActiveInvestigation(queryClient);
+    if (pathname === "/") {
+      router.refresh();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      router.push("/");
+    }
+  }, [pathname, router, queryClient]);
+
   const handleLogoClick = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    const shouldReset = hasActiveSession || pathname !== "/";
-    playSound(shouldReset ? "reset" : "hum");
-
-    if (shouldReset) {
-      resetActiveInvestigation(queryClient);
-      if (pathname === "/") {
-        router.refresh();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } else {
-        router.push("/");
-      }
+    if (!hasActiveSession && pathname === "/") {
+      playSound("hum");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [pathname, router, playSound, hasActiveSession, queryClient]);
+    // If an active session exists, require confirmation before wiping state.
+    if (hasActiveSession) {
+      setConfirmResetOpen(true);
+      return;
+    }
+
+    playSound("reset");
+    executeReset();
+  }, [pathname, playSound, hasActiveSession, executeReset]);
 
   const pageLabel = getPageLabel(pathname);
 
+  // Shown only when NEXT_PUBLIC_API_URL is set, meaning API calls go directly
+  // to the backend port (bypassing Caddy's security headers and rate limiting).
+  const directApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
   return (
+    <>
+    <Dialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
+      <DialogContent
+        className="max-w-sm w-full p-6 space-y-4"
+        aria-describedby="reset-confirm-desc"
+      >
+        <DialogTitle className="text-base font-semibold fc-text-primary">
+          Abort investigation?
+        </DialogTitle>
+        <p id="reset-confirm-desc" className="text-sm fc-text-secondary leading-relaxed">
+          The current analysis will be terminated and all local session data cleared. This cannot be undone.
+        </p>
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmResetOpen(false);
+              playSound("reset");
+              executeReset();
+            }}
+            className="flex-1 py-2.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/25 transition-colors"
+          >
+            Abort &amp; Reset
+          </button>
+          <DialogClose asChild>
+            <button
+              type="button"
+              className="flex-1 py-2.5 rounded-full fc-surface-elevated border border-border-muted fc-text-secondary text-sm font-semibold hover:border-border-strong transition-colors"
+            >
+              Keep Going
+            </button>
+          </DialogClose>
+        </div>
+      </DialogContent>
+    </Dialog>
+    {directApiUrl && (
+      <div
+        role="alert"
+        aria-live="polite"
+        className="fixed top-0 inset-x-0 z-[60] flex items-center justify-center gap-2 px-4 py-1 text-xs font-mono"
+        style={{
+          background: "rgba(234,179,8,0.15)",
+          borderBottom: "1px solid rgba(234,179,8,0.35)",
+          color: "rgba(253,224,71,0.9)",
+        }}
+      >
+        <span aria-hidden="true">⚠</span>
+        <span>
+          DEV MODE — API calls bypass Caddy (no rate-limit / security headers).{" "}
+          <span style={{ opacity: 0.7 }}>NEXT_PUBLIC_API_URL={directApiUrl}</span>
+        </span>
+      </div>
+    )}
     <nav
       aria-label="Main navigation"
       onFocusCapture={() => { setIsVisible(true); setIsKeyboardUser(true); }}
@@ -136,7 +210,7 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
-      className={`fixed top-0 inset-x-0 z-50 h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${
+      className={`fixed inset-x-0 z-50 h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${directApiUrl ? "top-7" : "top-0"} ${
         isVisible || isKeyboardUser
           ? "translate-y-0 opacity-100"
           : "-translate-y-full opacity-0 pointer-events-none"
@@ -200,6 +274,19 @@ export function GlobalNavbar() {
             </div>
           )}
 
+          {/* Mute toggle */}
+          <button
+            type="button"
+            onClick={toggleMute}
+            aria-label={isMuted ? "Unmute sound effects" : "Mute sound effects"}
+            aria-pressed={isMuted}
+            className="fc-btn-ghost p-0 w-9 h-9 min-h-0 shrink-0"
+          >
+            {isMuted
+              ? <VolumeX size={16} aria-hidden="true" />
+              : <Volume2 size={16} aria-hidden="true" />}
+          </button>
+
           {/* Session indicator */}
           {hasActiveSession ? (
             <div className="flex items-center gap-2 shrink-0">
@@ -219,5 +306,6 @@ export function GlobalNavbar() {
         </div>
       </div>
     </nav>
+    </>
   );
 }

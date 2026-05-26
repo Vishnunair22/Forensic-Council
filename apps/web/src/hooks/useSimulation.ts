@@ -93,6 +93,7 @@ export const useSimulation = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [_reconnectStatusMessage, setReconnectStatusMessage] = useState<string | null>(null);
+  const [streamStalled, setStreamStalled] = useState(false);
   const [pipelineMessage, setPipelineMessage] = useState<string>("");
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
   const [arbiterStatus, setArbiterStatus] = useState<string | null>(null);
@@ -106,6 +107,8 @@ export const useSimulation = ({
   const wsRef = useRef<WebSocket | null>(null);
   const sseRef = useRef<{ close: () => void } | null>(null);
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
+  const lastMessageAtRef = useRef<number>(0);
+  const stallTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSessionIdRef = useRef<string | null>(null);
   /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
   const expectingPipelineCompleteRef = useRef(false);
@@ -115,7 +118,7 @@ export const useSimulation = ({
   // WebSocket reconnection config with exponential backoff
   const reconnectConfig = useRef({
     initialDelay: 1000,
-    maxDelay: 30000,
+    maxDelay: 5000,
     backoffFactor: 2,
     maxRetries: 12,
   });
@@ -597,8 +600,13 @@ export const useSimulation = ({
             // Respond to server keepalive pings so the idle monitor stays reset.
             if ((update as { type: string }).type === "PING") {
               wsRef.current?.send(JSON.stringify({ type: "PONG", timestamp: Date.now() }));
+              lastMessageAtRef.current = Date.now();
+              setStreamStalled(false);
               return;
             }
+
+            lastMessageAtRef.current = Date.now();
+            setStreamStalled(false);
 
             dbg.log("[WebSocket] Received update, adding to queue:", update);
 
@@ -839,6 +847,37 @@ export const useSimulation = ({
     [],
   );
 
+  // Stream-stall detector: fires when no WS/SSE message arrives for 30 s
+  // while the pipeline is actively running.  Exposed as `streamStalled` so the
+  // UI can surface a "Stream stalled – try refreshing" nudge.
+  useEffect(() => {
+    const STALL_MS = 30_000;
+    const activeStatuses: string[] = ["analyzing", "initiating", "processing"];
+    if (!activeStatuses.includes(status)) {
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
+      setStreamStalled(false);
+      return;
+    }
+
+    const schedule = () => {
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) setStreamStalled(true);
+      }, STALL_MS);
+    };
+
+    schedule();
+    return () => {
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
+    };
+  }, [status]);
+
   // Cleanup WebSocket on unmount only.
   // IMPORTANT: This must NOT depend on sessionId — if it did, the cleanup would
   // fire every time connectWebSocket calls setSessionId(), killing the newly
@@ -850,6 +889,10 @@ export const useSimulation = ({
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
+      }
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
       }
       if (arbiterPollRef.current) {
         clearInterval(arbiterPollRef.current);
@@ -1133,5 +1176,6 @@ const resumeInvestigation = useCallback(
     revealQueue: [],
     revealPending: false,
     isReconnecting,
+    streamStalled,
   };
 };

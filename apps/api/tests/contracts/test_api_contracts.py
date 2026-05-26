@@ -487,6 +487,31 @@ class TestArbiterStatusEndpoint:
         body = resp.json()
         assert body["status"] in ("not_found", "running")
 
+    def test_arbiter_status_completed_metadata_returns_db_report_id(self, client):
+        """be-G-2: when Redis metadata says 'completed', report_id must come from DB, not session_id."""
+        db_report_id = "db-real-report-id-abc123"
+        with (
+            patch("api.routes._session_state.get_final_report", return_value=None),
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+            patch("core.session_persistence.get_session_persistence") as mock_gsp,
+        ):
+            mock_meta.return_value = {"status": "completed", "investigator_id": OWNER_USER_ID}
+            mock_meta_sessions.return_value = {"status": "completed", "investigator_id": OWNER_USER_ID}
+            mock_persistence = MagicMock()
+            mock_persistence.get_report = AsyncMock(return_value={"report_id": db_report_id, "status": "completed"})
+            mock_gsp.return_value = mock_persistence
+            resp = client.get(
+                f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
+                headers=_csrf(client, _auth()),
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "complete"
+        assert body.get("report_id") == db_report_id, (
+            f"report_id must be the DB value '{db_report_id}', not the session_id"
+        )
+
 
 class TestReportEndpoint:
     """GET /api/v1/sessions/{id}/report"""
@@ -1034,3 +1059,205 @@ class TestArbiterStatusUnreachable:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] in ("not_found", "running"), f"Expected safe fallback: {body}"
+
+
+class TestTerminateSession:
+    """DELETE /api/v1/sessions/{id}"""
+
+    def test_terminate_unlinks_evidence_tmp_file(self, client):
+        """be-A-15: terminate_session must unlink the evidence tmp file recorded in metadata."""
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            tmp_path = f.name
+
+        _meta_payload = {"file_path": tmp_path, "investigator_id": OWNER_USER_ID}
+
+        try:
+            assert os.path.exists(tmp_path)
+
+            with (
+                # Patch both the module-level import in sessions.py (used for the
+                # pre-delete file-path read) AND the _session_state symbol that
+                # assert_session_access imports inside its function body.
+                patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+                patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta_state,
+                patch("api.routes._session_state.get_active_pipeline", return_value=None),
+                patch("api.routes._session_state.pop_active_task", return_value=None),
+                patch("api.routes._session_state.remove_active_pipeline"),
+                patch("api.routes._session_state.broadcast_update", new_callable=AsyncMock),
+                patch("api.routes._session_state.get_session_websockets", return_value=[]),
+                patch("api.routes._session_state.clear_session_websockets"),
+                patch("api.routes.sessions.get_redis_client") as mock_redis_getter,
+                patch("core.session_persistence.get_session_persistence") as mock_gsp,
+            ):
+                mock_meta_sessions.return_value = _meta_payload
+                mock_meta_state.return_value = _meta_payload
+                mock_redis = AsyncMock()
+                mock_redis.delete = AsyncMock()
+                mock_redis.hdel = AsyncMock()
+                mock_redis.client = AsyncMock()
+                mock_redis.client.lrange = AsyncMock(return_value=[])
+                mock_pipe_ctx = AsyncMock()
+                mock_pipe_ctx.delete = AsyncMock()
+                mock_pipe_ctx.rpush = AsyncMock()
+                mock_pipe_ctx.execute = AsyncMock(return_value=[])
+                mock_redis.client.pipeline.return_value.__aenter__ = AsyncMock(return_value=mock_pipe_ctx)
+                mock_redis.client.pipeline.return_value.__aexit__ = AsyncMock(return_value=False)
+                mock_redis_getter.return_value = mock_redis
+                mock_persistence = AsyncMock()
+                mock_persistence.update_session_status = AsyncMock()
+                mock_gsp.return_value = mock_persistence
+
+                # Correct URL: DELETE /api/v1/sessions/{id} (no "/terminate" suffix)
+                resp = client.delete(
+                    f"/api/v1/sessions/{SESSION_ID}",
+                    headers=_csrf(client, _auth()),
+                )
+
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert resp.json()["status"] == "terminated"
+            assert not os.path.exists(tmp_path), (
+                "Evidence tmp file must be unlinked on termination — "
+                "file_path must be read BEFORE Redis metadata keys are deleted"
+            )
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+
+# ===========================================================================
+# PHASE 4 CONTRACT TESTS
+# ===========================================================================
+
+
+class TestPDFDownload:
+    """GET /api/v1/sessions/{id}/report/pdf must return Content-Type: application/pdf."""
+
+    def test_pdf_download_returns_application_pdf(self, client):
+        """be-A-13/be-D-3: PDF endpoint must produce real PDF bytes, not silently return HTML."""
+        from api.schemas import ReportDTO
+
+        dto = ReportDTO(**_minimal_report_dto())
+        mock_pipeline = MagicMock()
+        mock_pipeline._final_report = dto
+
+        with (
+            patch("api.routes.sessions.get_active_pipeline", return_value=mock_pipeline),
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+        ):
+            mock_meta.return_value = {"status": "completed", "investigator_id": OWNER_USER_ID}
+            mock_meta_sessions.return_value = {"status": "completed", "investigator_id": OWNER_USER_ID}
+
+            resp = client.get(
+                f"/api/v1/sessions/{SESSION_ID}/report/pdf",
+                headers=_csrf(client, _auth()),
+            )
+
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        content_type = resp.headers.get("content-type", "")
+        assert "application/pdf" in content_type, (
+            f"PDF endpoint must return Content-Type: application/pdf, got: {content_type!r}. "
+            "fpdf2 is in deps — install it or fix the exporter."
+        )
+        assert len(resp.content) > 100, "PDF response body must be non-empty bytes"
+
+    def test_pdf_download_has_content_disposition_attachment(self, client):
+        """PDF response must carry Content-Disposition: attachment with a .pdf filename."""
+        from api.schemas import ReportDTO
+
+        dto = ReportDTO(**_minimal_report_dto())
+        mock_pipeline = MagicMock()
+        mock_pipeline._final_report = dto
+
+        with (
+            patch("api.routes.sessions.get_active_pipeline", return_value=mock_pipeline),
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+        ):
+            mock_meta.return_value = {"status": "completed", "investigator_id": OWNER_USER_ID}
+            mock_meta_sessions.return_value = {"status": "completed", "investigator_id": OWNER_USER_ID}
+
+            resp = client.get(
+                f"/api/v1/sessions/{SESSION_ID}/report/pdf",
+                headers=_csrf(client, _auth()),
+            )
+
+        assert resp.status_code == 200
+        cd = resp.headers.get("content-disposition", "")
+        assert "attachment" in cd, f"Content-Disposition must include 'attachment': {cd!r}"
+        assert ".pdf" in cd, f"Content-Disposition filename must end with .pdf: {cd!r}"
+
+    def test_pdf_download_requires_auth(self, client):
+        resp = client.get(f"/api/v1/sessions/{SESSION_ID}/report/pdf")
+        assert resp.status_code in (401, 403)
+
+
+class TestDedupRedisDown503:
+    """POST /api/v1/investigate returns 503 when Redis is unavailable during dedup."""
+
+    def test_redis_down_during_dedup_returns_503(self, client):
+        """be-A-8: If Redis is unreachable during the dedup check, return 503, not 200."""
+        from PIL import Image
+
+        img = Image.new("RGB", (50, 50), color="green")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        file_bytes = buf.getvalue()
+
+        with (
+            patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
+        ):
+            mock_queue_getter.return_value = AsyncMock()
+            mock_redis_getter.side_effect = ConnectionError("Redis unavailable")
+
+            resp = client.post(
+                "/api/v1/investigate",
+                headers=_csrf(client, _auth()),
+                files={"file": ("evidence.jpg", io.BytesIO(file_bytes), "image/jpeg")},
+                data={"case_id": "CASE-DEDUP-503", "investigator_id": "INVESTIGATOR-001"},
+            )
+
+        assert resp.status_code == 503, (
+            f"Redis-down dedup must return 503, got {resp.status_code}: {resp.text}"
+        )
+        body = resp.json()
+        assert "unavailable" in body.get("detail", "").lower() or "redis" in body.get("detail", "").lower(), (
+            f"503 detail should mention unavailability: {body}"
+        )
+
+
+class TestResumeTerminalStatus:
+    """POST /api/v1/sessions/{id}/resume must reject terminal-state investigations."""
+
+    @pytest.mark.parametrize("terminal_status", ["completed", "error", "terminated", "superseded", "interrupted"])
+    def test_resume_terminal_status_returns_400(self, client, terminal_status):
+        """be-A-16: resuming a terminal investigation must return 400, not write a stale decision key."""
+        with (
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+            patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
+        ):
+            mock_meta.return_value = {
+                "status": terminal_status,
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_meta_sessions.return_value = {
+                "status": terminal_status,
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_redis_getter.return_value = _make_redis_mock()
+
+            resp = client.post(
+                f"/api/v1/sessions/{SESSION_ID}/resume",
+                headers=_csrf(client, _auth()),
+                json={"deep_analysis": False},
+            )
+
+        assert resp.status_code == 400, (
+            f"Resuming a '{terminal_status}' investigation must return 400, "
+            f"got {resp.status_code}: {resp.text}"
+        )

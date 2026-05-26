@@ -167,11 +167,20 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         OBJECT_DETECTOR_LABEL="DETR object detector"
     fi
 
-    # Need exact HF model families (OpenCLIP + SpeechBrain ECAPA + audio deepfake detector),
-    # an object detector (DETR by default, YOLO only when AGPL mode is explicit),
-    # torchvision ResNet, and EasyOCR. Count checks alone can pass with the wrong
-    # cached model, so keep both exact and aggregate checks.
-    if [ "${HF_HUBS:-0}" -lt 3 ] || [ "${HF_BLOBS:-0}" -lt 3 ] || [ "${CLIP_READY:-0}" -lt 1 ] || [ "${ECAPA_READY:-0}" -lt 1 ] || [ "${AASIST_READY:-0}" -lt 1 ] || [ "${OBJECT_DETECTOR_READY:-0}" -lt 1 ] || [ "${TORCH_WEIGHTS:-0}" -lt 1 ] || [ "${EASYOCR_FILES:-0}" -lt 2 ]; then
+    # Per-model presence map: each required model family must pass its own check.
+    # Aggregate hub/blob counts are omitted — they can pass with the wrong cached
+    # models and do not add safety beyond the per-model checks below.
+    # Required set: OpenCLIP, SpeechBrain ECAPA, audio deepfake (AASIST),
+    #               object detector (DETR default / YOLO with AGPL flag),
+    #               torchvision ResNet, EasyOCR.
+    CLIP_OK=0;  [ "${CLIP_READY:-0}"            -ge 1 ] && CLIP_OK=1
+    ECAPA_OK=0; [ "${ECAPA_READY:-0}"           -ge 1 ] && ECAPA_OK=1
+    AASIST_OK=0;[ "${AASIST_READY:-0}"          -ge 1 ] && AASIST_OK=1
+    OBJ_OK=0;   [ "${OBJECT_DETECTOR_READY:-0}" -ge 1 ] && OBJ_OK=1
+    TORCH_OK=0; [ "${TORCH_WEIGHTS:-0}"         -ge 1 ] && TORCH_OK=1
+    OCR_OK=0;   [ "${EASYOCR_FILES:-0}"         -ge 2 ] && OCR_OK=1
+
+    if [ "$CLIP_OK" -eq 0 ] || [ "$ECAPA_OK" -eq 0 ] || [ "$AASIST_OK" -eq 0 ] || [ "$OBJ_OK" -eq 0 ] || [ "$TORCH_OK" -eq 0 ] || [ "$OCR_OK" -eq 0 ]; then
         echo ""
         echo "============================================================"
         echo "  ML cache incomplete - downloading models before startup"
@@ -189,7 +198,7 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Model download complete. Log: /tmp/model_download.log"
     else
         echo "  ML model volumes already populated - skipping download."
-        echo "  Found: $HF_HUBS model hubs, $HF_BLOBS blob dirs, OpenCLIP=$CLIP_READY, ECAPA=$ECAPA_READY, AASIST=$AASIST_READY, $OBJECT_DETECTOR_LABEL=$OBJECT_DETECTOR_READY, $TORCH_WEIGHTS Torch weights, $EASYOCR_FILES EasyOCR files"
+        echo "  Found: OpenCLIP=$CLIP_READY ECAPA=$ECAPA_READY AASIST=$AASIST_READY $OBJECT_DETECTOR_LABEL=$OBJECT_DETECTOR_READY TorchWeights=$TORCH_WEIGHTS EasyOCR=$EASYOCR_FILES"
     fi
 fi
 

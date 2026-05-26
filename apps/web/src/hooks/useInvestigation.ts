@@ -24,6 +24,7 @@ import {
   AGENTS as AGENTS_DATA,
   INVESTIGATION_REQUEST_TIMEOUT_MS,
   ARBITER_POLL_INTERVAL_MS,
+  UI_STRINGS,
 } from "@/lib/constants";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
@@ -175,6 +176,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
   const resumeInFlightRef = useRef(false);
+
+  useEffect(() => {
+    const onQuota = () => {
+      toast.destructive({
+        title: "Storage limit reached",
+        description: "Local investigation data could not be saved. Clear browser storage and retry.",
+      });
+    };
+    window.addEventListener("fc_storage_quota_exceeded", onQuota);
+    return () => window.removeEventListener("fc_storage_quota_exceeded", onQuota);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -732,7 +744,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
     setIsNavigating(true);
     setArbiterDeliberating(true);
-    setArbiterLiveText("Compiling agent findings...");
+    setArbiterLiveText(UI_STRINGS.COMPILING_FINDINGS);
     const ARBITER_MIN_DISPLAY_MS = 4000;
     const _arbiterStartTime = Date.now();
     let navigationStarted = false;
@@ -885,13 +897,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
     setIsNavigating(true);
     setArbiterDeliberating(true);
-    setArbiterLiveText("Final report synthesis requested. Compiling deep analysis findings.");
+    setArbiterLiveText(UI_STRINGS.FINAL_SYNTHESIS);
     const ARBITER_MIN_DISPLAY_MS = 4000;
     const _arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
-      await resumeInvestigation(false);
+      const arbiterSt = await getArbiterStatus(sid).catch(() => null);
+      if (arbiterSt?.status !== "complete") {
+        await resumeInvestigation(false);
+      }
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 600_000, arbiterAbortControllerRef.current.signal);
       if (!ok) throw new Error("Report synthesis timed out");
@@ -943,7 +958,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     phase === "initial";
   const allAgentsDone = phase === "deep"
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
-    : expectedCompletedCount >= expectedAgentIds.size;
+    : (status === "awaiting_decision" || expectedCompletedCount >= expectedAgentIds.size);
 
   useEffect(() => {
     if ((awaitingDecision || (phase === "deep" && allAgentsDone)) && !analysisCompleteSoundedRef.current) {

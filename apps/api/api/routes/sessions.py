@@ -185,6 +185,21 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
             pass
     clear_session_websockets(session_id)
 
+    # Capture file path BEFORE deleting Redis metadata keys — the metadata
+    # key is deleted below and get_active_pipeline_metadata would return None
+    # if we queried after the delete.
+    _evidence_file_path: str | None = None
+    try:
+        _pre_delete_meta = await get_active_pipeline_metadata(session_id)
+        if _pre_delete_meta:
+            _evidence_file_path = _pre_delete_meta.get("file_path")
+    except Exception as _fp_err:
+        logger.debug(
+            "Could not read evidence file path before termination cleanup",
+            session_id=session_id,
+            error=str(_fp_err),
+        )
+
     redis = await get_redis_client()
     await redis.delete(
         f"forensic:session:metadata:{session_id}",
@@ -217,6 +232,17 @@ async def terminate_session(session_id: str, current_user: User = Depends(get_cu
         await persistence.update_session_status(session_id, "terminated", "Terminated by user")
     except Exception as exc:
         logger.warning("Failed to persist termination", session_id=session_id, error=str(exc))
+
+    if _evidence_file_path:
+        try:
+            from pathlib import Path
+            Path(_evidence_file_path).unlink(missing_ok=True)
+        except Exception as _unlink_err:
+            logger.debug(
+                "Evidence tmp file unlink failed on termination",
+                session_id=session_id,
+                error=str(_unlink_err),
+            )
 
     return {"status": "terminated", "session_id": session_id}
 
@@ -281,7 +307,16 @@ async def get_arbiter_status(
             if metadata:
                 status = metadata.get("status", "running")
                 if status == "completed":
-                    return {"status": "complete", "report_id": session_id}
+                    real_report_id = session_id
+                    try:
+                        from core.session_persistence import get_session_persistence as _gsp
+                        _p = await _gsp()
+                        _db = await _p.get_report(session_id)
+                        if _db and _db.get("report_id"):
+                            real_report_id = str(_db["report_id"])
+                    except Exception:
+                        pass
+                    return {"status": "complete", "report_id": real_report_id}
                 if status == "error":
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
                 if status == "paused_resume_requested":
@@ -308,7 +343,8 @@ async def get_arbiter_status(
             if db_row:
                 s = db_row.get("status", "")
                 if s == "completed":
-                    return {"status": "complete", "report_id": session_id}
+                    db_report_id = str(db_row.get("report_id") or session_id)
+                    return {"status": "complete", "report_id": db_report_id}
                 if s in ("running", "pending"):
                     return {"status": "running", "message": "Investigation in progress…"}
                 if s == "error":
@@ -835,9 +871,29 @@ async def resume_investigation(
             detail="You do not have access to this investigation",
         )
 
-    # Determine phase-scoped decision key from pipeline state
+    # Determine phase-scoped decision key from pipeline state.
+    # Reject during the transitional window where status is already being actioned
+    # to prevent writing the wrong phase key.
     redis = await get_redis_client()
     pipeline_status = metadata.get("status", "")
+    if pipeline_status == "paused_resume_requested":
+        return {
+            "status": "running",
+            "phase": "deep" if request.deep_analysis else "initial",
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+            "message": "Resume already in progress",
+        }
+
+    _TERMINAL_STATUSES = frozenset(
+        {"completed", "error", "terminated", "superseded", "interrupted"}
+    )
+    if pipeline_status in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot resume a {pipeline_status} investigation",
+        )
+
     if pipeline_status == "awaiting_deep_report":
         decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
     else:
