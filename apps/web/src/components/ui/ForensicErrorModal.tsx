@@ -145,7 +145,7 @@ export function ForensicErrorModal({
                   {/* Close button for accessibility */}
                   <Dialog.Close asChild>
                     <button
-                      className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center text-white/30 hover:text-white/90 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/50 rounded"
+                      className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center fc-text-muted hover:text-white/90 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/50 rounded"
                       aria-label="Close"
                     >
                       <X className="w-5 h-5" />

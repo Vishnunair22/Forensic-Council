@@ -492,11 +492,11 @@ export function AgentFindingCard({
             </div>
             <div className="flex items-center gap-2.5 text-sm font-mono font-bold fc-text-muted flex-wrap">
               <span>{meta.role}</span>
-              <span className="text-white/25">·</span>
+              <span className="fc-text-faint">·</span>
               <span>{realFindings.length} checks</span>
               {totalTimingMs > 0 && (
                 <>
-                  <span className="text-white/25">·</span>
+                  <span className="fc-text-faint">·</span>
                   <Clock className="w-3.5 h-3.5" />
                   <span>{totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}</span>
                 </>
@@ -607,7 +607,7 @@ export function AgentFindingCard({
             {bypassedFindings.length > 0 && (
               <div className="rounded-2xl border border-white/[0.06] bg-transparent px-5 py-4">
                 <div className="flex items-center gap-2 mb-2.5">
-                  <Info className="w-4 h-4 text-white/45" />
+                  <Info className="w-4 h-4 fc-text-muted" />
                   <span className="text-xs font-black tracking-wide text-white/55">
                     Bypassed Tools ({bypassedFindings.length})
                   </span>

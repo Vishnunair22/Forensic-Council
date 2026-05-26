@@ -4,7 +4,6 @@ import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useReducedMotion } from "framer-motion";
-import { Volume2, VolumeX } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
 import { resetActiveInvestigation } from "@/lib/appReset";
@@ -17,18 +16,10 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
-function getPageLabel(pathname: string): string {
-  if (pathname === "/") return "Overview";
-  if (pathname.startsWith("/evidence")) return "";
-  if (pathname.startsWith("/result")) return "Investigation";
-  if (pathname.startsWith("/session-expired")) return "Session Expired";
-  return "Forensic Council";
-}
-
 export function GlobalNavbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { playSound, isMuted, toggleMute } = useSound();
+  const { playSound } = useSound();
   const prefersReducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
@@ -141,8 +132,6 @@ export function GlobalNavbar() {
     executeReset();
   }, [pathname, playSound, hasActiveSession, executeReset]);
 
-  const pageLabel = getPageLabel(pathname);
-
   // Shown only when NEXT_PUBLIC_API_URL is set, meaning API calls go directly
   // to the backend port (bypassing Caddy's security headers and rate limiting).
   const directApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -185,8 +174,7 @@ export function GlobalNavbar() {
     </Dialog>
     {directApiUrl && (
       <div
-        role="alert"
-        aria-live="polite"
+        role="status"
         className="fixed top-0 inset-x-0 z-[60] flex items-center justify-center gap-2 px-4 py-1 text-xs font-mono"
         style={{
           background: "rgba(234,179,8,0.15)",
@@ -219,7 +207,7 @@ export function GlobalNavbar() {
         borderRadius: 0,
         border: "none",
         borderBottom: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 1px 0 rgba(147,197,253,0.10), 0 8px 40px rgba(0,0,0,0.45)",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.45)",
       }}
     >
       {/* Blue bottom accent gradient */}
@@ -251,59 +239,6 @@ export function GlobalNavbar() {
         >
           <BrandLogo size="sm" isHovered={isHovered} />
         </button>
-
-        {/* Right side */}
-        <div className="flex items-center gap-3 min-w-0">
-          {/* Page label — hidden on smallest screens */}
-          {pageLabel && (
-            <div
-              className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full shrink-0"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-              }}
-            >
-              <span
-                className="w-1 h-1 rounded-full shrink-0"
-                style={{ background: "rgba(147,197,253,0.55)" }}
-                aria-hidden="true"
-              />
-              <span className="fc-eyebrow fc-text-muted truncate">
-                {pageLabel}
-              </span>
-            </div>
-          )}
-
-          {/* Mute toggle */}
-          <button
-            type="button"
-            onClick={toggleMute}
-            aria-label={isMuted ? "Unmute sound effects" : "Mute sound effects"}
-            aria-pressed={isMuted}
-            className="fc-btn-ghost p-0 w-9 h-9 min-h-0 shrink-0"
-          >
-            {isMuted
-              ? <VolumeX size={16} aria-hidden="true" />
-              : <Volume2 size={16} aria-hidden="true" />}
-          </button>
-
-          {/* Session indicator */}
-          {hasActiveSession ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <span
-                className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
-                style={{
-                  background: "rgba(96,165,250,0.90)",
-                  boxShadow: "0 0 6px rgba(96,165,250,0.65)",
-                }}
-              />
-            </div>
-          ) : (
-            <span className="fc-eyebrow fc-text-faint hidden md:inline shrink-0">
-              FC — Multi-Agent
-            </span>
-          )}
-        </div>
       </div>
     </nav>
     </>

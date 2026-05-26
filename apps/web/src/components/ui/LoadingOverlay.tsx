@@ -63,7 +63,7 @@ export function LoadingOverlay({
     <motion.div
       aria-busy="true"
       aria-label="Analysis in progress, please wait"
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-background/96 backdrop-blur-3xl overflow-hidden"
+      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-background/96 overflow-hidden"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={

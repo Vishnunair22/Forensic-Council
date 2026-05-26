@@ -152,7 +152,7 @@ export function ArbiterCard({ status, thinking, phase, allAgentsDone }: ArbiterC
               ) : isPreWarming || isSynthesizing ? (
                 <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0 mt-0.5" />
               ) : (
-                <Activity className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
+                <Activity className="w-4 h-4 fc-text-faint shrink-0 mt-0.5" />
               )}
               <div className="flex flex-col gap-1">
                 <AnimatePresence mode="wait">

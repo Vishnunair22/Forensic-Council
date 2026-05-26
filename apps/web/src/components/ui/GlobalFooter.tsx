@@ -1,4 +1,13 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 export function GlobalFooter() {
+  const pathname = usePathname();
+
+  // Hide on result pages where the report itself serves as the authoritative document
+  if (pathname.startsWith("/result")) return null;
+
   return (
     <footer className="w-full mt-auto relative z-10" role="contentinfo" aria-label="Site footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

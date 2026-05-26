@@ -73,7 +73,7 @@ export function ArbiterDeliberationOverlay({
           key="arbiter-overlay"
           aria-busy="true"
           aria-label="Consensus Synthesis in progress"
-          className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-black/80 backdrop-blur-3xl overflow-hidden"
+          className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 overflow-hidden"
           initial={prefersReducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.3, ease: "easeIn" } }}
@@ -130,10 +130,10 @@ export function ArbiterDeliberationOverlay({
                 <span>Encryption Status</span>
                 <span className="tabular-nums">T+{formatTime(elapsed)}</span>
               </div>
-              <div className="h-2 w-full bg-black/50 border border-success/20 rounded-full relative overflow-hidden">
+              <div className="h-2 w-full bg-white/[0.06] border border-success/20 rounded-full relative overflow-hidden">
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-success rounded-full"
-                  style={{ boxShadow: "0 0 10px rgba(var(--color-success-rgb), 0.8)" }}
+                  style={{ boxShadow: "none" }}
                   initial={{ width: "0%" }}
                   animate={prefersReducedMotion ? {} : {
                     width: ["0%", "25%", "35%", "65%", "70%", "90%", "95%", "100%"],

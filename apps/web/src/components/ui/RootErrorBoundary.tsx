@@ -23,11 +23,19 @@ export class RootErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(_error: Error, _errorInfo: React.ErrorInfo) {
+    // Clear all forensic session storage rather than a hand-picked subset so
+    // no stale flow-control flags survive the error boundary recovery.
     try {
-      sessionStorage.removeItem("fc_show_loading");
-      sessionStorage.removeItem("fc_handoff_fired");
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith("fc_") || key.startsWith("forensic_"))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => sessionStorage.removeItem(k));
     } catch {
-      // Storage might be full or disabled
+      // Storage might be full or disabled — safe to ignore
     }
   }
 
@@ -79,7 +87,7 @@ export class RootErrorBoundary extends Component<Props, State> {
                   </div>
                   <div className="flex justify-between items-center text-xs font-mono">
                     <span className="fc-text-faint">UTC Time</span>
-                    <span className="text-white/60">{utcStamp}</span>
+                    <span className="fc-text-muted">{utcStamp}</span>
                   </div>
                 </div>
 

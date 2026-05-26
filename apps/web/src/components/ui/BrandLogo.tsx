@@ -60,6 +60,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
           animate={{ opacity: isHovered ? 1 : 0.55 }}
           transition={{ duration: 0.2 }}
           className="absolute w-1 h-1 rounded-full"
+          // eslint-disable-next-line no-restricted-syntax
           style={{ background: "rgba(165,200,255,0.95)", boxShadow: "0 0 6px rgba(79,142,247,0.8)" }}
         />
 
@@ -71,7 +72,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
             fontSize: size === "lg" ? "11px" : "9px",
             color: isHovered ? "rgba(220,235,255,1)" : "rgba(165,200,255,0.85)",
             letterSpacing: "0.06em",
-            textShadow: "0 0 10px rgba(79,142,247,0.6)",
+            textShadow: "0 0 10px rgba(79,142,247,0.6)", // eslint-disable-line no-restricted-syntax
           }}
         >
           FC

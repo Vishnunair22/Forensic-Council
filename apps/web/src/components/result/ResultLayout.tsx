@@ -46,6 +46,19 @@ interface ResultLayoutProps {
   initialSessionId?: string;
 }
 
+// Hoisted outside component to prevent new object allocation on each render
+const REPORT_CONTAINER_VARIANTS = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
+} as const;
+
+const REPORT_ITEM_VARIANTS = {
+  hidden: { opacity: 0, y: 4 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.16 } },
+} as const;
+
+const EMPTY_VARIANTS = {} as const;
+
 export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const rs = useResult(initialSessionId);
   const prefersReduced = useReducedMotion();
@@ -110,7 +123,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
       {/* ── Tab Nav ── */}
       <nav
-        className="fixed top-16 left-0 right-0 z-modal border-b border-white/[0.06] bg-background/85 backdrop-blur-md"
+        className="fixed top-16 left-0 right-0 z-modal border-b border-white/[0.06] bg-background/95"
         aria-label="Report sections"
       >
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-2">
@@ -160,18 +173,21 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
       {/* ── Main Content ── */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-4 space-y-0">
-        {/* History tab panel */}
-        {rs.activeTab === "history" && (
-          <div role="tabpanel" id="tabpanel-history" aria-labelledby="tab-history">
-            <HistoryPanel
-              onSelect={(sid) => {
-                rs.selectSession(sid);
-                rs.setActiveTab("analysis");
-              }}
-              currentSessionId={originalSessionIdRef.current}
-            />
-          </div>
-        )}
+        {/* History tab panel — always rendered; toggled with hidden for ARIA correctness */}
+        <div
+          role="tabpanel"
+          id="tabpanel-history"
+          aria-labelledby="tab-history"
+          hidden={rs.activeTab !== "history"}
+        >
+          <HistoryPanel
+            onSelect={(sid) => {
+              rs.selectSession(sid);
+              rs.setActiveTab("analysis");
+            }}
+            currentSessionId={originalSessionIdRef.current}
+          />
+        </div>
 
         {/* Analysis tab panel */}
         <div
@@ -201,14 +217,11 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
             <motion.div
               initial={prefersReduced ? false : "hidden"}
               animate="visible"
-              variants={prefersReduced ? {} : {
-                hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
-              }}
+              variants={prefersReduced ? EMPTY_VARIANTS : REPORT_CONTAINER_VARIANTS}
               className="space-y-4"
             >
               {/* 1. Evidence Header */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <EvidenceHeader
                   fileName={rs.fileName}
                   mimeType={rs.mimeType}
@@ -219,7 +232,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 2. Verdict + Metric Strip */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <VerdictSection
                   vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
                   confPct={toPct(rs.report.overall_confidence)}
@@ -233,14 +246,14 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
               {/* 3. Degradation Banner — only when analysis was degraded */}
               {(rs.report.degradation_flags ?? []).length > 0 && (
-                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                   <DegradationBanner flags={rs.report.degradation_flags ?? []} />
                 </motion.div>
               )}
 
               {/* 4. Intelligence Brief */}
               {(keyFindings.length > 0 || rs.report.verdict_sentence || rs.report.executive_summary) && (
-                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                   <IntelligenceBrief
                     verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
                     keyFindings={keyFindings}
@@ -254,7 +267,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               )}
 
               {/* 4.5. Agents Strip — after narrative so verdict context is established */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <AgentsStrip
                   perAgentMetrics={rs.report.per_agent_metrics}
                   perAgentSummary={rs.report.per_agent_summary}
@@ -264,7 +277,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 5. Agent Findings */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <AgentAnalysisTab
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -274,13 +287,13 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
               {/* 5.5. Deep Model Telemetry — only when cross-modal fusion actually ran */}
               {rs.report?.cross_modal_fusion && Object.keys(rs.report.cross_modal_fusion).length > 0 && (
-                <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                   <DeepModelTelemetry report={rs.report} />
                 </motion.div>
               )}
 
               {/* 6. Analysis Metrics */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <FindingsMetadata
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -288,7 +301,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 7. Execution Timeline */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <ExecutionTimeline
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
@@ -298,7 +311,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 8. Report Integrity */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <ReportIntegrity
                   report={rs.report}
                   sessionId={rs.sessionId}
@@ -307,7 +320,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               </motion.div>
 
               {/* 9. Navigation */}
-              <motion.div variants={prefersReduced ? {} : { hidden: { opacity: 0, y: 4 }, visible: { opacity: 1, y: 0, transition: { duration: 0.16 } } }}>
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <PageNavigation onHome={rs.handleHome} onNew={rs.handleNew} />
               </motion.div>
             </motion.div>
@@ -354,8 +367,11 @@ function ExportDropdown({
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const prefersReduced = useReducedMotion();
 
+  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -363,6 +379,41 @@ function ExportDropdown({
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Close on Escape; arrow-key navigation within the menu
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
+        if (!items || items.length === 0) return;
+        const focused = document.activeElement as HTMLElement;
+        const idx = Array.from(items).indexOf(focused);
+        const next = e.key === "ArrowDown"
+          ? (idx + 1) % items.length
+          : (idx - 1 + items.length) % items.length;
+        items[next]?.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  // Focus first menu item when opened
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => {
+        menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+      });
+    }
   }, [open]);
 
   const handlePdf = useCallback(async () => {
@@ -450,12 +501,15 @@ function ExportDropdown({
   return (
     <div className="relative shrink-0" ref={ref}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={exporting}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/[0.10] fc-text-muted hover:text-white hover:bg-white/[0.05] hover:border-white/[0.15] transition-all duration-[160ms] fc-eyebrow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border-muted fc-text-muted hover:fc-text-primary hover:bg-white/[0.05] hover:border-border-strong transition-all duration-[160ms] fc-eyebrow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
         aria-label="Export report"
+        aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls="export-menu"
       >
         <Download className="w-3.5 h-3.5" />
         Export
@@ -465,35 +519,51 @@ function ExportDropdown({
       <AnimatePresence>
         {open && (
           <motion.div
+            ref={menuRef}
+            id="export-menu"
+            role="menu"
+            aria-label="Export format options"
             initial={prefersReduced ? false : { opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={prefersReduced ? {} : { opacity: 0, y: -4 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute right-0 top-full mt-1.5 w-44 py-1.5 z-tooltip fc-surface-elevated overflow-hidden"
+            className="absolute right-0 top-full mt-1.5 w-52 py-1.5 z-tooltip fc-surface-elevated overflow-hidden"
           >
             <button
               type="button"
+              role="menuitem"
               onClick={handlePdf}
-              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs fc-text-muted hover:text-white hover:bg-white/[0.05] transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs fc-text-muted hover:fc-text-primary hover:bg-white/[0.05] transition-colors focus-visible:outline-none focus-visible:bg-white/[0.05]"
             >
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              PDF Report
+              <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="flex flex-col items-start text-left">
+                <span>PDF Report</span>
+                <span className="fc-text-muted opacity-70">Best for printing</span>
+              </span>
             </button>
             <button
               type="button"
+              role="menuitem"
               onClick={handleDocx}
-              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs fc-text-muted hover:text-white hover:bg-white/[0.05] transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs fc-text-muted hover:fc-text-primary hover:bg-white/[0.05] transition-colors focus-visible:outline-none focus-visible:bg-white/[0.05]"
             >
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              Word (.docx)
+              <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="flex flex-col items-start text-left">
+                <span>Word (.docx)</span>
+                <span className="fc-text-muted opacity-70">Editable document</span>
+              </span>
             </button>
             <button
               type="button"
+              role="menuitem"
               onClick={handleJson}
-              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs fc-text-muted hover:text-white hover:bg-white/[0.05] transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs fc-text-muted hover:fc-text-primary hover:bg-white/[0.05] transition-colors focus-visible:outline-none focus-visible:bg-white/[0.05]"
             >
-              <FileJson className="w-3.5 h-3.5 shrink-0" />
-              JSON Export
+              <FileJson className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="flex flex-col items-start text-left">
+                <span>JSON Export</span>
+                <span className="fc-text-muted opacity-70">Raw structured data</span>
+              </span>
             </button>
           </motion.div>
         )}

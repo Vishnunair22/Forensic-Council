@@ -1,6 +1,21 @@
 import { z } from "zod";
 import { VERDICTS } from "@/types";
 
+/**
+ * Zod schema for BriefUpdate — the WebSocket message envelope.
+ * Lenient (.passthrough()) so unknown future fields don't break parsing.
+ * Use this at the WS boundary so downstream code is fully typed.
+ */
+export const BriefUpdateSchema = z.object({
+  type: z.string(),
+  session_id: z.string().optional().default(""),
+  agent_id: z.string().nullable().optional().default(null),
+  agent_name: z.string().nullable().optional().default(null),
+  message: z.string().optional().default(""),
+  data: z.record(z.string(), z.unknown()).nullable().optional().default(null),
+  updates: z.array(z.unknown()).optional(),
+}).passthrough();
+
 export const AgentResultSchema = z.object({
   id: z.string(),
   name: z.string(),

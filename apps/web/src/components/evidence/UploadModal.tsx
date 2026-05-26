@@ -119,11 +119,10 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
             scale: 1.02,
             borderColor: "rgba(var(--color-primary-rgb), 0.8)",
             backgroundColor: "rgba(var(--color-primary-rgb), 0.08)",
-            boxShadow: "0 0 20px rgba(var(--color-primary-rgb), 0.15) inset",
           },
         }}
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
-        className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed backdrop-blur-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
+        className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
       >
         {/* Simulated Scanner Laser (only visible when dragging) */}
         <AnimatePresence>
@@ -134,7 +133,6 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               exit={{ opacity: 0 }}
               transition={{ top: { duration: 2, repeat: Infinity, ease: "linear" }, opacity: { duration: 0.2 } }}
               className="absolute left-0 right-0 h-[2px] bg-primary z-10 pointer-events-none"
-              style={{ boxShadow: "0 0 12px 2px rgba(var(--color-primary-rgb), 0.6)" }}
               aria-hidden="true"
             />
           )}
@@ -202,7 +200,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
               <p className="text-xs font-mono uppercase tracking-wider fc-text-primary animate-pulse" aria-live="assertive">
                 &gt; Establishing Secure Channel...
               </p>
-              <span className="text-[10px] font-mono fc-text-muted">ENC: AES-256</span>
+              <span className="text-xs font-mono fc-text-muted">ENC: AES-256</span>
             </div>
             {/* Indeterminate Data Bar */}
             <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden relative" role="progressbar" aria-valuetext="Encrypting and uploading file">

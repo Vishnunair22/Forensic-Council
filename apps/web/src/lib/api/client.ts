@@ -66,6 +66,24 @@ function _parseReportDTO(raw: unknown): ReportDTO {
   return raw as ReportDTO;
 }
 
+/**
+ * Attempt to refresh the auth token. Uses the shared apiFetch wrapper so that
+ * a 401 from the refresh endpoint triggers the session-expired redirect instead
+ * of silently failing in the WS reconnect path.
+ * Returns true if the refresh succeeded.
+ */
+export async function refreshAuthToken(): Promise<boolean> {
+  try {
+    const response = await apiFetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: "POST",
+    });
+    return response.ok;
+  } catch {
+    dbg.warn("[api] Token refresh network error");
+    return false;
+  }
+}
+
 export class ProtocolWarmingError extends Error {
   constructor(message = "Protocol warming up — system dependencies initializing") {
     super(message);

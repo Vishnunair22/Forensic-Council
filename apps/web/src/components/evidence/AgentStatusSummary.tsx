@@ -125,7 +125,7 @@ export function AgentStatusSummary({
               <Icon className={clsx(
                 "w-3.5 h-3.5 shrink-0 transition-opacity",
                 status === "waiting" ? "opacity-30" : "",
-                status === "complete" || status === "running" ? accent.textClass : "text-white/30"
+                status === "complete" || status === "running" ? accent.textClass : "fc-text-faint"
               )} />
 
               <span className={clsx(

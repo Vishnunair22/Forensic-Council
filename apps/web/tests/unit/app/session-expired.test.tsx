@@ -29,7 +29,7 @@ describe("SessionExpiredPage", () => {
     render(<SessionExpiredPage />);
 
     expect(screen.getByRole("heading", { name: /session expired/i })).toBeInTheDocument();
-    expect(screen.getByText(/authenticate again to continue forensic analysis/i)).toBeInTheDocument();
+    expect(screen.getByText(/Your session has expired or is no longer valid/i)).toBeInTheDocument();
   });
 
   it("routes back to the dashboard", () => {

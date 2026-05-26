@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Loader2,
   FileText,
@@ -76,10 +76,18 @@ interface ActiveAgentsPanelProps {
   agentUpdates: AgentProgressDisplayProps["agentUpdates"];
   completedAgents: AgentUpdate[];
   getAgentStatus: (id: string) => AgentStatus;
+  expanded?: boolean;
+  setExpanded?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-function ActiveAgentsPanel({ visibleAgents = [], agentUpdates: _agentUpdates = {}, completedAgents: _completedAgents = [], getAgentStatus }: ActiveAgentsPanelProps) {
-  const [expanded, setExpanded] = useState(false);
+function ActiveAgentsPanel({
+  visibleAgents = [],
+  agentUpdates: _agentUpdates = {},
+  completedAgents: _completedAgents = [],
+  getAgentStatus,
+  expanded = false,
+  setExpanded,
+}: ActiveAgentsPanelProps) {
   const prefersReducedMotion = useReducedMotion();
   const agentUpdates = _agentUpdates || {};
   const completedAgents = _completedAgents;
@@ -93,7 +101,7 @@ function ActiveAgentsPanel({ visibleAgents = [], agentUpdates: _agentUpdates = {
     <div className="fc-surface-quiet rounded-2xl overflow-hidden">
       <button
         type="button"
-        onClick={() => setExpanded(v => !v)}
+        onClick={() => setExpanded?.(v => !v)}
         aria-expanded={expanded}
         aria-controls="active-agents-panel"
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 fc-transition fc-focus-ring rounded-2xl"
@@ -288,6 +296,7 @@ export function AgentProgressDisplay({
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
+  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
     typeof process !== "undefined" && process.env.NODE_ENV === "test" ? false : true
@@ -338,8 +347,13 @@ export function AgentProgressDisplay({
 
   const skippedAgents = useMemo(() => {
     if (!mimeType) return [];
-    return allValidAgents.filter(a => !isAgentSupportedForMime(a.id, mimeType));
-  }, [mimeType]);
+    return allValidAgents.filter(a => {
+      const completed = completedAgents.find((c) => c.agent_id === a.id);
+      const liveStatus = agentUpdates[a.id]?.status;
+      const isSkippedOrUnsupported = completed?.status === "skipped" || liveStatus === "skipped" || liveStatus === "unsupported";
+      return !isAgentSupportedForMime(a.id, mimeType) || isSkippedOrUnsupported;
+    });
+  }, [mimeType, completedAgents, agentUpdates]);
 
   const isQueuePending = /queue|queued|enqueued|awaiting available forensic worker|waiting for an available forensic worker/i.test(
     `${pipelineMessage || ""} ${progressText || ""}`
@@ -388,6 +402,20 @@ export function AgentProgressDisplay({
 
   const statusText = pipelineMessage || (allAgentsDone ? "Analysis phase complete" : progressText || "Coordination in progress");
 
+  // Throttled SR-only text so screen readers aren't overwhelmed by rapid pipeline updates
+  const srTextRef = useRef<string>("");
+  const srThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [srText, setSrText] = useState("");
+  useEffect(() => {
+    if (statusText === srTextRef.current) return;
+    srTextRef.current = statusText;
+    if (srThrottleRef.current) clearTimeout(srThrottleRef.current);
+    srThrottleRef.current = setTimeout(() => setSrText(statusText), 2000);
+    return () => {
+      if (srThrottleRef.current) clearTimeout(srThrottleRef.current);
+    };
+  }, [statusText]);
+
   return (
     <div
       className="flex flex-col w-full max-w-7xl mx-auto gap-8 pb-16 pt-2"
@@ -419,13 +447,12 @@ export function AgentProgressDisplay({
               ? "Initial Verification"
               : "Phase 2"}
           </span>
-          <p
-            className="text-sm font-normal fc-text-secondary ml-auto hidden md:block"
-            role="status"
-            aria-live="polite"
-            aria-atomic="false"
-          >
+          <p className="text-sm font-normal fc-text-secondary ml-auto hidden md:block" aria-hidden="true">
             {statusText}
+          </p>
+          {/* Throttled SR announcement — updates at most once per 2 s to prevent read-every-frame */}
+          <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {srText}
           </p>
         </motion.div>
 
@@ -444,6 +471,8 @@ export function AgentProgressDisplay({
             agentUpdates={agentUpdates}
             completedAgents={completedAgents}
             getAgentStatus={getAgentStatus}
+            expanded={activeAgentsExpanded}
+            setExpanded={setActiveAgentsExpanded}
           />
           {skippedAgents.length > 0 && (
             <SkippedAgentsPanel
@@ -456,64 +485,65 @@ export function AgentProgressDisplay({
       </div>
 
       {/* ── Agent Cards Grid ────────────────────────────────────────────── */}
-      <div className="w-full flex flex-col gap-5">
-        <motion.div
-          className={`grid gap-4 md:gap-5 xl:gap-6 ${
-            visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
-            : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
-            : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-          }`}
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-        >
-          <AnimatePresence mode="popLayout">
-            {isBootstrapping ? (
-              visibleAgents.map((agent) => (
-                <div
-                  key={`skeleton-${agent.id}`}
-                  className="w-full h-40 rounded-2xl bg-white/5 border border-white/5 p-5 flex flex-col gap-4 relative overflow-hidden"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 fc-skeleton" />
-                    <div className="flex-1 flex flex-col gap-2">
-                      <div className="h-4 bg-white/10 rounded w-1/3 fc-skeleton" />
-                      <div className="h-3 bg-white/5 rounded w-1/2 fc-skeleton" />
+      {activeAgentsExpanded && (
+        <div className="w-full flex flex-col gap-5">
+          <motion.div
+            className={`grid gap-4 md:gap-5 xl:gap-6 ${
+              visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
+              : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
+              : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+            }`}
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+          >
+            <AnimatePresence mode="popLayout">
+              {isBootstrapping ? (
+                visibleAgents.map((agent) => (
+                  <div
+                    key={`skeleton-${agent.id}`}
+                    className="w-full h-40 rounded-2xl bg-white/5 border border-white/5 p-5 flex flex-col gap-4 relative overflow-hidden"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white/5 fc-skeleton" />
+                      <div className="flex-1 flex flex-col gap-2">
+                        <div className="h-4 bg-white/10 rounded w-1/3 fc-skeleton" />
+                        <div className="h-3 bg-white/5 rounded w-1/2 fc-skeleton" />
+                      </div>
+                    </div>
+                    <div className="flex-1 mt-2">
+                      <div className="h-3 bg-white/5 rounded w-full fc-skeleton" />
+                      <div className="h-3 bg-white/5 rounded w-5/6 mt-2 fc-skeleton" />
                     </div>
                   </div>
-                  <div className="flex-1 mt-2">
-                    <div className="h-3 bg-white/5 rounded w-full fc-skeleton" />
-                    <div className="h-3 bg-white/5 rounded w-5/6 mt-2 fc-skeleton" />
-                  </div>
-                </div>
-              ))
-            ) : (
-              visibleAgents.map((agent) => (
-                <motion.div
-                  key={agent.id}
-                  layout
-                  variants={itemVariants}
-                  exit={{ opacity: 0, transition: { duration: 0.16 } }}
-                >
-                  <AgentStatusCard
-                    agentId={agent.id}
-                    name={agent.name}
-                    badge={agent.badge}
-                    status={getAgentStatus(agent.id)}
-                    thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
-                    liveUpdate={agentUpdates[agent.id]}
-                    completedData={completedAgents.find((c) => c.agent_id === agent.id)}
-                    phase={phase}
-                    isExpanded={!!expandedCards[agent.id]}
-                    onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
-                  />
-                </motion.div>
-              ))
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-      </div>
+                ))
+              ) : (
+                visibleAgents.map((agent) => (
+                  <motion.div
+                    key={agent.id}
+                    layout
+                    variants={itemVariants}
+                    exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                  >
+                    <AgentStatusCard
+                      agentId={agent.id}
+                      name={agent.name}
+                      badge={agent.badge}
+                      status={getAgentStatus(agent.id)}
+                      thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
+                      liveUpdate={agentUpdates[agent.id]}
+                      completedData={completedAgents.find((c) => c.agent_id === agent.id)}
+                      phase={phase}
+                      isExpanded={!!expandedCards[agent.id]}
+                      onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
+                    />
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+      )}
 
       {/* ── Elevated Initial Analysis Decision Gate ──────────────────────────────── */}
       <AnimatePresence>
@@ -525,19 +555,16 @@ export function AgentProgressDisplay({
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8 relative z-20"
           >
-            <div className="relative overflow-hidden bg-black/60 backdrop-blur-xl rounded-2xl p-6 md:p-8 border border-primary/30 shadow-[0_0_40px_rgba(var(--color-primary-rgb),0.15)]">
-              {/* Scanning laser line */}
-              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
-
-              <div className="flex items-center justify-center gap-3 mb-6">
-                <Activity className="w-5 h-5 text-primary animate-pulse" />
-                <p className="text-center text-base font-mono font-medium text-primary">
-                  System Prompt: Command Required
+            <div className="fc-surface-elevated rounded-2xl p-6 md:p-8">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <Activity className="w-4 h-4 text-primary" aria-hidden="true" />
+                <p className="text-center text-sm font-semibold fc-text-primary">
+                  Decision Required
                 </p>
               </div>
 
-              <p className="text-center text-base fc-text-secondary mb-8 max-w-md mx-auto">
-                Baseline heuristics complete. Do you wish to accept the current findings or deploy neural-net models for deep pixel/audio forensics?
+              <p className="text-center text-sm fc-text-secondary mb-6 max-w-md mx-auto">
+                Baseline verification complete. Accept the current findings or run deep-model analysis for higher confidence.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -557,11 +584,9 @@ export function AgentProgressDisplay({
                   data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating}
-                  className="w-full sm:flex-[1.5] relative group overflow-hidden fc-btn-primary flex items-center justify-center gap-2 h-12"
+                  className="w-full sm:flex-[1.5] relative fc-btn-primary flex items-center justify-center gap-2 h-12"
                 >
-                  {/* Hover Glare Effect */}
-                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
-                  <span className="relative z-10 flex items-center gap-2">
+                  <span className="flex items-center gap-2">
                     {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cpu className="w-4 h-4" />}
                     <span>Authorize Deep Analysis</span>
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

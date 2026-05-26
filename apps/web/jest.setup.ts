@@ -23,6 +23,15 @@ if (typeof window !== "undefined") {
   window.scrollTo = jest.fn();
   global.scrollTo = jest.fn();
 
+  if (!window.fetch) {
+    // @ts-ignore
+    window.fetch = jest.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(""),
+    }));
+  }
+
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: jest.fn().mockImplementation((query: string) => ({
@@ -36,6 +45,15 @@ if (typeof window !== "undefined") {
       dispatchEvent: jest.fn(),
     })),
   });
+}
+
+if (typeof global.fetch === "undefined") {
+  // @ts-ignore
+  global.fetch = jest.fn().mockImplementation(() => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(""),
+  }));
 }
 
 // Mock useSound globally to avoid errors during test rendering

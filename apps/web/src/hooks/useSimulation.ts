@@ -12,7 +12,8 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 
-import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, API_BASE, dbg } from "@/lib/api";
+import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, dbg, refreshAuthToken } from "@/lib/api";
+import { BriefUpdateSchema } from "@/lib/schemas";
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/types";
 
@@ -325,14 +326,14 @@ export const useSimulation = ({
                       created_at: new Date().toISOString(),
                     };
                     // Persist to storage so the modal survives a page refresh
-                    try { storage.setItem(STORAGE_KEYS.HITL_CHECKPOINT, checkpoint, true); } catch { /* ignore */ }
+                    try { storage.setItem(STORAGE_KEYS.HITL_CHECKPOINT, checkpoint, true); } catch (e) { dbg.warn("[Simulation] HITL checkpoint persist failed:", e); }
                     setHitlCheckpoint(checkpoint);
                   }
                   break;
 
                 case "HITL_EXPIRED":
                   setHitlCheckpoint(null);
-                  try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+                  try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
                   break;
 
                 case "AGENT_COMPLETE":
@@ -595,7 +596,12 @@ export const useSimulation = ({
 
         const handleMessage = (event: MessageEvent) => {
           try {
-            const update: BriefUpdate = JSON.parse(event.data);
+            const raw = JSON.parse(event.data);
+            const parsed = BriefUpdateSchema.safeParse(raw);
+            if (!parsed.success) {
+              dbg.warn("[WebSocket] Message failed schema validation — using raw:", parsed.error.message);
+            }
+            const update: BriefUpdate = (parsed.success ? parsed.data : raw) as BriefUpdate;
 
             // Respond to server keepalive pings so the idle monitor stays reset.
             if ((update as { type: string }).type === "PING") {
@@ -932,29 +938,20 @@ export const useSimulation = ({
       const checkDelay = Math.max(0, timeToExpiry - 30000);
 
       tokenExpiryTimeout = setTimeout(() => {
-        // Token expires soon — attempt refresh
-        fetch(`${API_BASE}/api/v1/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        })
-          .then((response) => {
-            if (!response.ok) {
-              sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
-              setErrorMessage("Session refresh failed. Re-authentication will be attempted on the next API request.");
-              return;
-            }
-
-            const currentSessionId = sessionId || storage.getItem(STORAGE_KEYS.SESSION_ID);
-            if (currentSessionId) {
-              connectWebSocket(currentSessionId, true);
-            }
-            // Schedule next check
-            scheduleTokenExpiryCheck();
-          })
-          .catch(() => {
+        // Token expires soon — attempt refresh via the shared API client so 401
+        // triggers the session-expired redirect instead of silently failing.
+        refreshAuthToken().then((ok) => {
+          if (!ok) {
             sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
-            setErrorMessage("Session refresh could not reach the backend. Keeping the current analysis view open.");
-          });
+            setErrorMessage("Session refresh failed. Re-authentication will be attempted on the next request.");
+            return;
+          }
+          const currentSessionId = sessionId || storage.getItem(STORAGE_KEYS.SESSION_ID);
+          if (currentSessionId) {
+            connectWebSocket(currentSessionId, true);
+          }
+          scheduleTokenExpiryCheck();
+        });
       }, checkDelay);
     };
     scheduleTokenExpiryCheck();
@@ -969,7 +966,7 @@ export const useSimulation = ({
     try {
       const stored = storage.getItem<HITLCheckpoint>(STORAGE_KEYS.HITL_CHECKPOINT, true);
       if (stored) setHitlCheckpoint(stored);
-    } catch { /* ignore */ }
+    } catch (e) { dbg.warn("[Simulation] HITL checkpoint restore failed:", e); }
   }, []);
 
   const resetSimulation = useCallback(() => {
@@ -981,7 +978,7 @@ export const useSimulation = ({
     setAgentUpdates({});
     setHitlCheckpoint(null);
     setIsDeepHITL(false);
-    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
     try { storage.removeItem(STORAGE_KEYS.SESSION_ID); } catch { /* ignore */ }
     setErrorMessage(null);
     setReconnectStatusMessage(null);
@@ -1008,7 +1005,7 @@ export const useSimulation = ({
     setAgentUpdates({});
     setHitlCheckpoint(null);
     setIsDeepHITL(false);
-    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
     setErrorMessage(null);
     setReconnectStatusMessage(null);
     setPipelineMessage("Preparing forensic agents...");
@@ -1020,7 +1017,7 @@ export const useSimulation = ({
   // Dismiss HITL checkpoint
   const dismissCheckpoint = useCallback(() => {
     setHitlCheckpoint(null);
-    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch { /* ignore */ }
+    try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
   }, []);
 
 

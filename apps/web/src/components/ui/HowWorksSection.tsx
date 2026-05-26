@@ -64,12 +64,12 @@ export function HowWorksSection() {
               </div>
 
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10">
-                <item.icon className="w-6 h-6 fc-text-secondary fc-transition group-hover:scale-105 group-hover:text-primary" />
+                <item.icon className="w-6 h-6 fc-text-secondary fc-transition group-hover:text-primary" />
               </div>
             </div>
 
             {/* Card */}
-            <div className="w-full fc-surface-quiet rounded-2xl p-6 relative overflow-hidden h-full flex flex-col items-center group fc-transition hover:border-primary/40 hover:scale-[1.01]">
+            <div className="w-full fc-surface-quiet rounded-2xl p-6 relative overflow-hidden h-full flex flex-col items-center group fc-transition hover:border-primary/40">
               <h3 className="text-lg font-bold fc-text-primary mb-3 text-center tracking-tight">
                 {item.title}
               </h3>

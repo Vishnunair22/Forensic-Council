@@ -61,7 +61,7 @@ export default function RootLayout({
           <QueryProvider>
             <GlobalLoadingOverlay />
             <GlobalNavbar />
-            <main className="flex-1 relative z-10 pt-16" id="main-content" tabIndex={-1} style={{ outline: "none" }}>
+            <main className="flex-1 relative z-10 pt-16" id="main-content" tabIndex={-1}>
               {children}
             </main>
 

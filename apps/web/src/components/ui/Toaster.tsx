@@ -66,7 +66,7 @@ function ToastCard({
   return (
     <div
       className={clsx(
-        "relative flex items-start gap-3.5 px-4 py-3.5 rounded-xl border backdrop-blur-2xl shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] overflow-hidden",
+        "relative flex items-start gap-3.5 px-4 py-3.5 rounded-xl border shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] overflow-hidden",
         "animate-in slide-in-from-right-full fade-in duration-300",
         style.bg,
         style.border,
@@ -99,7 +99,7 @@ function ToastCard({
       <button
         type="button"
         onClick={onDismiss}
-        className="p-1 rounded-lg text-white/18 hover:text-white/60 transition-colors duration-150 shrink-0 mt-0.5"
+        className="p-1 rounded-lg fc-text-muted hover:text-white/60 transition-colors duration-150 shrink-0 mt-0.5"
         aria-label="Dismiss"
       >
         <X className="w-3 h-3" />

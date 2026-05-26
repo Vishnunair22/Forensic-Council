@@ -27,16 +27,10 @@ export function HomeClient() {
   const prefersReducedMotion = useReducedMotion();
   return (
     <div className="relative min-h-screen">
-      {/* Decorative Background Glows & Grid */}
+      {/* Decorative Background Grids — LandingBackground (in layout.tsx) already provides the ambient glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
-        {/* Grids */}
         <div className="absolute inset-0 bg-dot-grid opacity-30" />
         <div className="absolute inset-0 bg-grid-small opacity-15 [mask-image:radial-gradient(ellipse_at_center,white_50%,transparent_100%)]" />
-        
-        {/* Glassmorphism ambient glow meshes */}
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[140px] opacity-70" />
-        <div className="absolute top-[25%] right-[-15%] w-[60%] h-[60%] bg-accent/8 rounded-full blur-[160px] opacity-60" />
-        <div className="absolute bottom-[10%] left-[15%] w-[45%] h-[45%] bg-primary/6 rounded-full blur-[120px] opacity-50" />
       </div>
 
       {/* ── Hero ── */}

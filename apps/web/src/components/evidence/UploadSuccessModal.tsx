@@ -144,14 +144,14 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
             <Lock className="w-4.5 h-4.5" aria-hidden="true" />
           </motion.div>
           <div>
-            <p className="text-[10px] font-mono fc-text-muted uppercase tracking-wider">Status: Secured</p>
+            <p className="text-xs font-mono fc-text-muted uppercase tracking-wider">Status: Secured</p>
             <h2 className="text-lg font-heading font-bold fc-text-primary">Evidence Sealed</h2>
           </div>
         </div>
       </div>
 
       {/* Stacked Card: full-width preview + metadata footer */}
-      <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden mb-6">
+      <div className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden mb-6">
         {/* Preview Zone */}
         <div className="relative overflow-hidden bg-black/30 border-b border-white/5 min-h-[180px] max-h-[260px] flex items-center justify-center">
           <motion.div
@@ -187,12 +187,12 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10">
-                  <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/90">
+                  <div className="w-10 h-10 rounded-full bg-background/80 border border-white/20 flex items-center justify-center text-white/90">
                     <Play className="w-4 h-4 ml-0.5" />
                   </div>
                 </div>
                 {videoDuration && (
-                  <div className="absolute bottom-2 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[10px] font-mono text-white/90 border border-white/10 z-10">
+                  <div className="absolute bottom-2 right-2 bg-background/80 px-1.5 py-0.5 rounded text-xs font-mono text-white/90 border border-white/10 z-10">
                     {videoDuration}
                   </div>
                 )}
@@ -208,7 +208,7 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
                 <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${fileCategory.accentClass} flex items-center justify-center border mb-2`}>
                   <CategoryIcon className="w-7 h-7" />
                 </div>
-                <span className="text-[10px] font-mono tracking-wider fc-text-muted uppercase">
+                <span className="text-xs font-mono tracking-wider fc-text-muted uppercase">
                   {fileCategory.label}
                 </span>
               </div>
@@ -223,7 +223,7 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
               {file.name}
             </span>
             {extension && (
-              <span className="fc-badge fc-badge-active shrink-0 text-[10px] px-1.5 py-0">
+              <span className="fc-badge fc-badge-active shrink-0 text-xs px-1.5 py-0">
                 {extension}
               </span>
             )}
@@ -239,7 +239,7 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className="text-[10px] font-mono text-primary truncate"
+              className="text-xs font-mono text-primary truncate"
             >
               {btoa(file.name + file.size).substring(0, 24).toLowerCase()}...
             </motion.span>

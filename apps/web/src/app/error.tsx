@@ -29,13 +29,9 @@ export default function RouteError({
       >
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-danger/40 to-transparent" />
 
-        <motion.div
-          className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-2xl flex items-center justify-center mb-8"
-          animate={{ opacity: [0.7, 1, 0.7] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        >
+        <div className="w-20 h-20 bg-danger/10 border border-danger/30 rounded-2xl flex items-center justify-center mb-8">
           <AlertTriangle className="w-10 h-10 text-danger" />
-        </motion.div>
+        </div>
 
         <h1 className="text-3xl font-black mb-4 text-white tracking-tighter">
           System <span className="text-danger">Interrupted</span>
@@ -71,8 +67,8 @@ export default function RouteError({
               Diagnostic_Err: {error.message}
             </p>
             {error.digest && (
-              <p className="text-xs font-mono text-white/55 mt-2">
-                Node_Id: {error.digest}
+              <p className="text-xs font-mono fc-text-faint mt-2">
+                ID: {error.digest}
               </p>
             )}
           </div>

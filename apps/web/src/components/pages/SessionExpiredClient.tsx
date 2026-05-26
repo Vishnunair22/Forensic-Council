@@ -32,7 +32,7 @@ export function SessionExpiredClient() {
           transition={{ duration: 0.16 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-center gap-2 fc-text-faint">
+          <div className="flex items-center justify-center gap-2 fc-text-muted">
             <ShieldAlert className="w-4 h-4 text-red-500" aria-hidden="true" />
             <span className="fc-eyebrow">
               Security Boundary
@@ -42,10 +42,10 @@ export function SessionExpiredClient() {
             aria-label="Session expired"
             className="text-3xl md:text-4xl font-extrabold tracking-tighter leading-none text-white"
           >
-            Session De-synchronized
+            Session Expired
           </h1>
           <p className="text-base fc-text-secondary font-medium leading-relaxed">
-            The investigative payload session has either concluded, expired, or lacked appropriate validation signatures.
+            Your session has expired or is no longer valid. Please start a new analysis to continue.
           </p>
         </motion.div>
 
@@ -59,8 +59,8 @@ export function SessionExpiredClient() {
                 <Cpu className="w-12 h-12" />
              </div>
 
-            <p className="text-sm text-white/60 leading-relaxed font-medium">
-              Authenticate again to continue forensic analysis. Return to the central hub to start a new digital forensic ledger sequence.
+            <p className="text-sm fc-text-muted leading-relaxed font-medium">
+              Return to the hub to start a new forensic analysis.
             </p>
 
             <div className="space-y-3">
@@ -75,14 +75,14 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-primary text-background text-sm font-black transition-all flex items-center justify-center gap-3 group"
+                className="w-full fc-btn-primary flex items-center justify-center gap-2"
                 data-testid="session-expired-home-cta"
                 aria-label="Return to Hub"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Return to Hub
               </button>
-              
+
               <button
                 type="button"
                 onClick={() => {
@@ -93,12 +93,12 @@ export function SessionExpiredClient() {
                     router.push("/");
                   }
                 }}
-                className="w-full py-4 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 text-sm font-black transition-all flex items-center justify-center gap-3"
+                className="w-full fc-btn-secondary flex items-center justify-center gap-2"
                 data-testid="session-expired-retry-cta"
                 aria-label="New Intake — start a new forensic analysis"
               >
-                <RefreshCw className="w-4 h-4 opacity-60" />
-                New Intake
+                <RefreshCw className="w-4 h-4" />
+                New Analysis
               </button>
             </div>
           </GlassPanel>
@@ -107,7 +107,7 @@ export function SessionExpiredClient() {
         {/* Micro-accent */}
         <div className="flex justify-center">
            <div className="h-[1px] w-12 bg-white/20" />
-           <div className="mx-4 fc-eyebrow fc-text-faint">Security Boundary</div>
+           <div className="mx-4 fc-eyebrow fc-text-muted">Security Boundary</div>
            <div className="h-[1px] w-12 bg-white/20" />
         </div>
       </div>

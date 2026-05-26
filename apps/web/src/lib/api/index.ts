@@ -7,6 +7,7 @@ export * from "./utils";
 export {
   DuplicateInvestigationError,
   ProtocolWarmingError,
+  apiFetch,
   autoLoginAsInvestigator,
   checkBackendHealth,
   createLiveSocket,
@@ -20,6 +21,7 @@ export {
   login,
   logout,
   pollForReport,
+  refreshAuthToken,
   startInvestigation,
   submitHITLDecision,
   getAuthToken,

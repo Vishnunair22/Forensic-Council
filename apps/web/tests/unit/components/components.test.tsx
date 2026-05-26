@@ -166,6 +166,7 @@ describe("AgentProgressDisplay", () => {
     }];
     it("shows agent name", () => {
       render(<AgentProgressDisplay {...progressDefaults} completedAgents={completed} />);
+      fireEvent.click(screen.getByRole("button", { name: /Active Agents/i }));
       expect(screen.getAllByText(/Image Forensics/i).length).toBeGreaterThan(0);
     });
 
@@ -192,8 +193,9 @@ describe("AgentProgressDisplay", () => {
           }]}
         />,
       );
-
+      fireEvent.click(screen.getByRole("button", { name: /Active Agents/i }));
       expect(screen.getByText(/Final Verdict/i)).toBeInTheDocument();
+
       expect(screen.queryByText(/4\/4/i)).not.toBeInTheDocument();
     });
 

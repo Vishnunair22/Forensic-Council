@@ -97,13 +97,13 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                         backgroundColor: i < activeBlocks
                           ? `rgba(var(--color-primary-rgb), ${0.4 + (i / totalBlocks) * 0.6})`
                           : 'rgba(255,255,255,0.05)',
-                        boxShadow: i < activeBlocks && i === activeBlocks - 1 ? '0 0 8px rgba(var(--color-primary-rgb), 0.8)' : 'none',
+                        boxShadow: 'none',
                       }}
                     />
                   ))}
                 </div>
 
-                <div className="flex justify-between items-center text-[10px] font-mono text-white/40 uppercase tracking-widest relative z-10">
+                <div className="flex justify-between items-center text-xs font-mono fc-text-muted uppercase tracking-widest relative z-10">
                   <span>
                     {model.startsWith("neural_") || model === "anomaly_tracer" ? "Transformer V2" : "Tensor V4"}
                   </span>

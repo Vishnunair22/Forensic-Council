@@ -81,7 +81,7 @@ export function ForensicProgressOverlay({
     <motion.div
       aria-busy="true"
       aria-label={`${title} in progress, please wait`}
-      className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 backdrop-blur-2xl"
+      className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.4, ease: "easeIn" } }}

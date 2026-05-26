@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 jest.mock("next/navigation", () => ({
@@ -28,8 +28,18 @@ jest.mock("@/lib/storageKeys", () => ({
   STORAGE_KEYS: {},
 }));
 jest.mock("@/lib/agentSupport", () => ({
-  isAgentSupportedForMime: () => true,
-  supportedAgentIdsForMime: () => new Set(["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]),
+  isAgentSupportedForMime: (agentId: string, mimeType?: string | null) => {
+    if (mimeType && mimeType.startsWith("audio/")) {
+      return ["Agent2", "Agent5"].includes(agentId);
+    }
+    return true;
+  },
+  supportedAgentIdsForMime: (mimeType?: string | null) => {
+    if (mimeType && mimeType.startsWith("audio/")) {
+      return new Set(["Agent2", "Agent5"]);
+    }
+    return new Set(["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]);
+  },
 }));
 jest.mock("@/lib/agentTheme", () => ({
   accentFor: () => "blue",
@@ -51,8 +61,11 @@ jest.mock("@/lib/constants", () => ({
 }));
 
 jest.mock("@/components/evidence/AgentStatusCard", () => ({
-  AgentStatusCard: ({ agent }: { agent: { id: string; name: string } }) =>
-    React.createElement("div", { "data-testid": `card-${agent.id}` }, agent.name),
+  AgentStatusCard: (props: any) => {
+    const id = props.agent?.id || props.agentId;
+    const name = props.agent?.name || props.name;
+    return React.createElement("div", { "data-testid": `card-${id}` }, name);
+  },
   AGENT_ICONS: {},
 }));
 
@@ -91,6 +104,7 @@ describe("BUG-12 — SkippedAgentsPanel surfaces backend skip reason", () => {
         },
       })
     );
+    fireEvent.click(screen.getByRole("button", { name: /Skipped Agents/i }));
     expect(screen.queryByText(/Container codec not in whitelist/)).toBeInTheDocument();
   });
 
@@ -101,7 +115,8 @@ describe("BUG-12 — SkippedAgentsPanel surfaces backend skip reason", () => {
         mimeType: "audio/mpeg",
       })
     );
-    expect(screen.queryByText(/Not applicable for audio files/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Skipped Agents/i }));
+    expect(screen.getAllByText(/Not applicable for audio files/).length).toBeGreaterThan(0);
   });
 });
 
@@ -117,7 +132,7 @@ describe("BUG-19 — accessibility contrast and font improvements", () => {
     const { container } = render(
       React.createElement(AgentProgressDisplay, { ...defaultProps, awaitingDecision: true })
     );
-    const decisionText = container.querySelector(".text-base.font-mono.font-medium");
+    const decisionText = container.querySelector(".fc-surface-elevated .font-semibold");
     expect(decisionText).toBeInTheDocument();
     expect(container.querySelector(".uppercase")).not.toBeInTheDocument();
     expect(container.querySelector(".tracking-widest")).not.toBeInTheDocument();

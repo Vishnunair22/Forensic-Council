@@ -302,7 +302,7 @@
   /* ── Canonical Text System ── */
   .fc-text-primary   { color: rgba(237, 242, 248, 1.0); }
   .fc-text-secondary { color: rgba(237, 242, 248, 0.78); }
-  .fc-text-muted     { color: rgba(237, 242, 248, 0.62); }
+  .fc-text-muted     { color: rgba(237, 242, 248, 0.68); }
   .fc-text-faint     { color: rgba(237, 242, 248, 0.55); }
 
   /* ── Semantic Text Helpers ── */
@@ -708,10 +708,7 @@
   50%       { opacity: 1;   filter: blur(8px); }
 }
 
-@keyframes shimmer {
-  0%   { transform: translateY(-100%); }
-  100% { transform: translateY(200%); }
-}
+/* shimmer keyframe removed — duplicate of fc-shimmer; use @keyframes fc-shimmer instead */
 
 /* F-4 fix: CSS keyframe for ArcGauge decorative dashed ring rotation.
    The prefers-reduced-motion rule at the top of this file automatically

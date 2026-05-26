@@ -182,7 +182,7 @@ export function HistoryPanel({ onSelect, currentSessionId }: HistoryPanelProps) 
         {sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-12 h-12 rounded-full border border-white/[0.06] border-dashed flex items-center justify-center">
-              <HistoryIcon className="w-5 h-5 text-white/10" />
+              <HistoryIcon className="w-5 h-5 fc-text-faint" />
             </div>
             <p className="text-sm fc-text-muted">No investigations archived yet.</p>
           </div>

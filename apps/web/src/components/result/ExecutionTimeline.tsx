@@ -140,7 +140,7 @@ export function ExecutionTimeline({
                 <div
                   className={clsx(
                     "relative flex items-center justify-center w-6 h-6 shrink-0 bg-background border rounded shadow-sm z-10 mt-0.5",
-                    step.dot === "start"    && "border-white/30 text-white/50",
+                    step.dot === "start"    && "border-white/30 fc-text-muted",
                     step.dot === "agent"    && "border-white/20",
                     step.dot === "synthesis"&& "border-success/40 text-success/50 bg-success/5",
                     step.dot === "complete" && "border-success bg-success/10",
@@ -154,7 +154,7 @@ export function ExecutionTimeline({
                   {isComplete ? (
                      <div className="w-2 h-2 rounded-full bg-success shadow-[0_0_8px_rgba(var(--color-success-rgb),0.8)]" />
                   ) : (
-                     <span className="text-[10px] font-mono leading-none" style={accent ? { color: accent.color } : {}} aria-hidden="true">+</span>
+                     <span className="text-xs font-mono leading-none" style={accent ? { color: accent.color } : {}} aria-hidden="true">+</span>
                   )}
                 </div>
 
@@ -180,7 +180,7 @@ export function ExecutionTimeline({
 
                   {/* Server-style Timestamp */}
                   {step.time && (
-                    <div className="shrink-0 bg-black/40 border border-white/5 rounded px-2 py-1 flex items-center">
+                    <div className="shrink-0 bg-white/[0.03] border border-white/5 rounded px-2 py-1 flex items-center">
                       <span className="text-xs font-mono text-primary">{step.time}</span>
                     </div>
                   )}

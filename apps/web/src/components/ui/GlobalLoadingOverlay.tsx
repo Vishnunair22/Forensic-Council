@@ -9,13 +9,7 @@ import { AnimatePresence } from "framer-motion";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
-
-// Maximum time (ms) the GlobalLoadingOverlay can stay visible on /evidence.
-// useInvestigation manages its own overlay from that point — the global one
-// is only a navigation-gap bridge. If the evidence page hooks don't dismiss
-// it within this window (e.g. auth error / WS failure), we force-dismiss so
-// the page isn't permanently covered.
-const EVIDENCE_MAX_DISPLAY_MS = 5_000;
+import { EVIDENCE_MAX_DISPLAY_MS } from "@/lib/timings";
 
 export function GlobalLoadingOverlay() {
   const pathname = usePathname();
@@ -62,6 +56,7 @@ export function GlobalLoadingOverlay() {
       const { key, value } = (e as CustomEvent<{ key: string; value: string | null }>).detail;
       if (key === STORAGE_KEYS.FC_SHOW_LOADING) {
         if (value === "true") {
+          mountTimeRef.current = Date.now();
           setShow(true);
         } else {
           // Grace guard: block dismissal only during the narrow handoff window

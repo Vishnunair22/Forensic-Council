@@ -677,7 +677,7 @@ export function AgentStatusCard({
               </div>
 
               {/* Cyber-Tactical Progress Bar */}
-              <div className="relative w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/10 shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
+              <div className="relative w-full h-2 bg-white/[0.06] rounded-full overflow-hidden border border-white/10">
                 {/* Segmented hash marks background */}
                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNCIgaGVpZ2h0PSI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjQiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] opacity-50" />
 
@@ -687,7 +687,6 @@ export function AgentStatusCard({
                     width: status === "checking" ? "100%" : `${(currentToolIndex / liveTotal) * 100}%`,
                   }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
-                  style={{ boxShadow: "0 0 10px rgba(var(--color-primary-rgb), 0.5)" }}
                 >
                   {/* Infinite Light Sweep effect */}
                   <motion.div

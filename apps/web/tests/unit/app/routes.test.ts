@@ -34,7 +34,7 @@ describe("app api routes", () => {
     const cookies = response.headers.get("set-cookie") ?? "";
 
     expect(response.status).toBe(200);
-    expect(json.access_token).toBe("jwt-token");
+    expect(json.access_token).toBeUndefined();
     expect(cookies).toContain("access_token=jwt-token");
     expect(cookies).toContain("csrf_token=csrf-token");
   });
