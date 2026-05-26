@@ -240,12 +240,21 @@ export function useResult(initialSessionId?: string) {
     }
   }, [reportQueryError, arbiterComplete]);
 
-  // ── Arbiter status polling ───────────────────────────────────────────────────
-  useEffect(() => {
+// ── Arbiter status polling ───────────────────────────────────────────────────
+   useEffect(() => {
     if (!mounted) return;
 
+    // Pre-flight session validation: ensure sessionId maps to a valid investigation
     if (!sessionId) {
       setState("empty");
+      return;
+    }
+
+    // Validate session exists in storage before polling
+    const storedSession = storage.getItem(STORAGE_KEYS.SESSION_ID);
+    if (sessionId !== storedSession) {
+      dbg.warn("[useResult] Session mismatch, redirecting to session-expired");
+      router.push("/session-expired");
       return;
     }
 
