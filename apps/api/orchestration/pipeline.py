@@ -754,10 +754,20 @@ class ForensicCouncilPipeline:
                 await asyncio.wait_for(self._pre_warm_task, timeout=20.0)
             except Exception as e:
                 logger.warning("Arbiter pre-warm failed or timed out, re-running synchronously", error=str(e))
-                await self.arbiter.pre_warm(arbiter_results, case_id=case_id)
+                try:
+                    await asyncio.wait_for(
+                        self.arbiter.pre_warm(arbiter_results, case_id=case_id), timeout=30.0
+                    )
+                except Exception as sync_err:
+                    logger.warning("Synchronous pre-warm also failed", error=str(sync_err))
             self._pre_warm_task = None
         if getattr(self.arbiter, "_pre_warm_agent_results", None) is None:
-            await self.arbiter.pre_warm(arbiter_results, case_id=case_id)
+            try:
+                await asyncio.wait_for(
+                    self.arbiter.pre_warm(arbiter_results, case_id=case_id), timeout=30.0
+                )
+            except Exception as pw_err:
+                logger.warning("Pre-warm guard failed", error=str(pw_err))
 
         try:
             await self._broadcast_final_arbiter_status(
@@ -927,7 +937,34 @@ class ForensicCouncilPipeline:
         # (e.g. by setting an event the agent is waiting on)
 
     def _get_mime_type(self, file_path: str) -> str:
-        """Lightweight MIME detection."""
+        """MIME detection: extension-based first, then PIL magic-byte fallback for .bin/unknown paths."""
         import mimetypes
+
         mime, _ = mimetypes.guess_type(file_path)
+        if mime and mime != "application/octet-stream":
+            return mime
+
+        _PIL_FORMAT_TO_MIME = {
+            "JPEG": "image/jpeg",
+            "PNG": "image/png",
+            "GIF": "image/gif",
+            "WEBP": "image/webp",
+            "TIFF": "image/tiff",
+            "BMP": "image/bmp",
+            "HEIF": "image/heic",
+            "AVIF": "image/avif",
+            "ICO": "image/x-icon",
+            "PPM": "image/x-portable-pixmap",
+            "PGM": "image/x-portable-graymap",
+            "PBM": "image/x-portable-bitmap",
+        }
+        try:
+            from PIL import Image
+
+            with Image.open(file_path) as _img:
+                pil_format = (_img.format or "").upper()
+            if pil_format in _PIL_FORMAT_TO_MIME:
+                return _PIL_FORMAT_TO_MIME[pil_format]
+        except Exception:
+            pass
         return mime or "application/octet-stream"

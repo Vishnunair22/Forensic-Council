@@ -262,7 +262,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         has_deep_findings = any(
             (f.get("metadata") or {}).get("analysis_phase") == "deep"
-            and not (f.get("metadata") or {}).get("gated", False)
             for f in all_findings
         )
 

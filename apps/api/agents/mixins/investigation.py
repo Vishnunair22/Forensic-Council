@@ -455,6 +455,13 @@ class AgentInvestigationMixin:
                 return "MEDIUM"
             return "LOW"
 
+        # Force high-integrity clean signals into the list so "hash matched" and
+        # "EXIF found" are always cited, even when they rank below positive findings.
+        _HIGH_INTEGRITY_TOOLS = {"file_hash_verify", "hash_verify", "exif_extract", "file_structure_analysis"}
+        high_integrity = [
+            f for f in actionable
+            if str(f.metadata.get("tool_name") or f.finding_type) in _HIGH_INTEGRITY_TOOLS
+        ]
         sorted_findings = sorted(
             actionable,
             key=lambda f: (
@@ -463,15 +470,23 @@ class AgentInvestigationMixin:
             ),
             reverse=True,
         )
-        top_findings = sorted_findings[:5]
+        # Cap at 3 sections; re-insert high-integrity tools if they were pushed out
+        top_findings = sorted_findings[:3]
+        top_tool_names = {str(f.metadata.get("tool_name") or f.finding_type) for f in top_findings}
+        for hi_f in high_integrity:
+            hi_tool = str(hi_f.metadata.get("tool_name") or hi_f.finding_type)
+            if hi_tool not in top_tool_names and len(top_findings) < 4:
+                top_findings.append(hi_f)
+                top_tool_names.add(hi_tool)
+
         if top_findings:
             primary = top_findings[0]
+            verdict_word = str(primary.evidence_verdict or "").lower()
             primary_summary = primary.reasoning_summary.strip()
-            narrative = (
-                f"{_tool_name(primary)} reported {primary.evidence_verdict.lower()} evidence "
-                f"at {float(primary.confidence_raw or 0.0):.0%} confidence: "
-                f"{primary_summary[:180]}"
-            )
+            if str(primary.evidence_verdict).upper() == "POSITIVE":
+                narrative = f"{_tool_name(primary)} flagged a manipulation indicator: {primary_summary[:180]}"
+            else:
+                narrative = f"{_tool_name(primary)} found no anomalies: {primary_summary[:180]}"
         else:
             narrative = (
                 f"{self.agent_name} found no applicable forensic signals for this file type "
@@ -482,16 +497,30 @@ class AgentInvestigationMixin:
         for idx, f in enumerate(top_findings, start=1):
             tool_name = str(f.metadata.get("tool_name") or f.finding_type)
             degraded = bool(f.metadata.get("degraded") or f.metadata.get("fallback_reason"))
+            ev = str(f.evidence_verdict or "").upper()
+            summary = f.reasoning_summary.strip()
+            if ev == "POSITIVE":
+                opinion = f"{_tool_name(f)} flagged a manipulation indicator." + (f" {summary[:300]}" if summary else "")
+            elif ev in {"NEGATIVE", "CLEAN"}:
+                opinion = f"{_tool_name(f)} found no anomaly." + (f" {summary[:300]}" if summary else "")
+            elif ev == "NOT_APPLICABLE":
+                reason = f.metadata.get("reason") or f.metadata.get("skipped_reason") or "not applicable"
+                opinion = f"{_tool_name(f)} was bypassed — {reason}."
+            else:
+                opinion = summary[:300] if summary else f"{_tool_name(f)} returned an inconclusive result."
+            if degraded:
+                fallback = str(f.metadata.get("fallback_reason") or "heuristic fallback")
+                opinion += f" (Note: {fallback})"
             sections.append(
                 {
                     "id": f"tool_signal_{idx}",
                     "label": _tool_name(f),
-                    "opinion": f.reasoning_summary[:420],
+                    "opinion": opinion[:420],
                     "severity": _severity(f),
                     "refined_findings": [
                         {
                             "tool": tool_name,
-                            "user_friendly_summary": f.reasoning_summary[:300],
+                            "user_friendly_summary": opinion[:300],
                         }
                     ],
                     "key_signal": f.metadata.get("raw_tool_summary") or f.finding_type,

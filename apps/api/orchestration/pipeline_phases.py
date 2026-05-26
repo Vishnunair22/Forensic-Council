@@ -238,6 +238,15 @@ def _humanize_initial_finding(
         preview = metadata.get("ocr_text_preview") or metadata.get("text_preview")
         content_desc = str(metadata.get("content_description") or "").strip()
         content_type_val = str(metadata.get("content_type") or "").strip()
+        word_count = int(metadata.get("word_count") or 0)
+        if word_count == 0 and not preview and not content_desc:
+            # Suppress "no text found" cards for natural photos — analysts don't need a
+            # finding card to tell them a live photograph contains no readable text.
+            # Only keep the card if the image is document/screenshot-type content.
+            doc_indicators = {"document", "screenshot", "scan", "id_card", "id card", "receipt", "invoice", "form", "text"}
+            image_type = str(metadata.get("image_type") or metadata.get("content_type") or "").lower()
+            if not any(t in image_type for t in doc_indicators):
+                return None
         if preview:
             clean_preview = " ".join(str(preview).replace("|", " | ").split())
             method = str(metadata.get("method") or metadata.get("ocr_engine") or "OCR")
@@ -302,13 +311,62 @@ def _humanize_initial_finding(
             "completed; review detailed tool metrics",
             "analysis complete",
         )
+        _TOOL_NEGATIVE_NARRATIVES = {
+            "neural_fingerprint": (
+                "Neural fingerprint recorded. No match to known synthetic or AI-generated "
+                "image signatures in the reference library."
+            ),
+            "frequency_domain_analysis": (
+                "Frequency spectrum is consistent with authentic photographic content — "
+                "no GAN-like periodic artifact or anomalous high-frequency pattern detected."
+            ),
+            "extract_text_from_image": (
+                "No embedded text characters were detected. "
+                "This is expected for natural photographic content without visible labels or documents."
+            ),
+            "neural_ela": (
+                "Error-level analysis found no localised re-compression residuals indicative "
+                "of region-level compositing or airbrushing."
+            ),
+            "noiseprint_cluster": (
+                "Sensor-noise clustering found no inconsistent camera-source regions; "
+                "the image noise signature appears homogeneous throughout."
+            ),
+            "diffusion_artifact_detector": (
+                "No diffusion model or AI-generation artifact signature was detected in this image."
+            ),
+            "f3_net_frequency": (
+                "F3-Net frequency analysis found no frequency-space GAN artifact patterns."
+            ),
+            "anomaly_tracer": (
+                "ManTra-Net universal anomaly tracer found no manipulation pattern across the image."
+            ),
+            "deepfake_frequency_check": (
+                "Frequency-band GAN/deepfake scan found no high-frequency spectral artifacts "
+                "associated with synthetic generation."
+            ),
+            "neural_splicing": (
+                "TruFor ViT splicing analysis found no evidence of regional composition "
+                "or cut-and-paste insertion."
+            ),
+            "neural_copy_move": (
+                "BusterNet copy-move analysis found no cloned or duplicated regions within the image."
+            ),
+            "synthid_watermark_detect": (
+                "No SynthID, C2PA ai_generated marker, or AI software watermark was detected."
+            ),
+        }
         if any(p in clean_text.lower() for p in generic_patterns):
+            tool_key = (tool_name or "").lower()
+            if tool_key in _TOOL_NEGATIVE_NARRATIVES:
+                narrative = _TOOL_NEGATIVE_NARRATIVES[tool_key]
+                if metric_note:
+                    return f"{narrative} ({metric_note})"
+                return narrative
             tool_label = str(tool_name or "Tool").replace("_", " ").title()
-            # Add metric context
-            if metric_note and metric_note.lower() not in clean_text.lower():
-                clean_text = f"{tool_label} completed — no anomaly detected. Metric: {metric_note}."
-            else:
-                clean_text = f"{tool_label} completed — no anomaly detected."
+            if metric_note:
+                return f"{tool_label}: no forensic anomaly detected ({metric_note})."
+            return f"{tool_label}: no forensic anomaly detected."
         if metric_note and metric_note.lower() not in clean_text.lower():
             return f"{clean_text} Key metrics: {metric_note}."
         return clean_text
@@ -322,14 +380,6 @@ def _humanize_initial_finding(
     # Append key metric only if it adds new information
     if metric_note and metric_note.lower() not in enriched.lower():
         enriched = f"{enriched} Metric: {metric_note}."
-
-    # Surface confidence if present and not already in text
-    if confidence_val and str(round(float(confidence_val), 2)) not in enriched:
-        try:
-            pct = round(float(confidence_val) * 100)
-            enriched = f"{enriched} (confidence: {pct}%)"
-        except (TypeError, ValueError):
-            pass
 
     return enriched if enriched.strip() else None
 
@@ -577,9 +627,6 @@ async def run_agents_concurrent(
                                 or m.get("match_description")
                                 or ""
                             ),
-                            "confidence": (
-                                _finding_attr(f, "confidence_raw", None)
-                            ),
                             "section": m.get("section") or "",
                             "degraded": bool(m.get("degraded") or m.get("fallback_reason")),
                             "fallback_reason": m.get("fallback_reason"),
@@ -587,8 +634,9 @@ async def run_agents_concurrent(
                         }
                     )
 
-                # Sort by confidence descending to surface high-signal findings first
-                preview.sort(key=lambda x: x.get("confidence") or 0.0, reverse=True)
+                # Sort by severity to surface high-signal findings first
+                _SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+                preview.sort(key=lambda x: _SEV_RANK.get(x.get("severity") or "LOW", 0), reverse=True)
             if isinstance(synthesis, dict) and synthesis.get("sections"):
                 before = len(preview)
                 _append_synthesis_sections(synthesis)

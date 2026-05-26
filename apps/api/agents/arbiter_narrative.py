@@ -71,6 +71,21 @@ _SAFETY_PREAMBLE = (
 )
 _UNTRUSTED_FIELD_MAX = 4000
 
+# Maps deep-phase tool names to their closest Phase-1 analog for cross-phase
+# comparison pairs. Deep tools often have no exact same-name initial counterpart
+# (e.g. f3_net_frequency vs deepfake_frequency_check), so this table lets the
+# Groq prompt include an "Initial vs Deep" comparison even for camera images.
+_DEEP_TO_INITIAL_TOOL_MAP: dict[str, str] = {
+    "f3_net_frequency": "deepfake_frequency_check",
+    "neural_splicing": "splicing_detect",
+    "neural_copy_move": "copy_move_detect",
+    "neural_ela": "ela_full_image",
+    "noiseprint_cluster": "noise_fingerprint",
+    "anomaly_tracer": "ela_anomaly_classify",
+    "diffusion_artifact_detector": "analyze_image_content",
+    "adversarial_robustness": "neural_fingerprint",
+}
+
 
 def _wrap_untrusted(label: str, value: Any) -> str:
     """Render `value` inside [UNTRUSTED EVIDENCE START/END] markers, capped."""
@@ -213,6 +228,14 @@ def _is_generic_executive_summary(text: str) -> bool:
         "image integrity confirmed",
         "based on the analysis",
         "no significant anomalies were detected",
+        "no manipulation was detected",
+        "the image appears to be authentic",
+        "the evidence is consistent with",
+        "all forensic checks passed",
+        "no evidence of tampering",
+        "the file appears unmodified",
+        "analysis did not reveal",
+        "cannot be conclusively determined",
     )
     return any(phrase in lower for phrase in generic_phrases) and not any(
         marker in lower
@@ -235,6 +258,42 @@ class ArbiterNarrativeMixin:
     """
 
     # ── Agent name map (Full versions for LLM reasoning) ────────────────────
+    _AGENT_PERSONAS: dict[str, str] = {
+        "Agent1": (
+            "You are Dr. Maya Reyes, a 15-year forensic image integrity examiner with the FBI Digital Evidence Lab. "
+            "You specialize in JPEG re-compression analysis, sensor PRNU patterns, neural model artifacts, and "
+            "GAN/Diffusion provenance traces. You report only what your tools measured. You never speculate beyond "
+            "the data. You explicitly mark fallback heuristics as such. You write 2-3 sentence verdicts that a "
+            "non-technical jury can understand. You always cite at least one specific metric in your verdict."
+        ),
+        "Agent2": (
+            "You are Dr. Sam Okafor, a forensic audio examiner with 12 years of experience in voice-clone detection, "
+            "speaker diarization, and audio splice forensics for law enforcement. You specialize in prosody anomalies, "
+            "anti-spoofing model outputs, and AV sync inconsistencies. You cite specific timestamps, splice point "
+            "locations, and spectral measurements in your verdicts. You clearly distinguish between model-confirmed "
+            "signals and heuristic estimates."
+        ),
+        "Agent3": (
+            "You are Detective Inspector Priya Nair, a 10-year computer vision forensic analyst for a national "
+            "digital crimes unit. You specialize in scene-object inconsistencies, lighting and shadow anomalies, "
+            "scale violations, and weapon/contraband detection. You write verdicts that link specific detected "
+            "objects or scene anomalies to the forensic question. You never conflate low-confidence detections "
+            "with confirmed findings."
+        ),
+        "Agent4": (
+            "You are Dr. Lena Fischer, a video forensics specialist with the European Cybercrime Centre. "
+            "You specialize in inter-frame forgery detection, VFI artifacts, optical flow discontinuities, "
+            "and rolling shutter validation. You produce timestamped, frame-indexed findings and distinguish "
+            "between encoding artifacts and deliberate manipulation."
+        ),
+        "Agent5": (
+            "You are Dr. James Whitfield, a digital forensics examiner and court-certified expert witness "
+            "with 18 years specializing in EXIF metadata provenance, timestamp chronology, compression "
+            "platform fingerprinting, and C2PA chain-of-custody verification. You cite exact EXIF field names, "
+            "hash values, and timestamp discrepancies. You never assert authenticity from metadata alone."
+        ),
+    }
+
     _AGENT_FULL_NAMES: dict[str, str] = {
         "Agent1": (
             "Image Integrity Agent — "
@@ -289,8 +348,6 @@ class ArbiterNarrativeMixin:
             tool_name = meta.get("tool_name") or f.get("finding_type", "")
             verdict = evidence_verdict_of(f)
             statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
-            conf = confidence_of(f)
-            conf_str = f" ({round(conf * 100)}% confidence)" if conf is not None else ""
             if verdict == "NOT_APPLICABLE":
                 reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable to this file type"
                 assessment_parts.append(f"{tool_name} was bypassed — {reason}.")
@@ -298,10 +355,12 @@ class ArbiterNarrativeMixin:
                 assessment_parts.append(f"{tool_name} failed to execute successfully.")
             elif verdict == "POSITIVE":
                 detail = f" {statement}" if statement else ""
-                assessment_parts.append(f"{tool_name} flagged a manipulation indicator{conf_str}.{detail}")
+                degraded = meta.get("degraded") or meta.get("fallback_reason")
+                suffix = " (heuristic fallback)" if degraded else ""
+                assessment_parts.append(f"{tool_name} flagged a manipulation indicator{suffix}.{detail}")
             else:
                 detail = f" {statement}" if statement else ""
-                assessment_parts.append(f"{tool_name} returned {verdict.lower()}{conf_str}.{detail}")
+                assessment_parts.append(f"{tool_name} found no anomalies.{detail}")
 
         evidence_assessment = " ".join(assessment_parts) or "No initial findings were reported for assessment."
 
@@ -315,49 +374,61 @@ class ArbiterNarrativeMixin:
                 tool_name = meta.get("tool_name") or f.get("finding_type", "")
                 verdict = evidence_verdict_of(f)
                 statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
-                conf = confidence_of(f)
-                conf_str = f" ({round(conf * 100)}% confidence)" if conf is not None else ""
+                degraded = meta.get("degraded") or meta.get("fallback_reason")
                 if meta.get("gated") or meta.get("skipped"):
-                    reason = meta.get("reason") or "no prior suspicious signal"
-                    deep_parts.append(f"{tool_name} was gated — {reason}.")
+                    reason = meta.get("reason") or "no prior manipulation signal warranted escalation"
+                    deep_parts.append(f"{tool_name} was not applied — {reason}.")
                 elif verdict == "NOT_APPLICABLE":
-                    deep_parts.append(f"{tool_name} was not applicable and bypassed.")
+                    deep_parts.append(f"{tool_name} was not applicable to this evidence type.")
                 elif verdict == "ERROR":
-                    deep_parts.append(f"{tool_name} failed in deep analysis.")
+                    deep_parts.append(f"{tool_name} could not complete deep analysis.")
                 elif verdict == "POSITIVE":
                     detail = f" {statement}" if statement else ""
-                    deep_parts.append(f"{tool_name} (deep) confirmed a manipulation indicator{conf_str}.{detail}")
+                    suffix = " (via heuristic fallback)" if degraded else ""
+                    deep_parts.append(f"{tool_name} confirmed a manipulation indicator in deep analysis{suffix}.{detail}")
                 else:
                     detail = f" {statement}" if statement else ""
-                    deep_parts.append(f"{tool_name} (deep) returned {verdict.lower()}{conf_str}.{detail}")
+                    suffix = " (heuristic fallback, no new neural signal)" if degraded else ""
+                    deep_parts.append(f"{tool_name} returned no additional manipulation signal{suffix}.{detail}")
             deep_analysis = " ".join(deep_parts) or "No deep findings were produced."
-            
-        confidence_pct = round(metrics.get("confidence_score", 0) * 100)
-        error_rate_pct = round(metrics.get("error_rate", 0) * 100)
+
         tools_ok = metrics.get("tools_succeeded", 0)
         tools_total = metrics.get("total_tools_called", 0)
         tools_na = metrics.get("tools_not_applicable", 0)
-        
+        error_rate = metrics.get("error_rate", 0)
+
         has_positive = any(evidence_verdict_of(f) == "POSITIVE" for f in findings)
         if has_positive:
             agent_verdict = "SUSPICIOUS"
         elif metrics.get("skipped"):
             agent_verdict = "NOT APPLICABLE"
-        elif metrics.get("error_rate", 0) > 0.4:
+        elif error_rate > 0.4:
             agent_verdict = "INCONCLUSIVE"
         else:
             agent_verdict = "AUTHENTIC"
-            
+
+        if tools_total > 0:
+            coverage_frac = tools_ok / tools_total
+            if coverage_frac >= 0.8:
+                coverage_qual = "full tool coverage"
+            elif coverage_frac >= 0.5:
+                coverage_qual = "partial tool coverage"
+            else:
+                coverage_qual = "limited tool coverage"
+        else:
+            coverage_qual = "no tools completed"
+
+        na_clause = f", {tools_na} not applicable" if tools_na else ""
         reliability_verdict = (
-            f"The analysis has {confidence_pct}% confidence with an error rate of {error_rate_pct}% "
-            f"({tools_ok} of {tools_total} tools succeeded, {tools_na} were not applicable). "
-            f"The computed forensic verdict for this agent is {agent_verdict}."
+            f"This agent completed {tools_ok} of {tools_total} tools ({coverage_qual}{na_clause}). "
+            f"Forensic verdict: {agent_verdict}."
         )
-        
+
         return json.dumps({
             "evidence_assessment": evidence_assessment,
             "deep_analysis": deep_analysis,
-            "reliability_verdict": reliability_verdict
+            "reliability_verdict": reliability_verdict,
+            "synthesis_source": "template_fallback",
         })
 
     async def _generate_agent_narrative(
@@ -441,6 +512,13 @@ class ArbiterNarrativeMixin:
                 matching_initial = [
                     f for f in initial_f if (f.get("metadata") or {}).get("tool_name") == d_tool
                 ]
+                if not matching_initial:
+                    analog = _DEEP_TO_INITIAL_TOOL_MAP.get(d_tool)
+                    if analog:
+                        matching_initial = [
+                            f for f in initial_f
+                            if (f.get("metadata") or {}).get("tool_name") == analog
+                        ]
                 if matching_initial:
                     mf = matching_initial[0]
                     _comparison_pairs.append(
@@ -464,7 +542,10 @@ class ArbiterNarrativeMixin:
                     f"{json.dumps(_comparison_pairs, indent=2)}"
                 )
 
-        system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.
+        agent_persona = self._AGENT_PERSONAS.get(agent_id, "")
+        persona_block = f"\n\nAgent persona:\n{agent_persona}" if agent_persona else ""
+
+        system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.{persona_block}
 
 You MUST respond ONLY with a valid JSON object containing exactly three keys: "evidence_assessment", "deep_analysis", and "reliability_verdict". Do not output any markdown formatting (like ```json) or other text outside the JSON structure.
 
@@ -1295,9 +1376,11 @@ Rules:
                 )
 
             async def t_narratives():
-                sem = asyncio.Semaphore(3)
+                sem = asyncio.Semaphore(2)
+                _narr_warnings: list[str] = []
 
-                async def _one(aid, res):
+                async def _one(aid, res, idx: int):
+                    await asyncio.sleep(idx * 2.0)
                     async with sem:
                         try:
                             await _step(f"Summarizing {AGENT_NAMES.get(aid, aid)} findings.")
@@ -1314,12 +1397,15 @@ Rules:
                                 agent_id=aid,
                                 error=str(_e),
                             )
+                            _narr_warnings.append(
+                                f"{AGENT_NAMES.get(aid, aid)} narrative used template fallback: {type(_e).__name__}"
+                            )
                             return aid, ""
 
                 pairs = await asyncio.gather(
-                    *[_one(aid, res) for aid, res in active_agent_results.items()]
+                    *[_one(aid, res, idx) for idx, (aid, res) in enumerate(active_agent_results.items())]
                 )
-                return {p[0]: p[1] for p in pairs if isinstance(p, tuple) and p[1]}
+                return {p[0]: p[1] for p in pairs if isinstance(p, tuple) and p[1]}, _narr_warnings
 
             async def t_executive():
                 try:
@@ -1368,6 +1454,7 @@ Rules:
                         len(incomplete_findings), len(contested_findings), overall_error_rate
                     )
 
+            _agent_narr_warnings: list[str] = []
             try:
                 # overall investigation timeout budget is ML_SUBPROCESS_TIMEOUT_S (default 120s)
                 overall_timeout = getattr(self.config, "ml_subprocess_timeout_s", 120.0) or 120.0
@@ -1384,7 +1471,7 @@ Rules:
                     return await coro
 
                 # Stagger independent synthesis tasks to avoid simultaneous
-                # Groq TPM-limit bursts. t_narratives() has its own Semaphore(3).
+                # Groq TPM-limit bursts. t_narratives() has its own Semaphore(2).
                 async def _staggered_structured():
                     return await t_structured()
 
@@ -1396,7 +1483,7 @@ Rules:
                     await asyncio.sleep(1.0)
                     return await t_uncertainty()
 
-                (v_sent, kf_list, r_note), p_anal, exec_sum, unc_stmt = await asyncio.wait_for(
+                (v_sent, kf_list, r_note), (p_anal, _agent_narr_warnings), exec_sum, unc_stmt = await asyncio.wait_for(
                     asyncio.gather(
                         _staggered_structured(), t_narratives(), _staggered_executive(), _staggered_uncertainty()
                     ),
@@ -1433,6 +1520,7 @@ Rules:
         narrative_warnings = []
         if not llm_enabled:
             narrative_warnings.append("Narrative generated from templates (LLM unavailable)")
+        narrative_warnings.extend(_agent_narr_warnings)
 
         raw = self._postprocess_narratives(
             v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt,
@@ -1499,13 +1587,15 @@ Rules:
         import json
         p_anal_structured = {}
         p_anal_flat = {}
+        _default_source = "llm_grounded" if llm_enabled else "template_fallback"
         for aid, narr_str in p_anal.items():
             if not narr_str:
                 p_anal_flat[aid] = ""
                 p_anal_structured[aid] = {
                     "evidence_assessment": "No initial findings were reported for assessment.",
                     "deep_analysis": "Deep analysis was not executed or no deep findings were reported for this agent.",
-                    "reliability_verdict": ""
+                    "reliability_verdict": "",
+                    "synthesis_source": "template_fallback",
                 }
                 continue
             try:
@@ -1513,7 +1603,8 @@ Rules:
                 p_anal_structured[aid] = {
                     "evidence_assessment": parsed.get("evidence_assessment", ""),
                     "deep_analysis": parsed.get("deep_analysis", ""),
-                    "reliability_verdict": parsed.get("reliability_verdict", "")
+                    "reliability_verdict": parsed.get("reliability_verdict", ""),
+                    "synthesis_source": parsed.get("synthesis_source", _default_source),
                 }
                 p_anal_flat[aid] = " ".join([
                     parsed.get("evidence_assessment", ""),
@@ -1525,7 +1616,8 @@ Rules:
                 p_anal_structured[aid] = {
                     "evidence_assessment": narr_str,
                     "deep_analysis": "",
-                    "reliability_verdict": ""
+                    "reliability_verdict": "",
+                    "synthesis_source": "template_fallback",
                 }
 
         confidence_values = [

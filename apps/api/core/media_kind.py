@@ -75,6 +75,9 @@ def is_screen_capture_like(artifact: Any) -> bool:
     A PNG/WebP/BMP with no EXIF, monitor-like dimensions, and no camera format
     signature is usually a screenshot or digitally-created image.  The check is
     conservative enough to avoid affecting JPEG/HEIC camera uploads.
+
+    Evidence files are stored under UUID paths with a .bin extension; PIL-detected
+    format from magic bytes is used as the authoritative extension in that case.
     """
     file_path = str(getattr(artifact, "file_path", "") or "")
     ext = os.path.splitext(file_path)[1].lower()
@@ -83,11 +86,17 @@ def is_screen_capture_like(artifact: Any) -> bool:
     if not probe:
         return False
 
+    # Use PIL-detected format when the stored path carries a generic extension
+    # (.bin, .tmp, or no extension) so the format checks below work correctly.
+    pil_fmt = str(probe.get("format") or "").lower()
+    if ext in {"", ".bin", ".tmp"} and pil_fmt:
+        ext = {"jpeg": ".jpg"}.get(pil_fmt, f".{pil_fmt}")
+
     width = int(probe.get("width") or 0)
     height = int(probe.get("height") or 0)
 
     # Special Case: Large JPEGs that are clearly screenshots (phone exports)
-    if is_camera_still_candidate(artifact) and mime == "image/jpeg":
+    if ext == ".jpg" and (mime in {"image/jpeg", ""} or is_camera_still_candidate(artifact)):
         filename = os.path.basename(file_path).lower()
         screenshot_keywords = {"screenshot", "screen", "capture", "snap", "export"}
         has_keyword = any(k in filename for k in screenshot_keywords)

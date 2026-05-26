@@ -28,17 +28,24 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "extract_text_from_image": 65.0,
     "extract_evidence_text": 65.0,
     "neural_fingerprint": 45.0,
-    "noiseprint_cluster": 35.0,
-    "neural_ela": 35.0,
-    # Image analysis cold-load can exceed 30s; CLIP/SigLIP models need 45s
-    "analyze_image_content": 45.0,
+    # noiseprint++ loads the sensor model on first call; 50s covers cold-start
+    "noiseprint_cluster": 50.0,
+    # ELA transformer cold-start can exceed 35s in Docker; 45s gives headroom
+    "neural_ela": 45.0,
+    # CLIP/SigLIP models need 45s; BLIP-2 fallback may cold-start up to 30s
+    "analyze_image_content": 60.0,
     # YOLO object detection in Docker can cold-load slowly
     "object_detection": 60.0,
     # Speaker diarization loads heavy audio models
     "speaker_diarize": 60.0,
-    # Gemini deep forensic includes up to 60s wait for Agent1 context
-    # plus Gemini API latency. Give it headroom above the inner wait.
-    "gemini_deep_forensic": 120.0,
+    # Pure I/O — hash is computed in-process with no subprocess
+    "file_hash_verify": 10.0,
+    # Pure NumPy FFT — never exceeds 5s; tight bound prevents stall
+    "frequency_domain_analysis": 30.0,
+    # Gemini deep forensic includes up to 30s wait for Agent1 context plus
+    # Gemini API latency (60s quota refresh cycle on Free tier). 180s gives
+    # adequate headroom for a single 429 retry without killing the tool.
+    "gemini_deep_forensic": 180.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0

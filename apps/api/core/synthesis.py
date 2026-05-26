@@ -616,10 +616,9 @@ Agent: {agent_name} ({agent_id})
             primary = signal_rows[0] if signal_rows else {}
             primary_tool = str(primary.get("tool") or "forensic tools").replace("_", " ")
             primary_verdict = str(primary.get("evidence_verdict") or "INCONCLUSIVE").lower()
-            primary_conf = float(primary.get("confidence") or pre_confidence or 0.0)
             narrative = (
                 f"{primary_tool.title()} is the strongest agent signal: {primary_verdict} "
-                f"at {primary_conf:.0%} confidence across {len(findings)} applicable findings."
+                f"across {len(findings)} applicable findings."
                 if primary
                 else f"{agent_name} produced no applicable forensic signal."
             )
@@ -649,18 +648,16 @@ Agent: {agent_name} ({agent_id})
                         )
                     elif verdict.upper() == "POSITIVE":
                         summary = (
-                            f"{tool.replace('_', ' ').title()} returned a manipulation indicator "
-                            f"at {conf:.0%} confidence — review the metrics below.{metric_text}"
+                            f"{tool.replace('_', ' ').title()} flagged a manipulation indicator — "
+                            f"review the metrics below.{metric_text}"
                         )
                     elif verdict.upper() == "NEGATIVE":
                         summary = (
-                            f"{tool.replace('_', ' ').title()} confirmed no anomaly "
-                            f"at {conf:.0%} confidence for its specific test.{metric_text}"
+                            f"{tool.replace('_', ' ').title()} found no anomaly for its specific test.{metric_text}"
                         )
                     else:
                         summary = (
-                            f"{tool.replace('_', ' ').title()} returned an inconclusive result "
-                            f"at {conf:.0%} confidence.{metric_text}"
+                            f"{tool.replace('_', ' ').title()} returned an inconclusive result.{metric_text}"
                         )
                     refined.append({"tool": tool, "user_friendly_summary": summary})
                 top_signal = next(

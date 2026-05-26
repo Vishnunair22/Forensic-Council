@@ -593,14 +593,16 @@ class ImageHandlers(BaseToolHandler):
 
         if not result.get("error"):
             if record:
-                await self._store("neural_copy_move", result, "copy_move_detect")
+                await self.agent._record_tool_result("neural_copy_move", result)
             return result
 
         # Fallback: SIFT-based copy-move (runs in executor — sync CPU call)
         loop = asyncio.get_running_loop()
         fallback = await loop.run_in_executor(None, detect_copy_move, artifact.file_path)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = "BusterNet dual-branch unavailable; SIFT-based copy-move used"
         if record:
-            await self._store("neural_copy_move", fallback, "copy_move_detect")
+            await self.agent._record_tool_result("neural_copy_move", fallback)
         return fallback
 
     async def neural_splicing_handler(self, input_data: dict, record: bool = True) -> dict:
@@ -615,14 +617,16 @@ class ImageHandlers(BaseToolHandler):
 
         if not result.get("error"):
             if record:
-                await self._store("neural_splicing", result, "splicing_detect")
+                await self.agent._record_tool_result("neural_splicing", result)
             return result
 
         # Fallback: heuristic splicing detection (sync — run in executor)
         loop = asyncio.get_running_loop()
         fallback = await loop.run_in_executor(None, detect_splicing, artifact.file_path)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = "TruFor ViT unavailable; heuristic splicing detector used"
         if record:
-            await self._store("neural_splicing", fallback, "splicing_detect")
+            await self.agent._record_tool_result("neural_splicing", fallback)
         return fallback
 
     async def anomaly_tracer_handler(self, input_data: dict) -> dict:
@@ -638,14 +642,15 @@ class ImageHandlers(BaseToolHandler):
         if not await self._has_tampering_signal():
             result = {
                 "anomaly_tracer_skipped": True,
+                "skipped": True,
+                "not_applicable": True,
                 "reason": "No prior tampering signals from Phase-1/Phase-2 tools — ManTra-Net not triggered",
-                "confidence": 0.5,
-                "court_defensible": True,
+                "confidence": 0.0,
+                "court_defensible": False,
                 "available": True,
             }
             # Store only under anomaly_tracer — do NOT alias as jpeg_ghost_detect
-            # here because the skip-stub contains no ghost-detection data and would
-            # corrupt downstream consumers (Gemini context, arbiter) that read that key.
+            # because this stub contains no ghost-detection data.
             await self.agent._record_tool_result("anomaly_tracer", result)
             return result
 
@@ -662,6 +667,8 @@ class ImageHandlers(BaseToolHandler):
 
         # Fallback: JPEG ghost detection
         fallback = await real_jpeg_ghost_detect(artifact=artifact)
+        fallback["degraded"] = True
+        fallback["fallback_reason"] = "ManTra-Net unavailable; JPEG ghost detection used as substitute"
         await self._store("anomaly_tracer", fallback, "jpeg_ghost_detect")
         return fallback
 
@@ -679,10 +686,21 @@ class ImageHandlers(BaseToolHandler):
             await self._store("f3_net_frequency", result, "deepfake_frequency_check")
             return result
 
-        # Fallback: heuristic frequency bands (sync — run in executor)
-        loop = asyncio.get_running_loop()
-        fallback = await loop.run_in_executor(None, analyze_frequency_bands, artifact.file_path)
-        await self._store("f3_net_frequency", fallback, "deepfake_frequency_check")
+        # Fallback: return a degraded stub referencing any Phase-1 frequency result already in
+        # context.  Re-running analyze_frequency_bands here produces zero new information because
+        # that same heuristic already ran as deepfake_frequency_check in Phase 1.
+        existing = self.agent._tool_context.get("deepfake_frequency_check") or {}
+        fallback = {
+            **existing,
+            "degraded": True,
+            "fallback_reason": (
+                "F3-Net neural frequency analysis unavailable; "
+                "Phase-1 frequency heuristic result is referenced — no new deep signal"
+            ),
+            "available": False,
+            "court_defensible": False,
+        }
+        await self.agent._record_tool_result("f3_net_frequency", fallback)
         return fallback
 
     async def neural_fingerprint_handler(self, input_data: dict) -> dict:

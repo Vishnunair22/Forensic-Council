@@ -42,7 +42,7 @@ class NeuralSynthesisMixin:
             return {}
 
         if not event.is_set():
-            timeout = getattr(self.config, "agent_context_wait_timeout", 60.0)
+            timeout = getattr(self.config, "agent_context_wait_timeout", 30.0)
             try:
                 # Use shield to prevent cancellation of the wait if the agent pass is still running
                 await asyncio.wait_for(asyncio.shield(event.wait()), timeout=timeout)

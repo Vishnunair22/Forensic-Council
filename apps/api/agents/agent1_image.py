@@ -44,6 +44,14 @@ class Agent1Image(ForensicAgent):
     audio analysis, or video temporal analysis.
     """
 
+    persona: str = (
+        "You are Dr. Maya Reyes, a 15-year forensic image integrity examiner with the FBI Digital Evidence Lab. "
+        "You specialize in JPEG re-compression analysis, sensor PRNU patterns, neural model artifacts, and "
+        "GAN/Diffusion provenance traces. You report only what your tools measured. You never speculate beyond "
+        "the data. You explicitly mark fallback heuristics as such. You write 2-3 sentence verdicts that a "
+        "non-technical jury can understand. You always cite at least one specific metric in your verdict."
+    )
+
     @property
     def agent_name(self) -> str:
         return "Agent1_ImageIntegrity"
@@ -76,35 +84,41 @@ class Agent1Image(ForensicAgent):
         """
         Phase 1 — Initial Analysis (fast, runs on every image).
 
-        Tasks are ordered from least to most expensive so the agent produces
-        useful context early and accumulates evidence progressively.
+        Ordered by forensic signal value: primary manipulation detectors run
+        first so the investigator sees high-confidence findings early.
+        Cheap context tools (CLIP, OCR, FFT) follow.
         """
-        base = [
-            "Run file_hash_verify for evidence integrity check",
-            "Run analyze_image_content for semantic image understanding",
-            "Run extract_text_from_image for visible text extraction",
-        ]
         if self._is_screen_capture or self._is_digital_capture:
-            # Screenshots: fast integrity + OCR + frequency scan + semantic.
-            # neural_fingerprint (SigLIP2) deferred to deep — conceptual similarity
+            # Screenshots: hash integrity → OCR (primary signal for UI) → semantic →
+            # frequency scan. neural_fingerprint deferred to deep — conceptual similarity
             # is less informative for screenshots which are inherently unique UI states.
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run analyze_image_content for semantic image understanding",
                 "Run extract_text_from_image for visible text extraction",
+                "Run analyze_image_content for semantic image understanding",
                 "Run frequency_domain_analysis for frequency domain analysis",
             ]
-        base.insert(3, "Run neural_fingerprint for conceptual similarity detection")
         if self._is_lossless:
-            # Lossless path: frequency scan then noiseprint (sensor clustering preferred)
-            return base + [
-                "Run frequency_domain_analysis for frequency domain analysis",
+            # Lossless: noiseprint sensor clustering is the primary manipulation signal.
+            # neural_fingerprint → CLIP context → OCR (rarely useful) → FFT supporting.
+            return [
+                "Run file_hash_verify for evidence integrity check",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
+                "Run neural_fingerprint for conceptual similarity detection",
+                "Run analyze_image_content for semantic image understanding",
+                "Run frequency_domain_analysis for frequency domain analysis",
+                "Run extract_text_from_image for visible text extraction",
             ]
-        # Lossy path: frequency scan first for GAN baseline, then ELA (primary manipulation signal)
-        return base + [
-            "Run frequency_domain_analysis for frequency domain analysis",
+        # Lossy/JPEG: Neural ELA is the primary manipulation signal — run it first.
+        # neural_fingerprint (SigLIP2) follows for GAN/synthetic baseline.
+        # CLIP semantic + FFT + OCR provide supporting context.
+        return [
+            "Run file_hash_verify for evidence integrity check",
             "Run neural_ela for high-confidence manipulation detection",
+            "Run neural_fingerprint for conceptual similarity detection",
+            "Run analyze_image_content for semantic image understanding",
+            "Run frequency_domain_analysis for frequency domain analysis",
+            "Run extract_text_from_image for visible text extraction",
         ]
 
     @property
