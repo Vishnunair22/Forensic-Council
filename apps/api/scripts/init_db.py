@@ -34,6 +34,7 @@ try:
     from core.config import get_settings
     from core.dev_seed import MigrationManager
     from core.persistence.postgres_client import PostgresClient
+    from core.signing import get_keystore
 except Exception as e:
     print(f"\n[FATAL] Configuration error: {e}")
     sys.exit(1)
@@ -89,6 +90,21 @@ async def init_database() -> bool:
 
             # Bootstrap users
             await bootstrap_users(manager.client)
+
+            # Pre-seed agent signing keys so the worker can find them in the
+            # DB even when it starts before the backend finishes initializing.
+            try:
+                ks = get_keystore()
+                await ks.initialize()
+                # Also pre-create signing keys for bootstrapped investigators
+                # (dynamic agent IDs like "inv-<username>")
+                for row in await manager.client.fetch(
+                    "SELECT user_id FROM users WHERE role = 'investigator'"
+                ):
+                    await ks.get_or_create_persistent(row["user_id"])
+                logger.info("Signing key store initialized with agent keys")
+            except Exception as e:
+                logger.warning("Could not initialize signing keystore in migration", error=str(e))
 
             status = await manager.status()
             logger.info(

@@ -302,8 +302,17 @@ export function AgentProgressDisplay({
     typeof process !== "undefined" && process.env.NODE_ENV === "test" ? false : true
   );
 
+  const statusLeftIdleRef = useRef(false);
+  const prevStatusRef = useRef(pipelineStatus);
   useEffect(() => {
-    if (Object.keys(agentUpdates).length > 0 && !activeAgentsExpanded) {
+    if (prevStatusRef.current === "idle" && pipelineStatus !== "idle") {
+      statusLeftIdleRef.current = true;
+    }
+    prevStatusRef.current = pipelineStatus;
+  }, [pipelineStatus]);
+
+  useEffect(() => {
+    if (statusLeftIdleRef.current && !activeAgentsExpanded && Object.keys(agentUpdates).length > 0) {
       setActiveAgentsExpanded(true);
     }
   }, [agentUpdates, activeAgentsExpanded]);

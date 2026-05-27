@@ -486,6 +486,31 @@ class KeyStore:
         if agent_id in self._keys:
             return self._keys[agent_id]
 
+        # Attempt to load the key from PostgreSQL first on cache miss
+        try:
+            from core.persistence.postgres_client import get_postgres_client
+            pg = await get_postgres_client()
+            if pg is not None:
+                row = await pg.fetch_one(
+                    "SELECT encrypted_private_key_pem, is_active "
+                    "FROM agent_signing_keys WHERE agent_id = $1 AND is_active = true",
+                    agent_id,
+                )
+                if row:
+                    encrypted_pem = row["encrypted_private_key_pem"]
+                    if self._fernet:
+                        pem_bytes = self._fernet.decrypt(encrypted_pem.encode("utf-8"))
+                        key_pair = AgentKeyPair.from_pem(agent_id, pem_bytes.decode("utf-8"))
+                        self._keys[agent_id] = key_pair
+                        logger.info("Loaded dynamically registered signing key from DB", agent_id=agent_id)
+                        return key_pair
+        except Exception as e:
+            logger.warning(
+                "Failed to load dynamic key from database",
+                agent_id=agent_id,
+                error=str(e),
+            )
+
         if "worker" in self._settings.app_name.lower():
             raise RuntimeError(
                 f"KeyStore.get_or_create_persistent: Worker is missing ECDSA signing key for agent '{agent_id}'. "
