@@ -155,7 +155,8 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_success(self, mock_pg, mock_decode):
-        from core.auth import TokenData, get_current_user
+        from core.auth import TokenData, get_current_user, _user_status_cache
+        _user_status_cache.clear()
 
         mock_decode.return_value = TokenData(
             user_id="u1", username="test", role=UserRole.INVESTIGATOR
@@ -177,7 +178,8 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_disabled(self, mock_pg, mock_decode):
-        from core.auth import TokenData, get_current_user
+        from core.auth import TokenData, get_current_user, _user_status_cache
+        _user_status_cache.clear()
 
         mock_decode.return_value = TokenData(
             user_id="u1", username="test", role=UserRole.INVESTIGATOR
@@ -230,10 +232,12 @@ class TestRS256Auth:
     @pytest.mark.asyncio
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_cookie_fallback(self, mock_pg):
-        from core.auth import TokenData, get_current_user
+        from core.auth import TokenData, get_current_user, _user_status_cache
+        _user_status_cache.clear()
 
         mock_request = MagicMock()
         mock_request.cookies = {"access_token": "cookie-token"}
+        mock_request.query_params = {}
 
         with patch("core.auth.decode_token") as mock_decode:
             mock_decode.return_value = TokenData(
@@ -247,20 +251,23 @@ class TestRS256Auth:
             assert user.user_id == "u1"
 
     @pytest.mark.asyncio
+    @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
-    async def test_get_current_user_optional(self, mock_pg):
-        from core.auth import TokenData, get_current_user_optional
+    async def test_get_current_user_optional(self, mock_pg, mock_decode):
+        from core.auth import TokenData, get_current_user_optional, _user_status_cache
+        _user_status_cache.clear()
 
         # Unauthenticated
         mock_request = MagicMock()
         mock_request.cookies = {}
+        mock_request.query_params = {}
         assert await get_current_user_optional(request=mock_request, credentials=None) is None
 
         # Authenticated
-        mock_creds = MagicMock(credentials="token")
-        with patch("core.auth.decode_token") as mock_decode:
-            mock_decode.return_value = TokenData(
-                user_id="u1", username="test", role=UserRole.INVESTIGATOR
-            )
-            user = await get_current_user_optional(request=mock_request, credentials=mock_creds)
-            assert user.user_id == "u1"
+        mock_creds = MagicMock()
+        mock_creds.credentials = "token"
+        mock_decode.return_value = TokenData(
+            user_id="u1", username="test", role=UserRole.INVESTIGATOR
+        )
+        user = await get_current_user_optional(request=mock_request, credentials=mock_creds)
+        assert user.user_id == "u1"

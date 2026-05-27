@@ -168,7 +168,10 @@ async def run_agents_concurrent(
                         tool_name = str(item.get("tool") or "").strip()
                         if not tool_name:
                             continue
-                        if restrict_to_actual and (tool_name not in actual_tools or tool_name in (initial_tool_names or set())):
+                        if restrict_to_actual and (
+                            tool_name not in actual_tools
+                            or (analysis_phase == "deep" and tool_name in (initial_tool_names or set()))
+                        ):
                             continue
                         if tool_name in PREVIEW_EXCLUDED_TOOLS:
                             continue
@@ -304,7 +307,7 @@ async def run_agents_concurrent(
                     tool_key = str(item.get("tool") or "")
                     if tool_key and tool_key in seen_tools:
                         continue
-                    if initial_tool_names and tool_key in _norm_initial_tools:
+                    if analysis_phase == "deep" and initial_tool_names and tool_key in _norm_initial_tools:
                         continue
                     if tool_key:
                         seen_tools.add(tool_key)
@@ -312,9 +315,7 @@ async def run_agents_concurrent(
                     if len(deduped) >= 8:
                         break
                 preview = deduped
-            if isinstance(synthesis, dict) and not preview and not initial_tool_names:
-                # Only show the narrative fallback for the initial phase.
-                # Deep-phase broadcasts suppress it to avoid showing initial analysis context.
+            if isinstance(synthesis, dict) and synthesis.get("narrative_summary"):
                 summary = str(synthesis.get("narrative_summary") or "").strip()
                 if summary and not any(
                     p in summary.lower()
@@ -324,7 +325,9 @@ async def run_agents_concurrent(
                         "no digital traces or anomalies were detected due to",
                     )
                 ):
-                    preview.append(
+                    # Prepend narrative summary as the first preview item
+                    preview.insert(
+                        0,
                         {
                             "tool": "agent_synthesis",
                             "summary": summary[:420],

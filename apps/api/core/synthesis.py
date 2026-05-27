@@ -320,6 +320,7 @@ class SynthesisService:
         phase: str = "initial",
         agent_persona: str = "",
         image_type_hint: str = "",
+        gemini_context: dict | None = None,
     ) -> dict[str, Any]:
         """
         Synthesize findings using Groq to produce a structured forensic narrative.
@@ -433,8 +434,22 @@ class SynthesisService:
         # Build system prompt with role instructions (no evidence data)
         role_preamble = agent_persona if agent_persona else "You are a Senior Forensic Analyst at the National Cyber Forensics Institute."
         hint_block = f"\nThis analysis concerns: {image_type_hint}. Prioritize findings most relevant to this content category.\n" if image_type_hint else ""
+        
+        gemini_block = ""
+        if gemini_context:
+            category = gemini_context.get("image_category") or gemini_context.get("file_type_assessment") or "UNKNOWN"
+            signals = gemini_context.get("priority_signals") or gemini_context.get("manipulation_signals") or []
+            verdict = gemini_context.get("visual_verdict") or gemini_context.get("authenticity_verdict") or "INCONCLUSIVE"
+            gemini_block = f"""
+[GEMINI UPFRONT VISION CONTEXT]
+- Content Category: {category}
+- Visually Detected Manipulation Signals: {", ".join(signals) if isinstance(signals, list) else signals}
+- Visual Authenticity Verdict: {verdict}
+"""
+
         system_prompt = f"""[SYSTEM: FORENSIC ANALYST SYNTHESIS]
 {role_preamble}
+{gemini_block}
 Synthesize raw tool findings from {agent_name} into a precise, court-defensible narrative.{hint_block}
 Every sentence must be specific and grounded in the actual tool data — no generalities.
 
@@ -787,7 +802,7 @@ Agent: {agent_name} ({agent_id})
                 f"Image integrity checks ran {total_image} tool(s) on this screen capture — "
                 f"finding the file intact with no spectral manipulation signals detected. "
                 f"{ocr_note.capitalize()} and {hash_note}. "
-                "These results confirm integrity since upload; they do not speak to the original capture device or timestamp."
+                "These results confirm integrity since intake; they do not speak to the original capture device or timestamp."
             )
         elif screenshot_like and ("metadata" in agent_name.lower() or "provenance" in agent_name.lower()):
             grounded = self._agent_grounded_narrative(

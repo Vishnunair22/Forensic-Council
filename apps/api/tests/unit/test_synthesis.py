@@ -104,6 +104,44 @@ class TestSynthesisPromptRoleSplit:
                     assert "[UNTRUSTED EVIDENCE START" in user
 
     @pytest.mark.asyncio
+    async def test_gemini_context_injected_in_system_prompt(self, service):
+        with patch.object(service, "_ground_synthesis_response", return_value={"verdict": "AUTHENTIC", "narrative_summary": "", "sections": []}):
+            llm_client = AsyncMock()
+            llm_client.generate_synthesis = MagicMock()
+            llm_client.generate_synthesis.return_value = json.dumps({
+                "verdict": "AUTHENTIC", "narrative_summary": "Test", "sections": []
+            })
+            findings = [_finding("file_hash_verify")]
+            ev = _evidence()
+            with patch.object(service, "_compact_metrics", return_value={}):
+                service._llm_client = llm_client
+                try:
+                    await service.synthesize_findings(
+                        agent_id="Agent1",
+                        agent_name="Agent1_Image",
+                        findings=findings,
+                        evidence_artifact=ev,
+                        tool_success_count=1,
+                        tool_error_count=0,
+                        phase="initial",
+                        gemini_context={
+                            "image_category": "screenshot",
+                            "priority_signals": ["UI components", "Text alignment"],
+                            "visual_verdict": "SUSPICIOUS",
+                        }
+                    )
+                except Exception:
+                    pass
+                call_kwargs = llm_client.generate_synthesis.call_args
+                if call_kwargs:
+                    kwargs = call_kwargs[1] if len(call_kwargs[1]) > 0 else call_kwargs[0]
+                    system = kwargs.get("system_prompt", "")
+                    assert "[GEMINI UPFRONT VISION CONTEXT]" in system
+                    assert "Content Category: screenshot" in system
+                    assert "UI components, Text alignment" in system
+                    assert "Visual Authenticity Verdict: SUSPICIOUS" in system
+
+    @pytest.mark.asyncio
     async def test_user_content_contains_evidence_not_instructions(self, service):
         with patch.object(service, "_ground_synthesis_response", return_value={"verdict": "AUTHENTIC", "narrative_summary": "", "sections": []}):
             llm_client = AsyncMock()

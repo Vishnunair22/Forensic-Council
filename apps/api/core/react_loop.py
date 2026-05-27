@@ -1356,8 +1356,51 @@ class ReActLoopEngine:
                 next_step = await self._default_step_generator(state, tool_registry)
 
             if next_step is None:
-                # Both LLM and task driver signal completion
-                break
+                # Both LLM and task driver signal completion.
+                # Check for untreated absences via self-reflection.
+                injected_any = False
+                if self.agent and hasattr(self.agent, "self_reflection_pass") and self._current_iteration < self.iteration_ceiling:
+                    try:
+                        report = await self.agent.self_reflection_pass(self._findings)
+                        for absence in report.untreated_absences:
+                            if "MISSING_PRNU_ANALYSIS" in absence:
+                                has_np = False
+                                for t in state.tasks:
+                                    if "noiseprint" in t.description.lower() or "noise_fingerprint" in t.description.lower():
+                                        has_np = True
+                                        break
+                                if not has_np:
+                                    desc = "Run noiseprint_cluster for sensor-region source inconsistency" if getattr(self.agent, "_is_lossless", False) else "Run noise_fingerprint for sensor-level consistency check"
+                                    await self.agent.inject_task(desc, priority=5)
+                                    injected_any = True
+                            elif "MISSING_EXIF_DATA" in absence:
+                                has_exif = False
+                                for t in state.tasks:
+                                    if "exif" in t.description.lower():
+                                        has_exif = True
+                                        break
+                                if not has_exif:
+                                    await self.agent.inject_task("Run exif_extract for metadata check", priority=5)
+                                    injected_any = True
+                    except Exception as ref_err:
+                        logger.warning(
+                            "Self-reflection task injection failed",
+                            agent_id=self.agent_id,
+                            error=str(ref_err),
+                        )
+
+                if injected_any:
+                    # Re-read state and get the next step
+                    try:
+                        state = await self.working_memory.get_state(
+                            session_id=self.session_id, agent_id=self.agent_id
+                        )
+                        next_step = await self._default_step_generator(state, tool_registry)
+                    except Exception:
+                        next_step = None
+
+                if next_step is None:
+                    break
 
             next_step.iteration = self._current_iteration
             self._react_chain.append(next_step)

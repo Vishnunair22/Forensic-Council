@@ -106,6 +106,7 @@ class Agent1Image(ForensicAgent):
         if self._is_document:
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for content classification and forensic routing hints",
                 "Run extract_text_from_image for OCR and document content identification",
                 "Run analyze_image_content for semantic document classification",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -115,6 +116,7 @@ class Agent1Image(ForensicAgent):
         if self._is_recompressed_web:
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for content classification and forensic routing hints",
                 "Run jpeg_ghost_detect for double compression analysis",
                 "Run ela_full_image for classical ELA residuals check",
                 "Run neural_ela for high-confidence manipulation detection",
@@ -129,6 +131,7 @@ class Agent1Image(ForensicAgent):
             # is less informative for screenshots which are inherently unique UI states.
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for content classification and forensic routing hints",
                 "Run extract_text_from_image for visible text extraction",
                 "Run analyze_image_content for semantic image understanding",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -138,6 +141,7 @@ class Agent1Image(ForensicAgent):
             # neural_fingerprint → CLIP context → OCR (rarely useful) → FFT supporting.
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for content classification and forensic routing hints",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -149,6 +153,7 @@ class Agent1Image(ForensicAgent):
         # CLIP semantic + FFT + OCR provide supporting context.
         return [
             "Run file_hash_verify for evidence integrity check",
+            "Run gemini_deep_forensic for content classification and forensic routing hints",
             "Run neural_ela for high-confidence manipulation detection",
             "Run neural_fingerprint for conceptual similarity detection",
             "Run analyze_image_content for semantic image understanding",
@@ -232,7 +237,44 @@ class Agent1Image(ForensicAgent):
                 except Exception as _e:
                     logger.debug(f"{self.agent_id}: Gemini signal relay failed", error=str(_e))
 
-            return await self._gemini_deep_forensic_handler(input_data, signal_callback=_signal_cb)
+            result = await self._gemini_deep_forensic_handler(input_data, signal_callback=_signal_cb)
+
+            # Dynamic content-aware tool gating using forensic_routing
+            try:
+                metadata = result.get("metadata", {}) or {}
+                routing = metadata.get("forensic_routing", {}) or {}
+                skip_tools = [t.lower().replace("_", "") for t in routing.get("skip_tools", [])]
+
+                if skip_tools:
+                    # Get current tasks from working memory
+                    state = await self.working_memory.get_state(self.session_id, self.agent_id)
+                    new_tasks = []
+                    for t in state.tasks:
+                        matched_tool = None
+                        for name in registry.handlers.keys():
+                            if name in t.description:
+                                matched_tool = name
+                                break
+
+                        if matched_tool:
+                            norm_matched = matched_tool.lower().replace("_", "")
+                            # If this tool is explicitly listed in skip_tools, we skip it
+                            if norm_matched in skip_tools:
+                                logger.info(f"Dynamically skipping tool based on forensic routing: {matched_tool}", agent_id=self.agent_id)
+                                t.status = "COMPLETE"
+                                t.result_ref = "skipped_by_forensic_routing"
+                                t.sub_task_info = "Skipped by content-aware forensic routing"
+
+                        new_tasks.append(t)
+
+                    # Write updated tasks back to working memory
+                    await self.working_memory.update_state(
+                        self.session_id, self.agent_id, {"tasks": [t.model_dump() for t in new_tasks]}
+                    )
+            except Exception as exc:
+                logger.warning(f"Error in dynamic forensic routing application: {exc}", agent_id=self.agent_id)
+
+            return result
 
         registry.register(
             "gemini_deep_forensic",
@@ -306,11 +348,93 @@ class Agent1Image(ForensicAgent):
         """Reactive task expansion based on pixel and semantic signals."""
         try:
             await self._on_tool_result_impl(finding)
+            await self._reason_step(finding)
             # Ensure findings are progressively published to the UI to prevent hanging
             phase = finding.metadata.get("analysis_phase", "initial")
             await self._publish_agent_context(phase, [finding])
         except Exception as e:
             logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
+
+    async def _reason_step(self, finding: AgentFinding) -> None:
+        """Domain-specific forensic logic to handle tool interaction patterns."""
+        tool_name = finding.metadata.get("tool_name")
+        if not tool_name:
+            return
+
+        findings = self._findings
+
+        # 1. ELA + frequency disagreement
+        ela_finding = next((f for f in findings if f.metadata.get("tool_name") in ("neural_ela", "ela_full_image")), None)
+        fft_finding = next((f for f in findings if f.metadata.get("tool_name") == "frequency_domain_analysis"), None)
+        if ela_finding and fft_finding:
+            ela_pos = ela_finding.evidence_verdict == "POSITIVE" or ela_finding.metadata.get("manipulation_detected") is True or ela_finding.metadata.get("num_anomaly_regions", 0) > 0
+            fft_neg = fft_finding.evidence_verdict in ("NEGATIVE", "CLEAN") or (fft_finding.metadata.get("anomaly_detected") is False and fft_finding.metadata.get("num_anomaly_regions", 0) == 0)
+            if ela_pos and fft_neg:
+                has_ghost = any("jpeg_ghost_detect" in (t.description or "").lower() for t in getattr(self, "_react_chain", []) if hasattr(t, "description"))
+                has_f3 = any("f3_net_frequency" in (t.description or "").lower() for t in getattr(self, "_react_chain", []) if hasattr(t, "description"))
+                
+                state = await self.working_memory.get_state(session_id=self.session_id, agent_id=self.agent_id)
+                if state:
+                    has_ghost = has_ghost or any("jpeg_ghost_detect" in t.description.lower() for t in state.tasks)
+                    has_f3 = has_f3 or any("f3_net_frequency" in t.description.lower() for t in state.tasks)
+
+                if not has_ghost:
+                    logger.info("Reasoning Step: ELA and FFT disagreement. Injecting jpeg_ghost_detect.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run jpeg_ghost_detect for double compression analysis", priority=15)
+                if not has_f3:
+                    logger.info("Reasoning Step: ELA and FFT disagreement. Injecting f3_net_frequency.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run f3_net_frequency for AI-GAN artifact detection", priority=15)
+
+        # 2. noiseprint multi-cluster
+        if tool_name == "noiseprint_cluster":
+            num_clusters = finding.metadata.get("num_clusters", 1)
+            sensor_inconsistent = finding.metadata.get("sensor_inconsistency_detected", False)
+            if (finding.evidence_verdict == "POSITIVE" or sensor_inconsistent or num_clusters > 1):
+                state = await self.working_memory.get_state(session_id=self.session_id, agent_id=self.agent_id)
+                has_splicing = any("splicing" in t.description.lower() for t in state.tasks) if state else False
+                has_copy_move = any("copy_move" in t.description.lower() for t in state.tasks) if state else False
+                if not has_splicing:
+                    logger.info("Reasoning Step: noiseprint multi-cluster anomaly. Injecting neural_splicing.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run neural_splicing for ViT-based region composition analysis", priority=18)
+                if not has_copy_move:
+                    logger.info("Reasoning Step: noiseprint multi-cluster anomaly. Injecting neural_copy_move.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run neural_copy_move for dual-branch copy-move detection", priority=18)
+
+        # 3. copy-move confirmation after splicing
+        if tool_name in ("neural_splicing", "splicing_detect"):
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("splicing_detected") is True:
+                state = await self.working_memory.get_state(session_id=self.session_id, agent_id=self.agent_id)
+                has_copy_move = any("copy_move" in t.description.lower() for t in state.tasks) if state else False
+                if not has_copy_move:
+                    logger.info("Reasoning Step: Splicing detected. Injecting neural_copy_move to confirm clone source.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run neural_copy_move for dual-branch copy-move detection", priority=17)
+
+        # 4. diffusion confidence without frequency anomaly
+        diff_finding = next((f for f in findings if f.metadata.get("tool_name") == "diffusion_artifact_detector"), None)
+        if diff_finding and fft_finding:
+            diff_pos = diff_finding.evidence_verdict == "POSITIVE" or (diff_finding.confidence_raw or 0.0) > 0.8
+            fft_neg = fft_finding.evidence_verdict in ("NEGATIVE", "CLEAN") or (fft_finding.metadata.get("anomaly_detected") is False and fft_finding.metadata.get("num_anomaly_regions", 0) == 0)
+            if diff_pos and fft_neg:
+                state = await self.working_memory.get_state(session_id=self.session_id, agent_id=self.agent_id)
+                has_synthid = any("synthid" in t.description.lower() for t in state.tasks) if state else False
+                has_f3 = any("f3_net_frequency" in t.description.lower() for t in state.tasks) if state else False
+                if not has_synthid:
+                    logger.info("Reasoning Step: High diffusion confidence but clean FFT. Injecting synthid_watermark_detect.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run synthid_watermark_detect for SynthID and AI watermark detection", priority=16)
+                if not has_f3 and not (ela_finding and fft_finding and ela_pos and fft_neg):
+                    logger.info("Reasoning Step: High diffusion confidence but clean FFT. Injecting f3_net_frequency.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run f3_net_frequency for AI-GAN artifact detection", priority=16)
+
+        # 5. ROI injection on high-confidence ELA positives
+        if tool_name in ("neural_ela", "ela_full_image"):
+            ela_high_conf = (finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.75) or finding.metadata.get("num_anomaly_regions", 0) > 3
+            if ela_high_conf:
+                state = await self.working_memory.get_state(session_id=self.session_id, agent_id=self.agent_id)
+                has_roi = any("roi_extract" in t.description.lower() for t in state.tasks) if state else False
+                if not has_roi:
+                    logger.info("Reasoning Step: High-confidence ELA anomaly. Injecting roi_extract.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run roi_extract for localized forensic region analysis", priority=20)
+
 
     async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
         """Implementation of reactive task expansion."""

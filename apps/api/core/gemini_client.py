@@ -165,6 +165,7 @@ class GeminiVisionFinding:
     _contextual_narrative: str = ""
     _authenticity_verdict: str = ""
     _metadata_visual_consistency: str = ""
+    _forensic_routing: dict[str, Any] = field(default_factory=dict)
 
     def to_finding_dict(self, agent_id: str) -> dict[str, Any]:
         """Convert to a dict compatible with AgentFinding / Arbiter schema."""
@@ -201,6 +202,7 @@ class GeminiVisionFinding:
                 "contextual_narrative": getattr(self, "_contextual_narrative", ""),
                 "authenticity_verdict": getattr(self, "_authenticity_verdict", ""),
                 "metadata_visual_consistency": getattr(self, "_metadata_visual_consistency", ""),
+                "forensic_routing": getattr(self, "_forensic_routing", {}),
                 "analysis_phase": "deep",
                 "latency_ms": round(self.latency_ms, 1),
                 # Map authenticity_verdict to standard manipulation flags so the
@@ -644,6 +646,12 @@ class GeminiVisionClient:
             "it is a 'Samsung S24' photo but you see 'iPhone' UI artifacts, or if the "
             "GPS says 'Dubai' but you see 'London' landmarks.\n\n"
             "11. CONFIDENCE: Your overall confidence in this analysis (0.0-1.0).\n\n"
+            "12. FORENSIC_ROUTING: Classify the content type of this image to guide downstream agent routing. "
+            "Return an object containing:\n"
+            "   - image_category: one of 'live_photograph', 'web_image', 'document', 'object_scene', 'screenshot', 'ai_generated_suspect'\n"
+            "   - priority_signals: list of strings (what visual/pixel indicators to investigate first)\n"
+            "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
+            "   - focus_regions: list of strings (coordinates or specific regions of interest to inspect)\n\n"
             f"{meta_section}\n\n"
             "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
             "preamble, just the JSON object):\n"
@@ -658,7 +666,13 @@ class GeminiVisionClient:
             '  "metadata_visual_consistency": "consistency assessment",\n'
             '  "contradiction_audit": ["specific contradiction identified"],\n'
             '  "authenticity_verdict": "AUTHENTIC",\n'
-            '  "confidence": 0.95\n'
+            '  "confidence": 0.95,\n'
+            '  "forensic_routing": {\n'
+            '    "image_category": "live_photograph",\n'
+            '    "priority_signals": ["priority signal to look for"],\n'
+            '    "skip_tools": ["tools to skip"],\n'
+            '    "focus_regions": ["focus areas"]\n'
+            '  }\n'
             "}"
         )
 
@@ -1146,6 +1160,7 @@ class GeminiVisionClient:
             _contextual_narrative=data.get("contextual_narrative", ""),
             _authenticity_verdict=verdict,
             _metadata_visual_consistency=meta_consistency,
+            _forensic_routing=data.get("forensic_routing", {}),
         )
         return finding
 

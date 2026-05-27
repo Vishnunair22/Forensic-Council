@@ -31,6 +31,12 @@ class TestSubmitDecision:
         user.user_id = "user-123"
         return user
 
+    @pytest.fixture(autouse=True)
+    def mock_authz(self):
+        with patch("api.routes._authz.assert_session_access") as mock:
+            mock.return_value = {"session_id": "test", "investigator_id": "user-123"}
+            yield mock
+
     @pytest.mark.asyncio
     async def test_successful_decision(self, hitl_request, mock_user):
         """Test successful decision submission."""

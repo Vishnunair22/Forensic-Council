@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -20,6 +21,16 @@ class _RedisStub:
 
     async def delete(self, key: str):
         self.deleted.append(key)
+
+    async def execute_command(self, cmd: str, *args):
+        if cmd == "GETDEL":
+            val = self.value
+            self.value = None
+            return val
+        raise NotImplementedError()
+
+    async def set(self, key: str, value: Any, **kwargs):
+        pass
 
 
 class _MetadataStub:
@@ -42,7 +53,14 @@ async def test_deep_analysis_gate_consumes_pre_gate_resume_decision(monkeypatch)
 
     monkeypatch.setattr("core.persistence.redis_client.get_redis_client", _redis)
     monkeypatch.setattr("api.routes._session_state.get_active_pipeline_metadata", _metadata)
-    pipeline = SimpleNamespace(run_deep_analysis_flag=False)
+    
+    import asyncio
+    pipeline = SimpleNamespace(
+        run_deep_analysis_flag=False,
+        deep_analysis_decision_event=asyncio.Event(),
+        _redis=redis,
+        config=SimpleNamespace(hitl_decision_timeout=3600),
+    )
 
     should_run_deep = await _await_deep_analysis_decision(pipeline, uuid4())
 
