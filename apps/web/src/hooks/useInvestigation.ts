@@ -389,9 +389,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           await autoLoginAsInvestigator().then(() => {
             storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
           });
-        }
-        if (getAuthToken() === null) {
-          throw new Error("No active credentials established");
+          // autoLoginAsInvestigator uses httpOnly cookies — getAuthToken() remains
+          // null even after success. If it resolved without throwing, the session
+          // cookie is established and subsequent credentialed requests will work.
         }
       } catch (authErr) {
         setIsUploading(false);
