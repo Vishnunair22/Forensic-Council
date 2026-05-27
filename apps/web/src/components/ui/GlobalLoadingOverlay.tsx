@@ -24,7 +24,8 @@ export function GlobalLoadingOverlay() {
       const guard = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
       if (guard) {
         const guardTime = parseInt(guard, 10);
-        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file) {
+        const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
+        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file && !isAutoStart) {
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
           return false;
         }

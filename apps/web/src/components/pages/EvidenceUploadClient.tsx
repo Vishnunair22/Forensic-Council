@@ -69,32 +69,11 @@ export function EvidenceUploadClient() {
   const investigation = useInvestigation(playSound);
 
   const [isMounted, setIsMounted] = useState(false);
-  const [handoffPending, setHandoffPending] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const autoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
-    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
-    return autoStart || showLoading;
-  });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsMounted(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-
-  useEffect(() => {
-    const handleReset = () => setHandoffPending(false);
-    window.addEventListener("fc:reset-home", handleReset);
-    return () => window.removeEventListener("fc:reset-home", handleReset);
-  }, []);
-
-  useEffect(() => {
-    if (handoffPending && investigation.status === "idle" && !investigation.isUploading) {
-      const timer = setTimeout(() => {
-        setHandoffPending(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [handoffPending, investigation.status, investigation.isUploading]);
 
   useEffect(() => {
     document.body.style.overflow = "";
@@ -103,6 +82,7 @@ export function EvidenceUploadClient() {
     // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {
       if (e.persisted && !storage.getItem(STORAGE_KEYS.SESSION_ID)) {
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
         router.replace("/");
       }
     };
@@ -183,7 +163,7 @@ export function EvidenceUploadClient() {
           />
         )}
 
-        {showAgentProgress || investigation.handoffRecovering || handoffPending ? (
+        {showAgentProgress || investigation.handoffRecovering ? (
           <motion.div
               initial={{ opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}

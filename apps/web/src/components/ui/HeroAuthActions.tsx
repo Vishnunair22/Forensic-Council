@@ -251,11 +251,6 @@ export function HeroAuthActions() {
                 authError={localAuthError}
                 onStartAnalysis={async () => {
                   playSound("scan");
-                  window.dispatchEvent(
-                    new CustomEvent("fc_storage_update", {
-                      detail: { key: STORAGE_KEYS.FC_SHOW_LOADING, value: "true" },
-                    }),
-                  );
                   await handleStartAnalysis();
                   setIsHandingOff(true);
                 }}

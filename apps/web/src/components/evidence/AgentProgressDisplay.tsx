@@ -299,23 +299,10 @@ export function AgentProgressDisplay({
   const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
-    typeof process !== "undefined" && process.env.NODE_ENV === "test" ? false : true
+    (typeof process !== "undefined" && process.env.NODE_ENV === "test") || typeof jest !== "undefined" ? false : true
   );
 
-  const statusLeftIdleRef = useRef(false);
-  const prevStatusRef = useRef(pipelineStatus);
-  useEffect(() => {
-    if (prevStatusRef.current === "idle" && pipelineStatus !== "idle") {
-      statusLeftIdleRef.current = true;
-    }
-    prevStatusRef.current = pipelineStatus;
-  }, [pipelineStatus]);
 
-  useEffect(() => {
-    if (statusLeftIdleRef.current && !activeAgentsExpanded && Object.keys(agentUpdates).length > 0) {
-      setActiveAgentsExpanded(true);
-    }
-  }, [agentUpdates, activeAgentsExpanded]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -500,65 +487,63 @@ export function AgentProgressDisplay({
       </div>
 
       {/* ── Agent Cards Grid ────────────────────────────────────────────── */}
-      {activeAgentsExpanded && (
-        <div className="w-full flex flex-col gap-5">
-          <motion.div
-            className={`grid gap-4 md:gap-5 xl:gap-6 ${
-              visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
-              : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
-              : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-            }`}
-            variants={containerVariants}
-            initial="hidden"
-            animate="show"
-          >
-            <AnimatePresence mode="popLayout">
-              {isBootstrapping ? (
-                visibleAgents.map((agent) => (
-                  <div
-                    key={`skeleton-${agent.id}`}
-                    className="w-full h-40 rounded-2xl bg-white/5 border border-white/5 p-5 flex flex-col gap-4 relative overflow-hidden"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white/5 fc-skeleton" />
-                      <div className="flex-1 flex flex-col gap-2">
-                        <div className="h-4 bg-white/10 rounded w-1/3 fc-skeleton" />
-                        <div className="h-3 bg-white/5 rounded w-1/2 fc-skeleton" />
-                      </div>
-                    </div>
-                    <div className="flex-1 mt-2">
-                      <div className="h-3 bg-white/5 rounded w-full fc-skeleton" />
-                      <div className="h-3 bg-white/5 rounded w-5/6 mt-2 fc-skeleton" />
+      <div className="w-full flex flex-col gap-5">
+        <motion.div
+          className={`grid gap-4 md:gap-5 xl:gap-6 ${
+            visibleAgents.length === 1 ? "grid-cols-1 max-w-xl mx-auto"
+            : visibleAgents.length === 2 ? "grid-cols-1 md:grid-cols-2"
+            : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+          }`}
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+        >
+          <AnimatePresence mode="popLayout">
+            {isBootstrapping ? (
+              visibleAgents.map((agent) => (
+                <div
+                  key={`skeleton-${agent.id}`}
+                  className="w-full h-40 rounded-2xl bg-white/5 border border-white/5 p-5 flex flex-col gap-4 relative overflow-hidden"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 fc-skeleton" />
+                    <div className="flex-1 flex flex-col gap-2">
+                      <div className="h-4 bg-white/10 rounded w-1/3 fc-skeleton" />
+                      <div className="h-3 bg-white/5 rounded w-1/2 fc-skeleton" />
                     </div>
                   </div>
-                ))
-              ) : (
-                visibleAgents.map((agent) => (
-                  <motion.div
-                    key={agent.id}
-                    layout
-                    variants={itemVariants}
-                    exit={{ opacity: 0, transition: { duration: 0.16 } }}
-                  >
-                    <AgentStatusCard
-                      agentId={agent.id}
-                      name={agent.name}
-                      badge={agent.badge}
-                      status={getAgentStatus(agent.id)}
-                      thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
-                      liveUpdate={agentUpdates[agent.id]}
-                      completedData={completedAgents.find((c) => c.agent_id === agent.id)}
-                      phase={phase}
-                      isExpanded={!!expandedCards[agent.id]}
-                      onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
-                    />
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
-          </motion.div>
-        </div>
-      )}
+                  <div className="flex-1 mt-2">
+                    <div className="h-3 bg-white/5 rounded w-full fc-skeleton" />
+                    <div className="h-3 bg-white/5 rounded w-5/6 mt-2 fc-skeleton" />
+                  </div>
+                </div>
+              ))
+            ) : (
+              visibleAgents.map((agent) => (
+                <motion.div
+                  key={agent.id}
+                  layout
+                  variants={itemVariants}
+                  exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                >
+                  <AgentStatusCard
+                    agentId={agent.id}
+                    name={agent.name}
+                    badge={agent.badge}
+                    status={getAgentStatus(agent.id)}
+                    thinking={agentUpdates[agent.id]?.thinking || pipelineMessage || progressText}
+                    liveUpdate={agentUpdates[agent.id]}
+                    completedData={completedAgents.find((c) => c.agent_id === agent.id)}
+                    phase={phase}
+                    isExpanded={!!expandedCards[agent.id]}
+                    onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
+                  />
+                </motion.div>
+              ))
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
 
       {/* ── Elevated Initial Analysis Decision Gate ──────────────────────────────── */}
       <AnimatePresence>

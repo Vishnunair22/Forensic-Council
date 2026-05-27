@@ -40,7 +40,10 @@ export function UploadSuccessModal({
         }
       } catch (err) {
         console.error("Failed to compute SHA-256:", err);
-        const fallback = btoa(file.name + file.size).substring(0, 24).toLowerCase();
+        const ts = Date.now().toString(16).padStart(12, "0");
+        const sz = file.size.toString(16).padStart(8, "0");
+        const nm = Array.from(file.name).reduce((a, c) => (a * 31 + c.charCodeAt(0)) & 0xffffffff, 0).toString(16).padStart(8, "0");
+        const fallback = `${ts}${sz}${nm}${"0".repeat(28)}`.substring(0, 64);
         if (active) {
           setChecksum(fallback);
         }

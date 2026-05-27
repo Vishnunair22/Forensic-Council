@@ -106,7 +106,6 @@ export function GlobalNavbar() {
   const executeReset = useCallback(() => {
     resetActiveInvestigation(queryClient);
     if (pathname === "/") {
-      router.refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       router.push("/");

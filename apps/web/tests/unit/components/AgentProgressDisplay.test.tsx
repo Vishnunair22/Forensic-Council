@@ -86,10 +86,11 @@ const defaultProps = {
 };
 
 describe("BUG-10 — ActiveAgentsPanel collapsed by default", () => {
-  it("hides agent cards when ActiveAgentsPanel is collapsed (default expanded=false)", () => {
+  it("keeps ActiveAgentsPanel collapsed by default while keeping agent cards visible", () => {
     render(React.createElement(AgentProgressDisplay, defaultProps));
+    expect(screen.getByRole("button", { name: /Active Agents/i })).toHaveAttribute("aria-expanded", "false");
     const cards = screen.queryAllByTestId(/^card-/);
-    expect(cards).toHaveLength(0);
+    expect(cards.length).toBeGreaterThan(0);
   });
 });
 
