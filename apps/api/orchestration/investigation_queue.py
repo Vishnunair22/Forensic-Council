@@ -236,7 +236,17 @@ class InvestigationWorker:
     async def _heartbeat_loop(self) -> None:
         """Keep worker liveness fresh while long investigations are running."""
         interval = max(1, InvestigationQueue.WORKER_HEARTBEAT_TTL // 3)
+        try:
+            await self._write_heartbeat()  # write immediately on start
+        except Exception as e:
+            logger.warning(
+                f"Worker {self.worker_id} initial heartbeat failed",
+                error=str(e),
+            )
         while self._running:
+            await asyncio.sleep(interval)
+            if not self._running:
+                break
             try:
                 await self._write_heartbeat()
             except Exception as e:
@@ -244,7 +254,6 @@ class InvestigationWorker:
                     f"Worker {self.worker_id} heartbeat refresh failed",
                     error=str(e),
                 )
-            await asyncio.sleep(interval)
 
     async def start(self) -> None:
         """Start the worker loop."""

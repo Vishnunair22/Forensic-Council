@@ -585,7 +585,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     const startPendingAnalysis = async () => {
     let pending = __pendingFileStore.file;
-    if (!pending && (autoStartBlocking || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true")) {
+    if (!pending && sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
       pending = await loadPendingEvidenceFile().catch(() => null);
       if (pending) __pendingFileStore.file = pending;
     }

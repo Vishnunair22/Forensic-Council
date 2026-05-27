@@ -970,6 +970,7 @@ export const useSimulation = ({
   }, []);
 
   const resetSimulation = useCallback(() => {
+    activePhaseRef.current = "initial";
     expectingPipelineCompleteRef.current = false;
     setSessionId(null);
     setStatus("idle");
@@ -998,6 +999,7 @@ export const useSimulation = ({
   }, []);
 
   const startSimulation = useCallback(() => {
+    activePhaseRef.current = "initial";
     expectingPipelineCompleteRef.current = false;
     setStatus("initiating");
     setCompletedAgents([]);

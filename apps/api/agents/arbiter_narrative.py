@@ -1314,6 +1314,8 @@ Rules:
             if step_hook:
                 await step_hook(msg)
 
+        _agent_narr_warnings: list[str] = []
+
         llm_enabled = (
             use_llm
             and self.config.llm_api_key
@@ -1455,7 +1457,6 @@ Rules:
                         len(incomplete_findings), len(contested_findings), overall_error_rate
                     )
 
-            _agent_narr_warnings: list[str] = []
             try:
                 # overall investigation timeout budget is ML_SUBPROCESS_TIMEOUT_S (default 120s)
                 overall_timeout = getattr(self.config, "ml_subprocess_timeout_s", 120.0) or 120.0

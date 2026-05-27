@@ -1321,52 +1321,58 @@ async def _await_deep_analysis_decision(
     except Exception as log_err:
         logger.debug("Pre-gate decision log failed", error=str(log_err))
 
-    # Fix 1: Validate session state before consuming pre-gate decision.
-    # If initial analysis hasn't completed yet, clean up any stale key.
+    # Validate session state before consuming pre-gate decision.
+    existing_metadata = None
     try:
         existing_metadata = await get_active_pipeline_metadata(str(session_id))
-        if not existing_metadata or existing_metadata.get("status") != "awaiting_decision":
+    except Exception as state_err:
+        logger.debug("Session state validation failed", error=str(state_err))
+
+    is_awaiting = False
+    if isinstance(existing_metadata, dict) and existing_metadata.get("status") == "awaiting_decision":
+        is_awaiting = True
+
+    if not is_awaiting:
+        # Initial analysis has not yet completed or status check failed.
+        # Unconditionally delete the key and skip pre-gate consumption.
+        try:
             await redis.delete(decision_key)
             logger.info(
                 "Cleared stale decision key - initial analysis not yet complete",
                 session_id=str(session_id),
             )
-    except Exception as state_err:
-        logger.debug("Session state validation failed, proceeding without", error=str(state_err))
-
-    # The frontend can legitimately call /resume a moment before the worker
-    # reaches this pause gate (agent cards may finish revealing before this
-    # coroutine writes the paused metadata). Preserve and consume that early
-    # decision atomically with GETDEL instead of the racy GET+DELETE pattern
-    # that could lose a decision written between the two operations.
-    try:
-        raw_pre_gate_decision = await redis.getdel(decision_key)
-        if raw_pre_gate_decision:
-            decision = json.loads(raw_pre_gate_decision)
-            if isinstance(decision, dict):
-                pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
-                logger.info(
-                    "Analyst decision consumed before pause gate",
-                    session_id=str(session_id),
-                    deep_analysis=pipeline.run_deep_analysis_flag,
-                )
-                return pipeline.run_deep_analysis_flag
-    except AttributeError:
-        # Redis < 6.2 does not support GETDEL; fall back to racy GET+DELETE
+        except Exception as delete_err:
+            logger.debug("Stale key deletion failed", error=str(delete_err))
+    else:
+        # Only attempt to consume a pre-gate decision if the metadata confirms the session is genuinely in awaiting_decision state.
         try:
-            raw_pre_gate_decision = await redis.get(decision_key)
+            raw_pre_gate_decision = await redis.getdel(decision_key)
             if raw_pre_gate_decision:
                 decision = json.loads(raw_pre_gate_decision)
                 if isinstance(decision, dict):
                     pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                    logger.info(
+                        "Analyst decision consumed before pause gate",
+                        session_id=str(session_id),
+                        deep_analysis=pipeline.run_deep_analysis_flag,
+                    )
                     return pipeline.run_deep_analysis_flag
+        except AttributeError:
+            # Redis < 6.2 does not support GETDEL; fall back to racy GET+DELETE
+            try:
+                raw_pre_gate_decision = await redis.get(decision_key)
+                if raw_pre_gate_decision:
+                    decision = json.loads(raw_pre_gate_decision)
+                    if isinstance(decision, dict):
+                        pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                        return pipeline.run_deep_analysis_flag
+            except Exception as pre_gate_err:
+                logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
+            finally:
+                await redis.delete(decision_key)
         except Exception as pre_gate_err:
             logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
-        finally:
             await redis.delete(decision_key)
-    except Exception as pre_gate_err:
-        logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
-        await redis.delete(decision_key)
 
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()

@@ -170,6 +170,8 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
     last_activity = time.time()
     message_timestamps: deque[float] = deque(maxlen=200)
 
+    subscribed_event = asyncio.Event()
+
     async def _redis_subscriber():
         nonlocal last_activity
         from redis.asyncio import Redis
@@ -194,6 +196,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
             replay_key = f"forensic:replay:{session_id}"
 
             await pubsub.subscribe(channel, control_channel)
+            subscribed_event.set()
 
             dedicated_redis_any: Any = dedicated_redis
             replay_messages = await dedicated_redis_any.lrange(replay_key, 0, -1)
@@ -224,8 +227,10 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                     await websocket.send_json(data)
                     last_activity = time.time()
         except asyncio.CancelledError:
+            subscribed_event.set()
             raise
         except Exception as e:
+            subscribed_event.set()
             logger.warning("Redis subscriber error", session_id=session_id, error=str(e))
             try:
                 await websocket.send_json(
@@ -299,6 +304,8 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
     ping_task = asyncio.create_task(send_ping())
     idle_task = asyncio.create_task(monitor_idle())
     subscriber_task = asyncio.create_task(_redis_subscriber())
+
+    await subscribed_event.wait()
 
     try:
         await websocket.send_json(

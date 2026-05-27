@@ -137,6 +137,7 @@ export function HeroAuthActions() {
     );
 
     setShowUpload(false);
+    sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
     router.push("/evidence", { scroll: true });
   }, [selectedFile, router]);
 
@@ -219,15 +220,14 @@ export function HeroAuthActions() {
                 onDismiss={() => setSelectedFile(null)}
                 isHandingOff={isHandingOff}
                   onStartAnalysis={async () => {
-                  if (isHandingOff) return;
                   playSound("scan");
-                  setIsHandingOff(true);
                   window.dispatchEvent(
                     new CustomEvent("fc_storage_update", {
                       detail: { key: STORAGE_KEYS.FC_SHOW_LOADING, value: "true" },
                     }),
                   );
                   await handleStartAnalysis();
+                  setIsHandingOff(true);
                 }}
               />
             )}

@@ -303,6 +303,12 @@ export function AgentProgressDisplay({
   );
 
   useEffect(() => {
+    if (Object.keys(agentUpdates).length > 0 && !activeAgentsExpanded) {
+      setActiveAgentsExpanded(true);
+    }
+  }, [agentUpdates, activeAgentsExpanded]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       setIsBootstrapping(false);
     }, 400);
