@@ -297,7 +297,6 @@ export function AgentProgressDisplay({
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
   const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(false);
-  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
     (typeof process !== "undefined" && process.env.NODE_ENV === "test") || typeof jest !== "undefined" ? false : true
   );
@@ -310,11 +309,6 @@ export function AgentProgressDisplay({
     }, 400);
     return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    if (!mimeType) return;
-    setExpandedCards({});
-  }, [mimeType]);
 
   const initialAgentIds = useMemo<string[]>(() => {
     if (phase !== "deep") return [];
@@ -535,8 +529,6 @@ export function AgentProgressDisplay({
                     liveUpdate={agentUpdates[agent.id]}
                     completedData={completedAgents.find((c) => c.agent_id === agent.id)}
                     phase={phase}
-                    isExpanded={!!expandedCards[agent.id]}
-                    onToggleExpand={() => setExpandedCards(prev => ({ ...prev, [agent.id]: !prev[agent.id] }))}
                   />
                 </motion.div>
               ))

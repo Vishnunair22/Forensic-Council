@@ -10,6 +10,7 @@ export interface FindingPreview {
   elapsed_s?: number | null;
   degraded?: boolean | null;
   fallback_reason?: string | null;
+  finding_kind?: "discovery" | "confirmation" | null;
 }
 
 export interface AgentUpdate {
@@ -43,4 +44,5 @@ export interface AgentUpdate {
   degraded?: boolean;
   fallback_reason?: string;
   completed_at?: string;
+  image_context?: string | null;
 }

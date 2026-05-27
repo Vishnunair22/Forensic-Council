@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-from core.findings_humanizer import _metric_digest, _humanize_initial_finding, _verdict_score
+from core.findings_humanizer import _is_discovery_finding, _metric_digest, _humanize_initial_finding, _verdict_score
 
 PREVIEW_EXCLUDED_TOOLS = {"hash_verify", "custody_check", "file_type_validation"}
 
@@ -94,6 +94,20 @@ async def run_agents_concurrent(
 
             def _normalize_tool_name(raw: str) -> str:
                 return tool_display_names.get(raw, raw.replace("_", " ").title())
+
+            def _resolve_image_context(agent_inst) -> str | None:
+                if agent_inst is None:
+                    return None
+                tool_ctx = getattr(agent_inst, "_tool_context", {}) or {}
+                gemini_result = tool_ctx.get("gemini_deep_forensic") or {}
+                clip_result = tool_ctx.get("analyze_image_content") or {}
+                gemini_content_type = str(gemini_result.get("content_type") or "").strip()
+                clip_image_type = str(clip_result.get("image_type") or clip_result.get("semantic_context") or "").strip()
+                if gemini_content_type and gemini_content_type.lower() not in ("", "unknown", "none"):
+                    return gemini_content_type
+                if clip_image_type and clip_image_type.lower() not in ("", "unknown", "none"):
+                    return clip_image_type
+                return None
 
             synthesis = (
                 getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
@@ -192,6 +206,7 @@ async def run_agents_concurrent(
                                 "section": section.get("label") or "",
                                 "degraded": bool(synthesis_data.get("fallback_reason")),
                                 "fallback_reason": synthesis_data.get("fallback_reason"),
+                                "finding_kind": "discovery" if (section.get("severity") or "LOW") in ("HIGH", "CRITICAL", "MEDIUM") else "confirmation",
                             }
                         )
 
@@ -281,12 +296,20 @@ async def run_agents_concurrent(
                             "degraded": bool(m.get("degraded") or m.get("fallback_reason")),
                             "fallback_reason": m.get("fallback_reason"),
                             "elapsed_s": m.get("elapsed_s"),
+                            "finding_kind": "discovery" if tv in ("FLAGGED", "NEEDS_REVIEW") or _is_discovery_finding(tool, m) else "confirmation",
                         }
                     )
 
-                # Sort by severity to surface high-signal findings first
+                # Sort by severity (CRITICAL > HIGH > MEDIUM > LOW),
+                # then discoveries before confirmations within same tier
                 _sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
-                preview.sort(key=lambda x: _sev_rank.get(x.get("severity") or "LOW", 0), reverse=True)
+                preview.sort(
+                    key=lambda x: (
+                        _sev_rank.get(x.get("severity") or "LOW", 0),
+                        1 if x.get("finding_kind") == "discovery" else 0,
+                    ),
+                    reverse=True,
+                )
             if isinstance(synthesis, dict) and synthesis.get("sections"):
                 before = len(preview)
                 _append_synthesis_sections(synthesis)
@@ -395,6 +418,7 @@ async def run_agents_concurrent(
                         "section_flags": synthesis.get("sections")
                         if isinstance(synthesis, dict)
                         else None,
+                        "image_context": _resolve_image_context(agent_inst),
                     },
                 ),
             )

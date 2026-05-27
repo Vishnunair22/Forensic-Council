@@ -361,6 +361,7 @@ export const useSimulation = ({
                         tools_failed,
                         degraded,
                         verdict_score,
+                        image_context,
                       } = update.data as Record<string, unknown>;
                       const previewConfidenceValues = Array.isArray(findings_preview)
                         ? findings_preview
@@ -428,6 +429,7 @@ export const useSimulation = ({
                           typeof verdict_score === "number"
                             ? verdict_score
                             : undefined,
+                        image_context: typeof image_context === "string" ? image_context : undefined,
                         completed_at: new Date().toISOString(),
                       };
 

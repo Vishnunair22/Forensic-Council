@@ -320,6 +320,30 @@ def _humanize_initial_finding(
     return enriched if enriched.strip() else None
 
 
+def _is_discovery_finding(tool_name: str | None, metadata: dict[str, Any]) -> bool:
+    """
+    True when a CLEAN/NEGATIVE finding still represents a positive discovery
+    (something was found, not just 'check ran clean').
+    Examples: OCR found text, CLIP identified content type, objects were detected.
+    """
+    tool = (tool_name or "").lower()
+    if "extract_text" in tool or "extract_evidence" in tool:
+        return bool(metadata.get("has_text") or metadata.get("word_count", 0) > 0
+                    or metadata.get("ocr_text_preview") or metadata.get("content_description"))
+    if "analyze_image_content" in tool:
+        image_type = str(metadata.get("image_type") or "").lower()
+        return bool(image_type and image_type not in ("unknown", ""))
+    if "object_detection" in tool:
+        return bool(metadata.get("detection_count", 0) > 0 or metadata.get("detections"))
+    if "exif_extract" in tool or "exif" in tool:
+        return bool(metadata.get("total_fields_extracted", 0) > 0)
+    if "gps" in tool:
+        return bool(metadata.get("gps_coordinates") or metadata.get("latitude"))
+    if "file_structure" in tool or "file_structure_analysis" in tool:
+        return bool(metadata.get("anomaly_detected"))
+    return False
+
+
 def _verdict_score(verdict: Any) -> float | None:
     """Map agent verdicts to frontend severity color/risk score."""
     value = str(verdict or "").upper()
