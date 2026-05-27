@@ -220,7 +220,19 @@ class KeyStore:
     unavailable (single-key risk — see module docstring).
     """
 
-    _AGENT_IDS = ("Arbiter", "Agent1", "Agent2", "Agent3", "Agent4", "Agent5")
+    _AGENT_IDS = (
+        "Arbiter",
+        "Agent1",
+        "Agent2",
+        "Agent3",
+        "Agent4",
+        "Agent5",
+        "Agent1_deep",
+        "Agent2_deep",
+        "Agent3_deep",
+        "Agent4_deep",
+        "Agent5_deep",
+    )
 
     def __init__(self) -> None:
         """Initialize the key store."""

@@ -25,6 +25,32 @@ export function UploadSuccessModal({
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [checksum, setChecksum] = useState<string>("");
+
+  useEffect(() => {
+    let active = true;
+    const calculateHash = async () => {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+        if (active) {
+          setChecksum(hashHex);
+        }
+      } catch (err) {
+        console.error("Failed to compute SHA-256:", err);
+        const fallback = btoa(file.name + file.size).substring(0, 24).toLowerCase();
+        if (active) {
+          setChecksum(fallback);
+        }
+      }
+    };
+    calculateHash();
+    return () => {
+      active = false;
+    };
+  }, [file]);
 
   useEffect(() => {
     let url: string | null = null;
@@ -248,7 +274,7 @@ export function UploadSuccessModal({
               transition={{ delay: 0.5 }}
               className="text-xs font-mono text-primary truncate"
             >
-              {btoa(file.name + file.size).substring(0, 24).toLowerCase()}...
+              {checksum ? `${checksum.substring(0, 24).toLowerCase()}...` : "Calculating..."}
             </motion.span>
           </div>
         </div>
