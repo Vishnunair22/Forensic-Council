@@ -140,9 +140,9 @@ class LLMClient:
         # Synthesis-specific serialization: multiple agents finishing simultaneously
         # (especially on fast screenshot paths) would all call generate_synthesis()
         # concurrently and exhaust the Groq TPM budget in one burst → all 429.
-        # Semaphore(1) serializes synthesis calls so each gets a fresh token window.
+        # Semaphore(2) limits concurrent synthesis calls to avoid blasting limits while permitting overlap.
         if not hasattr(LLMClient, "_synthesis_semaphore"):
-            LLMClient._synthesis_semaphore = asyncio.Semaphore(1)
+            LLMClient._synthesis_semaphore = asyncio.Semaphore(2)
 
     async def _get_client(self, timeout_override: float | None = None) -> httpx.AsyncClient:
         """Return a shared httpx.AsyncClient, creating it on first use.
@@ -773,6 +773,42 @@ class LLMClient:
                 except Exception as exc:
                     last_exc = exc
                     logger.warning(f"Synthesis candidate {model_spec} failed: {exc}")
+
+            # If we reached here, all candidates were blocked or failed.
+            # Local retry for Gemini only: if Groq/others failed/429ed or Gemini was quota-blocked,
+            # wait 5 seconds and try a single forced Gemini call (bypassing quota guard check)
+            # to prevent returning empty response.
+            if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
+                logger.warning("All synthesis candidates exhausted. Initiating forced Gemini synthesis fallback in 5 seconds...")
+                await asyncio.sleep(5.0)
+                try:
+                    client = await self._get_client()
+                    req_timeout = timeout_override or 30.0
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
+                    req_headers = {"x-goog-api-key": self.gemini_api_key}
+                    payload = {
+                        "contents": [
+                            {
+                                "role": "user",
+                                "parts": [{"text": f"{system_prompt}\n\n{user_content}"}],
+                            }
+                        ],
+                        "generationConfig": {"temperature": 0.2, "maxOutputTokens": tokens},
+                    }
+                    if json_mode:
+                        payload["generationConfig"]["responseMimeType"] = "application/json"
+                    
+                    async with LLMClient._global_semaphore:
+                        resp = await client.post(url, headers=req_headers, json=payload, timeout=req_timeout)
+                    resp.raise_for_status()
+                    return (
+                        resp.json()["candidates"][0]["content"]["parts"][0]
+                        .get("text", "")
+                        .strip()
+                    )
+                except Exception as final_exc:
+                    logger.error(f"Forced Gemini synthesis fallback retry failed: {final_exc}")
+                    last_exc = final_exc
 
             if last_exc:
                 logger.error(f"All synthesis candidates failed: {last_exc}")

@@ -97,20 +97,11 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const keyFindings = useMemo(() => buildKeyFindings(rs.report), [rs.report]);
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
 
-  if (!rs.mounted) {
-    return (
-      <ResultLoadingView
-        title="Consensus Synthesis"
-        liveText="Final report synthesis requested. Compiling initial agent findings."
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen pb-24 pt-20 sm:pt-12 relative">
       {/* ── Arbiter/Loading overlay ── */}
       <AnimatePresence>
-        {(rs.state === "arbiter" || rs.state === "loading") && (
+        {(rs.state === "arbiter" || rs.state === "loading" || (rs.state === "ready" && !rs.report)) && (
           <ForensicProgressOverlay
             title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
             liveText={rs.arbiterMsg || "Preparing final forensic report..."}

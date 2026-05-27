@@ -27,7 +27,12 @@ from agents.base_agent import ForensicAgent
 from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
 from core.image_utils import is_lossless_image
-from core.media_kind import is_digitally_created_image, is_screen_capture_like
+from core.media_kind import (
+    is_digitally_created_image,
+    is_screen_capture_like,
+    is_document_like,
+    is_recompressed_web_image,
+)
 from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 from core.tool_registry import ToolRegistry
@@ -73,6 +78,16 @@ class Agent1Image(ForensicAgent):
         """Cached: whether the evidence is a non-camera digital image container."""
         return is_digitally_created_image(self.evidence_artifact)
 
+    @cached_property
+    def _is_document(self) -> bool:
+        """Cached: whether the image is classified as a document/scanned text."""
+        return is_document_like(self.evidence_artifact)
+
+    @cached_property
+    def _is_recompressed_web(self) -> bool:
+        """Cached: whether the image is a recompressed web download."""
+        return is_recompressed_web_image(self.evidence_artifact)
+
     @property
     def iteration_ceiling(self) -> int:
         # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
@@ -88,6 +103,26 @@ class Agent1Image(ForensicAgent):
         first so the investigator sees high-confidence findings early.
         Cheap context tools (CLIP, OCR, FFT) follow.
         """
+        if self._is_document:
+            return [
+                "Run file_hash_verify for evidence integrity check",
+                "Run extract_text_from_image for OCR and document content identification",
+                "Run analyze_image_content for semantic document classification",
+                "Run frequency_domain_analysis for frequency domain analysis",
+                "Run neural_ela for JPEG manipulation detection",
+                "Run neural_fingerprint for conceptual similarity detection",
+            ]
+        if self._is_recompressed_web:
+            return [
+                "Run file_hash_verify for evidence integrity check",
+                "Run jpeg_ghost_detect for double compression analysis",
+                "Run ela_full_image for classical ELA residuals check",
+                "Run neural_ela for high-confidence manipulation detection",
+                "Run neural_fingerprint for conceptual similarity detection",
+                "Run analyze_image_content for semantic image understanding",
+                "Run frequency_domain_analysis for frequency domain analysis",
+                "Run extract_text_from_image for visible text extraction",
+            ]
         if self._is_screen_capture or self._is_digital_capture:
             # Screenshots: hash integrity → OCR (primary signal for UI) → semantic →
             # frequency scan. neural_fingerprint deferred to deep — conceptual similarity
@@ -321,6 +356,23 @@ class Agent1Image(ForensicAgent):
                     priority=15,
                 )
 
+
+            object_keywords = {"vehicle", "weapon", "building", "product", "object", "scene"}
+            has_object = any(k in image_type for k in object_keywords) or any(
+                any(k in str(c.get("category", "")).lower() for k in object_keywords)
+                and (c.get("score") or 0.0) > 0.4
+                for c in all_classifications
+            )
+
+            if has_object:
+                logger.info(
+                    f"Object semantic trigger: {image_type}; injecting object ELA audit",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run roi_extract guided by object detection for targeted ELA on subject",
+                    priority=12,
+                )
 
             # AI generation suspicion
             if has_ai_marker or "digitally generated" in image_type:

@@ -10,7 +10,7 @@ os.environ.setdefault("POSTGRES_DB", "test")
 os.environ.setdefault("REDIS_PASSWORD", "test")
 os.environ.setdefault("DEMO_PASSWORD", "test")
 os.environ.setdefault("LLM_PROVIDER", "none")
-os.environ.setdefault("LLM_API_KEY", "test-key")
+os.environ.setdefault("LLM_API_KEY", "test-key-longer-than-20-chars")
 os.environ.setdefault("LLM_MODEL", "test-model")
 
 import json
@@ -21,7 +21,7 @@ import pytest
 
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
-from core.react_loop import AgentFinding, FindingStatus
+from core.react_loop import AgentFinding, AgentFindingStatus
 from core.synthesis import SynthesisService
 
 
@@ -35,7 +35,7 @@ def _settings() -> Settings:
         redis_password="test",
         DEMO_PASSWORD="test",
         llm_provider="groq",
-        llm_api_key="test-key",
+        llm_api_key="test-key-longer-than-20-chars",
         llm_model="test-model",
         llm_timeout=12.0,
         bootstrap_admin_password="Admin_123!",
@@ -55,12 +55,12 @@ def _evidence(mime: str = "image/jpeg") -> EvidenceArtifact:
     )
 
 
-def _finding(tool: str, status: str = "COMPLETE", verdict: str = "NEGATIVE", confidence: float = 0.9) -> AgentFinding:
+def _finding(tool: str, status: str = "CONFIRMED", verdict: str = "NEGATIVE", confidence: float = 0.9) -> AgentFinding:
     f = MagicMock(spec=AgentFinding)
     f.metadata = {"tool_name": tool}
     f.finding_type = "test"
     f.confidence_raw = confidence
-    f.status = FindingStatus(status)
+    f.status = AgentFindingStatus(status)
     f.evidence_verdict = verdict
     f.reasoning_summary = f"{tool} summary"
     return f
@@ -74,49 +74,14 @@ def service():
 class TestSynthesisPromptRoleSplit:
     @pytest.mark.asyncio
     async def test_system_prompt_contains_strict_instructions(self, service):
-        with patch.object(service, "_build_tool_sections", return_value=[]) as mock_sections:
-            mock_sections.return_value = []
-            with patch.object(service, "_ground_synthesis_response", return_value={"verdict": "AUTHENTIC", "narrative_summary": "", "sections": []}):
-                llm_client = AsyncMock()
-                llm_client.generate_synthesis = AsyncMock(return_value=json.dumps({
-                    "verdict": "AUTHENTIC", "narrative_summary": "Test", "sections": []
-                }))
-                findings = [_finding("file_hash_verify")]
-                ev = _evidence()
-                with patch.object(service, "_build_tool_sections", return_value=[]):
-                    with patch.object(service, "_compact_metrics", return_value={}):
-                        service._llm_client = llm_client
-                        try:
-                            await service.synthesize_findings(
-                                agent_id="Agent1",
-                                agent_name="Agent1_Image",
-                                findings=findings,
-                                evidence_artifact=ev,
-                                tool_success_count=1,
-                                tool_error_count=0,
-                                phase="initial",
-                            )
-                        except Exception:
-                            pass
-                        call_kwargs = llm_client.generate_synthesis.call_args
-                        if call_kwargs:
-                            kwargs = call_kwargs[1] if len(call_kwargs[1]) > 0 else call_kwargs[0]
-                            system = kwargs.get("system_prompt", "")
-                            user = kwargs.get("user_content", "")
-                            assert "[STRICT INSTRUCTIONS]" in system
-                            assert "[UNTRUSTED EVIDENCE START" in user
-
-    @pytest.mark.asyncio
-    async def test_user_content_contains_evidence_not_instructions(self, service):
-        with patch.object(service, "_build_tool_sections", return_value=[]) as mock_sections:
-            mock_sections.return_value = []
-            with patch.object(service, "_ground_synthesis_response", return_value={"verdict": "AUTHENTIC", "narrative_summary": "", "sections": []}):
-                llm_client = AsyncMock()
-                llm_client.generate_synthesis = AsyncMock(return_value=json.dumps({
-                    "verdict": "AUTHENTIC", "narrative_summary": "Test", "sections": []
-                }))
-                findings = [_finding("file_hash_verify")]
-                ev = _evidence()
+        with patch.object(service, "_ground_synthesis_response", return_value={"verdict": "AUTHENTIC", "narrative_summary": "", "sections": []}):
+            llm_client = AsyncMock()
+            llm_client.generate_synthesis = AsyncMock(return_value=json.dumps({
+                "verdict": "AUTHENTIC", "narrative_summary": "Test", "sections": []
+            }))
+            findings = [_finding("file_hash_verify")]
+            ev = _evidence()
+            with patch.object(service, "_compact_metrics", return_value={}):
                 service._llm_client = llm_client
                 try:
                     await service.synthesize_findings(
@@ -133,9 +98,39 @@ class TestSynthesisPromptRoleSplit:
                 call_kwargs = llm_client.generate_synthesis.call_args
                 if call_kwargs:
                     kwargs = call_kwargs[1] if len(call_kwargs[1]) > 0 else call_kwargs[0]
+                    system = kwargs.get("system_prompt", "")
                     user = kwargs.get("user_content", "")
-                    assert "[EVIDENCE CONTEXT]" in user
-                    assert "[RAW TOOL RESULTS]" in user
+                    assert "[STRICT INSTRUCTIONS]" in system
+                    assert "[UNTRUSTED EVIDENCE START" in user
+
+    @pytest.mark.asyncio
+    async def test_user_content_contains_evidence_not_instructions(self, service):
+        with patch.object(service, "_ground_synthesis_response", return_value={"verdict": "AUTHENTIC", "narrative_summary": "", "sections": []}):
+            llm_client = AsyncMock()
+            llm_client.generate_synthesis = AsyncMock(return_value=json.dumps({
+                "verdict": "AUTHENTIC", "narrative_summary": "Test", "sections": []
+            }))
+            findings = [_finding("file_hash_verify")]
+            ev = _evidence()
+            service._llm_client = llm_client
+            try:
+                await service.synthesize_findings(
+                    agent_id="Agent1",
+                    agent_name="Agent1_Image",
+                    findings=findings,
+                    evidence_artifact=ev,
+                    tool_success_count=1,
+                    tool_error_count=0,
+                    phase="initial",
+                )
+            except Exception:
+                pass
+            call_kwargs = llm_client.generate_synthesis.call_args
+            if call_kwargs:
+                kwargs = call_kwargs[1] if len(call_kwargs[1]) > 0 else call_kwargs[0]
+                user = kwargs.get("user_content", "")
+                assert "[EVIDENCE CONTEXT]" in user
+                assert "[RAW TOOL RESULTS]" in user
 
 
 class TestSynthesisTokenBudget:

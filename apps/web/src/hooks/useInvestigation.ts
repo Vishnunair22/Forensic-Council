@@ -94,13 +94,22 @@ async function waitForFinalReport(
       }
       if (st.status === "complete") {
         consecutiveNotFound = 0;
-        try {
-          const res = await withTimeout(getReport(sessionId), 30_000);
-          // ReportDTO has report_id; a 202 in-progress response has status:"in_progress"
-          const asAny = res as unknown as Record<string, unknown>;
-          if (asAny.report_id || (asAny.status === "complete" && asAny.report)) return true;
-        } catch {
-          /* report may not be ready yet — keep polling */
+        for (let attempt = 0; attempt < 5; attempt++) {
+          if (signal?.aborted) return false;
+          try {
+            const res = await withTimeout(getReport(sessionId), 30_000);
+            // ReportDTO has report_id; a 202 in-progress response has status:"in_progress"
+            const asAny = res as unknown as Record<string, unknown>;
+            if (asAny.report_id || (asAny.status === "complete" && asAny.report)) return true;
+          } catch {
+            /* report may not be ready yet — keep polling */
+          }
+          if (attempt < 4) {
+            await new Promise<void>((r) => {
+              const t = setTimeout(r, 800);
+              signal?.addEventListener("abort", () => clearTimeout(t), { once: true });
+            });
+          }
         }
       }
       if (st.status === "not_found" || st.status === "unreachable") {
@@ -777,6 +786,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`, completedAgentsRef.current, true);
       sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`, "initial");
     }
+    arbiterControl.abort();
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText(UI_STRINGS.COMPILING_FINDINGS);
@@ -790,6 +800,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
       if (!ok) {
         sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
+        document.body.setAttribute("data-fc-loading", "1");
+        navigationStarted = true;
         router.push(`/result/${encodeURIComponent(sid)}`);
         return;
       }
@@ -950,6 +963,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
       if (!ok) {
         sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
+        document.body.setAttribute("data-fc-loading", "1");
+        navigationStarted = true;
         router.push(`/result/${encodeURIComponent(sid)}`);
         return;
       }

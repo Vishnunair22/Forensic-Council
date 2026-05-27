@@ -222,6 +222,10 @@ class AgentInvestigationMixin:
             return None
         try:
             synthesis_service = SynthesisService(self.config)
+            agent_persona = getattr(self, "persona", "")
+            tool_context = getattr(self, "_tool_context", {}) or {}
+            image_type_hint = tool_context.get("analyze_image_content", {}).get("image_type", "")
+
             synthesis_result = await asyncio.wait_for(
                 synthesis_service.synthesize_findings(
                     agent_id=self.agent_id,
@@ -231,6 +235,8 @@ class AgentInvestigationMixin:
                     tool_success_count=self._tool_success_count,  # type: ignore[attr-defined]
                     tool_error_count=self._tool_error_count,  # type: ignore[attr-defined]
                     phase=phase,
+                    agent_persona=agent_persona,
+                    image_type_hint=image_type_hint,
                 ),
                 timeout=timeout_s,
             )

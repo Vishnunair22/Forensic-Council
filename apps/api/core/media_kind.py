@@ -146,3 +146,59 @@ def is_digitally_created_image(artifact: Any) -> bool:
         "image/svg+xml",
         "image/avif",
     }
+
+
+def is_document_like(artifact: Any) -> bool:
+    """Return True if the image is characterizable as a scanned or digital document."""
+    file_path = str(getattr(artifact, "file_path", "") or "")
+    probe = _image_probe(file_path)
+    if not probe:
+        return False
+
+    has_no_camera_tags = not probe.get("has_camera_tags")
+    info_keys = set(probe.get("info_keys") or ())
+    has_text_hints = has_no_camera_tags and bool(info_keys & {"software", "dpi", "description", "document"})
+
+    orig_name = str(getattr(artifact, "original_filename", "") or "").lower()
+    filename = os.path.basename(file_path).lower()
+    doc_keywords = {"scan", "document", "receipt", "invoice", "letter", "form", "id", "passport", "certificate"}
+    has_keyword = any(k in filename or k in orig_name for k in doc_keywords)
+
+    fmt = str(probe.get("format") or "").lower()
+    width = int(probe.get("width") or 0)
+    height = int(probe.get("height") or 0)
+    is_portrait = height > width
+    is_lossless_fmt = fmt in {"png", "tiff"}
+    is_portrait_lossless = is_portrait and is_lossless_fmt
+
+    return has_text_hints or has_keyword or is_portrait_lossless
+
+
+def is_recompressed_web_image(artifact: Any) -> bool:
+    """Return True if the image is classified as a recompressed web/social media download."""
+    file_path = str(getattr(artifact, "file_path", "") or "")
+    probe = _image_probe(file_path)
+    if not probe:
+        return False
+
+    fmt = str(probe.get("format") or "").lower()
+    # Accept both jpeg format label and standard extensions
+    is_jpg = fmt in {"jpeg", "jpg"} or os.path.splitext(file_path)[1].lower() in {".jpg", ".jpeg"}
+    if not is_jpg:
+        return False
+
+    has_no_camera_tags = not probe.get("has_camera_tags")
+    orig_name = str(getattr(artifact, "original_filename", "") or "").lower()
+    filename = os.path.basename(file_path).lower()
+    web_keywords = {"web", "download", "img", "photo_", "facebook", "instagram", "whatsapp", "twitter", "reddit"}
+    has_web_keyword = any(k in filename or k in orig_name for k in web_keywords)
+
+    has_quantization = False
+    try:
+        with Image.open(file_path) as img:
+            has_quantization = bool(getattr(img, "quantization", None))
+    except Exception:
+        pass
+
+    return has_no_camera_tags and (has_quantization or has_web_keyword)
+
