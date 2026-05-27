@@ -9,6 +9,7 @@ Complete reference for building, running, and verifying the Forensic Council sta
 
 ## Table of Contents
 
+0. [The "What to Use When" Reference](#0-the-what-to-use-when-reference)
 1. [Prerequisites](#1-prerequisites)
 2. [Environment Setup](#2-environment-setup)
 3. [Developer Mode](#3-developer-mode)
@@ -21,6 +22,32 @@ Complete reference for building, running, and verifying the Forensic Council sta
 10. [Compose File Reference](#10-compose-file-reference)
 11. [Teardown](#11-teardown)
 12. [Troubleshooting](#12-troubleshooting)
+
+---
+
+## 0. The "What to Use When" Reference
+
+Use this quick-reference table to identify the correct command or script for every container lifecycle action:
+
+| Operation | Developer Command / Script | Production Command / Script |
+|---|---|---|
+| First-time start | `bash scripts/dev.sh` | `bash scripts/prod.sh` |
+| Start (after first run) | `bash scripts/dev.sh` | `bash scripts/prod.sh` |
+| Build images only | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env build --parallel` | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env build --parallel` |
+| Rebuild one service | `bash scripts/rebuild.sh dev <service>` | `bash scripts/rebuild.sh prod <service>` |
+| Rebuild all (no cache) | `bash scripts/rebuild.sh dev` | `bash scripts/rebuild.sh prod` |
+| Apply .env changes | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --force-recreate <service>` | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d --force-recreate <service>` |
+| Restart worker (fast) | `docker compose kill -s SIGKILL worker && docker compose up -d --no-deps worker` (or `bash scripts/dev-restart-worker.sh`) | *Do not use in production (may orphan in-flight tasks)* |
+| Pause stack temporarily | `docker compose -f infra/docker-compose.yml --env-file .env stop` | `docker compose -f infra/docker-compose.yml --env-file .env stop` |
+| Resume after pause | `docker compose -f infra/docker-compose.yml --env-file .env start` | `docker compose -f infra/docker-compose.yml --env-file .env start` |
+| Stop and remove containers | `docker compose -f infra/docker-compose.yml --env-file .env down` | `docker compose -f infra/docker-compose.yml --env-file .env down` |
+| Full clean (nuclear reset) | `down -v` → `builder prune` → `clean_project.sh --deep` → `dev.sh` | `down -v` → `builder prune` → `clean_project.sh --deep` → `prod.sh` |
+| View health status | `bash scripts/troubleshoot.sh` | `bash scripts/troubleshoot.sh` |
+| Wait for full health | `bash scripts/_wait_healthy.sh dev` | `bash scripts/_wait_healthy.sh prod` |
+| Smoke test end-to-end | `bash scripts/_smoke.sh dev` | `bash scripts/_smoke.sh prod` |
+| Verify ML models | `docker exec forensic_api python scripts/model_cache_check.py --strict` | `docker exec forensic_api python scripts/model_cache_check.py --strict` |
+| View logs | `docker compose -f infra/docker-compose.yml --env-file .env logs -f <service>` | `docker compose -f infra/docker-compose.yml --env-file .env logs -f <service>` |
+| Debug merged compose config | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env config` | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env config` |
 
 ---
 
@@ -83,7 +110,16 @@ git status .env
 
 Developer mode targets the `development` Docker stage for the backend and worker (uvicorn `--reload` enabled, dev dependencies installed) and `next dev` for the frontend (Turbopack HMR). Source code is bind-mounted so every saved file is reflected instantly without rebuilding.
 
-### Step 1 — Build and start (dev overlay provides direct host ports 8000, 5432, 6379, 6333)
+### Recommended: One-shot start
+To boot the developer environment with automatic `.env` verification, parallel builds, worker health checks, and ML cache checks, run from the repository root:
+```bash
+bash scripts/dev.sh
+```
+
+### Advanced: Manual Control
+If you need to control the build process or run containers interactively, use the manual commands below.
+
+#### Step 1 — Build and start (dev overlay provides direct host ports 8000, 5432, 6379, 6333)
 
 ```bash
 docker compose \
@@ -104,7 +140,7 @@ docker compose \
   up --build -d
 ```
 
-### Step 2 — Monitor build and startup logs
+#### Step 2 — Monitor build and startup logs
 
 Open a second terminal while the build runs:
 
@@ -133,7 +169,7 @@ Key log lines to watch for:
 | `worker` | `Starting Forensic Council Background Worker` |
 | `frontend` | `✓ Ready` (Turbopack) or `ready - started server on 0.0.0.0:3000` |
 
-### Step 3 — Confirm all containers are healthy
+#### Step 3 — Confirm all containers are healthy
 
 ```bash
 docker compose \
@@ -150,11 +186,17 @@ Quick status table:
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
-### Step 4 — Verify ML models downloaded
+#### Step 4 — Verify ML models downloaded
 
 See [Section 6](#6-verifying-model-downloads).
 
-### Step 5 — Open the app
+#### Step 5 — Run post-start smoke test
+Verify routing and authentication end-to-end:
+```bash
+bash scripts/_smoke.sh dev
+```
+
+#### Step 6 — Open the app
 
 | URL | What |
 |-----|------|
@@ -167,19 +209,49 @@ See [Section 6](#6-verifying-model-downloads).
 
 Click **Demo Login** on the landing page to authenticate as the investigator user. The demo route uses `BOOTSTRAP_INVESTIGATOR_PASSWORD` from your `.env` — the placeholder value works out of the box because the migration creates the user with that same password.
 
+### Build images only (no start)
+To build the developer images without starting containers (useful for verifying Dockerfile changes or pre-warming the cache):
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  build --parallel
+```
+
+### Applying .env changes
+Environment variables are injected at container creation. When you edit `.env`, recreate the containers to apply:
+```bash
+# Apply to backend and worker
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --force-recreate backend worker
+
+# Apply to frontend
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --force-recreate frontend
+```
+
 ### Hot-reload behaviour
 
 | Service | Trigger | Behaviour |
 |---------|---------|-----------|
-| **Frontend** | Save any `.tsx`, `.ts`, `.css` file | Turbopack HMR updates the browser in ~500 ms |
+| **Frontend** | Save any `.tsx`, `.ts`, `.css` file | Turbopack HMR updates the browser in ~500 ms (uses polling fallback inside container) |
 | **Backend** | Save any `.py` file in `api/`, `core/`, `agents/`, `tools/`, `orchestration/` | uvicorn `--reload` restarts the server in ~1 s |
-| **Worker** | Save any `.py` file | Code is live in the container; run `docker compose restart worker` to apply |
+| **Worker** | Save any `.py` file | Code is live in the container; to apply instantly without waiting for the 300s grace period, run `bash scripts/dev-restart-worker.sh` (or `docker compose kill -s SIGKILL worker && docker compose up -d --no-deps worker`) |
 
 ---
 
 ## 4. Production Mode
 
-### Step 1 — Generate strong secrets
+### Recommended: One-shot start
+To validate production readiness, generate certificates, download models, build all images, start the stack, and verify health through Caddy/worker/ML check, run from the repository root:
+```bash
+bash scripts/prod.sh
+```
+*Note: This script automatically runs `validate_production_readiness.sh` before booting.*
+
+### Advanced: Manual Control
+If you need to configure and start the production environment step by step, follow the manual workflow below:
+
+#### Step 1 — Generate strong secrets
 
 Run this once from the **repo root**. It prints all required secret values to stdout — copy them into your `.env` file:
 
@@ -189,7 +261,7 @@ bash infra/generate_production_keys.sh
 
 > On Windows without Git Bash/WSL2: run the script in Git Bash or WSL2, then paste the output values into your `.env` file manually.
 
-### Step 2 — Configure production-specific settings
+#### Step 2 — Configure production-specific settings
 
 Edit `.env` and update these fields:
 
@@ -211,7 +283,7 @@ GEMINI_RPM_LIMIT=10
 GEMINI_RPD_LIMIT=1500
 ```
 
-### Step 3 — Validate production readiness
+#### Step 3 — Validate production readiness
 
 ```bash
 bash infra/validate_production_readiness.sh
@@ -219,7 +291,7 @@ bash infra/validate_production_readiness.sh
 
 All `FAIL` lines must be resolved before starting in production. `WARN` lines are informational.
 
-### Step 4 — Build and start
+#### Step 4 — Build and start
 
 ```bash
 docker compose \
@@ -236,7 +308,7 @@ The production overlay:
 - Strips direct host port bindings for backend/infra — all traffic flows through Caddy
 - Enables `restart: always` for automatic crash recovery
 
-### Step 5 — Monitor startup
+#### Step 5 — Monitor startup
 
 ```bash
 docker compose \
@@ -246,7 +318,7 @@ docker compose \
   logs -f
 ```
 
-### Step 6 — Confirm all containers are healthy
+#### Step 6 — Confirm all containers are healthy
 
 ```bash
 docker compose \
@@ -256,17 +328,43 @@ docker compose \
   ps
 ```
 
-### Step 7 — Verify ML models
+#### Step 7 — Verify ML models
 
 See [Section 6](#6-verifying-model-downloads).
 
-### Step 8 — Open the app
+#### Step 8 — Run post-start smoke test
+Verify routing and authentication end-to-end:
+```bash
+bash scripts/_smoke.sh prod
+```
+
+#### Step 9 — Open the app
 
 ```
 https://forensic.yourdomain.com
 ```
 
 Caddy obtains a Let's Encrypt TLS certificate automatically on first request to a real domain. Allow up to 60 seconds for ACME issuance.
+
+### Build images only (no start)
+To build the production images without starting containers (useful for CI/CD stages or deployment cache pre-warming):
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env \
+  build --parallel
+```
+
+### Applying .env changes
+Environment variables are injected at container creation. When you edit `.env` in production, recreate the containers:
+```bash
+# Recreate backend and worker
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d --force-recreate backend worker
+
+# Recreate frontend
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env up -d --force-recreate frontend
+```
 
 ---
 
@@ -276,8 +374,31 @@ Use this when Docker layer cache is stale (e.g. base image updated, dependency v
 
 **Keeps all named volumes** (databases, model weights, evidence files are preserved).
 
-### Developer no-cache rebuild
+### Recommended: Using the rebuild helper
+The `scripts/rebuild.sh` script automatically wraps the correct compose files, overlay targets, and build arguments. Run from the repository root:
 
+```bash
+# Rebuild all services in development mode
+bash scripts/rebuild.sh dev
+
+# Rebuild all services in production mode
+bash scripts/rebuild.sh prod
+
+# Rebuild a single service in development mode
+bash scripts/rebuild.sh dev backend
+bash scripts/rebuild.sh dev worker
+bash scripts/rebuild.sh dev frontend
+
+# Rebuild a single service in production mode
+bash scripts/rebuild.sh prod backend
+bash scripts/rebuild.sh prod worker
+bash scripts/rebuild.sh prod frontend
+```
+
+### Advanced: Manual No-Cache Rebuild
+If you need to pass additional docker build arguments or target specific layers manually:
+
+#### Developer full stack rebuild
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
@@ -292,8 +413,7 @@ docker compose \
   up -d
 ```
 
-### Production no-cache rebuild
-
+#### Production full stack rebuild
 ```bash
 docker compose \
   -f infra/docker-compose.yml \
@@ -308,17 +428,35 @@ docker compose \
   up -d
 ```
 
-### No-cache rebuild for a single service
+#### Manual single-service rebuilds
+Make sure you include the appropriate dev/prod overlays so target build stages are correctly resolved.
 
+**Developer Mode (e.g. backend):**
 ```bash
-# Backend only (developer)
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
   --env-file .env \
   build --no-cache backend
 
 docker compose \
   -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  up -d --no-deps backend
+```
+
+**Production Mode (e.g. backend):**
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
+  --env-file .env \
+  build --no-cache backend
+
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml \
   --env-file .env \
   up -d --no-deps backend
 ```
@@ -335,10 +473,16 @@ docker builder prune -f
 
 ## 6. Verifying Model Downloads
 
-After the stack starts, confirm that the model cache directories, Python ML dependencies, and individual required model artifacts are present. Run this against the backend or worker container:
+After the stack starts, confirm that the model cache directories, Python ML dependencies, and individual required model artifacts are present. While they share the underlying model cache volumes, both the backend (`forensic_api`) and the background worker (`forensic_worker`) verify cache integrity independently at startup.
+
+Run the status check against both containers:
 
 ```bash
+# Verify backend container cache
 docker exec forensic_api python scripts/model_cache_check.py --strict
+
+# Verify worker container cache
+docker exec forensic_worker python scripts/model_cache_check.py --strict
 ```
 
 Expected output should show cache directories as healthy and required model assets as `[OK]`. With the default commercial-safe configuration, the object detector is DETR (`facebook/detr-resnet-50`) and the Ultralytics/YOLO cache may be empty.
@@ -358,10 +502,16 @@ Expected output should show cache directories as healthy and required model asse
 To check the individual model artifacts without downloading:
 
 ```bash
+# Check backend container model presence
 docker exec forensic_api python scripts/model_pre_download.py --check --strict
+
+# Check worker container model presence
+docker exec forensic_worker python scripts/model_pre_download.py --check --strict
 ```
 
-The default model set is DETR object detection, EasyOCR, OpenCLIP/SigLIP, ResNet-50, SpeechBrain ECAPA, and the configured audio deepfake detector. If any model shows `MISS`, trigger a forced re-download:
+The default model set is DETR object detection, EasyOCR, OpenCLIP/SigLIP, ResNet-50, SpeechBrain ECAPA, and the configured audio deepfake detector. The full model list and their required conditions are documented in [MODEL_REGISTRY.md](../docs/MODEL_REGISTRY.md).
+
+If any model shows `MISS`, trigger a forced re-download:
 
 ```bash
 docker exec forensic_api python scripts/model_pre_download.py --force
@@ -386,8 +536,17 @@ docker volume ls --filter name=forensic-council \
 
 ## 7. Container Health Reference
 
-### Wait for all services to become healthy
+### Recommended: Automated health wait
+To wait for all services to start and pass their health checks in a structured manner (with a 15-minute timeout), run from the repository root:
+```bash
+# Developer mode
+bash scripts/_wait_healthy.sh dev
 
+# Production mode
+bash scripts/_wait_healthy.sh prod
+```
+
+### Manual health wait loop
 ```bash
 # Poll until every container is healthy (timeout 10 minutes)
 end=$((SECONDS + 600))
@@ -431,9 +590,9 @@ docker exec forensic_qdrant wget -qO- http://localhost:6333/healthz
 | `forensic_qdrant` | `healthy` | |
 | `forensic_jaeger` | `healthy` | |
 | `forensic_migration` | `exited (0)` | Runs once — exit 0 is correct |
-| `forensic_api` | `healthy` | 45 s start period |
-| `forensic_worker` | `healthy` | 60 s start period |
-| `forensic_ui` | `healthy` | 60–300 s start period (Next.js compilation) |
+| `forensic_api` | `healthy` | 120 s start period |
+| `forensic_worker` | `healthy` | 300 s start period |
+| `forensic_ui` | `healthy` | 180 s start period (Next.js compilation) |
 | `forensic_caddy` | `healthy` | |
 | `forensic_prometheus` | `healthy` | |
 
@@ -470,9 +629,27 @@ docker compose \
   --env-file .env \
   up -d --no-deps frontend
 
-# Restart worker (picks up bind-mounted code changes)
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env restart worker
+# Developer — restart worker (picks up bind-mounted code changes instantly, bypasses 300s grace period)
+bash scripts/dev-restart-worker.sh
 ```
+
+**Manual worker restart equivalent (bypassing grace period):**
+```bash
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  kill -s SIGKILL worker
+
+docker compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  --env-file .env \
+  up -d --no-deps worker
+```
+
+> [!WARNING]
+> Bypassing the stop grace period with SIGKILL aborts any in-flight agent investigations instantly and can leave database jobs in an orphaned state. Do NOT use this method in production.
 
 ---
 
@@ -565,22 +742,30 @@ The backend and worker services use `read_only: true` with a `tmpfs: /tmp` mount
 
 ## 11. Teardown
 
-### Stop containers, keep volumes
+### Pause and Resume (Recommended for daily pauses)
+Use `stop` to pause running containers without removing them. This preserves local caches, anonymous volumes, and Next.js HMR state.
+```bash
+# Pause the stack
+docker compose -f infra/docker-compose.yml --env-file .env stop
 
+# Resume the stack instantly
+docker compose -f infra/docker-compose.yml --env-file .env start
+```
+
+### Stop containers, keep volumes
+Use `down` to stop and remove containers. This is slower to resume because containers must be recreated on next `up`.
 ```bash
 docker compose -f infra/docker-compose.yml --env-file .env down
 ```
 
 ### Stop and remove all volumes (⚠ deletes models and data)
-
 ```bash
 docker compose -f infra/docker-compose.yml --env-file .env down -v
 ```
-
-Only use `-v` when you want a completely clean state — it deletes the database, all evidence files, and all downloaded ML model weights.
+> [!WARNING]
+> Only use `-v` when you want a completely clean state — it deletes the database, all uploaded evidence files, and all downloaded ML model weights.
 
 ### Remove only model volumes (re-download on next start)
-
 ```bash
 docker volume rm \
   forensic-council_hf_cache \
@@ -592,14 +777,41 @@ docker volume rm \
 ```
 
 ### Remove only the database volume
-
 ```bash
 docker volume rm forensic-council_postgres_data forensic-council_redis_data
 ```
 
+### Full Clean / Nuclear Reset
+When troubleshooting stubborn cache conflicts or performing a complete environment refresh, run this exact sequence:
+
+```bash
+# Step 1 — Stop containers and destroy all volumes (evidence, databases, and model weights)
+docker compose -f infra/docker-compose.yml --env-file .env down -v
+
+# Step 2 — Purge Docker BuildKit cache layers
+docker builder prune -f
+
+# Step 3 — Clean local developer workspace build artifacts (bytecode, Next.js cache, etc.)
+bash scripts/clean_project.sh
+
+# Step 4 — Deep clean host model caches
+bash scripts/clean_project.sh --deep
+
+# Step 5 — Boot fresh developer stack (re-verifies, downloads models, and starts)
+bash scripts/dev.sh
+```
+> [!CAUTION]
+> This destroys all evidence files, database records, downloaded model weights (~15–40 GB), and the ECDSA keys. Reports generated before this reset will fail cryptographic signature verification since the keys will be regenerated.
+
 ---
 
 ## 12. Troubleshooting
+
+### Quick diagnostics (run this first)
+To automatically inspect container health, capture logs of unhealthy services, check disk volumes, and report system settings:
+```bash
+bash scripts/troubleshoot.sh
+```
 
 ### Models download again after every restart
 
@@ -714,8 +926,8 @@ docker compose \
 ### Step 2 — Configure host environment
 
 ```bash
-cp .env.local.example .env.local
-# Edit .env.local: set POSTGRES_HOST=localhost, REDIS_HOST=localhost, QDRANT_HOST=localhost
+cp .env.host.example .env.host
+# Edit .env.host: set POSTGRES_HOST=localhost, REDIS_HOST=localhost, QDRANT_HOST=localhost
 ```
 
 ### Step 3 — Start the API on host
@@ -735,4 +947,4 @@ npm run dev
 ```
 
 The frontend dev server runs at `http://localhost:3000` and the API at `http://localhost:8000`.
-Note: Caddy is not in the loop for this mode; `NEXT_PUBLIC_API_URL=http://localhost:8000` in `.env.local`.
+Note: Caddy is not in the loop for this mode; `NEXT_PUBLIC_API_URL=http://localhost:8000` in `.env.host`.

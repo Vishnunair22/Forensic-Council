@@ -99,37 +99,21 @@ case "$MODE" in
 
   tests)
     echo "=== Test suite checks ==="
-    ./scripts/verify_phase8_tests.sh static || fail "test static failed"
-    pass "test static"
-
-    ./scripts/verify_phase8_tests.sh frontend-unit || fail "test frontend-unit failed"
-    pass "test frontend-unit"
-
-    ./scripts/verify_phase8_tests.sh backend-unit || fail "test backend-unit failed"
-    pass "test backend-unit"
-
+    "$0" static || fail "test static failed"
+    "$0" backend || fail "test backend failed"
+    "$0" frontend || fail "test frontend failed"
     echo "Project verification passed: tests"
     ;;
 
   docker-dev)
     echo "=== Docker dev checks ==="
-    if [[ -f scripts/verify_phase1_build_run.sh ]]; then
-      ./scripts/verify_phase1_build_run.sh docker-dev 2>&1 | tail -10 || fail "docker-dev failed"
-      pass "docker-dev"
-    else
-      echo "SKIP: verify_phase1_build_run.sh not found"
-    fi
+    bash scripts/_smoke.sh dev || fail "docker-dev smoke test failed"
     echo "Project verification passed: docker-dev"
     ;;
 
   docker-prod)
     echo "=== Docker prod checks ==="
-    if [[ -f scripts/verify_phase1_build_run.sh ]]; then
-      ./scripts/verify_phase1_build_run.sh docker-prod 2>&1 | tail -10 || fail "docker-prod failed"
-      pass "docker-prod"
-    else
-      echo "SKIP: verify_phase1_build_run.sh not found"
-    fi
+    bash scripts/_smoke.sh prod || fail "docker-prod smoke test failed"
     echo "Project verification passed: docker-prod"
     ;;
 

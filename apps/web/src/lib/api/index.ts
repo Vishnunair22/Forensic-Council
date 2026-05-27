@@ -7,6 +7,7 @@ export * from "./utils";
 export {
   DuplicateInvestigationError,
   ProtocolWarmingError,
+  WorkerWarmupError,
   apiFetch,
   autoLoginAsInvestigator,
   checkBackendHealth,

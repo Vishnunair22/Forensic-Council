@@ -21,7 +21,20 @@ if ! docker compose version >/dev/null 2>&1; then
     echo "FAILED: docker compose is not available."
     exit 1
 fi
-echo "OK: docker compose present."
+
+# Version check for docker compose >= 2.24
+COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || docker compose version | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | head -n1)
+MAJOR=$(echo "$COMPOSE_VERSION" | cut -d. -f1)
+MINOR=$(echo "$COMPOSE_VERSION" | cut -d. -f2)
+if [ -z "$MAJOR" ] || [ -z "$MINOR" ]; then
+    echo "FAILED: Could not parse docker compose version '$COMPOSE_VERSION'."
+    exit 1
+fi
+if [ "$MAJOR" -lt 2 ] || { [ "$MAJOR" -eq 2 ] && [ "$MINOR" -lt 24 ]; }; then
+    echo "FAILED: docker compose version must be >= 2.24. Got $COMPOSE_VERSION."
+    exit 1
+fi
+echo "OK: docker compose present ($COMPOSE_VERSION >= 2.24)."
 
 if ! docker info >/dev/null 2>&1; then
     echo "FAILED: Docker daemon is not reachable. Start Docker Desktop/Engine and rerun."
@@ -65,6 +78,18 @@ DEMO_PWD=$(grep DEMO_PASSWORD= .env | cut -d= -f2-)
 # (P3-DOCS-001 fix, audit v6→v7)
 RESEARCH_MODELS=$(grep ENABLE_RESEARCH_MODELS= .env | cut -d= -f2-)
 [ "$RESEARCH_MODELS" = "false" ] || [ -z "$RESEARCH_MODELS" ] || { echo "FAIL: ENABLE_RESEARCH_MODELS must be false in production"; exit 1; }
+
+# Handle ARBITER_GEMINI_API_KEY placeholder validation
+ARB_GEMINI_KEY=$(grep "^ARBITER_GEMINI_API_KEY=" .env | cut -d= -f2- || echo "")
+if [ -n "$ARB_GEMINI_KEY" ]; then
+  case "$ARB_GEMINI_KEY" in
+    __REPLACE_ME*|__PASTE_*|*placeholder*|*Placeholder*|*PLACEHOLDER*|change-me|changeme|change_me)
+      echo "FAIL: ARBITER_GEMINI_API_KEY has a placeholder value in .env"
+      exit 1
+      ;;
+  esac
+fi
+
 echo "OK"
 
 # 2. Validate Docker Compose configuration

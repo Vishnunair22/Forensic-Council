@@ -12,6 +12,15 @@ echo "🔍 Checking .env..."
 echo "🔐 Running production readiness validation..."
 "$ROOT/infra/validate_production_readiness.sh"
 
+PRELOAD_VAL=$(grep "^PRELOAD_MODELS=" "$ROOT/.env" | cut -d= -f2- || echo "1")
+if [[ "$PRELOAD_VAL" == "1" ]]; then
+  echo "⚠️  WARNING: PRELOAD_MODELS=1 is enabled in .env."
+  echo "   This will bake all ML models (YOLO, CLIP, EasyOCR, ECAPA, etc.) into the Docker image."
+  echo "   The build size will be extremely large (15–40 GB) and can take 20–40 minutes on first run."
+  echo "   Please ensure you have sufficient disk space and network bandwidth."
+  echo "----------------------------------------------------------------------------------"
+fi
+
 echo "🐳 Building production images..."
 "${COMPOSE[@]}" build --parallel
 
@@ -67,9 +76,32 @@ else
   echo "⚠️  ML model cache check failed. First analysis may trigger a slow model download."
 fi
 
+if [[ "$DOMAIN_VALUE" != "localhost" && "$HEALTH_URL" == https://* ]]; then
+  echo "⏳ Verifying TLS certificate for $DOMAIN_VALUE (checking that it is not self-signed)..."
+  TLS_READY=0
+  for i in $(seq 1 30); do
+    if curl -s -I "$HEALTH_URL" > /dev/null 2>&1; then
+      echo "✅ TLS certificate verified (valid CA-signed certificate active)."
+      TLS_READY=1
+      break
+    fi
+    echo "   TLS provisioning in progress (Caddy is acquiring ACME cert)..."
+    sleep 5
+  done
+  if [[ "$TLS_READY" -eq 0 ]]; then
+    echo "⚠️  WARNING: Caddy is still provisioning the Let's Encrypt TLS certificate."
+    echo "   Browsers may show a security warning until ACME issuance completes."
+  fi
+fi
+
 echo ""
 echo "════════════════════════════════════════"
 echo "  Forensic Council — PRODUCTION running"
 echo "  Web UI  → ${HEALTH_URL%/health}"
 echo "  Health  → $HEALTH_URL"
+echo "════════════════════════════════════════"
+echo "  ⚠️  CAUTION: Running 'docker compose down -v' will permanently destroy the"
+echo "     database volume, deleting the ECDSA signing keys and making all historical"
+echo "     forensic report signatures unverifiable. See docs/OPERATIONAL_RUNBOOK.md"
+echo "     for backup and restore runbooks."
 echo "════════════════════════════════════════"

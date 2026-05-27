@@ -168,15 +168,15 @@ npm.cmd run build
 Run from Project Root:
 
 ```bash
-# Static build/run verification (no tools needed)
-./scripts/verify_phase1_build_run.sh static
+# Static build/run verification (docs, hygiene, compile, shell syntax)
+./scripts/verify_project.sh static
 
-# Docker compose validation (requires Docker)
-./scripts/verify_phase1_build_run.sh docker-dev
-./scripts/verify_phase1_build_run.sh docker-prod
+# Docker compose validation (smoke testing against active dev/prod stacks)
+./scripts/verify_project.sh docker-dev
+./scripts/verify_project.sh docker-prod
 
-# Full all-targets pass (static + docker-dev + docker-prod)
-./scripts/verify_phase1_build_run.sh all
+# Full all-targets pass (static + backend + frontend)
+./scripts/verify_project.sh all
 
 # Live Stack Integration (Requires 'docker compose up')
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env ps

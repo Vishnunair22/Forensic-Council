@@ -287,6 +287,9 @@ docker compose \
   -f infra/docker-compose.dev.yml \
   --env-file .env config
 
+# First-line diagnostics (container states, unhealthy logs, volume sizes)
+bash scripts/troubleshoot.sh
+
 # No-cache rebuild and restart a single service (dev or prod)
 bash scripts/rebuild.sh dev backend
 bash scripts/rebuild.sh prod backend
@@ -305,15 +308,31 @@ docker compose \
   -f infra/docker-compose.yml \
   --env-file .env logs -f backend
 
-# Stop the stack, keep volumes intact
+# Pause the stack (stops containers, preserves containers & volumes for fast resume)
+docker compose \
+  -f infra/docker-compose.yml \
+  --env-file .env stop
+
+# Resume paused stack
+docker compose \
+  -f infra/docker-compose.yml \
+  --env-file .env start
+
+# Stop the stack and remove containers/networks (keep volumes intact)
 docker compose \
   -f infra/docker-compose.yml \
   --env-file .env down
 
-# Full reset — destroys all data and model caches
+# Full reset — destroys all data and model cache volumes
 docker compose \
   -f infra/docker-compose.yml \
   --env-file .env down -v
+
+# Clean build artifacts (bytecode, .next, coverage) — safe, never touches volumes
+bash scripts/clean_project.sh
+
+# Deep clean (also removes local model caches)
+bash scripts/clean_project.sh --deep
 ```
 
 ## Network Segmentation

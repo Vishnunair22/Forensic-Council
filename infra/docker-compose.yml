@@ -93,6 +93,7 @@ x-backend-env: &backend-env
   # inotify events from Windows host → WSL2 → container are unreliable;
   # polling ensures uvicorn --reload actually picks up code changes.
   WATCHFILES_FORCE_POLLING: "true"
+  UV_WATCHFILES_POLL_INTERVAL_MS: "500"
   PYTHONDONTWRITEBYTECODE: "1"
   CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8000}
   # Cap ML process pool workers to 2 in Docker dev to avoid OOM when both
@@ -325,13 +326,15 @@ services:
       # Source code bind mounts — uvicorn --reload picks up changes instantly.
       # Individual subdirectories are mounted so .venv (and /app/storage) are NOT
       # shadowed; the container keeps the Python packages baked into the image.
-      - ../apps/api/core:/app/core:ro
-      - ../apps/api/api:/app/api:ro
-      - ../apps/api/agents:/app/agents:ro
-      - ../apps/api/tools:/app/tools:ro
-      - ../apps/api/orchestration:/app/orchestration:ro
-      - ../apps/api/scripts:/app/scripts:ro
-      - ../apps/api/config:/app/config:ro
+      - ../apps/api/core:/app/core:ro,consistent
+      - ../apps/api/api:/app/api:ro,consistent
+      - ../apps/api/agents:/app/agents:ro,consistent
+      - ../apps/api/tools:/app/tools:ro,consistent
+      - ../apps/api/orchestration:/app/orchestration:ro,consistent
+      - ../apps/api/scripts:/app/scripts:ro,consistent
+      - ../apps/api/config:/app/config:ro,consistent
+      - ../apps/api/alembic:/app/alembic:ro,consistent
+      - ../apps/api/alembic.ini:/app/alembic.ini:ro,consistent
       # Runtime data volumes
       # signing_keys is read-write here: the backend (arbiter) is the only service
       # that signs reports. The worker mounts the same volume read-only.
@@ -405,13 +408,15 @@ services:
       - FOWNER
     volumes:
       # Source code bind mounts — restart the worker to pick up changes instantly.
-      - ../apps/api/core:/app/core:ro
-      - ../apps/api/api:/app/api:ro
-      - ../apps/api/agents:/app/agents:ro
-      - ../apps/api/tools:/app/tools:ro
-      - ../apps/api/orchestration:/app/orchestration:ro
-      - ../apps/api/scripts:/app/scripts:ro
-      - ../apps/api/config:/app/config:ro
+      - ../apps/api/core:/app/core:ro,consistent
+      - ../apps/api/api:/app/api:ro,consistent
+      - ../apps/api/agents:/app/agents:ro,consistent
+      - ../apps/api/tools:/app/tools:ro,consistent
+      - ../apps/api/orchestration:/app/orchestration:ro,consistent
+      - ../apps/api/scripts:/app/scripts:ro,consistent
+      - ../apps/api/config:/app/config:ro,consistent
+      - ../apps/api/alembic:/app/alembic:ro,consistent
+      - ../apps/api/alembic.ini:/app/alembic.ini:ro,consistent
       # Runtime data volumes
       # Note: Worker runs investigations but does NOT sign reports - arbiter (in backend service) signs.
       # signing_keys is therefore mounted read-only; backend has read-write access for signing.
@@ -504,8 +509,8 @@ services:
       - "3000:3000"
     volumes:
       - ../apps/web:/app/apps/web:rw
-      - /app/apps/web/.next
-      - /app/apps/web/node_modules
+      - web_next:/app/apps/web/.next
+      - web_node_modules:/app/apps/web/node_modules
     environment:
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
@@ -517,6 +522,8 @@ services:
       # Next.js 15 uses Turbopack by default. WATCHPACK_POLLING/CHOKIDAR vars are
       # webpack-only and have been removed — Turbopack manages its own file watcher.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+      - CHOKIDAR_USEPOLLING=1
+      - WATCHPACK_POLLING=true
       # DEMO_PASSWORD must be explicitly set and MUST equal BOOTSTRAP_INVESTIGATOR_PASSWORD.
       # No silent default — an unset value is caught early (P0-FE-001 fix, audit v6→v7).
       - DEMO_PASSWORD=${DEMO_PASSWORD:?DEMO_PASSWORD must be set and equal BOOTSTRAP_INVESTIGATOR_PASSWORD}
@@ -535,7 +542,7 @@ services:
       interval: 30s
       timeout: 60s
       retries: 5
-      start_period: 180s
+      start_period: 60s
     # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)
     security_opt:
       - no-new-privileges:true
@@ -606,6 +613,8 @@ volumes:
   caddy_config:
   caddy_logs:
   prometheus_data:
+  web_next:
+  web_node_modules:
 
 # ── Network Segmentation ───────────────────────────────────────────────────────
 # SECURITY: Four-network isolation model:

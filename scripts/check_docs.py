@@ -3,8 +3,8 @@
 
 Verifies:
 1. Every script listed in README quick-start exists on disk.
-2. .env.example and .env.local.example declare the same set of keys
-   (delegates to infra/validate_env_template_consistency.sh).
+2. .env.example and .env.host.example declare the same set of keys
+   (delegates to scripts/validate_env_template_consistency.sh).
 """
 
 import re
@@ -20,9 +20,10 @@ EXPECTED_SCRIPTS = [
     "infra/generate_production_keys.sh",
     "infra/validate_production_readiness.sh",
     "infra/validate_repo_health.sh",
-    "infra/validate_env_template_consistency.sh",
+    "scripts/validate_env_template_consistency.sh",
     "scripts/troubleshoot.sh",
     "scripts/clean_project.sh",
+    "scripts/dev-restart-worker.sh",
 ]
 
 FAILURES: list[str] = []
@@ -49,11 +50,49 @@ def check_readme_script_refs() -> None:
 
 
 def check_env_template_consistency() -> None:
-    script = ROOT / "infra" / "validate_env_template_consistency.sh"
+    script = ROOT / "scripts" / "validate_env_template_consistency.sh"
     if not script.exists():
-        FAILURES.append("infra/validate_env_template_consistency.sh missing — cannot check env templates")
+        FAILURES.append("scripts/validate_env_template_consistency.sh missing — cannot check env templates")
         return
-    result = subprocess.run([str(script)], capture_output=True, text=True)
+    
+    # Robustly find bash/sh on Windows (WSL bash might be broken, fallback to Git Bash)
+    import shutil
+    import os
+    
+    cmd = [str(script)]
+    if os.name == "nt":
+        resolved_bash = None
+        for shell_cmd in ["bash", "sh"]:
+            p = shutil.which(shell_cmd)
+            if p:
+                try:
+                    res = subprocess.run([p, "--version"], capture_output=True, text=True, timeout=2)
+                    if res.returncode == 0:
+                        resolved_bash = p
+                        break
+                except Exception:
+                    pass
+        if not resolved_bash:
+            git_path = shutil.which("git")
+            if git_path:
+                git_dir = Path(git_path).parent.parent
+                for rel in ["bin/bash.exe", "bin/sh.exe", "usr/bin/bash.exe", "usr/bin/sh.exe"]:
+                    p = git_dir / rel
+                    if p.exists():
+                        try:
+                            res = subprocess.run([str(p), "--version"], capture_output=True, text=True, timeout=2)
+                            if res.returncode == 0:
+                                resolved_bash = str(p)
+                                break
+                        except Exception:
+                            pass
+        if resolved_bash:
+            cmd = [resolved_bash, str(script)]
+        else:
+            FAILURES.append("Could not find a working bash/sh executable to run validate_env_template_consistency.sh on Windows")
+            return
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         FAILURES.append(f"Env template mismatch:\n{result.stdout}{result.stderr}")
 

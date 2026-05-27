@@ -317,6 +317,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await ks.initialize()
         logger.info("Signing key store initialized")
     except Exception as e:
+        if settings.app_env == "production":
+            logger.error("CRITICAL: Failed to initialize key store in production. Aborting startup.", error=str(e))
+            raise RuntimeError(f"Key store initialization failed: {e}") from e
         logger.warning("Key store initialization used deterministic fallback", error=str(e))
 
     # ── Gemini model availability validation ──────────────────────────────────

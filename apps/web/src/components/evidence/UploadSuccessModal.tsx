@@ -11,9 +11,16 @@ export interface UploadSuccessModalProps {
   onStartAnalysis: () => Promise<void> | void;
   onDismiss: () => void;
   isHandingOff?: boolean;
+  authError?: string | null;
 }
 
-export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHandingOff = false }: UploadSuccessModalProps) {
+export function UploadSuccessModal({
+  file,
+  onStartAnalysis,
+  onDismiss,
+  isHandingOff = false,
+  authError,
+}: UploadSuccessModalProps) {
   const { playSound } = useSound();
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<string | null>(null);
@@ -246,6 +253,15 @@ export function UploadSuccessModal({ file, onStartAnalysis, onDismiss, isHanding
           </div>
         </div>
       </div>
+
+      {authError && (
+        <div
+          className="mb-6 p-4 rounded-xl border border-red-500/20 bg-red-500/5 text-sm fc-text-danger relative z-10"
+          role="alert"
+        >
+          <strong>Authentication Error:</strong> {authError}. Please close the modal and try again to establish a valid investigator session.
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-3 relative z-10 mt-auto">

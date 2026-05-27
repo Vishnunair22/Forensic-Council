@@ -65,6 +65,9 @@ else
     SKIP=$((SKIP + 1))
 fi
 
+# Env Template Consistency
+run_check "env templates consistency" sh -c "bash '$ROOT/scripts/validate_env_template_consistency.sh'"
+
 echo "----------------------------------------------------"
 echo "Repo health: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
 echo "----------------------------------------------------"

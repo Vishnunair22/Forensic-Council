@@ -75,7 +75,7 @@ export async function ensureCsrfToken(): Promise<string | null> {
   if (token) return token;
 
   try {
-    await fetch(`${API_BASE}/api/v1/health`, {
+    await fetch(`${API_BASE}/api/v1/auth/me`, {
       method: "GET",
       credentials: "include",
       cache: "no-store",

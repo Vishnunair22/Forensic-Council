@@ -280,6 +280,14 @@ check_critical_coverage_*.txt
 # ── Audit plan (session-local) ───────────────────────────────────────────────
 FULL_APP_AUDIT.md
 end to end audit plan.md
+"Full App Audit Plan.md"
+Full*Audit*.md
+*Audit*Plan*.md
+scripts/__init__.py
+.github/.secrets.baseline
+*.secrets.baseline
+**/tests/load/*.log
+**/tests/load/results/
 
 # ── Generated / Stale Files ──────────────────────────────────────────────────
 apps/web/jest-results.json

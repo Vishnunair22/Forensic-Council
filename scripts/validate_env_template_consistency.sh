@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Forensic Council — Env Template Consistency Check
 #
-# Verifies that .env.example (Docker) and .env.local.example (host-run) declare
+# Verifies that .env.example (Docker) and .env.host.example (host-run) declare
 # the same set of keys, so new variables are not silently missing from one template.
 #
 # Usage:
@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 DOCKER_TMPL="$ROOT/.env.example"
-HOST_TMPL="$ROOT/.env.local.example"
+HOST_TMPL="$ROOT/.env.host.example"
 
 if [[ ! -f "$DOCKER_TMPL" ]]; then
     echo "ERROR: $DOCKER_TMPL not found"
@@ -44,19 +44,19 @@ ONLY_IN_HOST=$(comm -13 <(echo "$DOCKER_KEYS") <(echo "$HOST_KEYS"))
 FAIL=0
 
 if [[ -n "$ONLY_IN_DOCKER" ]]; then
-    echo "Keys in .env.example but NOT in .env.local.example:"
+    echo "Keys in .env.example but NOT in .env.host.example:"
     echo "$ONLY_IN_DOCKER" | sed 's/^/  /'
     FAIL=1
 fi
 
 if [[ -n "$ONLY_IN_HOST" ]]; then
-    echo "Keys in .env.local.example but NOT in .env.example:"
+    echo "Keys in .env.host.example but NOT in .env.example:"
     echo "$ONLY_IN_HOST" | sed 's/^/  /'
     FAIL=1
 fi
 
 if [[ "$FAIL" -eq 0 ]]; then
-    echo "OK: .env.example and .env.local.example declare the same set of keys."
+    echo "OK: .env.example and .env.host.example declare the same set of keys."
     exit 0
 else
     echo ""

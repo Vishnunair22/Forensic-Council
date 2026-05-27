@@ -145,7 +145,7 @@ let socketInstance: MockWebSocket;
 beforeEach(() => {
   jest.clearAllMocks();
   Object.keys(store).forEach((k) => delete store[k]);
-  document.cookie = "";
+  document.cookie = "csrf_token=test-token";
   // In the createLiveSocket tests, we need to capture the instance
   jest.spyOn(global, 'WebSocket').mockImplementation((url, protocols) => {
     socketInstance = new MockWebSocket(url as string, protocols as string | string[]);

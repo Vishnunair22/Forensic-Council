@@ -207,6 +207,41 @@ docker compose exec backend python -c "from core.websocket_manager import ws_man
 
 ---
 
+## Database Backup & Destruction Warnings
+
+> [!CAUTION]
+> Running `docker compose down -v` or deleting the `postgres_data` volume permanently destroys the database. 
+> This deletes the ECDSA private keys (stored in the `agent_signing_keys` table) that are encrypted at rest with the Fernet key derived from `SIGNING_KEY`.
+>
+> If these keys are lost, all historical report signatures and custody entries become permanently unverifiable.
+>
+> **Always back up the agent signing keys before destroying the volume!**
+
+### Manual Key & Database Backup
+
+To back up the agent signing keys specifically:
+```bash
+docker compose exec postgres pg_dump -U forensic_user -d forensic_council -t agent_signing_keys > agent_signing_keys_backup.sql
+```
+
+To back up the entire database (including audit logs, report data, and keys):
+```bash
+docker compose exec postgres pg_dump -U forensic_user -d forensic_council > database_full_backup.sql
+```
+
+### Restoring Keys from Backup
+
+After recreating the stack, restore the keys table:
+```bash
+# 1. Clean the target table (if it exists and has new default keys)
+docker compose exec postgres psql -U forensic_user -d forensic_council -c "TRUNCATE TABLE agent_signing_keys CASCADE;"
+
+# 2. Restore the keys from backup
+docker compose exec -T postgres psql -U forensic_user -d forensic_council < agent_signing_keys_backup.sql
+```
+
+---
+
 ## Recovery Commands
 
 ### Restart specific service
@@ -292,11 +327,11 @@ Run `infra/validate_production_readiness.sh` before any production deployment:
 ./infra/validate_production_readiness.sh
 ```
 
-Run `scripts/verify_phase8_tests.sh` for comprehensive test verification:
+Run `scripts/verify_project.sh` for comprehensive test verification:
 
 ```bash
-./scripts/verify_phase8_tests.sh static
-./scripts/verify_phase8_tests.sh backend-unit
-./scripts/verify_phase8_tests.sh frontend-unit
+./scripts/verify_project.sh static
+./scripts/verify_project.sh backend
+./scripts/verify_project.sh frontend
 ./scripts/verify_project.sh all
 ```

@@ -416,6 +416,12 @@ class KeyStore:
         # Generate any missing keys
         for agent_id in self._AGENT_IDS:
             if agent_id not in self._keys:
+                if "worker" in self._settings.app_name.lower():
+                    raise RuntimeError(
+                        f"KeyStore.initialize: Worker is missing ECDSA signing key for agent '{agent_id}'. "
+                        "Workers are unauthorized to generate or derive keys. "
+                        "Please ensure the backend (Arbiter) has initialized the keystore first."
+                    )
                 if self._db_available:
                     # Generate independent random key pair
                     key_pair = AgentKeyPair.generate(agent_id)
@@ -447,6 +453,11 @@ class KeyStore:
             AgentKeyPair for the agent
         """
         if agent_id not in self._keys:
+            if "worker" in self._settings.app_name.lower():
+                raise RuntimeError(
+                    f"KeyStore.get_or_create: Worker is missing ECDSA signing key for agent '{agent_id}'. "
+                    "Workers are unauthorized to generate or derive keys."
+                )
             # D-H-6 (S-M-7): same hard gate as initialize() — refuse sync
             # derivation in production so a call path that bypassed
             # initialize() cannot quietly substitute deterministic keys.
@@ -474,6 +485,12 @@ class KeyStore:
         """
         if agent_id in self._keys:
             return self._keys[agent_id]
+
+        if "worker" in self._settings.app_name.lower():
+            raise RuntimeError(
+                f"KeyStore.get_or_create_persistent: Worker is missing ECDSA signing key for agent '{agent_id}'. "
+                "Workers are unauthorized to generate or derive keys."
+            )
 
         if self._db_available:
             key_pair = AgentKeyPair.generate(agent_id)
@@ -509,6 +526,11 @@ class KeyStore:
         Returns:
             The new AgentKeyPair
         """
+        if "worker" in self._settings.app_name.lower():
+            raise RuntimeError(
+                f"KeyStore.rotate_key: Worker is unauthorized to rotate ECDSA signing key for agent '{agent_id}'."
+            )
+
         old_key = self._keys.get(agent_id)
 
         # Retire old key in DB

@@ -12,8 +12,9 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 
-import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, dbg, refreshAuthToken } from "@/lib/api";
+import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, dbg, refreshAuthToken, autoLoginAsInvestigator } from "@/lib/api";
 import { BriefUpdateSchema } from "@/lib/schemas";
+import { toast } from "@/hooks/use-toast";
 import { SoundType } from "./useSound";
 import type { AgentUpdate } from "@/components/evidence/types";
 
@@ -124,6 +125,7 @@ export const useSimulation = ({
     maxRetries: 12,
   });
   const reconnectAttemptsRef = useRef(0);
+  const authRetryAttemptsRef = useRef<Record<string, number>>({});
   const arbiterPollRef = useRef<NodeJS.Timeout | null>(null);
   /** Guards async poll callbacks from setting state after the component unmounts. */
   const isMountedRef = useRef(true);
@@ -694,6 +696,56 @@ export const useSimulation = ({
           // saturated) are added so we don't loop reconnect-attempts
           // through a server that explicitly told us the channel is
           // dead/busy.
+          const closeCodeMessages: Record<number, string> = {
+            4001: "Authentication failed. Please refresh the page.",
+            4003: "You do not have access to this investigation.",
+            4004: "Investigation session not found. It may have expired.",
+            4010: "Investigation interrupted by server restart. Please start a new analysis.",
+            1011: "Server error. Please refresh and try again.",
+            1013: "Server is temporarily unavailable. Please try again later.",
+          };
+          const friendlyMessage = closeCodeMessages[event.code] || event.reason || "Investigation interrupted. Please restart.";
+
+          if (event.code === 4001) {
+            const retries = authRetryAttemptsRef.current[targetSessionId] || 0;
+            if (retries < 1) {
+              authRetryAttemptsRef.current[targetSessionId] = retries + 1;
+              dbg.log("[WebSocket] Auth failed (4001). Refreshing token and retrying connection once...");
+              setIsReconnecting(true);
+              setReconnectStatusMessage("Authentication expired. Re-authenticating...");
+              (async () => {
+                try {
+                  const refreshSuccess = await refreshAuthToken();
+                  if (!refreshSuccess) {
+                    await autoLoginAsInvestigator();
+                  }
+                  const currentSessionId = storage.getItem(STORAGE_KEYS.SESSION_ID);
+                  if (currentSessionId === targetSessionId) {
+                    connectWebSocket(currentSessionId, isReconnect)
+                      .then(() => resolve())
+                      .catch((err) => reject(err));
+                  } else {
+                    reject(new Error("Session changed during re-authentication."));
+                  }
+                } catch (reauthErr) {
+                  dbg.warn("[WebSocket] Re-auth failed during 4001 recovery:", reauthErr);
+                  setIsReconnecting(false);
+                  setReconnectStatusMessage(null);
+                  setSessionId(null);
+                  clearInvestigationPersistence();
+                  if (wsConnectionReady) {
+                    setErrorMessage(friendlyMessage);
+                    setStatus("error");
+                  }
+                  if (!wsConnectionReady) {
+                    reject(new Error(friendlyMessage));
+                  }
+                }
+              })();
+              return;
+            }
+          }
+
           const terminalCodes = [1011, 1013, 4001, 4003, 4004, 4010];
           if (terminalCodes.includes(event.code)) {
             dbg.warn("[WebSocket] Terminal close code received. Clearing session state.");
@@ -701,16 +753,6 @@ export const useSimulation = ({
             setReconnectStatusMessage(null);
             setSessionId(null);
             clearInvestigationPersistence();
-
-            const closeCodeMessages: Record<number, string> = {
-              4001: "Authentication failed. Please refresh the page.",
-              4003: "You do not have access to this investigation.",
-              4004: "Investigation session not found. It may have expired.",
-              4010: "Investigation interrupted by server restart. Please start a new analysis.",
-              1011: "Server error. Please refresh and try again.",
-              1013: "Server is temporarily unavailable. Please try again later.",
-            };
-            const friendlyMessage = closeCodeMessages[event.code] || event.reason || "Investigation interrupted. Please restart.";
 
             // If connection was already established, set to error state
             if (wsConnectionReady) {
@@ -735,6 +777,9 @@ export const useSimulation = ({
           // Connection was established but closed - attempt reconnection with exponential backoff
           setStatus((prev: SimulationStatus) => {
             if (prev !== "complete" && prev !== "error" && prev !== "idle") {
+              if (expectingPipelineCompleteRef.current) {
+                return prev;
+              }
               if (reconnectAttemptsRef.current < reconnectConfig.current.maxRetries) {
                 // C-L-2: full-jitter backoff so N clients re-connecting
                 // after a backend restart don't synchronize into a
@@ -823,6 +868,10 @@ export const useSimulation = ({
             // connected promise settled (either onerror or onclose before open)
             if (!wsConnectionReady) {
               dbg.warn("[WebSocket] Connection failed, falling back to SSE progress stream...", err);
+              toast.warning({
+                title: "Live Feed Degraded",
+                description: "Direct WebSocket connection failed. Falling back to Server-Sent Events (SSE). UI updates may be slightly delayed.",
+              });
               try {
                 if (wsRef.current) {
                   wsRef.current.close();

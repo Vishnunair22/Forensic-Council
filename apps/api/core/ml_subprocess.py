@@ -55,6 +55,7 @@ _WARMUP_SCRIPTS = {
     "mantra_net_tracer.py",  # ManTra-Net universal anomaly tracer
     "f3net_freq.py",  # F3-Net frequency GAN/AI artifact detector
     "diffusion_artifact_detector.py",
+    "synthid_watermark_detector.py",
     # ── Audio / video tools ───────────────────────────────────────────────
     "audio_splice_detector.py",
     "audio_gen_signature_scanner.py",

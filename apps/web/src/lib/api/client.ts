@@ -91,6 +91,13 @@ export class ProtocolWarmingError extends Error {
   }
 }
 
+export class WorkerWarmupError extends Error {
+  constructor(message = "System warming up — forensic worker is initializing") {
+    super(message);
+    this.name = "WorkerWarmupError";
+  }
+}
+
 export class DuplicateInvestigationError extends Error {
   constructor(public existingSessionId: string, message = "Duplicate investigation request") {
     super(message);
@@ -295,6 +302,12 @@ export async function startInvestigation(
         const existingSessionId = extractDuplicateSessionId(err.detail);
         if (existingSessionId) {
           throw new DuplicateInvestigationError(existingSessionId, err.detail);
+        }
+      }
+      if (response.status === 503) {
+        const detailStr = typeof err.detail === "string" ? err.detail : "";
+        if (detailStr.includes("worker is not running") || detailStr.includes("warming up")) {
+          throw new WorkerWarmupError(detailStr);
         }
       }
       throw new Error(err.detail || `HTTP ${response.status}`);
@@ -510,10 +523,9 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
 
 export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatusResponse> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/arbiter-status`,
       {
-        credentials: "include",
         cache: "no-store",
       },
     );

@@ -16,6 +16,7 @@ import {
   getAuthToken,
   autoLoginAsInvestigator,
   DuplicateInvestigationError,
+  WorkerWarmupError,
   type ArbiterStatusResponse,
   type HITLDecision
 } from "@/lib/api";
@@ -142,6 +143,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   };
 
   const investigatorIdRef = useRef<string>(_initInvestigatorId());
+  const warmupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -193,6 +195,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (arbiterAbortControllerRef.current) {
         arbiterAbortControllerRef.current.abort();
         arbiterAbortControllerRef.current = null;
+      }
+      if (warmupTimeoutRef.current) {
+        clearTimeout(warmupTimeoutRef.current);
+        warmupTimeoutRef.current = null;
       }
     };
   }, []);
@@ -305,6 +311,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const resetSimulation = useCallback(() => {
     arbiterControl.abort();
+    if (warmupTimeoutRef.current) {
+      clearTimeout(warmupTimeoutRef.current);
+      warmupTimeoutRef.current = null;
+    }
     setIsUploading(false);
     setPhase("initial");
     setAnalysisStreamReady(false);
@@ -442,6 +452,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         if (err instanceof DuplicateInvestigationError) {
           sessionIdToUse = err.existingSessionId;
           isDuplicateSession = true;
+        } else if (err instanceof WorkerWarmupError) {
+          setUploadPhaseText("System is warming up, please try again in a moment...");
+          toast.warning({
+            title: "System Warmup",
+            description: "The forensic worker is starting/warming up. Retrying automatically in 15 seconds...",
+          });
+          warmupTimeoutRef.current = setTimeout(() => {
+            triggerAnalysis(targetFile);
+          }, 15000);
+          return;
         } else {
           const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
           setIsUploading(false);
@@ -496,6 +516,20 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       lastSessionIdRef.current = sessionIdToUse;
 
       if (isDuplicateSession) {
+        try {
+          const st = await getArbiterStatus(sessionIdToUse);
+          if (st.status === "complete") {
+            sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+            setIsUploading(false);
+            setShowLoadingOverlay(false);
+            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+            router.push(`/result/${sessionIdToUse}`, { scroll: true });
+            return;
+          }
+        } catch {
+          // ignore status errors, fall through to WS reconnect
+        }
+
         const savedDeepAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.DEEP_AGENTS}:${sessionIdToUse}`, true, []);
         const savedInitialAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.INITIAL_AGENTS}:${sessionIdToUse}`, true, []);
         const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
@@ -504,7 +538,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         if (savedAgents.length > 0) {
           restoreSimulationState(savedAgents, "awaiting_decision");
         }
-      connectWebSocket(sessionIdToUse, true)
+        connectWebSocket(sessionIdToUse, true)
         .then(() => {
           setAnalysisStreamReady(true);
           setIsUploading(false);
@@ -571,7 +605,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
-    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, restoreSimulationState, setSimulationPhase]
+    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, restoreSimulationState, setSimulationPhase, router]
   );
 
 

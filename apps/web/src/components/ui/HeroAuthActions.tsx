@@ -48,6 +48,7 @@ export function HeroAuthActions() {
     }
   }, [queryClient]);
   const [isHandingOff, setIsHandingOff] = useState(false);
+  const [localAuthError, setLocalAuthError] = useState<string | null>(null);
   const ctaRef = useRef<HTMLButtonElement>(null);
 
   // Prefetch the evidence route once on mount
@@ -115,6 +116,29 @@ export function HeroAuthActions() {
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile) return;
 
+    if (__pendingFileStore.authPromise) {
+      setIsHandingOff(true);
+      try {
+        await __pendingFileStore.authPromise;
+      } catch (error) {
+        console.warn("[HeroAuthActions] authPromise rejected in handleStartAnalysis:", error);
+        toast.destructive({
+          title: "Authentication Failed",
+          description: error instanceof Error ? error.message : "Could not authenticate your credentials. Please try again.",
+        });
+        setIsHandingOff(false);
+        return;
+      }
+    }
+
+    if (__pendingFileStore.authError) {
+      toast.destructive({
+        title: "Authentication Error",
+        description: __pendingFileStore.authError.message || "Failed to authenticate your session.",
+      });
+      return;
+    }
+
     clearInvestigationPersistence();
     __pendingFileStore.file = selectedFile;
     try {
@@ -145,6 +169,7 @@ export function HeroAuthActions() {
     setShowUpload(true);
     setSelectedFile(null);
     setIsHandingOff(false);
+    setLocalAuthError(null);
     try {
       playSound("envelope-open");
     } catch (error) {
@@ -155,6 +180,7 @@ export function HeroAuthActions() {
     __pendingFileStore.authPromise ||= autoLoginAsInvestigator()
       .then((token) => {
         __pendingFileStore.authError = null;
+        setLocalAuthError(null);
         return token;
       })
       .catch((err) => {
@@ -162,6 +188,7 @@ export function HeroAuthActions() {
         console.warn("[HeroAuthActions] pre-auth failed; evidence page will retry:", error);
         __pendingFileStore.authError = error;
         __pendingFileStore.authPromise = null;
+        setLocalAuthError(error.message);
         return Promise.reject(error);
       });
   }, [playSound]);
@@ -172,6 +199,7 @@ export function HeroAuthActions() {
     setIsHandingOff(false);
     __pendingFileStore.authPromise = null;
     __pendingFileStore.authError = null;
+    setLocalAuthError(null);
     requestAnimationFrame(() => ctaRef.current?.focus());
   }, []);
 
@@ -212,6 +240,7 @@ export function HeroAuthActions() {
                 key="upload-modal"
                 onClose={closeUpload}
                 onFileSelected={(file) => setSelectedFile(file)}
+                authError={localAuthError}
               />
             ) : (
               <UploadSuccessModal
@@ -219,7 +248,8 @@ export function HeroAuthActions() {
                 file={selectedFile}
                 onDismiss={() => setSelectedFile(null)}
                 isHandingOff={isHandingOff}
-                  onStartAnalysis={async () => {
+                authError={localAuthError}
+                onStartAnalysis={async () => {
                   playSound("scan");
                   window.dispatchEvent(
                     new CustomEvent("fc_storage_update", {

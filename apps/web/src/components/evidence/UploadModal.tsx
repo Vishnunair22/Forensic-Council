@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { X, CloudUpload } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
@@ -10,14 +10,24 @@ import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
 export interface UploadModalProps {
   onClose: () => void;
   onFileSelected: (file: File) => void;
+  authError?: string | null;
 }
 
-export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
+export function UploadModal({ onClose, onFileSelected, authError }: UploadModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { playSound } = useSound();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const closeModal = useCallback(() => {
     playSound("click");
@@ -49,7 +59,7 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
     setIsSubmitting(true);
     setError(null);
     playSound("success-chime");
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       onFileSelected(file);
     }, 600);
   }, [onFileSelected, playSound, isSubmitting]);
@@ -92,6 +102,15 @@ export function UploadModal({ onClose, onFileSelected }: UploadModalProps) {
           Evidence Acquisition
         </h2>
       </div>
+
+      {authError && (
+        <div
+          className="mb-6 p-4 rounded-xl border border-red-500/20 bg-red-500/5 text-sm fc-text-danger"
+          role="alert"
+        >
+          <strong>Authentication Warning:</strong> {authError}. You can still select files, but starting the analysis may fail.
+        </div>
+      )}
 
       {/* Elevated Drop Zone */}
       <motion.div

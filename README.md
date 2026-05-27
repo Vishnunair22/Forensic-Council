@@ -41,6 +41,22 @@ bash scripts/dev.sh
 
 `scripts/dev.sh` validates `.env`, builds all images in parallel, starts the stack, and polls health before returning.
 
+#### Development Hot-Reloading & Workflow Tips
+
+- **Backend & Frontend Hot-Reloading**: Backend API code changes are automatically reloaded by Uvicorn within the container. Frontend Next.js changes are hot-reloaded in the browser via Turbopack HMR.
+- **Worker Code Changes**: Background workers do not auto-reload. To pick up code changes in agents, tools, or orchestration instantly without waiting for the 300s stop grace period, run:
+  ```bash
+  bash scripts/dev-restart-worker.sh
+  ```
+- **Dependency Changes**: If you modify `pyproject.toml` or `uv.lock`, rebuild the python containers:
+  ```bash
+  docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env build backend worker
+  ```
+- **Environment Changes**: If you update `.env`, recreate the containers to apply the changes:
+  ```bash
+  docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --force-recreate
+  ```
+
 ### Docker — production (one command)
 
 ```bash
@@ -80,10 +96,10 @@ For a fully non-Docker run, install and run these services on the host:
 - libmagic
 - mediainfo
 
-Then create a local env file (use `.env.local.example` for host-run development; `.env.example` is reserved for Docker):
+Then create a local env file (use `.env.host.example` for host-run development; `.env.example` is reserved for Docker):
 
 ```bash
-[ -f .env ] || cp .env.local.example .env
+[ -f .env ] || cp .env.host.example .env
 ```
 
 > If `.env` already exists, neither command overwrites it. Delete `.env` first if you intentionally want to reset.
@@ -120,6 +136,9 @@ npm run dev
 > [!IMPORTANT]
 > When compiling for production using `npm run build` (rather than running in dev via `npm run dev`), Next.js bakes `NEXT_PUBLIC_API_URL` statically into the client-side JavaScript bundle. You must supply this environment variable during the `npm run build` compilation step, otherwise frontend client actions will fail to route to the API.
 
+> [!IMPORTANT]
+> **Host-Run Limitations**: Running in host-run mode (using `USE_REDIS_WORKER=false`) executes all investigations in-process within the backend API server. This mode does not use the background worker service, meaning worker graceful shutdown, stop grace periods, and task drain behaviors are not exercised. Use Docker mode (dev or prod) to test full pipeline worker lifecycle and drain behavior.
+
 Verify:
 
 ```bash
@@ -132,8 +151,8 @@ curl -fsS http://localhost:3000/
 | Suite | Command |
 |-------|---------|
 | All static checks | `./scripts/verify_project.sh static` |
-| Backend unit/integration | `./scripts/verify_phase8_tests.sh backend-unit && ./scripts/verify_phase8_tests.sh backend-integration` |
-| Frontend unit/build | `./scripts/verify_phase8_tests.sh frontend-unit` |
+| Backend unit/integration | `./scripts/verify_project.sh backend` |
+| Frontend unit/build | `./scripts/verify_project.sh frontend` |
 | Frontend E2E (fast, mocked) | `cd apps/web && npm run test:e2e:journey` |
 | Test hygiene | `python scripts/check_test_hygiene.py` |
 | Docs consistency | `python scripts/check_docs.py` |
