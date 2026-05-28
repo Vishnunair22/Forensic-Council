@@ -40,11 +40,11 @@ from orchestration.session_finalization import (  # noqa: E402
 from scripts.cleanup_storage import cleanup_evidence  # noqa: E402
 
 logger = get_logger("worker")
-settings = get_settings()
 
 
 async def main() -> None:
     """Main worker entry point."""
+    settings = get_settings()
     logger.info("Starting Forensic Council Worker", pid=os.getpid())
 
     keystore = get_keystore()

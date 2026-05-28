@@ -382,16 +382,18 @@ async def get_arbiter_status(
 
             pipeline = get_pipeline(session_id)
             if pipeline is not None:
-                if pipeline._final_report is not None:
+                report = getattr(pipeline, "_final_report", None)
+                if report is not None:
                     return {
                         "status": "complete",
-                        "report_id": str(pipeline._final_report.report_id),
+                        "report_id": str(report.report_id),
                     }
-                if pipeline._error:
-                    return {"status": "error", "message": pipeline._error}
+                error = getattr(pipeline, "_error", None)
+                if error:
+                    return {"status": "error", "message": error}
                 return {
                     "status": "running",
-                    "message": pipeline._arbiter_step or "Arbiter deliberating…",
+                    "message": getattr(pipeline, "_arbiter_step", None) or "Arbiter deliberating…",
                 }
         except Exception as _e:
             logger.debug("In-memory pipeline fallback failed", session_id=session_id, error=str(_e))

@@ -20,7 +20,16 @@ from core.config import get_settings
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
-settings = get_settings()
+
+
+def _get_settings():
+    return get_settings()
+
+
+# WARNING: In-memory only. Single-replica safe.
+# For multi-replica deployments, pipeline routing must use sticky sessions
+# or be replaced with a Redis-backed pipeline registry.
+# See: docs/ARCHITECTURE.md — Scaling Section
 
 # ── Module-level state stores ──────────────────────────────────────────────────
 # WebSocket connections remain in-memory because they are tied to local sockets

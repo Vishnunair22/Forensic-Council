@@ -181,10 +181,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # DEMO_PASSWORD invariant check
     demo_password = os.getenv("DEMO_PASSWORD", "")
     if demo_password and demo_password != settings.bootstrap_investigator_password:
-        logger.warning(
-            "DEMO_PASSWORD != BOOTSTRAP_INVESTIGATOR_PASSWORD — /api/auth/demo login will fail. "
-            "Ensure both values are identical or disable DEMO_PASSWORD for production."
+        msg = (
+            "DEMO_PASSWORD != BOOTSTRAP_INVESTIGATOR_PASSWORD — "
+            "/api/auth/demo login will fail. Ensure both values match in .env."
         )
+        if settings.app_env == "development":
+            raise RuntimeError(msg)
+        else:
+            logger.warning(msg)
 
     # Gemini API policy acknowledgment check
     if settings.gemini_api_key and not settings.gemini_api_key_policy_ok:
@@ -230,15 +234,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if settings.use_redis_worker:
         logger.info("Worker queue mode enabled — ensure worker.py is running")
-        if settings.app_env == "production":
-            try:
-                from core.persistence.redis_client import get_redis_client as _grc
-                rc = await _grc()
-                alive = await rc.get("forensic:worker:heartbeat")
-                if not alive:
-                    logger.warning("Worker heartbeat missing (forensic:worker:heartbeat) — investigations may stall")
-            except Exception as e:
-                logger.warning("Worker heartbeat check failed", error=str(e))
+        try:
+            from core.persistence.redis_client import get_redis_client as _grc
+            rc = await _grc()
+            alive = await rc.get("forensic:worker:heartbeat")
+            if not alive:
+                logger.warning(
+                    "Worker heartbeat missing (forensic:worker:heartbeat) — "
+                    "investigations will queue but not execute. "
+                    "Start the worker container: docker compose up worker"
+                )
+        except Exception as e:
+            logger.warning("Worker heartbeat check failed", error=str(e))
     else:
         logger.info("In-process investigation mode — investigations run in this process")
 

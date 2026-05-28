@@ -9,13 +9,18 @@ import asyncio
 import os
 import sys
 
-from core.structured_logging import configure_root_logger, get_logger
-
 # Ensure the backend directory is in the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.config import get_settings
-from orchestration.worker import main
+# Must be the first project import — patches bcrypt.__about__ before passlib loads
+from core._bcrypt_shim import ensure_bcrypt_compat  # noqa: E402
+
+ensure_bcrypt_compat()
+
+from core.structured_logging import configure_root_logger, get_logger  # noqa: E402
+
+from core.config import get_settings  # noqa: E402
+from orchestration.worker import main  # noqa: E402
 
 if __name__ == "__main__":
     settings = get_settings()
