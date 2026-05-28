@@ -79,6 +79,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
     Bridges messages from the background worker via Redis Pub/Sub.
     """
     # ── 1. Accept now that auth passed ─────────────────────────────────────────
+    settings = get_settings()
     await websocket.accept(subprotocol="forensic-v1")
 
     # ── 2. Wait for session metadata ─────────────────────────────────────────

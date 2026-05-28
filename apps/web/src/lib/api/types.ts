@@ -118,6 +118,7 @@ export interface BriefUpdate {
     | "PIPELINE_QUARANTINED"
     | "ARBITER_UPDATE"
     | "REPORT_READY"
+    | "INITIAL_ANALYSIS_COMPLETE"
     | "BATCH";
   session_id: string;
   agent_id: string | null;

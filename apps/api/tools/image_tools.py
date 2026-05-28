@@ -8,6 +8,7 @@ Implements ELA, ROI extraction, JPEG ghost detection, and hash verification.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import tempfile
@@ -53,52 +54,22 @@ async def ela_full_image(
     """
     Perform Error Level Analysis (ELA) on an image.
 
-    Opens image with Pillow, saves at specified quality, reloads,
-    and computes pixel difference to create ELA map.
+    All blocking PIL/numpy computation is offloaded to a thread via
+    run_in_executor so the async event loop is never stalled — especially
+    important when 5 agents run in parallel on large images.
 
     Multi-quality sweep: When enabled, re-saves at multiple quality levels
     (70, 80, 90, 95) and fuses results by taking the maximum ELA across
     all quality levels. This catches splices that may have survived
     single re-compression.
-
-    Args:
-        artifact: The evidence artifact to analyze
-        evidence_store: Optional evidence store for creating derivative artifacts
-        quality: JPEG quality level for re-saving (default 95, used when multi_quality=False)
-        anomaly_threshold: Threshold for flagging anomaly regions (default 10.0)
-        multi_quality: Enable multi-quality sweep for enhanced detection (default True)
-
-    Returns:
-        Dictionary containing:
-        - ela_map_array: 2D numpy array of ELA values (as list for serialization)
-        - max_anomaly: Maximum anomaly value detected
-        - anomaly_regions: List of BoundingBox regions with elevated anomaly
-        - mean_ela: Mean ELA value across image
-        - std_ela: Standard deviation of ELA values
-        - quality_levels: List of quality levels used in analysis
-        - multi_quality_fusion: Whether multi-quality fusion was applied
-
-    Raises:
-        ToolUnavailableError: If file cannot be opened or processed
     """
     try:
-        # Open the original image
         original_path = artifact.file_path
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
 
-        # ELA is only meaningful for JPEG images — it measures the residual error
-        # introduced by re-compression at a slightly lower quality level.  For
-        # lossless formats (PNG, BMP, TIFF) the first JPEG re-save introduces
-        # compression artefacts across the ENTIRE image, so every pixel shows a
-        # large ELA deviation.  Reporting those as "anomaly regions" would produce
-        # thousands of false positives and mislead any downstream analysis.
-        #
-        # NOTE: Evidence files are stored under UUID paths with a generic .bin
-        # extension, so extension-based checks alone are insufficient.  We open
-        # the file first so PIL reads the magic bytes, then check the reported
-        # format.  The extension check is kept as a fast-path for named files.
-        # Open image now so we can inspect the PIL-detected format
+        # Probe format and detect lossless BEFORE entering the executor
+        # (lightweight — just reads magic bytes with PIL, no heavy compute).
         with Image.open(original_path) as _probe:
             pil_format = (_probe.format or "").upper()
 
@@ -120,112 +91,89 @@ async def ela_full_image(
 
         quality_levels_used = [70, 80, 90, 95] if multi_quality else [quality]
 
-        with Image.open(original_path) as _img:
-            original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
-        original_array = np.array(original, dtype=np.float64)
+        # ── offload all blocking PIL/numpy/scipy work to a thread ────────────
+        # Previously this ran synchronously on the event loop, blocking all
+        # concurrent agents for 20-30s on large images during the 4-pass sweep.
+        def _blocking_ela_compute() -> dict:
+            with Image.open(original_path) as _img:
+                original = _img.convert("RGB") if _img.mode != "RGB" else _img.copy()
+            original_array = np.array(original, dtype=np.float64)
 
-        ela_maps: list = []
-        temp_files_ela: list[str] = []
+            ela_maps: list = []
+            temp_files_ela: list[str] = []
 
-        try:
-            for q in quality_levels_used:
-                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                    tmp_path_ela = tmp.name
-                    temp_files_ela.append(tmp_path_ela)
+            try:
+                for q in quality_levels_used:
+                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                        tmp_path_ela = tmp.name
+                        temp_files_ela.append(tmp_path_ela)
 
-                original.save(tmp_path_ela, "JPEG", quality=q)
-                with Image.open(tmp_path_ela) as _resaved:
-                    resaved_array = np.array(_resaved, dtype=np.float64)
+                    original.save(tmp_path_ela, "JPEG", quality=q)
+                    with Image.open(tmp_path_ela) as _resaved:
+                        resaved_array = np.array(_resaved, dtype=np.float64)
 
-                ela_map = np.abs(original_array - resaved_array)
-                ela_gray = np.mean(ela_map, axis=2)
-                ela_maps.append(ela_gray)
+                    ela_map = np.abs(original_array - resaved_array)
+                    ela_gray = np.mean(ela_map, axis=2)
+                    ela_maps.append(ela_gray)
 
-            combined_ela = (
-                np.max(np.stack(ela_maps, axis=0), axis=0) if len(ela_maps) > 1 else ela_maps[0]
-            )
+                combined_ela = (
+                    np.max(np.stack(ela_maps, axis=0), axis=0) if len(ela_maps) > 1 else ela_maps[0]
+                )
 
-            max_anomaly = float(np.max(combined_ela))
-            mean_ela = float(np.mean(combined_ela))
-            std_ela = float(np.std(combined_ela))
+                max_anomaly = float(np.max(combined_ela))
+                mean_ela = float(np.mean(combined_ela))
+                std_ela = float(np.std(combined_ela))
 
-            anomaly_mask = combined_ela > anomaly_threshold
-            labeled_array, num_features = ndimage.label(anomaly_mask)
+                anomaly_mask = combined_ela > anomaly_threshold
+                labeled_array, num_features = ndimage.label(anomaly_mask)
 
-            anomaly_regions: list[BoundingBox] = []
-            for i in range(1, num_features + 1):
-                region_mask = labeled_array == i
-                rows = np.any(region_mask, axis=1)
-                cols = np.any(region_mask, axis=0)
-                if np.any(rows) and np.any(cols):
-                    y_min, y_max = np.where(rows)[0][[0, -1]]
-                    x_min, x_max = np.where(cols)[0][[0, -1]]
-                    anomaly_regions.append(
-                        BoundingBox(
-                            x=int(x_min),
-                            y=int(y_min),
-                            w=int(x_max - x_min + 1),
-                            h=int(y_max - y_min + 1),
+                anomaly_regions: list[BoundingBox] = []
+                for i in range(1, num_features + 1):
+                    region_mask = labeled_array == i
+                    rows = np.any(region_mask, axis=1)
+                    cols = np.any(region_mask, axis=0)
+                    if np.any(rows) and np.any(cols):
+                        y_min, y_max = np.where(rows)[0][[0, -1]]
+                        x_min, x_max = np.where(cols)[0][[0, -1]]
+                        anomaly_regions.append(
+                            BoundingBox(
+                                x=int(x_min),
+                                y=int(y_min),
+                                w=int(x_max - x_min + 1),
+                                h=int(y_max - y_min + 1),
+                            )
                         )
+
+                result: dict[str, Any] = {
+                    "max_anomaly": max_anomaly,
+                    "anomaly_regions": [r.to_dict() for r in anomaly_regions],
+                    "num_anomaly_regions": len(anomaly_regions),
+                    "mean_ela": mean_ela,
+                    "std_ela": std_ela,
+                    "quality_levels": quality_levels_used,
+                    "multi_quality_fusion": multi_quality,
+                    "derivative_artifact": None,
+                    "court_defensible": True,
+                    "available": True,
+                }
+                if is_lossless:
+                    result["lossless_interpretation"] = (
+                        "ELA applied to lossless image — regions with high residual indicate "
+                        "copy-paste, format conversion boundaries, or re-encoded JPEG regions. "
+                        "Lower threshold applied for anomaly detection."
                     )
+                return result
 
-            derivative_artifact = None
-            if evidence_store:
-                ela_image = Image.fromarray(
-                    (combined_ela / max(max_anomaly, 1) * 255).astype(np.uint8)
-                )
-                ela_path = os.path.join(
-                    os.path.dirname(original_path),
-                    f"ela_{artifact.artifact_id}.jpg",
-                )
-                ela_image.save(ela_path, "JPEG", quality=95)
-                with open(ela_path, "rb") as f:
-                    ela_hash = hashlib.sha256(f.read()).hexdigest()
-                derivative_artifact = EvidenceArtifact.create_derivative(
-                    parent=artifact,
-                    artifact_type=ArtifactType.ELA_OUTPUT,
-                    file_path=ela_path,
-                    content_hash=ela_hash,
-                    action="ela_analysis",
-                    agent_id="image_tools",
-                    metadata={
-                        "quality": quality,
-                        "quality_levels": quality_levels_used,
-                        "multi_quality_fusion": multi_quality,
-                        "max_anomaly": max_anomaly,
-                        "anomaly_threshold": anomaly_threshold,
-                    },
-                )
+            finally:
+                for _tp in temp_files_ela:
+                    try:
+                        if os.path.exists(_tp):
+                            os.unlink(_tp)
+                    except OSError:
+                        pass
 
-            result = {
-                "max_anomaly": max_anomaly,
-                "anomaly_regions": [r.to_dict() for r in anomaly_regions],
-                "num_anomaly_regions": len(anomaly_regions),
-                "mean_ela": mean_ela,
-                "std_ela": std_ela,
-                "quality_levels": quality_levels_used,
-                "multi_quality_fusion": multi_quality,
-                "derivative_artifact": derivative_artifact.to_dict()
-                if derivative_artifact
-                else None,
-                "court_defensible": True,
-                "available": True,
-            }
-            if is_lossless:
-                result["lossless_interpretation"] = (
-                    "ELA applied to lossless image — regions with high residual indicate "
-                    "copy-paste, format conversion boundaries, or re-encoded JPEG regions. "
-                    "Lower threshold applied for anomaly detection."
-                )
-            return result
-
-        finally:
-            for _tp in temp_files_ela:
-                try:
-                    if os.path.exists(_tp):
-                        os.unlink(_tp)
-                except OSError:
-                    pass
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _blocking_ela_compute)
 
     except Exception as e:
         if isinstance(e, ToolUnavailableError):
@@ -610,6 +558,9 @@ async def frequency_domain_analysis(
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
 
+        from core.media_kind import is_screen_capture_like, is_digitally_created_image
+        is_digital = is_screen_capture_like(artifact) or is_digitally_created_image(artifact)
+
         # ── offload blocking FFT computation to a thread ──────────────────────
         import asyncio as _asyncio
 
@@ -640,15 +591,29 @@ async def frequency_domain_analysis(
 
             high_freq_ratio = high_freq_energy / total_energy
             natural_ceil = 0.20
-            anomaly_score = round(
-                min(1.0, max(0.0, (high_freq_ratio - natural_ceil) / natural_ceil)), 3
-            )
-            anomaly_detected = anomaly_score >= 0.4
-            confidence = (
-                round(0.55 + (anomaly_score * 0.35), 3)
-                if anomaly_detected
-                else round(0.70 - (anomaly_score * 0.25), 3)
-            )
+            
+            if is_digital:
+                anomaly_score = 0.0
+                anomaly_detected = False
+                confidence = 0.85
+                limitation_note = (
+                    "DFT high-frequency ratio anomaly detection bypassed because screenshots "
+                    "and digital captures naturally contain high-frequency UI/text elements."
+                )
+            else:
+                anomaly_score = round(
+                    min(1.0, max(0.0, (high_freq_ratio - natural_ceil) / natural_ceil)), 3
+                )
+                anomaly_detected = anomaly_score >= 0.4
+                confidence = (
+                    round(0.55 + (anomaly_score * 0.35), 3)
+                    if anomaly_detected
+                    else round(0.70 - (anomaly_score * 0.25), 3)
+                )
+                limitation_note = (
+                    "Basic DFT high-frequency ratio — supporting signal only, "
+                    "not a standalone manipulation indicator."
+                )
 
             # Return summary statistics only — omit frequency_spectrum / dominant_frequencies
             # arrays (W×H floats ≈ 16 MB for 1080p) to prevent memory and serialisation pressure.
@@ -660,10 +625,7 @@ async def frequency_domain_analysis(
                 "high_freq_ratio": round(high_freq_ratio, 4),
                 "court_defensible": False,
                 "available": True,
-                "limitation_note": (
-                    "Basic DFT high-frequency ratio — supporting signal only, "
-                    "not a standalone manipulation indicator."
-                ),
+                "limitation_note": limitation_note,
             }
 
         loop = _asyncio.get_running_loop()

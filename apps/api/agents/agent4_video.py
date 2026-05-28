@@ -47,6 +47,19 @@ class Agent4Video(ForensicAgent):
     )
 
     @property
+    def agent_name(self) -> str:
+        return "Agent4_VideoTemporal"
+
+    @property
+    def task_decomposition(self) -> list[str]:
+        # PHASE 1: INITIAL ANALYSIS
+        return [
+            "Run optical_flow_analysis and generate temporal anomaly heatmap",
+            "Run frame_consistency_analysis for temporal inter-frame jumps",
+            "Run video_metadata for container timing validation",
+        ]
+
+    @property
     def supported_file_types(self) -> list[str]:
         return ["video/"]
 

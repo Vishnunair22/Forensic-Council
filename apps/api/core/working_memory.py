@@ -190,6 +190,10 @@ class WorkingMemory:
                 state[k] = v
             end
 
+            if type(state.tasks) == 'table' and next(state.tasks) == nil then
+                setmetatable(state.tasks, cjson.empty_array)
+            end
+
             local new_json = cjson.encode(state)
             redis.call('SET', key, new_json, 'EX', expire)
             return new_json
@@ -222,6 +226,10 @@ class WorkingMemory:
             end
 
             if not found then return nil end
+
+            if type(state.tasks) == 'table' and next(state.tasks) == nil then
+                setmetatable(state.tasks, cjson.empty_array)
+            end
 
             local new_json = cjson.encode(state)
             redis.call('SET', key, new_json, 'EX', 86400)
@@ -613,7 +621,7 @@ class WorkingMemory:
                     self._lua_update_state,
                     1,
                     key,
-                    json.dumps(updates),
+                    json.dumps(updates, default=str),
                     "86400",
                     str(session_id),
                     agent_id,
@@ -726,6 +734,8 @@ class WorkingMemory:
 
         for k, v in updates.items():
             if hasattr(state, k):
+                if k == "tasks" and isinstance(v, list):
+                    v = [Task.model_validate(item) if isinstance(item, dict) else item for item in v]
                 setattr(state, k, v)
 
         key = self._get_key(session_id, agent_id)

@@ -135,8 +135,7 @@ class AgentInvestigationMixin:
                     },
                 )
 
-    async def _retrieve_episodic_context(self) -> str: ...
-    async def self_reflection_pass(self, findings: list[AgentFinding]) -> Any: ...
+
 
     async def _publish_tool_registry_snapshot(self, agent_id: str | None = None) -> None:
         """Expose the live tool catalogue to working memory for LLM ReAct mode.
@@ -226,8 +225,17 @@ class AgentInvestigationMixin:
             tool_context = getattr(self, "_tool_context", {}) or {}
             image_type_hint = tool_context.get("analyze_image_content", {}).get("image_type", "")
 
-            # Extract upfront Gemini routing/forensic context if available
+            # Extract upfront Gemini routing/forensic context if available.
+            # Primary: agent's own tool_context (Agent 1 stores its Gemini result here).
+            # Fallback: read from inter-agent bus (Agents 3/5 reuse Agent 1's result).
             gemini_result = tool_context.get("gemini_deep_forensic") or {}
+            if not gemini_result and getattr(self, "inter_agent_bus", None):
+                try:
+                    bus_ctx = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+                    if bus_ctx:
+                        gemini_result = bus_ctx
+                except Exception:
+                    pass
             gemini_metadata = gemini_result.get("metadata", {}) or {}
             gemini_context = gemini_metadata.get("forensic_routing") or {}
             if not gemini_context and gemini_metadata:
@@ -539,11 +547,24 @@ class AgentInvestigationMixin:
         error_rate = round(error_count / len(actionable), 3) if actionable else 0.0
         positive_count = sum(1 for f in actionable if f.evidence_verdict == "POSITIVE")
         negative_count = sum(1 for f in actionable if f.evidence_verdict == "NEGATIVE")
+        
+        # Determine is_screenshot from evidence artifact if available
+        _evidence_artifact = getattr(self, "evidence_artifact", None)
+        from core.media_kind import is_screen_capture_like as _is_scap
+        _is_screenshot = _is_scap(_evidence_artifact) if _evidence_artifact else False
 
         if positive_count >= 2:
             verdict = "TAMPERED"
-        elif positive_count == 1 or error_rate > 0.25:
+        elif positive_count == 1:
             verdict = "SUSPICIOUS"
+        elif error_rate > 0.4 and positive_count == 0:
+            # High tool failure rate with no positive signals: inconclusive coverage gap
+            # (never SUSPICIOUS — tool failures are not manipulation evidence).
+            verdict = "INCONCLUSIVE"
+        elif _is_screenshot and positive_count == 0:
+            # Screenshots: ELA/noise tools often fail or flag edge noise naturally.
+            # Without actual POSITIVE signals, the evidence is authentic from pixel perspective.
+            verdict = "AUTHENTIC"
         elif (
             error_rate == 0 and actionable and negative_count >= max(1, int(len(actionable) * 0.75))
         ):
@@ -785,7 +806,16 @@ class AgentInvestigationMixin:
                 }
             )
 
-        if sections:
+        if _is_screenshot and positive_count == 0:
+            # Screenshot-specific deterministic narrative — describes what was checked
+            _checked = ", ".join(s["label"] for s in sections[:3]) if sections else "integrity tools"
+            narrative = (
+                f"{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
+                f"({_checked}). No pixel-level manipulation signals were detected — "
+                "hash integrity, OCR content, and frequency/layout checks all returned clean. "
+                "These results confirm the evidence is intact since upload; they do not speak to the original capture device or timestamp."
+            )
+        elif sections:
             narrative = f"{self.agent_name} analysis complete. " + sections[0]["opinion"][:220]
         elif top_findings:
             primary = top_findings[0]

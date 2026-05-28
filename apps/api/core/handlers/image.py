@@ -320,8 +320,39 @@ class ImageHandlers(BaseToolHandler):
     # ── Phase 1: Neural ELA ───────────────────────────────────────────────────
 
     async def neural_ela_handler(self, input_data: dict, record: bool = True) -> dict:
-        """ViT-based Neural ELA. Falls back to multi-quality classical ELA."""
+        """ViT-based Neural ELA. Falls back to multi-quality classical ELA.
+
+        ELA measures JPEG re-compression residuals between save cycles.
+        It is NOT applicable to screen captures — UI elements are
+        software-rendered uniformly so every pixel shows the same ELA
+        signal, producing noise rather than forensic evidence.
+        """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+
+        # ── Screenshot fast-exit — ELA is not meaningful for screen captures ──
+        # Sharp UI edges and uniform backgrounds produce large ELA regions that
+        # mimic JPEG manipulation residuals but are actually rendering artifacts.
+        # Running ELA on screenshots is the #1 source of false-SUSPICIOUS verdicts.
+        if is_screen_capture_like(artifact):
+            not_applicable: dict = {
+                "available": True,
+                "not_applicable": True,
+                "reason": (
+                    "ELA (Error Level Analysis) measures JPEG re-compression residuals. "
+                    "Screen captures are software-rendered with no prior JPEG compression "
+                    "history, so ELA produces non-informative results. Screenshot integrity "
+                    "is assessed via hash, OCR, layout, and provenance checks instead."
+                ),
+                "confidence": 0.85,
+                "court_defensible": False,
+                "num_anomaly_regions": 0,
+                "max_anomaly": 0.0,
+                "manipulation_detected": False,
+            }
+            if record:
+                await self._store("neural_ela", not_applicable, "ela_full_image")
+            return not_applicable
+
         result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=15.0)
         if not result.get("error") and result.get("available"):
             if record:
@@ -338,6 +369,7 @@ class ImageHandlers(BaseToolHandler):
         if record:
             await self._store("neural_ela", fallback, "ela_full_image")
         return fallback
+
 
     # ── Phase 1: Noiseprint Cluster ───────────────────────────────────────────
 
@@ -363,20 +395,51 @@ class ImageHandlers(BaseToolHandler):
     # ── Standard Handlers (used as fallbacks and standalone) ─────────────────
 
     async def ela_full_image_handler(self, input_data: dict, record: bool = True) -> dict:
-        """Classical multi-quality ELA sweep (4 quality levels, fused via max)."""
+        """Classical multi-quality ELA sweep (4 quality levels, fused via max).
+
+        Wraps the compute in asyncio.wait_for(30s) so even if run_in_executor
+        takes longer than expected (e.g. very large images on slow hardware),
+        the handler will time out cleanly rather than blocking indefinitely.
+        """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+
+        # ELA is not applicable to screen captures — return early.
+        if is_screen_capture_like(artifact):
+            result: dict = {
+                "available": True,
+                "not_applicable": True,
+                "reason": "ELA not applicable to screen captures; screenshot-specific tools handle integrity.",
+                "confidence": 0.85,
+                "court_defensible": False,
+                "num_anomaly_regions": 0,
+                "max_anomaly": 0.0,
+            }
+            if record:
+                await self._store("ela_full_image", result, "neural_ela")
+            return result
+
         try:
-            result = await real_ela_full_image(
-                artifact=artifact,
-                quality=input_data.get("quality", 95),
-                anomaly_threshold=input_data.get("anomaly_threshold", 10.0),
+            result = await asyncio.wait_for(
+                real_ela_full_image(
+                    artifact=artifact,
+                    quality=input_data.get("quality", 95),
+                    anomaly_threshold=input_data.get("anomaly_threshold", 10.0),
+                ),
+                timeout=30.0,  # 4-pass sweep should finish well within 30s via executor
             )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Classical ELA timed out after 30s; using minimal fallback",
+                artifact_id=artifact.artifact_id,
+            )
+            result = self._ela_fallback(artifact.file_path, "classical ELA timed out after 30s")
+            result["degraded"] = True
         except Exception as e:
             result = {"error": str(e)}
 
         if result.get("error"):
             result = self._ela_fallback(artifact.file_path, str(result.get("error")))
-        else:
+        elif not result.get("degraded"):
             raw_sig = max(
                 min(result.get("num_anomaly_regions", 0) / 15.0, 1.0),
                 min(result.get("max_anomaly", 0.0) / 80.0, 1.0),

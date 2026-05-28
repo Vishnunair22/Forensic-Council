@@ -19,6 +19,11 @@ class _RedisStub:
     async def get(self, key: str):
         return self.value
 
+    async def getdel(self, key: str):
+        val = self.value
+        self.value = None
+        return val
+
     async def delete(self, key: str):
         self.deleted.append(key)
 
@@ -49,10 +54,14 @@ async def test_deep_analysis_gate_consumes_pre_gate_resume_decision(monkeypatch)
         return redis
 
     async def _metadata(*args, **kwargs):
-        return _MetadataStub("awaiting_decision")
+        return {"status": "awaiting_decision"}
+
+    async def _set_metadata(*args, **kwargs):
+        pass
 
     monkeypatch.setattr("core.persistence.redis_client.get_redis_client", _redis)
     monkeypatch.setattr("api.routes._session_state.get_active_pipeline_metadata", _metadata)
+    monkeypatch.setattr("api.routes._session_state.set_active_pipeline_metadata", _set_metadata)
     
     import asyncio
     pipeline = SimpleNamespace(
@@ -70,13 +79,29 @@ async def test_deep_analysis_gate_consumes_pre_gate_resume_decision(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_deep_report_gate_consumes_pre_gate_report_request(monkeypatch):
+    import asyncio
+
     redis = _RedisStub({"deep_analysis": False})
 
     async def _redis():
         return redis
 
+    async def _metadata(*args, **kwargs):
+        return {"status": "awaiting_deep_report"}
+
+    async def _set_metadata(*args, **kwargs):
+        pass
+
     monkeypatch.setattr("core.persistence.redis_client.get_redis_client", _redis)
-    pipeline = SimpleNamespace()
+    monkeypatch.setattr("api.routes._session_state.get_active_pipeline_metadata", _metadata)
+    monkeypatch.setattr("api.routes._session_state.set_active_pipeline_metadata", _set_metadata)
+
+    pipeline = SimpleNamespace(
+        run_deep_analysis_flag=False,
+        deep_analysis_decision_event=asyncio.Event(),
+        _redis=redis,
+        config=SimpleNamespace(hitl_decision_timeout=3600),
+    )
 
     await _await_deep_report_request(pipeline, uuid4())
 

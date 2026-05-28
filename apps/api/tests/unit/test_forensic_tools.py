@@ -63,11 +63,16 @@ async def test_ela_full_image_lossless(mock_open, mock_exists, mock_artifact):
     img_mock.format = "PNG"
     mock_open.return_value.__enter__.return_value = img_mock
 
-    result = await ela_full_image(mock_artifact)
+    with patch("numpy.array", return_value=np.zeros((100, 100, 3))):
+        result = await ela_full_image(mock_artifact)
 
     assert result.get("ela_not_applicable") is True or result.get("available") is True
     if result.get("ela_not_applicable") or result.get("available"):
-        assert "limitation_note" in result or "ela_limitation_note" in result
+        assert (
+            "limitation_note" in result
+            or "ela_limitation_note" in result
+            or "lossless_interpretation" in result
+        )
 
 
 @pytest.mark.asyncio

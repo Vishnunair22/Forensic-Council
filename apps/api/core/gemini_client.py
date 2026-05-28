@@ -1418,6 +1418,14 @@ class GeminiVisionClient:
         t0 = time.monotonic()
         Path(file_path)
 
+        if not is_screen_capture_like:
+            try:
+                from core.media_kind import is_screen_capture_like as detect_screenshot
+                from types import SimpleNamespace
+                is_screen_capture_like = detect_screenshot(SimpleNamespace(file_path=file_path, mime_type=""))
+            except Exception:
+                pass
+
         try:
             import numpy as np
             from PIL import Image as PILImage

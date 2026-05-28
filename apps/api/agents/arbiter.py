@@ -395,13 +395,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             unique_id = str(f.get("finding_id", "")) if not tool else ""
             phase = str(meta.get("analysis_phase") or "initial")
 
-            # Key now includes verdict and phase to ensure contradictions and
-            # multi-phase findings are not deduped away
+            # Key includes verdict (but not phase) to ensure contradictions
+            # are not deduped away, while merging initial and deep findings
+            # for the same tool when they agree on the verdict.
             key = (
                 str(f.get("agent_id", "")),
                 tool or unique_id,
                 verdict,
-                phase,
             )
 
             if key in seen:
@@ -409,7 +409,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 old = out[idx]
                 conf_new = confidence_of(f, default=0.0) or 0.0
                 conf_old = confidence_of(old, default=0.0) or 0.0
-                if conf_new > conf_old:
+                
+                # Prefer deep phase over initial phase if they have the same confidence,
+                # or if deep phase has higher confidence.
+                phase_new = str((f.get("metadata") or {}).get("analysis_phase") or "initial")
+                phase_old = str((old.get("metadata") or {}).get("analysis_phase") or "initial")
+                
+                if conf_new > conf_old or (conf_new == conf_old and phase_new == "deep" and phase_old == "initial"):
                     out[idx] = f
                 continue
 

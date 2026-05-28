@@ -330,6 +330,7 @@ class SynthesisService:
         unique_findings = []
         seen_summaries = set()
         seen_tools: dict[str, AgentFinding] = {}
+        no_tool_name_findings: list[AgentFinding] = []
         for f in findings:
             summary = f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or ""
             # Use a slightly fuzzy key for deduplication
@@ -341,14 +342,16 @@ class SynthesisService:
 
         # Secondary dedup: keep only the highest-confidence finding per tool_name
         # to prevent the same tool appearing twice across initial+deep passes.
+        # Findings WITHOUT a tool_name are preserved as-is (they cannot be keyed).
         for f in unique_findings:
             tool_name = f.metadata.get("tool_name") or ""
             if not tool_name:
+                no_tool_name_findings.append(f)
                 continue
             existing = seen_tools.get(tool_name)
             if existing is None or (f.confidence_raw or 0.0) > (existing.confidence_raw or 0.0):
                 seen_tools[tool_name] = f
-        unique_findings = list(seen_tools.values())
+        unique_findings = list(seen_tools.values()) + no_tool_name_findings
 
         findings = unique_findings
         if not findings:
@@ -493,11 +496,11 @@ Analytical Rules:
 2. CONTRADICTION: Do any findings disagree? Describe the disagreement and why it might exist (e.g. different detection methods, confidence differences).
 3. SIGNAL WEIGHT: Identify the strongest POSITIVE signal (most reliable manipulation indicator), the strongest NEGATIVE signal (most reliable clean signal), and any unresolved contradiction between tools.
 4. AGENT BRIEF: Write a 2-3 sentence expert conclusion synthesizing ALL signals. This will be used as the agent's narrative in the final report — it must be precise, court-defensible, and cite specific tool outcomes.
-5. KEY FINDINGS: List the 3-5 most decisive specific findings with their metrics. Each must be independently meaningful — no duplicates or near-duplicates.
-6. EXECUTIVE SUMMARY: 2-3 flowing sentences, 50-80 words. Plain English. Sentence 1: overall conclusion. Sentence 2: one or two notable outcomes. Sentence 3: one-line evidentiary conclusion.
-7. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals (evidence_verdict=POSITIVE). Tool failures, timeouts, and NOT_APPLICABLE are coverage gaps only — never evidence of manipulation.
-8. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result".
-9. NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result".
+5. KEY FINDINGS: List exactly 3-5 findings. EVERY finding MUST: (a) name the exact tool (e.g. "neural_ela", "file_hash_verify"), (b) cite the primary metric number from the tool output (e.g. "anomaly score 0.023", "0 regions", "hash matched"), (c) state the forensic implication in one clause. No two findings may describe the same tool or the same outcome. Do NOT write: "X flagged a manipulation indicator", "X found no anomaly" — those are too vague. Write the specific number.
+6. EXECUTIVE SUMMARY: 2-3 flowing sentences, 50-80 words. Plain English. Sentence 1: overall conclusion. Sentence 2: one or two notable outcomes with specific metric. Sentence 3: one-line evidentiary conclusion.
+7. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals (evidence_verdict=POSITIVE). Tool failures, timeouts, and NOT_APPLICABLE are coverage gaps only — never evidence of manipulation. If all tools returned NEGATIVE or NOT_APPLICABLE, the verdict MUST be AUTHENTIC or INCONCLUSIVE.
+8. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result", "flagged a manipulation indicator" (without a metric).
+9. NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result", generic boilerplate without a specific metric.
 10. Screenshots: State what was actually checked (OCR text content, layout structure, hash integrity since intake, binary container, compression codec). Do not claim camera authenticity.
 11. TOOL TIMEOUTS & ERRORS: A tool that timed out or returned an error is a coverage gap — not evidence of manipulation or authenticity.
 
@@ -602,7 +605,12 @@ Return ONLY a JSON object with this exact schema:
                 if finding.get("tool_limitation")
             )
             if positive_count == 0 and groq_verdict in {"SUSPICIOUS", "TAMPERED"}:
-                groq_verdict = "INCONCLUSIVE" if limitation_count else "AUTHENTIC"
+                # For screenshots, tool failures/ELA edge-noise are expected — never SUSPICIOUS.
+                # For other file types, tool failures add uncertainty → INCONCLUSIVE.
+                if screenshot_like:
+                    groq_verdict = "AUTHENTIC"
+                else:
+                    groq_verdict = "INCONCLUSIVE" if limitation_count else "AUTHENTIC"
             if positive_count > 0 and groq_verdict == "AUTHENTIC":
                 groq_verdict = "SUSPICIOUS"
             response = self._ground_synthesis_response(
@@ -652,10 +660,19 @@ Return ONLY a JSON object with this exact schema:
                 if str(finding.get("evidence_verdict")).upper() == "POSITIVE"
                 and not finding.get("tool_limitation")
             )
-            fallback_verdict = "SUSPICIOUS" if positive_count else "AUTHENTIC"
-            if pre_error_rate > 0.4:
+            # For screenshots, never return SUSPICIOUS if there are no actual POSITIVE signals.
+            # ELA tools commonly produce non-zero anomaly regions on sharp UI edges (expected behavior),
+            # which can push the error rate up — that must NOT be treated as manipulation evidence.
+            if screenshot_like and positive_count == 0:
+                fallback_verdict = "AUTHENTIC"
+            elif positive_count:
+                fallback_verdict = "SUSPICIOUS"
+            else:
+                fallback_verdict = "AUTHENTIC"
+            if pre_error_rate > 0.5 and not screenshot_like:
+                # High tool failure rate (>50%) for non-screenshots only → inconclusive coverage
                 fallback_verdict = "INCONCLUSIVE"
-            elif not positive_count and pre_confidence < 0.55:
+            elif not positive_count and pre_confidence < 0.55 and not screenshot_like:
                 fallback_verdict = "INCONCLUSIVE"
 
             signal_rows: list[dict[str, Any]] = []

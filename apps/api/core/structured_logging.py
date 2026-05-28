@@ -211,6 +211,8 @@ class ConsoleFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelno, "")
         timestamp = datetime.now().strftime("%H:%M:%S")
         message = record.getMessage()
+        if hasattr(record, "extra_fields") and record.extra_fields:
+            message += f" | Extra: {record.extra_fields}"
         if record.exc_info:
             message += "\n" + self.formatException(record.exc_info)
         return f"{color}[{timestamp}] {record.levelname:<7} {record.name}:{record.lineno} - {message}{self.RESET}"

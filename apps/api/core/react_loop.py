@@ -1362,7 +1362,8 @@ class ReActLoopEngine:
                 if self.agent and hasattr(self.agent, "self_reflection_pass") and self._current_iteration < self.iteration_ceiling:
                     try:
                         report = await self.agent.self_reflection_pass(self._findings)
-                        for absence in report.untreated_absences:
+                        untreated = getattr(report, "untreated_absences", None) or []
+                        for absence in untreated:
                             if "MISSING_PRNU_ANALYSIS" in absence:
                                 has_np = False
                                 for t in state.tasks:
