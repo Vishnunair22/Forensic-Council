@@ -33,9 +33,13 @@ import { PageNavigation } from "./PageNavigation";
 import { DegradationBanner } from "./DegradationBanner";
 import { DeepModelTelemetry } from "./DeepModelTelemetry";
 
+function AgentAnalysisTabSkeleton() {
+  return <div className="skeleton h-64 rounded-2xl" />;
+}
+
 const AgentAnalysisTab = dynamic(
   () => import("./AgentAnalysisTab").then((m) => m.AgentAnalysisTab),
-  { ssr: false },
+  { ssr: false, loading: () => <AgentAnalysisTabSkeleton /> },
 );
 const HistoryPanel = dynamic(
   () => import("./HistoryPanel").then((m) => m.HistoryPanel),

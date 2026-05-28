@@ -174,17 +174,24 @@ class GeminiVisionFinding:
             if self.analysis_type == "deep_forensic_analysis"
             else f"gemini_{self.analysis_type}"
         )
+        _is_local_fallback = self.model_used == "local_opencv_fallback"
+        _confidence = min(self.confidence, 0.5) if _is_local_fallback else self.confidence
+        _status: str = "INCONCLUSIVE"
+        if not _is_local_fallback:
+            _status = (
+                "CONFIRMED"
+                if (
+                    _confidence >= 0.6
+                    or getattr(self, "_authenticity_verdict", "").upper()
+                    in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
+                )
+                else "INCOMPLETE"
+            )
         return {
             "agent_id": agent_id,
             "finding_type": f"gemini_vision_{self.analysis_type}",
-            "confidence_raw": self.confidence,
-            "status": "CONFIRMED"
-            if (
-                self.confidence >= 0.6
-                or getattr(self, "_authenticity_verdict", "").upper()
-                in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
-            )
-            else "INCOMPLETE",
+            "confidence_raw": _confidence,
+            "status": _status,
             "evidence_refs": [],
             "reasoning_summary": self.content_description,
             "metadata": {
@@ -553,6 +560,8 @@ class GeminiVisionClient:
         exif_summary: dict[str, Any] | None = None,
         model_hint: str | None = None,
         signal_callback: Any | None = None,
+        persona: str | None = None,
+        is_screen_capture_like: bool = False,
     ) -> GeminiVisionFinding:
         """
         Comprehensive deep forensic analysis — single call covering everything.
@@ -573,7 +582,7 @@ class GeminiVisionClient:
           - Overall authenticity verdict and confidence
         """
         if not self._enabled:
-            return await self._local_forensic_fallback(file_path, exif_summary)
+            return await self._local_forensic_fallback(file_path, exif_summary, is_screen_capture_like=is_screen_capture_like)
 
         # M-H-8: cache by content-hash, not path. The previous path-keyed
         # cache could return stale results for a re-uploaded evidence file
@@ -600,8 +609,10 @@ class GeminiVisionClient:
                 "Cross-validate these claims against what you visually observe."
             )
 
+        persona_preamble = f"You are {persona}\n\n" if persona else ""
         prompt = (
             _SAFETY_PREAMBLE
+            + persona_preamble
             + "You are a senior forensic analyst performing a comprehensive examination "
             "of this file. Provide a thorough, court-grade analysis covering ALL of "
             "the following areas:\n\n"
@@ -681,6 +692,7 @@ class GeminiVisionClient:
             prompt=prompt,
             analysis_type="deep_forensic_analysis",
             model_hint=model_hint,
+            is_screen_capture_like=is_screen_capture_like,
         )
         # Cache the result for subsequent agents in the same process lifetime
         if cache_key and result and not result.error:
@@ -744,6 +756,7 @@ class GeminiVisionClient:
         prompt: str,
         analysis_type: str,
         model_hint: str | None = None,
+        is_screen_capture_like: bool = False,
     ) -> GeminiVisionFinding:
         """Encode file and call Gemini generateContent, parse structured result."""
         # Check circuit breaker before attempting API call
@@ -751,7 +764,7 @@ class GeminiVisionClient:
             logger.warning(
                 f"Gemini circuit breaker is OPEN — falling back to local analysis for {analysis_type}"
             )
-            finding = await self._local_forensic_fallback(file_path)
+            finding = await self._local_forensic_fallback(file_path, is_screen_capture_like=is_screen_capture_like)
             finding.analysis_type = analysis_type
             return finding
 
@@ -761,7 +774,7 @@ class GeminiVisionClient:
             logger.warning(
                 f"Gemini quota guard blocked {analysis_type}: {quota_result.reason} — using local fallback"
             )
-            finding = await self._local_forensic_fallback(file_path)
+            finding = await self._local_forensic_fallback(file_path, is_screen_capture_like=is_screen_capture_like)
             finding.analysis_type = analysis_type
             return finding
 
@@ -1318,6 +1331,7 @@ class GeminiVisionClient:
         self,
         file_path: str,
         exif_summary: dict[str, Any] | None = None,
+        is_screen_capture_like: bool = False,
     ) -> GeminiVisionFinding:
         """
         Local OpenCV/PIL fallback when Gemini API key is not configured.
@@ -1384,18 +1398,26 @@ class GeminiVisionClient:
             )
 
             manipulation_signals = []
-            if noise_residual > 8:
+            # Screenshots: use elevated thresholds to avoid false positives from
+            # UI anti-aliasing, flat-color regions, and PNG export artifacts.
+            _noise_threshold = 15 if is_screen_capture_like else 8
+            _block_threshold = 12 if is_screen_capture_like else 8
+            if noise_residual > _noise_threshold:
                 manipulation_signals.append(
                     f"Elevated noise residual ({noise_residual:.2f}) — possible double-compression or splicing"
                 )
-            if block_diff > 8:
+            if block_diff > _block_threshold:
                 manipulation_signals.append(
                     f"Strong JPEG block boundary artifacts (score {block_diff:.1f}) — re-encoding likely"
                 )
-            if possibly_synthetic:
+            if possibly_synthetic and not is_screen_capture_like:
                 manipulation_signals.append(
                     "Channel balance and sharpness profile consistent with synthetic/AI-generated content"
                 )
+
+            # Require at least two heuristic signals for SUSPICIOUS verdict
+            # in local fallback (single-signal false-positives are common).
+            _min_signals_for_suspicious = 2
 
             meta_notes = []
             if exif_summary:
@@ -1478,7 +1500,7 @@ class GeminiVisionClient:
                 _extracted_text=ocr_text_lines,
                 _interface_identification="",
                 _contextual_narrative=narrative,
-                _authenticity_verdict="SUSPICIOUS" if manipulation_signals else "CANNOT_DETERMINE",
+                _authenticity_verdict="SUSPICIOUS" if len(manipulation_signals) >= _min_signals_for_suspicious else "CANNOT_DETERMINE",
                 _metadata_visual_consistency="; ".join(meta_notes)
                 if meta_notes
                 else "No EXIF for cross-validation",

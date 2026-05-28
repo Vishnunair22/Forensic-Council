@@ -175,12 +175,17 @@ class Agent1Image(ForensicAgent):
           - adversarial_robustness_check — only when splicing/copy-move confirmed.
         """
         if self._is_screen_capture or self._is_digital_capture:
-            return [
+            tasks = [
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run diffusion_artifact_detector for AI-generation signatures",
                 "Run synthid_watermark_detect for SynthID and AI watermark detection",
-                "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding",
             ]
+            gemini_ran = bool(self._tool_context.get("gemini_deep_forensic"))
+            if not gemini_ran:
+                tasks.append(
+                    "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding"
+                )
+            return tasks
 
         # Natural photos: fast high-signal tools first, heavy tools later
         tasks = [

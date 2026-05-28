@@ -136,9 +136,13 @@ export function useResult(initialSessionId?: string) {
     const timer = setTimeout(() => {
       setMinOverlayDone(true);
       document.body.removeAttribute("data-fc-loading");
+      // If report data is already available, complete the transition
+      if (report) {
+        setState("ready");
+      }
     }, 800);
     return () => clearTimeout(timer);
-  }, [mounted, sessionId, reportAlreadyReady, minOverlayDone]);
+  }, [mounted, sessionId, reportAlreadyReady, minOverlayDone, report]);
 
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {
@@ -226,13 +230,17 @@ export function useResult(initialSessionId?: string) {
     if (finalReportData.is_deep_analysis === true || finalReportData.is_deep_analysis === false) {
       setIsDeepPhase(finalReportData.is_deep_analysis);
     }
-    setState("ready");
-    const id = setTimeout(() => {
-      soundRef.current("arbiter_done");
-      soundRef.current("result_reveal");
-    }, 200);
-    return () => clearTimeout(id);
-  }, [finalReportData]);
+    // Only transition to "ready" after the min overlay duration has elapsed
+    // to prevent blank flash during overlay exit animation.
+    if (minOverlayDone) {
+      setState("ready");
+      const id = setTimeout(() => {
+        soundRef.current("arbiter_done");
+        soundRef.current("result_reveal");
+      }, 200);
+      return () => clearTimeout(id);
+    }
+  }, [finalReportData, minOverlayDone]);
 
   useEffect(() => {
     if (reportQueryError && arbiterComplete) {
@@ -275,7 +283,6 @@ export function useResult(initialSessionId?: string) {
         if (s.status === "complete") {
           setArbiterComplete(true);
           setArbiterMsg("Decrypting forensic ledger...");
-          setState("ready");
           return;
         } else if (s.status === "error") {
           setErrorMsg(s.message || "Investigation failed");

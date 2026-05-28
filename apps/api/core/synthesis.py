@@ -328,6 +328,7 @@ class SynthesisService:
         # --- Pre-filter template findings and deduplicate ---
         unique_findings = []
         seen_summaries = set()
+        seen_tools: dict[str, AgentFinding] = {}
         for f in findings:
             summary = f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or ""
             # Use a slightly fuzzy key for deduplication
@@ -336,6 +337,17 @@ class SynthesisService:
             if dedup_key not in seen_summaries:
                 unique_findings.append(f)
                 seen_summaries.add(dedup_key)
+
+        # Secondary dedup: keep only the highest-confidence finding per tool_name
+        # to prevent the same tool appearing twice across initial+deep passes.
+        for f in unique_findings:
+            tool_name = f.metadata.get("tool_name") or ""
+            if not tool_name:
+                continue
+            existing = seen_tools.get(tool_name)
+            if existing is None or (f.confidence_raw or 0.0) > (existing.confidence_raw or 0.0):
+                seen_tools[tool_name] = f
+        unique_findings = list(seen_tools.values())
 
         findings = unique_findings
         if not findings:

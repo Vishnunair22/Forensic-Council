@@ -102,11 +102,15 @@ class NeuralSynthesisMixin:
             if hasattr(self, "update_sub_task"):
                 await self.update_sub_task("Synthesizing multi-modal forensic verdict...")
 
+            agent_persona = getattr(self, "persona", None)
+            is_screen_cap = getattr(self, "_is_screen_capture", False)
             finding = await client.deep_forensic_analysis(
                 file_path=artifact.file_path,
                 exif_summary=full_context,
                 signal_callback=signal_callback,
                 model_hint=model_hint,
+                persona=agent_persona,
+                is_screen_capture_like=is_screen_cap,
             )
 
             if finding.error:

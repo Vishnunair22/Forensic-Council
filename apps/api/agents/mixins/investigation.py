@@ -372,6 +372,28 @@ class AgentInvestigationMixin:
         )
         if error_count:
             lines.append(f"  Tool errors: {error_count}/{total_tools}")
+
+        # Supplement with specific Phase-1 tool context metrics
+        tool_ctx = getattr(self, "_tool_context", {}) or {}
+        metric_lines = []
+        ela = tool_ctx.get("neural_ela", {}) or tool_ctx.get("ela_full_image", {})
+        if isinstance(ela, dict):
+            ela_score = ela.get("anomaly_score") or ela.get("ela_score")
+            if ela_score is not None:
+                metric_lines.append(f"ELA anomaly score: {float(ela_score):.3f}")
+        noiseprint = tool_ctx.get("noiseprint_cluster", {})
+        if isinstance(noiseprint, dict):
+            clusters = noiseprint.get("num_clusters") or noiseprint.get("cluster_count")
+            if clusters is not None:
+                metric_lines.append(f"Noiseprint clusters: {int(clusters)}")
+        fft = tool_ctx.get("frequency_domain_analysis", {})
+        if isinstance(fft, dict):
+            fft_score = fft.get("high_frequency_score") or fft.get("anomaly_score")
+            if fft_score is not None:
+                metric_lines.append(f"FFT high-freq score: {float(fft_score):.3f}")
+        if metric_lines:
+            lines.append("  Key metrics: " + "; ".join(metric_lines))
+
         return "\n".join(lines)
 
     def _generate_agent_brief(self, phase: str) -> dict[str, Any]:
@@ -790,10 +812,7 @@ class AgentInvestigationMixin:
             self._findings, phase="initial", timeout_s=90.0
         )
 
-        if synthesis is None:
-            synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
-            self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
-        if not synthesis or not synthesis.get("sections"):
+        if synthesis is None or not synthesis.get("sections"):
             synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
             self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         self._agent_confidence = synthesis["agent_confidence"]
@@ -891,10 +910,7 @@ class AgentInvestigationMixin:
         synthesis = await self._synthesize_findings_once(
             self._findings, phase="deep", timeout_s=90.0
         )
-        if synthesis is None:
-            synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
-            self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
-        if not synthesis or not synthesis.get("sections"):
+        if synthesis is None or not synthesis.get("sections"):
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
             self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         self._agent_confidence = synthesis["agent_confidence"]

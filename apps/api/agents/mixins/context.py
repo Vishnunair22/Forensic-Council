@@ -114,8 +114,13 @@ class AgentContextMixin:
             for key in keys[:-max_entries]:
                 del self._tool_context[key]
 
+        # Exempt high-signal tools from payload truncation — their text content
+        # is the primary input for Gemini forensic context and OCR analysis.
+        _EXEMPT_FROM_TRUNCATION = {"extract_text_from_image", "analyze_image_content"}
         # Truncate large string/list payloads
         for _key, val in self._tool_context.items():
+            if _key in _EXEMPT_FROM_TRUNCATION:
+                continue
             if isinstance(val, dict):
                 for k in list(val.keys()):
                     # Check for large string or list payloads that don't need full persistence
