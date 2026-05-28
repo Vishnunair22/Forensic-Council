@@ -440,16 +440,24 @@ class ArbiterNarrativeMixin:
         """
         Generate a per-agent narrative for the report.
 
-        Fix 4: Uses pass-through from the agent's own synthesis when available
-        (agent_brief and key_findings produced during investigation). No Groq
-        calls are made here — falls back to programmatic template.
+        Uses pass-through from the agent's own LLM synthesis when available
+        (agent_brief and key_findings produced during investigation). Falls back
+        to a programmatic template when no LLM synthesis is available or when the
+        synthesis came from the deterministic fallback path.
         """
-        # Pass-through: agent already produced structured narrative
+        # Pass-through: agent already produced LLM-generated structured narrative
         if agent_data:
             synthesis = agent_data.get("synthesis") or {}
             agent_brief = synthesis.get("agent_brief")
             key_findings = synthesis.get("key_findings")
-            if agent_brief and key_findings:
+            synthesis_source = synthesis.get("synthesis_source", "")
+
+            # Reject deterministic-fallback briefs — they look like LLM output but
+            # are actually template strings. Route them to the richer programmatic
+            # template path instead to avoid surfacing terse fallback text in reports.
+            is_fallback = synthesis_source in ("template_fallback", "tool_grounded_fallback") or not synthesis_source
+
+            if agent_brief and key_findings and not is_fallback:
                 confidence_pct = round(metrics.get("confidence_score", 0) * 100)
                 error_rate_pct = round(metrics.get("error_rate", 0) * 100)
                 tools_ok = metrics.get("tools_succeeded", 0)
@@ -460,6 +468,11 @@ class ArbiterNarrativeMixin:
                 deep_note = ""
                 if phase_delta and delta_reason:
                     deep_note = f"\n\nDeep analysis delta: {phase_delta} — {delta_reason}"
+                logger.debug(
+                    "Using LLM-produced agent brief for narrative",
+                    agent_id=agent_id,
+                    synthesis_source=synthesis_source,
+                )
                 return json.dumps({
                     "evidence_assessment": str(agent_brief)[:1200],
                     "deep_analysis": "; ".join(str(kf) for kf in (key_findings or [])[:5])[:1200] + deep_note,
@@ -467,11 +480,18 @@ class ArbiterNarrativeMixin:
                         f"Confidence: {confidence_pct}% across {tools_ok}/{tools_total} tools "
                         f"({tools_na} not applicable; {error_rate_pct}% error rate)."
                     ),
-                    "synthesis_source": "agent_llm_synthesis",
+                    "synthesis_source": synthesis_source or "agent_llm_synthesis",
                 })
+            elif is_fallback and agent_brief:
+                logger.warning(
+                    "Agent synthesis was deterministic fallback — using programmatic template",
+                    agent_id=agent_id,
+                    synthesis_source=synthesis_source,
+                )
 
         # Fallback: programmatic template (no Groq call)
         return self._programmatic_agent_narrative(agent_id, findings, metrics)
+
 
     async def _generate_executive_summary(
         self,

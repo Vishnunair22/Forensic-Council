@@ -236,37 +236,91 @@ class AgentInvestigationMixin:
                         gemini_result = bus_ctx
                 except Exception:
                     pass
-            gemini_metadata = gemini_result.get("metadata", {}) or {}
 
-            # Build a RICH gemini_context — previously only 3 fields were passed (category,
-            # signals, verdict). Now we forward everything so Groq can anchor the agent_brief
-            # in what the evidence actually IS, not generic boilerplate.
-            _str = lambda v: str(v).strip() if v else ""
-            _lst = lambda v: v if isinstance(v, list) else []
+            # gemini_result is the full to_finding_dict() output:
+            #   { "reasoning_summary": ..., "confidence_raw": ..., "metadata": { ... } }
+            # The nested metadata dict holds all deep-forensic extra fields.
+            # We also support direct-field access as a fallback for any path that
+            # stores the GeminiVisionFinding attrs without the metadata wrapper.
+            gemini_metadata = gemini_result.get("metadata") or {}
+            if not isinstance(gemini_metadata, dict):
+                gemini_metadata = {}
+
+            def _gem_str(meta_key: str, *top_keys: str) -> str:
+                """Read from metadata dict first, then fall back to top-level keys."""
+                v = gemini_metadata.get(meta_key)
+                if v:
+                    return str(v).strip()
+                for k in top_keys:
+                    v = gemini_result.get(k)
+                    if v:
+                        return str(v).strip()
+                return ""
+
+            def _gem_lst(meta_key: str, *top_keys: str) -> list:
+                """Read list from metadata dict first, then top-level keys."""
+                v = gemini_metadata.get(meta_key)
+                if isinstance(v, list) and v:
+                    return v
+                for k in top_keys:
+                    v = gemini_result.get(k)
+                    if isinstance(v, list) and v:
+                        return v
+                return []
+
+            # Build a RICH gemini_context — forwards everything so Groq can anchor
+            # the agent_brief in what the evidence actually IS, not generic boilerplate.
             gemini_context: dict = {
                 # Evidence identity — what Gemini sees
-                "content_description": (
-                    _str(gemini_result.get("reasoning_summary"))
-                    or _str(gemini_result.get("content_description"))
+                "content_description": _gem_str(
+                    "content_description", "reasoning_summary", "content_description"
                 ),
-                "image_category": _str(
-                    gemini_metadata.get("file_type_assessment")
-                    or gemini_metadata.get("image_category")
+                "image_category": _gem_str(
+                    "file_type_assessment", "image_category"
                 ),
-                "interface_identification": _str(gemini_metadata.get("interface_identification")),
+                "interface_identification": _gem_str(
+                    "interface_identification"
+                ),
                 # Gemini's visual verdict and forensic signals
-                "visual_verdict": _str(gemini_metadata.get("authenticity_verdict")),
+                "visual_verdict": _gem_str(
+                    "authenticity_verdict", "visual_verdict"
+                ),
                 "gemini_confidence": float(gemini_result.get("confidence_raw") or 0.0),
-                "priority_signals": _lst(gemini_metadata.get("manipulation_signals")),
-                "contextual_anomalies": _lst(gemini_metadata.get("contextual_anomalies")),
+                "priority_signals": _gem_lst(
+                    "manipulation_signals", "priority_signals"
+                ),
+                "contextual_anomalies": _gem_lst(
+                    "contextual_anomalies"
+                ),
                 # Rich narrative and specifics
-                "contextual_narrative": _str(gemini_metadata.get("contextual_narrative")),
-                "forensic_specifics": _str(gemini_metadata.get("forensic_specifics")),
+                "contextual_narrative": _gem_str(
+                    "contextual_narrative"
+                ),
+                "forensic_specifics": _gem_str(
+                    "forensic_specifics"
+                ),
                 # Text Gemini read from the evidence
-                "extracted_text": _lst(gemini_metadata.get("extracted_text")),
+                "extracted_text": _gem_lst(
+                    "extracted_text"
+                ),
             }
-            # Strip empty values so the prompt block stays clean
+            # Strip falsy values (keep 0.0 for confidence) so the prompt block stays clean
             gemini_context = {k: v for k, v in gemini_context.items() if v or v == 0.0}
+
+            if gemini_context:
+                logger.debug(
+                    "Gemini context built for Groq synthesis",
+                    agent_id=self.agent_id,
+                    fields=list(gemini_context.keys()),
+                    has_narrative=bool(gemini_context.get("contextual_narrative")),
+                    has_verdict=bool(gemini_context.get("visual_verdict")),
+                )
+            else:
+                logger.warning(
+                    "Gemini context is empty — Groq synthesis will lack visual grounding",
+                    agent_id=self.agent_id,
+                    phase=phase,
+                )
 
 
             # Fix 1: Live progress broadcast before Groq call

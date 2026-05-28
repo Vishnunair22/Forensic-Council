@@ -80,6 +80,131 @@ _SAFETY_PREAMBLE = (
 )
 
 
+def _build_deep_forensic_prompt(
+    exif_summary: dict[str, Any] | None,
+    persona: str | None,
+    is_screen_capture_like: bool,
+) -> str:
+    """Build the comprehensive deep forensic analysis prompt."""
+    meta_section = ""
+    if exif_summary:
+        meta_text = json.dumps(exif_summary, indent=2, default=str)
+        meta_section = (
+            "\n\n[UNTRUSTED EVIDENCE START]\n"
+            f"EXIF / metadata extracted from file:\n{meta_text}\n"
+            "[UNTRUSTED EVIDENCE END]\n"
+            "Cross-validate these claims against what you visually observe."
+        )
+
+    # Build category-specific forensic directives
+    if is_screen_capture_like:
+        category_directive = (
+            "\n\nSPECIAL FOCUS — DIGITAL/SCREENSHOT EVIDENCE:\n"
+            "- Verify UI element consistency (fonts, spacing, button styles match claimed platform)\n"
+            "- Check timestamp/clock in status bar against EXIF or claimed date\n"
+            "- Identify the platform (iOS/Android/Web/Desktop) from visual cues\n"
+            "- Flag any pasted or overlaid text that differs in rendering from native UI\n"
+            "- Note if any elements appear cropped, composited, or re-rendered\n"
+        )
+    else:
+        category_directive = (
+            "\n\nSPECIAL FOCUS — PHOTOGRAPHIC EVIDENCE:\n"
+            "- Assess lighting direction consistency across all objects in the scene\n"
+            "- Check shadow angles for geometric consistency\n"
+            "- Note any objects whose perspective, scale, or depth-of-field is inconsistent\n"
+            "- For portraits: check skin texture uniformity, ear/hair boundary artifacts\n"
+            "- For crime scenes: assess scene staging plausibility\n"
+            "- For documents/handwritten items: note ink uniformity, baseline consistency, pen pressure\n"
+            "- For object photos (knife, weapon, vehicle): assess scale plausibility vs background\n"
+        )
+
+    persona_preamble = f"You are {persona}\n\n" if persona else ""
+    prompt = (
+        _SAFETY_PREAMBLE
+        + persona_preamble
+        + "You are a senior forensic analyst performing a comprehensive examination "
+        "of this file. Provide a thorough, court-grade analysis covering ALL of "
+        "the following areas:\n\n"
+        "1. CONTENT_TYPE: Classify the file precisely. Examples: 'photograph taken "
+        "with a camera', 'screenshot of a web browser', 'screenshot of a mobile app', "
+        "'scanned document', 'AI-generated image', 'screen recording frame', "
+        "'screenshot of a desktop application', 'photograph of a physical document', "
+        "'infographic', 'meme', etc. Be specific.\n\n"
+        "2. SCENE_DESCRIPTION: Describe in detail what you see. What is the setting? "
+        "What is happening? What is the overall context or narrative? If it is a "
+        "screenshot, describe what application/website is shown and what action is "
+        "being performed or displayed.\n\n"
+        "3. EXTRACTED_TEXT: Extract ALL visible text from the image verbatim, "
+        "preserving structure. Include UI labels, headings, body text, captions, "
+        "URLs, usernames, timestamps, error messages, form fields, table data, "
+        "watermarks — everything. If no text is present, return an empty list.\n\n"
+        "4. DETECTED_OBJECTS: List every identifiable object, device, or item. "
+        "Include: computers/laptops/phones/tablets, weapons (knives, firearms, etc.), "
+        "vehicles, faces/people (describe without identifying), documents/IDs, "
+        "currency, drugs/substances, clothing, furniture, logos/brands. "
+        "For each object include its approximate location in the frame "
+        "(e.g. 'laptop, center-left'). If none beyond the main scene, say 'None'.\n\n"
+        "5. INTERFACE_IDENTIFICATION: If the image shows a digital interface, "
+        "identify it precisely: application name (if recognisable), type of interface "
+        "(web browser, mobile app, desktop app, terminal, map, social media, "
+        "messaging, email client, etc.), and what the user is doing or what data "
+        "is displayed.\n\n"
+        "6. CONTEXTUAL_NARRATIVE: In 2-4 sentences, explain what is going on in this "
+        "image. What event, activity, or situation does it depict? What is the forensic "
+        "significance of its content?\n\n"
+        "7. MANIPULATION_SIGNALS: List any visual forensic red flags: inconsistent "
+        "lighting/shadows, copy-paste artifacts, edge blending issues, resolution "
+        "inconsistencies, AI generation artefacts, metadata-visual mismatches, "
+        "signs of cropping/compositing. If none, return empty list.\n\n"
+        "8. METADATA_VISUAL_CONSISTENCY: If EXIF data is provided, assess whether "
+        "the visual content is consistent with the claimed timestamp, location, and "
+        "device. If no EXIF provided, return 'No metadata provided for cross-validation'.\n\n"
+        "9. AUTHENTICITY_VERDICT: One of 'AUTHENTIC', 'SUSPICIOUS', 'LIKELY_MANIPULATED', "
+        "'AI_GENERATED', or 'CANNOT_DETERMINE'.\n\n"
+        "10. CONTRADICTION_AUDIT: Specifically list any contradictions between the "
+        "provided tool results/metadata and what you see. For example: if EXIF says "
+        "it is a 'Samsung S24' photo but you see 'iPhone' UI artifacts, or if the "
+        "GPS says 'Dubai' but you see 'London' landmarks.\n\n"
+        "11. CONFIDENCE: Your overall confidence in this analysis (0.0-1.0).\n\n"
+        "12. FORENSIC_ROUTING: Classify the content type of this image to guide downstream agent routing. "
+        "Return an object containing:\n"
+        "   - image_category: one of 'live_photograph', 'web_image', 'document', 'object_scene', 'screenshot', 'ai_generated_suspect'\n"
+        "   - priority_signals: list of strings (what visual/pixel indicators to investigate first)\n"
+        "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
+        "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
+        "   - focus_regions: list of strings (coordinates or specific regions of interest to inspect)\n\n"
+        "13. FORENSIC_SPECIFICS: Based on the image category, provide 2-3 domain-specific "
+        "observations a forensic expert would note (e.g. for portraits: facial boundary artifacts; "
+        "for documents: ink bleed patterns; for crime scenes: blood spatter pattern plausibility; "
+        "for vehicles: plate number legibility and consistency).\n\n"
+        f"{category_directive}"
+        f"{meta_section}\n\n"
+        "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
+        "preamble, just the JSON object):\n"
+        "{\n"
+        '  "content_type": "precise description",\n'
+        '  "scene_description": "detailed description",\n'
+        '  "extracted_text": ["verbatim text items"],\n'
+        '  "detected_objects": ["object at location"],\n'
+        '  "interface_identification": "app name and type",\n'
+        '  "contextual_narrative": "depicted event and significance",\n'
+        '  "manipulation_signals": ["forensic anomalies"],\n'
+        '  "metadata_visual_consistency": "consistency assessment",\n'
+        '  "contradiction_audit": ["specific contradiction identified"],\n'
+        '  "authenticity_verdict": "AUTHENTIC",\n'
+        '  "confidence": 0.95,\n'
+        '  "forensic_routing": {\n'
+        '    "image_category": "live_photograph",\n'
+        '    "priority_signals": ["priority signal to look for"],\n'
+        '    "skip_tools": ["tools to skip"],\n'
+        '    "focus_regions": ["focus areas"]\n'
+        '  },\n'
+        '  "forensic_specifics": "domain-specific observations"\n'
+        "}"
+    )
+    return prompt
+
+
 class _ModelUnavailableError(Exception):
     """Raised when the API returns 404 or a 'model not found' body.
 
@@ -639,120 +764,10 @@ class GeminiVisionClient:
             if hasattr(maybe_awaitable, "__await__"):
                 await maybe_awaitable
 
-        meta_section = ""
-        if exif_summary:
-            meta_text = json.dumps(exif_summary, indent=2, default=str)
-            meta_section = (
-                "\n\n[UNTRUSTED EVIDENCE START]\n"
-                f"EXIF / metadata extracted from file:\n{meta_text}\n"
-                "[UNTRUSTED EVIDENCE END]\n"
-                "Cross-validate these claims against what you visually observe."
-            )
-
-        # Build category-specific forensic directives
-        if is_screen_capture_like:
-            category_directive = (
-                "\n\nSPECIAL FOCUS — DIGITAL/SCREENSHOT EVIDENCE:\n"
-                "- Verify UI element consistency (fonts, spacing, button styles match claimed platform)\n"
-                "- Check timestamp/clock in status bar against EXIF or claimed date\n"
-                "- Identify the platform (iOS/Android/Web/Desktop) from visual cues\n"
-                "- Flag any pasted or overlaid text that differs in rendering from native UI\n"
-                "- Note if any elements appear cropped, composited, or re-rendered\n"
-            )
-        else:
-            category_directive = (
-                "\n\nSPECIAL FOCUS — PHOTOGRAPHIC EVIDENCE:\n"
-                "- Assess lighting direction consistency across all objects in the scene\n"
-                "- Check shadow angles for geometric consistency\n"
-                "- Note any objects whose perspective, scale, or depth-of-field is inconsistent\n"
-                "- For portraits: check skin texture uniformity, ear/hair boundary artifacts\n"
-                "- For crime scenes: assess scene staging plausibility\n"
-                "- For documents/handwritten items: note ink uniformity, baseline consistency, pen pressure\n"
-                "- For object photos (knife, weapon, vehicle): assess scale plausibility vs background\n"
-            )
-
-        persona_preamble = f"You are {persona}\n\n" if persona else ""
-        prompt = (
-            _SAFETY_PREAMBLE
-            + persona_preamble
-            + "You are a senior forensic analyst performing a comprehensive examination "
-            "of this file. Provide a thorough, court-grade analysis covering ALL of "
-            "the following areas:\n\n"
-            "1. CONTENT_TYPE: Classify the file precisely. Examples: 'photograph taken "
-            "with a camera', 'screenshot of a web browser', 'screenshot of a mobile app', "
-            "'scanned document', 'AI-generated image', 'screen recording frame', "
-            "'screenshot of a desktop application', 'photograph of a physical document', "
-            "'infographic', 'meme', etc. Be specific.\n\n"
-            "2. SCENE_DESCRIPTION: Describe in detail what you see. What is the setting? "
-            "What is happening? What is the overall context or narrative? If it is a "
-            "screenshot, describe what application/website is shown and what action is "
-            "being performed or displayed.\n\n"
-            "3. EXTRACTED_TEXT: Extract ALL visible text from the image verbatim, "
-            "preserving structure. Include UI labels, headings, body text, captions, "
-            "URLs, usernames, timestamps, error messages, form fields, table data, "
-            "watermarks — everything. If no text is present, return an empty list.\n\n"
-            "4. DETECTED_OBJECTS: List every identifiable object, device, or item. "
-            "Include: computers/laptops/phones/tablets, weapons (knives, firearms, etc.), "
-            "vehicles, faces/people (describe without identifying), documents/IDs, "
-            "currency, drugs/substances, clothing, furniture, logos/brands. "
-            "For each object include its approximate location in the frame "
-            "(e.g. 'laptop, center-left'). If none beyond the main scene, say 'None'.\n\n"
-            "5. INTERFACE_IDENTIFICATION: If the image shows a digital interface, "
-            "identify it precisely: application name (if recognisable), type of interface "
-            "(web browser, mobile app, desktop app, terminal, map, social media, "
-            "messaging, email client, etc.), and what the user is doing or what data "
-            "is displayed.\n\n"
-            "6. CONTEXTUAL_NARRATIVE: In 2-4 sentences, explain what is going on in this "
-            "image. What event, activity, or situation does it depict? What is the forensic "
-            "significance of its content?\n\n"
-            "7. MANIPULATION_SIGNALS: List any visual forensic red flags: inconsistent "
-            "lighting/shadows, copy-paste artifacts, edge blending issues, resolution "
-            "inconsistencies, AI generation artefacts, metadata-visual mismatches, "
-            "signs of cropping/compositing. If none, return empty list.\n\n"
-            "8. METADATA_VISUAL_CONSISTENCY: If EXIF data is provided, assess whether "
-            "the visual content is consistent with the claimed timestamp, location, and "
-            "device. If no EXIF provided, return 'No metadata provided for cross-validation'.\n\n"
-            "9. AUTHENTICITY_VERDICT: One of 'AUTHENTIC', 'SUSPICIOUS', 'LIKELY_MANIPULATED', "
-            "'AI_GENERATED', or 'CANNOT_DETERMINE'.\n\n"
-            "10. CONTRADICTION_AUDIT: Specifically list any contradictions between the "
-            "provided tool results/metadata and what you see. For example: if EXIF says "
-            "it is a 'Samsung S24' photo but you see 'iPhone' UI artifacts, or if the "
-            "GPS says 'Dubai' but you see 'London' landmarks.\n\n"
-            "11. CONFIDENCE: Your overall confidence in this analysis (0.0-1.0).\n\n"
-            "12. FORENSIC_ROUTING: Classify the content type of this image to guide downstream agent routing. "
-            "Return an object containing:\n"
-            "   - image_category: one of 'live_photograph', 'web_image', 'document', 'object_scene', 'screenshot', 'ai_generated_suspect'\n"
-            "   - priority_signals: list of strings (what visual/pixel indicators to investigate first)\n"
-            "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
-            "   - focus_regions: list of strings (coordinates or specific regions of interest to inspect)\n\n"
-            "13. FORENSIC_SPECIFICS: Based on the image category, provide 2-3 domain-specific "
-            "observations a forensic expert would note (e.g. for portraits: facial boundary artifacts; "
-            "for documents: ink bleed patterns; for crime scenes: blood spatter pattern plausibility; "
-            "for vehicles: plate number legibility and consistency).\n\n"
-            f"{category_directive}"
-            f"{meta_section}\n\n"
-            "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
-            "preamble, just the JSON object):\n"
-            "{\n"
-            '  "content_type": "precise description",\n'
-            '  "scene_description": "detailed description",\n'
-            '  "extracted_text": ["verbatim text items"],\n'
-            '  "detected_objects": ["object at location"],\n'
-            '  "interface_identification": "app name and type",\n'
-            '  "contextual_narrative": "depicted event and significance",\n'
-            '  "manipulation_signals": ["forensic anomalies"],\n'
-            '  "metadata_visual_consistency": "consistency assessment",\n'
-            '  "contradiction_audit": ["specific contradiction identified"],\n'
-            '  "authenticity_verdict": "AUTHENTIC",\n'
-            '  "confidence": 0.95,\n'
-            '  "forensic_routing": {\n'
-            '    "image_category": "live_photograph",\n'
-            '    "priority_signals": ["priority signal to look for"],\n'
-            '    "skip_tools": ["tools to skip"],\n'
-            '    "focus_regions": ["focus areas"]\n'
-            '  },\n'
-            '  "forensic_specifics": "domain-specific observations"\n'
-            "}"
+        prompt = _build_deep_forensic_prompt(
+            exif_summary=exif_summary,
+            persona=persona,
+            is_screen_capture_like=is_screen_capture_like,
         )
 
         result = await self._run_vision_analysis(

@@ -625,11 +625,18 @@ Return ONLY a JSON object with this exact schema:
             ])
         user_content = "\n".join(user_content_parts)
         try:
-            # Truncate user content to stay within safe context budget (~5000 tokens)
-            MAX_INPUT_CHARS = 18000
+            # Cap user content to 10000 chars so that even with the ~4500-char system prompt
+            # the total payload stays under 14000 chars — the safe limit for llama-3.1-8b-instant.
+            # llm_client.py applies per-model trimming on top, so larger models still get the full context.
+            MAX_INPUT_CHARS = 10000
+            original_user_len = len(user_content)
             if len(user_content) > MAX_INPUT_CHARS:
                 user_content = user_content[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
-                logger.warning("Groq synthesis input truncated", original_len=len(user_content))
+                logger.warning(
+                    "Groq synthesis input truncated",
+                    original_len=original_user_len,
+                    truncated_len=len(user_content),
+                )
 
             raw = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,

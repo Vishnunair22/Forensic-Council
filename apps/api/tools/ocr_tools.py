@@ -742,16 +742,25 @@ async def extract_evidence_text(
             file_type_hint,
         )
 
-    # Tier 0: Gemini Multimodal OCR (if enabled)
-    # We prefer Gemini for screenshots and documents as it understands layout better
-    gemini_res = await _extract_text_gemini(artifact)
-    if gemini_res.get("gemini_available") and (
-        gemini_res.get("has_text") or is_screen_capture_like(artifact)
-    ):
-        logger.info("Gemini OCR succeeded", word_count=gemini_res.get("word_count", 0))
-        return _finalize_result(gemini_res, file_type_hint)
+    # Tier 0 (Gemini Multimodal OCR) is intentionally DISABLED.
+    # Gemini API quota is shared across VisionRouter deep forensic analysis
+    # and Groq synthesis fallback. Burning it on OCR leaves insufficient
+    # quota headroom for vision analysis, which is the primary signal source.
+    # OCR is adequately served by EasyOCR (Tier 2) + Tesseract (Tier 3).
+    # Re-enable by setting GEMINI_OCR_ENABLED=true in the environment if a
+    # dedicated Gemini key is provided for OCR (separate from GEMINI_API_KEY).
+    _gemini_ocr_enabled = os.getenv("GEMINI_OCR_ENABLED", "false").lower() == "true"
+    if _gemini_ocr_enabled:
+        gemini_res = await _extract_text_gemini(artifact)
+        if gemini_res.get("gemini_available") and (
+            gemini_res.get("has_text") or is_screen_capture_like(artifact)
+        ):
+            logger.info("Gemini OCR succeeded", word_count=gemini_res.get("word_count", 0))
+            return _finalize_result(gemini_res, file_type_hint)
+        else:
+            logger.info("Gemini OCR unavailable or empty, falling back to EasyOCR")
     else:
-        logger.info("Gemini OCR unavailable or empty, falling back to EasyOCR")
+        logger.debug("Gemini OCR skipped (GEMINI_OCR_ENABLED=false) — using EasyOCR/Tesseract")
 
     if file_type_hint == "pdf_document":
         result = await extract_text_from_pdf(artifact)

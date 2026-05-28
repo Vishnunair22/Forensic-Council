@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from core.gemini_client import GeminiVisionClient
+from core.vision_router import VisionRouter
 from core.structured_logging import get_logger
 
 from .._context_utils import aggregate_tool_context
@@ -84,7 +84,7 @@ class NeuralSynthesisMixin:
 
         # 3. Initialize client and execute
         try:
-            client = GeminiVisionClient(self.config)
+            client = VisionRouter(self.config)
 
             # Default signal callback to inter-agent bus if not provided
             if signal_callback is None:
@@ -148,7 +148,7 @@ class NeuralSynthesisMixin:
                 return result
 
             result = finding.to_finding_dict(self.agent_id)
-            result["analysis_source"] = f"gemini_{model_hint}" if model_hint else "gemini_vision"
+            result["analysis_source"] = f"vision_cascade_{finding.model_used}"
 
             # Record result if method exists
             if hasattr(self, "_record_tool_result"):

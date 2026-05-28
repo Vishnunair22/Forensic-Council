@@ -712,6 +712,46 @@ class Settings(BaseSettings):
             return None
         return v
 
+    # ─── Vision provider chain (cascade order) ──────────────────────────────
+    vision_provider_chain: str = Field(
+        default="gemini,groq_vision,openrouter,local_ensemble",
+        description="Comma-separated cascade. Disable a step by removing it.",
+    )
+    text_provider_chain: str = Field(
+        default="groq,gemini,cerebras,template",
+        description="Comma-separated text-LLM cascade for synthesis.",
+    )
+
+    # ─── Groq Vision (Llama-3.2/4 vision via OpenAI-compatible endpoint) ────
+    groq_vision_api_key: str | None = Field(
+        default=None,
+        description="Groq API key for vision models. Defaults to LLM_API_KEY if unset.",
+    )
+    groq_vision_model: str = Field(
+        default="meta-llama/llama-4-scout-17b-16e-instruct",
+        description="Groq vision model id. Free-tier alternative: llama-3.2-90b-vision-preview.",
+    )
+    groq_vision_timeout: float = Field(default=30.0)
+    groq_vision_rpm_limit: int = Field(default=15)
+    groq_vision_rpd_limit: int = Field(default=14400)
+
+    # ─── OpenRouter (free vision models, opt-in) ────────────────────────────
+    openrouter_enabled: bool = Field(default=False)
+    openrouter_api_key: str | None = Field(default=None)
+    openrouter_referer: str | None = Field(default=None)
+    openrouter_vision_models: str = Field(
+        default="meta-llama/llama-3.2-11b-vision-instruct:free,qwen/qwen2.5-vl-7b-instruct:free,google/gemma-3-12b-it:free",
+    )
+    openrouter_timeout: float = Field(default=45.0)
+    openrouter_rpm_limit: int = Field(default=20)
+    openrouter_rpd_limit: int = Field(default=200)
+
+    # ─── Cerebras (text only, free tier) ────────────────────────────────────
+    cerebras_api_key: str | None = Field(default=None)
+    cerebras_model: str = Field(default="llama-3.3-70b")
+    cerebras_rpm_limit: int = Field(default=30)
+    cerebras_rpd_limit: int = Field(default=14400)
+
     # Forensic Tool Timeouts
     agent_context_wait_timeout: float = Field(
         default=60.0,

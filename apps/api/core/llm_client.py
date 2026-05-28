@@ -655,6 +655,20 @@ class LLMClient:
                 json_mode=json_mode,
             )
 
+    # Per-model prompt character limits (conservative, ~3.5 chars/token).
+    # Prevents 413 Payload Too Large on smaller context-window models.
+    _MODEL_PROMPT_CHAR_LIMITS: dict[str, int] = {
+        "llama-3.1-8b-instant": 14000,          # 8k ctx → ~6k chars after output budget
+        "llama-3.2-1b-preview": 10000,
+        "llama-3.2-3b-preview": 10000,
+        "gemini-2.5-flash-lite": 60000,
+        "gemini-2.0-flash-lite": 60000,
+        "gemini-2.5-flash": 120000,
+        "gemini-2.0-flash": 120000,
+        "llama-3.3-70b-versatile": 40000,       # 32k ctx window
+    }
+    _DEFAULT_PROMPT_CHAR_LIMIT: int = 18000
+
     async def _generate_synthesis_inner(
         self,
         system_prompt: str,
@@ -671,13 +685,16 @@ class LLMClient:
             tokens = max_tokens or min(self.max_tokens, 1500)
             candidates = list(self._get_model_candidates())
 
-            # Auto-append Gemini as a cross-provider synthesis fallback.
-            # Groq's free-tier TPM is routinely exhausted by concurrent ReAct
-            # reasoning calls before synthesis runs — Gemini escapes that bucket.
+            # Expand Gemini fallback candidates: lighter models use a different
+            # quota bucket and have higher RPD on the free tier.
             if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
-                gemini_candidate = f"gemini/{self.gemini_model}"
-                if gemini_candidate not in candidates:
-                    candidates.append(gemini_candidate)
+                for gem_model in [
+                    "gemini/gemini-2.5-flash",
+                    "gemini/gemini-2.0-flash-lite",
+                    "gemini/gemini-2.5-flash-lite",
+                ]:
+                    if gem_model not in candidates:
+                        candidates.append(gem_model)
 
             last_exc: Exception | None = None
 
@@ -708,6 +725,23 @@ class LLMClient:
                     )
                     continue
 
+                # Trim prompt to per-model character limit BEFORE sending to avoid 413.
+                char_limit = self._MODEL_PROMPT_CHAR_LIMITS.get(
+                    target_model, self._DEFAULT_PROMPT_CHAR_LIMIT
+                )
+                trimmed_user = user_content
+                if len(system_prompt) + len(user_content) > char_limit:
+                    # Reserve space for the system prompt; trim user content.
+                    user_budget = max(1000, char_limit - len(system_prompt) - 200)
+                    if len(user_content) > user_budget:
+                        trimmed_user = user_content[:user_budget] + "\n\n[...context trimmed for model context window...]"
+                        logger.debug(
+                            "Synthesis prompt trimmed for model context window",
+                            model=target_model,
+                            original_chars=len(user_content),
+                            trimmed_chars=len(trimmed_user),
+                        )
+
                 try:
                     client = await self._get_client()
                     req_timeout = timeout_override or 30.0
@@ -722,7 +756,7 @@ class LLMClient:
                             "model": target_model,
                             "messages": [
                                 {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_content},
+                                {"role": "user", "content": trimmed_user},
                             ],
                             "temperature": 0.2,
                             "max_tokens": tokens,
@@ -736,11 +770,12 @@ class LLMClient:
                         # M-C-4: Gemini key as header, not query string.
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"
                         req_headers = {"x-goog-api-key": target_api_key}
+                        gemini_prompt = f"{system_prompt}\n\n{trimmed_user}"
                         payload = {
                             "contents": [
                                 {
                                     "role": "user",
-                                    "parts": [{"text": f"{system_prompt}\n\n{user_content}"}],
+                                    "parts": [{"text": gemini_prompt}],
                                 }
                             ],
                             "generationConfig": {"temperature": 0.2, "maxOutputTokens": tokens},
@@ -752,65 +787,93 @@ class LLMClient:
                     else:
                         continue
 
-                    # Fast-fail on 429 — skip to next candidate with backoff.
-                    # Rate-limit buckets (RPM / TPM) typically take 30-60 s to refill.
+                    # Fast-fail on 429 — skip to next candidate with short backoff.
                     if resp.status_code == 429:
                         logger.warning(
                             f"Synthesis {target_provider}/{target_model} rate-limited — "
-                            f"backing off 15s before next candidate"
+                            f"trying next candidate"
                         )
-                        await asyncio.sleep(15.0)
+                        await asyncio.sleep(5.0)
+                        continue
+
+                    # Fast-fail on 413 — prompt too large for this model, try next.
+                    if resp.status_code == 413:
+                        logger.warning(
+                            f"Synthesis {target_provider}/{target_model} payload too large — "
+                            f"skipping to next candidate"
+                        )
                         continue
 
                     resp.raise_for_status()
 
                     if target_provider == "groq":
-                        return resp.json()["choices"][0]["message"].get("content", "").strip()
+                        result = resp.json()["choices"][0]["message"].get("content", "").strip()
                     else:
-                        return (
+                        result = (
                             resp.json()["candidates"][0]["content"]["parts"][0]
                             .get("text", "")
                             .strip()
                         )
+                    if result:
+                        logger.debug(
+                            "Synthesis succeeded",
+                            provider=target_provider,
+                            model=target_model,
+                            response_chars=len(result),
+                        )
+                    return result
 
                 except Exception as exc:
                     last_exc = exc
                     logger.warning(f"Synthesis candidate {model_spec} failed: {exc}")
 
-            # If we reached here, all candidates were blocked or failed.
-            # Local retry for Gemini only: if Groq/others failed/429ed or Gemini was quota-blocked,
-            # wait 5 seconds and try a single forced Gemini call (bypassing quota guard check)
-            # to prevent returning empty response.
+            # All candidates exhausted — try one final lightweight Gemini model
+            # after a short pause. Using gemini-2.0-flash-lite which has a separate
+            # quota bucket from the primary flash model.
             if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
-                logger.warning("All synthesis candidates exhausted. Initiating forced Gemini synthesis fallback in 30 seconds...")
-                await asyncio.sleep(30.0)
+                logger.warning(
+                    "All synthesis candidates exhausted. Retrying with gemini-2.0-flash-lite in 5s..."
+                )
+                await asyncio.sleep(5.0)
                 try:
                     client = await self._get_client()
                     req_timeout = timeout_override or 30.0
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
+                    lite_model = "gemini-2.0-flash-lite"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{lite_model}:generateContent"
                     req_headers = {"x-goog-api-key": self.gemini_api_key}
+                    # Use a hard-trimmed prompt for the lite model retry
+                    lite_limit = self._MODEL_PROMPT_CHAR_LIMITS.get(lite_model, 60000)
+                    lite_user = user_content[:lite_limit // 2]
                     payload = {
                         "contents": [
                             {
                                 "role": "user",
-                                "parts": [{"text": f"{system_prompt}\n\n{user_content}"}],
+                                "parts": [{"text": f"{system_prompt}\n\n{lite_user}"}],
                             }
                         ],
                         "generationConfig": {"temperature": 0.2, "maxOutputTokens": tokens},
                     }
                     if json_mode:
                         payload["generationConfig"]["responseMimeType"] = "application/json"
-                    
                     async with LLMClient._global_semaphore:
                         resp = await client.post(url, headers=req_headers, json=payload, timeout=req_timeout)
-                    resp.raise_for_status()
-                    return (
-                        resp.json()["candidates"][0]["content"]["parts"][0]
-                        .get("text", "")
-                        .strip()
-                    )
+                    if resp.status_code == 200:
+                        result = (
+                            resp.json()["candidates"][0]["content"]["parts"][0]
+                            .get("text", "")
+                            .strip()
+                        )
+                        if result:
+                            logger.info(
+                                "Synthesis succeeded on gemini-2.0-flash-lite final retry"
+                            )
+                            return result
+                    else:
+                        logger.warning(
+                            f"gemini-2.0-flash-lite final retry returned {resp.status_code}"
+                        )
                 except Exception as final_exc:
-                    logger.error(f"Forced Gemini synthesis fallback retry failed: {final_exc}")
+                    logger.error(f"gemini-2.0-flash-lite final retry failed: {final_exc}")
                     last_exc = final_exc
 
             if last_exc:

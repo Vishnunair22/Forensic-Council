@@ -670,6 +670,7 @@ _CSRF_EXEMPT_PATHS = {
     "/api/v1/health",
     "/api/v1/health/ml-tools",
     "/api/v1/health/tools",
+    "/api/v1/health/providers",
     "/api/v1/auth/login",
     "/api/v1/auth/logout",
     "/api/v1/auth/refresh",
@@ -1242,4 +1243,93 @@ async def system_tools_health():
         "message": "All required system tools are present"
         if not missing
         else f"Missing system tools: {', '.join(missing)}",
+    }
+
+
+@app.get("/api/v1/health/providers")
+async def providers_health(request: Request):
+    """
+    Get the health, configuration, and rate-limiting sliding-window status
+    for the vision/text LLM providers in the cascade.
+    """
+    settings = _settings_from_app(request)
+    from core.provider_quota_guard import ProviderQuotaGuard
+    from core.llm_client import is_placeholder_secret
+    
+    # Parse chains
+    v_chain_str = getattr(settings, "vision_provider_chain", "gemini,groq_vision,openrouter,local_ensemble")
+    v_chain = [p.strip().lower() for p in v_chain_str.split(",") if p.strip()]
+    
+    t_chain_str = getattr(settings, "text_provider_chain", "gemini,groq,openrouter,cerebras,local")
+    t_chain = [p.strip().lower() for p in t_chain_str.split(",") if p.strip()]
+
+    providers_status = {}
+
+    # Check Gemini
+    gemini_key = settings.gemini_api_key
+    gemini_configured = bool(gemini_key and not is_placeholder_secret(gemini_key))
+    gemini_rpm, gemini_rpd = ProviderQuotaGuard.get_current_counts("gemini", "gemini-2.5-flash")
+    providers_status["gemini"] = {
+        "enabled": "gemini" in v_chain or "gemini" in t_chain,
+        "configured": gemini_configured,
+        "quota": {
+            "current_rpm": gemini_rpm,
+            "rpm_limit": settings.gemini_rpm_limit,
+            "current_rpd": gemini_rpd,
+            "rpd_limit": settings.gemini_rpd_limit
+        }
+    }
+
+    # Check Groq Vision
+    groq_key = settings.groq_vision_api_key
+    if not groq_key or groq_key.strip() == "":
+        if getattr(settings, "llm_provider", "").lower() == "groq":
+            groq_key = settings.llm_api_key
+    groq_configured = bool(groq_key and not is_placeholder_secret(groq_key))
+    groq_model = settings.groq_vision_model or "llama-3.2-11b-vision-preview"
+    groq_rpm, groq_rpd = ProviderQuotaGuard.get_current_counts("groq_vision", groq_model)
+    providers_status["groq_vision"] = {
+        "enabled": "groq_vision" in v_chain,
+        "configured": groq_configured,
+        "model": groq_model,
+        "quota": {
+            "current_rpm": groq_rpm,
+            "rpm_limit": settings.groq_vision_rpm_limit,
+            "current_rpd": groq_rpd,
+            "rpd_limit": settings.groq_vision_rpd_limit
+        }
+    }
+
+    # Check OpenRouter
+    or_enabled = getattr(settings, "openrouter_enabled", False)
+    or_key = settings.openrouter_api_key
+    or_configured = bool(or_key and not is_placeholder_secret(or_key))
+    or_models = [m.strip() for m in settings.openrouter_vision_models.split(",") if m.strip()]
+    or_rpm, or_rpd = 0, 0
+    if or_models:
+        or_rpm, or_rpd = ProviderQuotaGuard.get_current_counts("openrouter", or_models[0])
+    providers_status["openrouter"] = {
+        "enabled": "openrouter" in v_chain or "openrouter" in t_chain,
+        "configured": or_configured and or_enabled,
+        "models": or_models,
+        "quota": {
+            "current_rpm": or_rpm,
+            "rpm_limit": settings.openrouter_rpm_limit,
+            "current_rpd": or_rpd,
+            "rpd_limit": settings.openrouter_rpd_limit
+        }
+    }
+
+    # Check Local Ensemble
+    providers_status["local_ensemble"] = {
+        "enabled": "local_ensemble" in v_chain,
+        "configured": True,
+        "quota": None
+    }
+
+    return {
+        "status": "healthy",
+        "vision_provider_chain": v_chain,
+        "text_provider_chain": t_chain,
+        "providers": providers_status
     }

@@ -909,3 +909,24 @@ async def analyze_image_content(
             "court_defensible": False,
             "error": str(e),
         }
+
+
+async def detr_detect_objects(file_path: str) -> list[str]:
+    """Lightweight async wrapper for DETR/YOLO object detection."""
+    try:
+        from core.inference_client import get_inference_client
+        client = await get_inference_client()
+        results = await client.predict_yolo(file_path, threshold=0.20)
+        detected = []
+        if results and hasattr(results[0], "boxes"):
+            model = await client.get_yolo_model()
+            names = getattr(model, "names", {})
+            for box in results[0].boxes:
+                cls_idx = int(box.cls.item() if hasattr(box.cls, "item") else box.cls)
+                label = names.get(cls_idx, f"object_{cls_idx}")
+                conf = float(box.conf.item() if hasattr(box.conf, "item") else box.conf)
+                detected.append(f"{label} ({conf:.2f})")
+        return detected
+    except Exception as e:
+        logger.warning(f"DETR object detection failed: {e}")
+        return []
