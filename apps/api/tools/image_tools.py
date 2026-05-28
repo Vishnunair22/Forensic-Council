@@ -109,35 +109,15 @@ async def ela_full_image(
 
         if is_lossless:
             logger.info(
-                "ELA skipped for lossless format",
+                "ELA on lossless format — interpreting as region inconsistency detector",
                 artifact_id=artifact.artifact_id,
                 session_id=getattr(artifact, "session_id", None),
                 mime_type=mime_type,
                 format_label=lossless_label,
             )
-            return {
-                "max_anomaly": None,
-                "anomaly_regions": [],
-                "num_anomaly_regions": 0,
-                "mean_ela": None,
-                "std_ela": None,
-                "quality_levels": [],
-                "multi_quality_fusion": False,
-                "ela_not_applicable": True,
-                "ela_limitation_note": (
-                    f"ELA is not applicable to lossless {lossless_label} files. "
-                    "Standard ELA measures JPEG re-compression residuals — applying it "
-                    "to a lossless source produces artefacts across the entire image "
-                    "that are indistinguishable from manipulation signals. "
-                    "Use frequency-domain analysis, noise fingerprinting, or CFA "
-                    "demosaicing checks instead for this file type."
-                ),
-                "logged_skip_reason": f"Lossless format {lossless_label} not compatible with ELA",
-                "court_defensible": False,
-                "available": True,
-            }
+            # Run with adjusted thresholds for lossless interpretation
+            anomaly_threshold = anomaly_threshold * 0.5 if anomaly_threshold else 5.0
 
-        # Run the blocking PIL/numpy multi-quality sweep directly (runs in thread pool automatically via async)
         quality_levels_used = [70, 80, 90, 95] if multi_quality else [quality]
 
         with Image.open(original_path) as _img:
@@ -217,7 +197,7 @@ async def ela_full_image(
                     },
                 )
 
-            return {
+            result = {
                 "max_anomaly": max_anomaly,
                 "anomaly_regions": [r.to_dict() for r in anomaly_regions],
                 "num_anomaly_regions": len(anomaly_regions),
@@ -231,6 +211,13 @@ async def ela_full_image(
                 "court_defensible": True,
                 "available": True,
             }
+            if is_lossless:
+                result["lossless_interpretation"] = (
+                    "ELA applied to lossless image — regions with high residual indicate "
+                    "copy-paste, format conversion boundaries, or re-encoded JPEG regions. "
+                    "Lower threshold applied for anomaly detection."
+                )
+            return result
 
         finally:
             for _tp in temp_files_ela:
@@ -387,28 +374,12 @@ async def jpeg_ghost_detect(
 
         if is_lossless:
             logger.info(
-                "JPEG ghost detection skipped for lossless format",
+                "JPEG ghost detection on lossless format — looking for embedded JPEG artifacts",
                 artifact_id=artifact.artifact_id,
                 session_id=getattr(artifact, "session_id", None),
                 mime_type=mime_type,
                 format_label=lossless_label,
             )
-            return {
-                "ghost_detected": False,
-                "confidence": 0.0,
-                "ghost_regions": [],
-                "max_variance": None,
-                "mean_variance": None,
-                "ghost_not_applicable": True,
-                "logged_skip_reason": f"Lossless format {lossless_label} not compatible with JPEG ghost detection",
-                "ghost_limitation_note": (
-                    f"JPEG ghost detection is not applicable to lossless {lossless_label} files. "
-                    "This technique detects double-JPEG-compression artefacts — a lossless "
-                    "source has no prior JPEG compression history to compare against."
-                ),
-                "court_defensible": False,
-                "available": True,
-            }
 
         # ── offload all blocking PIL/numpy work to a thread so the event loop
         # stays responsive during compression sweeps.
@@ -480,7 +451,7 @@ async def jpeg_ghost_detect(
                     # But cap at 0.90 since absence of evidence ≠ evidence of absence
                     confidence = round(min(0.90, 0.75 + (mean_variance / 20.0)), 3)
 
-                return {
+                result = {
                     "ghost_detected": ghost_detected,
                     "confidence": confidence,  # Now clearly means: "how reliable is this result?"
                     "ghost_regions": [r.to_dict() for r in ghost_regions],
@@ -491,6 +462,12 @@ async def jpeg_ghost_detect(
                     "court_defensible": True,
                     "available": True,
                 }
+                if is_lossless:
+                    result["lossless_interpretation"] = (
+                        "JPEG ghost detection applied to lossless image — ghost regions may indicate "
+                        "embedded JPEG artifacts from prior compression or copy-paste from JPEG sources."
+                    )
+                return result
 
             finally:
                 for _tp in temp_files_inner:
@@ -715,7 +692,21 @@ async def extract_text_from_image(
 
     from core.config import get_settings
 
-    _timeout = timeout or get_settings().ocr_tool_timeout
+    base_timeout = timeout or get_settings().ocr_tool_timeout
+    _timeout = base_timeout
+
+    # Scale OCR timeout by image resolution — 4K images need significantly more time
+    from PIL import Image as _PILImage
+    try:
+        with _PILImage.open(artifact.file_path) as _dim_probe:
+            _w, _h = _dim_probe.size
+        _area = _w * _h
+        _ref_area = 1920 * 1080
+        if _area > _ref_area:
+            _timeout = base_timeout * (1.0 + (_area / _ref_area - 1.0) * 0.5)
+            _timeout = min(_timeout, base_timeout * 4.0)  # cap at 4x base
+    except Exception:
+        pass
 
     def _run_ocr():
         import cv2

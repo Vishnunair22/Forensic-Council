@@ -1,4 +1,4 @@
-# Forensic Agent Capabilities (v1.7.0)
+# Forensic Agent Capabilities (v1.8.0)
 
 This document provides a definitive list of the diagnostic tools available to each specialist agent in the Forensic Council. Every tool includes a "Court Defensible" seal when running in its primary (ML-backed) mode.
 
@@ -15,6 +15,8 @@ This document provides a definitive list of the diagnostic tools available to ea
 | `copy_move_detect` | SIFT-based cloning and patch detection. | ✅ |
 | `adversarial_check` | Detects perturbations designed to evade ML. | ✅ |
 | `diffusion_detector` | Identifies Stable Diffusion / Midjourney hallmarks. | ✅ |
+| `detect_font_inconsistency` | Stroke-width variance analysis for font mismatch in screenshots. | ✅ |
+| `detect_ui_overlay_forgery` | Detects solid-color overlay banners (fake notifications, edited UI). | ✅ |
 
 ## 2. Audio Forensic Agent (Agent 2)
 | Tool | Function | Court Defensible |

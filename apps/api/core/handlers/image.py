@@ -61,6 +61,12 @@ from tools.image_tools import (
 from tools.image_tools import (
     roi_extract as real_roi_extract,
 )
+from tools.screenshot_tools import (
+    detect_font_inconsistency as real_detect_font_inconsistency,
+)
+from tools.screenshot_tools import (
+    detect_ui_overlay_forgery as real_detect_ui_overlay_forgery,
+)
 
 # ML fallback tools (importable CLI scripts in tools/ml_tools/)
 from tools.ml_tools.copy_move_detector import detect_copy_move  # sync, run in executor
@@ -178,6 +184,18 @@ class ImageHandlers(BaseToolHandler):
             "deepfake_frequency_check",
             self.deepfake_frequency_check_handler,
             "Heuristic frequency-band GAN artifact analysis",
+        )
+
+        # ── Screenshot Forensics ───────────────────────────────────────────────
+        registry.register(
+            "detect_font_inconsistency",
+            self.detect_font_inconsistency_handler,
+            "Font consistency analysis for screenshot text regions",
+        )
+        registry.register(
+            "detect_ui_overlay_forgery",
+            self.detect_ui_overlay_forgery_handler,
+            "UI overlay forgery detection for screenshots",
         )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -520,7 +538,19 @@ class ImageHandlers(BaseToolHandler):
         """SIFT-based copy-move clone region detection."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, detect_copy_move, artifact.file_path)
+        try:
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, detect_copy_move, artifact.file_path),
+                timeout=120.0,
+            )
+        except TimeoutError:
+            result = {
+                "error": "Copy-move detection timed out after 120s",
+                "available": False,
+                "copy_move_detected": False,
+                "confidence": 0.0,
+                "matched_pairs": 0,
+            }
         await self._store("copy_move_detect", result, "neural_copy_move")
         return result
 
@@ -823,4 +853,24 @@ class ImageHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_frequency_domain_analysis(artifact=artifact)
         await self.agent._record_tool_result("frequency_domain_analysis", result)
+        return result
+
+    # ── Screenshot Forensics Handlers ─────────────────────────────────────────
+
+    async def detect_font_inconsistency_handler(self, input_data: dict) -> dict:
+        """Font consistency analysis for screenshot text regions."""
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        text_regions = input_data.get("text_regions")
+        result = await real_detect_font_inconsistency(
+            artifact=artifact,
+            text_regions=text_regions,
+        )
+        await self.agent._record_tool_result("detect_font_inconsistency", result)
+        return result
+
+    async def detect_ui_overlay_forgery_handler(self, input_data: dict) -> dict:
+        """UI overlay forgery detection for screenshots."""
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        result = await real_detect_ui_overlay_forgery(artifact=artifact)
+        await self.agent._record_tool_result("detect_ui_overlay_forgery", result)
         return result

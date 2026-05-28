@@ -274,8 +274,17 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
             while True:
                 await asyncio.sleep(ping_interval)
                 try:
+                    _ping_start = time.time()
+                    await asyncio.wait_for(websocket.ping(), timeout=10.0)
                     await websocket.send_json({"type": "PING", "timestamp": time.time()})
                     last_activity = time.time()
+                except (TimeoutError, asyncio.TimeoutError):
+                    logger.warning(
+                        "WebSocket ping timeout — client unresponsive",
+                        session_id=session_id,
+                    )
+                    await websocket.close(code=1000, reason="Ping timeout")
+                    break
                 except Exception:
                     break
         except asyncio.CancelledError:

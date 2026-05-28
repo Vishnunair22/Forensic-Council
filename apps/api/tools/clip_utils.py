@@ -50,7 +50,13 @@ class CLIPImageAnalyzer:
     """
 
     # Default forensic-relevant image categories
+    # Weapon/contraband categories are listed first to ensure they are prioritized
+    # in zero-shot classification — critical for forensic evidence screening.
     DEFAULT_IMAGE_CATEGORIES = [
+        # Weapons / contraband (highest priority)
+        "a photograph of a weapon or knife",
+        "a photograph of a firearm or gun",
+        "a photograph of ammunition or bullets",
         # Screen captures
         "a screenshot of a document",
         "a screenshot of a chat conversation",
@@ -78,8 +84,6 @@ class CLIPImageAnalyzer:
         "a receipt or invoice",
         "a handwritten letter or message",
         # Object-focused
-        "a photograph of a weapon or knife",
-        "a photograph of a firearm or gun",
         "a photograph of a vehicle",
         # AI / synthetic
         "a digitally generated or AI-generated image",

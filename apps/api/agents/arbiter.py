@@ -87,6 +87,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self,
         agent_results: dict[str, dict[str, Any]],
         case_id: str = "",
+        artifact_mime: str = "",
     ) -> ForensicReport:
         """
         Build a deterministic arbiter report from current agent findings.
@@ -98,7 +99,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self._pre_warm_agent_results = agent_results
         self._pre_warm_case_id = case_id
         self._pre_warm_used_llm = False
-        self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False)
+        self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False, artifact_mime=artifact_mime)
         return self._pre_warm_report
 
     async def regenerate_missing_narratives(self, report: ForensicReport) -> ForensicReport:
@@ -133,7 +134,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         report.per_agent_narrative_structured = narratives.get("per_agent_narrative_structured", {})
         return report
 
-    async def finalise_from_cache(self, use_llm: bool = True) -> ForensicReport:
+    async def finalise_from_cache(self, use_llm: bool = True, artifact_mime: str = "") -> ForensicReport:
         """Finalize cached arbiter inputs into the report returned to the result page."""
         if self._pre_warm_agent_results is None:
             raise RuntimeError("Arbiter has no cached agent findings to finalise")
@@ -148,6 +149,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             self._pre_warm_agent_results,
             self._pre_warm_case_id,
             use_llm=use_llm,
+            artifact_mime=artifact_mime,
         )
         if use_llm:
             self._pre_warm_used_llm = True
@@ -166,6 +168,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         agent_results: dict[str, dict[str, Any]],
         case_id: str = "",
         use_llm: bool = True,
+        artifact_mime: str = "",
     ) -> ForensicReport:
         """Main deliberation entry point."""
         skip_types = {"file type not applicable", "format not supported"}
@@ -245,7 +248,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         await _step("Resolving cross-agent disagreements.")
         contested = await self._run_challenges(comparisons)
 
-        # Final verdict mapping
         overall_verdict = self._compute_verdict(
             man_prob,
             man_signals,
@@ -254,6 +256,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             len(contested),
             active_metrics,
             all_findings,
+            mime_type=artifact_mime,
         )
 
         # ── 4. Narrative Synthesis ────────────────────────────────────────
@@ -520,14 +523,30 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         contested_count: int,
         active_metrics: list[dict],
         all_findings: list[dict],
+        mime_type: str = "",
     ) -> str:
+        # File-type-specific thresholds: PNG/lossless screenshots have higher
+        # baselines for manipulation due to common compression artifacts.
+        if mime_type in ("image/png", "image/webp", "image/bmp", "image/gif"):
+            _manipulated_threshold = 0.85
+            _likely_manipulated_threshold = 0.70
+            _suspicious_threshold = 0.55
+            _authentic_conf_threshold = 0.80
+            _likely_authentic_conf_threshold = 0.65
+        else:
+            _manipulated_threshold = ForensicPolicy.MANIPULATED_PROB_THRESHOLD
+            _likely_manipulated_threshold = ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD
+            _suspicious_threshold = ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD
+            _authentic_conf_threshold = ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+            _likely_authentic_conf_threshold = ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD
+
         if (
-            manipulation_probability >= ForensicPolicy.MANIPULATED_PROB_THRESHOLD
+            manipulation_probability >= _manipulated_threshold
             and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
         ):
             return "MANIPULATED"
 
-        elif manipulation_probability >= ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD and (
+        elif manipulation_probability >= _likely_manipulated_threshold and (
             manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
             or (
                 manipulation_signals == 1
@@ -537,14 +556,14 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             return "LIKELY_MANIPULATED"
 
         elif (
-            manipulation_probability >= ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD
+            manipulation_probability >= _suspicious_threshold
             and manipulation_signals >= 1
         ):
             return "SUSPICIOUS"
 
         elif (
             manipulation_signals == 0
-            and overall_confidence >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+            and overall_confidence >= _authentic_conf_threshold
             and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX
             and contested_count == 0
         ):
@@ -552,7 +571,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         elif (
             manipulation_signals == 0
-            and overall_confidence >= ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD
+            and overall_confidence >= _likely_authentic_conf_threshold
             and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX
         ):
             return "LIKELY_AUTHENTIC"

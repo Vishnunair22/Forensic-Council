@@ -47,18 +47,8 @@ class Agent4Video(ForensicAgent):
     )
 
     @property
-    def agent_name(self) -> str:
-        return "Agent4_TemporalVideo"
-
-    @property
-    def task_decomposition(self) -> list[str]:
-        # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        return [
-            "Run video_metadata for advanced stream probe",
-            "Run vfi_error_map to flag motion interpolation artifacts",
-            "Run thumbnail_coherence to verify metadata preview parity",
-            "Run frame_consistency_analysis on sampled frames",
-        ]
+    def supported_file_types(self) -> list[str]:
+        return ["video/"]
 
     @property
     def deep_task_decomposition(self) -> list[str]:

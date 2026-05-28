@@ -197,8 +197,12 @@ class Agent1Image(ForensicAgent):
         if self._is_screen_capture or self._is_digital_capture:
             # Gemini already ran in Phase 1 for screenshots — result is in shared
             # context for Agents 3/5. Phase 2 uses classical ML tools exclusively.
+            # Deepfake detection is included because modern deepfakes are often
+            # shared as screenshots of videos or generated content.
             return [
                 "Run neural_fingerprint for conceptual similarity detection",
+                "Run f3_net_frequency for AI-GAN artifact detection",
+                "Run deepfake_frequency_check for GAN/Diffusion artifacts",
                 "Run diffusion_artifact_detector for AI-generation signatures",
                 "Run synthid_watermark_detect for SynthID and AI watermark detection",
             ]
@@ -514,6 +518,19 @@ class Agent1Image(ForensicAgent):
                     priority=15,
                 )
 
+            if "screenshot" in image_type or "screen capture" in image_type:
+                logger.info(
+                    f"Screenshot detected: {image_type}; injecting font/UI forensics",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run detect_font_inconsistency for screenshot text font analysis",
+                    priority=13,
+                )
+                await self.inject_task(
+                    description="Run detect_ui_overlay_forgery for screenshot UI overlay analysis",
+                    priority=13,
+                )
 
             object_keywords = {"vehicle", "weapon", "building", "product", "object", "scene"}
             has_object = any(k in image_type for k in object_keywords) or any(

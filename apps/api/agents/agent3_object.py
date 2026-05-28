@@ -172,6 +172,14 @@ class Agent3Object(ForensicAgent):
                     description="Run secondary_classification on flagged objects for validation",
                     priority=20,
                 )
+                await self.inject_task(
+                    description="Run scale_validation for weapon size plausibility check",
+                    priority=18,
+                )
+                await self.inject_task(
+                    description="Run lighting_consistency for shadow validation on held objects",
+                    priority=17,
+                )
 
         # 2. If lighting inconsistency in initial check, escalate to deep analysis
         if tool_name == "lighting_correlation_initial":

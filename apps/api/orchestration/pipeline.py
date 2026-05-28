@@ -496,6 +496,7 @@ class ForensicCouncilPipeline:
         evidence_artifact = await self._ingest_evidence(
             evidence_file_path, session_id, investigator_id, original_filename=original_filename
         )
+        self._evidence_mime = evidence_artifact.mime_type if evidence_artifact else ""
 
         try:
             from api.routes._session_state import broadcast_update
@@ -571,10 +572,22 @@ class ForensicCouncilPipeline:
 
         arbiter_results = self._normalize_agent_results(agent_results)
 
+        # Check for majority agent failure — if 3+ agents failed, abort
+        failed_count = sum(1 for r in agent_results if r.error)
+        active_count = sum(1 for r in agent_results if r.agent_active)
+        if failed_count >= 3 and failed_count >= active_count // 2:
+            error_msg = f"{failed_count} of {len(agent_results)} agents failed — investigation aborted"
+            logger.error(error_msg)
+            self._error = error_msg
+            raise RuntimeError(error_msg)
+
         # Pre-warm is now started inside run_agents_concurrent() after each phase
         # so it runs concurrently with the HITL decision windows. _run_deliberation
         # waits for the task and falls back to a synchronous pre-warm if needed.
-        report = await self._run_deliberation(arbiter_results, case_id, session_id)
+        report = await self._run_deliberation(
+            arbiter_results, case_id, session_id,
+            artifact_mime=evidence_artifact.mime_type if evidence_artifact else "",
+        )
 
         try:
             from orchestration.pipeline_enrichment import enrich_report
@@ -586,12 +599,12 @@ class ForensicCouncilPipeline:
                 agent_results=agent_results,
             )
         except Exception as enrich_err:
-            logger.warning(
-                "Report enrichment failed — proceeding with unsigned base report",
+            logger.error(
+                "Report enrichment failed — report will lack custody chain verification",
                 error=str(enrich_err),
             )
             self._degradation_flags.append(
-                f"Report enrichment failed: {enrich_err}. Some metadata may be incomplete."
+                f"Report enrichment failed: {enrich_err}. Report may not be court-admissible without complete chain of custody."
             )
 
         self._final_report = await self.arbiter.sign_report(report)
@@ -679,7 +692,8 @@ class ForensicCouncilPipeline:
                     )
                 )
 
-            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=True)
+            _mime = getattr(self, "_evidence_mime", "")
+            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=True, artifact_mime=_mime)
             self.arbiter._pre_warm_report = report
             self.arbiter._pre_warm_agent_results = agent_results
             self.arbiter._pre_warm_case_id = case_id
@@ -746,7 +760,7 @@ class ForensicCouncilPipeline:
         return arbiter_results
 
     async def _run_deliberation(
-        self, arbiter_results: dict[str, Any], case_id: str, session_id: UUID
+        self, arbiter_results: dict[str, Any], case_id: str, session_id: UUID, artifact_mime: str = ""
     ):
         """Run council arbiter deliberation with timeout and fallback."""
         logger.info("Running council arbiter deliberation")
@@ -759,17 +773,19 @@ class ForensicCouncilPipeline:
                 await asyncio.wait_for(self._pre_warm_task, timeout=20.0)
             except Exception as e:
                 logger.warning("Arbiter pre-warm failed or timed out, re-running synchronously", error=str(e))
+                _mime = getattr(self, "_evidence_mime", "")
                 try:
                     await asyncio.wait_for(
-                        self.arbiter.pre_warm(arbiter_results, case_id=case_id), timeout=30.0
+                        self.arbiter.pre_warm(arbiter_results, case_id=case_id, artifact_mime=_mime), timeout=30.0
                     )
                 except Exception as sync_err:
                     logger.warning("Synchronous pre-warm also failed", error=str(sync_err))
             self._pre_warm_task = None
+        _mime = getattr(self, "_evidence_mime", "")
         if getattr(self.arbiter, "_pre_warm_agent_results", None) is None:
             try:
                 await asyncio.wait_for(
-                    self.arbiter.pre_warm(arbiter_results, case_id=case_id), timeout=30.0
+                    self.arbiter.pre_warm(arbiter_results, case_id=case_id, artifact_mime=_mime), timeout=30.0
                 )
             except Exception as pw_err:
                 logger.warning("Pre-warm guard failed", error=str(pw_err))
@@ -781,7 +797,7 @@ class ForensicCouncilPipeline:
                 "Compiling final report from agent findings.",
             )
             report = await asyncio.wait_for(
-                self.arbiter.finalise_from_cache(use_llm=use_llm),
+                self.arbiter.finalise_from_cache(use_llm=use_llm, artifact_mime=artifact_mime),
                 timeout=90.0,
             )
         except TimeoutError:
@@ -791,7 +807,7 @@ class ForensicCouncilPipeline:
                     "Arbiter LLM synthesis timed out — report generated from templates."
                 )
             report = await asyncio.wait_for(
-                self.arbiter.finalise_from_cache(use_llm=False),
+                self.arbiter.finalise_from_cache(use_llm=False, artifact_mime=artifact_mime),
                 timeout=30.0,
             )
         await self._broadcast_final_arbiter_status(

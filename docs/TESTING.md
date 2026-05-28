@@ -1,6 +1,6 @@
 # Testing Guide — Forensic Council
 
-**Version:** v1.5.0 | Comprehensive Forensic & App Testing Reference.
+**Version:** v1.8.0 | Comprehensive Forensic & App Testing Reference.
 
 ---
 
@@ -73,6 +73,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | `test_forensic_properties.py` | Forensic algorithm robustness | `Hypothesis`, `Pillow`, `NumPy` | Validates ELA/JPEG Ghost invariants across millions of generated inputs (boundary cases, 1x1 images, overflow). |
 | `test_forensic_system.py` | Multi-agent pipeline flow | `pytest-asyncio`, Redis Mock | Orchestration of all 5 agents + Arbiter synthesis; verifies context injection (A1 -> A3/A5). |
+| `tests/forensics/` | Screenshot, weapon, PNG/lossless, and timeout edge-case tests | `pytest-asyncio`, `Pillow`, `NumPy`, **no Docker/Postgres required** | 18 tests: font inconsistency, UI overlay forgery, weapon category priority, ELA on PNG, agent timeout, ML-subprocess timeout, memory-limit enforcement, OCR resolution scaling. |
 
 ### 🛡️ Cryptographic Integrity & Security
 | File | Aspect Tested | Dependencies | Coverage |
@@ -189,6 +190,8 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env
 | Domain | Statements | Functions | Branches |
 | :--- | :--- | :--- | :--- |
 | **Forensic Core** | 90% | 95% | 85% |
+| **Screenshot Forensics** | 90% | 90% | 85% |
+| **Timeout / Edge Cases** | 90% | 95% | 80% |
 | **Auth & Security** | 100% | 100% | 90% |
 | **Frontend UI** | 60% | 60% | 50% |
 

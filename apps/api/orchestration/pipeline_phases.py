@@ -601,6 +601,67 @@ async def run_agents_concurrent(
         for aid, (agent, findings, status) in agent_map.items()
     ]
 
+    # Content-based routing: if CLIP analysis in Agent1 detected a video frame
+    # screenshot, invoke Agent4 (Video) even though the MIME type is image/*.
+    # This ensures deepfake video screenshots get video-specific forensic analysis.
+    _video_frame_detected = False
+    _a1_result = agent_map.get(AgentID.AGENT1.value)
+    if _a1_result:
+        _, _a1_findings, _ = _a1_result
+        for _f in _a1_findings or []:
+            _meta = (
+                _f.metadata if hasattr(_f, "metadata")
+                else _f.get("metadata", {}) if isinstance(_f, dict)
+                else {}
+            )
+            if _meta.get("tool_name") == "analyze_image_content":
+                _image_type = str(_meta.get("image_type") or "").lower()
+                if "video frame" in _image_type or "screenshot of a video" in _image_type:
+                    _video_frame_detected = True
+                    break
+
+    if _video_frame_detected:
+        _a4_entry = agent_map.get(AgentID.AGENT4.value)
+        if _a4_entry:
+            _a4_agent, _a4_findings, _a4_status = _a4_entry
+            if _a4_status == "unsupported" or not _a4_agent:
+                from orchestration.agent_factory import AgentLoopResult as _ALR
+                _a4_cls = registry.get_agent_class(AgentID.AGENT4.value)
+                if _a4_cls:
+                    _a4_instance = _a4_cls(
+                        agent_id=AgentID.AGENT4.value,
+                        session_id=session_id,
+                        evidence_artifact=evidence_artifact,
+                        config=pipeline.config,
+                        working_memory=pipeline.working_memory,
+                        episodic_memory=pipeline.episodic_memory,
+                        custody_logger=pipeline.custody_logger,
+                        evidence_store=pipeline.evidence_store,
+                        heavy_tool_semaphore=pipeline.heavy_tool_semaphore,
+                    )
+                    if pipeline.inter_agent_bus is not None:
+                        pipeline.inter_agent_bus.register_agent(AgentID.AGENT4.value, _a4_instance)
+                    _a4_result = await _run_one(_a4_instance, AgentID.AGENT4.value, True)
+                    _a4_agent, _a4_new_findings, _a4_new_status = _a4_result
+                    agent_map[AgentID.AGENT4.value] = (_a4_agent, _a4_new_findings, _a4_new_status)
+                    _a4_result_entry = _ALR(
+                        agent_id=AgentID.AGENT4.value,
+                        findings=[
+                            f.model_dump(mode="json") if hasattr(f, "model_dump") else f
+                            for f in _a4_new_findings
+                        ],
+                        reflection_report=getattr(_a4_agent, "_reflection_report", None),
+                        react_chain=_serialize_react_chain(getattr(_a4_agent, "_react_chain", [])),
+                        agent_active=True,
+                        supports_file_type=True,
+                        synthesis=getattr(_a4_agent, "_agent_synthesis", None),
+                    )
+                    initial_results = [
+                        _a4_result_entry if r.agent_id == AgentID.AGENT4.value else r
+                        for r in initial_results
+                    ]
+                    logger.info("Routed video frame screenshot to Agent4 for video-specific analysis")
+
     # --- HITL Gate ----------------------------------------------------------
     # Start the arbiter pre-warm with Phase 1 findings NOW so it runs concurrently
     # while the investigator reads the initial results and makes the Accept/Deep decision.
@@ -822,6 +883,17 @@ async def run_agents_concurrent(
                             break
                     if gemini_res:
                         _broadcast_context(gemini_res)
+                        # Validate context was received by downstream agents
+                        for _ctx_aid in [AgentID.AGENT3.value, AgentID.AGENT5.value]:
+                            _ctx_entry = agent_map.get(_ctx_aid)
+                            if _ctx_entry:
+                                _ctx_inst, _, _ = _ctx_entry
+                                if _ctx_inst and hasattr(_ctx_inst, "_agent1_context"):
+                                    if not _ctx_inst._agent1_context:
+                                        logger.warning(
+                                            f"Agent1 context injection failed for {_ctx_aid} — "
+                                            "agent may run without multimodal context",
+                                        )
                 finally:
                     context_event.set()
 
