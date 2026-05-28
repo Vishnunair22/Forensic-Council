@@ -225,8 +225,8 @@ class AgentInvestigationMixin:
             tool_context = getattr(self, "_tool_context", {}) or {}
             image_type_hint = tool_context.get("analyze_image_content", {}).get("image_type", "")
 
-            # Extract upfront Gemini routing/forensic context if available.
-            # Primary: agent's own tool_context (Agent 1 stores its Gemini result here).
+            # Extract full Gemini forensic context for Groq synthesis.
+            # Primary: agent's own tool_context (Agent 1 stores its result here).
             # Fallback: read from inter-agent bus (Agents 3/5 reuse Agent 1's result).
             gemini_result = tool_context.get("gemini_deep_forensic") or {}
             if not gemini_result and getattr(self, "inter_agent_bus", None):
@@ -237,13 +237,37 @@ class AgentInvestigationMixin:
                 except Exception:
                     pass
             gemini_metadata = gemini_result.get("metadata", {}) or {}
-            gemini_context = gemini_metadata.get("forensic_routing") or {}
-            if not gemini_context and gemini_metadata:
-                gemini_context = {
-                    "image_category": gemini_metadata.get("file_type_assessment"),
-                    "priority_signals": gemini_metadata.get("manipulation_signals"),
-                    "visual_verdict": gemini_metadata.get("authenticity_verdict"),
-                }
+
+            # Build a RICH gemini_context — previously only 3 fields were passed (category,
+            # signals, verdict). Now we forward everything so Groq can anchor the agent_brief
+            # in what the evidence actually IS, not generic boilerplate.
+            _str = lambda v: str(v).strip() if v else ""
+            _lst = lambda v: v if isinstance(v, list) else []
+            gemini_context: dict = {
+                # Evidence identity — what Gemini sees
+                "content_description": (
+                    _str(gemini_result.get("reasoning_summary"))
+                    or _str(gemini_result.get("content_description"))
+                ),
+                "image_category": _str(
+                    gemini_metadata.get("file_type_assessment")
+                    or gemini_metadata.get("image_category")
+                ),
+                "interface_identification": _str(gemini_metadata.get("interface_identification")),
+                # Gemini's visual verdict and forensic signals
+                "visual_verdict": _str(gemini_metadata.get("authenticity_verdict")),
+                "gemini_confidence": float(gemini_result.get("confidence_raw") or 0.0),
+                "priority_signals": _lst(gemini_metadata.get("manipulation_signals")),
+                "contextual_anomalies": _lst(gemini_metadata.get("contextual_anomalies")),
+                # Rich narrative and specifics
+                "contextual_narrative": _str(gemini_metadata.get("contextual_narrative")),
+                "forensic_specifics": _str(gemini_metadata.get("forensic_specifics")),
+                # Text Gemini read from the evidence
+                "extracted_text": _lst(gemini_metadata.get("extracted_text")),
+            }
+            # Strip empty values so the prompt block stays clean
+            gemini_context = {k: v for k, v in gemini_context.items() if v or v == 0.0}
+
 
             # Fix 1: Live progress broadcast before Groq call
             phase_label = f" - {phase.title()} Phase" if phase else ""

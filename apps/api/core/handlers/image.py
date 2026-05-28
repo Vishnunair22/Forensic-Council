@@ -305,6 +305,41 @@ class ImageHandlers(BaseToolHandler):
         except Exception:
             return False
 
+    def _is_screenshot_context(self, artifact: Any) -> bool:
+        """
+        Check heuristic detector and agent context (Gemini/CLIP) for screenshot status.
+        Ensures tools like ELA can correctly abort if Gemini identified the image
+        as a screen capture, even if the file extension/heuristics missed it.
+        """
+        # 1. Base heuristic check (magic bytes, dimensions, EXIF)
+        if is_screen_capture_like(artifact):
+            return True
+            
+        tool_ctx = getattr(self.agent, "_tool_context", {})
+        if not tool_ctx:
+            return False
+            
+        # 2. Check Semantic CLIP Analysis
+        clip_ctx = tool_ctx.get("analyze_image_content") or {}
+        if "screenshot" in str(clip_ctx.get("image_type", "")).lower():
+            return True
+            
+        # 3. Check Gemini Multimodal Analysis
+        gemini_ctx = tool_ctx.get("gemini_deep_forensic") or {}
+        gemini_meta = gemini_ctx.get("metadata") or {}
+        
+        # Check Gemini categorization
+        cat = str(gemini_meta.get("file_type_assessment") or gemini_meta.get("image_category") or "").lower()
+        if "screenshot" in cat or "screen capture" in cat:
+            return True
+            
+        # Check Gemini narrative/description
+        desc = str(gemini_ctx.get("reasoning_summary") or gemini_ctx.get("content_description") or "").lower()
+        if "screenshot" in desc or "screen capture" in desc:
+            return True
+            
+        return False
+
     async def _store(self, primary_key: str, result: dict, *alias_keys: str) -> None:
         """
         Persist a tool result to _tool_context under the primary key and any
@@ -333,7 +368,7 @@ class ImageHandlers(BaseToolHandler):
         # Sharp UI edges and uniform backgrounds produce large ELA regions that
         # mimic JPEG manipulation residuals but are actually rendering artifacts.
         # Running ELA on screenshots is the #1 source of false-SUSPICIOUS verdicts.
-        if is_screen_capture_like(artifact):
+        if self._is_screenshot_context(artifact):
             not_applicable: dict = {
                 "available": True,
                 "not_applicable": True,
@@ -404,7 +439,7 @@ class ImageHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
 
         # ELA is not applicable to screen captures — return early.
-        if is_screen_capture_like(artifact):
+        if self._is_screenshot_context(artifact):
             result: dict = {
                 "available": True,
                 "not_applicable": True,
@@ -446,6 +481,11 @@ class ImageHandlers(BaseToolHandler):
             )
             result["confidence"] = ConfidenceCalibrator.calibrate_heuristic(
                 raw_sig, reliability_tag="opencv_heuristic"
+            )
+            # Prevent false positives on sharp edges by raising the threshold
+            result["manipulation_detected"] = (
+                result.get("num_anomaly_regions", 0) >= 2 
+                and result.get("max_anomaly", 0.0) >= 20.0
             )
 
         if record:

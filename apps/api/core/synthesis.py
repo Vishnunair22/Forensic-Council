@@ -469,75 +469,142 @@ class SynthesisService:
         # Build system prompt with role instructions (no evidence data)
         role_preamble = agent_persona if agent_persona else "You are a Senior Forensic Analyst at the National Cyber Forensics Institute."
         hint_block = f"\nThis analysis concerns: {image_type_hint}. Prioritize findings most relevant to this content category.\n" if image_type_hint else ""
-        
+
+        # ── Build the Gemini evidence identity block ───────────────────────────
+        # Previously only 3 sparse fields were passed. Now we expose everything
+        # Gemini returned so Groq can anchor the agent_brief in the real evidence.
         gemini_block = ""
         if gemini_context:
-            category = gemini_context.get("image_category") or gemini_context.get("file_type_assessment") or "UNKNOWN"
-            signals = gemini_context.get("priority_signals") or gemini_context.get("manipulation_signals") or []
-            verdict = gemini_context.get("visual_verdict") or gemini_context.get("authenticity_verdict") or "INCONCLUSIVE"
-            gemini_block = f"""
-[GEMINI UPFRONT VISION CONTEXT]
-- Content Category: {category}
-- Visually Detected Manipulation Signals: {", ".join(signals) if isinstance(signals, list) else signals}
-- Visual Authenticity Verdict: {verdict}
-"""
+            lines = ["[GEMINI VISUAL ANALYSIS — EVIDENCE IDENTITY]"]
+
+            desc = gemini_context.get("content_description") or ""
+            iface = gemini_context.get("interface_identification") or ""
+            category = gemini_context.get("image_category") or ""
+            verdict = gemini_context.get("visual_verdict") or "INCONCLUSIVE"
+            gem_conf = gemini_context.get("gemini_confidence") or 0.0
+            signals = gemini_context.get("priority_signals") or []
+            anomalies = gemini_context.get("contextual_anomalies") or []
+            narrative = gemini_context.get("contextual_narrative") or ""
+            specifics = gemini_context.get("forensic_specifics") or ""
+            texts = gemini_context.get("extracted_text") or []
+
+            if desc:
+                lines.append(f"- What the evidence IS: {desc}")
+            if category:
+                lines.append(f"- Content Type: {category}")
+            if iface:
+                lines.append(f"- Interface / UI Detail: {iface}")
+            lines.append(f"- Gemini Visual Verdict: {verdict} (confidence {gem_conf:.2f})")
+            if signals:
+                lines.append(f"- Visual Manipulation Signals: {', '.join(str(s) for s in signals)}")
+            else:
+                lines.append("- Visual Manipulation Signals: none detected")
+            if anomalies:
+                lines.append(f"- Contextual Anomalies: {', '.join(str(a) for a in anomalies)}")
+            if narrative:
+                lines.append(f"- Gemini Forensic Narrative: {narrative[:400]}")
+            if specifics:
+                lines.append(f"- Forensic Specifics: {specifics[:300]}")
+            if texts:
+                text_preview = ", ".join(str(t) for t in texts[:6])
+                lines.append(f"- Visible Text Gemini Read: {text_preview[:200]}")
+
+            lines.append("")
+            lines.append("INSTRUCTION: Your agent_brief MUST open with what Gemini identified this evidence as.")
+            lines.append("Then state what the forensic tools confirmed. Then give the weighted verdict.")
+            gemini_block = "\n".join(lines) + "\n"
 
         system_prompt = f"""[SYSTEM: FORENSIC ANALYST SYNTHESIS]
 {role_preamble}
+{hint_block}
 {gemini_block}
-
 {_SAFETY_PREAMBLE}
 
-[LAYER 3: ANALYTICAL INSTRUCTION]
-You are a Senior Forensic Analyst. Your job is to REASON about the combined tool evidence — not to catalog or categorize findings into groups.
+[ANALYTICAL INSTRUCTIONS]
+You are a court-level Senior Forensic Analyst. Your job is to reason about the combined Gemini visual analysis and deterministic tool evidence — then produce a single cohesive, evidence-specific narrative. Do NOT produce generic or template language.
 
-Analytical Rules:
-1. CONVERGENCE: Which independent tools point to the same conclusion? Name the tools and the signal they agree on.
-2. CONTRADICTION: Do any findings disagree? Describe the disagreement and why it might exist (e.g. different detection methods, confidence differences).
-3. SIGNAL WEIGHT: Identify the strongest POSITIVE signal (most reliable manipulation indicator), the strongest NEGATIVE signal (most reliable clean signal), and any unresolved contradiction between tools.
-4. AGENT BRIEF: Write a 2-3 sentence expert conclusion synthesizing ALL signals. This will be used as the agent's narrative in the final report — it must be precise, court-defensible, and cite specific tool outcomes.
-5. KEY FINDINGS: List exactly 3-5 findings. EVERY finding MUST: (a) name the exact tool (e.g. "neural_ela", "file_hash_verify"), (b) cite the primary metric number from the tool output (e.g. "anomaly score 0.023", "0 regions", "hash matched"), (c) state the forensic implication in one clause. No two findings may describe the same tool or the same outcome. Do NOT write: "X flagged a manipulation indicator", "X found no anomaly" — those are too vague. Write the specific number.
-6. EXECUTIVE SUMMARY: 2-3 flowing sentences, 50-80 words. Plain English. Sentence 1: overall conclusion. Sentence 2: one or two notable outcomes with specific metric. Sentence 3: one-line evidentiary conclusion.
-7. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals (evidence_verdict=POSITIVE). Tool failures, timeouts, and NOT_APPLICABLE are coverage gaps only — never evidence of manipulation. If all tools returned NEGATIVE or NOT_APPLICABLE, the verdict MUST be AUTHENTIC or INCONCLUSIVE.
-8. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result", "flagged a manipulation indicator" (without a metric).
-9. NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result", generic boilerplate without a specific metric.
-10. Screenshots: State what was actually checked (OCR text content, layout structure, hash integrity since intake, binary container, compression codec). Do not claim camera authenticity.
-11. TOOL TIMEOUTS & ERRORS: A tool that timed out or returned an error is a coverage gap — not evidence of manipulation or authenticity.
+═══ HOW TO WEIGH GEMINI VS TOOLS ═══
+Gemini provides the evidence IDENTITY (what the file IS) and a preliminary visual verdict.
+The deterministic forensic tools provide the FORENSIC VERDICT (what manipulation was or was not found).
+Apply this weighting when forming verdict and confidence:
+
+  • Gemini AUTHENTIC + all tools NEGATIVE → verdict: AUTHENTIC, confidence: 0.85–0.95
+  • Gemini AUTHENTIC + tools mostly NEGATIVE (1 weak POSITIVE) → verdict: AUTHENTIC (note the anomaly as a false positive or minor degradation) or INCONCLUSIVE, confidence: 0.60–0.75
+  • Gemini AUTHENTIC + strong/multiple tool POSITIVE(s) → verdict: SUSPICIOUS or LIKELY_MANIPULATED, confidence: 0.65–0.85
+  • Gemini SUSPICIOUS + all tools NEGATIVE → verdict: AUTHENTIC or INCONCLUSIVE (tool findings win), confidence: 0.60–0.70; note the Gemini visual concern explicitly
+  • Gemini SUSPICIOUS + any tool POSITIVE → verdict: SUSPICIOUS or TAMPERED, confidence: 0.75–0.90
+  • Tool POSITIVE findings ALWAYS override a Gemini AUTHENTIC assessment, EXCEPT when the tool finding is explicitly marked as weak or likely noisy (e.g., single ELA edge anomaly)
+  • Tool failures / NOT_APPLICABLE are coverage gaps — they do NOT affect the verdict
+  • High tool error rate (>40%) → lower confidence by 0.10–0.15; note coverage gap
+
+═══ ANALYTICAL RULES ═══
+1. CONVERGENCE: Which independent tools point to the same conclusion? Name them and the shared signal.
+2. CONTRADICTION: Do any tools disagree with each other or with Gemini? State which and why (method differences, confidence gaps, etc.).
+3. SIGNAL WEIGHT: Name the single strongest POSITIVE signal (manipulation indicator) or 'none'. Name the strongest NEGATIVE signal (clean indicator) or 'none'.
+4. AGENT BRIEF — MANDATORY 3-SENTENCE STRUCTURE (no deviation):
+   Sentence 1: "Gemini identified this evidence as [exact content_description from Gemini — use the actual words, not a paraphrase]. [Add interface/UI detail if present]."
+   Sentence 2: "[N] forensic tool(s) ran: [list the 2-3 most decisive tool outcomes with their actual metric numbers — e.g. 'file_hash_verify confirmed hash match', 'ELA found 0 anomaly regions', 'OCR extracted 47 words including...']."
+   Sentence 3: "Based on [Gemini's visual verdict] visual assessment and [tool agreement/disagreement], this evidence is assessed as [VERDICT] with [X]% confidence."
+   NEVER write generic phrases like "analysis complete", "no anomalies", "consistent with authenticity".
+5. KEY FINDINGS — exactly 3–5 entries, one per tool. Every finding MUST:
+   (a) Name the exact tool used (e.g. "file_hash_verify", "neural_ela", "extract_text_from_image")
+   (b) Cite the primary metric number from that tool's output (e.g. "0 anomaly regions", "hash matched", "47 words extracted: 'FC Forensic Council...'")
+   (c) State the forensic implication for THIS specific evidence in one clause
+   No two findings may cover the same tool or the same outcome.
+   Do NOT write: "X flagged a manipulation indicator", "X confirmed authenticity" — always cite the metric.
+6. EXECUTIVE SUMMARY (narrative_summary): 2–3 flowing plain-English sentences, 55–80 words.
+   Sentence 1: overall conclusion for this specific evidence.
+   Sentence 2: cite one or two specific tool metrics that drove the verdict.
+   Sentence 3: one-line evidentiary conclusion (what this means for the case).
+7. VERDICT: AUTHENTIC | SUSPICIOUS | TAMPERED | INCONCLUSIVE
+   Apply the Gemini-vs-Tools weighting above. Never set SUSPICIOUS/TAMPERED without a confirmed POSITIVE tool signal (evidence_verdict=POSITIVE).
+8. CONFIDENCE: 0.0–1.0 float. Apply the weighting table above. Do not default to 0.75.
+9. FORBIDDEN phrases: "expected hash", "advanced neural analysis confirms", "signal detected at X%", "produced a positive result", "flagged a manipulation indicator" (without a specific metric), "analysis complete", "no anomalies detected in all tools", "consistent with authenticity", "warrants further review" (without specifying what to review).
+10. Screenshots: State what was checked (OCR text, layout structure, hash integrity since intake, binary container, compression). Do not claim camera authenticity or original capture device.
+11. Tool timeouts / errors: Coverage gaps only — never evidence of manipulation.
 
 For deep phase:
-  - Compare deep findings against Phase 1 verdict (provided in the PHASE 1 CONTEXT section in the evidence below).
-  - Determine phase_delta: CONFIRMED (deep matches Phase 1), UPGRADED (deep adds new evidence of tampering), DOWNGRADED (deep undermines Phase 1), CONTRADICTED (deep directly opposes Phase 1).
-  - Write delta_reason explaining the relationship between Phase 1 and deep findings in 1-2 sentences.
-  - Do NOT re-summarize Phase 1 findings — only reference them for comparison.
+  - Compare deep findings against Phase 1 verdict (in PHASE 1 CONTEXT below).
+  - phase_delta: CONFIRMED | UPGRADED | DOWNGRADED | CONTRADICTED
+  - delta_reason: 1–2 sentences explaining the relationship. Do NOT re-summarize Phase 1.
 
 Return ONLY a JSON object with this exact schema:
 {{
   "verdict": "AUTHENTIC|SUSPICIOUS|TAMPERED|INCONCLUSIVE",
-  "narrative_summary": "Precise 2-3 sentence executive summary, 55-75 words.",
-  "agent_brief": "2-3 sentence expert conclusion synthesizing all tool signals. Cite specific tools and outcomes.",
-  "key_findings": ["Finding 1: <specific tool outcome with metric>.", "Finding 2: ...", "Finding 3: ...", "Finding 4: ...", "Finding 5: ..."],
+  "confidence": 0.0,
+  "narrative_summary": "Precise 2-3 sentence executive summary, 55-80 words. Specific to THIS evidence.",
+  "agent_brief": "3-sentence structure: (1) what Gemini identified, (2) what tools found with metrics, (3) weighted verdict + confidence%.",
+  "gemini_tools_agreement": "AGREE|DISAGREE|PARTIAL — one sentence explaining the Gemini vs tool verdict relationship.",
+  "key_findings": [
+    "tool_name: [exact metric] → [forensic implication for this evidence].",
+    "tool_name: [exact metric] → [forensic implication for this evidence].",
+    "tool_name: [exact metric] → [forensic implication for this evidence]."
+  ],
   "signal_weight": {{
-    "strongest_positive": "Name the tool/signal with the strongest manipulation indicator, or 'none' if no positive signal.",
-    "strongest_negative": "Name the tool/signal with the strongest clean/authenticity signal, or 'none' if all tools raised flags.",
-    "contradiction": "Describe any contradiction between tool signals, or 'none' if all tools agree."
+    "strongest_positive": "Tool name + metric, or 'none'.",
+    "strongest_negative": "Tool name + metric, or 'none'.",
+    "contradiction": "Describe contradiction between Gemini and tools or between tools, or 'none'."
   }},
   "sections": [
     {{
       "id": "group_id",
       "label": "Group Label",
-      "key_signal": "4-8 word phrase: the most decisive finding in this group (e.g. 'No GAN artifacts in spectral profile' or 'ENF splice at 2.3s detected'). If no standout signal, leave blank.",
-      "opinion": "1-2 sentence technical opinion with specific metric reference.",
+      "key_signal": "4-8 word phrase: the most decisive finding in this group with a metric.",
+      "opinion": "1-2 sentence technical opinion citing a specific metric.",
       "severity": "LOW|MEDIUM|HIGH|CRITICAL",
       "refined_findings": [
         {{
           "tool": "exact_tool_name_from_data",
-          "user_friendly_summary": "One sentence: exact measurement → forensic implication."
+          "user_friendly_summary": "One sentence: [tool] measured [exact value] — [forensic implication]."
         }}
       ]
     }}
-  ]
+  ],
+  "phase_delta": "CONFIRMED|UPGRADED|DOWNGRADED|CONTRADICTED|N/A",
+  "delta_reason": "1-2 sentences comparing deep vs Phase 1 findings, or empty string if initial phase."
 }}
 """
+
 
         # Build user content with evidence data only
         user_content_parts = [
@@ -619,7 +686,12 @@ Return ONLY a JSON object with this exact schema:
                 screenshot_like=screenshot_like,
                 agent_name=agent_name,
             )
-            calibrated_confidence = pre_confidence
+            calibrated_confidence = response.get("confidence")
+            if calibrated_confidence is None or not isinstance(calibrated_confidence, (int, float)):
+                calibrated_confidence = pre_confidence
+            else:
+                calibrated_confidence = float(calibrated_confidence)
+                
             if screenshot_like and "object" in agent_name.lower():
                 layout_rows = [
                     finding
@@ -643,6 +715,7 @@ Return ONLY a JSON object with this exact schema:
                 "verdict": groq_verdict,
                 "narrative_summary": response.get("narrative_summary", ""),
                 "agent_brief": response.get("agent_brief", ""),
+                "gemini_tools_agreement": response.get("gemini_tools_agreement", ""),
                 "key_findings": response.get("key_findings", []),
                 "signal_weight": response.get("signal_weight", {}),
                 "sections": response.get("sections", []),

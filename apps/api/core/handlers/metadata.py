@@ -261,6 +261,36 @@ class MetadataHandlers(BaseToolHandler):
                 )
             result.setdefault("confidence", 0.65 if total_fields == 0 else 0.75)
 
+        # ── Grounding Metadata with Gemini Vision (if available) ──
+        gemini_context = ""
+        gemini_text = ""
+        if hasattr(self.agent, "_agent1_context") and self.agent._agent1_context:
+            gemini_context = str(self.agent._agent1_context.get("content_description") or "")
+            gemini_text = str(self.agent._agent1_context.get("metadata", {}).get("extracted_text") or "")
+        elif getattr(self.agent, "inter_agent_bus", None):
+            shared = self.agent.inter_agent_bus.get_image_context(str(self.agent.session_id)) or {}
+            gemini_context = str(shared.get("content_description") or "")
+            gemini_text = str(shared.get("metadata", {}).get("extracted_text") or "")
+            
+        gemini_validation = {}
+        if gemini_context or gemini_text:
+            has_time = bool(result.get("DateTimeOriginal") or result.get("datetime_original") or result.get("CreationDate"))
+            if not has_time:
+                gemini_validation["note"] = "Primary metadata timestamp missing. "
+                # Very basic heuristic to see if Gemini spotted a timestamp in the image (e.g. screenshot clock)
+                if any(x in gemini_text.lower() for x in ["date", "time", "202", "am", "pm", ":"]):
+                    gemini_validation["note"] += "However, Gemini visual analysis extracted potential date/time text directly from the image content."
+                    gemini_validation["corroborated_from_visuals"] = True
+            
+            make = str(result.get("make") or "").lower()
+            if make and "screenshot" in gemini_context.lower() and make not in gemini_context.lower():
+                note = gemini_validation.get("note", "")
+                gemini_validation["note"] = note + f" Note: EXIF claims device '{make}', but visual analysis identifies this as a screenshot."
+                gemini_validation["hallucination_risk"] = True
+            
+            if gemini_validation:
+                result["gemini_cross_validation"] = gemini_validation
+
         await self.agent._record_tool_result("exif_extract", result)
         return result
 

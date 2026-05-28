@@ -248,7 +248,13 @@ def analyze(image_path: str) -> dict[str, Any]:
     conf_ratio = min(block_anomaly_ratio / 0.20, 1.0)  # block contamination rate
     conf_regions = min(len(anomaly_regions) / 5.0, 1.0)
     confidence = round(float(0.45 * conf_ela + 0.35 * conf_ratio + 0.20 * conf_regions), 3)
-    manipulation_detected = len(anomaly_regions) >= 1 and max_anomaly >= _ANOMALY_THRESHOLD_ELA
+    
+    # Raise threshold significantly to prevent false positives on authentic sharp edges
+    manipulation_detected = (
+        len(anomaly_regions) >= 2 
+        and max_anomaly >= 20.0 
+        and block_anomaly_ratio > 0.01
+    )
 
     return {
         "manipulation_detected": manipulation_detected,

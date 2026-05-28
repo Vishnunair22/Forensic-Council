@@ -390,11 +390,41 @@ class SceneHandlers(BaseToolHandler):
                     for d in detections
                     if any(term in str(d.get("class_name", "")).lower() for term in weapon_terms)
                 ]
+
+                # ── Grounding YOLO with Gemini Vision (if available) ──
+                # Read Agent 1 context from bus or injected event
+                gemini_objects = []
+                gemini_desc = ""
+                if hasattr(self.agent, "_agent1_context") and self.agent._agent1_context:
+                    gemini_ctx = self.agent._agent1_context.get("metadata", {})
+                    gemini_objects = gemini_ctx.get("detected_objects", [])
+                    gemini_desc = str(self.agent._agent1_context.get("content_description") or "").lower()
+                elif getattr(self.agent, "inter_agent_bus", None):
+                    shared = self.agent.inter_agent_bus.get_image_context(str(self.agent.session_id)) or {}
+                    gemini_objects = shared.get("metadata", {}).get("detected_objects", [])
+                    gemini_desc = str(shared.get("content_description") or "").lower()
+
+                gemini_validation = {}
+                if gemini_objects or gemini_desc:
+                    gemini_objects_lower = {str(o).lower() for o in gemini_objects}
+                    unconfirmed_weapons = [
+                        w for w in weapon_detections
+                        if not any(w["class_name"].lower() in g for g in gemini_objects_lower)
+                        and w["class_name"].lower() not in gemini_desc
+                    ]
+                    if unconfirmed_weapons:
+                        gemini_validation["hallucination_risk"] = True
+                        gemini_validation["note"] = f"YOLO detected {len(unconfirmed_weapons)} weapon(s) not corroborated by Gemini visual analysis."
+                    else:
+                        gemini_validation["corroborated"] = True
+                        gemini_validation["note"] = "YOLO object detections are consistent with Gemini visual scene."
+
                 res = {
                     "detections": detections,
                     "detection_count": len(detections),
                     "classes_found": classes_found,
                     "weapon_detections": weapon_detections,
+                    "gemini_cross_validation": gemini_validation,
                     "backend": model.ckpt_path if hasattr(model, "ckpt_path") else "object-detector",
                     "available": True,
                     "confidence": 0.90 if detections else 0.70,

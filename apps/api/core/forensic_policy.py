@@ -78,28 +78,25 @@ class ForensicPolicy:
     DEEP_ANALYSIS_BONUS: float = 1.15
 
     # --- Verdict Thresholds (Overall) ---
-    MANIPULATED_PROB_THRESHOLD = 0.72
-    LIKELY_MANIPULATED_PROB_THRESHOLD = 0.55
-    SUSPICIOUS_PROB_THRESHOLD = 0.45
+    MANIPULATED_PROB_THRESHOLD = 0.75
+    LIKELY_MANIPULATED_PROB_THRESHOLD = 0.60
+    SUSPICIOUS_PROB_THRESHOLD = 0.50
     MANIP_SIGNAL_MIN_REQUIRED = 2  # Min direct signals for "MANIPULATED"
-    SINGLE_SIGNAL_MANIP_THRESHOLD = (
-        0.85  # Confidence floor for a single signal to trigger LIKELY_MANIPULATED
-    )
+    SINGLE_SIGNAL_MANIP_THRESHOLD = 0.85
 
-    AUTHENTIC_CONF_THRESHOLD = 0.75  # Higher bar for absolute "AUTHENTIC"
-    AUTHENTIC_ERROR_MAX = 0.15
-    LIKELY_AUTHENTIC_CONF_THRESHOLD = 0.60
-    LIKELY_AUTHENTIC_ERROR_MAX = 0.25
+    AUTHENTIC_CONF_THRESHOLD = 0.70  # Lowered from 0.75 to prevent real images from getting stuck in INCONCLUSIVE
+    AUTHENTIC_ERROR_MAX = 0.20       # Slightly increased to tolerate minor tool timeouts on real images
+    LIKELY_AUTHENTIC_CONF_THRESHOLD = 0.55
+    LIKELY_AUTHENTIC_ERROR_MAX = 0.35
 
-    ABSTAIN_CONF_FLOOR = 0.40
-    ABSTAIN_ERROR_CEILING = 0.50
+    ABSTAIN_CONF_FLOOR = 0.35
+    ABSTAIN_ERROR_CEILING = 0.55
 
     # --- Per-Agent Summary Thresholds ---
-    # Synchronised with overall thresholds to prevent UI/Report dissonance.
-    AGENT_AUTHENTIC_CONF = 0.75  # Was 0.70 (fixed inconsistency)
-    AGENT_AUTHENTIC_ERR = 0.15
-    AGENT_SUSPICIOUS_CONF = 0.45
-    AGENT_SUSPICIOUS_ERR = 0.40
+    AGENT_AUTHENTIC_CONF = 0.70
+    AGENT_AUTHENTIC_ERR = 0.20
+    AGENT_SUSPICIOUS_CONF = 0.50
+    AGENT_SUSPICIOUS_ERR = 0.45
 
     @classmethod
     def get_tool_weight(cls, tool_name: str) -> float:
