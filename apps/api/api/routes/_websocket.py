@@ -317,12 +317,24 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
     await subscribed_event.wait()
 
     try:
+        llm_provider = settings.llm_provider
+        llm_key_ok = bool(settings.llm_api_key)
+        gemini_ok = settings.gemini_available
         await websocket.send_json(
             {
                 "type": "CONNECTED",
                 "session_id": session_id,
                 "message": "Connected to distributed live updates",
-                "data": {"status": "connected", "user_id": user_id},
+                "data": {
+                    "status": "connected",
+                    "user_id": user_id,
+                    "llm": {
+                        "agent_provider": llm_provider,
+                        "agent_key_configured": llm_key_ok,
+                        "gemini_available": gemini_ok,
+                        "degraded": llm_provider == "none" or (llm_provider != "none" and not llm_key_ok) or not gemini_ok,
+                    },
+                },
             }
         )
 

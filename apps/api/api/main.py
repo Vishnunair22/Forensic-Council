@@ -442,6 +442,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Orphan session cleanup skipped", error=str(e))
 
+    # ── LLM provider health summary ──────────────────────────────────────────
+    llm_provider = settings.llm_provider
+    llm_key_ok = bool(settings.llm_api_key)
+    gemini_key_ok = settings.gemini_available
+    arbiter_provider = settings.arbiter_llm_provider
+    arbiter_key_ok = bool(settings.arbiter_llm_api_key or settings.llm_api_key)
+
+    _llm_info = {
+        "agent_llm": {"provider": llm_provider, "key_configured": llm_key_ok},
+        "gemini_vision": {"available": gemini_key_ok},
+        "arbiter": {"provider": arbiter_provider, "key_available": arbiter_key_ok},
+    }
+    if llm_provider == "none":
+        logger.info("LLM provider: none — agent synthesis disabled (template fallback only)")
+    elif not llm_key_ok:
+        logger.warning(
+            "LLM provider set to '%s' but no API key configured — synthesis will fall back to templates",
+            llm_provider,
+        )
+    if not gemini_key_ok:
+        logger.info(
+            "Gemini Vision not configured — deep-phase vision analysis unavailable. "
+            "Set GEMINI_API_KEY for multi-modal deep analysis."
+        )
+    logger.debug("LLM provider health", info=_llm_info)
+
     # Start periodic blacklist cache cleanup (runs every hour)
     try:
         from core.auth import start_blacklist_cleanup_task  # deferred: avoids circular import
