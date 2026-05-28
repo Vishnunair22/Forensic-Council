@@ -814,8 +814,14 @@ async def run_agents_concurrent(
                 context_event.set()
             raise
 
+    async def _run_deep_with_stagger(aid: str, idx: int):
+        """Stagger deep agent start by index * 4s to avoid simultaneous Gemini slot contention."""
+        if idx > 0:
+            await asyncio.sleep(idx * 4.0)
+        return await _run_deep_with_fallback(aid)
+
     raw_deep_all = await asyncio.gather(
-        *[_run_deep_with_fallback(aid) for aid in agent_map.keys()],
+        *[_run_deep_with_stagger(aid, idx) for idx, aid in enumerate(agent_map.keys())],
         return_exceptions=True,
     )
 
@@ -908,7 +914,7 @@ async def _run_agent_deep_only(
         span.set_attribute("agent_id", agent_id)
         try:
             logger.info(f"Running {agent_id} deep investigation")
-            deep_timeout = 600.0
+            deep_timeout = min(pipeline.config.investigation_timeout // 4, 480.0)
             await asyncio.wait_for(
                 agent.run_deep_investigation(),
                 timeout=deep_timeout,
@@ -1152,6 +1158,7 @@ async def _await_deep_report_request(
     # Same race as the initial deep-analysis gate: the analyst may request the
     # final report just before this post-deep pause is fully registered. Treat
     # any already-written resume decision as the final synthesis request.
+    pre_gate_decision_found = False
     try:
         raw_pre_gate_decision = await redis.get(decision_key)
         if raw_pre_gate_decision:
@@ -1164,7 +1171,13 @@ async def _await_deep_report_request(
     except Exception as pre_gate_err:
         logger.debug("Pre-gate final-report decision check flicker", error=str(pre_gate_err))
 
-    await redis.delete(decision_key)
+    # Only delete the key if no pre-existing decision was found — otherwise the
+    # get + delete race window silently drops a user's "Generate Report" click.
+    if not pre_gate_decision_found:
+        try:
+            await redis.delete(decision_key)
+        except Exception as _e:
+            logger.debug("Decision key delete skipped", error=str(_e))
 
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()

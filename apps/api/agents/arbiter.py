@@ -101,6 +101,38 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False)
         return self._pre_warm_report
 
+    async def regenerate_missing_narratives(self, report: ForensicReport) -> ForensicReport:
+        """Regenerate per-agent narratives if they were empty (e.g. all Groq calls timed out)."""
+        if report.per_agent_analysis and any(
+            v.strip() for v in report.per_agent_analysis.values()
+        ):
+            return report
+        logger.info("per_agent_analysis is empty — retrying narrative generation before persistence")
+        agent_results = {}
+        for aid, findings in report.per_agent_findings.items():
+            agent_results[aid] = {
+                "findings": [f.model_dump(mode="json") if hasattr(f, "model_dump") else f for f in findings],
+            }
+        narratives = await self.deliberate_narratives(
+            overall_verdict=report.overall_verdict,
+            overall_confidence=report.overall_confidence,
+            overall_error_rate=report.overall_error_rate,
+            manipulation_probability=report.manipulation_probability,
+            applicable_agent_count=report.applicable_agent_count,
+            all_findings=[f for fl in report.per_agent_findings.values() for f in fl],
+            active_agent_results=agent_results,
+            per_agent_metrics=report.per_agent_metrics,
+            gemini_vision_findings=report.gemini_vision_findings,
+            cross_modal_confirmed_count=len(report.cross_modal_confirmed),
+            contested_findings=report.contested_findings,
+            incomplete_findings=report.incomplete_findings,
+            analysis_coverage_note=report.analysis_coverage_note,
+            use_llm=True,
+        )
+        report.per_agent_analysis = narratives.get("per_agent_analysis", {})
+        report.per_agent_narrative_structured = narratives.get("per_agent_narrative_structured", {})
+        return report
+
     async def finalise_from_cache(self, use_llm: bool = True) -> ForensicReport:
         """Finalize cached arbiter inputs into the report returned to the result page."""
         if self._pre_warm_agent_results is None:
@@ -395,14 +427,21 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         def _is_na(f):
             return evidence_verdict_of(f) == "NOT_APPLICABLE"
 
+        def _is_gated(f):
+            meta = f.get("metadata") or {}
+            return meta.get("gated") is True or meta.get("not_triggered") is True
+
         def _is_fail(f):
             return evidence_verdict_of(f) == "ERROR" or (
-                not _is_na(f) and f.get("status") == "INCOMPLETE"
+                not _is_na(f) and not _is_gated(f) and f.get("status") == "INCOMPLETE"
             )
 
+        # Gated/not-triggered findings were never actually executed — count them
+        # as not_applicable so they don't inflate the error rate denominator.
         na = sum(1 for f in real if _is_na(f))
+        gated = sum(1 for f in real if _is_gated(f))
         fail = sum(1 for f in real if _is_fail(f))
-        app = len(real) - na
+        app = len(real) - na - gated
         if app == 0 and fail > 0:
             err = 1.0  # All tools failed - 100% error rate
         else:
@@ -421,7 +460,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             total_tools_called=len(real),
             tools_succeeded=app - fail,
             tools_failed=fail,
-            tools_not_applicable=na,
+            tools_not_applicable=na + gated,
             error_rate=err,
             confidence_score=avg_conf,
             finding_count=len(real),

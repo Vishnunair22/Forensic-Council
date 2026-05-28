@@ -182,14 +182,12 @@ def _clean_key_finding(text: str) -> str:
     return cleaned.rstrip(" .") + "."
 
 
-def _clean_key_findings(items: list[str], limit: int = 5) -> list[str]:
+def _clean_key_findings(items: list[str], limit: int = 8) -> list[str]:
     cleaned: list[str] = []
     seen: set[str] = set()
     for item in items:
         text = _clean_key_finding(item)
-        key = text.lower()
-        key = "".join(ch for ch in key if ch.isalnum() or ch.isspace())
-        key = " ".join(key.split())
+        key = text.lower().strip()
         if not key or key in seen:
             continue
         seen.add(key)
@@ -1397,36 +1395,37 @@ Rules:
                 )
 
             async def t_narratives():
-                sem = asyncio.Semaphore(2)
                 _narr_warnings: list[str] = []
+                results: dict[str, str] = {}
+                agent_items = list(active_agent_results.items())
 
-                async def _one(aid, res, idx: int):
-                    await asyncio.sleep(idx * 2.0)
-                    async with sem:
-                        try:
-                            await _step(f"Summarizing {AGENT_NAMES.get(aid, aid)} findings.")
-                            narr = await asyncio.wait_for(
-                                self._generate_agent_narrative(
-                                    aid, res.get("findings", []), per_agent_metrics.get(aid, {})
-                                ),
-                                timeout=40.0,
-                            )
-                            return aid, narr or ""
-                        except Exception as _e:
-                            logger.warning(
-                                "Agent narrative generation failed; omitting from report",
-                                agent_id=aid,
-                                error=str(_e),
-                            )
-                            _narr_warnings.append(
-                                f"{AGENT_NAMES.get(aid, aid)} narrative used template fallback: {type(_e).__name__}"
-                            )
-                            return aid, ""
+                for i, (aid, res) in enumerate(agent_items):
+                    try:
+                        await _step(f"Summarizing {AGENT_NAMES.get(aid, aid)} findings.")
+                        narr = await asyncio.wait_for(
+                            self._generate_agent_narrative(
+                                aid, res.get("findings", []), per_agent_metrics.get(aid, {})
+                            ),
+                            timeout=40.0,
+                        )
+                        if narr:
+                            results[aid] = narr
+                    except Exception as _e:
+                        logger.warning(
+                            "Agent narrative generation failed; omitting from report",
+                            agent_id=aid,
+                            error=str(_e),
+                        )
+                        _narr_warnings.append(
+                            f"{AGENT_NAMES.get(aid, aid)} narrative used template fallback: {type(_e).__name__}"
+                        )
+                        results[aid] = ""
 
-                pairs = await asyncio.gather(
-                    *[_one(aid, res, idx) for idx, (aid, res) in enumerate(active_agent_results.items())]
-                )
-                return {p[0]: p[1] for p in pairs if isinstance(p, tuple) and p[1]}, _narr_warnings
+                    # Stagger 1.5s between per-agent Groq calls to respect TPM budget
+                    if i < len(agent_items) - 1:
+                        await asyncio.sleep(1.5)
+
+                return results, _narr_warnings
 
             async def t_executive():
                 try:

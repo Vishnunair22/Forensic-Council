@@ -69,6 +69,7 @@ async def run_investigation_task(
             evidence_file_path=evidence_file_path,
             original_filename=original_filename,
             report=report,
+            arbiter=getattr(pipeline, "arbiter", None),
         )
 
     except Exception as exc:

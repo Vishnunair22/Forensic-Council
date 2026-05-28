@@ -32,6 +32,39 @@ def _normalize_report_for_template(report_dict: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _render_chain_of_custody(doc, report_dict: dict[str, Any]) -> None:
+    """Append Chain of Custody Log appendix to the document."""
+    custody_log = report_dict.get("chain_of_custody_log", [])
+    if not custody_log:
+        return
+    doc.add_page_break()
+    doc.add_heading("Chain of Custody Appendix", level=1)
+    table = doc.add_table(rows=1, cols=5)
+    table.style = "Light Grid Accent 1"
+    hdr = table.rows[0].cells
+    headers = ["Timestamp", "Entry Type", "Agent ID", "Action", "Hash"]
+    from docx.shared import Pt
+    for i, h in enumerate(headers):
+        hdr[i].text = h
+        for paragraph in hdr[i].paragraphs:
+            for run in paragraph.runs:
+                run.bold = True
+                run.font.size = Pt(8)
+    for entry in custody_log[:50]:
+        row = table.add_row().cells
+        row[0].text = str(entry.get("timestamp") or entry.get("created_at") or "")[:30]
+        row[1].text = str(entry.get("entry_type") or "")[:20]
+        row[2].text = str(entry.get("agent_id") or "")[:20]
+        row[3].text = str(entry.get("action") or entry.get("content", {}).get("action", ""))[:40]
+        row[4].text = str(entry.get("hash") or entry.get("content_hash") or "")[:24]
+        for cell in row:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(8)
+    if len(custody_log) > 50:
+        doc.add_paragraph(f"... and {len(custody_log) - 50} more custody entries.")
+
+
 async def export_report_docx(report_dict: dict[str, Any], session_id: str) -> bytes | None:
     """Export a ForensicReport as a DOCX file (bytes)."""
     try:
@@ -161,6 +194,9 @@ async def export_report_docx(report_dict: dict[str, Any], session_id: str) -> by
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
                     run.font.size = Pt(8)
+
+    # ── Chain of Custody Appendix ────────────────────────────────────────────
+    _render_chain_of_custody(doc, report_dict)
 
     # ── Footer ──────────────────────────────────────────────────────────────
     doc.add_paragraph()

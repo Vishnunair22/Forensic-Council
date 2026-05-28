@@ -679,7 +679,11 @@ class ForensicCouncilPipeline:
                     )
                 )
 
-            await self.arbiter.pre_warm(agent_results, case_id)
+            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=True)
+            self.arbiter._pre_warm_report = report
+            self.arbiter._pre_warm_agent_results = agent_results
+            self.arbiter._pre_warm_case_id = case_id
+            self.arbiter._pre_warm_used_llm = True
 
             if not suppress_broadcasts:
                 # Final pre-warm broadcast: metrics are ready for the user decision.

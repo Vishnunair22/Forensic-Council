@@ -169,6 +169,7 @@ async def main() -> None:
                 evidence_file_path=evidence_file_path,
                 original_filename=original_filename,
                 report=report,
+                arbiter=getattr(pipeline, "arbiter", None),
             )
 
             return report

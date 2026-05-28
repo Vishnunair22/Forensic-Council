@@ -497,7 +497,7 @@ class Settings(BaseSettings):
     )
     hitl_enabled: bool = Field(default=True, description="Enable Human-in-the-Loop checkpoints")
     investigation_timeout: int = Field(
-        default=600, description="Max seconds for a single investigation"
+        default=2400, description="Max seconds for a single investigation (40 min — accounts for up to 5 concurrent deep agents, each 480s)"
     )
     hitl_decision_timeout: int = Field(
         default=3600,
@@ -514,10 +514,10 @@ class Settings(BaseSettings):
         description="Hours to retain completed investigation sessions in memory before eviction",
     )
     max_parallel_heavy_tools: int = Field(
-        default=3,
+        default=2,
         ge=1,
         le=5,
-        description="Maximum number of simultaneous heavy neural/math tools allowed (prevents CPU starvation).",
+        description="Maximum number of simultaneous heavy neural/math tools allowed (prevents CPU starvation). Reduced to 2 to avoid burst contention during deep passes.",
     )
     daily_cost_quota_usd: float = Field(
         default=50.0,
@@ -574,8 +574,8 @@ class Settings(BaseSettings):
         default=4096, description="Maximum tokens for LLM responses (Groq: up to 32768)"
     )
     llm_timeout: float = Field(
-        default=12.0,
-        description="Timeout for LLM API calls in seconds (inner call timeout — outer asyncio wait_for is 20s to allow clean logging)",
+        default=25.0,
+        description="Timeout for LLM API calls in seconds (inner call timeout — outer asyncio wait_for is 35s to allow clean logging)"
     )
     llm_enable_react_reasoning: bool = Field(
         default=False,
@@ -637,17 +637,17 @@ class Settings(BaseSettings):
         ),
     )
     gemini_timeout: float = Field(
-        default=55.0,
+        default=90.0,
         description="Timeout for Gemini API calls in seconds.",
     )
     gemini_max_concurrent: int = Field(
-        default=1,
+        default=2,
         ge=1,
         le=10,
         description=(
             "Maximum number of Gemini API calls that may be in-flight simultaneously "
-            "across all agents. Default 1 prevents free-tier 429s (10 RPM limit). "
-            "Raise to 2-3 with a paid-tier key or GEMINI_MAX_CONCURRENT env var."
+            "across all agents. Default 2 balances free-tier 429 avoidance with throughput. "
+            "Raise to 4 with a paid-tier key or set via GEMINI_MAX_CONCURRENT env var."
         ),
     )
 

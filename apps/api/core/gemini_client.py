@@ -354,7 +354,7 @@ class GeminiVisionClient:
                         self._enabled = False
                         return {}
                     elif resp.status_code in (503, 429, 500, 502):
-                        wait = 2.0 ** attempt
+                        wait = (2.0 ** attempt) + random.uniform(0, (2.0 ** attempt) * 0.5)
                         logger.warning(
                             f"Gemini models.list returned {resp.status_code} — retrying in {wait:.0f}s "
                             f"(attempt {attempt+1}/3)"
@@ -369,7 +369,7 @@ class GeminiVisionClient:
                         return {}
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 last_error = e
-                wait = 2.0 ** attempt
+                wait = (2.0 ** attempt) + random.uniform(0, (2.0 ** attempt) * 0.5)
                 logger.warning(
                     f"Gemini models.list unreachable at startup — retrying in {wait:.0f}s "
                     f"(attempt {attempt+1}/3)", error=str(e)

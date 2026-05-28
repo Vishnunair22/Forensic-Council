@@ -236,6 +236,25 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
   </p>
 </div>""")
 
+    # Chain of Custody Log Appendix
+    custody_log = report_dict.get("chain_of_custody_log", [])
+    if custody_log:
+        custody_rows = ""
+        for entry in custody_log:
+            ts = esc(str(entry.get("timestamp") or entry.get("created_at") or ""))
+            etype = esc(str(entry.get("entry_type") or ""))
+            aid = esc(str(entry.get("agent_id") or ""))
+            action = esc(str(entry.get("action") or entry.get("content", {}).get("action", "")))
+            hash_val = esc(str(entry.get("hash") or entry.get("content_hash") or ""))
+            custody_rows += f"<tr><td>{ts}</td><td>{etype}</td><td>{aid}</td><td>{action}</td><td>{hash_val[:24]}</td></tr>"
+        sections.append(f"""<div class="section">
+  <h2>Chain of Custody Log</h2>
+  <table class="custody-table">
+    <tr><th>Timestamp</th><th>Type</th><th>Agent</th><th>Action</th><th>Hash</th></tr>
+    {custody_rows}
+  </table>
+</div>""")
+
     return "\n".join(sections)
 
 

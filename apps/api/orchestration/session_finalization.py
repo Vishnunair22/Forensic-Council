@@ -51,6 +51,7 @@ async def mark_investigation_completed(
     evidence_file_path: str,
     original_filename: str | None,
     report,
+    arbiter=None,
 ) -> None:
     # Idempotency guard: if already finalized, skip to prevent duplicate synthesis
     _early_meta = await get_active_pipeline_metadata(session_id) or {}
@@ -61,9 +62,15 @@ async def mark_investigation_completed(
         )
         return
 
-    _investigator_id, _investigator_role, _case_label = await _get_investigator_metadata(
-        session_id, investigator_id
-    )
+    # Retry narrative generation if per_agent_analysis is empty (all Groq calls timed out)
+    if arbiter is not None and hasattr(arbiter, "regenerate_missing_narratives"):
+        try:
+            report = await arbiter.regenerate_missing_narratives(report)
+        except Exception as narr_err:
+            logger.warning(
+                "Narrative regeneration failed — persisting with empty narratives",
+                error=str(narr_err),
+            )
 
     await set_final_report(session_id, report)
     existing_meta = await get_active_pipeline_metadata(session_id) or {}

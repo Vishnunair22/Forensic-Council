@@ -48,13 +48,12 @@ def _clean_key_finding(text: str) -> str:
     return cleaned.rstrip(" .") + "."
 
 
-def _clean_key_findings(items: list[Any], limit: int = 5) -> list[str]:
+def _clean_key_findings(items: list[Any], limit: int = 8) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
     for item in items:
         text = _clean_key_finding(str(item))
-        key = "".join(ch for ch in text.lower() if ch.isalnum() or ch.isspace())
-        key = " ".join(key.split())
+        key = text.lower().strip()
         if not key or key in seen:
             continue
         seen.add(key)
@@ -264,8 +263,12 @@ def _forensic_report_to_dto(report) -> ReportDTO:
 def _rebuild_finding(f: dict) -> AgentFindingDTO:
     metadata = f.get("metadata") or {}
     evidence_verdict = str(
-        f.get("evidence_verdict") or metadata.get("evidence_verdict") or "INCONCLUSIVE"
+        f.get("evidence_verdict") or metadata.get("evidence_verdict") or ""
     ).upper()
+    if not evidence_verdict:
+        evidence_verdict = str(
+            metadata.get("verdict") or metadata.get("status") or "INCONCLUSIVE"
+        ).upper()
     if evidence_verdict not in {
         "POSITIVE",
         "NEGATIVE",
