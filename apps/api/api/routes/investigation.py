@@ -114,6 +114,11 @@ async def _detect_mime_from_head(head: bytes) -> str:
         ) from exc
 
 
+def _append_chunk(path: Path, chunk: bytes) -> None:
+    with path.open("ab") as f:
+        f.write(chunk)
+
+
 @router.post("/investigate", response_model=InvestigationResponse)
 async def start_investigation(
     file: UploadFile = File(...),  # noqa: B008

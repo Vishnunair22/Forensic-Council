@@ -733,7 +733,10 @@ async def run_agents_concurrent(
         if agent_inst and hasattr(agent_inst, "_agent1_context_event"):
             agent_inst._agent1_context_event = context_event
 
-    # Pre-inject Agent 1 context from Phase 1 if already available to unblock parallel execution
+    # Pre-inject Agent 1 context from Phase 1 if already available to unblock parallel execution.
+    # If Agent 1's Gemini failed in Phase 1, we must still signal context_event so
+    # downstream agents are not stuck waiting on _agent1_context_event indefinitely.
+    _context_seeded = False
     _producer_tuple = agent_map.get(producer_id)
     if _producer_tuple:
         _, _initial_findings, _ = _producer_tuple
@@ -747,7 +750,11 @@ async def run_agents_concurrent(
             if _tool_name == "gemini_deep_forensic":
                 logger.info("Found Phase 1 Gemini findings for Agent 1. Pre-injecting context to unblock Phase 2 concurrency.")
                 _broadcast_context(_f)
+                _context_seeded = True
                 break
+
+    if not _context_seeded:
+        context_event.set()
 
     async def _run_deep_with_fallback(aid: str) -> AgentLoopResult:
         a_inst, a_init, a_status = agent_map[aid]
@@ -1079,71 +1086,53 @@ async def _await_deep_analysis_decision(
     decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
     redis = await get_redis_client()
 
-    # Fix 4: Log pre-gate decision state before consumption
+    # Atomic pre-gate decision consumption: GETDEL first, then validate.
+    # This eliminates the TOCTOU race between checking and consuming.
+    raw_pre_gate_decision = None
     try:
-        raw_pre_gate_log = await redis.get(decision_key)
-        if raw_pre_gate_log:
+        raw_pre_gate_decision = await redis.getdel(decision_key)
+    except AttributeError:
+        # Redis < 6.2 fallback: racy GET+DELETE
+        raw_pre_gate_decision = await redis.get(decision_key)
+        if raw_pre_gate_decision:
+            await redis.delete(decision_key)
+    except Exception as getdel_err:
+        logger.debug("GETDEL failed on decision key", error=str(getdel_err))
+
+    if raw_pre_gate_decision:
+        decision = None
+        try:
+            decision = json.loads(raw_pre_gate_decision)
+        except json.JSONDecodeError:
             logger.warning(
-                "Pre-gate decision key found - potential stale data",
-                session_id=str(session_id),
-                decision_key=decision_key,
-                decision_data=raw_pre_gate_log[:100],
-            )
-    except Exception as log_err:
-        logger.debug("Pre-gate decision log failed", error=str(log_err))
-
-    # Validate session state before consuming pre-gate decision.
-    existing_metadata = None
-    try:
-        existing_metadata = await get_active_pipeline_metadata(str(session_id))
-    except Exception as state_err:
-        logger.debug("Session state validation failed", error=str(state_err))
-
-    is_awaiting = False
-    if isinstance(existing_metadata, dict) and existing_metadata.get("status") == "awaiting_decision":
-        is_awaiting = True
-
-    if not is_awaiting:
-        # Initial analysis has not yet completed or status check failed.
-        # Unconditionally delete the key and skip pre-gate consumption.
-        try:
-            await redis.delete(decision_key)
-            logger.info(
-                "Cleared stale decision key - initial analysis not yet complete",
+                "Corrupt decision key data",
                 session_id=str(session_id),
             )
-        except Exception as delete_err:
-            logger.debug("Stale key deletion failed", error=str(delete_err))
-    else:
-        # Only attempt to consume a pre-gate decision if the metadata confirms the session is genuinely in awaiting_decision state.
-        try:
-            raw_pre_gate_decision = await redis.getdel(decision_key)
-            if raw_pre_gate_decision:
-                decision = json.loads(raw_pre_gate_decision)
-                if isinstance(decision, dict):
-                    pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
-                    logger.info(
-                        "Analyst decision consumed before pause gate",
-                        session_id=str(session_id),
-                        deep_analysis=pipeline.run_deep_analysis_flag,
-                    )
-                    return pipeline.run_deep_analysis_flag
-        except AttributeError:
-            # Redis < 6.2 does not support GETDEL; fall back to racy GET+DELETE
+
+        if isinstance(decision, dict):
+            # Validate the session is genuinely awaiting decision
             try:
-                raw_pre_gate_decision = await redis.get(decision_key)
-                if raw_pre_gate_decision:
-                    decision = json.loads(raw_pre_gate_decision)
-                    if isinstance(decision, dict):
-                        pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
-                        return pipeline.run_deep_analysis_flag
-            except Exception as pre_gate_err:
-                logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
-            finally:
-                await redis.delete(decision_key)
-        except Exception as pre_gate_err:
-            logger.debug("Pre-gate decision check flicker", error=str(pre_gate_err))
-            await redis.delete(decision_key)
+                existing_metadata = await get_active_pipeline_metadata(str(session_id))
+                is_awaiting = (
+                    isinstance(existing_metadata, dict)
+                    and existing_metadata.get("status") == "awaiting_decision"
+                )
+            except Exception:
+                is_awaiting = False
+
+            if is_awaiting:
+                pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+                logger.info(
+                    "Analyst decision consumed before pause gate",
+                    session_id=str(session_id),
+                    deep_analysis=pipeline.run_deep_analysis_flag,
+                )
+                return pipeline.run_deep_analysis_flag
+
+        logger.info(
+            "Cleared stale/out-of-session decision key",
+            session_id=str(session_id),
+        )
 
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()
@@ -1247,28 +1236,41 @@ async def _await_deep_report_request(
     redis = await get_redis_client()
 
     # Same race as the initial deep-analysis gate: the analyst may request the
-    # final report just before this post-deep pause is fully registered. Treat
-    # any already-written resume decision as the final synthesis request.
-    pre_gate_decision_found = False
+    # final report just before this post-deep pause is fully registered. Use
+    # GETDEL for atomic read+delete, then validate the session state.
     try:
+        raw_pre_gate_decision = await redis.getdel(decision_key)
+    except AttributeError:
         raw_pre_gate_decision = await redis.get(decision_key)
         if raw_pre_gate_decision:
+            await redis.delete(decision_key)
+    except Exception as pre_gate_err:
+        raw_pre_gate_decision = None
+        logger.debug("Pre-gate final-report decision check flicker", error=str(pre_gate_err))
+
+    if raw_pre_gate_decision:
+        # Validate session is genuinely awaiting deep report
+        try:
+            existing_metadata = await get_active_pipeline_metadata(str(session_id))
+            is_awaiting = (
+                isinstance(existing_metadata, dict)
+                and existing_metadata.get("status") == "awaiting_deep_report"
+            )
+        except Exception:
+            is_awaiting = False
+
+        if is_awaiting:
             logger.info(
                 "Final report request consumed before post-deep pause gate",
                 session_id=str(session_id),
                 decision_key=decision_key,
             )
             return
-    except Exception as pre_gate_err:
-        logger.debug("Pre-gate final-report decision check flicker", error=str(pre_gate_err))
 
-    # Only delete the key if no pre-existing decision was found — otherwise the
-    # get + delete race window silently drops a user's "Generate Report" click.
-    if not pre_gate_decision_found:
-        try:
-            await redis.delete(decision_key)
-        except Exception as _e:
-            logger.debug("Decision key delete skipped", error=str(_e))
+        logger.info(
+            "Cleared stale deep-to-report decision key",
+            session_id=str(session_id),
+        )
 
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()
