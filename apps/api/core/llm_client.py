@@ -713,6 +713,27 @@ class LLMClient:
                 if not target_api_key or is_placeholder_secret(target_api_key):
                     continue
 
+                # Check priority-based quota manager
+                from core.quota_manager import get_quota_manager
+                priority = "critical" if self.use_arbiter_tier else "medium"
+                
+                rpm_limit = getattr(self.config, f"{target_provider}_rpm_limit", 15)
+                rpd_limit = getattr(self.config, f"{target_provider}_rpd_limit", 1500)
+                
+                quota_mgr = get_quota_manager(
+                    f"{target_provider}_synthesis",
+                    rpm_limit=rpm_limit,
+                    rpd_limit=rpd_limit
+                )
+                
+                allowed_quota, reason = await quota_mgr.can_make_call(priority, estimated_tokens=tokens)
+                if not allowed_quota:
+                    logger.warning(
+                        f"Quota manager blocked call for {target_provider}: {reason} — trying next model in chain",
+                        priority=priority
+                    )
+                    continue
+
                 allowed, quota_result = await ProviderQuotaGuard.check_and_record(
                     target_provider, target_model
                 )
@@ -789,6 +810,7 @@ class LLMClient:
 
                     # Fast-fail on 429 — skip to next candidate with short backoff.
                     if resp.status_code == 429:
+                        await quota_mgr.record_call(priority, success=False)
                         logger.warning(
                             f"Synthesis {target_provider}/{target_model} rate-limited — "
                             f"trying next candidate"
@@ -815,6 +837,7 @@ class LLMClient:
                             .strip()
                         )
                     if result:
+                        await quota_mgr.record_call(priority, success=True)
                         logger.debug(
                             "Synthesis succeeded",
                             provider=target_provider,
@@ -824,6 +847,7 @@ class LLMClient:
                     return result
 
                 except Exception as exc:
+                    await quota_mgr.record_call(priority, success=False)
                     last_exc = exc
                     logger.warning(f"Synthesis candidate {model_spec} failed: {exc}")
 
@@ -879,6 +903,103 @@ class LLMClient:
             if last_exc:
                 logger.error(f"All synthesis candidates failed: {last_exc}")
             return ""
+
+    def _compress_prompt(self, text: str, max_length: int) -> str:
+        """Compress prompt by removing redundant phrases and truncating."""
+        if len(text) <= max_length:
+            return text
+
+        # Remove common filler phrases
+        compressed = text
+        fillers = [
+            "Please analyze the following",
+            "Your task is to",
+            "Based on the information provided",
+            "Please provide a detailed",
+            "Make sure to include",
+        ]
+        for filler in fillers:
+            compressed = compressed.replace(filler, "")
+
+        # Truncate to max length
+        if len(compressed) > max_length:
+            compressed = compressed[:max_length] + "..."
+
+        return compressed.strip()
+
+    def _generate_template_synthesis(self, findings_json: str) -> str:
+        """Generate deterministic synthesis from findings when API unavailable."""
+        try:
+            data = json.loads(findings_json) if isinstance(findings_json, str) else findings_json
+
+            summary_parts = []
+
+            # Extract key findings
+            if "manipulation_probability" in data:
+                prob = data["manipulation_probability"]
+                if prob > 0.7:
+                    summary_parts.append(f"High manipulation probability detected ({prob:.1%}).")
+                elif prob > 0.4:
+                    summary_parts.append(f"Moderate manipulation indicators found ({prob:.1%}).")
+                else:
+                    summary_parts.append(f"Low manipulation probability ({prob:.1%}).")
+
+            # List key evidence
+            if "key_findings" in data:
+                summary_parts.append("Key findings: " + "; ".join(data["key_findings"][:3]))
+
+            if "tool_results" in data:
+                tools_run = len(data["tool_results"])
+                summary_parts.append(f"{tools_run} forensic tools executed.")
+
+            return " ".join(summary_parts)
+
+        except Exception:
+            return "Analysis complete. Detailed synthesis unavailable due to API limits."
+
+    async def generate_synthesis(
+        self,
+        system_prompt: str,
+        user_content: str,
+        max_tokens: int | None = None,
+        timeout_override: float | None = None,
+        json_mode: bool = True,
+        priority: str = "medium",
+    ) -> str:
+        """Executive summary synthesis with cross-provider fallback support and priority."""
+        # Check quota first
+        from core.quota_manager import get_quota_manager
+
+        provider = self.provider if self.provider != "none" else "groq"
+        rpm_limit = getattr(self.config, f"{provider}_rpm_limit", 15)
+        rpd_limit = getattr(self.config, f"{provider}_rpd_limit", 1500)
+
+        quota_mgr = get_quota_manager(
+            f"{provider}_text",
+            rpm_limit=rpm_limit,
+            rpd_limit=rpd_limit
+        )
+
+        estimated_tokens = (len(system_prompt) + len(user_content)) // 4 + (max_tokens or 2048)
+        allowed, reason = await quota_mgr.can_make_call(priority, estimated_tokens=estimated_tokens)
+
+        if not allowed:
+            logger.warning(
+                f"Quota manager blocked synthesis: {reason}. Using template synthesis.",
+                priority=priority
+            )
+            if priority in ["critical", "high"]:
+                return self._generate_template_synthesis(user_content)
+            return ""
+
+        async with LLMClient._synthesis_semaphore:
+            return await self._generate_synthesis_inner(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=max_tokens,
+                timeout_override=timeout_override,
+                json_mode=json_mode,
+            )
 
 
 def parse_llm_step(content: str, tool_call: dict[str, Any] | None) -> dict[str, Any]:

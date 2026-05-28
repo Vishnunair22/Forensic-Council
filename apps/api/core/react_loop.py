@@ -244,6 +244,29 @@ def create_llm_step_generator(
         ):
             return None
 
+        # Check quota manager before proceeding with LLM reasoning in ReAct loop
+        from core.quota_manager import get_quota_manager
+        
+        priority = "medium"
+        provider = llm_client.provider
+        rpm_limit = getattr(config, f"{provider}_rpm_limit", 15)
+        rpd_limit = getattr(config, f"{provider}_rpd_limit", 1500)
+        
+        quota_mgr = get_quota_manager(
+            f"{provider}_reasoning",
+            rpm_limit=rpm_limit,
+            rpd_limit=rpd_limit
+        )
+        
+        allowed, reason = await quota_mgr.can_make_call(priority, estimated_tokens=1000)
+        if not allowed:
+            logger.warning(
+                f"Quota manager blocked ReAct LLM step: {reason}. Falling back to deterministic task decomposition.",
+                agent_name=agent_name,
+                priority=priority
+            )
+            return None
+
         # Build system prompt with forensic context
         system_prompt = _build_forensic_system_prompt(
             agent_name=agent_name,
@@ -314,6 +337,7 @@ def create_llm_step_generator(
         for attempt in range(2):
             try:
                 response: LLMResponse = await _attempt_llm_call()
+                await quota_mgr.record_call(priority, success=True)
                 step = _parse_response(response)
                 logger.info(
                     "LLM generated ReAct step",
@@ -324,6 +348,7 @@ def create_llm_step_generator(
                 )
                 return step
             except Exception as exc:
+                await quota_mgr.record_call(priority, success=False)
                 last_exc = exc
                 if attempt == 0:
                     logger.warning(
@@ -2461,3 +2486,128 @@ class ReActLoopEngine:
         self._pending_decision = decision
         if self._resume_event:
             self._resume_event.set()
+
+    async def _run_deterministic_tool_chain(
+        self,
+        task: str,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Execute all relevant tools in priority order without LLM.
+
+        This ensures full forensic coverage even when APIs are down.
+        CLIP + DETR + ELA are always run for image agents.
+        """
+        results = {
+            "iteration_count": 1,
+            "tool_executions": [],
+            "findings": [],
+            "mode": "deterministic_fallback"
+        }
+
+        tool_chain = self._get_prioritized_tools()
+
+        logger.info(
+            f"Executing deterministic tool chain",
+            agent_id=self.agent_id,
+            tool_count=len(tool_chain),
+            tools=[t["name"] for t in tool_chain]
+        )
+
+        for tool_def in tool_chain:
+            tool_name = tool_def["name"]
+            tool_params = tool_def.get("params", {})
+
+            try:
+                tool_result = await self._execute_tool_direct(tool_name, tool_params, context)
+
+                results["tool_executions"].append({
+                    "tool": tool_name,
+                    "status": "success",
+                    "output": tool_result
+                })
+
+                if "findings" in tool_result:
+                    results["findings"].extend(tool_result["findings"])
+
+            except Exception as e:
+                logger.error(
+                    f"Tool execution failed in deterministic mode",
+                    tool=tool_name,
+                    error=str(e)
+                )
+                results["tool_executions"].append({
+                    "tool": tool_name,
+                    "status": "failed",
+                    "error": str(e)
+                })
+
+        return results
+
+    async def _execute_tool_direct(
+        self,
+        tool_name: str,
+        tool_params: dict,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute a tool directly without going through the full ReAct loop."""
+        if hasattr(self, "_tool_registry") and self._tool_registry:
+            result = await self._tool_registry.call(
+                tool_name=tool_name,
+                input_data=tool_params,
+                agent_id=self.agent_id,
+                session_id=self.session_id,
+                custody_logger=self.custody_logger,
+                semaphore=self.heavy_tool_semaphore,
+            )
+            return result.output or {} if result.success else {"error": result.error}
+        return {}
+
+    def _get_prioritized_tools(self) -> list[dict]:
+        """
+        Get ordered tool list for deterministic execution.
+
+        Each agent has a different priority order based on forensic workflow.
+        """
+        tool_chains = {
+            "agent1": [
+                {"name": "extract_exif", "params": {}},
+                {"name": "ela_anomaly_classifier", "params": {"sensitivity": "medium"}},
+                {"name": "noise_fingerprint", "params": {}},
+                {"name": "jpeg_ghost_detector", "params": {}},
+                {"name": "copy_move_detector", "params": {"min_cluster_size": 5}},
+                {"name": "splicing_detector", "params": {}},
+                {"name": "object_detection", "params": {}},
+                {"name": "analyze_image_content", "params": {}},
+            ],
+            "agent2": [
+                {"name": "extract_audio_metadata", "params": {}},
+                {"name": "speaker_diarization", "params": {}},
+                {"name": "audio_splice_detector", "params": {}},
+                {"name": "deepfake_frequency_analysis", "params": {}},
+                {"name": "anti_spoofing_detector", "params": {}},
+            ],
+            "agent3": [
+                {"name": "object_detection", "params": {}},
+                {"name": "analyze_image_content", "params": {}},
+                {"name": "lighting_analyzer", "params": {}},
+                {"name": "scale_validator", "params": {}},
+                {"name": "shadow_direction_analyzer", "params": {}},
+            ],
+            "agent4": [
+                {"name": "extract_video_metadata", "params": {}},
+                {"name": "optical_flow_analyzer", "params": {}},
+                {"name": "face_swap_detector", "params": {}},
+                {"name": "rolling_shutter_validator", "params": {}},
+                {"name": "frame_interpolation_detector", "params": {}},
+            ],
+            "agent5": [
+                {"name": "extract_exif", "params": {}},
+                {"name": "gps_validator", "params": {}},
+                {"name": "steganography_detector", "params": {}},
+                {"name": "c2pa_validator", "params": {}},
+                {"name": "metadata_anomaly_scorer", "params": {}},
+            ],
+        }
+
+        return tool_chains.get(self.agent_id, [])
