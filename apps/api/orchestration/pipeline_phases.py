@@ -596,6 +596,7 @@ async def run_agents_concurrent(
             react_chain=_serialize_react_chain(getattr(agent, "_react_chain", [])),
             agent_active=status != "unsupported",
             supports_file_type=status != "unsupported",
+            synthesis=getattr(agent, "_agent_synthesis", None),
         )
         for aid, (agent, findings, status) in agent_map.items()
     ]
@@ -971,6 +972,7 @@ async def _run_agent_deep_only(
                 agent_active=True,
                 supports_file_type=True,
                 deep_findings_count=max(0, deep_count),
+                synthesis=getattr(agent, "_agent_synthesis", None),
             )
         except Exception as e:
             logger.error(f"{agent_id} deep pass failed", error=str(e), exc_info=True)
@@ -982,6 +984,7 @@ async def _run_agent_deep_only(
                 agent_active=True,
                 supports_file_type=True,
                 error=str(e),
+                synthesis=getattr(agent, "_agent_synthesis", None),
             )
 
 

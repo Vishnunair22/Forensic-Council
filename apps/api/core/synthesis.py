@@ -321,6 +321,7 @@ class SynthesisService:
         agent_persona: str = "",
         image_type_hint: str = "",
         gemini_context: dict | None = None,
+        phase1_context: dict | None = None,
     ) -> dict[str, Any]:
         """
         Synthesize findings using Groq to produce a structured forensic narrative.
@@ -436,12 +437,31 @@ class SynthesisService:
                 {"id": grp["id"], "label": grp["label"], "findings": tools_summary[:5]}
             )
 
+        # Fix 2: Build flat tool evidence list (not pre-grouped) for the 3-layer prompt
+        flat_tool_evidence = []
+        for f in target_findings:
+            is_tool_limitation = (
+                f.status in {"INCOMPLETE", "NOT_APPLICABLE", "ABSTAIN"}
+                or f.evidence_verdict in {"ERROR", "NOT_APPLICABLE"}
+                or f.metadata.get("available") is False
+                or bool(f.metadata.get("degraded"))
+                or bool(f.metadata.get("metadata_incomplete"))
+            )
+            flat_tool_evidence.append({
+                "tool": f.metadata.get("tool_name", "unknown"),
+                "verdict": "TOOL_LIMITATION" if is_tool_limitation else f.status,
+                "evidence_verdict": f.evidence_verdict,
+                "confidence": round(f.confidence_raw, 3) if f.confidence_raw is not None else 0.5,
+                "summary": f.reasoning_summary,
+                "key_metrics": self._compact_metrics(f),
+            })
+
         # Construct Groq Synthesis Prompt. S-H-5: filename and tool results
         # are user-controlled and are wrapped in UNTRUSTED markers; the
         # safety preamble instructs the model to treat them as evidence
         # data, not instructions.
         filename_block = _wrap_untrusted("filename", str(evidence_artifact.file_path))
-        results_block = _wrap_untrusted("tool_results", grouped_sections_data)
+        results_block = _wrap_untrusted("tool_results", flat_tool_evidence)
 
         # Build system prompt with role instructions (no evidence data)
         role_preamble = agent_persona if agent_persona else "You are a Senior Forensic Analyst at the National Cyber Forensics Institute."
@@ -462,42 +482,42 @@ class SynthesisService:
         system_prompt = f"""[SYSTEM: FORENSIC ANALYST SYNTHESIS]
 {role_preamble}
 {gemini_block}
-Synthesize raw tool findings from {agent_name} into a precise, court-defensible narrative.{hint_block}
-Every sentence must be specific and grounded in the actual tool data — no generalities.
 
 {_SAFETY_PREAMBLE}
 
-[STRICT INSTRUCTIONS]
-1. EXECUTIVE SUMMARY ('narrative_summary'): 2-3 flowing sentences, 50-80 words total.
-   - Write as a plain-English expert verdict. No raw scores, hash digests, or numeric values — those belong in the section cards below.
-   - Sentence 1: State what was collectively checked and the overall conclusion (e.g. "ran 5 tools and found the file fully intact" or "identified signs of manipulation in the spectral profile").
-   - Sentence 2: Name one or two notable outcomes in plain language (e.g. "OCR text extraction succeeded", "file hash confirmed no changes since upload", "a face-swap signal was flagged").
-   - Sentence 3 (optional): One-line evidentiary conclusion.
-   - NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result".
+[LAYER 3: ANALYTICAL INSTRUCTION]
+You are a Senior Forensic Analyst. Your job is to REASON about the combined tool evidence — not to catalog or categorize findings into groups.
 
-2. GROUP OPINION ('opinion'): 1-2 sentences. Quote at least one specific metric value from the data.
-   State WHAT was found, WHERE (if applicable), and WHAT it means forensically.
+Analytical Rules:
+1. CONVERGENCE: Which independent tools point to the same conclusion? Name the tools and the signal they agree on.
+2. CONTRADICTION: Do any findings disagree? Describe the disagreement and why it might exist (e.g. different detection methods, confidence differences).
+3. SIGNAL WEIGHT: Identify the strongest POSITIVE signal (most reliable manipulation indicator), the strongest NEGATIVE signal (most reliable clean signal), and any unresolved contradiction between tools.
+4. AGENT BRIEF: Write a 2-3 sentence expert conclusion synthesizing ALL signals. This will be used as the agent's narrative in the final report — it must be precise, court-defensible, and cite specific tool outcomes.
+5. KEY FINDINGS: List the 3-5 most decisive specific findings with their metrics. Each must be independently meaningful — no duplicates or near-duplicates.
+6. EXECUTIVE SUMMARY: 2-3 flowing sentences, 50-80 words. Plain English. Sentence 1: overall conclusion. Sentence 2: one or two notable outcomes. Sentence 3: one-line evidentiary conclusion.
+7. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals (evidence_verdict=POSITIVE). Tool failures, timeouts, and NOT_APPLICABLE are coverage gaps only — never evidence of manipulation.
+8. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result".
+9. NEVER use: "analysis complete", "no anomalies detected in all tools", "forensic warning signal", "produced a result".
+10. Screenshots: State what was actually checked (OCR text content, layout structure, hash integrity since intake, binary container, compression codec). Do not claim camera authenticity.
+11. TOOL TIMEOUTS & ERRORS: A tool that timed out or returned an error is a coverage gap — not evidence of manipulation or authenticity.
 
-3. PER-TOOL SUMMARIES ('user_friendly_summary'): One precise sentence per tool.
-   - State the exact measurement or finding: dimensions, score, pixel region, timestamp value, etc.
-   - Translate the finding into its forensic implication in plain language.
-   - BAD: "Frequency domain analysis found a forensic warning at 0.234 anomaly score."
-   - GOOD: "Frequency-domain analysis found the image's spectral distribution deviates by 0.234 from camera-captured baselines — consistent with GAN or diffusion-model generation."
-   - Spell out abbreviations: "Error Level Analysis" not "ELA", "Photo Response Non-Uniformity" not "PRNU".
-   - For NEGATIVE/NOT_APPLICABLE results: state what was checked and what was confirmed absent.
+For deep phase:
+  - Compare deep findings against Phase 1 verdict (provided in the PHASE 1 CONTEXT section in the evidence below).
+  - Determine phase_delta: CONFIRMED (deep matches Phase 1), UPGRADED (deep adds new evidence of tampering), DOWNGRADED (deep undermines Phase 1), CONTRADICTED (deep directly opposes Phase 1).
+  - Write delta_reason explaining the relationship between Phase 1 and deep findings in 1-2 sentences.
+  - Do NOT re-summarize Phase 1 findings — only reference them for comparison.
 
-4. VERDICT: Base SUSPICIOUS or TAMPERED ONLY on confirmed POSITIVE tool signals. Tool failures, timeouts, and NOT_APPLICABLE are coverage gaps only — never evidence of manipulation.
-
-5. Screenshots: State what was actually checked (OCR text content, layout structure, hash integrity since intake, binary container, compression codec). Do not claim camera authenticity.
-
-6. NEVER write: "expected hash", "advanced neural analysis confirms authenticity", "signal detected at X%", "produced a positive result".
-
-7. TOOL TIMEOUTS & ERRORS: A tool that timed out or returned an error is a coverage gap — not evidence of manipulation or authenticity. Do not treat missing data as suspicious.
-
-Return ONLY a JSON object:
+Return ONLY a JSON object with this exact schema:
 {{
   "verdict": "AUTHENTIC|SUSPICIOUS|TAMPERED|INCONCLUSIVE",
   "narrative_summary": "Precise 2-3 sentence executive summary, 55-75 words.",
+  "agent_brief": "2-3 sentence expert conclusion synthesizing all tool signals. Cite specific tools and outcomes.",
+  "key_findings": ["Finding 1: <specific tool outcome with metric>.", "Finding 2: ...", "Finding 3: ...", "Finding 4: ...", "Finding 5: ..."],
+  "signal_weight": {{
+    "strongest_positive": "Name the tool/signal with the strongest manipulation indicator, or 'none' if no positive signal.",
+    "strongest_negative": "Name the tool/signal with the strongest clean/authenticity signal, or 'none' if all tools raised flags.",
+    "contradiction": "Describe any contradiction between tool signals, or 'none' if all tools agree."
+  }},
   "sections": [
     {{
       "id": "group_id",
@@ -517,14 +537,23 @@ Return ONLY a JSON object:
 """
 
         # Build user content with evidence data only
-        user_content = f"""[EVIDENCE CONTEXT]
-{filename_block}
-MIME: {evidence_artifact.mime_type}
-Agent: {agent_name} ({agent_id})
-
-[RAW TOOL RESULTS]
-{results_block}
-"""
+        user_content_parts = [
+            "[EVIDENCE CONTEXT]",
+            filename_block,
+            f"MIME: {evidence_artifact.mime_type}",
+            f"Agent: {agent_name} ({agent_id})",
+            "",
+            "[RAW TOOL RESULTS]",
+            results_block,
+        ]
+        if phase == "deep" and phase1_context:
+            phase1_block = _wrap_untrusted("phase1_context", phase1_context)
+            user_content_parts.extend([
+                "",
+                "[PHASE 1 CONTEXT — Frozen reference for delta comparison]",
+                phase1_block,
+            ])
+        user_content = "\n".join(user_content_parts)
         try:
             # Truncate user content to stay within safe context budget (~5000 tokens)
             MAX_INPUT_CHARS = 18000
@@ -600,13 +629,20 @@ Agent: {agent_name} ({agent_id})
                 if clean_layout and not has_positive:
                     groq_verdict = "AUTHENTIC"
                     calibrated_confidence = max(calibrated_confidence, 0.78)
-            return {
+            result = {
                 "agent_confidence": round(calibrated_confidence, 3),
                 "agent_error_rate": pre_error_rate,
                 "verdict": groq_verdict,
                 "narrative_summary": response.get("narrative_summary", ""),
+                "agent_brief": response.get("agent_brief", ""),
+                "key_findings": response.get("key_findings", []),
+                "signal_weight": response.get("signal_weight", {}),
                 "sections": response.get("sections", []),
             }
+            if phase == "deep":
+                result["phase_delta"] = response.get("phase_delta", "")
+                result["delta_reason"] = response.get("delta_reason", "")
+            return result
         except Exception as e:
             logger.error(f"Groq synthesis failed: {e}")
             positive_count = sum(
@@ -722,11 +758,21 @@ Agent: {agent_name} ({agent_id})
                     }
                 )
 
-            return {
+            fallback_result = {
                 "agent_confidence": pre_confidence,
                 "agent_error_rate": pre_error_rate,
                 "verdict": fallback_verdict,
                 "narrative_summary": narrative,
+                "agent_brief": f"{agent_name} {phase} analysis: {fallback_verdict} — "
+                              f"{'manipulation signal detected' if positive_count else 'no manipulation signal'} "
+                              f"across {len(findings)} findings.",
+                "key_findings": [
+                    f"{item.get('tool', 'tool')}: {item.get('evidence_verdict', 'INCONCLUSIVE')} "
+                    f"({item.get('confidence', 0.0):.2f})"
+                    for group in grouped_sections_data
+                    for item in group.get("findings", [])
+                ][:5],
+                "signal_weight": {},
                 "sections": self._ground_synthesis_response(
                     {"sections": sections},
                     grouped_sections_data,
@@ -735,6 +781,10 @@ Agent: {agent_name} ({agent_id})
                 ).get("sections", sections),
                 "synthesis_source": "tool_grounded_fallback",
             }
+            if phase == "deep":
+                fallback_result["phase_delta"] = ""
+                fallback_result["delta_reason"] = ""
+            return fallback_result
 
     def _ground_synthesis_response(
         self,

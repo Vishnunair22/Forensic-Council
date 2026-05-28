@@ -62,15 +62,14 @@ class Agent4Video(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
+        # frame_extraction, face_swap_detection, deepfake_frequency_check, and
+        # adversarial_robustness_check removed from base — all reactively injected
+        # by _on_tool_result_impl when their trigger conditions are met.
         return [
             "Run optical_flow_analysis and generate temporal anomaly heatmap",
             "Run interframe_forgery_detector for motion ghosting and SSIM variance",
-            "Run frame_extraction on flagged anomaly windows",
-            "Run face_swap_detection on frames containing human faces",
-            "Run deepfake_frequency_check on extracted frames",
             "Run rolling_shutter_validation against claimed device metadata",
             "Run compression_artifact_analysis for P-frame/I-frame incongruence",
-            "Run adversarial_robustness_check on optical flow results",
             "Perform gemini_deep_forensic on key extracted frames",
         ]
 
@@ -206,4 +205,33 @@ class Agent4Video(ForensicAgent):
                 await self.inject_task(
                     description="Run deep optical_flow_analysis on VFI-flagged segments to verify motion continuity",
                     priority=15,
+                )
+
+        # 3. If optical flow finds anomalies, inject frame extraction + adversarial check
+        if tool_name == "optical_flow_analysis":
+            anomaly_count = finding.metadata.get("anomaly_count", 0)
+            if anomaly_count > 0:
+                logger.info(
+                    "Optical flow anomalies detected; injecting frame extraction and adversarial check",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run frame_extraction on flagged anomaly windows",
+                    priority=18,
+                )
+                await self.inject_task(
+                    description="Run adversarial_robustness_check on optical flow results",
+                    priority=14,
+                )
+
+        # 4. If face swap detected, inject deepfake frequency check
+        if tool_name == "face_swap_detection":
+            if finding.evidence_verdict == "POSITIVE":
+                logger.info(
+                    "Face swap detected; injecting deepfake frequency check",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run deepfake_frequency_check on extracted frames",
+                    priority=17,
                 )

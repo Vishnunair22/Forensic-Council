@@ -282,6 +282,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             analysis_cov,
             use_llm=use_llm,
             step_hook=self._step_hook,
+            comparisons=comparisons,
         )
 
         # ── 5. Case Finalisation ───────────────────────────────────────────

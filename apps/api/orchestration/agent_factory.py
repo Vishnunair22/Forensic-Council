@@ -54,6 +54,7 @@ class AgentLoopResult:
         agent_active: bool = True,
         supports_file_type: bool = True,
         deep_findings_count: int = 0,
+        synthesis: dict[str, Any] | None = None,
     ):
         self.agent_id = agent_id
         self.findings = findings
@@ -63,6 +64,7 @@ class AgentLoopResult:
         self.agent_active = agent_active
         self.supports_file_type = supports_file_type
         self.deep_findings_count = deep_findings_count
+        self.synthesis = synthesis or {}
 
 
 class AgentFactory:

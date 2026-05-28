@@ -237,21 +237,94 @@ class AgentInvestigationMixin:
                     "visual_verdict": gemini_metadata.get("authenticity_verdict"),
                 }
 
-            synthesis_result = await asyncio.wait_for(
-                synthesis_service.synthesize_findings(
+            # Fix 1: Live progress broadcast before Groq call
+            phase_label = f" - {phase.title()} Phase" if phase else ""
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            await broadcast_update(
+                str(self.session_id),
+                BriefUpdate(
+                    type="AGENT_UPDATE",
+                    session_id=str(self.session_id),
                     agent_id=self.agent_id,
                     agent_name=self.agent_name,
-                    findings=findings,
-                    evidence_artifact=self.evidence_artifact,
-                    tool_success_count=self._tool_success_count,  # type: ignore[attr-defined]
-                    tool_error_count=self._tool_error_count,  # type: ignore[attr-defined]
-                    phase=phase,
-                    agent_persona=agent_persona,
-                    image_type_hint=image_type_hint,
-                    gemini_context=gemini_context or None,
+                    message=f"Analyzing {len(findings)} tool finding(s) against image context{phase_label}.",
+                    data={
+                        "status": "running",
+                        "thinking": f"Cross-referencing tool results with image context{phase_label}",
+                        "analysis_phase": phase or "initial",
+                    },
                 ),
-                timeout=timeout_s,
             )
+
+            # Fix 1: Rotating keepalive during Groq call
+            keepalive_task: asyncio.Task | None = None
+            async def _broadcast_keepalive():
+                phases_str = ["weighing results", "cross-referencing signals", "building narrative", "finalizing verdict"]
+                idx = 0
+                while True:
+                    await asyncio.sleep(4.0)
+                    msg = f"Synthesis {phases_str[idx % len(phases_str)]}{phase_label}"
+                    idx += 1
+                    try:
+                        await broadcast_update(
+                            str(self.session_id),
+                            BriefUpdate(
+                                type="AGENT_UPDATE",
+                                session_id=str(self.session_id),
+                                agent_id=self.agent_id,
+                                agent_name=self.agent_name,
+                                message=msg,
+                                data={
+                                    "status": "running",
+                                    "thinking": msg,
+                                    "analysis_phase": phase or "initial",
+                                },
+                            ),
+                        )
+                    except Exception:
+                        pass
+
+            keepalive_task = asyncio.create_task(_broadcast_keepalive())
+
+            # Fix 3: Pass Phase 1 synthesis as frozen context for deep phase
+            phase1_context = None
+            if phase == "deep":
+                phase1_synthesis = getattr(self, "_agent_synthesis", None) or {}
+                phase1_verdict = phase1_synthesis.get("verdict", "INCONCLUSIVE")
+                phase1_confidence = phase1_synthesis.get("agent_confidence", 0.0)
+                phase1_narrative = phase1_synthesis.get("narrative_summary", "")
+                phase1_context = {
+                    "phase1_verdict": phase1_verdict,
+                    "phase1_confidence": phase1_confidence,
+                    "phase1_narrative": phase1_narrative,
+                }
+
+            try:
+                synthesis_result = await asyncio.wait_for(
+                    synthesis_service.synthesize_findings(
+                        agent_id=self.agent_id,
+                        agent_name=self.agent_name,
+                        findings=findings,
+                        evidence_artifact=self.evidence_artifact,
+                        tool_success_count=self._tool_success_count,  # type: ignore[attr-defined]
+                        tool_error_count=self._tool_error_count,  # type: ignore[attr-defined]
+                        phase=phase,
+                        agent_persona=agent_persona,
+                        image_type_hint=image_type_hint,
+                        gemini_context=gemini_context or None,
+                        phase1_context=phase1_context,
+                    ),
+                    timeout=timeout_s,
+                )
+            finally:
+                if keepalive_task:
+                    keepalive_task.cancel()
+                    try:
+                        await keepalive_task
+                    except asyncio.CancelledError:
+                        pass
+
             if synthesis_result:
                 self._agent_confidence = synthesis_result.get("agent_confidence")
                 self._agent_error_rate = synthesis_result.get("agent_error_rate")
@@ -920,7 +993,8 @@ class AgentInvestigationMixin:
         # Enrich synthesis with agent brief and initial context (Fix 5 + Fix 6)
         if isinstance(synthesis, dict):
             brief = getattr(self, "_agent_brief", None)
-            if brief:
+            # Only set agent_brief from stats if the LLM didn't already produce one
+            if brief and not synthesis.get("agent_brief"):
                 synthesis["agent_brief"] = brief
             synthesis["initial_findings_summary"] = initial_summary
 

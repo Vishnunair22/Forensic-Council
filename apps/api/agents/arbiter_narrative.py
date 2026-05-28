@@ -435,195 +435,42 @@ class ArbiterNarrativeMixin:
         agent_id: str,
         findings: list[dict[str, Any]],
         metrics: dict[str, Any],
+        agent_data: dict[str, Any] | None = None,
     ) -> str:
         """
-        Generate a Groq-synthesised per-agent narrative as a three-key JSON.
+        Generate a per-agent narrative for the report.
+
+        Fix 4: Uses pass-through from the agent's own synthesis when available
+        (agent_brief and key_findings produced during investigation). No Groq
+        calls are made here — falls back to programmatic template.
         """
-        if not (self.config.llm_api_key and self.config.llm_provider != "none"):  # type: ignore[attr-defined]
-            return self._programmatic_agent_narrative(agent_id, findings, metrics)
+        # Pass-through: agent already produced structured narrative
+        if agent_data:
+            synthesis = agent_data.get("synthesis") or {}
+            agent_brief = synthesis.get("agent_brief")
+            key_findings = synthesis.get("key_findings")
+            if agent_brief and key_findings:
+                confidence_pct = round(metrics.get("confidence_score", 0) * 100)
+                error_rate_pct = round(metrics.get("error_rate", 0) * 100)
+                tools_ok = metrics.get("tools_succeeded", 0)
+                tools_total = metrics.get("total_tools_called", 0)
+                tools_na = metrics.get("tools_not_applicable", 0)
+                phase_delta = synthesis.get("phase_delta", "")
+                delta_reason = synthesis.get("delta_reason", "")
+                deep_note = ""
+                if phase_delta and delta_reason:
+                    deep_note = f"\n\nDeep analysis delta: {phase_delta} — {delta_reason}"
+                return json.dumps({
+                    "evidence_assessment": str(agent_brief)[:1200],
+                    "deep_analysis": "; ".join(str(kf) for kf in (key_findings or [])[:5])[:1200] + deep_note,
+                    "reliability_verdict": (
+                        f"Confidence: {confidence_pct}% across {tools_ok}/{tools_total} tools "
+                        f"({tools_na} not applicable; {error_rate_pct}% error rate)."
+                    ),
+                    "synthesis_source": "agent_llm_synthesis",
+                })
 
-        client = getattr(self, "_synthesis_client", None) or LLMClient(
-            self.config, use_arbiter_tier=True
-        )
-        if not client.is_available:
-            return self._programmatic_agent_narrative(agent_id, findings, metrics)
-
-        agent_full_name = self._AGENT_FULL_NAMES.get(agent_id, agent_id)
-        confidence_pct = round(metrics.get("confidence_score", 0) * 100)
-        error_rate_pct = round(metrics.get("error_rate", 0) * 100)
-        tools_ok = metrics.get("tools_succeeded", 0)
-        tools_total = metrics.get("total_tools_called", 0)
-
-        # Split findings by phase
-        initial_f = [
-            f
-            for f in findings
-            if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"
-        ]
-        deep_f = [f for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
-
-        _NOT_APPLICABLE_FLAGS = ("ela_not_applicable", "ghost_not_applicable")
-
-        def _fmt_text(findings_list: list[dict]) -> str:
-            lines = []
-            sorted_findings = sorted(
-                findings_list,
-                key=lambda x: (
-                    1 if (x.get("metadata") or {}).get("analysis_phase") == "deep" else 0,
-                    _finding_importance(x),
-                ),
-                reverse=True,
-            )
-
-            for f in sorted_findings[:15]:
-                meta = f.get("metadata") or {}
-                tool_name = meta.get("tool_name", f.get("finding_type", ""))
-                is_na = any(meta.get(flag) for flag in _NOT_APPLICABLE_FLAGS)
-                is_failed = not is_na and meta.get("court_defensible") is False
-
-                verdict = evidence_verdict_of(f)
-                conf = round(confidence_of(f, default=0.0) or 0.0, 3)
-                statement = f.get("court_statement") or f.get("reasoning_summary") or "No detailed statement available."
-
-                status_str = "NOT_APPLICABLE" if is_na else ("FAILED" if is_failed else "RAN")
-
-                lines.append(
-                    f"- TOOL: {tool_name}\n"
-                    f"  VERDICT: {verdict}\n"
-                    f"  CONFIDENCE: {conf * 100:.1f}%\n"
-                    f"  STATUS: {status_str}\n"
-                    f"  FORENSIC STATEMENT: {statement}\n"
-                )
-            return "\n".join(lines)
-
-        tools_na = metrics.get("tools_not_applicable", 0)
-        has_deep = bool(deep_f)
-        comparison_section = ""
-        initial_vs_deep_comparison = ""
-        if has_deep:
-            comparison_section = (
-                f"\n\nDeep analysis findings ({len(deep_f)} tool scans):\n{_fmt_text(deep_f)}"
-            )
-            _comparison_pairs = []
-            for df in deep_f:
-                d_meta = df.get("metadata") or {}
-                d_tool = d_meta.get("tool_name", "")
-                matching_initial = [
-                    f for f in initial_f if (f.get("metadata") or {}).get("tool_name") == d_tool
-                ]
-                if not matching_initial:
-                    analog = _DEEP_TO_INITIAL_TOOL_MAP.get(d_tool)
-                    if analog:
-                        matching_initial = [
-                            f for f in initial_f
-                            if (f.get("metadata") or {}).get("tool_name") == analog
-                        ]
-                if matching_initial:
-                    mf = matching_initial[0]
-                    _comparison_pairs.append(
-                        {
-                            "tool": d_tool,
-                            "initial_confidence": round(confidence_of(mf, default=0.0) or 0.0, 3),
-                            "deep_confidence": round(confidence_of(df, default=0.0) or 0.0, 3),
-                            "initial_evidence_verdict": evidence_verdict_of(mf),
-                            "deep_evidence_verdict": evidence_verdict_of(df),
-                            "initial_verdict": (mf.get("metadata") or {}).get("verdict", ""),
-                            "deep_verdict": d_meta.get("verdict", ""),
-                            "initial_manipulation": (mf.get("metadata") or {}).get(
-                                "manipulation_detected", False
-                            ),
-                            "deep_manipulation": d_meta.get("manipulation_detected", False),
-                        }
-                    )
-            if _comparison_pairs:
-                initial_vs_deep_comparison = (
-                    f"\n\nInitial vs Deep comparison (same tool across phases):\n"
-                    f"{json.dumps(_comparison_pairs, indent=2)}"
-                )
-
-        agent_persona = self._AGENT_PERSONAS.get(agent_id, "")
-        persona_block = f"\n\nAgent persona:\n{agent_persona}" if agent_persona else ""
-
-        system_prompt = f"""You are the Council Arbiter writing the per-agent analysis section of a forensic report.{persona_block}
-
-You MUST respond ONLY with a valid JSON object containing exactly three keys: "evidence_assessment", "deep_analysis", and "reliability_verdict". Do not output any markdown formatting (like ```json) or other text outside the JSON structure.
-
-JSON Structure:
-{{
-  "evidence_assessment": "<Forensic evidence assessment paragraphs. Cite exact metric values from initial findings and interpret them forensically. Explicitly mention any bypassed (NOT_APPLICABLE) or FAILED tools.>",
-  "deep_analysis": "<Deep analysis and cross-validation paragraphs. If a deep pass was run, specify what deep tools (TruFor, BusterNet, Gemini Multimodal, etc.) confirmed, expanded, or contradicted. If no deep pass was run, explicitly note that deep analysis was skipped/gated.>",
-  "reliability_verdict": "<Reliability and verdict paragraphs. Cite the agent's confidence: {confidence_pct}%, tool error rate: {error_rate_pct}% ({tools_ok} of {tools_total} tools succeeded, {tools_na} not applicable). Conclude with the plain-English verdict for this agent (e.g., AUTHENTIC, SUSPICIOUS, INCONCLUSIVE, or NOT APPLICABLE).>"
-}}
-
-Do NOT use bullet points in the JSON values. Write in continuous prose. Interpret numbers — do not paste raw JSON."""
-
-        initial_block = _wrap_untrusted(f"{agent_full_name}_initial_findings", _fmt_text(initial_f))
-        comparison_block = (
-            _wrap_untrusted(f"{agent_full_name}_comparison", comparison_section)
-            if comparison_section
-            else ""
-        )
-        initial_vs_deep_block = (
-            _wrap_untrusted(f"{agent_full_name}_initial_vs_deep", initial_vs_deep_comparison)
-            if initial_vs_deep_comparison
-            else ""
-        )
-        user_content = (
-            f"Agent: {agent_full_name}\n"
-            f"Confidence: {confidence_pct}%  |  Error rate: {error_rate_pct}%  |  "
-            f"Tools succeeded: {tools_ok}/{tools_total}  |  Not applicable: {tools_na}\n\n"
-            f"Initial analysis ({len(initial_f)} tool scans):\n{initial_block}"
-            f"{comparison_block}"
-            f"{initial_vs_deep_block}\n\n"
-            f"Write the per-agent analysis section JSON."
-        )
-
-        try:
-            raw = await client.generate_synthesis(
-                system_prompt=_SAFETY_PREAMBLE + "\n" + system_prompt,
-                user_content=user_content,
-                max_tokens=1400,
-                json_mode=True,
-            )
-            if raw:
-                # Strip markdown code blocks if any
-                raw_clean = raw.strip()
-                if raw_clean.startswith("```"):
-                    raw_clean = raw_clean.split("```", 2)[-1].lstrip("json").strip()
-                    if raw_clean.endswith("```"):
-                        raw_clean = raw_clean[:-3].strip()
-                parsed = json.loads(raw_clean[raw_clean.find("{") : raw_clean.rfind("}") + 1])
-                if all(k in parsed for k in ("evidence_assessment", "deep_analysis", "reliability_verdict")):
-                    return json.dumps(parsed)
-        except Exception as e:
-            logger.debug(f"Per-agent narrative Groq parsing/call failed for {agent_id}: {e}")
-
-        # Retry once with simplified 2-key schema before programmatic fallback
-        try:
-            retry_prompt = system_prompt + (
-                "\n\nIMPORTANT: Return ONLY a JSON with TWO keys: "
-                '"evidence_assessment" and "reliability_verdict". '
-                "Omit deep_analysis. Each value must be one sentence, max 40 words."
-            )
-            raw2 = await client.generate_synthesis(
-                system_prompt=_SAFETY_PREAMBLE + "\n" + retry_prompt,
-                user_content=user_content,
-                max_tokens=800,
-                json_mode=True,
-            )
-            if raw2:
-                raw2_clean = raw2.strip()
-                if raw2_clean.startswith("```"):
-                    raw2_clean = raw2_clean.split("```", 2)[-1].lstrip("json").strip()
-                    if raw2_clean.endswith("```"):
-                        raw2_clean = raw2_clean[:-3].strip()
-                parsed2 = json.loads(raw2_clean[raw2_clean.find("{") : raw2_clean.rfind("}") + 1])
-                if "evidence_assessment" in parsed2 and "reliability_verdict" in parsed2:
-                    parsed2.setdefault("deep_analysis", "")
-                    return json.dumps(parsed2)
-        except Exception as retry_err:
-            logger.debug(f"Per-agent narrative retry also failed for {agent_id}: {retry_err}")
-
+        # Fallback: programmatic template (no Groq call)
         return self._programmatic_agent_narrative(agent_id, findings, metrics)
 
     async def _generate_executive_summary(
@@ -1306,6 +1153,265 @@ Rules:
             statements.append("No significant uncertainties remain.")
         return " ".join(statements)
 
+    async def _llm_arbiter_synthesis(
+        self,
+        overall_verdict: str,
+        overall_confidence: float,
+        overall_error_rate: float,
+        manipulation_probability: float,
+        applicable_agent_count: int,
+        all_findings: list[dict[str, Any]],
+        active_agent_results: dict[str, dict[str, Any]],
+        per_agent_metrics: dict[str, Any],
+        gemini_vision_findings: list[dict[str, Any]],
+        cross_modal_confirmed_count: int,
+        contested_findings: list[dict[str, Any]],
+        incomplete_findings: list[dict[str, Any]],
+        analysis_coverage_note: str,
+        comparisons: list[Any] | None = None,
+        has_deep_analysis: bool = False,
+    ) -> dict[str, Any] | None:
+        """
+        Single LLM synthesis call producing all arbiter narrative outputs.
+
+        Builds a 5-layer prompt:
+          Layer 1 — What the evidence IS (Gemini baseline)
+          Layer 2 — Per-agent verdicts (rich synthesis pass-through)
+          Layer 3 — Cross-modal agreement map
+          Layer 4 — Computed verdict facts
+          Layer 5 — Analytical instruction
+
+        Context budget management: trims Layer 2 (agent briefs) before Layer 3
+        (cross-modal map) before Layer 1 (Gemini scene description) when over
+        the ~5K character input cap.
+        """
+        client = getattr(self, "_synthesis_client", None) or LLMClient(
+            self.config, use_arbiter_tier=True
+        )
+        if not client.is_available:
+            return None
+        if not (self.config.llm_api_key and self.config.llm_provider != "none"):
+            return None
+
+        # ── Layer 1: Gemini/EVIDENCE BASELINE ─────────────────────────────
+        gemini_lines = ["[LAYER 1 — EVIDENCE BASELINE]"]
+        for gf in (gemini_vision_findings or [])[:3]:
+            meta = gf.get("metadata") or {}
+            gemini_lines.extend([
+                f"Content type: {meta.get('file_type_assessment') or meta.get('forensic_routing', {}).get('image_category', 'unknown')}",
+                f"Gemini visual verdict: {meta.get('authenticity_verdict') or meta.get('forensic_routing', {}).get('visual_verdict', 'INCONCLUSIVE')}",
+                f"Manipulation signals: {', '.join(str(x) for x in (meta.get('manipulation_signals') or meta.get('forensic_routing', {}).get('priority_signals', [])))}",
+                f"Scene: {(meta.get('scene_description') or '')[:150]}",
+            ])
+        if not gemini_vision_findings:
+            gemini_lines.append("No Gemini vision analysis available for this file type.")
+        layer1 = "\n".join(gemini_lines)
+
+        # ── Layer 2: Per-Agent Verdicts ───────────────────────────────────
+        agent_lines = ["[LAYER 2 — PER-AGENT VERDICTS]"]
+        for aid in sorted(active_agent_results.keys()):
+            s = active_agent_results[aid].get("synthesis") or {}
+            m = per_agent_metrics.get(aid) or {}
+            agent_name = AGENT_NAMES.get(aid, aid)
+            verdict = s.get("verdict") or m.get("verdict") or s.get("evidence_verdict") or "UNKNOWN"
+            conf = m.get("confidence_score", 0)
+            brief = str(s.get("agent_brief") or "")[:350]
+            key_fs = s.get("key_findings") or []
+            signal_w = s.get("signal_weight") or {}
+            phase_d = s.get("phase_delta", "")
+            delta_r = s.get("delta_reason", "")
+            agent_lines.append(
+                f"\n{agent_name} ({aid}):"
+                f"\n  Verdict: {verdict} | Confidence: {conf:.2f}"
+                f"\n  Brief: {brief}"
+                f"\n  Key findings: {'; '.join(str(kf)[:200] for kf in key_fs[:3])}"
+                f"\n  Signal weight: strongest_positive={signal_w.get('strongest_positive', 'none')}"
+                f"\n  Strongest negative: {signal_w.get('strongest_negative', 'none')}"
+                f"\n  Contradiction: {signal_w.get('contradiction', 'none')}"
+                + (f"\n  Phase delta: {phase_d} — {delta_r}" if phase_d else "")
+            )
+        layer2 = "\n".join(agent_lines)
+
+        # ── Layer 3: Cross-Modal Agreement Map ────────────────────────────
+        cross_lines = ["[LAYER 3 — CROSS-MODAL CORROBORATION]"]
+        confirmed_pairs = []
+        contested_pairs = []
+        if comparisons:
+            for c in comparisons:
+                desc = getattr(c, "plain_description", "") or (
+                    f"{c.finding_a.get('agent_id', '?')} vs {c.finding_b.get('agent_id', '?')}"
+                )
+                if getattr(c, "cross_modal_confirmed", False) or getattr(c, "verdict", None) == "AGREEMENT":
+                    confirmed_pairs.append(desc)
+                elif getattr(c, "verdict", None) == "CONTRADICTION":
+                    contested_pairs.append(desc)
+        if confirmed_pairs:
+            cross_lines.append("Confirmed agreements (independent agents flagging same signal):")
+            for p in confirmed_pairs[:6]:
+                cross_lines.append(f"  - {p}")
+        if contested_pairs:
+            cross_lines.append("Contested findings (agents disagree):")
+            for p in contested_pairs[:3]:
+                cross_lines.append(f"  - {p}")
+        if not confirmed_pairs and not contested_pairs:
+            cross_lines.append("No cross-agent comparison data available.")
+        layer3 = "\n".join(cross_lines)
+
+        # ── Layer 4: Computed Verdict Facts ───────────────────────────────
+        analysis_mode = "Initial + Deep analysis" if has_deep_analysis else "Initial analysis only"
+        layer4 = (
+            f"[LAYER 4 — ARBITER COMPUTED FACTS]\n"
+            f"Overall verdict: {overall_verdict}\n"
+            f"Manipulation probability: {manipulation_probability:.2f}\n"
+            f"Confidence: {overall_confidence:.2f}\n"
+            f"Active agents: {applicable_agent_count}\n"
+            f"Cross-modal confirmed: {cross_modal_confirmed_count}\n"
+            f"Contested: {len(contested_findings)}\n"
+            f"Tool error rate: {overall_error_rate * 100:.0f}%\n"
+            f"Analysis depth: {analysis_mode}\n"
+            f"Coverage: {analysis_coverage_note}"
+        )
+
+        # ── Layer 5: Analytical Instruction ───────────────────────────────
+        layer5 = (
+            "[LAYER 5 — ANALYTICAL INSTRUCTION]\n"
+            "You are the Council Arbiter — the presiding forensic authority who has "
+            "received independent expert reports from specialist agents and must "
+            "render a final court-ready judgment.\n\n"
+            "Your task is NOT to re-derive the verdict (it is computed above). Your "
+            "task is to EXPLAIN it with full forensic reasoning.\n\n"
+            "1. VERDICT SENTENCE: In one sentence, cite the strongest cross-modal "
+            "signal combination that drove this verdict. If two independent agents "
+            "corroborate the same signal type, say so explicitly. If the verdict is "
+            "SUSPICIOUS rather than MANIPULATED, explain why — what is missing.\n\n"
+            "2. KEY FINDINGS: 4-6 findings ordered by evidential weight. For each:\n"
+            "   - Name the specific tool and metric\n"
+            "   - State its forensic implication for THIS evidence type\n"
+            "   - If cross-modal corroborated: say 'independently corroborated by [agent]'\n"
+            "   - If contested: say 'partially contested by [agent] finding'\n\n"
+            "3. CROSS-MODAL ANALYSIS: Explain what the agreement/disagreement pattern "
+            "means forensically. Independent agreement between different analysis "
+            "modalities is much stronger than a single-agent finding.\n\n"
+            "4. EXECUTIVE SUMMARY: 3 sentences for a court document:\n"
+            "   - Sentence 1: What the evidence IS and the overall verdict\n"
+            "   - Sentence 2: The decisive signal combination that drove it\n"
+            "   - Sentence 3: What this means for evidential use + any material caveats\n\n"
+            "5. UNCERTAINTY STATEMENT: What are the evidential gaps? Which signals are "
+            "incomplete? Which contests remain unresolved? What would a higher-confidence "
+            "determination require?\n\n"
+            "6. RELIABILITY NOTE: One sentence. Confidence X%, Y active agents, Z% error rate.\n\n"
+            "7. ARBITER REASONING: 2-3 sentences explaining the deliberative logic — "
+            "why this verdict and not the one above or below. E.g., 'SUSPICIOUS and not "
+            "MANIPULATED because the ELA signal is strong but spectral analysis is clean, "
+            "creating a disagreement that prevents higher-confidence classification.'"
+        )
+
+        # ── Assemble with Safety Preamble ─────────────────────────────────
+        system_prompt = (
+            _SAFETY_PREAMBLE + "\n\n" + layer5 + "\n\n"
+            "Return ONLY a JSON object with this exact schema (no markdown wrapping):\n"
+            '{\n'
+            '  "verdict_sentence": "One sentence: strongest cross-modal signal + verdict + why not higher/lower.",\n'
+            '  "key_findings": [\n'
+            '    {"finding": "Tool: metric => implication for this content type", "agent": "AgentX", "corroborated_by": "AgentY independently", "weight": "HIGH|MEDIUM|LOW"}\n'
+            '  ],\n'
+            '  "cross_modal_analysis": "2-3 sentences: what the agreement/disagreement pattern means forensically.",\n'
+            '  "executive_summary": "3 sentences: what it is -> decisive signal -> evidential use + caveats.",\n'
+            '  "uncertainty_statement": "Specific gaps: which tools incomplete, which contests unresolved, what would increase confidence.",\n'
+            '  "reliability_note": "Confidence X%, Y active agents, Z% error rate. [Key caveat if any].",\n'
+            '  "arbiter_reasoning": "2-3 sentences: the deliberative logic — why this verdict and not the one above/below."\n'
+            '}'
+        )
+
+        # ── Context Budget Management (Fix 5) ─────────────────────────────
+        MAX_INPUT_CHARS = 5000
+        user_parts = [
+            layer1,
+            "",
+            _wrap_untrusted("per_agent_verdicts", layer2),
+            "",
+            _wrap_untrusted("cross_modal", layer3),
+            "",
+            layer4,
+        ]
+        user_content = "\n".join(user_parts)
+
+        # Graceful truncation: trim layer2 first, then layer3, then layer1 (scene desc)
+        if len(user_content) > MAX_INPUT_CHARS:
+            # Trim Layer 2: shorten agent briefs
+            short_lines = []
+            for line in layer2.split("\n"):
+                if line.startswith("  Brief: ") and len(line) > 200:
+                    short_lines.append(line[:200] + "...")
+                elif line.startswith("  Key findings: ") and len(line) > 250:
+                    short_lines.append(line[:250] + "...")
+                else:
+                    short_lines.append(line)
+            layer2_short = "\n".join(short_lines)
+            user_parts = [
+                layer1,
+                "",
+                _wrap_untrusted("per_agent_verdicts", layer2_short),
+                "",
+                _wrap_untrusted("cross_modal", layer3),
+                "",
+                layer4,
+            ]
+            user_content = "\n".join(user_parts)
+
+        if len(user_content) > MAX_INPUT_CHARS:
+            # Trim Layer 3: fewer cross-modal items
+            cross_short_lines = cross_lines[:2] + cross_lines[-5:] if len(cross_lines) > 8 else cross_lines
+            layer3_short = "\n".join(cross_short_lines)
+            user_parts = [
+                layer1,
+                "",
+                _wrap_untrusted("per_agent_verdicts", layer2_short if 'layer2_short' in dir() else layer2),
+                "",
+                _wrap_untrusted("cross_modal", layer3_short),
+                "",
+                layer4,
+            ]
+            user_content = "\n".join(user_parts)
+
+        if len(user_content) > MAX_INPUT_CHARS:
+            # Final trim: shorten Layer 1 scene description
+            gemini_short = [l for l in layer1.split("\n") if not l.startswith("Scene:") or len(l) < 100]
+            layer1_short = "\n".join(gemini_short)
+            user_parts = [
+                layer1_short,
+                "",
+                _wrap_untrusted("per_agent_verdicts", layer2_short if 'layer2_short' in dir() else layer2),
+                "",
+                _wrap_untrusted("cross_modal", layer3_short if 'layer3_short' in dir() else layer3),
+                "",
+                layer4,
+            ]
+            user_content = "\n".join(user_parts)
+
+        if len(user_content) > MAX_INPUT_CHARS:
+            user_content = user_content[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
+
+        try:
+            raw = await client.generate_synthesis(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=1800,
+                json_mode=True,
+            )
+            if not raw:
+                return None
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```", 2)[-1].lstrip("json").strip()
+                if raw.endswith("```"):
+                    raw = raw[:-3].strip()
+            data = json.loads(raw[raw.find("{") : raw.rfind("}") + 1])
+            return data
+        except Exception as e:
+            logger.debug(f"Arbiter synthesis call failed: {e}")
+            return None
+
     async def deliberate_narratives(
         self,
         overall_verdict: str,
@@ -1323,8 +1429,14 @@ Rules:
         analysis_coverage_note: str,
         use_llm: bool = True,
         step_hook: Any = None,
+        comparisons: list[Any] | None = None,
     ) -> dict[str, Any]:
-        """Orchestrate all LLM synthesis tasks in parallel."""
+        """Orchestrate all narrative synthesis tasks.
+
+        Fix 1: Replaced 3 separate Groq calls (structured_summary, executive,
+        uncertainty) with a single _llm_arbiter_synthesis() call.
+        Per-agent narratives are pass-through (no Groq calls).
+        """
 
         async def _step(msg: str):
             if step_hook:
@@ -1377,22 +1489,36 @@ Rules:
                 incomplete_count=len(incomplete_findings),
                 per_agent_metrics=per_agent_metrics,
             )
+            cross_modal_analysis = ""
+            arbiter_reasoning = ""
         else:
-            await _step("Generating Groq summaries from tool findings.")
+            await _step("Generating cross-modal arbiter synthesis.")
 
-            async def t_structured():
-                return await self._generate_structured_summary(
-                    overall_verdict,
-                    overall_confidence,
-                    overall_error_rate,
-                    manipulation_probability,
-                    applicable_agent_count,
-                    all_findings,
-                    cross_modal_confirmed_count,
-                    len(contested_findings),
-                    analysis_coverage_note,
-                    has_deep_analysis=has_deep_analysis,
-                )
+            async def t_arbiter():
+                try:
+                    return await asyncio.wait_for(
+                        self._llm_arbiter_synthesis(
+                            overall_verdict=overall_verdict,
+                            overall_confidence=overall_confidence,
+                            overall_error_rate=overall_error_rate,
+                            manipulation_probability=manipulation_probability,
+                            applicable_agent_count=applicable_agent_count,
+                            all_findings=all_findings,
+                            active_agent_results=active_agent_results,
+                            per_agent_metrics=per_agent_metrics,
+                            gemini_vision_findings=gemini_vision_findings,
+                            cross_modal_confirmed_count=cross_modal_confirmed_count,
+                            contested_findings=contested_findings,
+                            incomplete_findings=incomplete_findings,
+                            analysis_coverage_note=analysis_coverage_note,
+                            comparisons=comparisons,
+                            has_deep_analysis=has_deep_analysis,
+                        ),
+                        timeout=60.0,
+                    )
+                except Exception as _e:
+                    logger.warning("Arbiter synthesis failed; using template fallback", error=str(_e))
+                    return None
 
             async def t_narratives():
                 _narr_warnings: list[str] = []
@@ -1404,9 +1530,10 @@ Rules:
                         await _step(f"Summarizing {AGENT_NAMES.get(aid, aid)} findings.")
                         narr = await asyncio.wait_for(
                             self._generate_agent_narrative(
-                                aid, res.get("findings", []), per_agent_metrics.get(aid, {})
+                                aid, res.get("findings", []), per_agent_metrics.get(aid, {}),
+                                agent_data=res,
                             ),
-                            timeout=40.0,
+                            timeout=10.0,
                         )
                         if narr:
                             results[aid] = narr
@@ -1417,101 +1544,64 @@ Rules:
                             error=str(_e),
                         )
                         _narr_warnings.append(
-                            f"{AGENT_NAMES.get(aid, aid)} narrative used template fallback: {type(_e).__name__}"
+                            f"{AGENT_NAMES.get(aid, aid)} narrative: {type(_e).__name__}"
                         )
                         results[aid] = ""
 
-                    # Stagger 1.5s between per-agent Groq calls to respect TPM budget
-                    if i < len(agent_items) - 1:
-                        await asyncio.sleep(1.5)
-
                 return results, _narr_warnings
 
-            async def t_executive():
-                try:
-                    await _step("Generating cross-modal executive summary.")
-                    return await asyncio.wait_for(
-                        self._generate_executive_summary(
-                            len(active_agent_results),
-                            len(all_findings),
-                            cross_modal_confirmed_count,
-                            len(contested_findings),
-                            all_findings=all_findings,
-                            gemini_findings=gemini_vision_findings,
-                            active_agent_metrics=list(per_agent_metrics.values()),
-                            overall_verdict=overall_verdict,
-                            analysis_coverage_note=analysis_coverage_note,
-                        ),
-                        timeout=45.0,
-                    )
-                except Exception as _e:
-                    logger.warning(
-                        "Executive summary LLM generation failed; falling back to template",
-                        error=str(_e),
-                    )
-                    return self._template_executive_summary(
-                        len(active_agent_results),
-                        len(all_findings),
-                        cross_modal_confirmed_count,
-                        len(contested_findings),
-                        all_findings,
-                    )
-
-            async def t_uncertainty():
-                try:
-                    return await asyncio.wait_for(
-                        self._generate_uncertainty_statement(
-                            len(incomplete_findings), len(contested_findings), overall_error_rate
-                        ),
-                        timeout=30.0,
-                    )
-                except Exception as _e:
-                    logger.warning(
-                        "Uncertainty statement LLM generation failed; falling back to template",
-                        error=str(_e),
-                    )
-                    return self._template_uncertainty_statement(
-                        len(incomplete_findings), len(contested_findings), overall_error_rate
-                    )
-
             try:
-                # overall investigation timeout budget is ML_SUBPROCESS_TIMEOUT_S (default 120s)
                 overall_timeout = getattr(self.config, "ml_subprocess_timeout_s", 120.0) or 120.0
-                # Use 60% of the investigation budget (min 120s) so the arbiter can survive
-                # a Groq TPM window refresh (60s) or a Gemini quota cycle without timing out
-                # and silently falling back to template-generated narratives.
                 timeout_budget = max(120.0, float(overall_timeout) * 0.60)
 
-                # Stagger synthesis tasks ~500ms apart to avoid simultaneous
-                # Groq TPM-limit bursts that would 429 all tasks at once.
-                async def _staggered(coro, delay: float):
-                    if delay > 0:
-                        await asyncio.sleep(delay)
-                    return await coro
-
-                # Stagger independent synthesis tasks to avoid simultaneous
-                # Groq TPM-limit bursts. t_narratives() has its own Semaphore(2).
-                async def _staggered_structured():
-                    return await t_structured()
-
-                async def _staggered_executive():
-                    await asyncio.sleep(0.5)
-                    return await t_executive()
-
-                async def _staggered_uncertainty():
-                    await asyncio.sleep(1.0)
-                    return await t_uncertainty()
-
-                (v_sent, kf_list, r_note), (p_anal, _agent_narr_warnings), exec_sum, unc_stmt = await asyncio.wait_for(
-                    asyncio.gather(
-                        _staggered_structured(), t_narratives(), _staggered_executive(), _staggered_uncertainty()
-                    ),
-                    timeout=timeout_budget
+                arbiter_result, (p_anal, _agent_narr_warnings) = await asyncio.wait_for(
+                    asyncio.gather(t_arbiter(), t_narratives()),
+                    timeout=timeout_budget,
                 )
+
+                if arbiter_result:
+                    v_sent = str(arbiter_result.get("verdict_sentence", ""))
+                    raw_kf = arbiter_result.get("key_findings", [])
+                    # Normalize structured key_findings (list of dicts) to list of strings
+                    kf_list = []
+                    for kf_item in raw_kf:
+                        if isinstance(kf_item, dict):
+                            parts = [str(kf_item.get("finding", ""))]
+                            corr = kf_item.get("corroborated_by", "")
+                            if corr:
+                                parts.append(f"[corroborated by: {corr}]")
+                            weight = kf_item.get("weight", "")
+                            if weight:
+                                parts.append(f"[weight: {weight}]")
+                            kf_list.append(" ".join(parts))
+                        elif isinstance(kf_item, str):
+                            kf_list.append(kf_item)
+                    exec_sum = str(arbiter_result.get("executive_summary", ""))
+                    unc_stmt = str(arbiter_result.get("uncertainty_statement", ""))
+                    r_note = str(arbiter_result.get("reliability_note", ""))
+                    cross_modal_analysis = str(arbiter_result.get("cross_modal_analysis", ""))
+                    arbiter_reasoning = str(arbiter_result.get("arbiter_reasoning", ""))
+                else:
+                    v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt = self._template_all(
+                        overall_verdict,
+                        overall_confidence,
+                        overall_error_rate,
+                        manipulation_probability,
+                        applicable_agent_count,
+                        all_findings,
+                        cross_modal_confirmed_count,
+                        len(contested_findings),
+                        analysis_coverage_note,
+                        active_agent_results,
+                        incomplete_count=len(incomplete_findings),
+                        per_agent_metrics=per_agent_metrics,
+                    )
+                    cross_modal_analysis = ""
+                    arbiter_reasoning = ""
             except TimeoutError:
                 logger.warning(
-                    "Arbiter LLM synthesis timed out; falling back to template-generated narratives",
-                    timeout_limit=timeout_budget
+                    "Arbiter synthesis timed out; falling back to template-generated narratives",
+                    timeout_limit=timeout_budget,
                 )
                 v_sent, kf_list, r_note, p_anal, exec_s, unc_s = self._template_all(
                     overall_verdict,
@@ -1527,10 +1617,14 @@ Rules:
                     incomplete_count=len(incomplete_findings),
                     per_agent_metrics=per_agent_metrics,
                 )
+                cross_modal_analysis = ""
+                arbiter_reasoning = ""
                 raw = self._postprocess_narratives(
                     v_sent, kf_list, r_note, p_anal, exec_s, unc_s,
-                    False, ["LLM synthesis unavailable due to timeout"],
-                    per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note
+                    False, ["LLM synthesis timed out"],
+                    per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note,
+                    cross_modal_analysis=cross_modal_analysis,
+                    arbiter_reasoning=arbiter_reasoning,
                 )
                 return _validate_synthesis(raw)
 
@@ -1544,7 +1638,9 @@ Rules:
         raw = self._postprocess_narratives(
             v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt,
             llm_enabled, narrative_warnings,
-            per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note
+            per_agent_metrics, all_findings, overall_verdict, analysis_coverage_note,
+            cross_modal_analysis=cross_modal_analysis,
+            arbiter_reasoning=arbiter_reasoning,
         )
         return _validate_synthesis(raw)
 
@@ -1602,6 +1698,8 @@ Rules:
         all_findings: list[dict[str, Any]],
         overall_verdict: str,
         analysis_coverage_note: str,
+        cross_modal_analysis: str = "",
+        arbiter_reasoning: str = "",
     ) -> dict[str, Any]:
         import json
         p_anal_structured = {}
@@ -1755,6 +1853,12 @@ Rules:
                     warning_count=len(grounding_warnings),
                     warnings=grounding_warnings,
                 )
+
+        # Store new arbiter fields in summary_structured (fits inside existing model)
+        if cross_modal_analysis:
+            summary_structured["cross_modal_analysis"] = cross_modal_analysis
+        if arbiter_reasoning:
+            summary_structured["arbiter_reasoning"] = arbiter_reasoning
 
         return {
             "verdict_sentence": v_sent,

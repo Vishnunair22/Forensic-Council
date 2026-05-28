@@ -64,15 +64,21 @@ class Agent2Audio(ForensicAgent):
         # voice_clone_detect and anti_spoofing_detect are intentionally absent here —
         # the ensemble handlers re-run them internally and read the Phase 1 result from
         # _tool_context before overwriting it, preserving the cross-phase comparison.
-        return [
+        # enf_analysis and background_noise_analysis removed from base — reactively
+        # injected by _on_tool_result_impl when splice or re-encoding is detected.
+        tasks = [
             "Run prosody_analyze for acoustic marker verification",
             "Run audio_splice_detect on audio segments",
-            "Run enf_analysis for electrical network frequency splice detection",
-            "Run background_noise_analysis to identify shift points",
             "Run voice_clone_deep_ensemble for cross-validated AI speech synthesis detection if Phase 1 flagged a suspicious voice signal",
             "Run anti_spoofing_deep_ensemble for reinforced anti-spoofing on low-confidence segments if Phase 1 flagged a spoofing signal",
-            "Run gemini_deep_forensic for Neural Audio Audit and Acoustic Provenance",
         ]
+        mime = getattr(self.evidence_artifact, "mime_type", "") or ""
+        if mime.startswith("video/"):
+            tasks.append("Run background_noise_analysis to identify shift points")
+        # Gemini runs for video (can analyze frames) or when audio carries a suspicious signal
+        if mime.startswith("video/") or self._has_audio_suspicious_signal():
+            tasks.append("Run gemini_deep_forensic for Neural Audio Audit and Acoustic Provenance")
+        return tasks
 
     def _has_audio_suspicious_signal(self) -> bool:
         """Gate expensive Phase-2 ensemble tools on Phase-1 suspicious signals."""
@@ -268,6 +274,18 @@ class Agent2Audio(ForensicAgent):
                 await self.inject_task(
                     description="Run enf_analysis to verify electrical network frequency splice markers",
                     priority=15,
+                )
+
+        # 5. If codec re-encoding detected, inject background noise analysis
+        if tool_name == "codec_fingerprinting":
+            if finding.metadata.get("re_encoding_detected"):
+                logger.info(
+                    "Codec re-encoding detected; injecting background noise analysis",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run background_noise_analysis to identify shift points",
+                    priority=14,
                 )
 
         # 4. Signal to inter-agent bus if AV sync is relevant

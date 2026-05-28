@@ -77,39 +77,53 @@ class Agent3Object(ForensicAgent):
                 "Run lighting_correlation_initial for initial shadow and light direction audit",
                 "Run vector_contraband_search for risk object screening",
             ]
-        return [
+        if not self._is_screen_capture and self._is_digital_capture:
+            # Digitally-created artwork: skip lighting correlation (no camera provenance)
+            return [
+                "Run object_detection for scene object identification",
+                "Run scene_incongruence for contextual anomaly detection",
+                "Run vector_contraband_search for risk object screening",
+            ]
+        # Content-aware routing: read Agent 1's image_category from shared context
+        # to decide whether vector_contraband_search is needed.
+        shared = {}
+        if self.inter_agent_bus:
+            shared = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+        routing = shared.get("metadata", {}).get("forensic_routing", {}) or {}
+        image_category = (routing.get("image_category") or "").lower()
+        skip_contraband = image_category == "live_photograph"
+        tasks = [
             "Run object_detection for scene object identification",
             "Run scene_incongruence for contextual anomaly detection",
-            "Run lighting_correlation_initial for initial shadow and light direction audit",
-            "Run vector_contraband_search for risk object screening",
         ]
+        if not skip_contraband:
+            tasks.append("Run lighting_correlation_initial for initial shadow and light direction audit")
+            tasks.append("Run vector_contraband_search for risk object screening")
+        else:
+            tasks.append("Run lighting_correlation_initial for initial shadow and light direction audit")
+        return tasks
 
     @property
     def deep_task_decomposition(self) -> list[str]:
         if self._is_screen_capture or self._is_digital_capture:
             return [
-                "Run gemini_deep_forensic to identify UI elements, interface objects, and potential document fabrication",
+                "Read shared image context for UI/screenshot grounding from Agent 1 Gemini analysis",
                 "Run screenshot_layout_forensics for deep UI/document consistency cross-check",
             ]
         object_ctx = self._tool_context.get("object_detection", {})
         detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
         tasks = []
+        # secondary_classification and adversarial_robustness_check removed from base —
+        # both are already reactively injected by _on_tool_result_impl
+        # (secondary from vector_contraband_search, adversarial from scene_incongruence).
         if detections:
-            tasks.extend(
-                [
-                    "Run secondary_classification on low-confidence objects",
-                    "Run scale_validation on confirmed objects for geometric proportion validation",
-                    "Run adversarial_robustness_check against object detection evasion",
-                ]
-            )
+            tasks.append("Run scale_validation on confirmed objects for geometric proportion validation")
         else:
-            # Always run scale_validation in deep pass even without prior detections
-            # (initial pass removed it for speed; deep pass validates geometry)
             tasks.append("Run scale_validation for object proportion and geometry consistency")
         tasks.extend(
             [
                 "Run lighting_consistency for deep ROI-aware shadow-angle audit",
-                "Run gemini_deep_forensic to identify content, detect weapons, describe context",
+                "Read shared image context for object/scene grounding from Agent 1 Gemini analysis",
             ]
         )
         return tasks
@@ -224,33 +238,42 @@ class Agent3Object(ForensicAgent):
             "Adversarial robustness check",
         )
 
-        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
-        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            async def _gemini_signal_callback(msg: str):
-                """Signal callback for early hand-off to Arbiter."""
-                try:
-                    if self.inter_agent_bus:
+        # ── Shared Image Context Reader (replaces Gemini API call) ────────────
+        # Agent 1's Phase 1 Gemini result is stored in the inter-agent bus.
+        # Agent 3 reads it here instead of making its own API call, reducing
+        # Gemini calls from 4 to 1 per image.
+        async def read_shared_image_context_handler(input_data: dict) -> dict:
+            """Read Agent 1's Gemini result from shared bus context."""
+            result = {"shared_context_available": False, "source": "agent1_gemini"}
+            try:
+                if self.inter_agent_bus:
+                    ctx = self.inter_agent_bus.get_image_context(str(self.session_id))
+                    if ctx:
+                        result["shared_context_available"] = True
+                        result["metadata"] = ctx.get("metadata", {})
+                        result["content_description"] = ctx.get("content_description", "")
+                        result["detected_objects"] = ctx.get("detected_objects", [])
+                        result["authenticity_verdict"] = ctx.get("authenticity_verdict", "")
+                        result["reasoning_summary"] = ctx.get("reasoning_summary", "")
+                        # Signal progress to the frontend
                         self.inter_agent_bus.signal_event(
                             self.session_id,
                             "agent3_initial_signal",
                             {
-                                "progress": msg,
+                                "progress": "Shared image context loaded from Agent 1 Gemini analysis",
                                 "object_count": self._tool_context.get("object_detection", {}).get(
                                     "detection_count", 0
                                 ),
                             },
                         )
-                except Exception as e:
-                    logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
-
-            return await self._gemini_deep_forensic_handler(
-                input_data, signal_callback=_gemini_signal_callback
-            )
+            except Exception as e:
+                logger.warning(f"{self.agent_id}: Failed to read shared image context", error=str(e))
+            return result
 
         registry.register(
-            "gemini_deep_forensic",
-            gemini_deep_forensic_handler,
-            "Gemini deep forensic analysis for objects and scene context",
+            "read_shared_image_context",
+            read_shared_image_context_handler,
+            "Read Agent 1 Gemini analysis from shared bus context",
         )
 
         return registry

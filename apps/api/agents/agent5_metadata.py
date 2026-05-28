@@ -167,6 +167,30 @@ class Agent5Metadata(ForensicAgent):
             )
         )
 
+    def _should_run_gemini_provenance(self) -> bool:
+        """Gate Agent 5's Gemini call — only when cross-validation is high-value.
+
+        Agent 5's Gemini prompt is a narrower GPS/timestamp/device provenance
+        cross-validation, not the full 13-section forensic prompt. Only fire
+        when there's data worth cross-validating or when Agent 1 flagged
+        suspicion.
+        """
+        exif = self._tool_context.get("exif_extract", {}) or {}
+        has_gps = bool(isinstance(exif, dict) and exif.get("gps_coordinates"))
+        software = str(exif.get("software", "")).lower() if isinstance(exif, dict) else ""
+        editing_tools = {"photoshop", "gimp", "lightroom", "picsart", "snapseed", "canva", "capcut"}
+        has_editing_sw = any(tool in software for tool in editing_tools)
+        # Read Agent 1 shared context for manipulation suspicion
+        agent1_suspicious = False
+        try:
+            if self.inter_agent_bus:
+                shared = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+                verdict = shared.get("metadata", {}).get("authenticity_verdict", "")
+                agent1_suspicious = verdict in ("SUSPICIOUS", "LIKELY_MANIPULATED")
+        except Exception:
+            pass
+        return has_gps or has_editing_sw or agent1_suspicious
+
     @property
     def agent_name(self) -> str:
         return "Agent5_MetadataContext"
@@ -214,8 +238,8 @@ class Agent5Metadata(ForensicAgent):
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
             ]
 
+        # exif_isolation_forest moved to Phase 2 — Phase 1 should be fast screening only
         return core_tasks + [
-            "Run exif_isolation_forest for ML-based field outlier detection",
             "Run timestamp_analysis for cross-field date and time consistency",
         ]
 
@@ -235,14 +259,25 @@ class Agent5Metadata(ForensicAgent):
             return [
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
             ]
-        return [
+        # exif_isolation_forest moved from Phase 1 (heavy ML — belongs in deep pass)
+        tasks = [
             "Run metadata_anomaly_score for probabilistic fabrication detection",
+            "Run exif_isolation_forest for ML-based field outlier detection",
             "Run provenance_chain_verify for C2PA and digital provenance manifests",
-            "Run camera_profile_match against claimed device model",
-            "Run astro_grounding to verify shadow-sun-gps-time parity if GPS coordinates are present",
-            "Run gps_timezone_validate for coordinate-timezone timeline cross-check if GPS data is available",
-            "Run gemini_deep_forensic for Hardware-Grounded Provenance Verification",
         ]
+        # camera_profile_match only if camera make is known from Phase 1 EXIF
+        exif = self._tool_context.get("exif_extract", {}) or {}
+        if isinstance(exif, dict) and exif.get("camera_make"):
+            tasks.append("Run camera_profile_match against claimed device model")
+        # GPS-dependent tools only if GPS coordinates are present
+        if isinstance(exif, dict) and exif.get("gps_coordinates"):
+            tasks.append("Run astro_grounding to verify shadow-sun-gps-time parity")
+            tasks.append("Run gps_timezone_validate for coordinate-timezone timeline cross-check")
+        # gemini runs when Phase 1 EXIF detected editing software, GPS data is
+        # present (for geospatial cross-validation), or Agent 1 flagged suspicion.
+        if self._should_run_gemini_provenance():
+            tasks.append("Run gemini_deep_forensic for GPS/Timestamp/Device Provenance Cross-Validation")
+        return tasks
 
     @property
     def iteration_ceiling(self) -> int:
@@ -357,4 +392,12 @@ class Agent5Metadata(ForensicAgent):
                     description="Run provenance_chain_verify for C2PA/JUMBF integrity check",
                     status=TaskStatus.PENDING,
                     priority=10,
+                )
+                # Also inject gemini for deep provenance verification when anomaly is detected
+                await self.working_memory.create_task(
+                    session_id=self.session_id,
+                    agent_id=_wm_agent_id,
+                    description="Run gemini_deep_forensic for Hardware-Grounded Provenance Verification",
+                    status=TaskStatus.PENDING,
+                    priority=8,
                 )

@@ -130,6 +130,29 @@ def _deep_forensic_cache_key(file_path: str | None, agent_id: str = "") -> str |
         return None
 
 
+def _deep_forensic_cache_key_triage(file_path: str | None) -> str | None:
+    """Return a shared cache key for cross-agent Gemini result reuse.
+
+    Key is ``{file_hash}:image_triage`` — Agent 1 stores its result under this
+    key so Agents 3/5 can read it without making their own API call.
+    """
+    import os as _os
+
+    if not file_path or not _os.path.isabs(file_path):
+        return None
+    try:
+        import hashlib
+
+        h = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        file_hash = h.hexdigest()
+        return f"{file_hash}:image_triage"
+    except OSError:
+        return None
+
+
 def _deep_forensic_cache_put(key: str, value: "GeminiVisionFinding") -> None:
     if len(_DEEP_FORENSIC_CACHE) >= _DEEP_FORENSIC_CACHE_MAX:
         try:
@@ -597,6 +620,14 @@ class GeminiVisionClient:
         # Each agent gets its own cache entry — Agent 3's object/scene
         # analysis is not interchangeable with Agent 1's pixel analysis.
         cache_key = _deep_forensic_cache_key(str(file_path), agent_id=agent_id)
+        # Shared triage cache: Agents 3/5 check if Agent 1 already ran.
+        triage_key = _deep_forensic_cache_key_triage(str(file_path))
+        # Check triage cache first (Agent 1's result, which can serve all agents)
+        if triage_key and triage_key in _DEEP_FORENSIC_CACHE:
+            cached = _DEEP_FORENSIC_CACHE[triage_key]
+            logger.info("Gemini triage cache hit — reusing Agent 1 result", file_path=file_path)
+            cached.from_cache = True
+            return cached
         if cache_key and cache_key in _DEEP_FORENSIC_CACHE:
             cached = _DEEP_FORENSIC_CACHE[cache_key]
             logger.info("Gemini deep forensic cache hit — reusing result", file_path=file_path)
@@ -731,9 +762,14 @@ class GeminiVisionClient:
             model_hint=model_hint,
             is_screen_capture_like=is_screen_capture_like,
         )
-        # Cache the result for subsequent agents in the same process lifetime
-        if cache_key and result and not result.error:
-            _deep_forensic_cache_put(cache_key, result)
+        # Cache the result for subsequent agents in the same process lifetime.
+        # Also store under the shared triage key so Agents 3/5 can reuse Agent 1's
+        # result without making their own API calls.
+        if result and not result.error:
+            if cache_key:
+                _deep_forensic_cache_put(cache_key, result)
+            if triage_key:
+                _deep_forensic_cache_put(triage_key, result)
         return result
 
     async def analyze_metadata_visual_consistency(

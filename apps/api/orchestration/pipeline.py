@@ -741,6 +741,7 @@ class ForensicCouncilPipeline:
                 "reflection_report": result.reflection_report,
                 "react_chain": result.react_chain,
                 "agent_had_error": result.error is not None,
+                "synthesis": result.synthesis,
             }
         return arbiter_results
 

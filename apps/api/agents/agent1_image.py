@@ -28,6 +28,7 @@ from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
 from core.image_utils import is_lossless_image
 from core.media_kind import (
+    is_camera_still_candidate,
     is_digitally_created_image,
     is_screen_capture_like,
     is_document_like,
@@ -88,6 +89,11 @@ class Agent1Image(ForensicAgent):
         """Cached: whether the image is a recompressed web download."""
         return is_recompressed_web_image(self.evidence_artifact)
 
+    @cached_property
+    def _is_camera(self) -> bool:
+        """Cached: whether the image originates from a camera (has camera EXIF tags)."""
+        return is_camera_still_candidate(self.evidence_artifact)
+
     @property
     def iteration_ceiling(self) -> int:
         # Include both initial and deep tasks to prevent truncation of the forensic pipeline.
@@ -102,11 +108,20 @@ class Agent1Image(ForensicAgent):
         Ordered by forensic signal value: primary manipulation detectors run
         first so the investigator sees high-confidence findings early.
         Cheap context tools (CLIP, OCR, FFT) follow.
+
+        Design rules:
+          - gemini_deep_forensic is a synthesis tool — runs only in Phase 2
+            except for screenshots where it replaces ELA as the primary classifier.
+          - extract_text_from_image is only useful for documents (scanned text)
+            and screenshots (UI text) — OCR on camera photos or web downloads
+            wastes a task slot. It is reactively injected by _on_tool_result_impl
+            when analyze_image_content detects handwritten content.
+          - Camera JPEGs get a dedicated branch (5 tools) instead of falling
+            through to the generic lossy/JPEG default.
         """
         if self._is_document:
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for content classification and forensic routing hints",
                 "Run extract_text_from_image for OCR and document content identification",
                 "Run analyze_image_content for semantic document classification",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -114,21 +129,20 @@ class Agent1Image(ForensicAgent):
                 "Run neural_fingerprint for conceptual similarity detection",
             ]
         if self._is_recompressed_web:
+            # jpeg_ghost_detect and ela_full_image removed from base — reactively
+            # injected by _reason_step when ELA/FFT disagree (no coverage lost).
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for content classification and forensic routing hints",
-                "Run jpeg_ghost_detect for double compression analysis",
-                "Run ela_full_image for classical ELA residuals check",
                 "Run neural_ela for high-confidence manipulation detection",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
                 "Run frequency_domain_analysis for frequency domain analysis",
-                "Run extract_text_from_image for visible text extraction",
             ]
         if self._is_screen_capture or self._is_digital_capture:
             # Screenshots: hash integrity → OCR (primary signal for UI) → semantic →
             # frequency scan. neural_fingerprint deferred to deep — conceptual similarity
             # is less informative for screenshots which are inherently unique UI states.
+            # Gemini stays as the primary content classifier (cheaper than ELA on UI).
             return [
                 "Run file_hash_verify for evidence integrity check",
                 "Run gemini_deep_forensic for content classification and forensic routing hints",
@@ -138,27 +152,33 @@ class Agent1Image(ForensicAgent):
             ]
         if self._is_lossless:
             # Lossless: noiseprint sensor clustering is the primary manipulation signal.
-            # neural_fingerprint → CLIP context → OCR (rarely useful) → FFT supporting.
+            # neural_fingerprint → CLIP context → FFT supporting.
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for content classification and forensic routing hints",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
                 "Run frequency_domain_analysis for frequency domain analysis",
-                "Run extract_text_from_image for visible text extraction",
             ]
-        # Lossy/JPEG: Neural ELA is the primary manipulation signal — run it first.
-        # neural_fingerprint (SigLIP2) follows for GAN/synthetic baseline.
-        # CLIP semantic + FFT + OCR provide supporting context.
+        if self._is_camera:
+            # Camera JPEGs: neural ELA is the primary manipulation detector.
+            # No Gemini or OCR in Phase 1 — they are expensive and low-value
+            # for natural photos. OCR is reactively injected if text is found.
+            return [
+                "Run file_hash_verify for evidence integrity check",
+                "Run neural_ela for high-confidence manipulation detection",
+                "Run neural_fingerprint for conceptual similarity detection",
+                "Run analyze_image_content for semantic image understanding",
+                "Run frequency_domain_analysis for frequency domain analysis",
+            ]
+        # Lossy/JPEG fallback: Neural ELA is the primary manipulation signal.
+        # No Gemini or OCR — same reasoning as camera branch.
         return [
             "Run file_hash_verify for evidence integrity check",
-            "Run gemini_deep_forensic for content classification and forensic routing hints",
             "Run neural_ela for high-confidence manipulation detection",
             "Run neural_fingerprint for conceptual similarity detection",
             "Run analyze_image_content for semantic image understanding",
             "Run frequency_domain_analysis for frequency domain analysis",
-            "Run extract_text_from_image for visible text extraction",
         ]
 
     @property
@@ -175,17 +195,13 @@ class Agent1Image(ForensicAgent):
           - adversarial_robustness_check — only when splicing/copy-move confirmed.
         """
         if self._is_screen_capture or self._is_digital_capture:
-            tasks = [
+            # Gemini already ran in Phase 1 for screenshots — result is in shared
+            # context for Agents 3/5. Phase 2 uses classical ML tools exclusively.
+            return [
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run diffusion_artifact_detector for AI-generation signatures",
                 "Run synthid_watermark_detect for SynthID and AI watermark detection",
             ]
-            gemini_ran = bool(self._tool_context.get("gemini_deep_forensic"))
-            if not gemini_ran:
-                tasks.append(
-                    "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding"
-                )
-            return tasks
 
         # Natural photos: fast high-signal tools first, heavy tools later
         tasks = [
@@ -198,15 +214,9 @@ class Agent1Image(ForensicAgent):
         # anomaly_tracer relies heavily on JPEG noise/ghosts — skip for lossless
         if not self._is_lossless:
             tasks.append("Run anomaly_tracer for ManTra-Net universal anomaly tracing")
-        # adversarial_robustness_check is expensive — gated inside its handler
-        tasks.append(
-            "Run adversarial_robustness_check for anti-forensics perturbation stability check if splicing or copy-move was detected",
-        )
-        gemini_ran = bool(self._tool_context.get("gemini_deep_forensic"))
-        if not gemini_ran:
-            tasks.append(
-                "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding"
-            )
+        # adversarial_robustness_check removed from base — injected reactively in
+        # _reason_step when neural_splicing or neural_copy_move returns POSITIVE.
+        # Gemini removed from Phase 2 — Phase 1 result in shared context.
         return tasks
 
     @property
@@ -245,6 +255,14 @@ class Agent1Image(ForensicAgent):
                     logger.debug(f"{self.agent_id}: Gemini signal relay failed", error=str(_e))
 
             result = await self._gemini_deep_forensic_handler(input_data, signal_callback=_signal_cb)
+
+            # Store result to shared context for Agents 3/5 to reuse
+            if result and not result.get("error"):
+                try:
+                    if self.inter_agent_bus:
+                        self.inter_agent_bus.set_image_context(str(self.session_id), result)
+                except Exception as ctx_err:
+                    logger.debug(f"{self.agent_id}: Failed to store shared context", error=str(ctx_err))
 
             # Dynamic content-aware tool gating using forensic_routing
             try:
@@ -441,6 +459,15 @@ class Agent1Image(ForensicAgent):
                 if not has_roi:
                     logger.info("Reasoning Step: High-confidence ELA anomaly. Injecting roi_extract.", agent_id=self.agent_id)
                     await self.inject_task(description="Run roi_extract for localized forensic region analysis", priority=20)
+
+        # 6. Reactive adversarial check on splicing or copy-move confirmation
+        if tool_name in {"neural_splicing", "splicing_detect", "neural_copy_move", "copy_move_detect"}:
+            if finding.evidence_verdict == "POSITIVE":
+                state = await self.working_memory.get_state(session_id=self.session_id, agent_id=self.agent_id)
+                has_adversarial = any("adversarial" in t.description.lower() for t in state.tasks) if state else False
+                if not has_adversarial:
+                    logger.info("Reasoning Step: Splicing/copy-move confirmed. Injecting adversarial_robustness_check.", agent_id=self.agent_id)
+                    await self.inject_task(description="Run adversarial_robustness_check for anti-forensics perturbation stability check", priority=16)
 
 
     async def _on_tool_result_impl(self, finding: AgentFinding) -> None:

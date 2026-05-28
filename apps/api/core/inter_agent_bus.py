@@ -119,6 +119,11 @@ class InterAgentBus:
         # Lock to make circular-dependency check + _active_calls registration atomic
         self._dispatch_lock = asyncio.Lock()
 
+        # Shared image context store: session_id → Gemini result dict.
+        # Agent 1 stores its Phase 1 result here; Agents 3/5 read it
+        # instead of making their own Gemini API calls.
+        self._image_context: dict[str, dict] = {}
+
         # Redis Pub/Sub integration
         self._listener_task: asyncio.Task | None = None
         self._pubsub: Any = None
@@ -483,6 +488,14 @@ class InterAgentBus:
         else:
             self._arbiter_challenges.clear()
 
+    def set_image_context(self, session_id: str, data: dict) -> None:
+        """Store Agent 1's Gemini result for cross-agent reuse."""
+        self._image_context[str(session_id)] = data
+
+    def get_image_context(self, session_id: str) -> dict:
+        """Retrieve Agent 1's Gemini result, or empty dict if not yet available."""
+        return self._image_context.get(str(session_id), {})
+
     def reset(self) -> None:
         """Reset bus state (for new sessions)."""
         self._active_calls.clear()
@@ -490,3 +503,4 @@ class InterAgentBus:
         self._call_history.clear()
         self._completed_calls.clear()
         self._registered_agents.clear()
+        self._image_context.clear()

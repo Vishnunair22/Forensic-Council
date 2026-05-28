@@ -189,7 +189,10 @@ def is_recompressed_web_image(artifact: Any) -> bool:
     if not is_jpg:
         return False
 
-    has_no_camera_tags = not probe.get("has_camera_tags")
+    # Camera-originated files are never recompressed web images
+    if probe.get("has_camera_tags"):
+        return False
+
     orig_name = str(getattr(artifact, "original_filename", "") or "").lower()
     filename = os.path.basename(file_path).lower()
     web_keywords = {"web", "download", "img", "photo_", "facebook", "instagram", "whatsapp", "twitter", "reddit"}
@@ -202,5 +205,5 @@ def is_recompressed_web_image(artifact: Any) -> bool:
     except Exception:
         pass
 
-    return has_no_camera_tags and (has_quantization or has_web_keyword)
+    return has_quantization or has_web_keyword
 
