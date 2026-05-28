@@ -111,6 +111,7 @@ class NeuralSynthesisMixin:
                 model_hint=model_hint,
                 persona=agent_persona,
                 is_screen_capture_like=is_screen_cap,
+                agent_id=self.agent_id,
             )
 
             if finding.error:

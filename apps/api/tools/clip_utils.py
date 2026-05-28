@@ -51,29 +51,58 @@ class CLIPImageAnalyzer:
 
     # Default forensic-relevant image categories
     DEFAULT_IMAGE_CATEGORIES = [
+        # Screen captures
         "a screenshot of a document",
-        "an outdoor photograph",
-        "an indoor photograph",
-        "a social media post",
-        "a surveillance camera frame",
-        "a digitally generated or AI image",
-        "a scanned photograph",
-        "a news article image",
-        "a passport or identification document",
         "a screenshot of a chat conversation",
+        "a screenshot of a mobile phone screen",
+        "a screenshot of a desktop application",
+        "a screenshot of a web browser",
+        # Camera/phone photos
+        "an outdoor photograph taken with a camera",
+        "an indoor photograph taken with a camera",
+        "a portrait photograph of a person or face",
+        "a photograph of a crowd or public gathering",
+        "a nighttime or low-light photograph",
+        "a close-up photograph of an object or item",
+        "a photograph of a street scene or cityscape",
+        "a photograph of a vehicle or car",
+        "a photograph of a building or structure",
+        # Crime / forensic
+        "a crime scene photograph",
         "a forensic evidence photograph",
+        "a surveillance camera frame",
+        # Documents / handwritten
+        "a scanned handwritten document or note",
+        "a printed document or form",
+        "a passport or identification document",
+        "a receipt or invoice",
+        "a handwritten letter or message",
+        # Object-focused
+        "a photograph of a weapon or knife",
+        "a photograph of a firearm or gun",
+        "a photograph of a vehicle",
+        # AI / synthetic
+        "a digitally generated or AI-generated image",
+        "a social media post",
+        "a news article image",
+        "a medical or scientific imaging scan",
         "a product or commercial image",
+        "a scanned photograph or printed photo",
     ]
 
     # Categories for contraband/concern detection
     CONCERN_CATEGORIES = [
-        "a firearm or weapon",
-        "an explosive device",
-        "drug paraphernalia",
+        "a firearm or gun",
         "a knife or bladed weapon",
+        "an explosive device or bomb",
+        "drug paraphernalia or controlled substances",
         "a safe everyday object",
-        "a person",
-        "a vehicle",
+        "a person or face",
+        "a vehicle or car",
+        "a crime scene",
+        "blood or bodily injury",
+        "currency or cash",
+        "a document or ID card",
     ]
 
     def __init__(self):

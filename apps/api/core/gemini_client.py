@@ -34,6 +34,7 @@ import asyncio
 import base64
 import json
 import mimetypes
+import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -106,8 +107,12 @@ _DEEP_FORENSIC_CACHE: dict[str, "GeminiVisionFinding"] = {}
 _DEEP_FORENSIC_CACHE_MAX = 32
 
 
-def _deep_forensic_cache_key(file_path: str | None) -> str | None:
-    """Return SHA-256 hex digest of file contents, or None if unreadable."""
+def _deep_forensic_cache_key(file_path: str | None, agent_id: str = "") -> str | None:
+    """Return SHA-256 hex digest of file contents + agent_id, or None if unreadable.
+
+    Agent ID is included so each agent gets its own cache entry — Agent 3's
+    object/scene analysis is not interchangeable with Agent 1's pixel analysis.
+    """
     import os as _os
 
     if not file_path or not _os.path.isabs(file_path):
@@ -119,7 +124,8 @@ def _deep_forensic_cache_key(file_path: str | None) -> str | None:
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(1024 * 1024), b""):
                 h.update(chunk)
-        return h.hexdigest()
+        file_hash = h.hexdigest()
+        return f"{file_hash}:{agent_id}" if agent_id else file_hash
     except OSError:
         return None
 
@@ -166,6 +172,7 @@ class GeminiVisionFinding:
     _authenticity_verdict: str = ""
     _metadata_visual_consistency: str = ""
     _forensic_routing: dict[str, Any] = field(default_factory=dict)
+    _forensic_specifics: str = ""
 
     def to_finding_dict(self, agent_id: str) -> dict[str, Any]:
         """Convert to a dict compatible with AgentFinding / Arbiter schema."""
@@ -210,6 +217,7 @@ class GeminiVisionFinding:
                 "authenticity_verdict": getattr(self, "_authenticity_verdict", ""),
                 "metadata_visual_consistency": getattr(self, "_metadata_visual_consistency", ""),
                 "forensic_routing": getattr(self, "_forensic_routing", {}),
+                "forensic_specifics": getattr(self, "_forensic_specifics", ""),
                 "analysis_phase": "deep",
                 "latency_ms": round(self.latency_ms, 1),
                 # Map authenticity_verdict to standard manipulation flags so the
@@ -562,6 +570,7 @@ class GeminiVisionClient:
         signal_callback: Any | None = None,
         persona: str | None = None,
         is_screen_capture_like: bool = False,
+        agent_id: str = "",
     ) -> GeminiVisionFinding:
         """
         Comprehensive deep forensic analysis — single call covering everything.
@@ -584,10 +593,10 @@ class GeminiVisionClient:
         if not self._enabled:
             return await self._local_forensic_fallback(file_path, exif_summary, is_screen_capture_like=is_screen_capture_like)
 
-        # M-H-8: cache by content-hash, not path. The previous path-keyed
-        # cache could return stale results for a re-uploaded evidence file
-        # that landed at the same fixed-directory path.
-        cache_key = _deep_forensic_cache_key(str(file_path))
+        # M-H-8: cache by content-hash + agent_id, not path alone.
+        # Each agent gets its own cache entry — Agent 3's object/scene
+        # analysis is not interchangeable with Agent 1's pixel analysis.
+        cache_key = _deep_forensic_cache_key(str(file_path), agent_id=agent_id)
         if cache_key and cache_key in _DEEP_FORENSIC_CACHE:
             cached = _DEEP_FORENSIC_CACHE[cache_key]
             logger.info("Gemini deep forensic cache hit — reusing result", file_path=file_path)
@@ -607,6 +616,28 @@ class GeminiVisionClient:
                 f"EXIF / metadata extracted from file:\n{meta_text}\n"
                 "[UNTRUSTED EVIDENCE END]\n"
                 "Cross-validate these claims against what you visually observe."
+            )
+
+        # Build category-specific forensic directives
+        if is_screen_capture_like:
+            category_directive = (
+                "\n\nSPECIAL FOCUS — DIGITAL/SCREENSHOT EVIDENCE:\n"
+                "- Verify UI element consistency (fonts, spacing, button styles match claimed platform)\n"
+                "- Check timestamp/clock in status bar against EXIF or claimed date\n"
+                "- Identify the platform (iOS/Android/Web/Desktop) from visual cues\n"
+                "- Flag any pasted or overlaid text that differs in rendering from native UI\n"
+                "- Note if any elements appear cropped, composited, or re-rendered\n"
+            )
+        else:
+            category_directive = (
+                "\n\nSPECIAL FOCUS — PHOTOGRAPHIC EVIDENCE:\n"
+                "- Assess lighting direction consistency across all objects in the scene\n"
+                "- Check shadow angles for geometric consistency\n"
+                "- Note any objects whose perspective, scale, or depth-of-field is inconsistent\n"
+                "- For portraits: check skin texture uniformity, ear/hair boundary artifacts\n"
+                "- For crime scenes: assess scene staging plausibility\n"
+                "- For documents/handwritten items: note ink uniformity, baseline consistency, pen pressure\n"
+                "- For object photos (knife, weapon, vehicle): assess scale plausibility vs background\n"
             )
 
         persona_preamble = f"You are {persona}\n\n" if persona else ""
@@ -663,6 +694,11 @@ class GeminiVisionClient:
             "   - priority_signals: list of strings (what visual/pixel indicators to investigate first)\n"
             "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
             "   - focus_regions: list of strings (coordinates or specific regions of interest to inspect)\n\n"
+            "13. FORENSIC_SPECIFICS: Based on the image category, provide 2-3 domain-specific "
+            "observations a forensic expert would note (e.g. for portraits: facial boundary artifacts; "
+            "for documents: ink bleed patterns; for crime scenes: blood spatter pattern plausibility; "
+            "for vehicles: plate number legibility and consistency).\n\n"
+            f"{category_directive}"
             f"{meta_section}\n\n"
             "Respond ONLY with valid JSON matching this exact schema (no markdown, no "
             "preamble, just the JSON object):\n"
@@ -683,7 +719,8 @@ class GeminiVisionClient:
             '    "priority_signals": ["priority signal to look for"],\n'
             '    "skip_tools": ["tools to skip"],\n'
             '    "focus_regions": ["focus areas"]\n'
-            '  }\n'
+            '  },\n'
+            '  "forensic_specifics": "domain-specific observations"\n'
             "}"
         )
 
@@ -976,7 +1013,7 @@ class GeminiVisionClient:
                                 raise _ModelUnavailableError(
                                     f"Quota exceeded (429): {error_detail[:300]}"
                                 )
-                            wait = _BASE_BACKOFF * (2**attempt)
+                            wait = _BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
                             logger.warning(
                                 f"Gemini API rate limited (429) for model {self.model}. "
                                 f"Retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})..."
@@ -984,7 +1021,7 @@ class GeminiVisionClient:
                             await asyncio.sleep(wait)
                             continue
                         elif resp.status_code in {500, 502, 503, 504}:
-                            wait = _BASE_BACKOFF * (2**attempt)
+                            wait = _BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
                             logger.warning(
                                 f"Gemini API error {resp.status_code} for model {self.model}. "
                                 f"Retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})..."
@@ -1015,7 +1052,7 @@ class GeminiVisionClient:
                     return ""
             except (httpx.TimeoutException, httpx.ConnectError) as net_err:
                 if attempt < _MAX_RETRIES - 1:
-                    wait = _BASE_BACKOFF * (2**attempt)
+                    wait = _BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
                     logger.warning(
                         f"Gemini networking error ({type(net_err).__name__}) - retrying in {wait:.1f}s..."
                     )
@@ -1174,6 +1211,7 @@ class GeminiVisionClient:
             _authenticity_verdict=verdict,
             _metadata_visual_consistency=meta_consistency,
             _forensic_routing=data.get("forensic_routing", {}),
+            _forensic_specifics=data.get("forensic_specifics", ""),
         )
         return finding
 
@@ -1489,7 +1527,7 @@ class GeminiVisionClient:
                 contextual_anomalies=[],
                 file_type_assessment=content_type,
                 confidence=0.55,
-                court_defensible=True,
+                court_defensible=False,
                 caveat=(
                     "Local fallback analysis — GEMINI_API_KEY not set. "
                     "Set GEMINI_API_KEY for AI-powered deep visual forensics. "

@@ -27,21 +27,22 @@ except Exception:  # pragma: no cover - optional dependency
     Nominatim = None  # type: ignore[assignment]
 
 EXPECTED_EXIF_FIELDS = [
-    "Make",
-    "Model",
-    "DateTime",
-    "DateTimeOriginal",
-    "DateTimeDigitized",
-    "Software",
-    "LensModel",
-    "FNumber",
-    "ExposureTime",
-    "ISOSpeedRatings",
-    "FocalLength",
-    "GPSLatitude",
-    "GPSLongitude",
-    "GPSLatitudeRef",
-    "GPSLongitudeRef",
+    # Device identity
+    "Make", "Model", "CameraSerialNumber", "LensModel", "LensSerialNumber",
+    # Temporal (full precision)
+    "DateTime", "DateTimeOriginal", "DateTimeDigitized", "SubSecTimeOriginal",
+    "SubSecTime", "SubSecTimeDigitized",
+    # Capture parameters
+    "FNumber", "ExposureTime", "ISOSpeedRatings", "FocalLength",
+    "Flash", "WhiteBalance", "MeteringMode", "ExposureProgram",
+    "SceneType", "SceneCaptureType",
+    # GPS full set
+    "GPSLatitude", "GPSLongitude", "GPSLatitudeRef", "GPSLongitudeRef",
+    "GPSAltitude", "GPSAltitudeRef", "GPSTimestamp", "GPSDateStamp",
+    "GPSSpeed", "GPSSpeedRef", "GPSImgDirection", "GPSImgDirectionRef",
+    # Provenance
+    "Software", "Artist", "Copyright", "ImageDescription",
+    "XPComment", "UserComment",
 ]
 
 
@@ -507,6 +508,7 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
     exif_datetime: datetime | None = None
     exif_software: str | None = None
     gps_datestamp: str | None = None
+    gps_timestamp_raw: str | None = None
 
     try:
         with Image.open(path) as img:
@@ -514,6 +516,7 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
             if raw_exif:
                 # 36867=DateTimeOriginal, 36868=DateTimeDigitized, 306=DateTime
                 # 305=Software, 29=GPSDateStamp (inside GPSInfo sub-IFD)
+                # 7=GPSTimestamp (tuple of hour/min/sec)
                 exif_original = _parse_dt(raw_exif.get(36867))
                 exif_digitized = _parse_dt(raw_exif.get(36868))
                 exif_datetime = _parse_dt(raw_exif.get(306))
@@ -521,6 +524,15 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
                 gps_info = raw_exif.get(34853)
                 if isinstance(gps_info, dict):
                     gps_datestamp = str(gps_info.get(29) or "").strip() or None
+                    gps_ts = gps_info.get(7)
+                    if gps_ts and len(gps_ts) == 3:
+                        try:
+                            h = int(_ratio(gps_ts[0]) or 0)
+                            m = int(_ratio(gps_ts[1]) or 0)
+                            s = int(_ratio(gps_ts[2]) or 0)
+                            gps_timestamp_raw = f"{h:02d}:{m:02d}:{s:02d} UTC"
+                        except Exception:
+                            pass
     except Exception:
         pass
 
@@ -575,7 +587,21 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
                 f"({exif_day}) — possible timezone error or metadata manipulation."
             )
 
-    # 6. Software field implies post-capture editing
+    # 6. GPS UTC timestamp vs EXIF DateTimeOriginal (>24h gap is suspicious)
+    if gps_datestamp and gps_timestamp_raw and exif_original:
+        try:
+            gps_dt_str = f"{gps_datestamp.replace(':', '-')} {gps_timestamp_raw.replace(' UTC', '')}"
+            gps_dt = datetime.strptime(gps_dt_str, "%Y-%m-%d %H:%M:%S")
+            delta_hours = abs((exif_original - gps_dt).total_seconds()) / 3600
+            if delta_hours > 24:
+                inconsistencies.append(
+                    f"GPS UTC datetime ({gps_dt_str} UTC) differs from EXIF DateTimeOriginal "
+                    f"({exif_original}) by {delta_hours:.1f} hours — timezone error or metadata manipulation suspected."
+                )
+        except Exception:
+            pass
+
+    # 7. Software field implies post-capture editing
     editing_hints = {"photoshop", "gimp", "lightroom", "canva", "picsart", "facetune",
                      "meitu", "snapseed", "affinity", "pixelmator", "fotor"}
     software_flag = exif_software and any(h in exif_software.lower() for h in editing_hints)
@@ -593,6 +619,7 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
         "exif_datetime": exif_datetime.isoformat() if exif_datetime else None,
         "exif_software": exif_software,
         "gps_datestamp": gps_datestamp,
+        "gps_timestamp": gps_timestamp_raw,
         "inconsistencies": inconsistencies,
         "inconsistency_count": len(inconsistencies),
         "software_edit_flag": bool(software_flag),
@@ -788,6 +815,14 @@ async def camera_profile_match(artifact: Any = None, file_path: str | None = Non
         "verdict": verdict,
         "confidence": confidence,
         "court_defensible": True,
+        "device_identity": f"{claimed_make or 'Unknown'} {claimed_model or 'Unknown'}".strip(),
+        "device_identity_statement": (
+            f"Claimed device: {claimed_make} {claimed_model}. "
+            f"Profile completeness: {completeness:.0%}. "
+            f"Capture fields present: {', '.join(capture_present) or 'none'}."
+            if (claimed_make or claimed_model)
+            else "No Make/Model present — likely screenshot, synthetic, or metadata-stripped."
+        ),
     }
 
 

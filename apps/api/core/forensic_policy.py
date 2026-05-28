@@ -27,7 +27,7 @@ class ForensicPolicy:
         "ela_full_image": 1.0,
         "jpeg_ghost_detect": 1.0,
         "noise_fingerprint": 1.0,
-        "frequency_domain_analysis": 1.0,
+        "frequency_domain_analysis": 0.75,
         "codec_fingerprint": 1.0,
         # ML-based / Neural (medium-high weight)
         "voice_clone_detect": 0.85,

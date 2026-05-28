@@ -895,6 +895,9 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
         hex_f = _first_by_tool(all_findings, "hex_signature_scan")
         structure = _first_by_tool(all_findings, "file_structure_analysis")
         compression = _first_by_tool(all_findings, "compression_risk_audit")
+        object_det = _first_by_tool(all_findings, "object_detection", "yolo_object_detection")
+        scene_inc = _first_by_tool(all_findings, "scene_incongruence")
+        lighting = _first_by_tool(all_findings, "lighting_consistency", "lighting_correlation_initial")
 
         integrity_bits: list[str] = []
         if freq:
@@ -962,6 +965,20 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
             impact = meta.get("forensic_reliability_impact") or "unspecified"
             penalty = meta.get("compression_penalty", 1.0)
             context_bits.append(f"compression/provenance reliability impact {impact} (penalty {float(penalty or 1.0):.2f})")
+        if object_det:
+            meta = _tool_meta(object_det)
+            labels = meta.get("detected_labels") or meta.get("labels") or []
+            context_bits.append(f"object detection identified {', '.join(str(x) for x in labels[:4])}; {len(labels)} object(s) total")
+        if scene_inc:
+            meta = _tool_meta(scene_inc)
+            anomalies = meta.get("anomalies") or []
+            score = meta.get("incongruence_score", 0)
+            context_bits.append(f"scene incongruence score {score:.3f} with {len(anomalies)} anomaly flag(s)")
+        if lighting:
+            meta = _tool_meta(lighting)
+            l_score = meta.get("lighting_consistency_score") or meta.get("correlation_score") or 0
+            direction = meta.get("light_direction_consistency") or "unknown"
+            context_bits.append(f"lighting consistency score {float(l_score):.3f} (direction: {direction})")
 
         line_one = (
             f"{verdict}"
@@ -1188,7 +1205,7 @@ Rules:
                     raw = raw[:-3].strip()
             data = json.loads(raw[raw.find("{") : raw.rfind("}") + 1])
             vs = str(data.get("verdict_sentence", ""))
-            kf = [str(x) for x in data.get("key_findings", []) if x]
+            kf = _clean_key_findings([str(x) for x in data.get("key_findings", []) if x])
             rn = str(data.get("reliability_note", ""))
             if vs and kf and rn:
                 return vs, kf, rn
@@ -1252,6 +1269,7 @@ Rules:
         key_findings_list = [
             _strip_rs_prefix(_truncate(f.get("reasoning_summary") or "")) for f in top
         ]
+        key_findings_list = _clean_key_findings(key_findings_list)
         if not key_findings_list:
             key_findings_list = ["No significant findings were identified."]
 
@@ -1638,6 +1656,9 @@ Rules:
         hex_f = _first_by_tool(all_findings, "hex_signature_scan")
         structure = _first_by_tool(all_findings, "file_structure_analysis")
         compression = _first_by_tool(all_findings, "compression_risk_audit")
+        object_det = _first_by_tool(all_findings, "object_detection", "yolo_object_detection")
+        scene_inc = _first_by_tool(all_findings, "scene_incongruence")
+        lighting = _first_by_tool(all_findings, "lighting_consistency", "lighting_correlation_initial")
 
         integrity_lines = []
         if freq:
@@ -1701,6 +1722,20 @@ Rules:
             impact = meta.get("forensic_reliability_impact") or "unspecified"
             penalty = meta.get("compression_penalty", 1.0)
             context_lines.append(f"compression/provenance reliability impact {impact} (penalty {float(penalty or 1.0):.2f})")
+        if object_det:
+            meta = _tool_meta(object_det)
+            labels = meta.get("detected_labels") or meta.get("labels") or []
+            context_lines.append(f"object detection identified {', '.join(str(x) for x in labels[:4])}; {len(labels)} object(s) total")
+        if scene_inc:
+            meta = _tool_meta(scene_inc)
+            anomalies = meta.get("anomalies") or []
+            score = meta.get("incongruence_score", 0)
+            context_lines.append(f"scene incongruence score {score:.3f} with {len(anomalies)} anomaly flag(s)")
+        if lighting:
+            meta = _tool_meta(lighting)
+            l_score = meta.get("lighting_consistency_score") or meta.get("correlation_score") or 0
+            direction = meta.get("light_direction_consistency") or "unknown"
+            context_lines.append(f"lighting consistency score {float(l_score):.3f} (direction: {direction})")
 
         summary_structured = {
             "verdict_line": f"{verdict} at {confidence}% confidence.",

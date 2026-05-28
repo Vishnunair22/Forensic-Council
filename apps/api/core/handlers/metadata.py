@@ -494,11 +494,16 @@ class MetadataHandlers(BaseToolHandler):
         # tags still has meaningful provenance signals and should not be penalised.
         total_fields = int(exif.get("total_fields_extracted", 0))
         if penalty == 1.0 and total_fields < 3:
-            # Camera filename → metadata was likely stripped by a privacy tool or transfer;
-            # apply only a small calibration penalty rather than a risk flag.
+            # Check if capture fields exist despite low tag count (partial metadata)
+            fnumber = exif.get("FNumber")
+            iso = exif.get("ISOSpeedRatings")
+            has_capture_fields = bool(fnumber or iso)
             is_camera_file = any(x in file_name for x in ("dsc", "img_", "p_", "mvc", "dcim"))
-            if is_camera_file:
-                penalty = 0.95  # Negligible — camera capture with privacy-stripped metadata
+            if has_capture_fields:
+                penalty = 0.92  # Has capture params — partial metadata, low risk
+                platform = "Camera Capture (Partial Metadata)"
+            elif is_camera_file:
+                penalty = 0.95  # Camera capture with privacy-stripped metadata
                 platform = "Camera Capture (Stripped Metadata)"
             else:
                 penalty = 0.78  # Minor penalty — non-standard name with near-zero EXIF

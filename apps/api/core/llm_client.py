@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import random
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -374,7 +376,7 @@ class LLMClient:
 
                 last_response = response
                 if response.status_code in _RETRYABLE_STATUS:
-                    wait = min(_BASE_BACKOFF * (2**attempt), _MAX_BACKOFF)
+                    wait = min(_BASE_BACKOFF * (2**attempt), _MAX_BACKOFF) * (0.5 + random.random())
                     logger.warning(
                         f"LLM API {response.status_code}, retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
                     )
@@ -383,7 +385,7 @@ class LLMClient:
                 return response
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 if attempt < _MAX_RETRIES - 1:
-                    wait = min(_BASE_BACKOFF * (2**attempt), _MAX_BACKOFF)
+                    wait = min(_BASE_BACKOFF * (2**attempt), _MAX_BACKOFF) * (0.5 + random.random())
                     logger.warning(f"LLM API {type(e).__name__}, retrying in {wait:.1f}s")
                     await asyncio.sleep(wait)
                 else:

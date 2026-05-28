@@ -511,6 +511,48 @@ class Agent1Image(ForensicAgent):
                     priority=20,
                 )
 
+            # Reactive routing: handwritten content detection
+            handwritten_keywords = {"handwritten", "handwriting", "hand writing", "manuscript", "cursive", "written note"}
+            has_handwritten = any(k in image_type for k in handwritten_keywords) or any(
+                any(k in str(c.get("category", "")).lower() for k in handwritten_keywords)
+                and (c.get("score") or 0.0) > 0.35
+                for c in all_classifications
+            )
+            if has_handwritten:
+                logger.info(
+                    f"Handwritten content detected: {image_type}; routing to handwriting OCR",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run extract_text_from_image for handwriting OCR with adaptive fallback",
+                    priority=12,
+                )
+                if self.inter_agent_bus:
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "handwriting_detected",
+                        {"agent_id": self.agent_id, "image_type": image_type},
+                    )
+
+            # Reactive routing: crime scene / weapon / document detection
+            crime_keywords = {"crime scene", "blood", "injury", "weapon", "knife", "firearm", "gun", "violence"}
+            has_crime_scene = any(k in image_type for k in crime_keywords) or any(
+                any(k in str(c.get("category", "")).lower() for k in crime_keywords)
+                and (c.get("score") or 0.0) > 0.35
+                for c in all_classifications
+            )
+            if has_crime_scene:
+                logger.info(
+                    f"Crime scene / weapon content detected: {image_type}; routing to Agent 3",
+                    agent_id=self.agent_id,
+                )
+                if self.inter_agent_bus:
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "crime_scene_detected",
+                        {"agent_id": self.agent_id, "image_type": image_type},
+                    )
+
 
             await self.update_sub_task(f"Semantic Context: {image_type}")
             return
@@ -542,6 +584,21 @@ class Agent1Image(ForensicAgent):
                     description="Run diffusion_artifact_detector to confirm AI generation",
                     priority=19,
                 )
+
+            # Reactive routing: handwritten content from OCR context
+            handwriting_keywords = {"handwritten", "handwriting", "manuscript", "cursive", "ink", "pen"}
+            has_handwriting = any(k in combined for k in handwriting_keywords)
+            if has_handwriting:
+                logger.info(
+                    f"OCR context suggests handwritten content; routing handwriting signal",
+                    agent_id=self.agent_id,
+                )
+                if self.inter_agent_bus:
+                    self.inter_agent_bus.signal_event(
+                        self.session_id,
+                        "handwriting_detected",
+                        {"agent_id": self.agent_id, "source": "extract_text_from_image", "content_type": content_type},
+                    )
             return
 
         # 2. If neural forensic tools flag high-confidence manipulation, inject localized ROI extraction

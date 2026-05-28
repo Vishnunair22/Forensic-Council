@@ -633,30 +633,36 @@ If no text is visible, return empty lists and an empty content_description."""
 Perform two tasks in one pass:
 
 TASK 1 — CONTENT IDENTIFICATION:
-Identify exactly what this image shows: photograph, scanned document, AI-generated image,
-infographic, meme, etc. Provide a 1-2 sentence description of the content and its forensic context.
+Identify exactly what this image shows: photograph, scanned document, handwritten note/letter,
+AI-generated image, printed form, ID document, receipt, etc.
+Provide a 1-2 sentence description of the content and its forensic context.
 
-TASK 2 — PRECISION OCR:
-Extract all visible text exactly as it appears, focusing on:
-- Timestamps, dates, and times
-- Names, usernames, phone numbers, email addresses, and URLs
-- Document headings, labels, captions, table content
-- Any text that appears inconsistent in font, size, or alignment (potential overlay/forgery)
+TASK 2 — PRECISION OCR (including handwriting):
+Extract all visible text exactly as it appears. For HANDWRITTEN content: transcribe each
+word individually even if uncertain — mark uncertain transcriptions with [?].
+Focus on:
+- Timestamps, dates, times (exact format as written)
+- Names, signatures, initials
+- Addresses, phone numbers, account numbers
+- Any text that appears inconsistent in pressure, ink, or style (potential forgery indicator)
+- Printed labels, stamps, or overlays on top of handwritten content
+- Document headers, form field labels and their values
 
 Return ONLY valid JSON — no markdown, no preamble:
 {
-  "content_type": "precise description, e.g. photograph of printed document",
+  "content_type": "precise description, e.g. handwritten letter on lined paper",
   "content_description": "1-2 sentence forensic description",
-  "lines": ["verbatim text line 1", "verbatim text line 2"],
+  "lines": ["verbatim text line 1 [? uncertain word]", ...],
   "structured_metadata": {
-    "timestamps": [],
-    "identifiers": [],
+    "timestamps": ["exact timestamp strings"],
+    "identifiers": ["names, signatures, IDs, account numbers"],
     "urls": [],
     "ui_elements": [],
-    "document_fields": [],
-    "suspicious_elements": []
+    "document_fields": ["form field: value pairs"],
+    "suspicious_elements": ["text that appears inconsistent in style/ink/pressure"]
   },
-  "ocr_confidence": 0.0
+  "ocr_confidence": 0.0,
+  "handwriting_detected": true
 }
 If no text is visible, return empty lists."""
 
@@ -759,4 +765,13 @@ async def extract_evidence_text(
 
 
     result = await extract_text_easyocr(artifact)
+
+    # Tesseract fallback for document/handwritten images when EasyOCR yields nothing
+    if not result.get("has_text") or int(result.get("word_count") or 0) < 3:
+        from core.media_kind import is_document_like
+        if is_document_like(artifact):
+            tess_result = await _extract_text_tesseract_fallback(artifact)
+            if tess_result.get("has_text") and int(tess_result.get("word_count") or 0) > int(result.get("word_count") or 0):
+                result = {**tess_result, "method": "Tesseract adaptive (document fallback)", "ocr_tier": "tesseract"}
+
     return _finalize_result(result, "image")

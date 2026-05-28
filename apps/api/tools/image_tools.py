@@ -892,6 +892,8 @@ async def analyze_image_content(
             "a screenshot of a document": "Document screenshot - text content expected",
             "a screenshot of a mobile phone screen": "Mobile screenshot - platform metadata and compression forensics applicable",
             "a screenshot of a chat conversation": "Chat/messaging screenshot - authenticity check",
+            "a screenshot of a desktop application": "Desktop screenshot - UI consistency and compression forensics applicable",
+            "a screenshot of a web browser": "Browser screenshot - URL bar, favicon, and rendering consistency checks applicable",
             "an outdoor photograph": "Outdoor scene - natural lighting, shadow, and horizon consistency applicable",
             "an indoor photograph": "Indoor scene - artificial lighting patterns and object scale forensics applicable",
             "a portrait photograph of a person or face": "Portrait/face - deepfake, face-swap, and identity verification checks warranted",
@@ -913,6 +915,14 @@ async def analyze_image_content(
             "a passport or identification document": "Identity document - security features, font consistency, and holograms expected",
             "a forensic evidence photograph": "Evidence photo - chain of custody and scene-context integrity critical",
             "a product or commercial image": "Commercial image - retouching, compositing, and colour manipulation check relevant",
+            "a crime scene photograph": "Crime scene — scene-object inconsistencies, lighting, and contextual plausibility checks critical",
+            "a scanned handwritten document or note": "Handwritten document — OCR, ink consistency, paper texture, and signature forensics applicable",
+            "a printed document or form": "Printed document — font consistency, pixel-level alteration, and seal/stamp authenticity checks",
+            "a photograph of a weapon or knife": "Weapon present — object detection, contraband escalation, and scene-context plausibility required",
+            "a photograph of a firearm or gun": "Firearm present — contraband escalation and scene plausibility required",
+            "a receipt or invoice": "Receipt — font consistency, alignment, and numerical sequence plausibility checks applicable",
+            "a handwritten letter or message": "Handwritten letter — handwriting analysis, ink consistency, and signature verification applicable",
+            "a scanned photograph or printed photo": "Scanned/printed photo — halftone patterns, print artifacts, and flatbed scanner noise may be present",
         }
 
         semantic_context = semantic_templates.get(
