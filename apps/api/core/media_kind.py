@@ -123,11 +123,11 @@ def is_screen_capture_like(artifact: Any) -> bool:
     metadata_hint = bool(
         set(probe.get("info_keys") or ()) & {"software", "source", "screen", "creation time", "dpi"}
     )
-        common_axis = any(
-            v in {720, 768, 800, 900, 1024, 1080, 1170, 1179, 1200, 1284, 1290,
-                  1440, 1600, 2160, 2340, 2400, 2532, 2556, 2664, 2796, 3088}
-            for v in (width, height)
-        )
+    common_axis = any(
+        v in {720, 768, 800, 900, 1024, 1080, 1170, 1179, 1200, 1284, 1290,
+              1440, 1600, 2160, 2340, 2400, 2532, 2556, 2664, 2796, 3088}
+        for v in (width, height)
+    )
     return monitor_like and (metadata_hint or common_axis or width >= 1000)
 
 

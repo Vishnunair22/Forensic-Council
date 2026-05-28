@@ -202,9 +202,11 @@ class Agent1Image(ForensicAgent):
         tasks.append(
             "Run adversarial_robustness_check for anti-forensics perturbation stability check if splicing or copy-move was detected",
         )
-        tasks.append(
-            "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding"
-        )
+        gemini_ran = bool(self._tool_context.get("gemini_deep_forensic"))
+        if not gemini_ran:
+            tasks.append(
+                "Run gemini_deep_forensic for cross-tool evidence aggregation and semantic grounding"
+            )
         return tasks
 
     @property

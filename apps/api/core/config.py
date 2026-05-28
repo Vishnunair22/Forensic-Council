@@ -654,22 +654,22 @@ class Settings(BaseSettings):
     # Per-provider free-tier quota limits — used by the quota guard before each call
     # to decide whether to proceed or degrade gracefully.
     gemini_rpm_limit: int = Field(
-        default=10,
-        description="Gemini free-tier requests-per-minute limit. Paid tier: set higher.",
+        default=5,
+        description="Gemini requests-per-minute per process. Halved from 10 because API + "
+        "Worker have independent in-memory guards for the same key. Paid tier: raise as needed.",
     )
     gemini_rpd_limit: int = Field(
         default=1500,
         description="Gemini free-tier requests-per-day limit.",
     )
     groq_rpm_limit: int = Field(
-        default=30,
-        description="Groq free-tier RPM limit (varies by model; 30 is conservative).",
+        default=15,
+        description="Groq RPM per process (halved for cross-process key sharing; combined "
+        "API+Worker = 30, matching the free-tier limit for llama-3.3-70b).",
     )
     groq_tpm_limit: int = Field(
         default=6000,
-        description="Groq free-tier tokens-per-minute limit.",
     )
-
     # Gemini API key policy acknowledgment — required before using Gemini in production.
     # See: https://ai.google.dev/terms
     gemini_api_key_policy_ok: bool = Field(

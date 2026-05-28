@@ -752,13 +752,14 @@ class LLMClient:
                     else:
                         continue
 
-                    # Fast-fail on 429 — skip to next candidate immediately.
-                    # Retrying the same rate-limited model wastes time: Groq's
-                    # token bucket takes ~60 s to refill, not 5 s.
+                    # Fast-fail on 429 — skip to next candidate with backoff.
+                    # Rate-limit buckets (RPM / TPM) typically take 30-60 s to refill.
                     if resp.status_code == 429:
                         logger.warning(
-                            f"Synthesis {target_provider}/{target_model} rate-limited — skipping to next candidate"
+                            f"Synthesis {target_provider}/{target_model} rate-limited — "
+                            f"backing off 15s before next candidate"
                         )
+                        await asyncio.sleep(15.0)
                         continue
 
                     resp.raise_for_status()
@@ -781,8 +782,8 @@ class LLMClient:
             # wait 5 seconds and try a single forced Gemini call (bypassing quota guard check)
             # to prevent returning empty response.
             if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
-                logger.warning("All synthesis candidates exhausted. Initiating forced Gemini synthesis fallback in 5 seconds...")
-                await asyncio.sleep(5.0)
+                logger.warning("All synthesis candidates exhausted. Initiating forced Gemini synthesis fallback in 30 seconds...")
+                await asyncio.sleep(30.0)
                 try:
                     client = await self._get_client()
                     req_timeout = timeout_override or 30.0

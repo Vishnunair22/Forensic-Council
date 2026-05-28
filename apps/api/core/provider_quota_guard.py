@@ -201,9 +201,9 @@ class ProviderQuotaGuard:
 
     @classmethod
     def _cleanup_stale(cls, provider: str, model: str, now: float) -> None:
-        """Remove timestamps older than 2 minutes from the call tracking."""
+        """Remove timestamps older than 24 hours from the call tracking."""
         key = _provider_model_key(provider, model)
-        cutoff = now - _CLEANUP_INTERVAL_SECONDS
+        cutoff = now - 86400.0
         _CALL_TIMESTAMPS[key] = [ts for ts in _CALL_TIMESTAMPS[key] if ts > cutoff]
         # Also clean up entries with no recent calls to prevent unbounded dict growth
         if not _CALL_TIMESTAMPS[key]:

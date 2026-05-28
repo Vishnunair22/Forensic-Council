@@ -671,6 +671,22 @@ async def run_agents_concurrent(
         if agent_inst and hasattr(agent_inst, "_agent1_context_event"):
             agent_inst._agent1_context_event = context_event
 
+    # Pre-inject Agent 1 context from Phase 1 if already available to unblock parallel execution
+    _producer_tuple = agent_map.get(producer_id)
+    if _producer_tuple:
+        _, _initial_findings, _ = _producer_tuple
+        for _f in _initial_findings or []:
+            _f_meta = (
+                _f.metadata if hasattr(_f, "metadata")
+                else _f.get("metadata", {}) if isinstance(_f, dict)
+                else {}
+            )
+            _tool_name = _f_meta.get("tool_name") if isinstance(_f_meta, dict) else None
+            if _tool_name == "gemini_deep_forensic":
+                logger.info("Found Phase 1 Gemini findings for Agent 1. Pre-injecting context to unblock Phase 2 concurrency.")
+                _broadcast_context(_f)
+                break
+
     async def _run_deep_with_fallback(aid: str) -> AgentLoopResult:
         a_inst, a_init, a_status = agent_map[aid]
         a_supported = a_status != "unsupported"

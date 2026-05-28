@@ -176,6 +176,10 @@ class ToolRegistry:
                     f"Auto-registered tool: {t_name} from {handler_instance.__class__.__name__}"
                 )
 
+    @property
+    def handlers(self) -> dict[str, ToolHandler]:
+        return dict(self._handlers)
+
     def get_handler(self, name: str) -> ToolHandler | None:
         """Return the callable handler for a registered tool, or None."""
         return self._handlers.get(name)
