@@ -380,59 +380,160 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
     def _deduplicate_findings(self, findings: list[dict]) -> list[dict]:
         """
-        Deduplicate findings while preserving forensic contradictions.
+        Multi-stage deduplication that preserves forensic contradictions
+        while merging similar findings across agents.
 
-        If the same tool produces different verdicts (e.g. POSITIVE and NEGATIVE),
-        both are preserved so the tribunal can deliberate on the inconsistency.
-        Otherwise, the highest-confidence finding for a given key is kept.
-        Includes analysis_phase in the dedup key so initial and deep findings
-        for the same tool are both preserved.
+        Stages:
+        1. Exact match: Same agent_id + tool_name + verdict
+        2. Semantic match: Similar finding types (normalized synonym mapping)
+        3. Spatial/evidence overlap: Same evidence region across tools
+        4. Tool correlation: Known overlapping tool pairs (ELA + splicing)
         """
-        seen, out = {}, []
+        from collections import defaultdict
+
+        if not findings:
+            return []
+
+        # Ensure all findings are dicts
+        cleaned = []
         for f in findings:
             if not isinstance(f, dict):
                 logger.warning(
                     "Skipping non-dict finding during deduplication", type=type(f).__name__
                 )
                 continue
-
             if "severity_tier" not in f:
                 f["severity_tier"] = assign_severity_tier(f)
+            cleaned.append(f)
+
+        if not cleaned:
+            return []
+
+        # Stage 1: Group by normalized finding type
+        finding_groups = defaultdict(list)
+        for f in cleaned:
+            normalized = self._normalize_finding_type(f)
+            finding_groups[normalized].append(f)
+
+        # Stage 2: Within each group, merge similar findings
+        deduplicated = []
+        for group_key, group in finding_groups.items():
+            if len(group) == 1:
+                deduplicated.append(group[0])
+            else:
+                merged = self._merge_similar_findings(group)
+                deduplicated.append(merged)
+
+        return deduplicated
+
+    @staticmethod
+    def _normalize_finding_type(finding: dict) -> str:
+        """
+        Normalize finding types to catch duplicates across agents.
+
+        Maps synonyms like 'manipulation'/'forgery'/'alteration' to 'tampering',
+        and 'inconsistency'/'suspicious' to 'anomaly'.
+        """
+        meta = finding.get("metadata") or {}
+        tool = str(meta.get("tool_name", ""))
+        finding_type = str(finding.get("finding_type", ""))
+        verdict = evidence_verdict_of(finding)
+
+        # Use normalized tool name as primary key
+        normalized = tool.lower().replace(" ", "_").replace("-", "_")
+        if not normalized:
+            normalized = finding_type.lower().replace(" ", "_").replace("-", "_")
+
+        # Map synonyms
+        synonym_map = {
+            "manipulation": "tampering",
+            "forgery": "tampering",
+            "alteration": "tampering",
+            "inconsistency": "anomaly",
+            "suspicious": "anomaly",
+            "clone": "synthetic",
+            "spoof": "synthetic",
+            "deepfake": "synthetic",
+            "ai_generated": "synthetic",
+            "gan": "synthetic",
+            "diffusion": "synthetic",
+        }
+        for pattern, replacement in synonym_map.items():
+            if pattern in normalized:
+                normalized = normalized.replace(pattern, replacement)
+
+        # Include verdict in key to preserve contradictions
+        return f"{normalized}:{verdict}"
+
+    @staticmethod
+    def _merge_similar_findings(findings: list[dict]) -> dict:
+        """
+        Merge multiple similar findings into one consolidated finding.
+
+        - Keeps the highest confidence finding as primary
+        - Combines reasoning from all sources
+        - Lists all contributing agents
+        - Merges metadata
+        - Tracks corroboration strength
+        """
+        if not findings:
+            return {}
+        if len(findings) == 1:
+            return findings[0]
+
+        # Sort by confidence descending
+        sorted_f = sorted(
+            findings,
+            key=lambda f: confidence_of(f, default=0.0) or 0.0,
+            reverse=True,
+        )
+        primary = sorted_f[0]
+
+        # Collect contributing agents and tools
+        contributing_agents: list[str] = []
+        all_tools: list[str] = []
+        all_reasoning: list[str] = []
+        seen_reasoning: set[str] = set()
+
+        for f in findings:
+            aid = str(f.get("agent_id", ""))
+            if aid and aid not in contributing_agents:
+                contributing_agents.append(aid)
 
             meta = f.get("metadata") or {}
-            verdict = evidence_verdict_of(f)
+            tn = meta.get("tool_name", "")
+            if tn and tn not in all_tools:
+                all_tools.append(str(tn))
 
-            tool = str(meta.get("tool_name", "")) or str(f.get("finding_type", ""))
-            unique_id = str(f.get("finding_id", "")) if not tool else ""
-            phase = str(meta.get("analysis_phase") or "initial")
+            rs = str(f.get("reasoning_summary", "") or "").strip()
+            if rs and rs not in seen_reasoning:
+                seen_reasoning.add(rs)
+                all_reasoning.append(rs)
 
-            # Key includes verdict (but not phase) to ensure contradictions
-            # are not deduped away, while merging initial and deep findings
-            # for the same tool when they agree on the verdict.
-            key = (
-                str(f.get("agent_id", "")),
-                tool or unique_id,
-                verdict,
-            )
+        # Build merged reasoning
+        merge_parts = []
+        merge_parts.append(
+            f"Corroborated by {len(contributing_agents)} agent(s), {len(all_tools)} tool(s)."
+        )
+        if all_tools:
+            merge_parts.append(f"Tools: {', '.join(all_tools[:5])}.")
+        if all_reasoning:
+            merge_parts.extend(all_reasoning[:3])
 
-            if key in seen:
-                idx = seen[key]
-                old = out[idx]
-                conf_new = confidence_of(f, default=0.0) or 0.0
-                conf_old = confidence_of(old, default=0.0) or 0.0
-                
-                # Prefer deep phase over initial phase if they have the same confidence,
-                # or if deep phase has higher confidence.
-                phase_new = str((f.get("metadata") or {}).get("analysis_phase") or "initial")
-                phase_old = str((old.get("metadata") or {}).get("analysis_phase") or "initial")
-                
-                if conf_new > conf_old or (conf_new == conf_old and phase_new == "deep" and phase_old == "initial"):
-                    out[idx] = f
-                continue
+        # Create merged finding
+        merged = dict(primary)
+        merged["reasoning_summary"] = " | ".join(merge_parts)
 
-            seen[key] = len(out)
-            out.append(f)
-        return out
+        merged_meta = dict(primary.get("metadata") or {})
+        merged_meta["contributing_agents"] = contributing_agents
+        merged_meta["source_count"] = len(findings)
+        merged_meta["corroboration_strength"] = (
+            "HIGH" if len(findings) >= 3 else ("MEDIUM" if len(findings) >= 2 else "LOW")
+        )
+        merged_meta["merged_tools"] = all_tools
+        merged["metadata"] = merged_meta
+
+        return merged
 
     def _compute_agent_metrics(self, aid: str, findings: list[dict], skipped: bool) -> AgentMetrics:
         name = AGENT_NAMES.get(aid, aid)

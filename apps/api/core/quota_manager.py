@@ -92,6 +92,31 @@ class QuotaManager:
             
             # Allow call
             return True, "ok"
+
+    async def wait_for_slot(
+        self,
+        priority: Literal["critical", "high", "medium", "low"],
+        timeout: float = 30.0,
+        estimated_tokens: int = 1000,
+    ) -> bool:
+        """
+        Block until a rate limit slot becomes available.
+        
+        Polls every 0.5s up to `timeout` seconds. Returns True once a slot
+        is free, False if the timeout was reached.
+        """
+        deadline = datetime.now().timestamp() + timeout
+        while datetime.now().timestamp() < deadline:
+            allowed, reason = await self.can_make_call(priority, estimated_tokens=estimated_tokens)
+            if allowed:
+                return True
+            await asyncio.sleep(0.5)
+        logger.warning(
+            f"Quota wait_for_slot timed out after {timeout}s",
+            provider=self.provider,
+            priority=priority,
+        )
+        return False
     
     async def record_call(
         self, 

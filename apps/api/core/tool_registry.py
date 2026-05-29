@@ -48,6 +48,9 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "gemini_deep_forensic": 180.0,
     "provenance_chain_verify": 20.0,
     "c2pa_validator": 20.0,
+    # No-API fallback tools
+    "reverse_image_search": 25.0,
+    "lens_style_multimodal_scan": 40.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0
@@ -85,6 +88,7 @@ HEAVY_TOOLS: set[str] = {
     "file_structure_analysis",
     "hex_signature_scan",
     "astro_grounding",
+    "lens_style_multimodal_scan",
 }
 
 

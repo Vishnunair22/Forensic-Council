@@ -41,13 +41,174 @@ class CLIPAnalysisResult:
     error: str | None = None
 
 
+CASCADE_MODELS = [
+    ("clip", "OpenCLIP ViT-B-32"),
+    ("vit", "torchvision ViT-B-16"),
+    ("efficientnet", "torchvision EfficientNet-B0"),
+    ("resnet", "torchvision ResNet-18"),
+]
+
+
+class ImageClassifierBase:
+    """Abstract base for any image classifier in the cascade."""
+
+    name: str = "base"
+    available: bool = False
+
+    def analyze_image(
+        self, image_path: str, categories: list[str] | None = None
+    ) -> CLIPAnalysisResult:
+        raise NotImplementedError
+
+
+class TorchVisionClassifier(ImageClassifierBase):
+    """
+    Lightweight torchvision classifier (ViT, EfficientNet, or ResNet).
+
+    Uses the model's own ImageNet prediction as the "top match" and
+    extracts the feature embedding for fingerprint generation.
+    Does NOT support zero-shot text categories — only predicts
+    ImageNet class indices.
+    """
+
+    def __init__(self, model_type: str):
+        self.name = model_type
+        self.available = False
+        self._model = None
+        self._preprocess = None
+        self._device = None
+        self._imagenet_labels: list[str] | None = None
+
+    def _load(self) -> bool:
+        import torch
+
+        try:
+            import torchvision.models as tv_models
+            from torchvision import transforms
+        except ImportError:
+            return False
+
+        try:
+            from core.config import get_settings
+
+            self._device = torch.device("cpu")
+
+            if self.name == "vit":
+                weights = tv_models.ViT_B_16_Weights.IMAGENET1K_V1
+                self._model = tv_models.vit_b_16(weights=weights)
+                self._preprocess = weights.transforms()
+            elif self.name == "efficientnet":
+                weights = tv_models.EfficientNet_B0_Weights.IMAGENET1K_V1
+                self._model = tv_models.efficientnet_b0(weights=weights)
+                self._preprocess = weights.transforms()
+            elif self.name == "resnet":
+                weights = tv_models.ResNet18_Weights.IMAGENET1K_V1
+                self._model = tv_models.resnet18(weights=weights)
+                self._preprocess = weights.transforms()
+            else:
+                return False
+
+            self._model = self._model.to(self._device)
+            self._model.eval()
+
+            # Load ImageNet labels
+            self._imagenet_labels = _load_imagenet_labels()
+            self.available = True
+            logger.info(f"Loaded {self.name} classifier")
+            return True
+
+        except Exception as exc:
+            logger.debug(f"Failed to load {self.name} classifier: {exc}")
+            return False
+
+    def analyze_image(
+        self, image_path: str, categories: list[str] | None = None
+    ) -> CLIPAnalysisResult:
+        if not self.available:
+            return CLIPAnalysisResult(
+                top_match="unknown",
+                top_confidence=0.0,
+                all_scores=[],
+                concern_flag=False,
+                available=False,
+                error=f"{self.name} not available",
+            )
+
+        import torch
+        from PIL import Image as PILImage
+
+        try:
+            image = PILImage.open(image_path).convert("RGB")
+            tensor = self._preprocess(image).unsqueeze(0).to(self._device)
+
+            with torch.no_grad():
+                output = self._model(tensor)
+                probs = torch.nn.functional.softmax(output, dim=1)
+                top5_idx = probs.topk(5).indices[0].tolist()
+                top5_probs = probs.topk(5).values[0].tolist()
+
+            scores = []
+            for idx, prob in zip(top5_idx, top5_probs):
+                label = self._imagenet_labels[idx] if self._imagenet_labels and idx < len(self._imagenet_labels) else f"class_{idx}"
+                scores.append((label, round(float(prob), 4)))
+
+            return CLIPAnalysisResult(
+                top_match=scores[0][0] if scores else "unknown",
+                top_confidence=scores[0][1] if scores else 0.0,
+                all_scores=scores,
+                concern_flag=False,
+                available=True,
+                embedding=output.cpu().numpy().flatten().tolist()[:512],
+            )
+
+        except Exception as exc:
+            return CLIPAnalysisResult(
+                top_match="unknown",
+                top_confidence=0.0,
+                all_scores=[],
+                concern_flag=False,
+                available=False,
+                error=str(exc),
+            )
+
+
+def _load_imagenet_labels() -> list[str] | None:
+    """Load ImageNet class labels."""
+    try:
+        import urllib.request
+
+        url = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
+        with urllib.request.urlopen(url, timeout=5) as f:
+            return [line.decode("utf-8").strip() for line in f.readlines()]
+    except Exception:
+        return None
+
+
 class CLIPImageAnalyzer:
     """
     Singleton CLIP image analyzer for zero-shot image classification.
 
-    Lazily loads the model on first use to avoid unnecessary memory
-    consumption when CLIP features are not needed.
+    Implements multi-tier cascade: CLIP → ViT → EfficientNet → ResNet.
+    Each tier is attempted lazily; the first available model is used.
+    This ensures forensic analysis proceeds even when CLIP or PyTorch
+    are partially installed.
     """
+
+    def __init__(self):
+        """Initialize analyzer (does not load model yet)."""
+        self._model = None
+        self._preprocess = None
+        self._tokenizer = None
+        self._device = None
+        self._model_name = "unknown"
+        self._pretrained = "openai"
+        self._fallback_classifiers: list[TorchVisionClassifier] = []
+        self._active_model_name: str = "none"
+
+    @property
+    def available(self) -> bool:
+        """Check if any classifier is available."""
+        return self._model is not None or any(c.available for c in self._fallback_classifiers)
 
     # Default forensic-relevant image categories
     # Weapon/contraband categories are listed first to ensure they are prioritized
@@ -109,25 +270,40 @@ class CLIPImageAnalyzer:
         "a document or ID card",
     ]
 
-    def __init__(self):
-        """Initialize analyzer (does not load model yet)."""
-        self._model = None
-        self._preprocess = None
-        self._tokenizer = None
-        self._device = None
-        self._model_name = "unknown"
-        self._pretrained = "openai"
-
     def _load_model(self) -> bool:
         """
-        Lazily load the CLIP model.
+        Lazily load the best available model via multi-tier cascade.
 
-        Returns:
-            True if model loaded successfully, False otherwise.
+        Cascade order: CLIP (zero-shot) → ViT → EfficientNet → ResNet.
+        Each tier is tried only if the previous one fails.
         """
         if self._model is not None:
             return True
 
+        # Tier 1: OpenCLIP (full zero-shot semantic understanding)
+        if self._try_load_clip():
+            self._active_model_name = f"clip_{self._model_name}"
+            return True
+
+        # Tier 2-4: torchvision classifiers (ImageNet prediction only)
+        for model_type in ("vit", "efficientnet", "resnet"):
+            classifier = TorchVisionClassifier(model_type)
+            if classifier._load():
+                self._fallback_classifiers.append(classifier)
+                self._active_model_name = model_type
+                logger.info(f"CLIP cascade using {model_type} as active classifier")
+                return True
+
+        logger.error("All CLIP cascade models failed to load")
+        return False
+
+    def _try_load_clip(self) -> bool:
+        """
+        Try to load the OpenCLIP model.
+
+        Returns:
+            True if CLIP model loaded successfully, False otherwise.
+        """
         try:
             import os
 
@@ -166,10 +342,10 @@ class CLIPImageAnalyzer:
             return True
 
         except ImportError as e:
-            logger.error(f"Failed to import CLIP dependencies: {e}")
+            logger.debug(f"CLIP dependencies unavailable: {e}")
             return False
         except Exception as e:
-            logger.error(f"Failed to load CLIP model: {e}")
+            logger.debug(f"Failed to load CLIP model: {e}")
             return False
 
     def analyze_image(
@@ -179,7 +355,10 @@ class CLIPImageAnalyzer:
         check_concerns: bool = False,
     ) -> CLIPAnalysisResult:
         """
-        Analyze an image using CLIP zero-shot classification.
+        Analyze an image using the best available classifier.
+
+        Cascade: CLIP (zero-shot) → ViT → EfficientNet → ResNet.
+        Falls through tiers until one succeeds.
 
         Args:
             image_path: Path to the image file
@@ -197,9 +376,15 @@ class CLIPImageAnalyzer:
                 all_scores=[],
                 concern_flag=False,
                 available=False,
-                error="CLIP model not available - dependencies missing",
+                error="All cascade models unavailable",
             )
 
+        # If a fallback classifier is active, delegate to it
+        if self._model is None and self._fallback_classifiers:
+            classifier = self._fallback_classifiers[0]
+            return classifier.analyze_image(image_path, categories)
+
+        # CLIP path
         try:
             import torch
             from PIL import Image as PILImage
@@ -248,8 +433,6 @@ class CLIPImageAnalyzer:
                 ]
                 if concern_scores:
                     top_concern, concern_score = max(concern_scores, key=lambda x: x[1])
-                    # Flag if top concern is not "safe everyday object" and score is significantly
-                    # above the mean concern score (relative threshold instead of absolute 0.4)
                     concern_mean = sum(s for _, s in concern_scores) / len(concern_scores)
                     if (
                         top_concern != "a safe everyday object"
@@ -268,6 +451,10 @@ class CLIPImageAnalyzer:
 
         except Exception as e:
             logger.error(f"CLIP analysis failed: {e}")
+            # Fall through to cascade classifiers
+            if self._fallback_classifiers:
+                logger.info("Falling back to cascade classifier")
+                return self._fallback_classifiers[0].analyze_image(image_path, categories)
             return CLIPAnalysisResult(
                 top_match="unknown",
                 top_confidence=0.0,

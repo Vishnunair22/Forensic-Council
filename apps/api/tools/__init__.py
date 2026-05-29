@@ -38,6 +38,12 @@ from tools.video_tools import (
     optical_flow_analyze,
     video_metadata_extract,
 )
+from tools.google_search_tools import (
+    reverse_image_search,
+)
+from tools.lens_style_tools import (
+    lens_style_multimodal_scan,
+)
 
 __all__ = [
     # Image tools
@@ -69,4 +75,7 @@ __all__ = [
     "frame_consistency_analyze",
     "face_swap_detect",
     "video_metadata_extract",
+    # No-API fallback tools
+    "reverse_image_search",
+    "lens_style_multimodal_scan",
 ]

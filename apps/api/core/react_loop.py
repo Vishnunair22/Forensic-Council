@@ -563,6 +563,15 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
             "name": "gemini_deep_forensic",
             "description": "Gemini 2.5 Flash neural vision audit — deep analysis of authenticity, objects, and text",
         },
+        # No-API fallback tools
+        {
+            "name": "reverse_image_search",
+            "description": "Google reverse image search for online provenance (no API key required)",
+        },
+        {
+            "name": "lens_style_multimodal_scan",
+            "description": "On-device multi-modal scan with OCR, barcode, object, and logo analysis (no API key)",
+        },
         # Agent 2 — Audio
         {
             "name": "speaker_diarize",
@@ -2249,6 +2258,184 @@ class ReActLoopEngine:
                 },
             )
 
+    @staticmethod
+    def _build_detailed_reasoning(tool_name: str, output: dict) -> str:
+        """
+        Generate specific, court-admissible reasoning based on tool output.
+        Each tool type produces a unique numerical-rich summary sentence.
+        """
+        if not isinstance(output, dict):
+            return ""
+
+        lower_tool = tool_name.lower()
+
+        if lower_tool in ("ela_full_image", "neural_ela"):
+            num_regions = output.get("num_anomaly_regions", 0)
+            threshold = output.get("threshold_used", output.get("ela_threshold", "N/A"))
+            max_ela = output.get("max_ela_value", output.get("max_ela", "N/A"))
+            return (
+                f"ELA analysis at threshold {threshold}: {num_regions} anomaly regions detected. "
+                f"Maximum ELA value: {max_ela}."
+            )
+
+        if lower_tool in ("noise_fingerprint", "noiseprint_cluster"):
+            consistency = output.get("noise_consistency_score", output.get("consistency_score", 0))
+            blocks = output.get("blocks_analyzed", output.get("num_blocks", 0))
+            verdict = str(output.get("verdict", "") or "")
+            return (
+                f"PRNU noise fingerprint: Consistency score {float(consistency):.3f} "
+                f"across {int(blocks)} analyzed blocks. "
+                f"{'No sensor inconsistencies detected.' if not verdict or 'inconsist' not in verdict.lower() else 'Potential sensor mismatch detected.'}"
+            )
+
+        if lower_tool == "object_detection":
+            detections = output.get("detections", [])
+            classes = set(d.get("class", "") for d in detections if isinstance(d, dict) and d.get("class"))
+            return (
+                f"YOLO object detection: {len(detections)} objects detected "
+                f"across {len(classes)} classes. "
+                f"Objects: {', '.join(sorted(classes)[:5])}."
+            )
+
+        if lower_tool == "gemini_deep_forensic":
+            gv = output.get("gemini_verdict", output.get("verdict", "INCONCLUSIVE"))
+            signals = output.get("manipulation_signals", output.get("gemini_manipulation_signals", []))
+            text = output.get("text_content", output.get("extracted_text", ""))
+            parts = [f"Gemini vision verdict: {gv}."]
+            if signals and isinstance(signals, list):
+                parts.append(f"Manipulation signals: {', '.join(str(s) for s in signals[:3])}.")
+            if text and isinstance(text, str) and len(text) > 3:
+                parts.append(f"Text extracted: '{text[:120]}'.")
+            return " ".join(parts)
+
+        if lower_tool == "frequency_domain_analysis":
+            anomaly_score = output.get("anomaly_score", 0)
+            hfr = output.get("high_freq_ratio", output.get("high_frequency_ratio", "N/A"))
+            regions = output.get("num_anomaly_regions", 0)
+            detected = output.get("anomaly_detected", False)
+            return (
+                f"FFT frequency analysis: anomaly score {float(anomaly_score):.3f}, "
+                f"high-frequency ratio {hfr}, {int(regions)} anomalous region(s). "
+                f"{'Anomalies detected.' if detected else 'No significant frequency anomalies.'}"
+            )
+
+        if lower_tool == "extract_text_from_image":
+            word_count = output.get("word_count", 0)
+            method = output.get("method", output.get("ocr_engine", "OCR"))
+            preview = str(output.get("text", output.get("full_text", "")) or "")[:120]
+            return (
+                f"{method} OCR: {int(word_count)} words extracted. "
+                f"Content: '{preview}'" if preview else f"{method} OCR: {int(word_count)} words extracted."
+            )
+
+        if lower_tool in ("exif_extract",):
+            fields = output.get("total_fields_extracted", 0)
+            camera = output.get("camera_make", output.get("device_model", ""))
+            gps = "GPS coordinates present" if output.get("gps_coordinates") else "No GPS data"
+            return (
+                f"EXIF extraction: {int(fields)} fields found. "
+                f"{'Camera: ' + str(camera) + '. ' if camera else ''}"
+                f"{gps}."
+            )
+
+        if lower_tool == "compression_risk_audit":
+            penalty = output.get("compression_penalty", 1.0)
+            platform = output.get("platform", output.get("detected_platform", "unknown"))
+            return (
+                f"Compression audit: reliability penalty {float(penalty):.2f}. "
+                f"Detected platform: {platform}."
+            )
+
+        if lower_tool in ("file_hash_verify", "hash_verify"):
+            match = output.get("hash_matches", output.get("hash_match", None))
+            status_str = "matched intake custody" if match else "mismatched intake custody"
+            return f"SHA-256 hash verification: {status_str}."
+
+        if lower_tool in ("lighting_consistency", "lighting_correlation_initial"):
+            score = output.get("lighting_consistency_score", output.get("correlation_score", 0))
+            direction = output.get("light_direction_consistency", "unknown")
+            return (
+                f"Lighting analysis: consistency score {float(score):.3f}, "
+                f"direction consistency: {direction}."
+            )
+
+        if lower_tool in ("scene_incongruence",):
+            score = output.get("incongruence_score", 0)
+            anomalies = output.get("anomalies", output.get("contextual_anomalies", []))
+            return (
+                f"Scene incongruence analysis: score {float(score):.3f} "
+                f"with {len(anomalies) if isinstance(anomalies, list) else 0} anomaly flag(s)."
+            )
+
+        if lower_tool in ("neural_splicing", "splicing_detect"):
+            detected = output.get("splicing_detected", output.get("manipulation_detected", False))
+            conf = output.get("confidence", output.get("tampering_score", 0))
+            return (
+                f"Splicing detection: {'SPLICE DETECTED' if detected else 'No splice detected'}. "
+                f"Confidence: {float(conf):.3f}."
+            )
+
+        if lower_tool == "neural_copy_move":
+            detected = output.get("copy_move_detected", output.get("manipulation_detected", False))
+            matches = output.get("keypoint_matches", output.get("num_matches", 0))
+            return (
+                f"Copy-move detection: {'FORGERY DETECTED' if detected else 'No copy-move forgery detected'}. "
+                f"Keypoint matches: {int(matches)}."
+            )
+
+        if lower_tool == "deepfake_frequency_check":
+            prob = output.get("deepfake_probability", output.get("ai_probability", 0))
+            return f"Deepfake frequency analysis: AI generation probability {float(prob):.3f}."
+
+        if lower_tool == "diffusion_artifact_detector":
+            detected = output.get("diffusion_detected", output.get("ai_generated", False))
+            prob = output.get("diffusion_probability", output.get("ai_probability", 0))
+            return (
+                f"Diffusion artifact detection: "
+                f"{'AI-generation artifacts detected' if detected else 'No AI-generation artifacts detected'}. "
+                f"Probability: {float(prob):.3f}."
+            )
+
+        if lower_tool == "audio_splice_detect":
+            detected = output.get("splice_detected", False)
+            count = output.get("splice_count", output.get("num_splices", 0))
+            return f"Audio splice detection: {int(count)} splice(s) {'detected' if detected else 'found'}."
+
+        if lower_tool == "codec_fingerprinting":
+            detected = output.get("re_encoding_detected", False)
+            codec = output.get("detected_codec", output.get("codec", "unknown"))
+            return (
+                f"Codec fingerprinting: {'Re-encoding detected' if detected else 'No re-encoding detected'}. "
+                f"Codec: {codec}."
+            )
+
+        if lower_tool in ("optical_flow_analysis",):
+            anomalies = output.get("anomaly_count", 0)
+            flow_score = output.get("flow_consistency_score", output.get("consistency_score", 0))
+            return (
+                f"Optical flow analysis: {int(anomalies)} anomaly frame(s), "
+                f"consistency score {float(flow_score):.3f}."
+            )
+
+        if lower_tool in ("frame_consistency_analysis", "interframe_forgery_detector"):
+            discontinuities = output.get("discontinuity_count", output.get("anomaly_count", 0))
+            ssim = output.get("ssim_variance", output.get("consistency_score", 0))
+            return (
+                f"Frame consistency: {int(discontinuities)} discontinuity(ies), "
+                f"SSIM variance {float(ssim):.3f}."
+            )
+
+        # Fallback: extract key numerical fields
+        key_results = []
+        for key in ("verdict", "score", "confidence", "confidence_raw", "anomaly_count",
+                     "detection_count", "num_anomaly_regions", "splice_count", "word_count"):
+            if key in output:
+                key_results.append(f"{key}={output[key]}")
+        if key_results:
+            return f"Tool results: {', '.join(key_results)}."
+
+        return ""
+
     def _build_readable_summary(
         self,
         tool_name: str,
@@ -2262,9 +2449,8 @@ class ReActLoopEngine:
         """
         Build a human-readable summary from a tool result.
 
-        Filters out large data blobs (arrays, maps) and extracts only
-        meaningful scalar metrics to produce a concise sentence for the
-        frontend agent cards.
+        Uses tool-specific detailed reasoning builders for rich,
+        court-admissible findings. Falls back to generic scalar extraction.
         """
         tool_label = tool_name.replace("_", " ").title()
 
@@ -2350,22 +2536,24 @@ class ReActLoopEngine:
                 f"Confidence: {confidence:.0%}."
             )
 
-        # Standard forensic summary building starts here
-        parts = [reasoning_prefix + f"{tool_label} analysis complete."]
+        # Try tool-specific detailed reasoning builder first
+        detailed = self._build_detailed_reasoning(tool_name, output)
+        if detailed:
+            return self._shape_analyst_finding(
+                tool_label=tool_label,
+                message=str(detailed),
+                evidence_verdict=evidence_verdict,
+                status=status,
+                output=output,
+            )
 
-        if "verdict" in output:
-            parts.append(f"Verdict: {output['verdict']}.")
-
-        # Use imported tool interpreters
+        # Use imported tool interpreters as second priority
         global _TOOL_INTERPRETERS
 
         interpreter = _TOOL_INTERPRETERS.get(tool_name)
         if interpreter and tool_result.success:
             try:
                 interpreted_msg = interpreter(output)
-                # Do not restate a hard "{confidence}% certainty" sentence here,
-                # as the UI already shows calibrated confidence and this wording
-                # can be misleading. Keep this as a plain, human-readable summary.
                 return self._shape_analyst_finding(
                     tool_label=tool_label,
                     message=str(interpreted_msg),

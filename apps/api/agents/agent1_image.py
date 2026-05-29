@@ -339,6 +339,31 @@ class Agent1Image(ForensicAgent):
             "Detect SynthID, C2PA ai_generated, and AI software watermarks",
         )
 
+        # ── No-API Fallback Search Tools ──────────────────────────────────────
+        async def reverse_image_search_handler(input_data: dict) -> dict:
+            from tools.google_search_tools import reverse_image_search
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await reverse_image_search(artifact=artifact)
+            return result
+
+        registry.register(
+            "reverse_image_search",
+            reverse_image_search_handler,
+            "Google reverse image search for online provenance (no API key required)",
+        )
+
+        async def lens_style_scan_handler(input_data: dict) -> dict:
+            from tools.lens_style_tools import lens_style_multimodal_scan
+            artifact = input_data.get("artifact") or self.evidence_artifact
+            result = await lens_style_multimodal_scan(artifact=artifact)
+            return result
+
+        registry.register(
+            "lens_style_multimodal_scan",
+            lens_style_scan_handler,
+            "On-device multi-modal scan with OCR, barcode, object, and logo analysis (no API key)",
+        )
+
         return registry
 
 
