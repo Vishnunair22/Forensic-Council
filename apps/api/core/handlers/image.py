@@ -920,6 +920,35 @@ class ImageHandlers(BaseToolHandler):
     async def extract_text_from_image_handler(self, input_data: dict) -> dict:
         """Tiered OCR — unified entry point for PDF/Image text extraction."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        try:
+            shared = {}
+            if getattr(self.agent, "inter_agent_bus", None):
+                shared = self.agent.inter_agent_bus.get_image_context(str(self.agent.session_id)) or {}
+            meta = shared.get("metadata") if isinstance(shared, dict) else {}
+            if not isinstance(meta, dict):
+                meta = {}
+            extracted = []
+            if isinstance(shared, dict):
+                extracted = meta.get("extracted_text") or shared.get("extracted_text") or []
+            if isinstance(extracted, list) and extracted:
+                lines = [str(line).strip() for line in extracted if str(line).strip()]
+                full_text = "\n".join(lines)
+                result = {
+                    "method": "agent1_visual_profile",
+                    "lines": lines,
+                    "full_text": full_text,
+                    "word_count": len(full_text.split()),
+                    "has_text": bool(lines),
+                    "avg_confidence": float(shared.get("confidence_raw") or 0.8),
+                    "court_defensible": True,
+                    "content_description": shared.get("reasoning_summary") or "",
+                    "shared_visual_profile": True,
+                }
+                await self._store("extract_text_from_image", result, "extract_evidence_text")
+                return result
+        except Exception as shared_err:
+            logger.debug("Shared Agent 1 visual profile OCR reuse skipped", error=str(shared_err))
+
         key = _ocr_cache_key(artifact)
         cached = _OCR_CACHE.get(key)
         if cached and time.monotonic() - cached[0] < _OCR_CACHE_TTL_SECONDS:

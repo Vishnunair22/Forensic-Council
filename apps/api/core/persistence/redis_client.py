@@ -303,7 +303,7 @@ class RedisClient:
         Publish a message to a Redis channel.
         """
         if not isinstance(message, str):
-            message = json.dumps(message)
+            message = json.dumps(message, default=str)
         return await self.client.publish(channel, message)
 
     def get_pubsub(self):

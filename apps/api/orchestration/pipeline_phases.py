@@ -575,12 +575,18 @@ async def run_agents_concurrent(
             )
             return agent, findings, "error"
 
+    async def _run_one_staggered(agent, aid: str, supported: bool, idx: int):
+        """Stagger initial agent startup by idx * 2s to avoid simultaneous API quota bursts."""
+        if idx > 0:
+            await asyncio.sleep(idx * 2.0)
+        return await _run_one(agent, aid, supported)
+
     raw_initial = await asyncio.gather(
         *[
-            _run_one(inst, aid, supported)
-            for (inst, supported), aid in zip(
+            _run_one_staggered(inst, aid, supported, idx)
+            for idx, ((inst, supported), aid) in enumerate(zip(
                 agent_instances, registry.get_all_agent_ids(), strict=True
-            )
+            ))
         ],
         return_exceptions=True,
     )
@@ -723,20 +729,27 @@ async def run_agents_concurrent(
 
     def _broadcast_context(producer_finding: Any):
         try:
-            meta = {}
+            context_payload = {}
             if hasattr(producer_finding, "metadata"):
-                meta = (
-                    producer_finding.metadata if isinstance(producer_finding.metadata, dict) else {}
-                )
+                if hasattr(producer_finding, "model_dump"):
+                    context_payload = producer_finding.model_dump(mode="json")
+                else:
+                    context_payload = {
+                        "metadata": producer_finding.metadata
+                        if isinstance(producer_finding.metadata, dict)
+                        else {}
+                    }
             elif isinstance(producer_finding, dict):
-                meta = producer_finding.get("metadata", {}) or producer_finding
+                context_payload = producer_finding
 
-            if meta:
+            if context_payload:
+                if pipeline.inter_agent_bus is not None:
+                    pipeline.inter_agent_bus.set_image_context(str(session_id), context_payload)
                 for aid, (agent_inst, _, _) in agent_map.items():
                     if agent_inst is None or aid in context_injected or aid == producer_id:
                         continue
                     if hasattr(agent_inst, "inject_agent1_context"):
-                        agent_inst.inject_agent1_context(meta)
+                        agent_inst.inject_agent1_context(context_payload)
                         context_injected.add(aid)
                 logger.info(f"Early context broadcast from {producer_id} triggered")
             context_event.set()
@@ -961,8 +974,10 @@ async def run_agents_concurrent(
         else:
             results.append(r)
 
-    # Deduplicate deep findings against initial findings to prevent duplicates
-    results = _deduplicate_phase_findings(initial_results, results)
+    # Keep Phase 1 + Phase 2 evidence together for the final arbiter report.
+    # _run_agent_deep_only already appends only non-duplicate deep findings to
+    # the agent's existing findings; stripping here removes useful initial
+    # evidence from the signed deep report.
 
     active_agents = [r.agent_id for r in results if r.agent_active]
     skipped_agents = [r.agent_id for r in results if not r.supports_file_type]

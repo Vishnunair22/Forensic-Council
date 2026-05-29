@@ -641,7 +641,7 @@ Return ONLY a JSON object with this exact schema:
             raw = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=3200,
+                max_tokens=1400,
                 timeout_override=None,
                 json_mode=True,
             )

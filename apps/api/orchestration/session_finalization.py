@@ -53,6 +53,10 @@ async def mark_investigation_completed(
     report,
     arbiter=None,
 ) -> None:
+    _investigator_id, _investigator_role, _case_label = await _get_investigator_metadata(
+        session_id, investigator_id
+    )
+
     # Idempotency guard: if already finalized, skip to prevent duplicate synthesis
     _early_meta = await get_active_pipeline_metadata(session_id) or {}
     if _early_meta.get("status") == "completed":

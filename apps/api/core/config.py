@@ -585,6 +585,13 @@ class Settings(BaseSettings):
         default=True,
         description="After tools complete, call LLM once to synthesize findings into rich forensic narratives",
     )
+    gemini_text_calls_enabled: bool = Field(
+        default=False,
+        description=(
+            "Allow Gemini for text-only LLM/OCR synthesis. Default false keeps Gemini "
+            "reserved for the single Agent 1 visual evidence probe."
+        ),
+    )
 
     # Arbiter LLM Configuration (Dedicated high-reasoning tier)
     arbiter_llm_provider: str = Field(
@@ -600,10 +607,10 @@ class Settings(BaseSettings):
         description="Primary reasoning engine for the Council Arbiter (Groq Llama 3 70B).",
     )
     arbiter_fallback_chain: str = Field(
-        default="gemini/gemini-2.5-flash,gemini/gemini-2.5-flash-lite",
+        default="llama-3.1-8b-instant",
         description=(
-            "Cross-provider fallback chain for the Arbiter. Supports provider prefixes "
-            "(e.g. 'gemini/gemini-2.5-flash')."
+            "Fallback model chain for the Arbiter. Gemini is intentionally not used "
+            "by default so the Gemini key remains reserved for the Agent 1 visual probe."
         ),
     )
 
@@ -612,8 +619,8 @@ class Settings(BaseSettings):
         default=None,
         description=(
             "Google Gemini API key for vision-powered deep analysis. "
-            "Used by Agent 1 (Image Integrity), Agent 3 (Object/Weapon), and "
-            "Agent 5 (Metadata/Context) to perform multimodal file understanding. "
+            "Used only by Agent 1 (Image Integrity) to perform the session visual probe. "
+            "Other agents consume Agent 1's shared visual profile instead of calling Gemini. "
             "Get a free key at https://aistudio.google.com/apikey"
         ),
     )

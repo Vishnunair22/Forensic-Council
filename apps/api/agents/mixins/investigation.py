@@ -61,9 +61,11 @@ class AgentInvestigationMixin:
             phase = "deep" if reactive_agent_id else "initial"
 
             # Check if task already exists to avoid duplication loops
+            # Also block COMPLETE tasks — re-injecting an already-executed
+            # tool re-runs it and appends a duplicate finding with no dedup.
             state = await self.working_memory.get_state(self.session_id, target_agent_id)
             for existing in state.tasks:
-                if existing.description.lower() == description.lower() and existing.status in ("PENDING", "IN_PROGRESS"):
+                if existing.description.lower() == description.lower() and existing.status in ("PENDING", "IN_PROGRESS", "COMPLETE"):
                     logger.debug(f"Task already exists, skipping injection: {description}", agent_id=self.agent_id)
                     return
 
@@ -1080,7 +1082,18 @@ class AgentInvestigationMixin:
             f.agent_id = self.agent_id
             f.metadata["analysis_phase"] = "deep"
 
-        self._findings = self._findings + deep_findings
+        # Dedup deep findings against existing initial findings by tool_name
+        # to prevent the concatenation from duplicating findings.
+        existing_tool_names = {
+            f.metadata.get("tool_name")
+            for f in self._findings
+            if hasattr(f, "metadata") and isinstance(f.metadata, dict)
+        }
+        deduped_deep = [
+            f for f in deep_findings
+            if f.metadata.get("tool_name") not in existing_tool_names
+        ]
+        self._findings = self._findings + deduped_deep
 
         self._tool_success_count = sum(1 for f in self._findings if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE")
         self._tool_error_count = sum(1 for f in self._findings if f.evidence_verdict == "ERROR" or f.status == "INCOMPLETE")

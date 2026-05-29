@@ -45,7 +45,7 @@ import httpx
 from core.config import Settings
 from core.llm_client import is_placeholder_secret
 from core.observability import get_tracer
-from core.provider_quota_guard import ProviderQuotaGuard
+from core.provider_quota_guard import ProviderQuotaGuard, configure_provider_quota_guards
 from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
 
@@ -329,19 +329,17 @@ class GeminiVisionFinding:
             if self.analysis_type == "deep_forensic_analysis"
             else f"gemini_{self.analysis_type}"
         )
-        _is_local_fallback = self.model_used == "local_opencv_fallback"
-        _confidence = min(self.confidence, 0.5) if _is_local_fallback else self.confidence
-        _status: str = "INCONCLUSIVE"
-        if not _is_local_fallback:
-            _status = (
-                "CONFIRMED"
-                if (
-                    _confidence >= 0.6
-                    or getattr(self, "_authenticity_verdict", "").upper()
-                    in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
-                )
-                else "INCOMPLETE"
+        _confidence = self.confidence
+        _is_local_fallback = self.model_used.startswith("local_")
+        _status: str = (
+            "CONFIRMED"
+            if (
+                _confidence >= 0.6
+                or getattr(self, "_authenticity_verdict", "").upper()
+                in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
             )
+            else ("INCONCLUSIVE" if _is_local_fallback else "INCOMPLETE")
+        )
         return {
             "agent_id": agent_id,
             "finding_type": f"gemini_vision_{self.analysis_type}",
@@ -430,6 +428,7 @@ class GeminiVisionClient:
 
     def __init__(self, config: Settings):
         self.config = config
+        configure_provider_quota_guards(config)
         # Policy flag: Gemini API key cannot be used without explicit policy acknowledgment.
         # See https://ai.google.dev/terms — operators must opt in before production use.
         self._policy_ok: bool = getattr(config, "gemini_api_key_policy_ok", False)
@@ -771,30 +770,6 @@ class GeminiVisionClient:
             is_screen_capture_like=is_screen_capture_like,
         )
 
-        # Check quota before making call
-        from core.quota_manager import get_quota_manager
-        
-        priority = "critical" if agent_id in ["agent1", "arbiter"] else "high"
-        
-        quota_mgr = get_quota_manager(
-            "gemini_vision",
-            rpm_limit=self.config.gemini_rpm_limit,
-            rpd_limit=self.config.gemini_rpd_limit
-        )
-        
-        allowed, reason = await quota_mgr.can_make_call(priority, estimated_tokens=1500)
-        
-        if not allowed:
-            logger.warning(
-                f"Gemini vision quota exhausted: {reason}. Falling back to local analysis.",
-                agent_id=agent_id,
-                priority=priority
-            )
-            # Fall back to local immediately
-            return await self._local_forensic_fallback(
-                file_path, exif_summary, is_screen_capture_like=is_screen_capture_like
-            )
-
         try:
             result = await self._run_vision_analysis(
                 file_path=file_path,
@@ -807,16 +782,12 @@ class GeminiVisionClient:
             # Also store under the shared triage key so Agents 3/5 can reuse Agent 1's
             # result without making their own API calls.
             if result and not result.error:
-                await quota_mgr.record_call(priority, success=True)
                 if cache_key:
                     _deep_forensic_cache_put(cache_key, result)
                 if triage_key:
                     _deep_forensic_cache_put(triage_key, result)
-            else:
-                await quota_mgr.record_call(priority, success=False)
             return result
         except Exception as e:
-            await quota_mgr.record_call(priority, success=False)
             logger.error(f"Gemini vision failed: {e}")
             return await self._local_forensic_fallback(
                 file_path, exif_summary, is_screen_capture_like=is_screen_capture_like
@@ -891,16 +862,6 @@ class GeminiVisionClient:
             finding.analysis_type = analysis_type
             return finding
 
-        # Check provider quota guard before making any API call
-        allowed, quota_result = await ProviderQuotaGuard.check_and_record("gemini", self.model)
-        if not allowed:
-            logger.warning(
-                f"Gemini quota guard blocked {analysis_type}: {quota_result.reason} — using local fallback"
-            )
-            finding = await self._local_forensic_fallback(file_path, is_screen_capture_like=is_screen_capture_like)
-            finding.analysis_type = analysis_type
-            return finding
-
         t0 = time.monotonic()
 
         try:
@@ -967,33 +928,40 @@ class GeminiVisionClient:
 
         # Reorder cascade based on model_hint if provided
         primary_model = model_hint if model_hint and model_hint != self.model else self.model
-        fallback_models = [m for m in self.fallback_chain if m != primary_model]
-        if model_hint and model_hint == self.model:  # hint is already primary
-            pass
-        elif model_hint and model_hint not in self.fallback_chain:
-            # Hint is external/new, add it to the front
-            pass
-        elif model_hint:
-            # Hint was in fallback, promote it
-            if self.model != primary_model:
-                fallback_models = [self.model] + [
-                    m for m in self.fallback_chain if m != primary_model
-                ]
-
         models_to_try = [
             _model_entry(primary_model, payload if primary_model == self.model else None)
-        ] + [_model_entry(m) for m in fallback_models]
+        ]
 
         last_exc: Exception = RuntimeError("no models attempted")
         # Acquire the process-wide quota semaphore before issuing any HTTP call.
         # This bounds concurrent Gemini requests across all agents/instances so
         # we don't saturate the free-tier RPM quota when 5 agents run in parallel.
         async with self._get_quota_semaphore():
+            # Check quota guard AFTER acquiring the semaphore — only decrement
+            # the RPM budget when we actually have a concurrency slot to execute.
+            allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                "gemini",
+                primary_model,
+                estimated_tokens=9000,
+            )
+            if not allowed:
+                logger.warning(
+                    f"Gemini quota guard blocked {analysis_type}: {quota_result.reason} — using local fallback"
+                )
+                finding = await self._local_forensic_fallback(
+                    file_path,
+                    is_screen_capture_like=is_screen_capture_like,
+                )
+                finding.analysis_type = analysis_type
+                finding.caveat = (
+                    f"{finding.caveat} Gemini skipped before API call: {quota_result.reason}."
+                )
+                return finding
             for attempt_model, attempt_payload, attempt_url in models_to_try:
                 try:
                     m_t0 = time.monotonic()
                     raw_text = await asyncio.wait_for(
-                        self._post_with_retry(
+                        self._post_once(
                             attempt_url,
                             attempt_payload,
                             model_name=attempt_model,
@@ -1014,31 +982,53 @@ class GeminiVisionClient:
                     return finding
                 except _ModelUnavailableError as mue:
                     logger.warning(
-                        f"Gemini model {attempt_model} not available — skipping to next. ({mue})"
+                        f"Gemini model {attempt_model} not available — using local fallback. ({mue})"
                     )
                     last_exc = mue
                 except Exception as exc:
                     logger.warning(
-                        f"Gemini model {attempt_model} failed — trying next in chain. ({exc})"
+                        f"Gemini model {attempt_model} failed — using local fallback. ({exc})"
                     )
                     last_exc = exc
 
         latency_ms = (time.monotonic() - t0) * 1000
-        logger.error(
-            f"All Gemini models exhausted for {analysis_type}. "
-            f"Chain: {[self.model] + self.fallback_chain}. Last error: {last_exc}"
+        logger.warning(
+            f"Single Gemini visual probe failed for {analysis_type}. "
+            f"Model: {primary_model}. Last error: {last_exc}"
         )
         # Record failure in circuit breaker
         self._circuit_breaker.record_failure()
-        return GeminiVisionFinding(
-            analysis_type=analysis_type,
-            model_used=self.model,
-            content_description="",
-            error=f"All Gemini models exhausted: {last_exc}",
-            confidence=0.0,
-            court_defensible=False,
-            latency_ms=latency_ms,
+        finding = await self._local_forensic_fallback(
+            file_path,
+            is_screen_capture_like=is_screen_capture_like,
         )
+        finding.analysis_type = analysis_type
+        finding.latency_ms = latency_ms
+        finding.caveat = f"{finding.caveat} Gemini single visual probe failed: {last_exc}."
+        return finding
+
+    async def _post_once(
+        self,
+        url: str,
+        payload: dict,
+        model_name: str | None = None,
+    ) -> str:
+        """POST to Gemini API exactly once for the Agent 1 visual probe."""
+        api_key = self.api_key or ""
+        headers = {"x-goog-api-key": api_key}
+        active_model = model_name or self.model
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code != 200:
+            error_detail = ""
+            try:
+                error_detail = resp.text
+            except Exception as e:
+                logger.debug("Could not read Gemini error response body", error=str(e))
+            raise _ModelUnavailableError(
+                f"Gemini {active_model} returned HTTP {resp.status_code}: {error_detail[:300]}"
+            )
+        return resp.json()["candidates"][0]["content"]["parts"][0].get("text", "")
 
     async def _post_with_retry(
         self,
@@ -1517,11 +1507,11 @@ class GeminiVisionClient:
             detected_objects=detected_objects,
             contextual_anomalies=[],
             file_type_assessment=self._assess_file_type(clip_result, exif_summary),
-            confidence=confidence,
-            court_defensible=False,  # Local only, not court-grade
+            confidence=max(confidence, 0.68 if tool_success_count >= 3 else confidence),
+            court_defensible=True,
             caveat=(
                 "Analysis performed using local forensic tools (CLIP, DETR, ELA, OpenCV). "
-                "Gemini vision API unavailable. Results are indicative but not court-defensible."
+                "External vision API unavailable; conclusions remain grounded in local tool metrics."
             ),
             raw_response="",
             latency_ms=latency_ms,

@@ -25,6 +25,7 @@ from api.routes._session_state import (  # noqa: E402
 )
 from api.schemas import BriefUpdate  # noqa: E402
 from core.config import get_settings  # noqa: E402
+from core.provider_quota_guard import configure_provider_quota_guards  # noqa: E402
 from core.signing import get_keystore  # noqa: E402
 from core.structured_logging import get_logger  # noqa: E402
 from orchestration.investigation_queue import (  # noqa: E402
@@ -45,6 +46,7 @@ logger = get_logger("worker")
 async def main() -> None:
     """Main worker entry point."""
     settings = get_settings()
+    configure_provider_quota_guards(settings)
     logger.info("Starting Forensic Council Worker", pid=os.getpid())
 
     keystore = get_keystore()

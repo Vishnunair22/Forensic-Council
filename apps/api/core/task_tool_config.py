@@ -58,6 +58,7 @@ _IMAGE_TOOLS: frozenset[str] = frozenset(
         "analyze_image_content",
         "extract_text_from_image",
         "gemini_deep_forensic",
+        "read_shared_image_context",
         # Hash / integrity
         "file_hash_verify",
         # Scene / object (Agent 3 also applies to images)
@@ -100,7 +101,7 @@ _AUDIO_TOOLS: frozenset[str] = frozenset(
         "audio_splice_detect",
         "enf_analysis",
         "background_noise_analysis",
-        "gemini_deep_forensic",
+        "read_shared_image_context",
         # Hash / file integrity always applicable
         "file_hash_verify",
         "file_structure_analysis",
@@ -141,7 +142,7 @@ _VIDEO_TOOLS: frozenset[str] = frozenset(
         "scene_incongruence",
         "lighting_consistency",
         # General
-        "gemini_deep_forensic",
+        "read_shared_image_context",
         "file_hash_verify",
         "file_structure_analysis",
         "hex_signature_scan",
@@ -163,6 +164,7 @@ _DOCUMENT_TOOLS: frozenset[str] = frozenset(
         "timestamp_analysis",
         "provenance_chain_verify",
         "gemini_deep_forensic",
+        "read_shared_image_context",
     }
 )
 
@@ -177,6 +179,7 @@ _ALWAYS_ALLOWED: frozenset[str] = frozenset(
         "file_hash_verify",
         "inter_agent_call",
         "gemini_deep_forensic",
+        "read_shared_image_context",
     }
 )
 

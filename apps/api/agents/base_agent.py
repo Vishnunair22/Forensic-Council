@@ -173,7 +173,7 @@ class ForensicAgent(
             findings_json = json.dumps([
                 f.model_dump() if hasattr(f, 'model_dump') else f
                 for f in findings
-            ])
+            ], default=str)
             synthesis = await llm_client.generate_synthesis(
                 system_prompt=f"Executive synthesis for {self.agent_id} forensic findings.",
                 user_content=findings_json,

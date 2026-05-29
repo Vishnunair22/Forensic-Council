@@ -249,7 +249,7 @@ class Agent5Metadata(ForensicAgent):
             return [
                 "Run timestamp_analysis for cross-field date and time consistency",
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
-                "Run gemini_deep_forensic for screenshot timestamp and provenance cross-check",
+                "Read shared image context for screenshot timestamp and provenance cross-check",
             ]
         if self._is_av_media:
             return [
@@ -273,10 +273,10 @@ class Agent5Metadata(ForensicAgent):
         if isinstance(exif, dict) and exif.get("gps_coordinates"):
             tasks.append("Run astro_grounding to verify shadow-sun-gps-time parity")
             tasks.append("Run gps_timezone_validate for coordinate-timezone timeline cross-check")
-        # gemini runs when Phase 1 EXIF detected editing software, GPS data is
-        # present (for geospatial cross-validation), or Agent 1 flagged suspicion.
+        # Agent 1's visual profile is reused when Phase 1 EXIF detected editing
+        # software, GPS data is present, or Agent 1 flagged suspicion.
         if self._should_run_gemini_provenance():
-            tasks.append("Run gemini_deep_forensic for GPS/Timestamp/Device Provenance Cross-Validation")
+            tasks.append("Read shared image context for GPS/Timestamp/Device Provenance Cross-Validation")
         return tasks
 
     @property
@@ -317,8 +317,8 @@ class Agent5Metadata(ForensicAgent):
                 "av_file_identity", video_h.av_file_identity_handler, "Lightweight AV pre-screen"
             )
 
-        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
-        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
+        # ── Shared Agent 1 Visual Profile Reader ──────────────────────────────
+        async def read_shared_image_context_handler(input_data: dict) -> dict:
             async def _gemini_signal_callback(msg: str):
                 """Signal callback for early hand-off to Arbiter."""
                 if self.inter_agent_bus:
@@ -335,7 +335,9 @@ class Agent5Metadata(ForensicAgent):
             )
 
         registry.register(
-            "gemini_deep_forensic", gemini_deep_forensic_handler, "Gemini deep forensic analysis"
+            "read_shared_image_context",
+            read_shared_image_context_handler,
+            "Read Agent 1 visual evidence profile for provenance grounding",
         )
 
         # ── OCR (for screenshot timestamp extraction) ─────────────────────────
@@ -393,11 +395,11 @@ class Agent5Metadata(ForensicAgent):
                     status=TaskStatus.PENDING,
                     priority=10,
                 )
-                # Also inject gemini for deep provenance verification when anomaly is detected
+                # Also reuse Agent 1's visual profile for deep provenance verification.
                 await self.working_memory.create_task(
                     session_id=self.session_id,
                     agent_id=_wm_agent_id,
-                    description="Run gemini_deep_forensic for Hardware-Grounded Provenance Verification",
+                    description="Read shared image context for Hardware-Grounded Provenance Verification",
                     status=TaskStatus.PENDING,
                     priority=8,
                 )

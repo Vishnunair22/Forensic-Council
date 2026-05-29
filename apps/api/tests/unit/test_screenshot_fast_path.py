@@ -123,7 +123,7 @@ def test_agent5_omits_camera_provenance_tools_for_screen_capture(tmp_path):
     assert agent.deep_task_decomposition == [
         "Run timestamp_analysis for cross-field date and time consistency",
         "Run provenance_chain_verify for C2PA and digital provenance manifests",
-        "Run gemini_deep_forensic for screenshot timestamp and provenance cross-check",
+        "Read shared image context for screenshot timestamp and provenance cross-check",
     ]
 
 

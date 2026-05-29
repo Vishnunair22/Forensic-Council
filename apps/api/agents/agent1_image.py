@@ -110,8 +110,8 @@ class Agent1Image(ForensicAgent):
         Cheap context tools (CLIP, OCR, FFT) follow.
 
         Design rules:
-          - gemini_deep_forensic is a synthesis tool — runs only in Phase 2
-            except for screenshots where it replaces ELA as the primary classifier.
+          - gemini_deep_forensic runs once at the beginning as the session visual
+            evidence profile. All other agents and OCR consumers reuse this profile.
           - extract_text_from_image is only useful for documents (scanned text)
             and screenshots (UI text) — OCR on camera photos or web downloads
             wastes a task slot. It is reactively injected by _on_tool_result_impl
@@ -122,6 +122,7 @@ class Agent1Image(ForensicAgent):
         if self._is_document:
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for OCR and document content identification",
                 "Run analyze_image_content for semantic document classification",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -133,6 +134,7 @@ class Agent1Image(ForensicAgent):
             # injected by _reason_step when ELA/FFT disagree (no coverage lost).
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
                 "Run neural_ela for high-confidence manipulation detection",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -145,7 +147,7 @@ class Agent1Image(ForensicAgent):
             # Gemini stays as the primary content classifier (cheaper than ELA on UI).
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for content classification and forensic routing hints",
+                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for visible text extraction",
                 "Run analyze_image_content for semantic image understanding",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -155,6 +157,7 @@ class Agent1Image(ForensicAgent):
             # neural_fingerprint → CLIP context → FFT supporting.
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -166,6 +169,7 @@ class Agent1Image(ForensicAgent):
             # for natural photos. OCR is reactively injected if text is found.
             return [
                 "Run file_hash_verify for evidence integrity check",
+                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
                 "Run neural_ela for high-confidence manipulation detection",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -175,6 +179,7 @@ class Agent1Image(ForensicAgent):
         # No Gemini or OCR — same reasoning as camera branch.
         return [
             "Run file_hash_verify for evidence integrity check",
+            "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
             "Run neural_ela for high-confidence manipulation detection",
             "Run neural_fingerprint for conceptual similarity detection",
             "Run analyze_image_content for semantic image understanding",

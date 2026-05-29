@@ -23,7 +23,7 @@ import httpx
 
 from core.config import Settings
 from core.observability import get_tracer
-from core.provider_quota_guard import ProviderQuotaGuard
+from core.provider_quota_guard import ProviderQuotaGuard, configure_provider_quota_guards
 from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
 
@@ -111,6 +111,7 @@ class LLMClient:
     def __init__(self, config: Settings, use_arbiter_tier: bool = False):
         self.config = config
         self.use_arbiter_tier = use_arbiter_tier
+        configure_provider_quota_guards(config)
 
         if use_arbiter_tier:
             self.provider = config.arbiter_llm_provider.lower()
@@ -147,14 +148,14 @@ class LLMClient:
 
         # Global semaphore to limit concurrency and avoid blasting API limits
         if not hasattr(LLMClient, "_global_semaphore"):
-            LLMClient._global_semaphore = asyncio.Semaphore(4)
+            LLMClient._global_semaphore = asyncio.Semaphore(2)
 
         # Synthesis-specific serialization: multiple agents finishing simultaneously
         # (especially on fast screenshot paths) would all call generate_synthesis()
         # concurrently and exhaust the Groq TPM budget in one burst → all 429.
         # Semaphore(2) limits concurrent synthesis calls to avoid blasting limits while permitting overlap.
         if not hasattr(LLMClient, "_synthesis_semaphore"):
-            LLMClient._synthesis_semaphore = asyncio.Semaphore(2)
+            LLMClient._synthesis_semaphore = asyncio.Semaphore(1)
 
     async def _get_client(self, timeout_override: float | None = None) -> httpx.AsyncClient:
         """Return a shared httpx.AsyncClient, creating it on first use.
@@ -188,6 +189,8 @@ class LLMClient:
             return False
         # Gemini calls require policy acknowledgment
         if self.provider == "gemini":
+            if not getattr(self.config, "gemini_text_calls_enabled", False):
+                return False
             if not getattr(self.config, "gemini_api_key_policy_ok", False):
                 return False
             if not self.gemini_api_key or is_placeholder_secret(self.gemini_api_key):
@@ -290,8 +293,14 @@ class LLMClient:
                         continue
 
                     # Check provider quota before the API call
+                    estimated_tokens = (
+                        sum(len(m.get("content", "")) for m in messages) // 4
+                        + min(self.max_tokens, 1024)
+                    )
                     allowed, quota_result = await ProviderQuotaGuard.check_and_record(
-                        self.provider, self.model
+                        self.provider,
+                        self.model,
+                        estimated_tokens=estimated_tokens,
                     )
                     if not allowed:
                         logger.warning(
@@ -366,7 +375,7 @@ class LLMClient:
                 messages.append(
                     {
                         "role": "assistant",
-                        "content": f"Action: {tool_name}({json.dumps(tool_input)})",
+                        "content": f"Action: {tool_name}({json.dumps(tool_input, default=str)})",
                     }
                 )
             elif step_type == "OBSERVATION":
@@ -415,6 +424,11 @@ class LLMClient:
         """Return primary model followed by de-duplicated fallbacks."""
         candidates: list[str] = []
         for model in [self.model, *self.fallback_models]:
+            if (
+                str(model).lower().startswith("gemini/")
+                and not getattr(self.config, "gemini_text_calls_enabled", False)
+            ):
+                continue
             if model and model not in candidates:
                 candidates.append(model)
         return candidates
@@ -600,6 +614,9 @@ class LLMClient:
         Multimodal synthesis supporting image/PDF vision inputs via Gemini.
         Essential for Tier 0 OCR and deep forensic visual grounding.
         """
+        if not getattr(self.config, "gemini_text_calls_enabled", False):
+            logger.info("Gemini multimodal synthesis skipped; reserved for Agent 1 visual probe")
+            return {}
         if not self.gemini_api_key:
             return {}
 
@@ -764,7 +781,12 @@ class LLMClient:
 
             # Expand Gemini fallback candidates: lighter models use a different
             # quota bucket and have higher RPD on the free tier.
-            if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
+            if (
+                self.gemini_api_key
+                and not is_placeholder_secret(self.gemini_api_key)
+                and (self.use_arbiter_tier or self.provider == "gemini")
+                and getattr(self.config, "gemini_text_calls_enabled", False)
+            ):
                 for gem_model in [
                     "gemini/gemini-2.5-flash",
                     "gemini/gemini-2.0-flash-lite",
@@ -811,18 +833,6 @@ class LLMClient:
                     )
                     continue
 
-                allowed, quota_result = await ProviderQuotaGuard.check_and_record(
-                    target_provider, target_model
-                )
-                if not allowed:
-                    logger.warning(
-                        "Provider quota guard blocked synthesis call",
-                        provider=target_provider,
-                        model=target_model,
-                        reason=quota_result.reason,
-                    )
-                    continue
-
                 # Trim prompt to per-model character limit BEFORE sending to avoid 413.
                 char_limit = self._MODEL_PROMPT_CHAR_LIMITS.get(
                     target_model, self._DEFAULT_PROMPT_CHAR_LIMIT
@@ -839,6 +849,21 @@ class LLMClient:
                             original_chars=len(user_content),
                             trimmed_chars=len(trimmed_user),
                         )
+
+                estimated_tokens = (len(system_prompt) + len(trimmed_user)) // 4 + tokens
+                allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                    target_provider,
+                    target_model,
+                    estimated_tokens=estimated_tokens,
+                )
+                if not allowed:
+                    logger.warning(
+                        "Provider quota guard blocked synthesis call",
+                        provider=target_provider,
+                        model=target_model,
+                        reason=quota_result.reason,
+                    )
+                    continue
 
                 try:
                     client = await self._get_client()
@@ -931,7 +956,12 @@ class LLMClient:
             # All candidates exhausted — try one final lightweight Gemini model
             # after a short pause. Using gemini-2.0-flash-lite which has a separate
             # quota bucket from the primary flash model.
-            if self.gemini_api_key and not is_placeholder_secret(self.gemini_api_key):
+            if (
+                self.gemini_api_key
+                and not is_placeholder_secret(self.gemini_api_key)
+                and (self.use_arbiter_tier or self.provider == "gemini")
+                and getattr(self.config, "gemini_text_calls_enabled", False)
+            ):
                 logger.warning(
                     "All synthesis candidates exhausted. Retrying with gemini-2.0-flash-lite in 5s..."
                 )
@@ -945,6 +975,18 @@ class LLMClient:
                     # Use a hard-trimmed prompt for the lite model retry
                     lite_limit = self._MODEL_PROMPT_CHAR_LIMITS.get(lite_model, 60000)
                     lite_user = user_content[:lite_limit // 2]
+                    estimated_tokens = (len(system_prompt) + len(lite_user)) // 4 + tokens
+                    allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                        "gemini",
+                        lite_model,
+                        estimated_tokens=estimated_tokens,
+                    )
+                    if not allowed:
+                        logger.warning(
+                            "Skipping final Gemini retry because quota guard blocked it",
+                            reason=quota_result.reason,
+                        )
+                        return ""
                     payload = {
                         "contents": [
                             {
@@ -1058,6 +1100,7 @@ class LLMClient:
         # Check quota first
         from core.quota_manager import get_quota_manager
 
+        effective_priority = "critical" if self.use_arbiter_tier else priority
         provider = self.provider if self.provider != "none" else "groq"
         rpm_limit = getattr(self.config, f"{provider}_rpm_limit", 15)
         rpd_limit = getattr(self.config, f"{provider}_rpd_limit", 1500)
@@ -1068,27 +1111,29 @@ class LLMClient:
             rpd_limit=rpd_limit
         )
 
-        # Try chunked synthesis first for large finding sets (>6000 chars)
-        chunked = await self._chunked_synthesis(
-            system_prompt=system_prompt,
-            user_content=user_content,
-            max_tokens=max_tokens,
-            timeout_override=timeout_override,
-            json_mode=json_mode,
-        )
-        if chunked is not None:
-            logger.info("Using chunked synthesis for large finding set")
-            return chunked
+        if effective_priority in {"critical", "high"}:
+            chunked = await self._chunked_synthesis(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=max_tokens,
+                timeout_override=timeout_override,
+                json_mode=json_mode,
+            )
+            if chunked is not None:
+                logger.info("Using chunked synthesis for large finding set")
+                return chunked
 
         estimated_tokens = (len(system_prompt) + len(user_content)) // 4 + (max_tokens or 2048)
-        allowed, reason = await quota_mgr.can_make_call(priority, estimated_tokens=estimated_tokens)
+        allowed, reason = await quota_mgr.can_make_call(
+            effective_priority, estimated_tokens=estimated_tokens
+        )
 
         if not allowed:
             logger.warning(
                 f"Quota manager blocked synthesis: {reason}. Using template synthesis.",
-                priority=priority
+                priority=effective_priority
             )
-            if priority in ["critical", "high"]:
+            if effective_priority in ["critical", "high"]:
                 return self._generate_template_synthesis(user_content)
             return ""
 

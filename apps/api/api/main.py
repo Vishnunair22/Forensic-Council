@@ -334,19 +334,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the Gemini models.list endpoint (no quota burned). Unavailable models are
     # pruned from the cascade so investigations never hit avoidable 404s.
     try:
-        from core.provider_quota_guard import ProviderQuotaGuard
+        from core.provider_quota_guard import configure_provider_quota_guards
 
         # Configure provider quota guards from settings
-        ProviderQuotaGuard.configure(
-            "groq",
-            rpm_limit=settings.groq_rpm_limit,
-            rpd_limit=15000,
-        )
-        ProviderQuotaGuard.configure(
-            "gemini",
-            rpm_limit=settings.gemini_rpm_limit,
-            rpd_limit=settings.gemini_rpd_limit,
-        )
+        configure_provider_quota_guards(settings)
         if settings.free_tier_mode:
             pass
 
@@ -359,13 +350,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as pdf_err:
             logger.warning("Failed to probe PDF export library availability", error=str(pdf_err))
 
-        if not settings.gemini_api_key_policy_ok:
-            logger.info("Skipping Gemini model availability check (policy not acknowledged)")
-        else:
-            from core.gemini_client import GeminiVisionClient
-            _gemini_client = GeminiVisionClient(settings)
-            GeminiVisionClient.configure_quota_pool(settings.gemini_max_concurrent)
-            await _gemini_client.validate_model_availability()
+        from core.gemini_client import GeminiVisionClient
+        GeminiVisionClient.configure_quota_pool(settings.gemini_max_concurrent)
+        logger.info(
+            "Skipping Gemini startup model validation; Gemini is reserved for the single Agent 1 visual probe"
+        )
 
     except Exception as e:
         logger.warning("Gemini model validation skipped", error=str(e))

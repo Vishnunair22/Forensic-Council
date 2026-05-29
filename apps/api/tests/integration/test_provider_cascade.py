@@ -47,7 +47,7 @@ async def test_cascade_gemini_success(tmp_path: Path):
         # Gemini succeeds
         mock_deep.return_value = mock_finding
 
-        res = await router.deep_forensic_analysis(str(test_image))
+        res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent1")
         
         assert res.model_used == "gemini-2.5-flash"
         assert res.content_description == "Gemini direct success"
@@ -102,7 +102,7 @@ async def test_cascade_gemini_fail_groq_success(tmp_path: Path):
             with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
                 mock_post.return_value = mock_response
 
-                res = await router.deep_forensic_analysis(str(test_image))
+                res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent1")
 
                 assert res.model_used == "mock-groq-model"
                 assert res.content_description == "Groq vision success"
@@ -155,12 +155,43 @@ async def test_cascade_all_fail_local_success(tmp_path: Path):
             with patch("core.vision_router.analyze_local_ensemble", new_callable=AsyncMock) as mock_local:
                 mock_local.return_value = local_mock_finding
 
-                res = await router.deep_forensic_analysis(str(test_image))
+                res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent1")
 
                 assert res.model_used == "local_opencv_fallback"
                 assert res.content_description == "Local fallback triggered successfully"
                 mock_gemini.assert_called_once()
                 mock_local.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cascade_skips_gemini_for_non_agent1(tmp_path: Path):
+    """Only Agent 1 may consume the Gemini visual quota."""
+    test_image = tmp_path / "test.jpg"
+    test_image.write_bytes(_create_minimal_jpeg())
+
+    settings = Settings()
+    settings.vision_provider_chain = "gemini,local_ensemble"
+    router = VisionRouter(settings)
+
+    with patch.object(
+        router.gemini_client, "deep_forensic_analysis", new_callable=AsyncMock
+    ) as mock_gemini, patch(
+        "core.vision_router.analyze_local_ensemble", new_callable=AsyncMock
+    ) as mock_local:
+        local_mock_finding = GeminiVisionFinding(
+            analysis_type="deep_forensic_analysis",
+            model_used="local_opencv_fallback",
+            content_description="Local fallback for downstream agent",
+            confidence=0.72,
+            court_defensible=True,
+        )
+        mock_local.return_value = local_mock_finding
+
+        res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent3")
+
+    assert res.model_used == "local_opencv_fallback"
+    mock_gemini.assert_not_called()
+    mock_local.assert_called_once()
 
 
 @pytest.fixture

@@ -244,29 +244,6 @@ def create_llm_step_generator(
         ):
             return None
 
-        # Check quota manager before proceeding with LLM reasoning in ReAct loop
-        from core.quota_manager import get_quota_manager
-        
-        priority = "medium"
-        provider = llm_client.provider
-        rpm_limit = getattr(config, f"{provider}_rpm_limit", 15)
-        rpd_limit = getattr(config, f"{provider}_rpd_limit", 1500)
-        
-        quota_mgr = get_quota_manager(
-            f"{provider}_reasoning",
-            rpm_limit=rpm_limit,
-            rpd_limit=rpd_limit
-        )
-        
-        allowed, reason = await quota_mgr.can_make_call(priority, estimated_tokens=1000)
-        if not allowed:
-            logger.warning(
-                f"Quota manager blocked ReAct LLM step: {reason}. Falling back to deterministic task decomposition.",
-                agent_name=agent_name,
-                priority=priority
-            )
-            return None
-
         # Build system prompt with forensic context
         system_prompt = _build_forensic_system_prompt(
             agent_name=agent_name,
@@ -337,7 +314,6 @@ def create_llm_step_generator(
         for attempt in range(2):
             try:
                 response: LLMResponse = await _attempt_llm_call()
-                await quota_mgr.record_call(priority, success=True)
                 step = _parse_response(response)
                 logger.info(
                     "LLM generated ReAct step",
@@ -348,7 +324,6 @@ def create_llm_step_generator(
                 )
                 return step
             except Exception as exc:
-                await quota_mgr.record_call(priority, success=False)
                 last_exc = exc
                 if attempt == 0:
                     logger.warning(
@@ -1164,13 +1139,21 @@ class ReActLoopEngine:
         if declared_status in {"NOT_APPLICABLE", "SKIPPED"}:
             return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
 
-        court_defensible = bool(output.get("court_defensible", True)) and not conf_from_fallback
+        court_defensible = bool(output.get("court_defensible", True))
         if self._positive_signal(output):
             return "CONFIRMED", "POSITIVE", confidence, court_defensible
 
         inconclusive_verdicts = {"INCONCLUSIVE", "UNKNOWN", "NO_ENF_SIGNAL"}
         verdict = str(output.get("verdict", "")).upper()
-        if verdict in inconclusive_verdicts or conf_from_fallback:
+        declared_clean = verdict in {
+            "AUTHENTIC",
+            "CLEAN",
+            "CONSISTENT",
+            "LIKELY_AUTHENTIC",
+            "LIKELY_GENUINE",
+            "NATURAL_OR_CLEAN",
+        } or declared_status in {"CONFIRMED", "COMPLETE", "OK", "SUCCESS"}
+        if verdict in inconclusive_verdicts or (conf_from_fallback and not declared_clean):
             return "INCONCLUSIVE", "INCONCLUSIVE", confidence, court_defensible
 
         return "CONFIRMED", "NEGATIVE", confidence, court_defensible
@@ -1401,7 +1384,9 @@ class ReActLoopEngine:
                 injected_any = False
                 if self.agent and hasattr(self.agent, "self_reflection_pass") and self._current_iteration < self.iteration_ceiling:
                     try:
-                        report = await self.agent.self_reflection_pass(self._findings)
+                        report = await self.agent.self_reflection_pass(self._findings or [])
+                        if report is None:
+                            raise ValueError("self_reflection_pass returned None")
                         untreated = getattr(report, "untreated_absences", None) or []
                         for absence in untreated:
                             if "MISSING_PRNU_ANALYSIS" in absence:
@@ -1610,7 +1595,15 @@ class ReActLoopEngine:
                             "llm_reasoning": llm_reasoning,  # [M1] Injected trace data
                         },
                     )
-                    self._findings.append(finding)
+                    # Dedup by tool_name — prevent duplicate findings when a tool
+                    # is re-executed (e.g. by inject_task re-injecting a COMPLETE task).
+                    tool_name = next_step.tool_name
+                    if not any(
+                        f.metadata.get("tool_name") == tool_name
+                        for f in self._findings
+                        if hasattr(f, "metadata") and isinstance(f.metadata, dict)
+                    ):
+                        self._findings.append(finding)
 
                     # [INT-DECOMP] Reactive hook: Allow agent to inject tasks based on finding
                     if self.agent is not None:
@@ -1679,27 +1672,35 @@ class ReActLoopEngine:
                         )
 
                 if not tool_result.success:
-                    self._findings.append(
-                        AgentFinding(
-                            agent_id=self.agent_id,
-                            agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
-                            finding_type=f"{next_step.tool_name.replace('_', ' ').title()} Incomplete",
-                            confidence_raw=None,
-                            raw_confidence_score=None,
-                            status="INCOMPLETE",
-                            evidence_verdict="ERROR",
-                            reasoning_summary=(
-                                f"{next_step.tool_name.replace('_', ' ').title()} did not complete: "
-                                f"{tool_result.error or 'tool failed without diagnostic output'}. "
-                                "The remaining tools were allowed to continue so the investigation can still reach analyst review."
-                            ),
-                            metadata={
-                                "tool_name": next_step.tool_name,
-                                "court_defensible": False,
-                                "tool_error": tool_result.error,
-                            },
+                    # Dedup error findings by tool_name — prevent stacking ERROR
+                    # findings when the same tool fails repeatedly.
+                    tool_name = next_step.tool_name
+                    if not any(
+                        f.metadata.get("tool_name") == tool_name
+                        for f in self._findings
+                        if hasattr(f, "metadata") and isinstance(f.metadata, dict)
+                    ):
+                        self._findings.append(
+                            AgentFinding(
+                                agent_id=self.agent_id,
+                                agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
+                                finding_type=f"{tool_name.replace('_', ' ').title()} Incomplete",
+                                confidence_raw=None,
+                                raw_confidence_score=None,
+                                status="INCOMPLETE",
+                                evidence_verdict="ERROR",
+                                reasoning_summary=(
+                                    f"{tool_name.replace('_', ' ').title()} did not complete: "
+                                    f"{tool_result.error or 'tool failed without diagnostic output'}. "
+                                    "The remaining tools were allowed to continue so the investigation can still reach analyst review."
+                                ),
+                                metadata={
+                                    "tool_name": tool_name,
+                                    "court_defensible": False,
+                                    "tool_error": tool_result.error,
+                                },
+                            )
                         )
-                    )
 
                 # Mark the IN_PROGRESS task as COMPLETE now that the tool has run.
                 await self._update_task_complete(next_step)

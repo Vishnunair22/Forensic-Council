@@ -32,6 +32,7 @@ logger = get_logger(__name__)
 # Resets on process restart — acceptable for per-session quota guards.
 # Key: (provider, model)  Value: list of timestamps (Unix seconds)
 _CALL_TIMESTAMPS: dict[str, list[float]] = defaultdict(list)
+_TOKEN_TIMESTAMPS: dict[str, list[tuple[float, int]]] = defaultdict(list)
 
 # Global lock to prevent race conditions on concurrent call tracking.
 _TRACKING_LOCK = asyncio.Lock()
@@ -91,6 +92,15 @@ class ProviderQuotaGuard:
     @classmethod
     def configure(cls, provider: str, rpm_limit: int, rpd_limit: int, tpm_limit: int | None = None) -> None:
         """Set quota limits for a provider. Call once at startup."""
+        existing = cls._configs.get(provider)
+        if (
+            existing
+            and existing.rpm_limit == rpm_limit
+            and existing.rpd_limit == rpd_limit
+            and existing.tpm_limit == tpm_limit
+            and existing.enabled
+        ):
+            return
         cls._configs[provider] = ProviderConfig(
             rpm_limit=rpm_limit, rpd_limit=rpd_limit, tpm_limit=tpm_limit, enabled=True
         )
@@ -114,7 +124,13 @@ class ProviderQuotaGuard:
         return cls._configs.get(provider)
 
     @classmethod
-    async def check_and_record(cls, provider: str, model: str) -> tuple[bool, QuotaCheckResult]:
+    async def check_and_record(
+        cls,
+        provider: str,
+        model: str,
+        *,
+        estimated_tokens: int = 0,
+    ) -> tuple[bool, QuotaCheckResult]:
         """
         Check quota availability and record a call.
 
@@ -128,68 +144,96 @@ class ProviderQuotaGuard:
         if config is None or not config.enabled:
             return True, QuotaCheckResult(allowed=True, reason="provider not configured")
 
-        key = _provider_model_key(provider, model)
-        now = time.time()
-
-        # Cleanup old timestamps periodically
         async with _TRACKING_LOCK:
+            key = _provider_model_key(provider, model)
+            now = time.time()
+
+            # Cleanup old timestamps periodically
             if now - config._last_cleanup > _CLEANUP_INTERVAL_SECONDS:
                 cls._cleanup_stale(provider, model, now)
                 config._last_cleanup = now
 
-        timestamps = _CALL_TIMESTAMPS[key]
+            timestamps = _CALL_TIMESTAMPS[key]
 
-        # RPM check: calls in the last 60 seconds
-        cutoff_60s = now - 60.0
-        recent_calls = [ts for ts in timestamps if ts > cutoff_60s]
-        rpm_count = len(recent_calls)
-        rpm_limit = config.rpm_limit
+            # RPM check: calls in the last 60 seconds
+            cutoff_60s = now - 60.0
+            recent_calls = [ts for ts in timestamps if ts > cutoff_60s]
+            rpm_count = len(recent_calls)
+            rpm_limit = config.rpm_limit
 
-        if rpm_count >= rpm_limit:
-            result = QuotaCheckResult(
-                allowed=False,
-                reason=(
-                    f"Gemini free-tier RPM limit reached ({rpm_count}/{rpm_limit}) — "
-                    f"next allowed in ~60s"
-                ),
-                calls_in_window=rpm_count,
-                limit=rpm_limit,
-                window_type="rpm",
-            )
-            logger.warning(
-                f"Quota guard: RPM limit reached for {provider}/{model}",
-                count=rpm_count,
-                limit=rpm_limit,
-            )
-            return False, result
+            if rpm_count >= rpm_limit:
+                result = QuotaCheckResult(
+                    allowed=False,
+                    reason=(
+                        f"{provider} RPM limit reached ({rpm_count}/{rpm_limit}) — "
+                        f"next allowed in ~60s"
+                    ),
+                    calls_in_window=rpm_count,
+                    limit=rpm_limit,
+                    window_type="rpm",
+                )
+                logger.warning(
+                    f"Quota guard: RPM limit reached for {provider}/{model}",
+                    count=rpm_count,
+                    limit=rpm_limit,
+                )
+                return False, result
 
-        # RPD check: calls in the last 24 hours
-        cutoff_24h = now - 86400.0
-        daily_calls = [ts for ts in timestamps if ts > cutoff_24h]
-        rpd_count = len(daily_calls)
-        rpd_limit = config.rpd_limit
+            if config.tpm_limit and estimated_tokens > 0:
+                recent_tokens = [
+                    item for item in _TOKEN_TIMESTAMPS[key] if item[0] > cutoff_60s
+                ]
+                token_count = sum(tokens for _, tokens in recent_tokens)
+                if token_count + estimated_tokens > config.tpm_limit:
+                    result = QuotaCheckResult(
+                        allowed=False,
+                        reason=(
+                            f"{provider} TPM limit would be exceeded "
+                            f"({token_count + estimated_tokens}/{config.tpm_limit})"
+                        ),
+                        calls_in_window=token_count,
+                        limit=config.tpm_limit,
+                        window_type="tpm",
+                    )
+                    logger.warning(
+                        "Quota guard: TPM limit reached",
+                        provider=provider,
+                        model=model,
+                        tokens=token_count,
+                        estimated_tokens=estimated_tokens,
+                        limit=config.tpm_limit,
+                    )
+                    return False, result
 
-        if rpd_count >= rpd_limit:
-            result = QuotaCheckResult(
-                allowed=False,
-                reason=(
-                    f"Gemini free-tier RPD limit reached ({rpd_count}/{rpd_limit}) — "
-                    f"next allowed tomorrow"
-                ),
-                calls_in_window=rpd_count,
-                limit=rpd_limit,
-                window_type="rpd",
-            )
-            logger.warning(
-                f"Quota guard: RPD limit reached for {provider}/{model}",
-                count=rpd_count,
-                limit=rpd_limit,
-            )
-            return False, result
+            # RPD check: calls in the last 24 hours
+            cutoff_24h = now - 86400.0
+            daily_calls = [ts for ts in timestamps if ts > cutoff_24h]
+            rpd_count = len(daily_calls)
+            rpd_limit = config.rpd_limit
 
-        # Record the call
-        async with _TRACKING_LOCK:
+            if rpd_count >= rpd_limit:
+                result = QuotaCheckResult(
+                    allowed=False,
+                    reason=(
+                        f"{provider} RPD limit reached ({rpd_count}/{rpd_limit}) — "
+                        f"next allowed tomorrow"
+                    ),
+                    calls_in_window=rpd_count,
+                    limit=rpd_limit,
+                    window_type="rpd",
+                )
+                logger.warning(
+                    f"Quota guard: RPD limit reached for {provider}/{model}",
+                    count=rpd_count,
+                    limit=rpd_limit,
+                )
+                return False, result
+
+            # Record the call while still holding the lock so concurrent agents
+            # cannot overshoot the quota between check and append.
             _CALL_TIMESTAMPS[key].append(now)
+            if estimated_tokens > 0:
+                _TOKEN_TIMESTAMPS[key].append((now, estimated_tokens))
 
         return True, QuotaCheckResult(
             allowed=True,
@@ -205,14 +249,20 @@ class ProviderQuotaGuard:
         key = _provider_model_key(provider, model)
         cutoff = now - 86400.0
         _CALL_TIMESTAMPS[key] = [ts for ts in _CALL_TIMESTAMPS[key] if ts > cutoff]
+        _TOKEN_TIMESTAMPS[key] = [
+            (ts, tokens) for ts, tokens in _TOKEN_TIMESTAMPS[key] if ts > cutoff
+        ]
         # Also clean up entries with no recent calls to prevent unbounded dict growth
         if not _CALL_TIMESTAMPS[key]:
             _CALL_TIMESTAMPS.pop(key, None)
+        if not _TOKEN_TIMESTAMPS[key]:
+            _TOKEN_TIMESTAMPS.pop(key, None)
 
     @classmethod
     def clear_all(cls) -> None:
         """Clear all call tracking. Use in tests."""
         _CALL_TIMESTAMPS.clear()
+        _TOKEN_TIMESTAMPS.clear()
 
     @classmethod
     def get_current_counts(cls, provider: str, model: str) -> tuple[int, int]:
@@ -225,3 +275,38 @@ class ProviderQuotaGuard:
         rpm = len([ts for ts in timestamps if ts > cutoff_60s])
         rpd = len([ts for ts in timestamps if ts > cutoff_24h])
         return rpm, rpd
+
+
+def configure_provider_quota_guards(settings) -> None:
+    """Configure all provider quota guards from app settings.
+
+    This is intentionally idempotent and cheap. API and worker processes are
+    separate in Docker deployments, so both must configure their in-process
+    guards before provider calls begin.
+    """
+    ProviderQuotaGuard.configure(
+        "groq",
+        rpm_limit=getattr(settings, "groq_rpm_limit", 15),
+        rpd_limit=getattr(settings, "groq_rpd_limit", 15000),
+        tpm_limit=getattr(settings, "groq_tpm_limit", None),
+    )
+    ProviderQuotaGuard.configure(
+        "gemini",
+        rpm_limit=getattr(settings, "gemini_rpm_limit", 5),
+        rpd_limit=getattr(settings, "gemini_rpd_limit", 1500),
+    )
+    ProviderQuotaGuard.configure(
+        "groq_vision",
+        rpm_limit=getattr(settings, "groq_vision_rpm_limit", 15),
+        rpd_limit=getattr(settings, "groq_vision_rpd_limit", 14400),
+    )
+    ProviderQuotaGuard.configure(
+        "openrouter",
+        rpm_limit=getattr(settings, "openrouter_rpm_limit", 20),
+        rpd_limit=getattr(settings, "openrouter_rpd_limit", 200),
+    )
+    ProviderQuotaGuard.configure(
+        "cerebras",
+        rpm_limit=getattr(settings, "cerebras_rpm_limit", 30),
+        rpd_limit=getattr(settings, "cerebras_rpd_limit", 14400),
+    )

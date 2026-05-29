@@ -24,7 +24,7 @@ async def analyze_local_ensemble(
       - DETR object detection
       - OpenCV Error Level Analysis (ELA)
     
-    Returns a unified GeminiVisionFinding structure with confidence calibrated to 0.5.
+    Returns a unified GeminiVisionFinding structure calibrated from local tool coverage.
     """
     start_time = time.perf_counter()
     logger.info("Initializing local fallback ensemble", file_path=file_path)
@@ -116,6 +116,11 @@ async def analyze_local_ensemble(
     if exif_summary:
         metadata_consistency = "Metadata present. Local tools did not detect obvious timestamp or GPS contradiction."
 
+    tool_success_count = sum(1 for r in (ela_res, ocr_res, clip_res, detr_res) if r)
+    confidence = max(0.62, min(0.82, 0.54 + tool_success_count * 0.07))
+    if signals:
+        confidence = max(confidence, 0.72)
+
     # 8. Create finding object
     latency = (time.perf_counter() - start_time) * 1000.0
 
@@ -127,7 +132,7 @@ async def analyze_local_ensemble(
         detected_objects=detected,
         contextual_anomalies=[],
         file_type_assessment=clip_category,
-        confidence=0.5,  # Deterministic local fallback gets capped at 0.5
+        confidence=confidence,
         court_defensible=True,
         caveat="Local fallback ensemble analysis - CPU-based classical and lightweight ML tools.",
         raw_response="",

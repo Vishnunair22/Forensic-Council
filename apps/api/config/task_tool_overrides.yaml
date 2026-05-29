@@ -165,7 +165,11 @@ gemini:
   "gemini deep forensic": "gemini_deep_forensic"
   "semantic grounding on suspicious": "gemini_deep_forensic"
   "semantic grounding on all findings": "gemini_deep_forensic"
-  "hardware-grounded provenance verification": "gemini_deep_forensic"
+  "read shared image context": "read_shared_image_context"
+  "shared image context": "read_shared_image_context"
+  "hardware-grounded provenance verification": "read_shared_image_context"
+  "neural audio audit and acoustic provenance": "read_shared_image_context"
+  "key-frame visual grounding": "read_shared_image_context"
   "cross-validate scene content with exif": "gemini_deep_forensic"
 
 # --- Agent 1: Initial Pass Tools ---
@@ -174,6 +178,8 @@ agent1_initial:
   "run file_hash_verify for evidence integrity check": "file_hash_verify"
   "run analyze_image_content for semantic image understanding": "analyze_image_content"
   "run extract_text_from_image for visible text extraction": "extract_text_from_image"
+  "run gemini_deep_forensic for visual evidence profile and forensic routing hints": "gemini_deep_forensic"
+  "visual evidence profile and forensic routing hints": "gemini_deep_forensic"
   "run frequency_domain_analysis for frequency domain analysis": "frequency_domain_analysis"
   "run synthid_watermark_detect for synthid and ai watermark detection": "synthid_watermark_detect"
   # Neural ELA / noiseprint Phase-1 exact task strings
@@ -244,7 +250,7 @@ agent3_initial:
   "ui and document layout anomaly scan": "screenshot_layout_forensics"
   "deep ui/document consistency cross-check": "screenshot_layout_forensics"
   "ui/document layout anomaly": "screenshot_layout_forensics"
-  "potential document fabrication": "gemini_deep_forensic"
+  "potential document fabrication": "read_shared_image_context"
   # Issue 1: Add explicit contraband_database mappings
   "run contraband_database for risk object screening": "vector_contraband_search"
   "contraband_database": "vector_contraband_search"
@@ -272,7 +278,7 @@ deep_agent5:
   "probabilistic fabrication detection": "metadata_anomaly_score"
   "run provenance_chain_verify": "provenance_chain_verify"
   "c2pa and digital provenance manifests": "provenance_chain_verify"
-  "screenshot timestamp and provenance cross-check": "gemini_deep_forensic"
+  "screenshot timestamp and provenance cross-check": "read_shared_image_context"
   "run camera_profile_match": "camera_profile_match"
   "claimed device model": "camera_profile_match"
   # Issue 2: Add three Agent 5 task phrase mappings

@@ -75,9 +75,10 @@ class Agent2Audio(ForensicAgent):
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
         if mime.startswith("video/"):
             tasks.append("Run background_noise_analysis to identify shift points")
-        # Gemini runs for video (can analyze frames) or when audio carries a suspicious signal
+        # Gemini is reserved for Agent 1's visual probe. Audio/video agents use
+        # local ensembles and inter-agent context instead of calling Gemini.
         if mime.startswith("video/") or self._has_audio_suspicious_signal():
-            tasks.append("Run gemini_deep_forensic for Neural Audio Audit and Acoustic Provenance")
+            tasks.append("Read shared image context for Neural Audio Audit and Acoustic Provenance")
         return tasks
 
     def _has_audio_suspicious_signal(self) -> bool:
@@ -185,18 +186,15 @@ class Agent2Audio(ForensicAgent):
             "Deep ensemble audio anti-spoofing",
         )
 
-        # ── Gemini Vision Handler (Audio Forensic synthesis) ───────────────────
-        # Note: Even for audio, Gemini Vision acts as a multi-modal synthesis engine
-        # and a neural grounding signal for Agent 4 (Video).
-        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
-        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
-            """Neural audio forensic audit using Gemini."""
+        # ── Shared Visual Profile Reader ──────────────────────────────────────
+        async def read_shared_image_context_handler(input_data: dict) -> dict:
+            """Reuse Agent 1 visual profile or local fallback; never calls Gemini."""
             return await self._gemini_deep_forensic_handler(input_data)
 
         registry.register(
-            "gemini_deep_forensic",
-            gemini_deep_forensic_handler,
-            "Gemini Flash neural audio forensic audit",
+            "read_shared_image_context",
+            read_shared_image_context_handler,
+            "Read Agent 1 visual profile for audio/video provenance grounding",
         )
 
         # ── Agent-Specific Handlers ──────────────────────────────────────────

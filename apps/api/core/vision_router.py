@@ -12,7 +12,7 @@ from core.gemini_client import (
     _build_deep_forensic_prompt,
 )
 from core.llm_client import is_placeholder_secret
-from core.provider_quota_guard import ProviderQuotaGuard
+from core.provider_quota_guard import ProviderQuotaGuard, configure_provider_quota_guards
 from core.structured_logging import get_logger
 from core.vision_fallback_ensemble import analyze_local_ensemble
 
@@ -34,6 +34,7 @@ class VisionRouter:
 
     def __init__(self, config: Settings):
         self.config = config
+        configure_provider_quota_guards(config)
         self.gemini_client = GeminiVisionClient(config)
 
         # Parse provider chain
@@ -111,6 +112,12 @@ class VisionRouter:
             logger.info("VisionRouter trying provider in cascade", provider=provider)
 
             if provider == "gemini":
+                if agent_id != "Agent1":
+                    logger.info(
+                        "Gemini skipped: single-call policy reserves Gemini for Agent1",
+                        agent_id=agent_id,
+                    )
+                    continue
                 if not self.gemini_client._enabled:
                     logger.info("Gemini skipped: not configured or policy not accepted")
                     continue

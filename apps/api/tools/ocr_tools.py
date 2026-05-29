@@ -574,153 +574,15 @@ async def _extract_text_gemini(
     Results are cached per file_path so subsequent tool calls (analyze_image_content,
     screenshot_layout_forensics, etc.) reuse the same response without a second API hit.
     """
-    # M-H-8: cache key is content-hash, not path. Test fixtures with
-    # relative paths are still skipped (hash helper returns None).
-    file_path = str(getattr(artifact, "file_path", "") or "")
-    cache_key = _gemini_ocr_cache_key(file_path)
-    use_cache = bool(cache_key)
-    if use_cache and cache_key in _GEMINI_OCR_CACHE:
-        logger.info("Gemini OCR cache hit", file_path=file_path)
-        return _GEMINI_OCR_CACHE[cache_key]
-
-    try:
-        from core.config import get_settings
-        from core.llm_client import LLMClient
-
-        settings = get_settings()
-        gemini_api_key = str(getattr(settings, "gemini_api_key", "") or "").strip()
-        if not gemini_api_key or gemini_api_key.lower() in {"none", "placeholder"}:
-            return {"gemini_available": False}
-
-        client = LLMClient(settings)
-        is_screenshot = is_screen_capture_like(artifact)
-
-        if is_screenshot:
-            prompt = """You are a forensic analyst examining a screenshot for evidentiary purposes.
-Perform two tasks in one pass:
-
-TASK 1 — CONTENT IDENTIFICATION:
-Identify exactly what this screenshot shows: the application name (if recognisable), the type of
-interface (web browser, mobile app, desktop GUI, messaging app, email, social media, document, etc.),
-and a 1-sentence description of what action or data is displayed.
-
-TASK 2 — PRECISION OCR:
-Extract every visible text item verbatim, preserving reading order and UI grouping.
-Include: system clock/date, app/window titles, browser address bar, tab labels, menu items,
-buttons, form field labels and values, table headers and cell content, usernames, @handles,
-post text, message content, IDs, filenames, notification text, status bar items,
-error messages, captions, watermarks, and any footer/header text.
-Do NOT summarise, paraphrase, or correct spelling. Transcribe partially occluded text and flag it.
-
-Return ONLY valid JSON — no markdown, no preamble:
-{
-  "content_type": "precise type, e.g. screenshot of WhatsApp conversation on Android",
-  "content_description": "one sentence describing what is shown",
-  "lines": ["verbatim text line 1", "verbatim text line 2"],
-  "structured_metadata": {
-    "timestamps": ["exact timestamp strings found"],
-    "identifiers": ["usernames, handles, IDs, phone numbers found"],
-    "urls": ["full URLs found"],
-    "ui_elements": ["button labels, menu items, headings found"],
-    "document_fields": ["form labels and values found"],
-    "suspicious_elements": ["partially occluded or anomalous text"]
-  },
-  "ocr_confidence": 0.97
-}
-If no text is visible, return empty lists and an empty content_description."""
-        else:
-            prompt = """You are a forensic analyst examining an image file for evidentiary purposes.
-Perform two tasks in one pass:
-
-TASK 1 — CONTENT IDENTIFICATION:
-Identify exactly what this image shows: photograph, scanned document, handwritten note/letter,
-AI-generated image, printed form, ID document, receipt, etc.
-Provide a 1-2 sentence description of the content and its forensic context.
-
-TASK 2 — PRECISION OCR (including handwriting):
-Extract all visible text exactly as it appears. For HANDWRITTEN content: transcribe each
-word individually even if uncertain — mark uncertain transcriptions with [?].
-Focus on:
-- Timestamps, dates, times (exact format as written)
-- Names, signatures, initials
-- Addresses, phone numbers, account numbers
-- Any text that appears inconsistent in pressure, ink, or style (potential forgery indicator)
-- Printed labels, stamps, or overlays on top of handwritten content
-- Document headers, form field labels and their values
-
-Return ONLY valid JSON — no markdown, no preamble:
-{
-  "content_type": "precise description, e.g. handwritten letter on lined paper",
-  "content_description": "1-2 sentence forensic description",
-  "lines": ["verbatim text line 1 [? uncertain word]", ...],
-  "structured_metadata": {
-    "timestamps": ["exact timestamp strings"],
-    "identifiers": ["names, signatures, IDs, account numbers"],
-    "urls": [],
-    "ui_elements": [],
-    "document_fields": ["form field: value pairs"],
-    "suspicious_elements": ["text that appears inconsistent in style/ink/pressure"]
-  },
-  "ocr_confidence": 0.0,
-  "handwriting_detected": true
-}
-If no text is visible, return empty lists."""
-
-        raw_result = await client.generate_multimodal_synthesis(
-            artifact=artifact,
-            prompt=prompt,
-            max_tokens=1536,
-            json_mode=True,
-        )
-
-        lines, metadata, ocr_confidence = _coerce_gemini_ocr_lines(raw_result)
-        full_text = "\n".join(lines)
-        preview = " | ".join(lines[:5])
-
-        # Extract content description and type from the raw response
-        content_type = ""
-        content_description = ""
-        try:
-            import json as _json
-            if isinstance(raw_result, dict):
-                content_type = str(raw_result.get("content_type") or "")
-                content_description = str(raw_result.get("content_description") or "")
-            elif isinstance(raw_result, str):
-                text = raw_result.strip()
-                # Strip optional markdown code fence
-                if text.startswith("```"):
-                    text = text.split("```", 2)[-1].lstrip("json").strip()
-                    if text.endswith("```"):
-                        text = text[:-3].strip()
-                parsed = _json.loads(text)
-                if isinstance(parsed, dict):
-                    content_type = str(parsed.get("content_type") or "")
-                    content_description = str(parsed.get("content_description") or "")
-        except Exception as _parse_err:
-            logger.debug("OCR response JSON parse failed (non-fatal)", error=str(_parse_err))
-
-        result = {
-            "gemini_available": True,
-            "method": "gemini_multimodal",
-            "lines": lines,
-            "full_text": full_text,
-            "word_count": len(full_text.split()),
-            "has_text": bool(lines),
-            "structured_metadata": metadata,
-            "avg_confidence": max(0.0, min(1.0, ocr_confidence)),
-            "ocr_text_preview": preview,
-            "screenshot_optimized": is_screenshot,
-            "court_defensible": True,
-            "content_type": content_type,
-            "content_description": content_description,
-        }
-        if use_cache and cache_key is not None:
-            _gemini_ocr_cache_put(cache_key, result)
-        return result
-    except Exception as exc:
-        logger.warning("Gemini OCR unavailable, falling back to EasyOCR", error=str(exc))
-        return {"gemini_available": False, "error": str(exc)}
-
+    # Gemini is reserved for the single Agent 1 visual evidence probe.
+    # OCR consumes that profile when routed through agents, then falls back
+    # to EasyOCR/Tesseract here. This function remains as a compatibility
+    # shim for callers/tests but never makes an API request.
+    return {
+        "gemini_available": False,
+        "method": "agent1_visual_profile_or_local_ocr",
+        "reason": "Gemini OCR disabled; Gemini quota is reserved for Agent 1 visual profile.",
+    }
 
 async def extract_evidence_text(
     artifact: EvidenceArtifact,
@@ -742,25 +604,7 @@ async def extract_evidence_text(
             file_type_hint,
         )
 
-    # Tier 0 (Gemini Multimodal OCR) is intentionally DISABLED.
-    # Gemini API quota is shared across VisionRouter deep forensic analysis
-    # and Groq synthesis fallback. Burning it on OCR leaves insufficient
-    # quota headroom for vision analysis, which is the primary signal source.
-    # OCR is adequately served by EasyOCR (Tier 2) + Tesseract (Tier 3).
-    # Re-enable by setting GEMINI_OCR_ENABLED=true in the environment if a
-    # dedicated Gemini key is provided for OCR (separate from GEMINI_API_KEY).
-    _gemini_ocr_enabled = os.getenv("GEMINI_OCR_ENABLED", "false").lower() == "true"
-    if _gemini_ocr_enabled:
-        gemini_res = await _extract_text_gemini(artifact)
-        if gemini_res.get("gemini_available") and (
-            gemini_res.get("has_text") or is_screen_capture_like(artifact)
-        ):
-            logger.info("Gemini OCR succeeded", word_count=gemini_res.get("word_count", 0))
-            return _finalize_result(gemini_res, file_type_hint)
-        else:
-            logger.info("Gemini OCR unavailable or empty, falling back to EasyOCR")
-    else:
-        logger.debug("Gemini OCR skipped (GEMINI_OCR_ENABLED=false) — using EasyOCR/Tesseract")
+    logger.debug("Gemini OCR skipped — using Agent 1 visual profile plus EasyOCR/Tesseract")
 
     if file_type_hint == "pdf_document":
         result = await extract_text_from_pdf(artifact)

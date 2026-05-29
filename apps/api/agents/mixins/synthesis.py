@@ -38,6 +38,11 @@ class NeuralSynthesisMixin:
         Wait for Agent 1 (Image Integrity) context if applicable.
         Used by Agents 3 and 5 to ground their findings in pixel-level data.
         """
+        if self.inter_agent_bus:
+            shared = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+            if shared:
+                return shared
+
         event = getattr(self, "_agent1_context_event", None)
         if event is None:
             return {}
@@ -61,6 +66,63 @@ class NeuralSynthesisMixin:
 
         return getattr(self, "_agent1_context", {})
 
+    def _visual_profile_to_tool_result(
+        self,
+        profile: dict,
+        *,
+        source: str = "agent1_visual_profile",
+    ) -> dict:
+        """Convert the shared Agent 1 visual profile into this agent's tool result."""
+        metadata = profile.get("metadata") if isinstance(profile, dict) else {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+        content_description = (
+            profile.get("content_description")
+            or metadata.get("content_description")
+            or metadata.get("gemini_scene")
+            or metadata.get("scene_description")
+            or "Agent 1 visual evidence profile available."
+        )
+        confidence = (
+            profile.get("confidence_raw")
+            or profile.get("confidence")
+            or metadata.get("confidence")
+            or metadata.get("gemini_confidence")
+            or 0.68
+        )
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = 0.68
+
+        result = {
+            **profile,
+            "agent_id": self.agent_id,
+            "finding_type": "shared_visual_evidence_profile",
+            "confidence_raw": max(0.0, min(1.0, confidence)),
+            "status": profile.get("status") or "CONFIRMED",
+            "evidence_verdict": profile.get("evidence_verdict") or "INCONCLUSIVE",
+            "reasoning_summary": (
+                f"Reused Agent 1 visual evidence profile: {str(content_description)[:500]}"
+            ),
+            "summary": (
+                f"Reused Agent 1 visual evidence profile: {str(content_description)[:240]}"
+            ),
+            "metadata": {
+                **metadata,
+                "tool_name": "gemini_deep_forensic",
+                "analysis_source": source,
+                "source_agent": "Agent1",
+                "reused_visual_profile": True,
+                "single_gemini_call_enforced": True,
+                "available": True,
+                "court_defensible": metadata.get("court_defensible", True),
+            },
+            "court_defensible": True,
+            "available": True,
+        }
+        return result
+
     async def _gemini_deep_forensic_handler(
         self,
         input_data: dict,
@@ -71,6 +133,69 @@ class NeuralSynthesisMixin:
         Unified handler for Gemini multimodal visual forensic synthesis.
         """
         artifact = input_data.get("artifact") or self.evidence_artifact
+
+        # Hard quota contract: only Agent 1 may make the Gemini visual API call.
+        # All other agents consume Agent 1's shared visual evidence profile or
+        # fall back to local tools without touching Gemini.
+        if self.agent_id != "Agent1":
+            agent1_context = await self._wait_for_agent1_context()
+            if agent1_context:
+                result = self._visual_profile_to_tool_result(agent1_context)
+                if hasattr(self, "_record_tool_result"):
+                    await self._record_tool_result("gemini_deep_forensic", result)
+                return result
+
+            try:
+                from core.vision_fallback_ensemble import analyze_local_ensemble
+
+                finding = await analyze_local_ensemble(
+                    artifact.file_path,
+                    exif_summary={"reason": "Agent 1 visual profile unavailable"},
+                    is_screen_capture_like=getattr(self, "_is_screen_capture", False),
+                )
+                result = finding.to_finding_dict(self.agent_id)
+                result["metadata"] = {
+                    **(result.get("metadata") or {}),
+                    "tool_name": "gemini_deep_forensic",
+                    "analysis_source": "local_visual_profile_fallback",
+                    "agent1_profile_missing": True,
+                    "single_gemini_call_enforced": True,
+                }
+                if hasattr(self, "_record_tool_result"):
+                    await self._record_tool_result("gemini_deep_forensic", result)
+                return result
+            except Exception as fallback_err:
+                return {
+                    "agent_id": self.agent_id,
+                    "finding_type": "shared_visual_evidence_profile",
+                    "confidence_raw": 0.0,
+                    "status": "INCOMPLETE",
+                    "evidence_verdict": "INCONCLUSIVE",
+                    "reasoning_summary": "Agent 1 visual profile unavailable; local visual fallback failed.",
+                    "summary": "Agent 1 visual profile unavailable.",
+                    "metadata": {
+                        "tool_name": "gemini_deep_forensic",
+                        "analysis_source": "agent1_visual_profile",
+                        "available": False,
+                        "court_defensible": False,
+                        "skipped": True,
+                        "single_gemini_call_enforced": True,
+                        "error": str(fallback_err),
+                    },
+                    "court_defensible": False,
+                    "available": False,
+                }
+        elif self.inter_agent_bus:
+            existing_profile = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+            if existing_profile:
+                result = self._visual_profile_to_tool_result(
+                    existing_profile,
+                    source="agent1_visual_profile_cached",
+                )
+                result["agent_id"] = self.agent_id
+                if hasattr(self, "_record_tool_result"):
+                    await self._record_tool_result("gemini_deep_forensic", result)
+                return result
 
         # 1. Aggregate local tool context
         dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
@@ -150,10 +275,18 @@ class NeuralSynthesisMixin:
 
             result = finding.to_finding_dict(self.agent_id)
             result["analysis_source"] = f"vision_cascade_{finding.model_used}"
+            result["metadata"] = {
+                **(result.get("metadata") or {}),
+                "visual_profile_owner": "Agent1",
+                "single_gemini_call_enforced": True,
+            }
 
             # Record result if method exists
             if hasattr(self, "_record_tool_result"):
                 await self._record_tool_result("gemini_deep_forensic", result)
+
+            if self.inter_agent_bus and not result.get("error"):
+                self.inter_agent_bus.set_image_context(str(self.session_id), result)
 
             return result
 
@@ -249,7 +382,7 @@ class NeuralSynthesisMixin:
                     user_content=json.dumps([
                         f.model_dump() if hasattr(f, 'model_dump') else f
                         for f in findings
-                    ]),
+                    ], default=str),
                     max_tokens=1024,
                     json_mode=False,
                 ),

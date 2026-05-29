@@ -60,10 +60,6 @@ class Agent4Video(ForensicAgent):
         ]
 
     @property
-    def supported_file_types(self) -> list[str]:
-        return ["video/"]
-
-    @property
     def deep_task_decomposition(self) -> list[str]:
         # frame_extraction, face_swap_detection, deepfake_frequency_check, and
         # adversarial_robustness_check removed from base — all reactively injected
@@ -73,7 +69,7 @@ class Agent4Video(ForensicAgent):
             "Run interframe_forgery_detector for motion ghosting and SSIM variance",
             "Run rolling_shutter_validation against claimed device metadata",
             "Run compression_artifact_analysis for P-frame/I-frame incongruence",
-            "Perform gemini_deep_forensic on key extracted frames",
+            "Read shared image context for key-frame visual grounding",
         ]
 
     @property
@@ -123,8 +119,8 @@ class Agent4Video(ForensicAgent):
         # is loaded, tested, and validated. See agent4_video.py docstring.
         # When ready, register with available=False and a clear quarantine flag.
 
-        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
-        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
+        # ── Shared Visual Profile Reader ──────────────────────────────────────
+        async def read_shared_image_context_handler(input_data: dict) -> dict:
             async def _gemini_signal_callback(msg: str):
                 """Signal callback for early hand-off to Arbiter."""
                 try:
@@ -147,9 +143,9 @@ class Agent4Video(ForensicAgent):
             )
 
         registry.register(
-            "gemini_deep_forensic",
-            gemini_deep_forensic_handler,
-            "Gemini deep forensic analysis for video frames",
+            "read_shared_image_context",
+            read_shared_image_context_handler,
+            "Read Agent 1 visual profile for video frame grounding",
         )
 
         return registry

@@ -175,7 +175,7 @@ class TestOCRTools:
             assert "rasterise pages" in result["scanned_pdf_note"]
 
     @pytest.mark.asyncio
-    async def test_gemini_ocr_uses_gemini_key_when_llm_provider_is_none(self, mock_artifact):
+    async def test_gemini_ocr_is_disabled_even_when_key_exists(self, mock_artifact):
         mock_artifact.file_path = "screen.png"
         mock_artifact.mime_type = "image/png"
         settings = MagicMock(
@@ -185,32 +185,14 @@ class TestOCRTools:
             gemini_model="gemini-2.5-flash",
         )
 
-        with (
-            patch("core.config.get_settings", return_value=settings),
-            patch("tools.ocr_tools.is_screen_capture_like", return_value=True),
-            patch("core.llm_client.LLMClient") as mock_client_cls,
-        ):
-            mock_client = MagicMock()
-            mock_client.generate_multimodal_synthesis = AsyncMock(
-                return_value={
-                    "lines": ["SYSTEM OVERVIEW", "10:42 AM"],
-                    "structured_metadata": {"timestamps": ["10:42 AM"], "ui_elements": ["SYSTEM OVERVIEW"]},
-                    "ocr_confidence": 0.93,
-                }
-            )
-            mock_client_cls.return_value = mock_client
-
+        with patch("core.config.get_settings", return_value=settings):
             result = await _extract_text_gemini(mock_artifact)
 
-        assert result["gemini_available"] is True
-        assert result["method"] == "gemini_multimodal"
-        assert result["screenshot_optimized"] is True
-        assert result["lines"] == ["SYSTEM OVERVIEW", "10:42 AM"]
-        assert result["structured_metadata"]["timestamps"] == ["10:42 AM"]
-        assert result["avg_confidence"] == 0.93
+        assert result["gemini_available"] is False
+        assert result["method"] == "agent1_visual_profile_or_local_ocr"
 
     @pytest.mark.asyncio
-    async def test_gemini_ocr_parses_json_string_and_line_objects(self, mock_artifact):
+    async def test_gemini_ocr_never_calls_llm_client(self, mock_artifact):
         mock_artifact.file_path = "screen.png"
         mock_artifact.mime_type = "image/png"
         settings = MagicMock(
@@ -220,20 +202,10 @@ class TestOCRTools:
             gemini_model="gemini-2.5-flash",
         )
 
-        with (
-            patch("core.config.get_settings", return_value=settings),
-            patch("tools.ocr_tools.is_screen_capture_like", return_value=True),
-            patch("core.llm_client.LLMClient") as mock_client_cls,
-        ):
-            mock_client = MagicMock()
-            mock_client.generate_multimodal_synthesis = AsyncMock(
-                return_value='{"lines":[{"text":"FC Forensic Council"},{"content":"Upload Evidence"}],"ocr_confidence":0.91}'
-            )
-            mock_client_cls.return_value = mock_client
-
+        with patch("core.config.get_settings", return_value=settings), patch(
+            "core.llm_client.LLMClient"
+        ) as mock_client_cls:
             result = await _extract_text_gemini(mock_artifact)
 
-        assert result["gemini_available"] is True
-        assert result["lines"] == ["FC Forensic Council", "Upload Evidence"]
-        assert result["word_count"] == 5
-        assert result["avg_confidence"] == 0.91
+        assert result["gemini_available"] is False
+        mock_client_cls.assert_not_called()

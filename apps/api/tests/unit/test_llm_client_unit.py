@@ -167,6 +167,7 @@ class TestHealthCheck:
     async def test_health_check_gemini_provider(self):
         client = _make_client_direct(provider="gemini", api_key="AIzaSyRealKey-abcdefghijk1234567")
         client.config.gemini_api_key_policy_ok = True
+        client.config.gemini_text_calls_enabled = True
         with patch.object(client, "_get_client") as mock_get:
             mock_resp = MagicMock()
             mock_resp.status_code = 200
