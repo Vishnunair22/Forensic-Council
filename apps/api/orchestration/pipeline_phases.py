@@ -18,6 +18,7 @@ from uuid import UUID
 from core.agent_registry import AgentID
 from core.media_kind import is_screen_capture_like
 from core.structured_logging import get_logger
+from core.tool_names import TOOL_VISUAL_PROFILE, is_visual_profile_tool
 from orchestration.agent_factory import AgentLoopResult, _serialize_react_chain
 
 if TYPE_CHECKING:
@@ -89,7 +90,8 @@ async def run_agents_concurrent(
                 "provenance_chain_verify": "C2PA Provenance",
                 "timestamp_analysis": "Chronology Audit",
                 "file_structure_analysis": "Structure Check",
-                "gemini_deep_forensic": "Multimodal Synthesis",
+                "visual_evidence_profile": "Local Visual Evidence Profile",
+                "gemini_deep_forensic": "Visual Evidence Profile",  # legacy session compatibility
             }
 
             def _normalize_tool_name(raw: str) -> str:
@@ -99,12 +101,16 @@ async def run_agents_concurrent(
                 if agent_inst is None:
                     return None
                 tool_ctx = getattr(agent_inst, "_tool_context", {}) or {}
-                gemini_result = tool_ctx.get("gemini_deep_forensic") or {}
+                visual_profile = (
+                    tool_ctx.get(TOOL_VISUAL_PROFILE)
+                    or tool_ctx.get("gemini_deep_forensic")
+                    or {}
+                )
                 clip_result = tool_ctx.get("analyze_image_content") or {}
-                gemini_content_type = str(gemini_result.get("content_type") or "").strip()
+                content_type = str(visual_profile.get("content_type") or "").strip()
                 clip_image_type = str(clip_result.get("image_type") or clip_result.get("semantic_context") or "").strip()
-                if gemini_content_type and gemini_content_type.lower() not in ("", "unknown", "none"):
-                    return gemini_content_type
+                if content_type and content_type.lower() not in ("", "unknown", "none"):
+                    return content_type
                 if clip_image_type and clip_image_type.lower() not in ("", "unknown", "none"):
                     return clip_image_type
                 return None
@@ -778,8 +784,11 @@ async def run_agents_concurrent(
                 else {}
             )
             _tool_name = _f_meta.get("tool_name") if isinstance(_f_meta, dict) else None
-            if _tool_name == "gemini_deep_forensic":
-                logger.info("Found Phase 1 Gemini findings for Agent 1. Pre-injecting context to unblock Phase 2 concurrency.")
+            if is_visual_profile_tool(_tool_name):
+                logger.info(
+                    "Found Phase 1 visual profile for Agent 1; "
+                    "pre-injecting context to unblock Phase 2 concurrency."
+                )
                 _broadcast_context(_f)
                 _context_seeded = True
                 break
@@ -911,17 +920,18 @@ async def run_agents_concurrent(
 
             if aid == producer_id:
                 try:
-                    gemini_res = {}
-                    for f in result.findings or []:
+                    visual_profile_result = {}
+                    for finding in result.findings or []:
                         if (
-                            isinstance(f, dict)
-                            and f.get("metadata", {}).get("tool_name") == "gemini_deep_forensic"
+                            isinstance(finding, dict)
+                            and is_visual_profile_tool(
+                                finding.get("metadata", {}).get("tool_name")
+                            )
                         ):
-                            gemini_res = f.get("metadata", {})
+                            visual_profile_result = finding
                             break
-                    if gemini_res:
-                        _broadcast_context(gemini_res)
-                        # Validate context was received by downstream agents
+                    if visual_profile_result:
+                        _broadcast_context(visual_profile_result)
                         for _ctx_aid in [AgentID.AGENT3.value, AgentID.AGENT5.value]:
                             _ctx_entry = agent_map.get(_ctx_aid)
                             if _ctx_entry:

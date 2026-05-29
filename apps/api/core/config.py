@@ -69,6 +69,35 @@ class Settings(BaseSettings):
         ),
     )
 
+    analysis_execution_mode: str = Field(
+        default="hybrid",
+        description=(
+            "Analysis execution mode. "
+            "'hybrid' allows configured remote providers with local fallback. "
+            "'local_only' prohibits all external AI provider calls and runs only "
+            "deterministic/local ML tools."
+        ),
+    )
+
+    @field_validator("analysis_execution_mode")
+    @classmethod
+    def validate_analysis_execution_mode(cls, value: str) -> str:
+        normalized = str(value or "").strip().lower()
+        allowed = {"hybrid", "local_only"}
+        if normalized not in allowed:
+            raise ValueError(
+                f"ANALYSIS_EXECUTION_MODE must be one of {sorted(allowed)}, got {value!r}"
+            )
+        return normalized
+
+    @property
+    def local_only_analysis(self) -> bool:
+        return self.analysis_execution_mode == "local_only"
+
+    @property
+    def external_ai_allowed(self) -> bool:
+        return not self.local_only_analysis
+
     @field_validator("app_env")
     @classmethod
     def validate_app_env(cls, v: str) -> str:

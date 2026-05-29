@@ -36,6 +36,7 @@ from core.media_kind import (
 )
 from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
+from core.tool_names import TOOL_GEMINI_DEEP, TOOL_VISUAL_PROFILE
 from core.tool_registry import ToolRegistry
 
 logger = get_logger(__name__)
@@ -110,8 +111,10 @@ class Agent1Image(ForensicAgent):
         Cheap context tools (CLIP, OCR, FFT) follow.
 
         Design rules:
-          - gemini_deep_forensic runs once at the beginning as the session visual
-            evidence profile. All other agents and OCR consumers reuse this profile.
+          - visual_evidence_profile runs once at the beginning as the session-wide
+            visual evidence profile. In local_only mode it is produced exclusively by
+            the local visual ensemble; in hybrid mode it may be produced by a configured
+            provider.
           - extract_text_from_image is only useful for documents (scanned text)
             and screenshots (UI text) — OCR on camera photos or web downloads
             wastes a task slot. It is reactively injected by _on_tool_result_impl
@@ -122,7 +125,7 @@ class Agent1Image(ForensicAgent):
         if self._is_document:
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
+                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for OCR and document content identification",
                 "Run analyze_image_content for semantic document classification",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -134,7 +137,7 @@ class Agent1Image(ForensicAgent):
             # injected by _reason_step when ELA/FFT disagree (no coverage lost).
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
+                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run neural_ela for high-confidence manipulation detection",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -144,10 +147,10 @@ class Agent1Image(ForensicAgent):
             # Screenshots: hash integrity → OCR (primary signal for UI) → semantic →
             # frequency scan. neural_fingerprint deferred to deep — conceptual similarity
             # is less informative for screenshots which are inherently unique UI states.
-            # Gemini stays as the primary content classifier (cheaper than ELA on UI).
+            # The shared visual evidence profile remains the primary routing context.
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
+                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for visible text extraction",
                 "Run analyze_image_content for semantic image understanding",
                 "Run frequency_domain_analysis for frequency domain analysis",
@@ -157,7 +160,7 @@ class Agent1Image(ForensicAgent):
             # neural_fingerprint → CLIP context → FFT supporting.
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
+                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run noiseprint_cluster for sensor-region source inconsistency",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -169,7 +172,7 @@ class Agent1Image(ForensicAgent):
             # for natural photos. OCR is reactively injected if text is found.
             return [
                 "Run file_hash_verify for evidence integrity check",
-                "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
+                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run neural_ela for high-confidence manipulation detection",
                 "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
@@ -179,7 +182,7 @@ class Agent1Image(ForensicAgent):
         # No Gemini or OCR — same reasoning as camera branch.
         return [
             "Run file_hash_verify for evidence integrity check",
-            "Run gemini_deep_forensic for visual evidence profile and forensic routing hints",
+            "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
             "Run neural_ela for high-confidence manipulation detection",
             "Run neural_fingerprint for conceptual similarity detection",
             "Run analyze_image_content for semantic image understanding",
@@ -249,71 +252,105 @@ class Agent1Image(ForensicAgent):
         )
 
 
-        # ── Gemini Vision Handler (Unified) ───────────────────────────────────
-        async def gemini_deep_forensic_handler(input_data: dict) -> dict:
+        # ── Shared Visual Evidence Profile Handler ─────────────────────────────
+        async def visual_evidence_profile_handler(input_data: dict) -> dict:
             async def _signal_cb(msg: str) -> None:
-                """Relay Gemini progress to the inter-agent bus for frontend streaming."""
+                """Relay visual-profile progress to the inter-agent bus."""
                 try:
                     if self.inter_agent_bus:
                         self.inter_agent_bus.signal_event(
                             self.session_id,
-                            "agent1_gemini_signal",
+                            "agent1_visual_profile_signal",
                             {"progress": msg},
                         )
-                except Exception as _e:
-                    logger.debug(f"{self.agent_id}: Gemini signal relay failed", error=str(_e))
+                except Exception as exc:
+                    logger.debug(
+                        f"{self.agent_id}: Visual profile signal relay failed",
+                        error=str(exc),
+                    )
 
-            result = await self._gemini_deep_forensic_handler(input_data, signal_callback=_signal_cb)
+            result = await self._visual_evidence_profile_handler(
+                input_data,
+                signal_callback=_signal_cb,
+            )
 
-            # Store result to shared context for Agents 3/5 to reuse
             if result and not result.get("error"):
                 try:
                     if self.inter_agent_bus:
-                        self.inter_agent_bus.set_image_context(str(self.session_id), result)
+                        self.inter_agent_bus.set_image_context(
+                            str(self.session_id),
+                            result,
+                        )
                 except Exception as ctx_err:
-                    logger.debug(f"{self.agent_id}: Failed to store shared context", error=str(ctx_err))
+                    logger.debug(
+                        f"{self.agent_id}: Failed to store shared image context",
+                        error=str(ctx_err),
+                    )
 
-            # Dynamic content-aware tool gating using forensic_routing
+            # Dynamic content-aware tool gating using forensic_routing.
             try:
                 metadata = result.get("metadata", {}) or {}
                 routing = metadata.get("forensic_routing", {}) or {}
-                skip_tools = [t.lower().replace("_", "") for t in routing.get("skip_tools", [])]
+                skip_tools = [
+                    str(tool).lower().replace("_", "")
+                    for tool in routing.get("skip_tools", [])
+                ]
 
                 if skip_tools:
-                    # Get current tasks from working memory
-                    state = await self.working_memory.get_state(self.session_id, self.agent_id)
-                    new_tasks = []
-                    for t in state.tasks:
+                    state = await self.working_memory.get_state(
+                        self.session_id,
+                        self.agent_id,
+                    )
+                    updated_tasks = []
+
+                    for task in state.tasks:
                         matched_tool = None
                         for name in registry.handlers.keys():
-                            if name in t.description:
+                            if name in task.description:
                                 matched_tool = name
                                 break
 
                         if matched_tool:
-                            norm_matched = matched_tool.lower().replace("_", "")
-                            # If this tool is explicitly listed in skip_tools, we skip it
-                            if norm_matched in skip_tools:
-                                logger.info(f"Dynamically skipping tool based on forensic routing: {matched_tool}", agent_id=self.agent_id)
-                                t.status = "COMPLETE"
-                                t.result_ref = "skipped_by_forensic_routing"
-                                t.sub_task_info = "Skipped by content-aware forensic routing"
+                            normalized = matched_tool.lower().replace("_", "")
+                            if normalized in skip_tools:
+                                logger.info(
+                                    "Dynamically skipping tool based on forensic routing",
+                                    agent_id=self.agent_id,
+                                    tool_name=matched_tool,
+                                )
+                                task.status = "COMPLETE"
+                                task.result_ref = "skipped_by_forensic_routing"
+                                task.sub_task_info = (
+                                    "Skipped by content-aware forensic routing"
+                                )
 
-                        new_tasks.append(t)
+                        updated_tasks.append(task)
 
-                    # Write updated tasks back to working memory
                     await self.working_memory.update_state(
-                        self.session_id, self.agent_id, {"tasks": [t.model_dump() for t in new_tasks]}
+                        self.session_id,
+                        self.agent_id,
+                        {"tasks": [task.model_dump() for task in updated_tasks]},
                     )
             except Exception as exc:
-                logger.warning(f"Error in dynamic forensic routing application: {exc}", agent_id=self.agent_id)
+                logger.warning(
+                    "Error applying visual-profile routing",
+                    agent_id=self.agent_id,
+                    error=str(exc),
+                )
 
             return result
 
         registry.register(
-            "gemini_deep_forensic",
-            gemini_deep_forensic_handler,
-            "Gemini multimodal visual forensic synthesis and evidence aggregation",
+            TOOL_VISUAL_PROFILE,
+            visual_evidence_profile_handler,
+            "Shared visual evidence profile and forensic routing context",
+        )
+
+        # Compatibility alias for old persisted task descriptions only.
+        registry.register(
+            TOOL_GEMINI_DEEP,
+            visual_evidence_profile_handler,
+            "Deprecated alias for shared visual evidence profile",
         )
 
         # ── SynthID / AI Watermark Detection ─────────────────────────────────

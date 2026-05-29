@@ -324,17 +324,27 @@ class ImageHandlers(BaseToolHandler):
         if "screenshot" in str(clip_ctx.get("image_type", "")).lower():
             return True
             
-        # 3. Check Gemini Multimodal Analysis
-        gemini_ctx = tool_ctx.get("gemini_deep_forensic") or {}
-        gemini_meta = gemini_ctx.get("metadata") or {}
+        # 3. Check shared visual evidence profile.
+        visual_ctx = (
+            tool_ctx.get("visual_evidence_profile")
+            or tool_ctx.get("gemini_deep_forensic")
+            or {}
+        )
+        visual_meta = visual_ctx.get("metadata") or {}
         
-        # Check Gemini categorization
-        cat = str(gemini_meta.get("file_type_assessment") or gemini_meta.get("image_category") or "").lower()
+        cat = str(
+            visual_meta.get("file_type_assessment")
+            or visual_meta.get("image_category")
+            or ""
+        ).lower()
         if "screenshot" in cat or "screen capture" in cat:
             return True
             
-        # Check Gemini narrative/description
-        desc = str(gemini_ctx.get("reasoning_summary") or gemini_ctx.get("content_description") or "").lower()
+        desc = str(
+            visual_ctx.get("reasoning_summary")
+            or visual_ctx.get("content_description")
+            or ""
+        ).lower()
         if "screenshot" in desc or "screen capture" in desc:
             return True
             

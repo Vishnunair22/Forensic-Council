@@ -219,6 +219,9 @@ class AgentInvestigationMixin:
         timeout_s: float = 35.0,
     ) -> dict[str, Any] | None:
         """Run one bounded post-analysis synthesis call for card/report narration."""
+        if self.config.local_only_analysis:
+            return None
+
         if not (self.config.llm_enable_post_synthesis and self.config.llm_api_key):
             return None
         try:
@@ -227,50 +230,55 @@ class AgentInvestigationMixin:
             tool_context = getattr(self, "_tool_context", {}) or {}
             image_type_hint = tool_context.get("analyze_image_content", {}).get("image_type", "")
 
-            # Extract full Gemini forensic context for Groq synthesis.
+            # Extract full shared visual evidence profile for optional synthesis.
             # Primary: agent's own tool_context (Agent 1 stores its result here).
             # Fallback: read from inter-agent bus (Agents 3/5 reuse Agent 1's result).
-            gemini_result = tool_context.get("gemini_deep_forensic") or {}
-            if not gemini_result and getattr(self, "inter_agent_bus", None):
+            visual_profile = (
+                tool_context.get("visual_evidence_profile")
+                or tool_context.get("gemini_deep_forensic")
+                or {}
+            )
+
+            if not visual_profile and getattr(self, "inter_agent_bus", None):
                 try:
                     bus_ctx = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
                     if bus_ctx:
-                        gemini_result = bus_ctx
+                        visual_profile = bus_ctx
                 except Exception:
                     pass
 
-            # gemini_result is the full to_finding_dict() output:
+            # visual_profile is the full to_finding_dict() output:
             #   { "reasoning_summary": ..., "confidence_raw": ..., "metadata": { ... } }
             # The nested metadata dict holds all deep-forensic extra fields.
             # We also support direct-field access as a fallback for any path that
-            # stores the GeminiVisionFinding attrs without the metadata wrapper.
-            gemini_metadata = gemini_result.get("metadata") or {}
-            if not isinstance(gemini_metadata, dict):
-                gemini_metadata = {}
+            # stores the VisualEvidenceFinding attrs without the metadata wrapper.
+            visual_metadata = visual_profile.get("metadata") or {}
+            if not isinstance(visual_metadata, dict):
+                visual_metadata = {}
 
             def _gem_str(meta_key: str, *top_keys: str) -> str:
                 """Read from metadata dict first, then fall back to top-level keys."""
-                v = gemini_metadata.get(meta_key)
+                v = visual_metadata.get(meta_key)
                 if v:
                     return str(v).strip()
                 for k in top_keys:
-                    v = gemini_result.get(k)
+                    v = visual_profile.get(k)
                     if v:
                         return str(v).strip()
                 return ""
 
             def _gem_lst(meta_key: str, *top_keys: str) -> list:
                 """Read list from metadata dict first, then top-level keys."""
-                v = gemini_metadata.get(meta_key)
+                v = visual_metadata.get(meta_key)
                 if isinstance(v, list) and v:
                     return v
                 for k in top_keys:
-                    v = gemini_result.get(k)
+                    v = visual_profile.get(k)
                     if isinstance(v, list) and v:
                         return v
                 return []
 
-            # Build a RICH gemini_context — forwards everything so Groq can anchor
+            # Build a rich visual profile context — forwards everything so synthesis can anchor
             # the agent_brief in what the evidence actually IS, not generic boilerplate.
             gemini_context: dict = {
                 # Evidence identity — what Gemini sees
@@ -287,7 +295,7 @@ class AgentInvestigationMixin:
                 "visual_verdict": _gem_str(
                     "authenticity_verdict", "visual_verdict"
                 ),
-                "gemini_confidence": float(gemini_result.get("confidence_raw") or 0.0),
+                "gemini_confidence": float(visual_profile.get("confidence_raw") or 0.0),
                 "priority_signals": _gem_lst(
                     "manipulation_signals", "priority_signals"
                 ),
@@ -966,7 +974,11 @@ class AgentInvestigationMixin:
         )
 
         llm_generator = None
-        if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
+        if (
+            self.config.external_ai_allowed
+            and self.config.llm_enable_react_reasoning
+            and self.config.llm_api_key
+        ):
             llm_client = LLMClient(self.config)
             if llm_client.is_available:
                 llm_generator = create_llm_step_generator(
@@ -1162,7 +1174,11 @@ class AgentInvestigationMixin:
         )
 
         llm_generator = None
-        if self.config.llm_enable_react_reasoning and self.config.llm_api_key:
+        if (
+            self.config.external_ai_allowed
+            and self.config.llm_enable_react_reasoning
+            and self.config.llm_api_key
+        ):
             llm_client = LLMClient(self.config)
             llm_generator = create_llm_step_generator(
                 llm_client=llm_client,

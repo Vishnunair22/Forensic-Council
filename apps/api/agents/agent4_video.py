@@ -121,7 +121,7 @@ class Agent4Video(ForensicAgent):
 
         # ── Shared Visual Profile Reader ──────────────────────────────────────
         async def read_shared_image_context_handler(input_data: dict) -> dict:
-            async def _gemini_signal_callback(msg: str):
+            async def _visual_profile_signal_callback(msg: str):
                 """Signal callback for early hand-off to Arbiter."""
                 try:
                     if self.inter_agent_bus:
@@ -136,10 +136,10 @@ class Agent4Video(ForensicAgent):
                             },
                         )
                 except Exception as e:
-                    logger.debug(f"{self.agent_id}: Gemini signal callback failed", error=str(e))
+                    logger.debug(f"{self.agent_id}: Visual profile signal callback failed", error=str(e))
 
-            return await self._gemini_deep_forensic_handler(
-                input_data, model_hint="gemini-2.5-flash", signal_callback=_gemini_signal_callback
+            return await self._visual_evidence_profile_handler(
+                input_data, signal_callback=_visual_profile_signal_callback
             )
 
         registry.register(

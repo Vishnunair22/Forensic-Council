@@ -172,6 +172,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
     ) -> ForensicReport:
         """Main deliberation entry point."""
 
+        if self.config.local_only_analysis:
+            use_llm = False
+
         # Force use_llm=False if LLM is unavailable
         llm_available = bool(self._synthesis_client and self._synthesis_client.is_available)
         if not llm_available:

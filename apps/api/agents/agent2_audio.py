@@ -189,7 +189,7 @@ class Agent2Audio(ForensicAgent):
         # ── Shared Visual Profile Reader ──────────────────────────────────────
         async def read_shared_image_context_handler(input_data: dict) -> dict:
             """Reuse Agent 1 visual profile or local fallback; never calls Gemini."""
-            return await self._gemini_deep_forensic_handler(input_data)
+            return await self._visual_evidence_profile_handler(input_data)
 
         registry.register(
             "read_shared_image_context",

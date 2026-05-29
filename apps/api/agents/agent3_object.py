@@ -62,12 +62,21 @@ class Agent3Object(ForensicAgent):
 
     @property
     def task_decomposition(self) -> list[str]:
-        # PHASE 1: INITIAL ANALYSIS (Neural Refined)
-        if self._is_screen_capture or self._is_digital_capture:
+        # PHASE 1: INITIAL ANALYSIS
+
+        if self._is_screen_capture:
             return [
                 "Run screenshot_scene_applicability for screen-capture object/scene scope",
                 "Run screenshot_layout_forensics for UI and document layout anomaly scan",
             ]
+
+        if self._is_digital_capture:
+            return [
+                "Run object_detection for scene object identification",
+                "Run scene_incongruence for contextual anomaly detection",
+                "Run vector_contraband_search for risk object screening",
+            ]
+
         file_type = (self.evidence_artifact.mime_type or "").lower()
         if file_type.startswith("video/"):
             return [
@@ -77,37 +86,35 @@ class Agent3Object(ForensicAgent):
                 "Run lighting_correlation_initial for initial shadow and light direction audit",
                 "Run vector_contraband_search for risk object screening",
             ]
-        if not self._is_screen_capture and self._is_digital_capture:
-            # Digitally-created artwork: skip lighting correlation (no camera provenance)
-            return [
-                "Run object_detection for scene object identification",
-                "Run scene_incongruence for contextual anomaly detection",
-                "Run vector_contraband_search for risk object screening",
-            ]
-        # Content-aware routing: read Agent 1's image_category from shared context
-        # to decide whether vector_contraband_search is needed.
+
         shared = {}
         if self.inter_agent_bus:
-            shared = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+            shared = self.inter_agent_bus.get_image_context(
+                str(self.session_id)
+            ) or {}
+
         routing = shared.get("metadata", {}).get("forensic_routing", {}) or {}
-        image_category = (routing.get("image_category") or "").lower()
+        image_category = str(routing.get("image_category") or "").lower()
         skip_contraband = image_category == "live_photograph"
+
         tasks = [
             "Run object_detection for scene object identification",
             "Run scene_incongruence for contextual anomaly detection",
+            "Run lighting_correlation_initial for initial shadow and light direction audit",
         ]
+
         if not skip_contraband:
-            tasks.append("Run lighting_correlation_initial for initial shadow and light direction audit")
-            tasks.append("Run vector_contraband_search for risk object screening")
-        else:
-            tasks.append("Run lighting_correlation_initial for initial shadow and light direction audit")
+            tasks.append(
+                "Run vector_contraband_search for risk object screening"
+            )
+
         return tasks
 
     @property
     def deep_task_decomposition(self) -> list[str]:
         if self._is_screen_capture or self._is_digital_capture:
             return [
-                "Read shared image context for UI/screenshot grounding from Agent 1 Gemini analysis",
+                "Read shared image context for UI/screenshot grounding from Agent 1 visual profile",
                 "Run screenshot_layout_forensics for deep UI/document consistency cross-check",
             ]
         object_ctx = self._tool_context.get("object_detection", {})
@@ -123,7 +130,7 @@ class Agent3Object(ForensicAgent):
         tasks.extend(
             [
                 "Run lighting_consistency for deep ROI-aware shadow-angle audit",
-                "Read shared image context for object/scene grounding from Agent 1 Gemini analysis",
+                "Read shared image context for object/scene grounding from Agent 1 visual profile",
             ]
         )
         return tasks
@@ -246,13 +253,12 @@ class Agent3Object(ForensicAgent):
             "Adversarial robustness check",
         )
 
-        # ── Shared Image Context Reader (replaces Gemini API call) ────────────
-        # Agent 1's Phase 1 Gemini result is stored in the inter-agent bus.
-        # Agent 3 reads it here instead of making its own API call, reducing
-        # Gemini calls from 4 to 1 per image.
+        # ── Shared Image Context Reader ───────────────────────────────────────
+        # Agent 1's Phase 1 visual evidence profile is stored in the inter-agent bus.
+        # Agent 3 reads it here instead of making its own API call.
         async def read_shared_image_context_handler(input_data: dict) -> dict:
-            """Read Agent 1's Gemini result from shared bus context."""
-            result = {"shared_context_available": False, "source": "agent1_gemini"}
+            """Read Agent 1's shared visual evidence profile from bus context."""
+            result = {"shared_context_available": False, "source": "agent1_visual_profile"}
             try:
                 if self.inter_agent_bus:
                     ctx = self.inter_agent_bus.get_image_context(str(self.session_id))
@@ -263,12 +269,11 @@ class Agent3Object(ForensicAgent):
                         result["detected_objects"] = ctx.get("detected_objects", [])
                         result["authenticity_verdict"] = ctx.get("authenticity_verdict", "")
                         result["reasoning_summary"] = ctx.get("reasoning_summary", "")
-                        # Signal progress to the frontend
                         self.inter_agent_bus.signal_event(
                             self.session_id,
                             "agent3_initial_signal",
                             {
-                                "progress": "Shared image context loaded from Agent 1 Gemini analysis",
+                                "progress": "Shared image context loaded from Agent 1 visual profile",
                                 "object_count": self._tool_context.get("object_detection", {}).get(
                                     "detection_count", 0
                                 ),
@@ -281,7 +286,7 @@ class Agent3Object(ForensicAgent):
         registry.register(
             "read_shared_image_context",
             read_shared_image_context_handler,
-            "Read Agent 1 Gemini analysis from shared bus context",
+            "Read Agent 1 shared visual evidence profile from bus context",
         )
 
         # ── No-API Fallback Tools ──────────────────────────────────────────────

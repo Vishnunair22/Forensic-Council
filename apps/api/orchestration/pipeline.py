@@ -693,11 +693,15 @@ class ForensicCouncilPipeline:
                 )
 
             _mime = getattr(self, "_evidence_mime", "")
-            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=True, artifact_mime=_mime)
+            use_llm = (
+                self.config.external_ai_allowed
+                and self.config.llm_enable_post_synthesis
+            )
+            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=use_llm, artifact_mime=_mime)
             self.arbiter._pre_warm_report = report
             self.arbiter._pre_warm_agent_results = agent_results
             self.arbiter._pre_warm_case_id = case_id
-            self.arbiter._pre_warm_used_llm = True
+            self.arbiter._pre_warm_used_llm = use_llm
 
             if not suppress_broadcasts:
                 # Final pre-warm broadcast: metrics are ready for the user decision.
@@ -765,7 +769,10 @@ class ForensicCouncilPipeline:
         """Run council arbiter deliberation with timeout and fallback."""
         logger.info("Running council arbiter deliberation")
         _start = time.perf_counter()
-        use_llm = bool(self.config.llm_enable_post_synthesis)
+        use_llm = (
+            self.config.external_ai_allowed
+            and bool(self.config.llm_enable_post_synthesis)
+        )
 
         # Ensure pre-warm is complete before starting final synthesis.
         if self._pre_warm_task:

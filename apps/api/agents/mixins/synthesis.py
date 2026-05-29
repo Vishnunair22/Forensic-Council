@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from core.tool_names import TOOL_GEMINI_DEEP, TOOL_VISUAL_PROFILE
 from core.vision_router import VisionRouter
 from core.structured_logging import get_logger
 
@@ -66,6 +67,11 @@ class NeuralSynthesisMixin:
 
         return getattr(self, "_agent1_context", {})
 
+    async def _record_visual_profile_result(self, result: dict) -> None:
+        if hasattr(self, "_record_tool_result"):
+            await self._record_tool_result(TOOL_VISUAL_PROFILE, result)
+        self._tool_context[TOOL_GEMINI_DEEP] = result
+
     def _visual_profile_to_tool_result(
         self,
         profile: dict,
@@ -110,11 +116,11 @@ class NeuralSynthesisMixin:
             ),
             "metadata": {
                 **metadata,
-                "tool_name": "gemini_deep_forensic",
+                "tool_name": TOOL_VISUAL_PROFILE,
                 "analysis_source": source,
                 "source_agent": "Agent1",
                 "reused_visual_profile": True,
-                "single_gemini_call_enforced": True,
+                "external_ai_used": bool(metadata.get("external_ai_used", False)),
                 "available": True,
                 "court_defensible": metadata.get("court_defensible", True),
             },
@@ -123,14 +129,15 @@ class NeuralSynthesisMixin:
         }
         return result
 
-    async def _gemini_deep_forensic_handler(
+    async def _visual_evidence_profile_handler(
         self,
         input_data: dict,
         model_hint: str | None = None,
         signal_callback: Callable[[str], Any] | None = None,
     ) -> dict:
         """
-        Unified handler for Gemini multimodal visual forensic synthesis.
+        Unified handler for visual evidence profile — the session-wide
+        shared visual context used by all downstream agents.
         """
         artifact = input_data.get("artifact") or self.evidence_artifact
 
@@ -146,23 +153,26 @@ class NeuralSynthesisMixin:
                 return result
 
             try:
-                from core.vision_fallback_ensemble import analyze_local_ensemble
+                from core.vision_local_ensemble import analyze_local_visual_profile
 
-                finding = await analyze_local_ensemble(
+                finding = await analyze_local_visual_profile(
                     artifact.file_path,
                     exif_summary={"reason": "Agent 1 visual profile unavailable"},
                     is_screen_capture_like=getattr(self, "_is_screen_capture", False),
                 )
-                result = finding.to_finding_dict(self.agent_id)
+                result = finding.to_finding_dict(
+                    self.agent_id,
+                    tool_name=TOOL_VISUAL_PROFILE,
+                )
                 result["metadata"] = {
                     **(result.get("metadata") or {}),
-                    "tool_name": "gemini_deep_forensic",
-                    "analysis_source": "local_visual_profile_fallback",
+                    "tool_name": TOOL_VISUAL_PROFILE,
+                    "analysis_source": "local_visual_ensemble",
+                    "provider_used": "local_visual_ensemble",
+                    "external_ai_used": False,
                     "agent1_profile_missing": True,
-                    "single_gemini_call_enforced": True,
                 }
-                if hasattr(self, "_record_tool_result"):
-                    await self._record_tool_result("gemini_deep_forensic", result)
+                await self._record_visual_profile_result(result)
                 return result
             except Exception as fallback_err:
                 return {
@@ -171,15 +181,14 @@ class NeuralSynthesisMixin:
                     "confidence_raw": 0.0,
                     "status": "INCOMPLETE",
                     "evidence_verdict": "INCONCLUSIVE",
-                    "reasoning_summary": "Agent 1 visual profile unavailable; local visual fallback failed.",
+                    "reasoning_summary": "Agent 1 visual profile unavailable; local visual profile failed.",
                     "summary": "Agent 1 visual profile unavailable.",
                     "metadata": {
-                        "tool_name": "gemini_deep_forensic",
+                        "tool_name": TOOL_VISUAL_PROFILE,
                         "analysis_source": "agent1_visual_profile",
                         "available": False,
                         "court_defensible": False,
                         "skipped": True,
-                        "single_gemini_call_enforced": True,
                         "error": str(fallback_err),
                     },
                     "court_defensible": False,
@@ -273,17 +282,23 @@ class NeuralSynthesisMixin:
                     await self._record_tool_error("gemini_deep_forensic", f"Error ({err_status}): {err_msg}")
                 return result
 
-            result = finding.to_finding_dict(self.agent_id)
-            result["analysis_source"] = f"vision_cascade_{finding.model_used}"
+            result = finding.to_finding_dict(
+                self.agent_id,
+                tool_name=TOOL_VISUAL_PROFILE,
+            )
+            result["analysis_source"] = result.get("metadata", {}).get(
+                "analysis_source",
+                "local_visual_ensemble",
+            )
             result["metadata"] = {
                 **(result.get("metadata") or {}),
+                "tool_name": TOOL_VISUAL_PROFILE,
                 "visual_profile_owner": "Agent1",
-                "single_gemini_call_enforced": True,
+                "execution_mode": self.config.analysis_execution_mode,
+                "external_ai_used": not self.config.local_only_analysis,
             }
 
-            # Record result if method exists
-            if hasattr(self, "_record_tool_result"):
-                await self._record_tool_result("gemini_deep_forensic", result)
+            await self._record_visual_profile_result(result)
 
             if self.inter_agent_bus and not result.get("error"):
                 self.inter_agent_bus.set_image_context(str(self.session_id), result)
@@ -402,6 +417,19 @@ class NeuralSynthesisMixin:
         except Exception as e:
             logger.warning(f"{self.agent_id}: LLM synthesis failed: {e}, using template")
             return self._template_synthesis(findings)
+
+    async def _gemini_deep_forensic_handler(
+        self,
+        input_data: dict,
+        model_hint: str | None = None,
+        signal_callback: Callable[[str], Any] | None = None,
+    ) -> dict:
+        """Deprecated compatibility alias for persisted investigations."""
+        return await self._visual_evidence_profile_handler(
+            input_data,
+            model_hint=model_hint,
+            signal_callback=signal_callback,
+        )
 
     def _template_synthesis(self, findings: list) -> str:
         """Pure deterministic synthesis from findings."""

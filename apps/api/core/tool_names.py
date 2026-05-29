@@ -26,5 +26,20 @@ TOOL_C2PA_VALIDATOR = "c2pa_validator"
 TOOL_METADATA_ANOMALY = "metadata_anomaly_scorer"
 TOOL_HEX_SIGNATURE = "hex_signature"
 
-# Shared deep analysis
+# Shared visual evidence profile
+TOOL_VISUAL_PROFILE = "visual_evidence_profile"
+
+# Deprecated compatibility alias for persisted tasks/results created before
+# native local-only mode was introduced. Do not schedule this tool in new runs.
 TOOL_GEMINI_DEEP = "gemini_deep_forensic"
+
+VISUAL_PROFILE_TOOL_NAMES = frozenset(
+    {
+        TOOL_VISUAL_PROFILE,
+        TOOL_GEMINI_DEEP,
+    }
+)
+
+
+def is_visual_profile_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() in VISUAL_PROFILE_TOOL_NAMES

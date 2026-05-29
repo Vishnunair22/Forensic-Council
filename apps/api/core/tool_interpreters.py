@@ -371,12 +371,21 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
             else "No provenance flags raised."
         )
     ),
+    "visual_evidence_profile": lambda output: (
+        f"Visual profile error: {output.get('error')}."
+        if output.get("error")
+        else (
+            f"Visual evidence profile complete. "
+            f"Content: {output.get('file_type_assessment', 'unidentified content')}. "
+            f"Scene: {str(output.get('content_description', ''))[:400]}."
+        )
+    ),
     "gemini_deep_forensic": lambda o: (
-        f"Gemini Vision Error: {o.get('error')}."
+        f"Visual profile error: {o.get('error')}."
         if o.get("error")
         else (
-            lambda ctype=(o.get("gemini_content_type", o.get("file_type_assessment", "")) or "unidentified content"), narrative=(str(o.get("gemini_narrative", o.get("content_description", ""))) or "Visual analysis complete."), objects=o.get("gemini_detected_objects", o.get("gemini_validated_objects", o.get("detected_objects", []))), texts=o.get("gemini_extracted_text", []), verdict=o.get("gemini_verdict", ""), meta_consistency=str(o.get("gemini_metadata_consistency", "")), iface=o.get("gemini_interface", ""), signals=list(o.get("gemini_manipulation_signals") or o.get("manipulation_signals") or []): (
-                "Gemini deep forensic complete. "
+            lambda ctype=(o.get("file_type_assessment", "") or "unidentified content"), narrative=(str(o.get("content_description", "")) or "Visual analysis complete."), objects=o.get("detected_objects", []), texts=o.get("extracted_text", []), verdict=o.get("authenticity_verdict", ""), meta_consistency=str(o.get("metadata_visual_consistency", "")), iface=o.get("interface_identification", ""), signals=list(o.get("manipulation_signals") or []): (
+                "Visual evidence profile complete. "
                 + f"Content: {ctype}. "
                 + (f"Interface/UI: {iface}. " if iface else "")
                 + (f"Scene: {narrative[:400]}. " if narrative else "")
@@ -393,12 +402,12 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
                 + (f"Authenticity verdict: {verdict}. " if verdict else "")
                 + (f"Metadata vs visual: {meta_consistency[:200]}. " if meta_consistency else "")
                 + (
-                    f"Manipulation signals: {'; '.join(str(s) for s in signals[:6])}."
+                    f"Manipulation signals: {'; '.join(str(s) for s in signals[:5])}."
                     if signals
                     else "No manipulation signals detected."
                 )
-            )
-        )()
+            )()
+        )
     ),
     "prnu_analysis": lambda o: (
         o.get(

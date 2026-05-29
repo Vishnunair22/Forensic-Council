@@ -48,6 +48,7 @@ from core.observability import get_tracer
 from core.provider_quota_guard import ProviderQuotaGuard, configure_provider_quota_guards
 from core.retry import CircuitBreaker
 from core.structured_logging import get_logger
+from core.vision_types import VisualEvidenceFinding
 
 logger = get_logger(__name__)
 _tracer = get_tracer("forensic-council.gemini")
@@ -377,6 +378,12 @@ class GeminiVisionFinding:
             "caveat": self.caveat,
             "stub_result": False,
         }
+
+
+# Backwards-compatible alias — all new code should import VisualEvidenceFinding
+# from core.vision_types. GeminiVisionFinding is preserved so existing provider-cascade
+# tests and imports continue to work.
+GeminiVisionFinding = VisualEvidenceFinding
 
 
 class GeminiVisionClient:

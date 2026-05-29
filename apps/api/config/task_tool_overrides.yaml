@@ -178,8 +178,12 @@ agent1_initial:
   "run file_hash_verify for evidence integrity check": "file_hash_verify"
   "run analyze_image_content for semantic image understanding": "analyze_image_content"
   "run extract_text_from_image for visible text extraction": "extract_text_from_image"
-  "run gemini_deep_forensic for visual evidence profile and forensic routing hints": "gemini_deep_forensic"
-  "visual evidence profile and forensic routing hints": "gemini_deep_forensic"
+  "run visual_evidence_profile for visual evidence profile and forensic routing hints": "visual_evidence_profile"
+  "visual evidence profile and forensic routing hints": "visual_evidence_profile"
+
+  # Deprecated compatibility mappings for previously persisted investigations.
+  "run gemini_deep_forensic for visual evidence profile and forensic routing hints": "visual_evidence_profile"
+  "run gemini_deep_forensic for final semantic grounding and court-ready verdict": "visual_evidence_profile"
   "run frequency_domain_analysis for frequency domain analysis": "frequency_domain_analysis"
   "run synthid_watermark_detect for synthid and ai watermark detection": "synthid_watermark_detect"
   # Neural ELA / noiseprint Phase-1 exact task strings

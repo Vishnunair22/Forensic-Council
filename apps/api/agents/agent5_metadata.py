@@ -319,10 +319,9 @@ class Agent5Metadata(ForensicAgent):
 
         # ── Shared Agent 1 Visual Profile Reader ──────────────────────────────
         async def read_shared_image_context_handler(input_data: dict) -> dict:
-            async def _gemini_signal_callback(msg: str):
+            async def _visual_profile_signal_callback(msg: str):
                 """Signal callback for early hand-off to Arbiter."""
                 if self.inter_agent_bus:
-                    # Signal coordinates for geospatial grounding
                     exif = self._tool_context.get("exif_extract", {})
                     self.inter_agent_bus.signal_event(
                         self.session_id,
@@ -330,8 +329,8 @@ class Agent5Metadata(ForensicAgent):
                         {"progress": msg, "has_gps": bool(exif.get("gps_coordinates"))},
                     )
 
-            return await self._gemini_deep_forensic_handler(
-                input_data, model_hint="gemini-2.5-flash", signal_callback=_gemini_signal_callback
+            return await self._visual_evidence_profile_handler(
+                input_data, signal_callback=_visual_profile_signal_callback
             )
 
         registry.register(

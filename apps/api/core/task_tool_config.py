@@ -57,7 +57,8 @@ _IMAGE_TOOLS: frozenset[str] = frozenset(
         # Content understanding
         "analyze_image_content",
         "extract_text_from_image",
-        "gemini_deep_forensic",
+        "visual_evidence_profile",
+        "gemini_deep_forensic",  # deprecated compatibility alias
         "read_shared_image_context",
         # Hash / integrity
         "file_hash_verify",
@@ -163,7 +164,8 @@ _DOCUMENT_TOOLS: frozenset[str] = frozenset(
         "compression_risk_audit",
         "timestamp_analysis",
         "provenance_chain_verify",
-        "gemini_deep_forensic",
+        "visual_evidence_profile",
+        "gemini_deep_forensic",  # deprecated compatibility alias
         "read_shared_image_context",
     }
 )
@@ -178,7 +180,8 @@ _ALWAYS_ALLOWED: frozenset[str] = frozenset(
     {
         "file_hash_verify",
         "inter_agent_call",
-        "gemini_deep_forensic",
+        "visual_evidence_profile",
+        "gemini_deep_forensic",  # deprecated compatibility alias
         "read_shared_image_context",
     }
 )

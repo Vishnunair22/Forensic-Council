@@ -14,7 +14,7 @@ from core.gemini_client import (
 from core.llm_client import is_placeholder_secret
 from core.provider_quota_guard import ProviderQuotaGuard, configure_provider_quota_guards
 from core.structured_logging import get_logger
-from core.vision_fallback_ensemble import analyze_local_ensemble
+from core.vision_local_ensemble import analyze_local_visual_profile
 
 logger = get_logger(__name__)
 
@@ -37,9 +37,17 @@ class VisionRouter:
         configure_provider_quota_guards(config)
         self.gemini_client = GeminiVisionClient(config)
 
-        # Parse provider chain
-        chain_str = getattr(config, "vision_provider_chain", "gemini,groq_vision,openrouter,local_ensemble")
-        self.provider_chain = [p.strip().lower() for p in chain_str.split(",") if p.strip()]
+        self.local_only = config.local_only_analysis
+
+        if self.local_only:
+            self.provider_chain = ["local_ensemble"]
+        else:
+            chain_str = getattr(config, "vision_provider_chain", "gemini,groq_vision,openrouter,local_ensemble")
+            self.provider_chain = [
+                provider.strip().lower()
+                for provider in chain_str.split(",")
+                if provider.strip()
+            ]
 
         # Ensure Quota Guards are configured
         if not ProviderQuotaGuard.get_config("groq_vision"):
@@ -55,13 +63,19 @@ class VisionRouter:
                 rpd_limit=getattr(config, "openrouter_rpd_limit", 200),
             )
 
-        logger.info("VisionRouter initialized with provider cascade", chain=self.provider_chain)
+        logger.info(
+            "VisionRouter initialized",
+            execution_mode=config.analysis_execution_mode,
+            chain=self.provider_chain,
+        )
 
     def _use_gemini(self) -> bool:
         """Check if Gemini is in the chain and configured."""
         return "gemini" in self.provider_chain and self.gemini_client._enabled
 
     async def identify_file_content(self, file_path: str, agent_context: str = "") -> GeminiVisionFinding:
+        if self.local_only:
+            return await self._run_local_visual_profile(file_path=file_path, exif_summary={}, is_screen_capture_like=False)
         if self._use_gemini():
             try:
                 return await self.gemini_client.identify_file_content(file_path, agent_context)
@@ -70,6 +84,8 @@ class VisionRouter:
         return await self.gemini_client._local_forensic_fallback(file_path)
 
     async def analyze_manipulation_evidence(self, file_path: str, preliminary_findings: list[str]) -> GeminiVisionFinding:
+        if self.local_only:
+            return await self._run_local_visual_profile(file_path=file_path, exif_summary={}, is_screen_capture_like=False)
         if self._use_gemini():
             try:
                 return await self.gemini_client.analyze_manipulation_evidence(file_path, preliminary_findings)
@@ -78,6 +94,8 @@ class VisionRouter:
         return await self.gemini_client._local_forensic_fallback(file_path)
 
     async def analyze_objects_and_scene(self, file_path: str, preliminary_detections: list[str]) -> GeminiVisionFinding:
+        if self.local_only:
+            return await self._run_local_visual_profile(file_path=file_path, exif_summary={}, is_screen_capture_like=False)
         if self._use_gemini():
             try:
                 return await self.gemini_client.analyze_objects_and_scene(file_path, preliminary_detections)
@@ -86,12 +104,26 @@ class VisionRouter:
         return await self.gemini_client._local_forensic_fallback(file_path)
 
     async def analyze_metadata_visual_consistency(self, file_path: str, metadata_summary: dict[str, Any]) -> GeminiVisionFinding:
+        if self.local_only:
+            return await self._run_local_visual_profile(file_path=file_path, exif_summary=metadata_summary, is_screen_capture_like=False)
         if self._use_gemini():
             try:
                 return await self.gemini_client.analyze_metadata_visual_consistency(file_path, metadata_summary)
             except Exception as e:
                 logger.warning("analyze_metadata_visual_consistency failed on Gemini, falling back to local ELA/metrics", error=str(e))
         return await self.gemini_client._local_forensic_fallback(file_path, metadata_summary)
+
+    async def _run_local_visual_profile(
+        self,
+        file_path: str,
+        exif_summary: dict[str, Any] | None = None,
+        is_screen_capture_like: bool = False,
+    ):
+        return await analyze_local_visual_profile(
+            file_path=file_path,
+            exif_summary=exif_summary,
+            is_screen_capture_like=is_screen_capture_like,
+        )
 
     async def deep_forensic_analysis(
         self,
@@ -106,6 +138,18 @@ class VisionRouter:
         """
         Execute deep vision forensic analysis by routing through the provider chain.
         """
+        if self.local_only:
+            logger.info(
+                "Executing native local visual profile",
+                execution_mode="local_only",
+                agent_id=agent_id,
+            )
+            return await self._run_local_visual_profile(
+                file_path=file_path,
+                exif_summary=exif_summary,
+                is_screen_capture_like=is_screen_capture_like,
+            )
+
         errors = []
 
         for provider in self.provider_chain:
@@ -267,12 +311,12 @@ class VisionRouter:
                         errors.append(f"OpenRouter {model} exception: {str(e)}")
 
             elif provider == "local_ensemble":
-                logger.info("Executing local fallback ensemble")
-                return await analyze_local_ensemble(file_path, exif_summary, is_screen_capture_like)
+                logger.info("Executing native local visual profile")
+                return await self._run_local_visual_profile(file_path, exif_summary, is_screen_capture_like)
 
         # Fallback of last resort if all in the chain failed or were skipped
-        logger.warning("All providers in cascade failed or skipped. Triggering last-resort local ensemble.", errors=errors)
-        return await analyze_local_ensemble(file_path, exif_summary, is_screen_capture_like)
+        logger.warning("All providers in cascade failed or skipped. Triggering last-resort local profile.", errors=errors)
+        return await self._run_local_visual_profile(file_path, exif_summary, is_screen_capture_like)
 
     def _parse_openai_vision_response(self, text: str, latency: float, model: str) -> GeminiVisionFinding:
         """Parse JSON response from OpenAI-compatible Vision API."""

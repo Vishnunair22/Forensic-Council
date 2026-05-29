@@ -535,8 +535,15 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
             "description": "CLIP semantic understanding — identify objects, scenes, context",
         },
         {
+            "name": "visual_evidence_profile",
+            "description": (
+                "Shared visual evidence profile — local or configured-provider "
+                "analysis of authenticity, objects, text, and routing context"
+            ),
+        },
+        {
             "name": "gemini_deep_forensic",
-            "description": "Gemini 2.5 Flash neural vision audit — deep analysis of authenticity, objects, and text",
+            "description": "Deprecated alias for shared visual evidence profile",
         },
         # No-API fallback tools
         {
@@ -573,8 +580,12 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
             "description": "Audio codec and encoding chain fingerprinting",
         },
         {
+            "name": "visual_evidence_profile",
+            "description": "Shared visual evidence profile — local or configured-provider analysis",
+        },
+        {
             "name": "gemini_deep_forensic",
-            "description": "Gemini 2.5 Flash neural audio audit — identifies voice clones and sentiment anomalies",
+            "description": "Deprecated alias for shared visual evidence profile",
         },
         # Agent 3 — Scene
         {
@@ -772,7 +783,8 @@ class ReActLoopEngine:
         "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
         "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
         "synthid_watermark_detect": "SynthID / AI Watermark Detection",
-        "gemini_deep_forensic": "Gemini Deep Forensic Analysis",
+        "visual_evidence_profile": "Visual Evidence Profile",
+        "gemini_deep_forensic": "Visual Evidence Profile",
         "voice_clone_detect": "Voice Clone Detection",
         "enf_analysis": "ENF Frequency Analysis",
         "sensor_db_query": "Camera Sensor DB Query",
@@ -2298,13 +2310,24 @@ class ReActLoopEngine:
                 f"Objects: {', '.join(sorted(classes)[:5])}."
             )
 
-        if lower_tool == "gemini_deep_forensic":
-            gv = output.get("gemini_verdict", output.get("verdict", "INCONCLUSIVE"))
-            signals = output.get("manipulation_signals", output.get("gemini_manipulation_signals", []))
-            text = output.get("text_content", output.get("extracted_text", ""))
-            parts = [f"Gemini vision verdict: {gv}."]
+        if lower_tool in {"visual_evidence_profile", "gemini_deep_forensic"}:
+            verdict = output.get(
+                "authenticity_verdict",
+                output.get("verdict", "INCONCLUSIVE"),
+            )
+            signals = output.get(
+                "manipulation_signals",
+                output.get("visual_manipulation_signals", []),
+            )
+            text = output.get(
+                "text_content",
+                output.get("extracted_text", ""),
+            )
+            parts = [f"Visual evidence profile verdict: {verdict}."]
             if signals and isinstance(signals, list):
-                parts.append(f"Manipulation signals: {', '.join(str(s) for s in signals[:3])}.")
+                parts.append(
+                    f"Manipulation signals: {', '.join(str(item) for item in signals[:3])}."
+                )
             if text and isinstance(text, str) and len(text) > 3:
                 parts.append(f"Text extracted: '{text[:120]}'.")
             return " ".join(parts)
