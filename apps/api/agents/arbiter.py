@@ -171,6 +171,17 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         artifact_mime: str = "",
     ) -> ForensicReport:
         """Main deliberation entry point."""
+
+        # Force use_llm=False if LLM is unavailable
+        llm_available = bool(self._synthesis_client and self._synthesis_client.is_available)
+        if not llm_available:
+            from core.llm_client import LLMClient
+            temp_client = LLMClient(config=self.config, use_arbiter_tier=True)
+            llm_available = temp_client.is_available
+        if use_llm and not llm_available:
+            logger.info("Arbiter LLM unavailable, using deterministic logic")
+            use_llm = False
+
         skip_types = {"file type not applicable", "format not supported"}
 
         async def _step(msg: str):
@@ -783,3 +794,48 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             ],
             analysis_coverage_note="Zero agents produced findings; verdict defaulted to INCONCLUSIVE.",
         )
+
+    @staticmethod
+    def _calculate_verdict_deterministic(findings: dict) -> tuple[str, float]:
+        """Calculate verdict using only tool outputs, no LLM."""
+        positive_counts = {}
+        total_tools = {}
+        for agent_id, agent_findings in findings.items():
+            positive = sum(1 for f in agent_findings
+                          if f.get('evidence_verdict') == 'POSITIVE')
+            total = len([f for f in agent_findings
+                        if f.get('status') != 'NOT_APPLICABLE'])
+            positive_counts[agent_id] = positive
+            total_tools[agent_id] = total
+        total_positive = sum(positive_counts.values())
+        total_executed = sum(total_tools.values())
+        if total_executed == 0:
+            return "INCONCLUSIVE", 0.0
+        manipulation_ratio = total_positive / total_executed
+        if manipulation_ratio >= 0.7:
+            return "HIGHLY_LIKELY_MANIPULATED", 0.85
+        elif manipulation_ratio >= 0.5:
+            return "LIKELY_MANIPULATED", 0.70
+        elif manipulation_ratio >= 0.3:
+            return "POSSIBLY_MANIPULATED", 0.50
+        elif manipulation_ratio >= 0.1:
+            return "LIKELY_AUTHENTIC", 0.75
+        else:
+            return "HIGHLY_LIKELY_AUTHENTIC", 0.90
+
+    @staticmethod
+    def _generate_template_narratives(agent_results: dict) -> dict[str, str]:
+        """Generate deterministic per-agent narratives without LLM."""
+        narratives = {}
+        for agent_id, result in agent_results.items():
+            findings = result.get('findings', [])
+            tool_count = len([f for f in findings if f.get('metadata', {}).get('tool_name')])
+            positive_count = sum(1 for f in findings if f.get('evidence_verdict') == 'POSITIVE')
+            if positive_count > 0:
+                narrative = (f"{agent_id} executed {tool_count} specialized forensic tools "
+                            f"and detected {positive_count} positive indicators of manipulation.")
+            else:
+                narrative = (f"{agent_id} executed {tool_count} specialized forensic tools "
+                            f"and found no significant anomalies.")
+            narratives[agent_id] = narrative
+        return narratives

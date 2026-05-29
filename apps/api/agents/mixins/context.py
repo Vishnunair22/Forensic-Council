@@ -46,6 +46,8 @@ class AgentContextMixin:
         self._gemini_signal_callback: Any = None
         self._episodic_context: str = ""
         self._investigation_completed: bool = False
+        self._llm_client: Any = None
+        self._synthesis_mode: str = "deterministic"
 
     async def _retrieve_episodic_context(self) -> str:
         """Retrieve relevant context from episodic memory for injection."""

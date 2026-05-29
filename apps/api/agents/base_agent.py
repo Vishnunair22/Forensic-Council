@@ -9,6 +9,7 @@ Now decomposed into mixins for better maintainability.
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import uuid
 from abc import ABC, abstractmethod
@@ -157,3 +158,57 @@ class ForensicAgent(
         return MimeRegistry.is_supported(
             agent_name=self.agent_name, mime_type=mime_type, file_path=file_path
         )
+
+    async def generate_synthesis(self, findings: list) -> str:
+        """Generate executive synthesis with robust no-LLM fallback."""
+        from core.llm_client import LLMClient
+        llm_client = LLMClient(config=self.config)
+        llm_available = llm_client.is_available
+
+        if not llm_available:
+            logger.info(f"{self.agent_id}: LLM unavailable, using template synthesis")
+            return self._generate_template_synthesis_from_findings(findings)
+
+        try:
+            findings_json = json.dumps([
+                f.model_dump() if hasattr(f, 'model_dump') else f
+                for f in findings
+            ])
+            synthesis = await llm_client.generate_synthesis(
+                system_prompt=f"Executive synthesis for {self.agent_id} forensic findings.",
+                user_content=findings_json,
+                max_tokens=1024,
+                json_mode=False
+            )
+            if synthesis and len(synthesis.strip()) > 20:
+                return synthesis
+            logger.warning(f"{self.agent_id}: LLM returned empty synthesis, using template")
+            return self._generate_template_synthesis_from_findings(findings)
+        except Exception as e:
+            logger.warning(f"{self.agent_id}: Synthesis generation failed: {e}")
+            return self._generate_template_synthesis_from_findings(findings)
+
+    def _generate_template_synthesis_from_findings(self, findings: list) -> str:
+        """Deterministic synthesis from tool findings only."""
+        if not findings:
+            return f"{self.agent_id}: No forensic anomalies detected in this evidence."
+        tool_names = set()
+        positive_findings = []
+        for f in findings:
+            meta = f.metadata if hasattr(f, 'metadata') else f.get('metadata', {})
+            tool_name = meta.get('tool_name')
+            if tool_name:
+                tool_names.add(tool_name)
+            verdict = (f.evidence_verdict if hasattr(f, 'evidence_verdict')
+                      else f.get('evidence_verdict', ''))
+            if verdict == 'POSITIVE':
+                finding_type = (f.finding_type if hasattr(f, 'finding_type')
+                              else f.get('finding_type', tool_name))
+                positive_findings.append(finding_type)
+        parts = []
+        parts.append(f"Analyzed using {len(tool_names)} specialized tools.")
+        if positive_findings:
+            parts.append(f"Detected: {', '.join(positive_findings[:3])}.")
+        else:
+            parts.append("No significant anomalies detected.")
+        return " ".join(parts)

@@ -1322,11 +1322,17 @@ class ReActLoopEngine:
             _loop_span.set_attribute("session_id", str(self.session_id))
             _loop_span.set_attribute("iteration_ceiling", self.iteration_ceiling)
 
-            # Create initial THOUGHT step
-            initial_step = ReActStep(step_type="THOUGHT", content=initial_thought, iteration=0)
-            self._react_chain.append(initial_step)
-            self._thought_buffer.append(initial_thought)  # M1: Seed buffer with initial context
-            await self._log_step(initial_step)
+        # Log LLM availability for the run
+        if llm_generator is not None:
+            logger.debug(f"ReAct loop {self.agent_id}: LLM reasoning available")
+        else:
+            logger.info(f"ReAct loop {self.agent_id}: NO-LLM mode (task decomposition only)")
+
+        # Create initial THOUGHT step
+        initial_step = ReActStep(step_type="THOUGHT", content=initial_thought, iteration=0)
+        self._react_chain.append(initial_step)
+        self._thought_buffer.append(initial_thought)  # M1: Seed buffer with initial context
+        await self._log_step(initial_step)
 
         self._current_iteration = 0
 

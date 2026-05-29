@@ -92,6 +92,19 @@ class AgentFactory:
         self.evidence_store = evidence_store
         self.inter_agent_bus = inter_agent_bus
         self._evidence_artifact = None
+        self._log_llm_availability()
+
+    def _log_llm_availability(self) -> None:
+        """Log LLM availability status at factory init."""
+        from core.llm_client import LLMClient
+        try:
+            llm_client = LLMClient(config=self.config)
+            if llm_client.is_available:
+                logger.info("AgentFactory: LLM available for enhanced reasoning")
+            else:
+                logger.info("AgentFactory: NO-LLM mode (classical tools only)")
+        except Exception as e:
+            logger.info(f"AgentFactory: LLM check failed ({e}), using classical tools")
 
     def set_evidence_artifact(self, artifact) -> None:
         """Set the evidence artifact for agent re-invocation."""

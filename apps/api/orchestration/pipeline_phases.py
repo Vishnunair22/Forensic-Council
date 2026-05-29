@@ -450,6 +450,16 @@ async def run_agents_concurrent(
             if pipeline.inter_agent_bus is not None:
                 pipeline.inter_agent_bus.register_agent(aid, inst)
 
+            # Log LLM availability for this agent
+            from core.llm_client import LLMClient
+            _llm_check = LLMClient(config=pipeline.config)
+            inst._llm_available = _llm_check.is_available
+            inst._synthesis_mode = "llm" if _llm_check.is_available else "deterministic"
+            if _llm_check.is_available:
+                logger.debug(f"{aid}: LLM available for enhanced reasoning")
+            else:
+                logger.info(f"{aid}: NO-LLM mode (classical tools only)")
+
             # Broadcast "validating" phase start for this specific node
             await _broadcast_agent_status(
                 aid,
@@ -697,6 +707,14 @@ async def run_agents_concurrent(
     except Exception:
         pass
 
+    # Clear stale findings from working memory before deep phase to prevent carry-over
+    for _aid in registry.get_all_agent_ids():
+        try:
+            await pipeline.working_memory.clear(session_id, _aid)
+            logger.debug(f"Cleared working memory for {_aid} before deep phase")
+        except Exception as _wm_err:
+            logger.debug(f"Working memory clear failed for {_aid}: {_wm_err}")
+
     # --- Phase 2: Deep passes with early context sync ----------------------
 
     context_event = asyncio.Event()
@@ -943,6 +961,9 @@ async def run_agents_concurrent(
         else:
             results.append(r)
 
+    # Deduplicate deep findings against initial findings to prevent duplicates
+    results = _deduplicate_phase_findings(initial_results, results)
+
     active_agents = [r.agent_id for r in results if r.agent_active]
     skipped_agents = [r.agent_id for r in results if not r.supports_file_type]
     logger.info(
@@ -1065,6 +1086,52 @@ async def _run_agent_deep_only(
                 error=str(e),
                 synthesis=getattr(agent, "_agent_synthesis", None),
             )
+
+
+def _deduplicate_phase_findings(
+    initial_results: list[AgentLoopResult],
+    deep_results: list[AgentLoopResult],
+) -> list[AgentLoopResult]:
+    """Remove duplicate findings between initial and deep phases."""
+
+    def _finding_signature(finding: dict) -> str:
+        tool = finding.get('metadata', {}).get('tool_name', '')
+        verdict = finding.get('evidence_verdict', '')
+        finding_type = finding.get('finding_type', '')
+        return f"{tool}:{verdict}:{finding_type}"
+
+    initial_signatures: dict[str, set[str]] = {}
+    for result in initial_results:
+        agent_id = result.agent_id
+        if agent_id not in initial_signatures:
+            initial_signatures[agent_id] = set()
+        for finding in result.findings:
+            sig = _finding_signature(finding)
+            initial_signatures[agent_id].add(sig)
+
+    deduplicated = []
+    for result in deep_results:
+        agent_id = result.agent_id
+        new_findings = []
+        for finding in result.findings:
+            sig = _finding_signature(finding)
+            if sig not in initial_signatures.get(agent_id, set()):
+                new_findings.append(finding)
+            else:
+                logger.debug(f"Skipping duplicate finding: {sig}")
+        deduplicated.append(AgentLoopResult(
+            agent_id=agent_id,
+            findings=new_findings,
+            error=result.error,
+            agent_active=result.agent_active,
+            reflection_report=result.reflection_report,
+            react_chain=result.react_chain,
+            synthesis=result.synthesis,
+            supports_file_type=result.supports_file_type,
+            deep_findings_count=result.deep_findings_count,
+        ))
+
+    return deduplicated
 
 
 async def _await_deep_analysis_decision(

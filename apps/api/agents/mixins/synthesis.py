@@ -6,6 +6,7 @@ Centralizes Gemini-based deep forensic analysis and cross-modal grounding.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -228,3 +229,72 @@ class NeuralSynthesisMixin:
             if hasattr(self, "_record_tool_error"):
                 await self._record_tool_error("gemini_deep_forensic", f"Error ({err_status}): {err_msg}")
             return err_result
+
+    async def generate_agent_synthesis(self, findings: list, react_chain: list) -> str:
+        """Generate synthesis with guaranteed fallback."""
+        if not findings:
+            return f"{self.agent_id}: Classical forensic analysis complete. No anomalies detected."
+
+        llm_available = getattr(self, "_llm_available", False) or getattr(self, "llm_available", False)
+        if not llm_available:
+            logger.info(f"{self.agent_id}: Generating template synthesis (no LLM)")
+            return self._template_synthesis(findings)
+
+        try:
+            from core.llm_client import LLMClient
+            llm_client = LLMClient(config=self.config)
+            llm_synthesis = await asyncio.wait_for(
+                llm_client.generate_synthesis(
+                    system_prompt=f"Forensic synthesis for {self.agent_id}.",
+                    user_content=json.dumps([
+                        f.model_dump() if hasattr(f, 'model_dump') else f
+                        for f in findings
+                    ]),
+                    max_tokens=1024,
+                    json_mode=False,
+                ),
+                timeout=30.0,
+            )
+            if llm_synthesis and len(llm_synthesis.strip()) > 30:
+                template_markers = ['template', 'placeholder', 'example', 'TODO', 'lorem ipsum']
+                if any(marker in llm_synthesis.lower() for marker in template_markers):
+                    logger.warning(f"{self.agent_id}: LLM returned template text, using deterministic")
+                    return self._template_synthesis(findings)
+                return llm_synthesis
+            logger.info(f"{self.agent_id}: LLM synthesis too short, using template")
+            return self._template_synthesis(findings)
+        except asyncio.TimeoutError:
+            logger.warning(f"{self.agent_id}: LLM synthesis timeout, using template")
+            return self._template_synthesis(findings)
+        except Exception as e:
+            logger.warning(f"{self.agent_id}: LLM synthesis failed: {e}, using template")
+            return self._template_synthesis(findings)
+
+    def _template_synthesis(self, findings: list) -> str:
+        """Pure deterministic synthesis from findings."""
+        tools_executed = set()
+        positive_findings = []
+        high_confidence = []
+        for f in findings:
+            meta = f.metadata if hasattr(f, 'metadata') else f.get('metadata', {})
+            tool_name = meta.get('tool_name', '')
+            if tool_name:
+                tools_executed.add(tool_name)
+            verdict = (f.evidence_verdict if hasattr(f, 'evidence_verdict')
+                      else f.get('evidence_verdict', ''))
+            confidence = (f.confidence_raw if hasattr(f, 'confidence_raw')
+                         else f.get('confidence_raw', 0))
+            if verdict == 'POSITIVE':
+                finding_type = (f.finding_type if hasattr(f, 'finding_type')
+                              else f.get('finding_type', tool_name))
+                positive_findings.append(finding_type)
+                if confidence and confidence > 0.7:
+                    high_confidence.append(finding_type)
+        parts = [f"Executed {len(tools_executed)} specialized forensic tools"]
+        if positive_findings:
+            parts.append(f"Detected {len(positive_findings)} positive indicators")
+            if high_confidence:
+                parts.append(f"High confidence: {', '.join(high_confidence[:2])}")
+        else:
+            parts.append("No manipulation indicators detected")
+        return ". ".join(parts) + "."
