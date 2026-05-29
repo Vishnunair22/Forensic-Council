@@ -727,6 +727,7 @@ Return ONLY a JSON object with this exact schema:
                 "key_findings": response.get("key_findings", []),
                 "signal_weight": response.get("signal_weight", {}),
                 "sections": response.get("sections", []),
+                "synthesis_source": f"{llm_client.provider}_llm",
             }
             if phase == "deep":
                 result["phase_delta"] = response.get("phase_delta", "")

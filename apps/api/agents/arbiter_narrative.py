@@ -1190,37 +1190,32 @@ Rules:
         incomplete_findings: list[dict[str, Any]],
         analysis_coverage_note: str,
         comparisons: list[Any] | None = None,
+        has_deep_analysis: bool = False,
     ) -> dict[str, Any]:
         """
         Build the layered prompt and call the LLM for arbiter-level narrative synthesis.
         """
 
-        # Track context length to apply progressive compression
-        _current_chars = len(tool_context_block) + len(finding_context_block)
-        _finding_count = len(all_agent_findings)
-
-        # ---------------------------------------------------------------------------
-        #   LAYERED PROMPT ARCHITECTURE (6 layers + synthesis task)
-        #
-        #   Layer 0 — Agent capability & cross-modal map (always included)
-        #   Layer 1 — What the evidence IS (visual evidence baseline)
-        #   Layer 2 — Deterministic tool findings (per-agent)
-        #   Layer 3 — Cross-modal consistency
-        #   Layer 4 — Programmatic metrics and agent confidence
-        #   Layer 5 — RAG knowledge citations
-        #
-        #   Compression: layers 1 & 2 are progressively shortened when context
-        #   exceeds token budget. Drop order: layer 1 first (visual profile is
-        #   redundant when deterministic tools are present), then layer 2 tool
-        #   details, then layer 0 persona map.
-        #
-        #   S-H-5: All user-derived/litigant-controlled values are guarded with
-        #   UNTRUSTED markers in the system prompt (see _SAFETY_PREAMBLE above).
-        # ---------------------------------------------------------------------------
+        # derived data from parameters
+        active_agent_metrics = {
+            aid: per_agent_metrics.get(aid, {}) for aid in active_agent_results
+        }
+        agent_findings_map: dict[str, list[dict[str, Any]]] = {}
+        for _f in all_findings:
+            _aid = _f.get("agent_id", "unknown")
+            agent_findings_map.setdefault(_aid, []).append(_f)
 
         # ── Layer 0: AGENT CAPABILITY MAP ──────────────────────────────────
-        availability_map = self._build_agent_availability_map(agent_metrics=active_agent_metrics)
-        cross_modal_map = _build_cross_modal_summary(agent_findings_map)
+        _avail_lines = [
+            f"  {aid}: confidence={m.get('confidence_score', 0):.2f}, tools_run={m.get('tools_run', 0)}"
+            for aid, m in sorted(active_agent_metrics.items())
+        ]
+        availability_map = "\n".join(_avail_lines) if _avail_lines else "No active agents"
+        _cross_lines = [
+            f"  {aid}: {len(fs)} finding(s)"
+            for aid, fs in sorted(agent_findings_map.items())
+        ]
+        cross_modal_map = "\n".join(_cross_lines) if _cross_lines else "No cross-modal data"
         layer0 = (
             f"[AGENT CAPABILITY MAP]\n{availability_map}\n\n"
             f"[CROSS-MODAL MAP]\n{cross_modal_map}"
@@ -1478,12 +1473,7 @@ Rules:
 
         _agent_narr_warnings: list[str] = []
 
-        llm_enabled = (
-            use_llm
-            and self.config.llm_api_key
-            and self.config.llm_provider != "none"
-            and bool(active_agent_results)
-        )
+        llm_enabled = use_llm and bool(active_agent_results)
 
         has_deep_analysis = any(
             (f.get("metadata") or {}).get("analysis_phase") == "deep"

@@ -3,7 +3,7 @@ import { arbiterControl } from "@/lib/arbiterControl";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { clearPendingEvidenceFile } from "@/lib/pendingFilePersistence";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
-import { readCookie } from "@/lib/api/utils";
+import { readCookie, API_BASE } from "@/lib/api/utils";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
 function expireCookie(name: string) {
@@ -31,7 +31,7 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   // state.  Fire-and-forget: local cleanup proceeds regardless of response.
   const runningSessionId = storage.getItem(STORAGE_KEYS.SESSION_ID);
   if (runningSessionId) {
-    fetch(`/api/v1/sessions/${encodeURIComponent(runningSessionId)}`, {
+    fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(runningSessionId)}`, {
       method: "DELETE",
       credentials: "include",
       headers: mutationHeaders,
@@ -39,7 +39,7 @@ export function resetActiveInvestigation(queryClient?: QueryClient) {
   }
 
   // Expire the httpOnly access_token via backend Set-Cookie response.
-  fetch("/api/v1/auth/logout", {
+  fetch(`${API_BASE}/api/v1/auth/logout`, {
     method: "POST",
     credentials: "include",
     headers: mutationHeaders,

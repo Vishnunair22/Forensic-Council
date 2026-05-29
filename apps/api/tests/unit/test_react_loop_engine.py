@@ -137,6 +137,43 @@ class TestReActLoopEngineInit:
             overrides = ReActLoopEngine._get_task_tool_overrides()
             assert isinstance(overrides, dict)
 
+    def test_classify_declared_positive_visual_profile(self):
+        engine = _make_engine()
+        output = {
+            "status": "CONFIRMED",
+            "evidence_verdict": "POSITIVE",
+            "confidence_raw": 0.91,
+            "metadata": {
+                "tool_name": "visual_evidence_profile",
+                "authenticity_verdict": "LIKELY_MANIPULATED",
+                "manipulation_detected": True,
+            },
+        }
+
+        status, verdict, confidence, court_defensible = engine._classify_tool_output(
+            output,
+            "visual_evidence_profile",
+            0.91,
+            False,
+        )
+
+        assert status == "CONFIRMED"
+        assert verdict == "POSITIVE"
+        assert confidence == 0.91
+        assert court_defensible is True
+
+    def test_nested_visual_profile_metadata_counts_as_positive_signal(self):
+        output = {
+            "status": "CONFIRMED",
+            "metadata": {
+                "tool_name": "visual_evidence_profile",
+                "authenticity_verdict": "AI_GENERATED",
+                "deepfake_detected": True,
+            },
+        }
+
+        assert ReActLoopEngine._positive_signal(output) is True
+
 
 # ── ReActLoopEngine.run() ─────────────────────────────────────────────────────
 

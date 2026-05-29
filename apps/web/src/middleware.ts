@@ -39,10 +39,7 @@ export function middleware(request: NextRequest) {
     form-action 'self';
   `.replace(/\s{2,}/g, " ").trim();
 
-  const cspHeaders = new Headers(requestHeaders);
-  cspHeaders.set("Content-Security-Policy", cspHeader);
-
-  const response = NextResponse.next({ request: { headers: cspHeaders } });
+  const response = NextResponse.next();
   response.headers.set("Content-Security-Policy", cspHeader);
   return response;
 }

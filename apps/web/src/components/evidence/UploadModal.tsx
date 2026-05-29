@@ -117,7 +117,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         data-testid="upload-dropzone"
         role="button"
         tabIndex={0}
-        aria-label="Upload evidence file. Drag and drop or press Enter to browse files."
+        aria-label="Evidence dropzone. Drag and drop or press Enter to browse files."
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -180,6 +180,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         <input
           type="file"
           id="evidence-file-input"
+          aria-label="Upload evidence file"
           tabIndex={-1}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0 z-30"
           accept={[...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS].join(",")}

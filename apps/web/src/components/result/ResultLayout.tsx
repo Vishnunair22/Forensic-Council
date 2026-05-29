@@ -443,15 +443,17 @@ function ExportDropdown({
         title: "PDF export unavailable",
         description: "Downloading the report as JSON instead.",
       });
+      onExportJson();
     } catch {
       toast.warning({
         title: "PDF export unavailable",
         description: "Downloading the report as JSON instead.",
       });
+      onExportJson();
     } finally {
       setExporting(false);
     }
-  }, [sessionId, exporting, report]);
+  }, [sessionId, exporting, report, onExportJson]);
 
   const handleJson = useCallback(() => {
     setOpen(false);
@@ -563,37 +565,6 @@ function ExportDropdown({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ── Sub-components ───────────────────────────────────────────────────────────
-
-function ResultLoadingView({ title, liveText }: { title: string; liveText: string }) {
-  return (
-    <div className="min-h-screen bg-background" aria-busy="true" aria-label={title}>
-      <ForensicProgressOverlay
-        title={title}
-        liveText={liveText}
-        telemetryLabel="Compiling agent findings"
-        showElapsed
-        variant="arbiter"
-      />
-      <ResultSkeletonView />
-    </div>
-  );
-}
-
-function ResultSkeletonView() {
-  return (
-    <div className="min-h-screen opacity-35" aria-hidden="true">
-      <div className="max-w-4xl mx-auto px-6 pt-28 space-y-4">
-        <div className="skeleton h-28 rounded-2xl" />
-        <div className="skeleton h-44 rounded-2xl" />
-        <div className="skeleton h-12 rounded-2xl" />
-        <div className="skeleton h-36 rounded-2xl" />
-        <div className="skeleton h-64 rounded-2xl" />
-      </div>
     </div>
   );
 }

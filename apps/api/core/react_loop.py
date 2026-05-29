@@ -1080,6 +1080,9 @@ class ReActLoopEngine:
             "editing_software_detected",
             "is_anomalous",
         )
+        nested_metadata = output.get("metadata") if isinstance(output.get("metadata"), dict) else {}
+        if nested_metadata and ReActLoopEngine._positive_signal(nested_metadata):
+            return True
         if any(bool(output.get(k)) for k in positive_keys):
             return True
         if any(bool(output.get(f"gemini_{k}")) for k in positive_keys):
@@ -1106,6 +1109,7 @@ class ReActLoopEngine:
         if int(output.get("anomaly_count", 0) or 0) > 0:
             return True
         verdict = str(output.get("verdict", "")).upper()
+        authenticity_verdict = str(output.get("authenticity_verdict", "")).upper()
         return verdict in {
             "SUSPICIOUS",
             "TAMPERED",
@@ -1114,6 +1118,12 @@ class ReActLoopEngine:
             "ANOMALOUS",
             "SPLICE_DETECTED",
             "SPLICE_SUSPECTED",
+        } or authenticity_verdict in {
+            "SUSPICIOUS",
+            "LIKELY_MANIPULATED",
+            "AI_GENERATED",
+            "TAMPERED",
+            "MANIPULATED",
         }
 
     def _classify_tool_output(
@@ -1152,6 +1162,21 @@ class ReActLoopEngine:
             return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
 
         court_defensible = bool(output.get("court_defensible", True))
+        declared_evidence_verdict = str(
+            output.get("evidence_verdict")
+            or (
+                output.get("metadata", {}).get("evidence_verdict")
+                if isinstance(output.get("metadata"), dict)
+                else ""
+            )
+            or ""
+        ).upper()
+        if declared_evidence_verdict == "POSITIVE":
+            return "CONFIRMED", "POSITIVE", confidence, court_defensible
+        if declared_evidence_verdict == "NEGATIVE":
+            return "CONFIRMED", "NEGATIVE", confidence, court_defensible
+        if declared_evidence_verdict == "INCONCLUSIVE":
+            return "INCONCLUSIVE", "INCONCLUSIVE", confidence, court_defensible
         if self._positive_signal(output):
             return "CONFIRMED", "POSITIVE", confidence, court_defensible
 

@@ -208,3 +208,89 @@ class TestSynthesisPromptContent:
     def test_safety_preamble_has_injection_resistance(self):
         from core.synthesis import _SAFETY_PREAMBLE
         assert "PROMPT-INJECTION RESISTANCE" in _SAFETY_PREAMBLE
+
+
+class TestSynthesisSource:
+    @pytest.mark.asyncio
+    async def test_successful_llm_synthesis_marks_source(self, service):
+        class FakeLLMClient:
+            provider = "groq"
+
+            async def generate_synthesis(self, **kwargs):
+                return json.dumps({
+                    "verdict": "AUTHENTIC",
+                    "confidence": 0.82,
+                    "narrative_summary": "Hash and frequency checks produced clean, tool-grounded signals for this evidence.",
+                    "agent_brief": "Gemini identified the evidence context; tools found no manipulation indicators; verdict authentic at 82%.",
+                    "key_findings": ["file_hash_verify: matched intake custody."],
+                    "signal_weight": {},
+                    "sections": [
+                        {
+                            "id": "chain_of_custody",
+                            "label": "Chain of Custody",
+                            "key_signal": "hash matched",
+                            "opinion": "SHA-256 matched the intake record.",
+                            "severity": "LOW",
+                            "refined_findings": [
+                                {
+                                    "tool": "file_hash_verify",
+                                    "user_friendly_summary": "file_hash_verify matched intake custody.",
+                                }
+                            ],
+                        }
+                    ],
+                })
+
+        findings = [_finding("file_hash_verify")]
+        ev = _evidence()
+
+        with patch("core.synthesis.LLMClient", return_value=FakeLLMClient()):
+            result = await service.synthesize_findings(
+                agent_id="Agent1",
+                agent_name="Agent1_Image",
+                findings=findings,
+                evidence_artifact=ev,
+                tool_success_count=1,
+                tool_error_count=0,
+                phase="initial",
+            )
+
+        assert result["synthesis_source"] == "groq_llm"
+
+    @pytest.mark.asyncio
+    async def test_arbiter_uses_agent_llm_brief_when_source_is_marked(self):
+        from agents.arbiter import CouncilArbiter
+
+        arbiter = CouncilArbiter(session_id=uuid4(), config=_settings())
+        narrative = await arbiter._generate_agent_narrative(
+            "Agent1",
+            findings=[
+                {
+                    "agent_id": "Agent1",
+                    "finding_type": "Hash Verify",
+                    "status": "CONFIRMED",
+                    "evidence_verdict": "NEGATIVE",
+                    "confidence_raw": 0.82,
+                    "reasoning_summary": "Hash matched intake custody.",
+                    "metadata": {"tool_name": "file_hash_verify"},
+                }
+            ],
+            metrics={
+                "confidence_score": 0.82,
+                "error_rate": 0.0,
+                "tools_succeeded": 1,
+                "total_tools_called": 1,
+                "tools_not_applicable": 0,
+            },
+            agent_data={
+                "synthesis": {
+                    "synthesis_source": "groq_llm",
+                    "agent_brief": "Groq-grounded agent brief.",
+                    "key_findings": ["Hash matched intake custody."],
+                }
+            },
+        )
+
+        parsed = json.loads(narrative)
+        assert parsed["synthesis_source"] == "groq_llm"
+        assert parsed["evidence_assessment"] == "Groq-grounded agent brief."

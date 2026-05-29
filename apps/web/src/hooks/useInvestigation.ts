@@ -467,7 +467,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             title: "System Warmup",
             description: "The forensic worker is starting/warming up. Retrying automatically in 15 seconds...",
           });
+          investigationInFlightRef.current = false;
           warmupTimeoutRef.current = setTimeout(() => {
+            warmupTimeoutRef.current = null;
             triggerAnalysis(targetFile);
           }, 15000);
           return;
@@ -689,7 +691,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (autoStartFiredRef.current) return;
     if (sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") return;
     if (__pendingFileStore.file || autoStartBlocking || isUploading) return;
-    if (status !== "idle" && status !== "error") return;
 
     // fc_show_loading guard on reconnect
     if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true") {
@@ -731,7 +732,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           storage.removeItem(STORAGE_KEYS.INVESTIGATION_CTX);
           resetSimulation();
           setShowLoadingOverlay(false);
-          router.push("/session-expired");
+          sessionOnlyStorage.setItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE, "1");
+          sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
+          router.push("/?upload=1");
           return;
         }
         if (st.status === "complete") {
@@ -752,7 +755,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         });
     })();
     return () => { effectCancelled = true; };
-  }, [autoStartBlocking, isUploading, status, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
+  }, [autoStartBlocking, isUploading, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
 
   const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
     if (!hitlCheckpoint || isSubmittingHITL) return;

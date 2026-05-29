@@ -128,6 +128,23 @@ async function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
   });
 
   page.route(`**/api/v1/sessions/*/arbiter-status`, async (route) => {
+    const url = route.request().url();
+    if (url.includes("00000000-0000-4000-b000-000000000002")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "not_found", message: "Session not found" }),
+      });
+      return;
+    }
+    if (url.includes("00000000-0000-4000-c000-000000000003")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "complete", report_id: "rpt-complete" }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -163,12 +180,11 @@ test.describe.serial("mocked journey with session persistence", () => {
   test.beforeEach(async ({ page }) => {
     await page.context().clearCookies();
     await setupMockRoutes(page);
-    await page.goto("/");
-    await page.evaluate(() => {
+    await page.addInitScript(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
   });
 
   test("fast mocked journey: landing → upload → accept → result → history", async ({ page }) => {
@@ -176,8 +192,7 @@ test.describe.serial("mocked journey with session persistence", () => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
 
-    await setupMockRoutes(page);
-    await page.goto("/?upload=1");
+    await page.goto("/?upload=1", { waitUntil: "domcontentloaded" });
     if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
       const begin = page.getByTestId("hero-cta-begin");
       await expect(begin).toBeVisible({ timeout: 10_000 });
@@ -202,9 +217,10 @@ test.describe.serial("mocked journey with session persistence", () => {
     });
 
     await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("upload-start-analysis").click();
-
-    await page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" });
+    await Promise.all([
+      page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" }),
+      page.getByTestId("upload-start-analysis").click(),
+    ]);
 
     await expect(page.getByText(/Reconnecting/i)).toBeVisible({ timeout: 5_000 }).catch(() => {
       /* ignore — mocked flow may not show reconnecting text */
@@ -232,8 +248,7 @@ test.describe.serial("mocked journey with session persistence", () => {
 
   test("mocked upload route flow: upload → evidence page shows agent cards", async ({ page }) => {
     test.setTimeout(60_000);
-    await setupMockRoutes(page);
-    await page.goto("/?upload=1");
+    await page.goto("/?upload=1", { waitUntil: "domcontentloaded" });
     if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
       const begin = page.getByTestId("hero-cta-begin");
       await expect(begin).toBeVisible({ timeout: 10_000 });
@@ -257,9 +272,10 @@ test.describe.serial("mocked journey with session persistence", () => {
     });
 
     await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("upload-start-analysis").click();
-
-    await page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" });
+    await Promise.all([
+      page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" }),
+      page.getByTestId("upload-start-analysis").click(),
+    ]);
     await expect(page.getByTestId("agent-card-Agent1")).toBeVisible({ timeout: 10_000 }).catch(() => {
       /* agent cards may not render in mocked flow */
     });
@@ -269,8 +285,7 @@ test.describe.serial("mocked journey with session persistence", () => {
     test.setTimeout(30_000);
     page.on("console", (msg) => console.log(`[BROWSER CONSOLE] ${msg.text()}`));
     page.on("pageerror", (err) => console.error(`[BROWSER ERROR] ${err.message}`));
-    await setupMockRoutes(page, "00000000-0000-4000-b000-000000000002");
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await page.evaluate(() => {
       localStorage.setItem("forensic_session_id", "00000000-0000-4000-b000-000000000002");
@@ -285,7 +300,7 @@ test.describe.serial("mocked journey with session persistence", () => {
       });
     });
 
-    await page.goto("/evidence");
+    await page.goto("/evidence", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/(\?upload=1)?$/, { timeout: 15_000 });
     await expect(page.getByTestId("hero-cta-begin")).toBeVisible({ timeout: 15_000 });
   });
@@ -293,8 +308,7 @@ test.describe.serial("mocked journey with session persistence", () => {
   test("mocked reconnect complete navigates to result", async ({ page }) => {
     test.setTimeout(30_000);
     const sid = "00000000-0000-4000-c000-000000000003";
-    await setupMockRoutes(page, sid);
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await page.evaluate((activeSid) => {
       localStorage.setItem("forensic_session_id", activeSid);
@@ -309,7 +323,7 @@ test.describe.serial("mocked journey with session persistence", () => {
       });
     });
 
-    await page.goto(`/result/${sid}`);
+    await page.goto(`/result/${sid}`, { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/result\//, { timeout: 15_000 });
     expect(page.url()).toContain(sid);
   });

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { useSound } from "@/hooks/useSound";
@@ -76,7 +76,6 @@ export function HeroAuthActions() {
       router.prefetch?.("/evidence");
     };
     const handleSessionExpired = () => {
-      const queryClient = undefined;
       resetActiveInvestigation(queryClient);
       router.push("/?session_expired=true");
     };
@@ -88,7 +87,7 @@ export function HeroAuthActions() {
       window.removeEventListener("fc:open-upload", handleOpen);
       window.removeEventListener("fc:session-expired", handleSessionExpired);
     };
-  }, [router]);
+  }, [router, queryClient]);
 
   // Auto-open upload modal when returning from evidence page via ?upload=1.
   // IMPORTANT: never clear AUTO_START or FC_SHOW_LOADING here — those are
@@ -114,10 +113,11 @@ export function HeroAuthActions() {
 
   // Core handoff: store file, set session flags, then navigate
   const handleStartAnalysis = useCallback(async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) return false;
+
+    setIsHandingOff(true);
 
     if (__pendingFileStore.authPromise) {
-      setIsHandingOff(true);
       try {
         await __pendingFileStore.authPromise;
       } catch (error) {
@@ -127,7 +127,7 @@ export function HeroAuthActions() {
           description: error instanceof Error ? error.message : "Could not authenticate your credentials. Please try again.",
         });
         setIsHandingOff(false);
-        return;
+        return false;
       }
     }
 
@@ -136,7 +136,8 @@ export function HeroAuthActions() {
         title: "Authentication Error",
         description: __pendingFileStore.authError.message || "Failed to authenticate your session.",
       });
-      return;
+      setIsHandingOff(false);
+      return false;
     }
 
     clearInvestigationPersistence();
@@ -163,6 +164,7 @@ export function HeroAuthActions() {
     setShowUpload(false);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
     router.push("/evidence", { scroll: true });
+    return true;
   }, [selectedFile, router]);
 
   const handleCTAClick = useCallback(() => {
@@ -223,17 +225,16 @@ export function HeroAuthActions() {
       >
         <DialogContent
           className="max-w-xl p-0"
-          aria-describedby="dialog-description"
           onFocusOutside={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">
             {!selectedFile ? "Upload Evidence" : "Evidence Ready"}
           </DialogTitle>
-          <p id="dialog-description" className="sr-only">
+          <DialogDescription className="sr-only">
             {!selectedFile
               ? "Drag and drop or browse to select an evidence file for forensic analysis."
               : "Evidence file has been received. Proceed to analysis or cancel."}
-          </p>
+          </DialogDescription>
           <AnimatePresence mode="wait" initial={false}>
             {!selectedFile ? (
               <UploadModal
@@ -252,7 +253,6 @@ export function HeroAuthActions() {
                 onStartAnalysis={async () => {
                   playSound("scan");
                   await handleStartAnalysis();
-                  setIsHandingOff(true);
                 }}
               />
             )}

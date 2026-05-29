@@ -18,6 +18,10 @@ jest.mock("@/hooks/useSound", () => ({
   useSound: () => ({ playSound: mockPlaySound }),
 }));
 
+jest.mock("@/lib/pendingFilePersistence", () => ({
+  savePendingEvidenceFile: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: jest.fn(() => ({
     clear: jest.fn(),
@@ -50,15 +54,22 @@ jest.mock("@/components/evidence/UploadSuccessModal", () => ({
     file,
     onDismiss,
     onStartAnalysis,
+    isHandingOff,
+    authError,
   }: {
     file: File;
     onDismiss: () => void;
     onStartAnalysis: () => void;
+    isHandingOff?: boolean;
+    authError?: string | null;
   }) => (
     <div data-testid="upload-success-modal">
       <span>{file.name}</span>
+      {authError && <div role="alert">{authError}</div>}
       <button onClick={onDismiss}>Choose Another</button>
-      <button onClick={onStartAnalysis}>Start Analysis</button>
+      <button onClick={onStartAnalysis} disabled={isHandingOff}>
+        {isHandingOff ? "Initializing Agents..." : "Start Analysis"}
+      </button>
     </div>
   ),
 }));
@@ -74,6 +85,8 @@ describe("HeroAuthActions", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     __pendingFileStore.file = null;
+    __pendingFileStore.authPromise = null;
+    __pendingFileStore.authError = null;
     storage.removeItem("forensic_auto_start");
     storage.removeItem("fc_show_loading");
     storage.removeItem("forensic_auth_ok");
@@ -116,6 +129,24 @@ describe("HeroAuthActions", () => {
 
     expect(screen.getByTestId("upload-modal")).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("does not get stuck handing off when auth already failed", async () => {
+    renderWithOverlay();
+
+    fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
+    fireEvent.click(screen.getByRole("button", { name: /select test file/i }));
+
+    __pendingFileStore.authPromise = null;
+    __pendingFileStore.authError = new Error("Demo auth unavailable");
+    fireEvent.click(screen.getByRole("button", { name: /start analysis/i }));
+
+    await waitFor(() => {
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: /start analysis/i })).toBeEnabled();
+    });
+    expect(__pendingFileStore.file).toBeNull();
+    expect(sessionOnlyStorage.getItem("forensic_auto_start")).toBeNull();
   });
 
   it("prefetches the evidence route for a faster handoff", () => {

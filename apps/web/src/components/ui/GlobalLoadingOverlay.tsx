@@ -14,6 +14,7 @@ import { EVIDENCE_MAX_DISPLAY_MS } from "@/lib/timings";
 
 export function GlobalLoadingOverlay() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const [show, setShow] = useState(() => {
     if (typeof window !== "undefined" && pathname !== "/evidence") {
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
@@ -43,6 +44,10 @@ export function GlobalLoadingOverlay() {
   });
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountTimeRef = useRef(Date.now());
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const dismiss = (clearStorage = true) => {
     setShow(false);
@@ -128,7 +133,7 @@ export function GlobalLoadingOverlay() {
 
   return (
     <AnimatePresence>
-      {show && (
+      {mounted && show && (
         <LoadingOverlay
           key="global-loading"
           liveText={liveText}

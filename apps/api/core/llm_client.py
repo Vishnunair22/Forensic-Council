@@ -670,24 +670,6 @@ class LLMClient:
             logger.warning(f"Multimodal synthesis failed: {exc}")
             raise
 
-    async def generate_synthesis(
-        self,
-        system_prompt: str,
-        user_content: str,
-        max_tokens: int | None = None,
-        timeout_override: float | None = None,
-        json_mode: bool = True,
-    ) -> str:
-        """Executive summary synthesis with cross-provider fallback support."""
-        async with LLMClient._synthesis_semaphore:
-            return await self._generate_synthesis_inner(
-                system_prompt=system_prompt,
-                user_content=user_content,
-                max_tokens=max_tokens,
-                timeout_override=timeout_override,
-                json_mode=json_mode,
-            )
-
     # Per-model prompt character limits (conservative, ~3.5 chars/token).
     # Prevents 413 Payload Too Large on smaller context-window models.
     _MODEL_PROMPT_CHAR_LIMITS: dict[str, int] = {

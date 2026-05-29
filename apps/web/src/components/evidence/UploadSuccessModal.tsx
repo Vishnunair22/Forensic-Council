@@ -300,6 +300,7 @@ export function UploadSuccessModal({
         <button
           onClick={onStartAnalysis}
           disabled={isHandingOff}
+          data-testid="upload-start-analysis"
           className="fc-btn-primary flex-[2] group relative overflow-hidden text-sm py-2"
         >
           <span className="relative z-10 flex items-center justify-center gap-2">

@@ -152,6 +152,41 @@ describe("useInvestigation Hook", () => {
     expect(api.submitHITLDecision).toHaveBeenCalled();
   });
 
+  test("auto-start retries after worker warmup without staying in-flight", async () => {
+    jest.useFakeTimers();
+    const testFile = new File(["audio"], "evidence.wav", { type: "audio/wav" });
+    __pendingFileStore.file = testFile;
+    sessionOnlyStorage.setItem("forensic_auto_start", "true");
+    (api.startInvestigation as jest.Mock)
+      .mockRejectedValueOnce(new api.WorkerWarmupError("worker is warming up"))
+      .mockResolvedValueOnce({ session_id: "retry-sid" });
+
+    renderHook(() => useInvestigation(mockPlaySound));
+
+    await waitFor(() => expect(api.startInvestigation).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      jest.advanceTimersByTime(15000);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(api.startInvestigation).toHaveBeenCalledTimes(2));
+    expect(mockConnectWebSocket).toHaveBeenCalledWith("retry-sid");
+    jest.useRealTimers();
+  });
+
+  test("reconnect not_found clears stale session and returns home with upload prompt", async () => {
+    storage.setItem("forensic_session_id", "missing-sid");
+    (api.getArbiterStatus as jest.Mock).mockResolvedValueOnce({ status: "not_found" });
+
+    renderHook(() => useInvestigation(mockPlaySound));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/?upload=1"));
+    expect(storage.getItem("forensic_session_id")).toBeNull();
+    expect(sessionOnlyStorage.getItem("fc_open_upload_once")).toBe("1");
+    expect(sessionOnlyStorage.getItem("fc_no_reconnect")).toBe("1");
+  });
+
   describe("failure path resets UI state", () => {
     beforeEach(() => {
       jest.clearAllMocks();

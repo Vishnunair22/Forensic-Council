@@ -172,7 +172,6 @@ def _build_deep_forensic_prompt(
         "   - image_category: one of 'live_photograph', 'web_image', 'document', 'object_scene', 'screenshot', 'ai_generated_suspect'\n"
         "   - priority_signals: list of strings (what visual/pixel indicators to investigate first)\n"
         "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
-        "   - skip_tools: list of strings (deterministic tool names unlikely to yield signal, e.g. ['screenshot_scene_applicability'] for camera photographs)\n"
         "   - focus_regions: list of strings (coordinates or specific regions of interest to inspect)\n\n"
         "13. FORENSIC_SPECIFICS: Based on the image category, provide 2-3 domain-specific "
         "observations a forensic expert would note (e.g. for portraits: facial boundary artifacts; "
@@ -456,7 +455,7 @@ class GeminiVisionClient:
                 seen.add(_m)
                 _chain.append(_m)
         self.fallback_chain: list[str] = _chain
-        self.timeout: float = min(getattr(config, "gemini_timeout", 25.0), 25.0)
+        self.timeout: float = max(1.0, float(getattr(config, "gemini_timeout", 90.0)))
 
         # Check if key is missing or is a placeholder
         self._enabled = bool(self.api_key) and not is_placeholder_secret(self.api_key) and self._policy_ok

@@ -55,11 +55,24 @@ class TestGeminiVisionClientInit:
         assert client._enabled is False
 
     def test_init_with_real_key_enabled(self):
-        client = _make_client(gemini_api_key="AIzaSyRealKey1234567890")
+        client = _make_client(
+            gemini_api_key="AIzaSyRealKey1234567890",
+            gemini_api_key_policy_ok=True,
+        )
         assert client._enabled is True
 
+    def test_init_with_real_key_without_policy_disabled(self):
+        client = _make_client(
+            gemini_api_key="AIzaSyRealKey1234567890",
+            gemini_api_key_policy_ok=False,
+        )
+        assert client._enabled is False
+
     def test_fallback_chain_excludes_primary(self):
-        client = _make_client(gemini_api_key="AIzaSyRealKey1234567890")
+        client = _make_client(
+            gemini_api_key="AIzaSyRealKey1234567890",
+            gemini_api_key_policy_ok=True,
+        )
         assert client.model not in client.fallback_chain
 
     def test_circuit_breaker_created(self):
@@ -78,7 +91,8 @@ class TestGeminiVisionFindingSchema:
         d = finding.to_finding_dict(agent_id="Agent1")
         assert d["agent_id"] == "Agent1"
         assert d["confidence_raw"] == 0.85
-        assert "gemini_vision" in d["finding_type"]
+        assert d["finding_type"] == "visual_evidence_profile"
+        assert d["evidence_verdict"] == "INCONCLUSIVE"
         assert d["reasoning_summary"] == "No manipulation detected."
         assert "metadata" in d
 
@@ -100,7 +114,8 @@ class TestGeminiVisionFindingSchema:
             confidence=0.2,
         )
         d = finding.to_finding_dict(agent_id="Agent1")
-        assert d["status"] == "INCOMPLETE"
+        assert d["status"] == "INCONCLUSIVE"
+        assert d["evidence_verdict"] == "INCONCLUSIVE"
 
     def test_manipulation_signals_in_metadata(self):
         finding = GeminiVisionFinding(
@@ -111,6 +126,8 @@ class TestGeminiVisionFindingSchema:
         )
         d = finding.to_finding_dict(agent_id="Agent1")
         assert "edge discontinuity" in d["metadata"]["manipulation_signals"]
+        assert d["evidence_verdict"] == "POSITIVE"
+        assert d["manipulation_detected"] is True
 
     def test_detected_objects_in_metadata(self):
         finding = GeminiVisionFinding(
@@ -203,8 +220,8 @@ class TestGeminiEncodeFile:
 
 class TestGeminiDisabledGraceful:
     @pytest.mark.asyncio
-    async def test_identify_file_content_disabled_returns_error_finding(self, tmp_path):
-        """When Gemini is disabled, identify_file_content should return a finding with error set."""
+    async def test_identify_file_content_disabled_returns_local_fallback(self, tmp_path):
+        """When Gemini is disabled, identify_file_content should return a local visual finding."""
         client = _make_client()  # no api key → disabled
         assert client._enabled is False
 
@@ -213,7 +230,8 @@ class TestGeminiDisabledGraceful:
 
         result = await client.identify_file_content(str(img_file))
         assert isinstance(result, GeminiVisionFinding)
-        assert result.error is not None
+        assert result.provider_used == "local_visual_ensemble"
+        assert result.error is None
 
     @pytest.mark.asyncio
     async def test_quota_pool_configure(self):

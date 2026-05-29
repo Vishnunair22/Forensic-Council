@@ -247,6 +247,19 @@ export const useSimulation = ({
                     break;
 
                   case "AGENT_UPDATE":
+                  // Phase guard: drop updates that carry a phase marker
+                  // that does not match the active analysis phase.
+                  {
+                    const updatePhase = getMessagePhase(update);
+                    if (updatePhase && updatePhase !== activePhaseRef.current) {
+                      dbg.log("[WebSocket] Ignoring stale-phase AGENT_UPDATE", {
+                        active: activePhaseRef.current,
+                        incoming: updatePhase,
+                        agent_id: update.agent_id,
+                      });
+                      break;
+                    }
+                  }
                   // Pipeline-level updates come through with agent_id=null.
                   // Surface them separately so the UI can show "what the backend is doing" in real time.
                   if (!update.agent_id) {

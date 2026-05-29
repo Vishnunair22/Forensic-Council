@@ -230,7 +230,7 @@ interface AgentBriefProps {
 }
 
 function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBriefProps) {
-  const prefersReduced = useReducedMotion();
+  const _prefersReduced = useReducedMotion();
   const rawSummary = typeof completedData.summary === "string"
     ? completedData.summary
     : completedData.summary ? JSON.stringify(completedData.summary) : "";
