@@ -123,7 +123,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             all_findings=[f for fl in report.per_agent_findings.values() for f in fl],
             active_agent_results=agent_results,
             per_agent_metrics=report.per_agent_metrics,
-            gemini_vision_findings=report.gemini_vision_findings,
+            visual_profile_findings=report.gemini_vision_findings,
             cross_modal_confirmed_count=len(report.cross_modal_confirmed),
             contested_findings=report.contested_findings,
             incomplete_findings=report.incomplete_findings,
@@ -194,7 +194,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # ── 1. Finding Extraction & Deduplication ─────────────────────────
         await _step("Compiling agent findings.")
         all_findings, per_agent_findings, per_agent_metrics, skipped_agents = [], {}, {}, {}
-        active_results, gemini_findings_by_agent = {}, {}
+        active_results, visual_profile_findings_by_agent = {}, {}
 
         for aid, res in agent_results.items():
             raw = res.get("findings", [])
@@ -212,15 +212,19 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if not skipped:
                 active_results[aid] = {**res, "findings": deduped}
                 all_findings.extend(deduped)
-                af_gemini = [
+                af_visual = [
                     f
                     for f in deduped
-                    if str((f.get("metadata") or {}).get("analysis_source", "")).startswith(
+                    if f.get("finding_type") == "visual_evidence_profile"
+                    or str((f.get("metadata") or {}).get("tool_name", "")).endswith(
+                        "visual_evidence_profile"
+                    )
+                    or str((f.get("metadata") or {}).get("analysis_source", "")).startswith(
                         "gemini"
                     )
                 ]
-                if af_gemini:
-                    gemini_findings_by_agent[aid] = af_gemini
+                if af_visual:
+                    visual_profile_findings_by_agent[aid] = af_visual
 
         if not active_results:
             return self._empty_report(case_id, per_agent_findings, per_agent_metrics)
@@ -286,7 +290,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             all_findings,
             active_results,
             per_agent_metrics,
-            [f for fl in gemini_findings_by_agent.values() for f in fl],
+            [f for fl in visual_profile_findings_by_agent.values() for f in fl],
             len(
                 [
                     c
@@ -336,7 +340,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             contested_findings=contested,
             incomplete_findings=[f for f in all_findings if f.get("status") == "INCOMPLETE"],
             stub_findings=[f for f in all_findings if f.get("stub_result")],
-            gemini_vision_findings=[f for fl in gemini_findings_by_agent.values() for f in fl],
+            gemini_vision_findings=[f for fl in visual_profile_findings_by_agent.values() for f in fl],
             uncertainty_statement=narratives["uncertainty_statement"],
             verdict_sentence=narratives["verdict_sentence"],
             key_findings=narratives["key_findings"],
@@ -868,18 +872,18 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             flags.append("LLM synthesis bypassed")
         if penalty < 0.80:
             flags.append(f"Compression penalty applied ({round((1 - penalty) * 100)}%)")
-        # Only flag missing Gemini when the report actually contains deep-phase findings —
-        # Gemini is not part of initial analysis (Phase 1), so this check must be gated on
-        # whether deep analysis ran. Without the gate it fires as a false positive on every
-        # initial-analysis report, incorrectly indicating degradation to operators and the UI.
+        # Check visual profile provenance: report if all deep-phase findings
+        # used local fallback (Gemini was unavailable or skipped).
         has_deep_findings = any(
             (f.get("metadata") or {}).get("analysis_phase") == "deep" for f in findings
         )
-        if has_deep_findings and not any(
-            str((f.get("metadata") or {}).get("analysis_source", "")).startswith("gemini")
+        has_remote_profile = any(
+            (f.get("metadata") or {}).get("external_ai_used") is True
+            or (f.get("metadata") or {}).get("provider_used") == "gemini"
             for f in findings
-        ):
-            flags.append("Gemini deep analysis skipped")
+        )
+        if has_deep_findings and not has_remote_profile:
+            flags.append("Visual profile: local ensemble only (no remote provider)")
         if narrative_warnings:
             flags.extend(narrative_warnings)
         return flags

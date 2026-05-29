@@ -1,6 +1,5 @@
 import asyncio
 import time
-from uuid import uuid4
 from typing import Any
 
 from core.evidence import EvidenceArtifact, ArtifactType
@@ -9,9 +8,32 @@ from core.vision_types import VisualEvidenceFinding
 
 logger = get_logger(__name__)
 
+_TOOL_NAMES = ["ELA", "OCR", "CLIP", "DETR"]
+
+
+def _is_tool_successful(result: Any) -> bool:
+    if result is None:
+        return False
+    if isinstance(result, Exception):
+        return False
+    if isinstance(result, dict):
+        if result.get("status") == "error" or result.get("available") is False:
+            return False
+        if result.get("error"):
+            return False
+    return True
+
+
+def _tool_error_summary(result: Any) -> str:
+    if isinstance(result, Exception):
+        return str(result)
+    if isinstance(result, dict):
+        return str(result.get("error", "unknown error"))
+    return "unknown error"
+
 
 async def analyze_local_visual_profile(
-    file_path: str,
+    artifact: EvidenceArtifact,
     exif_summary: dict[str, Any] | None = None,
     is_screen_capture_like: bool = False,
 ) -> VisualEvidenceFinding:
@@ -19,25 +41,24 @@ async def analyze_local_visual_profile(
     Perform native local visual profile analysis using cached on-device
     forensic models and deterministic image-processing tools.
 
+    The EvidenceArtifact provides session_id and content_hash for proper
+    forensic chain-of-custody. The artifact is never fabricated — it must
+    originate from the custody-linked evidence pipeline.
+
     Aggregates:
       - CLIP (SigLIP 2) zero-shot classification
       - Pytesseract OCR
       - DETR object detection
       - OpenCV Error Level Analysis (ELA)
 
-    Returns a provider-neutral VisualEvidenceFinding.
+    Returns a provider-neutral VisualEvidenceFinding with tool_coverage
+    populated for downstream provenance reporting.
     """
     start_time = time.perf_counter()
+    file_path = artifact.file_path
     logger.info("Initializing native local visual ensemble", file_path=file_path)
 
-    art = EvidenceArtifact.create_root(
-        artifact_type=ArtifactType.ORIGINAL,
-        file_path=file_path,
-        content_hash="local_visual_ensemble_hash",
-        action="local_visual_analysis",
-        agent_id="local_visual_ensemble",
-        session_id=uuid4(),
-    )
+    art = artifact
 
     from tools.image_tools import (
         ela_full_image,
@@ -53,17 +74,25 @@ async def analyze_local_visual_profile(
         detr_detect_objects(file_path),
     ]
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    ela_res = results[0] if not isinstance(results[0], Exception) else {}
-    ocr_res = results[1] if not isinstance(results[1], Exception) else {}
-    clip_res = results[2] if not isinstance(results[2], Exception) else {}
-    detr_res = results[3] if not isinstance(results[3], Exception) else []
+    tool_results: dict[str, Any] = {}
+    tool_errors: dict[str, str] = {}
+    tool_coverage: dict[str, bool] = {}
+    for idx, name in enumerate(_TOOL_NAMES):
+        r = raw_results[idx]
+        if _is_tool_successful(r):
+            tool_results[name] = r
+            tool_coverage[name] = True
+        else:
+            tool_errors[name] = _tool_error_summary(r)
+            tool_coverage[name] = False
+            logger.error(f"Ensemble tool {name} failed", error=tool_errors[name])
 
-    if any(isinstance(r, Exception) for r in results):
-        for idx, r in enumerate(results):
-            if isinstance(r, Exception):
-                logger.error(f"Ensemble tool index {idx} failed", error=str(r))
+    ela_res = tool_results.get("ELA", {})
+    ocr_res = tool_results.get("OCR", {})
+    clip_res = tool_results.get("CLIP", {})
+    detr_res = tool_results.get("DETR", [])
 
     clip_category = clip_res.get("image_type", "unknown") if isinstance(clip_res, dict) else "unknown"
     ocr_lines = ocr_res.get("extracted_text", []) if isinstance(ocr_res, dict) else []
@@ -108,12 +137,31 @@ async def analyze_local_visual_profile(
     if exif_summary:
         metadata_consistency = "Metadata present. Local tools did not detect obvious timestamp or GPS contradiction."
 
-    tool_success_count = sum(1 for r in (ela_res, ocr_res, clip_res, detr_res) if r)
-    confidence = max(0.62, min(0.82, 0.54 + tool_success_count * 0.07))
+    tools_total = len(_TOOL_NAMES)
+    tools_ok = len(tool_results)
+    partial_execution = tools_ok < tools_total
+
+    base_confidence = 0.40 + (tools_ok / tools_total) * 0.30
     if signals:
-        confidence = max(confidence, 0.72)
+        base_confidence = max(base_confidence, 0.60)
+    confidence = round(min(base_confidence, 0.85), 4)
+
+    caveat_parts = [
+        "Local visual ensemble analysis using cached on-device forensic "
+        "models and deterministic image-processing tools."
+    ]
+    if partial_execution:
+        failed_names = ", ".join(sorted(tool_errors.keys()))
+        caveat_parts.append(
+            f"Partial execution: {tools_ok}/{tools_total} tools succeeded. "
+            f"Failed: {failed_names}."
+        )
 
     latency = (time.perf_counter() - start_time) * 1000.0
+
+    degradation_flags = []
+    if partial_execution:
+        degradation_flags.append(f"partial_tool_execution:{tools_ok}/{tools_total}")
 
     finding = VisualEvidenceFinding(
         analysis_type="visual_evidence_profile",
@@ -125,14 +173,13 @@ async def analyze_local_visual_profile(
         contextual_anomalies=[],
         file_type_assessment=clip_category,
         confidence=confidence,
-        court_defensible=True,
-        caveat=(
-            "Local visual ensemble analysis using cached on-device forensic "
-            "models and deterministic image-processing tools."
-        ),
+        court_defensible=not partial_execution,
+        caveat=" ".join(caveat_parts),
         raw_response="",
         latency_ms=latency,
-        error=None,
+        error=None if not partial_execution else "; ".join(
+            f"{name}: {err}" for name, err in tool_errors.items()
+        ),
         from_cache=False,
         _extracted_text=ocr_lines,
         _interface_identification=interface_id,
@@ -147,7 +194,19 @@ async def analyze_local_visual_profile(
             "priority_signals": ["local_ela", "ocr_patterns"],
             "skip_tools": [],
         },
-        _forensic_specifics="Local analysis suggests " + ("digital UI layout" if is_screenshot else "natural photographic scene")
+        _forensic_specifics="Local analysis suggests " + ("digital UI layout" if is_screenshot else "natural photographic scene"),
+        provider_attempts=[
+            {
+                "provider": "local_visual_ensemble",
+                "success": tools_ok > 0,
+                "tools_ok": tools_ok,
+                "tools_total": tools_total,
+            }
+        ],
+        fallback_applied=False,
+        fallback_reason="",
+        tool_coverage=tool_coverage,
+        degradation_flags=degradation_flags,
     )
 
     return finding

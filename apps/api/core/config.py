@@ -98,6 +98,18 @@ class Settings(BaseSettings):
     def external_ai_allowed(self) -> bool:
         return not self.local_only_analysis
 
+    @property
+    def hybrid_analysis(self) -> bool:
+        return self.analysis_execution_mode == "hybrid"
+
+    @property
+    def remote_visual_profile_allowed(self) -> bool:
+        return self.hybrid_analysis and bool(self.gemini_api_key)
+
+    @property
+    def remote_text_synthesis_allowed(self) -> bool:
+        return self.hybrid_analysis and self.llm_provider not in ("none",)
+
     @field_validator("app_env")
     @classmethod
     def validate_app_env(cls, v: str) -> str:
@@ -750,8 +762,13 @@ class Settings(BaseSettings):
 
     # ─── Vision provider chain (cascade order) ──────────────────────────────
     vision_provider_chain: str = Field(
-        default="gemini,groq_vision,openrouter,local_ensemble",
-        description="Comma-separated cascade. Disable a step by removing it.",
+        default="gemini,local_ensemble",
+        description=(
+            "Comma-separated cascade for the session visual profile. "
+            "Recommended hybrid production route: gemini,local_ensemble. "
+            "Gemini is attempted only by Agent1; local_ensemble is the forensic fallback. "
+            "Groq Vision and OpenRouter remain available as opt-in experimental configurations."
+        ),
     )
     text_provider_chain: str = Field(
         default="groq,gemini,cerebras,template",
@@ -793,7 +810,7 @@ class Settings(BaseSettings):
         default=60.0,
         ge=10,
         le=300,
-        description="Max seconds an agent waits for Agent 1 Gemini context before proceeding.",
+        description="Max seconds an agent waits for Agent 1 visual profile before proceeding.",
     )
     ocr_tool_timeout: float = Field(
         default=60.0,
@@ -834,14 +851,16 @@ class Settings(BaseSettings):
 
         if v is None:
             msg = (
-                "GEMINI_API_KEY not set. Agents 1, 3, and 5 will use local fallback analysis "
-                "instead of Gemini vision. Get a free key at https://aistudio.google.com/apikey"
+                "GEMINI_API_KEY not set. Agent 1 will use local ensemble for the visual "
+                "evidence profile instead of Gemini vision. "
+                "Get a free key at https://aistudio.google.com/apikey"
             )
             _config_logger.warning(msg)
         elif len(v) < 20:
             msg = (
-                "GEMINI_API_KEY appears too short (< 20 chars). Agents 1, 3, and 5 may skip "
-                "Gemini vision deep analysis — verify the key at https://aistudio.google.com/apikey"
+                "GEMINI_API_KEY appears too short (< 20 chars). Agent 1 may skip "
+                "Gemini vision for the visual evidence profile — verify the key "
+                "at https://aistudio.google.com/apikey"
             )
             _config_logger.warning(msg)
         return v

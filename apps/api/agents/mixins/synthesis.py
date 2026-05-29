@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from core.tool_names import TOOL_GEMINI_DEEP, TOOL_VISUAL_PROFILE
+from core.tool_names import TOOL_VISUAL_PROFILE
 from core.vision_router import VisionRouter
 from core.structured_logging import get_logger
 
@@ -34,13 +34,13 @@ class NeuralSynthesisMixin:
     _tool_context: dict[str, Any]
     inter_agent_bus: Any | None
 
-    async def _wait_for_agent1_context(self) -> dict:
+    async def _wait_for_agent1_visual_profile(self) -> dict:
         """
-        Wait for Agent 1 (Image Integrity) context if applicable.
-        Used by Agents 3 and 5 to ground their findings in pixel-level data.
+        Wait for Agent 1 (Image Integrity) visual profile if applicable.
+        Used by downstream agents to ground their findings in pixel-level data.
         """
         if self.inter_agent_bus:
-            shared = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+            shared = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
             if shared:
                 return shared
 
@@ -70,7 +70,7 @@ class NeuralSynthesisMixin:
     async def _record_visual_profile_result(self, result: dict) -> None:
         if hasattr(self, "_record_tool_result"):
             await self._record_tool_result(TOOL_VISUAL_PROFILE, result)
-        self._tool_context[TOOL_GEMINI_DEEP] = result
+        self._tool_context[TOOL_VISUAL_PROFILE] = result
 
     def _visual_profile_to_tool_result(
         self,
@@ -145,18 +145,18 @@ class NeuralSynthesisMixin:
         # All other agents consume Agent 1's shared visual evidence profile or
         # fall back to local tools without touching Gemini.
         if self.agent_id != "Agent1":
-            agent1_context = await self._wait_for_agent1_context()
-            if agent1_context:
-                result = self._visual_profile_to_tool_result(agent1_context)
+            agent1_profile = await self._wait_for_agent1_visual_profile()
+            if agent1_profile:
+                result = self._visual_profile_to_tool_result(agent1_profile)
                 if hasattr(self, "_record_tool_result"):
-                    await self._record_tool_result("gemini_deep_forensic", result)
+                    await self._record_tool_result(TOOL_VISUAL_PROFILE, result)
                 return result
 
             try:
                 from core.vision_local_ensemble import analyze_local_visual_profile
 
                 finding = await analyze_local_visual_profile(
-                    artifact.file_path,
+                    artifact=artifact,
                     exif_summary={"reason": "Agent 1 visual profile unavailable"},
                     is_screen_capture_like=getattr(self, "_is_screen_capture", False),
                 )
@@ -195,7 +195,7 @@ class NeuralSynthesisMixin:
                     "available": False,
                 }
         elif self.inter_agent_bus:
-            existing_profile = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+            existing_profile = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
             if existing_profile:
                 result = self._visual_profile_to_tool_result(
                     existing_profile,
@@ -203,21 +203,21 @@ class NeuralSynthesisMixin:
                 )
                 result["agent_id"] = self.agent_id
                 if hasattr(self, "_record_tool_result"):
-                    await self._record_tool_result("gemini_deep_forensic", result)
+                    await self._record_tool_result(TOOL_VISUAL_PROFILE, result)
                 return result
 
         # 1. Aggregate local tool context
         dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
 
         # 2. Integrate Agent 1 context for cross-modal grounding
-        agent1_context = await self._wait_for_agent1_context()
+        agent1_profile = await self._wait_for_agent1_visual_profile()
 
         full_context = {
             "tools": dynamic_context,
-            "agent1_vision": agent1_context,
+            "agent1_visual_profile": agent1_profile,
         }
 
-        # 3. Initialize client and execute
+        # 3. Initialize router and execute
         try:
             client = VisionRouter(self.config)
 
@@ -228,19 +228,19 @@ class NeuralSynthesisMixin:
                     if self.inter_agent_bus:
                         self.inter_agent_bus.signal_event(
                             self.session_id,
-                            f"{self.agent_id.lower()}_gemini_signal",
+                            f"{self.agent_id.lower()}_vision_signal",
                             {"progress": msg},
                         )
 
                 signal_callback = _default_signal
 
             if hasattr(self, "update_sub_task"):
-                await self.update_sub_task("Synthesizing multi-modal forensic verdict...")
+                await self.update_sub_task("Running visual evidence profile...")
 
             agent_persona = getattr(self, "persona", None)
             is_screen_cap = getattr(self, "_is_screen_capture", False)
             finding = await client.deep_forensic_analysis(
-                file_path=artifact.file_path,
+                artifact=artifact,
                 exif_summary=full_context,
                 signal_callback=signal_callback,
                 model_hint=model_hint,
@@ -251,36 +251,33 @@ class NeuralSynthesisMixin:
 
             if finding.error:
                 err_msg = finding.error
-                err_status = "FAILED"
-                if "401" in err_msg or "unauthorized" in err_msg.lower() or "auth" in err_msg.lower() or "api key" in err_msg.lower():
-                    err_status = "AUTH_FAILED"
-                elif "timeout" in err_msg.lower() or "timed out" in err_msg.lower():
-                    err_status = "TIMEOUT"
-
-                result = {
+                err_result = {
                     "agent_id": self.agent_id,
-                    "finding_type": "gemini_vision_deep_forensic_analysis",
+                    "finding_type": "visual_evidence_profile",
                     "confidence_raw": 0.55,
-                    "status": err_status,
+                    "status": "FAILED",
                     "evidence_refs": [],
-                    "reasoning_summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
-                    "summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
+                    "reasoning_summary": f"Visual evidence profile failed: {err_msg}",
+                    "summary": f"Visual evidence profile failed: {err_msg}",
                     "metadata": {
-                        "tool_name": "gemini_deep_forensic",
-                        "analysis_source": "gemini_vision",
+                        "tool_name": TOOL_VISUAL_PROFILE,
+                        "analysis_source": finding.provider_used,
                         "available": False,
                         "court_defensible": False,
-                        "status": err_status,
+                        "provider_attempts": finding.provider_attempts,
+                        "fallback_applied": finding.fallback_applied,
+                        "fallback_reason": finding.fallback_reason,
+                        "tool_coverage": finding.tool_coverage,
                         "error": err_msg,
                     },
                     "court_defensible": False,
-                    "caveat": "Gemini vision analysis failed/unavailable.",
+                    "caveat": "Visual evidence profile failed/unavailable.",
                     "stub_result": True,
                     "available": False,
                 }
                 if hasattr(self, "_record_tool_error"):
-                    await self._record_tool_error("gemini_deep_forensic", f"Error ({err_status}): {err_msg}")
-                return result
+                    await self._record_tool_error(TOOL_VISUAL_PROFILE, f"Error: {err_msg}")
+                return err_result
 
             result = finding.to_finding_dict(
                 self.agent_id,
@@ -301,81 +298,35 @@ class NeuralSynthesisMixin:
             await self._record_visual_profile_result(result)
 
             if self.inter_agent_bus and not result.get("error"):
-                self.inter_agent_bus.set_image_context(str(self.session_id), result)
+                self.inter_agent_bus.set_visual_profile(str(self.session_id), result)
 
             return result
 
         except Exception as e:
             err_msg = str(e)
-            err_status = "FAILED"
-
-            if (
-                "401" in err_msg
-                or "unauthorized" in err_msg.lower()
-                or "auth" in err_msg.lower()
-                or "api key" in err_msg.lower()
-                or (hasattr(e, "response") and getattr(e.response, "status_code", None) == 401)
-            ):
-                err_status = "AUTH_FAILED"
-                logger.error(
-                    "Gemini authentication failed - invalid API key",
-                    agent_id=self.agent_id,
-                    error=err_msg,
-                    exc_info=True,
-                )
-            elif (
-                isinstance(e, httpx.TimeoutException)
-                or "timeout" in err_msg.lower()
-                or "timed out" in err_msg.lower()
-            ):
-                err_status = "TIMEOUT"
-                logger.warning(
-                    "Gemini request timed out",
-                    agent_id=self.agent_id,
-                    error=err_msg,
-                )
-            elif (
-                "429" in err_msg
-                or "rate limit" in err_msg.lower()
-                or "quota" in err_msg.lower()
-                or (hasattr(e, "response") and getattr(e.response, "status_code", None) == 429)
-            ):
-                logger.warning(
-                    "Gemini rate limit / quota hit",
-                    agent_id=self.agent_id,
-                    error=err_msg,
-                )
-            else:
-                logger.error(
-                    "Gemini deep forensic analysis failed",
-                    agent_id=self.agent_id,
-                    error=err_msg,
-                    exc_info=True,
-                )
-
             err_result = {
                 "agent_id": self.agent_id,
-                "finding_type": "gemini_vision_deep_forensic_analysis",
+                "finding_type": "visual_evidence_profile",
                 "confidence_raw": 0.55,
-                "status": err_status,
+                "status": "FAILED",
                 "evidence_refs": [],
-                "reasoning_summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
-                "summary": f"Gemini deep forensic analysis failed ({err_status}): {err_msg}",
+                "reasoning_summary": f"Visual evidence profile failed: {err_msg}",
+                "summary": f"Visual evidence profile failed: {err_msg}",
                 "metadata": {
-                    "tool_name": "gemini_deep_forensic",
-                    "analysis_source": "gemini_vision",
+                    "tool_name": TOOL_VISUAL_PROFILE,
+                    "analysis_source": "router_exception",
                     "available": False,
                     "court_defensible": False,
-                    "status": err_status,
+                    "status": "FAILED",
                     "error": err_msg,
                 },
                 "court_defensible": False,
-                "caveat": "Gemini vision analysis failed/unavailable.",
+                "caveat": "Visual evidence profile failed/unavailable.",
                 "stub_result": True,
                 "available": False,
             }
             if hasattr(self, "_record_tool_error"):
-                await self._record_tool_error("gemini_deep_forensic", f"Error ({err_status}): {err_msg}")
+                await self._record_tool_error(TOOL_VISUAL_PROFILE, f"Error: {err_msg}")
             return err_result
 
     async def generate_agent_synthesis(self, findings: list, react_chain: list) -> str:

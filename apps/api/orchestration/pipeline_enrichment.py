@@ -3,7 +3,7 @@ Pipeline Enrichment
 ===================
 
 Post-deliberation report enrichment: metadata collection, custody verification,
-Gemini degradation detection, and degradation flag propagation.
+visual profile provenance detection, and degradation flag propagation.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ async def enrich_report(
 
     Mutates *report* in-place. Appends to *pipeline._degradation_flags*.
     """
-    _detect_gemini_degradation(pipeline, report)
+    _detect_visual_profile_provenance(pipeline, report)
 
     tasks = [
         _collect_case_linking_flags(pipeline, session_id, artifact),
@@ -62,43 +62,38 @@ async def enrich_report(
         report.degradation_flags.extend(pipeline._degradation_flags)
 
 
-def _detect_gemini_degradation(pipeline: Any, report: Any) -> None:
-    """Detect Gemini API degradation and append flags to pipeline._degradation_flags."""
-    gemini_key = pipeline.config.gemini_api_key
-    if not gemini_key or "your_gemini_key" in gemini_key:
-        return
+def _detect_visual_profile_provenance(pipeline: Any, report: Any) -> None:
+    """Check visual profile provenance and flag missing remote provider coverage."""
+    all_findings = []
+    for agent_findings in getattr(report, "per_agent_findings", {}).values():
+        all_findings.extend(agent_findings)
 
-    if hasattr(pipeline, "run_deep_analysis_flag") and not pipeline.run_deep_analysis_flag:
-        return
+    visual_findings = [
+        f for f in all_findings
+        if isinstance(f, dict)
+        and (f.get("finding_type") == "visual_evidence_profile"
+             or f.get("metadata", {}).get("tool_name") == "visual_evidence_profile")
+    ]
 
-    gemini_findings = report.gemini_vision_findings
-    if not gemini_findings:
+    if not visual_findings:
         pipeline._degradation_flags.append(
-            "Gemini vision API produced no findings - deep-pass agents fell back to local analysis."
+            "No visual evidence profile was recorded — downstream agents may lack visual grounding."
         )
-    elif all(_is_gemini_error(f) for f in gemini_findings):
-        is_refusal = any(
-            "safety" in str(f.get("metadata", {}).get("error", "")).lower() for f in gemini_findings
+        return
+
+    remote_profiles = [
+        f for f in visual_findings
+        if f.get("metadata", {}).get("external_ai_used") is True
+    ]
+
+    if not remote_profiles and not pipeline.config.local_only_analysis:
+        pipeline._degradation_flags.append(
+            "Visual profile: local ensemble only — no remote AI provider was available. "
+            "Deep-pass agents used local fallback."
         )
-        if is_refusal:
-            pipeline._degradation_flags.append(
-                "FORENSIC_SIGNAL_REFUSED: Gemini vision API refused to analyze content due to safety filters. "
-                "This refusal itself is a critical signal of potentially sensitive/illegal material."
-            )
-        else:
-            pipeline._degradation_flags.append(
-                "Gemini vision API returned errors for all analyses - deep-pass agents used local fallback."
-            )
 
 
-def _is_gemini_error(finding: Any) -> bool:
-    if not isinstance(finding, dict):
-        return False
-    return bool(
-        finding.get("error")
-        or finding.get("metadata", {}).get("error")
-        or finding.get("status") == "INCOMPLETE"
-    )
+
 
 
 async def _verify_custody_integrity(pipeline: Any, session_id: UUID) -> None:

@@ -152,7 +152,7 @@ async def test_cascade_all_fail_local_success(tmp_path: Path):
                 court_defensible=True,
             )
 
-            with patch("core.vision_router.analyze_local_ensemble", new_callable=AsyncMock) as mock_local:
+            with patch("core.vision_router.analyze_local_visual_profile", new_callable=AsyncMock) as mock_local:
                 mock_local.return_value = local_mock_finding
 
                 res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent1")

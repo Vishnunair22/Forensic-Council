@@ -166,8 +166,8 @@ def _clean_key_finding(text: str) -> str:
         return "SHA-256 intake hash matches the chain-of-custody record."
     if "available: yes;" in lower and "header valid" in lower:
         return "File structure check passed: size and header are valid."
-    if "gemini_multimodal extracted" in lower:
-        return "Gemini Vision OCR extracted minimal visible text."
+    if "visual_profile extracted" in lower:
+        return "Visual profile extracted minimal visible text."
     if lower.startswith("speaker diarization:"):
         return cleaned.split(". This supports", 1)[0].strip() + "."
     if lower.startswith("codec fingerprint:"):
@@ -298,33 +298,33 @@ class ArbiterNarrativeMixin:
             "Image Integrity Agent — "
             "Phase 1: CLIP · OCR · SigLIP2 · SHA-256 · FFT · Neural ELA / Noiseprint++ | "
             "Phase 2: TruFor Splicing · BusterNet Copy-Move · Diffusion Artifact · "
-            "F3-Net · ManTra-Net · Gemini Multimodal Synthesis"
+            "F3-Net · ManTra-Net · Visual Evidence Profile"
         ),
         "Agent2": (
             "Audio Forensics Agent — "
             "Phase 1: Speaker Diarization · Neural Prosody · TTS Signature · Codec Fingerprint | "
             "Phase 2: ENF Analysis · Audio Splice · Voice Clone Ensemble · "
-            "Anti-Spoofing Ensemble · Gemini Neural Audio Audit"
+            "Anti-Spoofing Ensemble · Visual Evidence Profile"
         ),
         "Agent3": (
             "Object & Scene Agent — "
             "Phase 1: DETR-ResNet-50 Detection · Contraband CLIP Search · Lighting Correlation · "
             "Scene Incongruence | "
             "Phase 2: Secondary Classification · Scale Validation · "
-            "Adversarial Robustness · Gemini Object-Scene Synthesis"
+            "Adversarial Robustness · Visual Evidence Profile"
         ),
         "Agent4": (
             "Temporal Video Agent — "
             "Phase 1: Video Metadata · VFI Error Map · Thumbnail Coherence · Frame Consistency | "
             "Phase 2: Optical Flow · Interframe Forgery · Face-Swap · Deepfake Frequency · "
-            "Rolling Shutter · Compression Artifacts · Gemini Frame Synthesis"
+            "Rolling Shutter · Compression Artifacts · Visual Evidence Profile"
         ),
         "Agent5": (
             "Metadata & Provenance Agent — "
             "Phase 1: Hash Verify · EXIF Extract · Compression Risk · Isolation Forest · "
             "Astro Grounding · GPS Timezone · Timestamp Analysis | "
             "Phase 2: File Structure · Hex Signature · Metadata Anomaly Score · "
-            "C2PA Provenance · Camera Profile · Gemini Provenance Synthesis"
+            "C2PA Provenance · Camera Profile · Visual Evidence Profile"
         ),
     }
 
@@ -500,7 +500,7 @@ class ArbiterNarrativeMixin:
         cross_modal_confirmed: int,
         contested: int,
         all_findings: list[dict[str, Any]] | None = None,
-        gemini_findings: list[dict[str, Any]] | None = None,
+        visual_profile_findings: list[dict[str, Any]] | None = None,
         active_agent_metrics: list[dict[str, Any]] | None = None,
         overall_verdict: str = "",
         analysis_coverage_note: str = "",
@@ -516,7 +516,7 @@ class ArbiterNarrativeMixin:
                     cross_modal_confirmed,
                     contested,
                     all_findings or [],
-                    gemini_findings=gemini_findings,
+                    visual_profile_findings=visual_profile_findings,
                     active_agent_metrics=active_agent_metrics,
                     overall_verdict=overall_verdict,
                     analysis_coverage_note=analysis_coverage_note,
@@ -552,7 +552,7 @@ class ArbiterNarrativeMixin:
         cross_modal_confirmed: int,
         contested: int,
         all_findings: list[dict[str, Any]],
-        gemini_findings: list[dict[str, Any]] | None = None,
+        visual_profile_findings: list[dict[str, Any]] | None = None,
         active_agent_metrics: list[dict[str, Any]] | None = None,
         overall_verdict: str = "",
         analysis_coverage_note: str = "",
@@ -587,28 +587,29 @@ class ArbiterNarrativeMixin:
                 }
             )
 
-        gemini_digest = []
-        for gf in (gemini_findings or [])[:4]:
-            meta = gf.get("metadata", {})
-            gemini_digest.append(
+        visual_profile_digest = []
+        for vf in (visual_profile_findings or [])[:4]:
+            meta = vf.get("metadata", {})
+            visual_profile_digest.append(
                 {
-                    "agent": gf.get("agent_id", "unknown"),
-                    "analysis_type": meta.get("analysis_type", "vision"),
-                    "model": meta.get("model_used", "gemini"),
-                    "confidence": round(confidence_of(gf, default=0.0) or 0.0, 3),
-                    "evidence_verdict": evidence_verdict_of(gf),
-                    "summary": gf.get("reasoning_summary", ""),
+                    "agent": vf.get("agent_id", "unknown"),
+                    "analysis_type": meta.get("analysis_type", "visual_evidence_profile"),
+                    "model": meta.get("model_used", "local_visual_ensemble"),
+                    "confidence": round(confidence_of(vf, default=0.0) or 0.0, 3),
+                    "evidence_verdict": evidence_verdict_of(vf),
+                    "summary": vf.get("reasoning_summary", ""),
                     "manipulation_signals": meta.get("manipulation_signals", []),
                     "detected_objects": meta.get("detected_objects", []),
+                    "provider_used": meta.get("provider_used", "unknown"),
                 }
             )
 
-        gemini_section = ""
-        if gemini_digest:
-            gemini_section = (
-                f"\n\nGemini vision deep analysis findings "
-                f"({len(gemini_digest)} of {len(gemini_findings or [])}):\n"
-                f"{json.dumps(gemini_digest, indent=2)}"
+        visual_profile_section = ""
+        if visual_profile_digest:
+            visual_profile_section = (
+                f"\n\nVisual evidence profile findings "
+                f"({len(visual_profile_digest)} of {len(visual_profile_findings or [])}):\n"
+                f"{json.dumps(visual_profile_digest, indent=2)}"
             )
 
         metrics_summary = ""
@@ -670,14 +671,14 @@ If RAG context contradicts the computed finding data, trust the finding data, no
             logger.debug("RAG context retrieval failed (non-fatal)", error=str(_rag_err))
         # -------------------------------------------------------------------------
 
-        # S-H-5: wrap user-derived tool / RAG / Gemini content in
+        # S-H-5: wrap user-derived tool / RAG / visual profile content in
         # UNTRUSTED markers. The verdict template fields below are derived
         # from server-side counters and are safe to embed plain.
         coverage_block = _wrap_untrusted("analysis_coverage_note", analysis_coverage_note)
         findings_block = _wrap_untrusted("top_findings_digest", findings_digest)
         untrusted_extras = ""
-        if gemini_section:
-            untrusted_extras += "\n\n" + _wrap_untrusted("gemini_vision_section", gemini_section)
+        if visual_profile_section:
+            untrusted_extras += "\n\n" + _wrap_untrusted("visual_profile_section", visual_profile_section)
         if metrics_summary:
             untrusted_extras += "\n\n" + _wrap_untrusted("metrics_summary", metrics_summary)
         if rag_context_block:
@@ -688,12 +689,12 @@ If RAG context contradicts the computed finding data, trust the finding data, no
 - Total findings from active agents: {num_findings}
 - Cross-modal confirmed (multiple agents agree): {cross_modal_confirmed}
 - Contested findings (agents disagree): {contested}
-- Gemini vision findings: {len(gemini_findings or [])}
+- Visual evidence profile findings: {len(visual_profile_findings or [])}
 - Computed verdict: {overall_verdict}{verdict_line}
 - Analysis coverage:
 {coverage_block}
 
-Top findings by confidence (classical tools):
+Top findings by confidence:
 {findings_block}{untrusted_extras}
 
 Write the 2-3 line Executive Summary for this forensic report. Justify the {overall_verdict} verdict based on the data."""
@@ -1183,48 +1184,61 @@ Rules:
         all_findings: list[dict[str, Any]],
         active_agent_results: dict[str, dict[str, Any]],
         per_agent_metrics: dict[str, Any],
-        gemini_vision_findings: list[dict[str, Any]],
+        visual_profile_findings: list[dict[str, Any]],
         cross_modal_confirmed_count: int,
         contested_findings: list[dict[str, Any]],
         incomplete_findings: list[dict[str, Any]],
         analysis_coverage_note: str,
         comparisons: list[Any] | None = None,
-        has_deep_analysis: bool = False,
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, Any]:
         """
-        Single LLM synthesis call producing all arbiter narrative outputs.
-
-        Builds a 5-layer prompt:
-          Layer 1 — What the evidence IS (Gemini baseline)
-          Layer 2 — Per-agent verdicts (rich synthesis pass-through)
-          Layer 3 — Cross-modal agreement map
-          Layer 4 — Computed verdict facts
-          Layer 5 — Analytical instruction
-
-        Context budget management: trims Layer 2 (agent briefs) before Layer 3
-        (cross-modal map) before Layer 1 (Gemini scene description) when over
-        the ~5K character input cap.
+        Build the layered prompt and call the LLM for arbiter-level narrative synthesis.
         """
-        client = getattr(self, "_synthesis_client", None) or LLMClient(
-            self.config, use_arbiter_tier=True
+
+        # Track context length to apply progressive compression
+        _current_chars = len(tool_context_block) + len(finding_context_block)
+        _finding_count = len(all_agent_findings)
+
+        # ---------------------------------------------------------------------------
+        #   LAYERED PROMPT ARCHITECTURE (6 layers + synthesis task)
+        #
+        #   Layer 0 — Agent capability & cross-modal map (always included)
+        #   Layer 1 — What the evidence IS (visual evidence baseline)
+        #   Layer 2 — Deterministic tool findings (per-agent)
+        #   Layer 3 — Cross-modal consistency
+        #   Layer 4 — Programmatic metrics and agent confidence
+        #   Layer 5 — RAG knowledge citations
+        #
+        #   Compression: layers 1 & 2 are progressively shortened when context
+        #   exceeds token budget. Drop order: layer 1 first (visual profile is
+        #   redundant when deterministic tools are present), then layer 2 tool
+        #   details, then layer 0 persona map.
+        #
+        #   S-H-5: All user-derived/litigant-controlled values are guarded with
+        #   UNTRUSTED markers in the system prompt (see _SAFETY_PREAMBLE above).
+        # ---------------------------------------------------------------------------
+
+        # ── Layer 0: AGENT CAPABILITY MAP ──────────────────────────────────
+        availability_map = self._build_agent_availability_map(agent_metrics=active_agent_metrics)
+        cross_modal_map = _build_cross_modal_summary(agent_findings_map)
+        layer0 = (
+            f"[AGENT CAPABILITY MAP]\n{availability_map}\n\n"
+            f"[CROSS-MODAL MAP]\n{cross_modal_map}"
         )
-        if not client.is_available:
-            return None
-        if not (self.config.llm_api_key and self.config.llm_provider != "none"):
-            return None
 
-        # ── Layer 1: Gemini/EVIDENCE BASELINE ─────────────────────────────
+        # ── Layer 1: VISUAL EVIDENCE PROFILE (evidence baseline) ──────────
         gemini_lines = ["[LAYER 1 — EVIDENCE BASELINE]"]
-        for gf in (gemini_vision_findings or [])[:3]:
-            meta = gf.get("metadata") or {}
+        for gf in (visual_profile_findings or [])[:3]:
+            meta = gf.get("metadata", {}) or {}
             gemini_lines.extend([
-                f"Content type: {meta.get('file_type_assessment') or meta.get('forensic_routing', {}).get('image_category', 'unknown')}",
-                f"Gemini visual verdict: {meta.get('authenticity_verdict') or meta.get('forensic_routing', {}).get('visual_verdict', 'INCONCLUSIVE')}",
-                f"Manipulation signals: {', '.join(str(x) for x in (meta.get('manipulation_signals') or meta.get('forensic_routing', {}).get('priority_signals', [])))}",
-                f"Scene: {(meta.get('scene_description') or '')[:150]}",
+                f"- Agent {gf.get('agent_id', 'unknown')}: {meta.get('analysis_type', 'visual_evidence_profile')}",
+                f"  Content: {gf.get('reasoning_summary', '')[:300]}",
+                f"  Visual verdict: {meta.get('authenticity_verdict') or meta.get('forensic_routing', {}).get('visual_verdict', 'INCONCLUSIVE')}",
+                f"  Confidence: {gf.get('confidence', 0.0)}",
+                f"  Provider: {meta.get('provider_used', 'unknown')}",
             ])
-        if not gemini_vision_findings:
-            gemini_lines.append("No Gemini vision analysis available for this file type.")
+        if not visual_profile_findings:
+            gemini_lines.append("No visual evidence profile available for this file type.")
         layer1 = "\n".join(gemini_lines)
 
         # ── Layer 2: Per-Agent Verdicts ───────────────────────────────────
@@ -1396,8 +1410,8 @@ Rules:
 
         if len(user_content) > MAX_INPUT_CHARS:
             # Final trim: shorten Layer 1 scene description
-            gemini_short = [l for l in layer1.split("\n") if not l.startswith("Scene:") or len(l) < 100]
-            layer1_short = "\n".join(gemini_short)
+            _l1_short_lines = [l for l in layer1.split("\n") if not l.startswith("Scene:") or len(l) < 100]
+            layer1_short = "\n".join(_l1_short_lines)
             user_parts = [
                 layer1_short,
                 "",
@@ -1442,7 +1456,7 @@ Rules:
         all_findings: list[dict[str, Any]],
         active_agent_results: dict[str, dict[str, Any]],
         per_agent_metrics: dict[str, Any],
-        gemini_vision_findings: list[dict[str, Any]],
+        visual_profile_findings: list[dict[str, Any]],
         cross_modal_confirmed_count: int,
         contested_findings: list[dict[str, Any]],
         incomplete_findings: list[dict[str, Any]],
@@ -1526,7 +1540,7 @@ Rules:
                             all_findings=all_findings,
                             active_agent_results=active_agent_results,
                             per_agent_metrics=per_agent_metrics,
-                            gemini_vision_findings=gemini_vision_findings,
+                            visual_profile_findings=visual_profile_findings,
                             cross_modal_confirmed_count=cross_modal_confirmed_count,
                             contested_findings=contested_findings,
                             incomplete_findings=incomplete_findings,

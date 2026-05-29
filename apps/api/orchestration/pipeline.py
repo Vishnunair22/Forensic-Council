@@ -254,7 +254,7 @@ class ForensicCouncilPipeline:
                             "provenance_chain_verify": "C2PA Provenance",
                             "timestamp_analysis": "Chronology Audit",
                             "file_structure_analysis": "Structure Check",
-                            "gemini_deep_forensic": "Multimodal Synthesis",
+                            "visual_evidence_profile": "Visual Evidence Profile",
                         }
 
                         agent_name = AGENT_NAMES.get(agent_id, agent_id)

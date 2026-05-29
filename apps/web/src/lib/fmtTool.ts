@@ -90,7 +90,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   mediainfo_profile: "Container Profile (MediaInfo)",
   av_file_identity: "AV File Identity",
   // Synthesis
-  gemini_deep_forensic: "Gemini Visual Forensics",
+  visual_evidence_profile: "Visual Evidence Profile",
   inter_agent_call: "Cross-Agent Coordination",
 };
 

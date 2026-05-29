@@ -90,8 +90,7 @@ async def run_agents_concurrent(
                 "provenance_chain_verify": "C2PA Provenance",
                 "timestamp_analysis": "Chronology Audit",
                 "file_structure_analysis": "Structure Check",
-                "visual_evidence_profile": "Local Visual Evidence Profile",
-                "gemini_deep_forensic": "Visual Evidence Profile",  # legacy session compatibility
+                "visual_evidence_profile": "Visual Evidence Profile",
             }
 
             def _normalize_tool_name(raw: str) -> str:
@@ -103,7 +102,6 @@ async def run_agents_concurrent(
                 tool_ctx = getattr(agent_inst, "_tool_context", {}) or {}
                 visual_profile = (
                     tool_ctx.get(TOOL_VISUAL_PROFILE)
-                    or tool_ctx.get("gemini_deep_forensic")
                     or {}
                 )
                 clip_result = tool_ctx.get("analyze_image_content") or {}

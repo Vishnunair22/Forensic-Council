@@ -119,10 +119,10 @@ class InterAgentBus:
         # Lock to make circular-dependency check + _active_calls registration atomic
         self._dispatch_lock = asyncio.Lock()
 
-        # Shared image context store: session_id → Gemini result dict.
-        # Agent 1 stores its Phase 1 result here; Agents 3/5 read it
-        # instead of making their own Gemini API calls.
-        self._image_context: dict[str, dict] = {}
+        # Shared visual profile store: session_id → VisualEvidenceFinding dict.
+        # Agent 1 stores its visual profile result here; all downstream agents
+        # read it instead of calling Gemini or local ensemble again.
+        self._visual_profile: dict[str, dict] = {}
 
         # Redis Pub/Sub integration
         self._listener_task: asyncio.Task | None = None
@@ -488,13 +488,13 @@ class InterAgentBus:
         else:
             self._arbiter_challenges.clear()
 
-    def set_image_context(self, session_id: str, data: dict) -> None:
-        """Store Agent 1's Gemini result for cross-agent reuse."""
-        self._image_context[str(session_id)] = data
+    def set_visual_profile(self, session_id: str, data: dict) -> None:
+        """Store Agent 1's visual profile result for cross-agent reuse."""
+        self._visual_profile[str(session_id)] = data
 
-    def get_image_context(self, session_id: str) -> dict:
-        """Retrieve Agent 1's Gemini result, or empty dict if not yet available."""
-        return self._image_context.get(str(session_id), {})
+    def get_visual_profile(self, session_id: str) -> dict:
+        """Retrieve Agent 1's visual profile, or empty dict if not yet available."""
+        return self._visual_profile.get(str(session_id), {})
 
     def reset(self) -> None:
         """Reset bus state (for new sessions)."""
@@ -503,4 +503,4 @@ class InterAgentBus:
         self._call_history.clear()
         self._completed_calls.clear()
         self._registered_agents.clear()
-        self._image_context.clear()
+        self._visual_profile.clear()

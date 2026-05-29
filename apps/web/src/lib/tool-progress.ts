@@ -106,7 +106,7 @@ const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
   c2pa_verify: { label: "Checking content credentials", icon: Shield },
   provenance_chain_verify: { label: "Checking provenance chain", icon: Shield },
   camera_profile_match: { label: "Comparing camera profile consistency", icon: Fingerprint },
-  gemini_deep_forensic: { label: "Synthesizing cross-tool evidence", icon: Brain },
+  visual_evidence_profile: { label: "Running visual evidence profile", icon: ImageIcon },
 
   // Short-form aliases emitted by some backend tool_name values
   ocr:        { label: "Identifying image contents using OCR tools",  icon: Camera },
@@ -128,7 +128,7 @@ const FALLBACK_BY_AGENT: Record<string, ProgressDescriptor[]> = {
     { label: "Analyzing image compression using ELA tools", icon: Scan },
     { label: "Inspecting spectral artifacts using frequency analysis", icon: Activity },
     { label: "Validating noise consistency using sensor profiling", icon: Fingerprint },
-    { label: "Synthesizing visual evidence using Gemini", icon: Brain },
+    { label: "Running visual evidence profile", icon: ImageIcon },
   ],
   Agent2: [
     { label: "Separating speakers in the audio", icon: Speaker },

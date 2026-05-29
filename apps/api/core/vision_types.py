@@ -30,6 +30,11 @@ class VisualEvidenceFinding:
     _metadata_visual_consistency: str = ""
     _forensic_routing: dict[str, Any] = field(default_factory=dict)
     _forensic_specifics: str = ""
+    provider_attempts: list[dict] = field(default_factory=list)
+    fallback_applied: bool = False
+    fallback_reason: str = ""
+    tool_coverage: dict[str, bool] = field(default_factory=dict)
+    degradation_flags: list[str] = field(default_factory=list)
 
     def to_finding_dict(
         self,
@@ -77,6 +82,11 @@ class VisualEvidenceFinding:
                     "LIKELY_MANIPULATED",
                 },
                 "deepfake_detected": verdict == "AI_GENERATED",
+                "provider_attempts": self.provider_attempts,
+                "fallback_applied": self.fallback_applied,
+                "fallback_reason": self.fallback_reason,
+                "tool_coverage": self.tool_coverage,
+                "degradation_flags": self.degradation_flags,
             },
             "court_defensible": self.court_defensible,
             "caveat": self.caveat,

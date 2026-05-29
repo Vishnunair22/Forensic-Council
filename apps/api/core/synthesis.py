@@ -320,7 +320,7 @@ class SynthesisService:
         phase: str = "initial",
         agent_persona: str = "",
         image_type_hint: str = "",
-        gemini_context: dict | None = None,
+        visual_profile_context: dict | None = None,
         phase1_context: dict | None = None,
     ) -> dict[str, Any]:
         """
@@ -470,23 +470,24 @@ class SynthesisService:
         role_preamble = agent_persona if agent_persona else "You are a Senior Forensic Analyst at the National Cyber Forensics Institute."
         hint_block = f"\nThis analysis concerns: {image_type_hint}. Prioritize findings most relevant to this content category.\n" if image_type_hint else ""
 
-        # ── Build the Gemini evidence identity block ───────────────────────────
-        # Previously only 3 sparse fields were passed. Now we expose everything
-        # Gemini returned so Groq can anchor the agent_brief in the real evidence.
-        gemini_block = ""
-        if gemini_context:
-            lines = ["[GEMINI VISUAL ANALYSIS — EVIDENCE IDENTITY]"]
+        # ── Build the visual evidence profile block ────────────────────────
+        # Provides what the evidence IS (from visual analysis) so the
+        # Groq synthesis can anchor the agent_brief in the actual content
+        # rather than producing generic boilerplate.
+        visual_profile_block = ""
+        if visual_profile_context:
+            lines = ["[VISUAL EVIDENCE PROFILE]"]
 
-            desc = gemini_context.get("content_description") or ""
-            iface = gemini_context.get("interface_identification") or ""
-            category = gemini_context.get("image_category") or ""
-            verdict = gemini_context.get("visual_verdict") or "INCONCLUSIVE"
-            gem_conf = gemini_context.get("gemini_confidence") or 0.0
-            signals = gemini_context.get("priority_signals") or []
-            anomalies = gemini_context.get("contextual_anomalies") or []
-            narrative = gemini_context.get("contextual_narrative") or ""
-            specifics = gemini_context.get("forensic_specifics") or ""
-            texts = gemini_context.get("extracted_text") or []
+            desc = visual_profile_context.get("content_description") or ""
+            iface = visual_profile_context.get("interface_identification") or ""
+            category = visual_profile_context.get("image_category") or ""
+            verdict = visual_profile_context.get("visual_verdict") or "INCONCLUSIVE"
+            vis_conf = visual_profile_context.get("visual_confidence") or 0.0
+            signals = visual_profile_context.get("priority_signals") or []
+            anomalies = visual_profile_context.get("contextual_anomalies") or []
+            narrative = visual_profile_context.get("contextual_narrative") or ""
+            specifics = visual_profile_context.get("forensic_specifics") or ""
+            texts = visual_profile_context.get("extracted_text") or []
 
             if desc:
                 lines.append(f"- What the evidence IS: {desc}")
@@ -494,7 +495,7 @@ class SynthesisService:
                 lines.append(f"- Content Type: {category}")
             if iface:
                 lines.append(f"- Interface / UI Detail: {iface}")
-            lines.append(f"- Gemini Visual Verdict: {verdict} (confidence {gem_conf:.2f})")
+            lines.append(f"- Visual Verdict: {verdict} (confidence {vis_conf:.2f})")
             if signals:
                 lines.append(f"- Visual Manipulation Signals: {', '.join(str(s) for s in signals)}")
             else:
@@ -502,22 +503,22 @@ class SynthesisService:
             if anomalies:
                 lines.append(f"- Contextual Anomalies: {', '.join(str(a) for a in anomalies)}")
             if narrative:
-                lines.append(f"- Gemini Forensic Narrative: {narrative[:400]}")
+                lines.append(f"- Visual Forensic Narrative: {narrative[:400]}")
             if specifics:
                 lines.append(f"- Forensic Specifics: {specifics[:300]}")
             if texts:
                 text_preview = ", ".join(str(t) for t in texts[:6])
-                lines.append(f"- Visible Text Gemini Read: {text_preview[:200]}")
+                lines.append(f"- Visible Text Extracted: {text_preview[:200]}")
 
             lines.append("")
-            lines.append("INSTRUCTION: Your agent_brief MUST open with what Gemini identified this evidence as.")
+            lines.append("INSTRUCTION: Your agent_brief MUST open with what the visual profile identified this evidence as.")
             lines.append("Then state what the forensic tools confirmed. Then give the weighted verdict.")
-            gemini_block = "\n".join(lines) + "\n"
+            visual_profile_block = "\n".join(lines) + "\n"
 
         system_prompt = f"""[SYSTEM: FORENSIC ANALYST SYNTHESIS]
 {role_preamble}
 {hint_block}
-{gemini_block}
+{visual_profile_block}
 {_SAFETY_PREAMBLE}
 
 [ANALYTICAL INSTRUCTIONS]

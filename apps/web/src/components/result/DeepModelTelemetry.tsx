@@ -16,7 +16,7 @@ const TOOL_LABELS: Record<string, string> = {
   f3_net_frequency: "F3-Net Frequency",
   neural_ela: "Neural ELA (ViT-L)",
   diffusion_artifact_detector: "Diffusion Discriminator",
-  gemini_deep_forensic: "Gemini 2.5 Multi-Modal",
+  visual_evidence_profile: "Visual Evidence Profile",
 };
 
 export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {

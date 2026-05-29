@@ -235,13 +235,12 @@ class AgentInvestigationMixin:
             # Fallback: read from inter-agent bus (Agents 3/5 reuse Agent 1's result).
             visual_profile = (
                 tool_context.get("visual_evidence_profile")
-                or tool_context.get("gemini_deep_forensic")
                 or {}
             )
 
             if not visual_profile and getattr(self, "inter_agent_bus", None):
                 try:
-                    bus_ctx = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+                    bus_ctx = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
                     if bus_ctx:
                         visual_profile = bus_ctx
                 except Exception:
@@ -280,8 +279,8 @@ class AgentInvestigationMixin:
 
             # Build a rich visual profile context — forwards everything so synthesis can anchor
             # the agent_brief in what the evidence actually IS, not generic boilerplate.
-            gemini_context: dict = {
-                # Evidence identity — what Gemini sees
+            visual_context: dict = {
+                # Evidence identity
                 "content_description": _gem_str(
                     "content_description", "reasoning_summary", "content_description"
                 ),
@@ -291,11 +290,11 @@ class AgentInvestigationMixin:
                 "interface_identification": _gem_str(
                     "interface_identification"
                 ),
-                # Gemini's visual verdict and forensic signals
+                # Visual verdict and forensic signals
                 "visual_verdict": _gem_str(
                     "authenticity_verdict", "visual_verdict"
                 ),
-                "gemini_confidence": float(visual_profile.get("confidence_raw") or 0.0),
+                "visual_confidence": float(visual_profile.get("confidence_raw") or 0.0),
                 "priority_signals": _gem_lst(
                     "manipulation_signals", "priority_signals"
                 ),
@@ -309,25 +308,25 @@ class AgentInvestigationMixin:
                 "forensic_specifics": _gem_str(
                     "forensic_specifics"
                 ),
-                # Text Gemini read from the evidence
+                # Extracted text
                 "extracted_text": _gem_lst(
                     "extracted_text"
                 ),
             }
             # Strip falsy values (keep 0.0 for confidence) so the prompt block stays clean
-            gemini_context = {k: v for k, v in gemini_context.items() if v or v == 0.0}
+            visual_context = {k: v for k, v in visual_context.items() if v or v == 0.0}
 
-            if gemini_context:
+            if visual_context:
                 logger.debug(
-                    "Gemini context built for Groq synthesis",
+                    "Visual profile context built for synthesis",
                     agent_id=self.agent_id,
-                    fields=list(gemini_context.keys()),
-                    has_narrative=bool(gemini_context.get("contextual_narrative")),
-                    has_verdict=bool(gemini_context.get("visual_verdict")),
+                    fields=list(visual_context.keys()),
+                    has_narrative=bool(visual_context.get("contextual_narrative")),
+                    has_verdict=bool(visual_context.get("visual_verdict")),
                 )
             else:
                 logger.warning(
-                    "Gemini context is empty — Groq synthesis will lack visual grounding",
+                    "Visual profile context is empty — synthesis will lack visual grounding",
                     agent_id=self.agent_id,
                     phase=phase,
                 )
@@ -408,7 +407,7 @@ class AgentInvestigationMixin:
                         phase=phase,
                         agent_persona=agent_persona,
                         image_type_hint=image_type_hint,
-                        gemini_context=gemini_context or None,
+                        visual_profile_context=visual_context or None,
                         phase1_context=phase1_context,
                     ),
                     timeout=timeout_s,
