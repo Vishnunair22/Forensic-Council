@@ -89,7 +89,7 @@ class Agent3Object(ForensicAgent):
 
         shared = {}
         if self.inter_agent_bus:
-            shared = self.inter_agent_bus.get_image_context(
+            shared = self.inter_agent_bus.get_visual_profile(
                 str(self.session_id)
             ) or {}
 
@@ -261,7 +261,7 @@ class Agent3Object(ForensicAgent):
             result = {"shared_context_available": False, "source": "agent1_visual_profile"}
             try:
                 if self.inter_agent_bus:
-                    ctx = self.inter_agent_bus.get_image_context(str(self.session_id))
+                    ctx = self.inter_agent_bus.get_visual_profile(str(self.session_id))
                     if ctx:
                         result["shared_context_available"] = True
                         result["metadata"] = ctx.get("metadata", {})

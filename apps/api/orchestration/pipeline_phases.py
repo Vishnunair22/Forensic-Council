@@ -690,7 +690,7 @@ async def run_agents_concurrent(
     try:
         _initial_norm = pipeline._normalize_agent_results(initial_results)
         pipeline._pre_warm_task = asyncio.create_task(
-            pipeline._run_arbiter_pre_warm(_initial_norm, "", suppress_broadcasts=True)
+            pipeline._run_arbiter_pre_warm(_initial_norm, pipeline._case_id, suppress_broadcasts=True)
         )
     except Exception as _pw_err:
         logger.debug("Phase-1 pre-warm task creation failed", error=str(_pw_err))
@@ -732,6 +732,7 @@ async def run_agents_concurrent(
     producer_id = AgentID.AGENT1.value
 
     def _broadcast_context(producer_finding: Any):
+        broadcast_ok = False
         try:
             context_payload = {}
             if hasattr(producer_finding, "metadata"):
@@ -748,7 +749,7 @@ async def run_agents_concurrent(
 
             if context_payload:
                 if pipeline.inter_agent_bus is not None:
-                    pipeline.inter_agent_bus.set_image_context(str(session_id), context_payload)
+                    pipeline.inter_agent_bus.set_visual_profile(str(session_id), context_payload)
                 for aid, (agent_inst, _, _) in agent_map.items():
                     if agent_inst is None or aid in context_injected or aid == producer_id:
                         continue
@@ -756,9 +757,12 @@ async def run_agents_concurrent(
                         agent_inst.inject_agent1_context(context_payload)
                         context_injected.add(aid)
                 logger.info(f"Early context broadcast from {producer_id} triggered")
-            context_event.set()
+            broadcast_ok = True
         except Exception as _cb_err:
             logger.warning(f"Early signal callback failed: {_cb_err}")
+        finally:
+            context_event.set()
+        return broadcast_ok
 
     producer_inst = agent_map.get(producer_id, (None, None, "error"))[0]
     if producer_inst:
@@ -787,8 +791,8 @@ async def run_agents_concurrent(
                     "Found Phase 1 visual profile for Agent 1; "
                     "pre-injecting context to unblock Phase 2 concurrency."
                 )
-                _broadcast_context(_f)
-                _context_seeded = True
+                if _broadcast_context(_f):
+                    _context_seeded = True
                 break
 
     if not _context_seeded:
@@ -998,7 +1002,7 @@ async def run_agents_concurrent(
     try:
         _deep_norm = pipeline._normalize_agent_results(results)
         pipeline._pre_warm_task = asyncio.create_task(
-            pipeline._run_arbiter_pre_warm(_deep_norm, "")
+            pipeline._run_arbiter_pre_warm(_deep_norm, pipeline._case_id)
         )
     except Exception as _pw_err:
         logger.debug("Phase-2 pre-warm task creation failed", error=str(_pw_err))
@@ -1176,59 +1180,15 @@ async def _await_deep_analysis_decision(
     decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
     redis = await get_redis_client()
 
-    # Atomic pre-gate decision consumption: GETDEL first, then validate.
-    # This eliminates the TOCTOU race between checking and consuming.
-    raw_pre_gate_decision = None
-    try:
-        raw_pre_gate_decision = await redis.getdel(decision_key)
-    except AttributeError:
-        # Redis < 6.2 fallback: racy GET+DELETE
-        raw_pre_gate_decision = await redis.get(decision_key)
-        if raw_pre_gate_decision:
-            await redis.delete(decision_key)
-    except Exception as getdel_err:
-        logger.debug("GETDEL failed on decision key", error=str(getdel_err))
-
-    if raw_pre_gate_decision:
-        decision = None
-        try:
-            decision = json.loads(raw_pre_gate_decision)
-        except json.JSONDecodeError:
-            logger.warning(
-                "Corrupt decision key data",
-                session_id=str(session_id),
-            )
-
-        if isinstance(decision, dict):
-            # Validate the session is genuinely awaiting decision
-            try:
-                existing_metadata = await get_active_pipeline_metadata(str(session_id))
-                is_awaiting = (
-                    isinstance(existing_metadata, dict)
-                    and existing_metadata.get("status") == "awaiting_decision"
-                )
-            except Exception:
-                is_awaiting = False
-
-            if is_awaiting:
-                pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
-                logger.info(
-                    "Analyst decision consumed before pause gate",
-                    session_id=str(session_id),
-                    deep_analysis=pipeline.run_deep_analysis_flag,
-                )
-                return pipeline.run_deep_analysis_flag
-
-        logger.info(
-            "Cleared stale/out-of-session decision key",
-            session_id=str(session_id),
-        )
-
+    # Set pause status BEFORE consuming any pre-existing decision.
+    # This ensures the resume endpoint writes to the correct key and
+    # eliminates the TOCTOU race where GETDEL could consume a decision
+    # before the pipeline is registered as "awaiting_decision".
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()
     pipeline.run_deep_analysis_flag = False
 
-    # Fix 5: Enforce initial results broadcast before pausing
+    # Broadcast initial results complete before pausing
     try:
         await broadcast_update(
             str(session_id),
@@ -1264,6 +1224,42 @@ async def _await_deep_analysis_decision(
             data={"status": "awaiting_decision", "initial_results_ready": True},
         ),
     )
+
+    # Now consume any decision that arrived during the status transition.
+    # Any decision written after the status was set will be in the correct key.
+    try:
+        raw_pre_gate_decision = await redis.getdel(decision_key)
+    except AttributeError:
+        raw_pre_gate_decision = await redis.get(decision_key)
+        if raw_pre_gate_decision:
+            await redis.delete(decision_key)
+    except Exception as getdel_err:
+        raw_pre_gate_decision = None
+        logger.debug("GETDEL failed on decision key", error=str(getdel_err))
+
+    if raw_pre_gate_decision:
+        decision = None
+        try:
+            decision = json.loads(raw_pre_gate_decision)
+        except json.JSONDecodeError:
+            logger.warning(
+                "Corrupt decision key data",
+                session_id=str(session_id),
+            )
+
+        if isinstance(decision, dict):
+            pipeline.run_deep_analysis_flag = bool(decision.get("deep_analysis"))
+            logger.info(
+                "Analyst decision consumed after pause gate",
+                session_id=str(session_id),
+                deep_analysis=pipeline.run_deep_analysis_flag,
+            )
+            return pipeline.run_deep_analysis_flag
+
+        logger.info(
+            "Cleared stale/out-of-session decision key",
+            session_id=str(session_id),
+        )
 
     try:
         active_redis = pipeline._redis or await get_redis_client()
@@ -1325,43 +1321,9 @@ async def _await_deep_report_request(
     decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
     redis = await get_redis_client()
 
-    # Same race as the initial deep-analysis gate: the analyst may request the
-    # final report just before this post-deep pause is fully registered. Use
-    # GETDEL for atomic read+delete, then validate the session state.
-    try:
-        raw_pre_gate_decision = await redis.getdel(decision_key)
-    except AttributeError:
-        raw_pre_gate_decision = await redis.get(decision_key)
-        if raw_pre_gate_decision:
-            await redis.delete(decision_key)
-    except Exception as pre_gate_err:
-        raw_pre_gate_decision = None
-        logger.debug("Pre-gate final-report decision check flicker", error=str(pre_gate_err))
-
-    if raw_pre_gate_decision:
-        # Validate session is genuinely awaiting deep report
-        try:
-            existing_metadata = await get_active_pipeline_metadata(str(session_id))
-            is_awaiting = (
-                isinstance(existing_metadata, dict)
-                and existing_metadata.get("status") == "awaiting_deep_report"
-            )
-        except Exception:
-            is_awaiting = False
-
-        if is_awaiting:
-            logger.info(
-                "Final report request consumed before post-deep pause gate",
-                session_id=str(session_id),
-                decision_key=decision_key,
-            )
-            return
-
-        logger.info(
-            "Cleared stale deep-to-report decision key",
-            session_id=str(session_id),
-        )
-
+    # Set pause status BEFORE consuming any pre-existing decision.
+    # This ensures the resume endpoint writes to the correct key and
+    # eliminates the TOCTOU race.
     pipeline._awaiting_user_decision = True
     pipeline.deep_analysis_decision_event.clear()
     pipeline.run_deep_analysis_flag = False
@@ -1391,6 +1353,25 @@ async def _await_deep_report_request(
             },
         ),
     )
+
+    # Now consume any decision that arrived during the status transition.
+    try:
+        raw_pre_gate_decision = await redis.getdel(decision_key)
+    except AttributeError:
+        raw_pre_gate_decision = await redis.get(decision_key)
+        if raw_pre_gate_decision:
+            await redis.delete(decision_key)
+    except Exception as pre_gate_err:
+        raw_pre_gate_decision = None
+        logger.debug("Pre-gate final-report decision check flicker", error=str(pre_gate_err))
+
+    if raw_pre_gate_decision:
+        logger.info(
+            "Final report request consumed after post-deep pause gate",
+            session_id=str(session_id),
+            decision_key=decision_key,
+        )
+        return
 
     try:
         active_redis = pipeline._redis or await get_redis_client()

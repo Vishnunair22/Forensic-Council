@@ -277,7 +277,7 @@ class Agent1Image(ForensicAgent):
             if result and not result.get("error"):
                 try:
                     if self.inter_agent_bus:
-                        self.inter_agent_bus.set_image_context(
+                        self.inter_agent_bus.set_visual_profile(
                             str(self.session_id),
                             result,
                         )

@@ -394,21 +394,25 @@ async def start_investigation(
     try:
         hasher = hashlib.sha256()
         total_size = 0
-        tmp_path.write_bytes(b"")
-        chunks: list[bytes] = []
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            total_size += len(chunk)
-            if total_size > MAX_FILE_SIZE:
-                tmp_path.unlink(missing_ok=True)
-                raise HTTPException(status_code=400, detail="File size exceeds limit.")
-            hasher.update(chunk)
-            chunks.append(chunk)
-
-        if chunks:
-            await _write_file(tmp_path, chunks)
+        # Stream chunks directly to the temp file using the underlying sync
+        # SpooledTemporaryFile to avoid buffering the entire file in memory.
+        # This prevents OOM under concurrent large uploads.
+        def _stream_to_file():
+            nonlocal total_size
+            with tmp_path.open("wb") as out:
+                while True:
+                    chunk = file.file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > MAX_FILE_SIZE:
+                        return
+                    hasher.update(chunk)
+                    out.write(chunk)
+        await asyncio.to_thread(_stream_to_file)
+        if total_size > MAX_FILE_SIZE:
+            tmp_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=400, detail="File size exceeds limit.")
 
         if total_size == 0:
             tmp_path.unlink(missing_ok=True)

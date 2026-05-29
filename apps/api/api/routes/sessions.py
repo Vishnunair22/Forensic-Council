@@ -541,7 +541,11 @@ async def get_session_report(
                     skipped_agents=dict(rd.get("skipped_agents") or {}),
                     analysis_coverage_note=rd.get("analysis_coverage_note", ""),
                     per_agent_summary=dict(rd.get("per_agent_summary") or {}),
+                    per_agent_narrative_structured=dict(rd.get("per_agent_narrative_structured") or {}),
+                    summary_structured=dict(rd.get("summary_structured") or {}),
                     degradation_flags=list(rd.get("degradation_flags") or []),
+                    degraded_findings_summary=rd.get("degraded_findings_summary") or "",
+                    is_deep_analysis=bool(rd.get("is_deep_analysis", False)),
                     cross_modal_fusion=dict(rd.get("cross_modal_fusion") or {}),
                 )
     except HTTPException:
@@ -912,6 +916,14 @@ class ResumeRequest(_BaseModel):
     """Request body for the resume endpoint."""
 
     deep_analysis: bool
+    expected_phase: str | None = None
+    """
+    Optional phase gate token to prevent writing to the wrong decision key.
+    - "initial"  → expects pipeline status to be awaiting_decision
+    - "deep"     → expects pipeline status to be awaiting_deep_report
+    When provided, the request is rejected if the actual pipeline phase does
+    not match, eliminating ambiguous-transition writes.
+    """
 
 
 @router.post("/{session_id}/resume")
@@ -964,6 +976,24 @@ async def resume_investigation(
             status_code=403,
             detail="You do not have access to this investigation",
         )
+
+    # Validate expected_phase gate token if provided.
+    # Rejects requests arriving during ambiguous transition states.
+    _phase_token = request.expected_phase
+    if _phase_token:
+        pipeline_status = metadata.get("status", "")
+        if _phase_token == "initial" and pipeline_status != "awaiting_decision":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Phase mismatch: expected initial gate (awaiting_decision), "
+                       f"current status is '{pipeline_status}'",
+            )
+        if _phase_token == "deep" and pipeline_status != "awaiting_deep_report":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Phase mismatch: expected deep gate (awaiting_deep_report), "
+                       f"current status is '{pipeline_status}'",
+            )
 
     # Determine phase-scoped decision key from pipeline state.
     # Reject during the transitional window where status is already being actioned

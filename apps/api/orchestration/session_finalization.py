@@ -76,6 +76,46 @@ async def mark_investigation_completed(
                 error=str(narr_err),
             )
 
+    # Persist the signed report to durable storage BEFORE marking the session
+    # as completed or broadcasting PIPELINE_COMPLETE. This ensures the report
+    # survives Redis/cache loss.
+    try:
+        persistence = await get_session_persistence()
+        await persistence.save_report(
+            session_id=session_id,
+            case_id=case_id,
+            investigator_id=investigator_id,
+            report_data=report.model_dump(mode="json"),
+        )
+        await persistence.update_session_status(session_id, "completed")
+    except Exception as exc:
+        logger.error("Failed to persist completed investigation", error=str(exc))
+        await set_active_pipeline_metadata(
+            session_id,
+            {
+                "status": "degraded",
+                "brief": "Investigation completed but report persistence failed — may be lost on cache expiry.",
+                "case_id": case_id,
+                "investigator_id": _investigator_id,
+                "investigator_role": _investigator_role,
+                "case_investigator_label": _case_label,
+                "file_path": evidence_file_path,
+                "original_filename": original_filename,
+                "error": str(exc),
+                "report_id": str(report.report_id),
+            },
+        )
+        await broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="DEGRADED",
+                session_id=session_id,
+                message="Investigation completed with persistence errors.",
+                data={"status": "degraded", "error": str(exc)},
+            ),
+        )
+        return
+
     await set_final_report(session_id, report)
     existing_meta = await get_active_pipeline_metadata(session_id) or {}
     await set_active_pipeline_metadata(
@@ -120,18 +160,6 @@ async def mark_investigation_completed(
             data={"report_id": str(report.report_id)},
         ),
     )
-
-    try:
-        persistence = await get_session_persistence()
-        await persistence.save_report(
-            session_id=session_id,
-            case_id=case_id,
-            investigator_id=investigator_id,
-            report_data=report.model_dump(mode="json"),
-        )
-        await persistence.update_session_status(session_id, "completed")
-    except Exception as exc:
-        logger.error("Failed to persist completed investigation", error=str(exc))
 
 
 async def mark_investigation_failed(

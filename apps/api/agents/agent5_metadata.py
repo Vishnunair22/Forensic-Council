@@ -184,7 +184,7 @@ class Agent5Metadata(ForensicAgent):
         agent1_suspicious = False
         try:
             if self.inter_agent_bus:
-                shared = self.inter_agent_bus.get_image_context(str(self.session_id)) or {}
+                shared = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
                 verdict = shared.get("metadata", {}).get("authenticity_verdict", "")
                 agent1_suspicious = verdict in ("SUSPICIOUS", "LIKELY_MANIPULATED")
         except Exception:
