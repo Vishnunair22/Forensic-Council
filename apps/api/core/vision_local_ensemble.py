@@ -108,17 +108,6 @@ async def analyze_local_visual_profile(
     ocr_lines = ocr_res.get("extracted_text", []) if isinstance(ocr_res, dict) else []
     detected = detr_res if isinstance(detr_res, list) else []
 
-    desc_parts = [
-        "Local visual profile generated after Gemini was unavailable or skipped.",
-        f"Semantic category: {clip_category}.",
-    ]
-    if detected:
-        desc_parts.append(f"Detected objects: {', '.join(detected)}.")
-    if ocr_lines:
-        desc_parts.append(f"Extracted UI/Text lines: {', '.join(ocr_lines[:5])}...")
-
-    content_description = " ".join(desc_parts)
-
     signals = []
     verdict = "AUTHENTIC"
     max_anomaly = 0.0
@@ -130,6 +119,20 @@ async def analyze_local_visual_profile(
         elif ela_res.get("num_anomaly_regions", 0) > 3:
             signals.append(f"Multiple suspicious ELA anomaly clusters: {ela_res.get('num_anomaly_regions')}")
             verdict = "SUSPICIOUS"
+
+    desc_parts = [
+        f"CLIP classified the image as '{clip_category}'.",
+    ]
+    if detected:
+        desc_parts.append(f"Detected objects: {', '.join(detected)}.")
+    if ocr_lines:
+        desc_parts.append(f"Extracted text: {', '.join(ocr_lines[:5])}.")
+    if signals:
+        desc_parts.append(f"Anomalies: {'; '.join(signals)}.")
+    else:
+        desc_parts.append("No manipulation signals detected by local ensemble.")
+
+    content_description = " ".join(desc_parts)
 
     is_screenshot = is_screen_capture_like or "screenshot" in clip_category.lower() or "screen capture" in clip_category.lower()
     interface_id = ""
@@ -200,8 +203,10 @@ async def analyze_local_visual_profile(
         _extracted_text=ocr_lines,
         _interface_identification=interface_id,
         _contextual_narrative=(
-            "Local analysis of evidence file contents using cached semantic, "
-            "object-detection, OCR, and forensic-signal models."
+            f"Local visual ensemble classified the evidence as '{clip_category}' "
+            f"with {len(detected)} detected object(s) and {len(ocr_lines)} OCR text line(s). "
+            f"Authenticity verdict: {verdict}. "
+            f"Confidence: {confidence:.0%}."
         ),
         _authenticity_verdict=verdict,
         _metadata_visual_consistency=metadata_consistency,
@@ -209,7 +214,12 @@ async def analyze_local_visual_profile(
             **routing,
             "priority_signals": ["local_ela", "ocr_patterns"],
         },
-        _forensic_specifics="Local analysis suggests " + ("digital UI layout" if is_screenshot else "natural photographic scene"),
+        _forensic_specifics=(
+            f"Local ensemble: CLIP={clip_category}, "
+            f"objects={len(detected)}, OCR_lines={len(ocr_lines)}, "
+            f"ELA_max_anomaly={max_anomaly:.1f}, "
+            f"tools_ok={tools_ok}/{tools_total}"
+        ),
         provider_attempts=[
             {
                 "provider": "local_visual_ensemble",
