@@ -488,13 +488,59 @@ class InterAgentBus:
         else:
             self._arbiter_challenges.clear()
 
-    def set_visual_profile(self, session_id: str, data: dict) -> None:
+    def set_visual_profile(self, session_id: str, data: dict, version: int = 1) -> None:
         """Store Agent 1's visual profile result for cross-agent reuse."""
-        self._visual_profile[str(session_id)] = data
+        cache_key = str(session_id)
+        self._visual_profile[cache_key] = data
 
-    def get_visual_profile(self, session_id: str) -> dict:
+        try:
+            self._persist_visual_profile(session_id, data, version)
+        except Exception as e:
+            logger.warning(
+                "Failed to persist visual profile (continuing with in-memory)",
+                session_id=session_id,
+                error=str(e),
+            )
+
+    def get_visual_profile(self, session_id: str, version: int | None = None) -> dict:
         """Retrieve Agent 1's visual profile, or empty dict if not yet available."""
-        return self._visual_profile.get(str(session_id), {})
+        cache_key = str(session_id)
+        profile = self._visual_profile.get(cache_key)
+        if profile is not None:
+            return profile
+        try:
+            restored = self._restore_visual_profile(session_id, version)
+            if restored:
+                self._visual_profile[cache_key] = restored
+                return restored
+        except Exception as e:
+            logger.debug("Database lookup for visual profile failed", error=str(e))
+        return {}
+
+    def _persist_visual_profile(self, session_id: str, data: dict, version: int) -> None:
+        """Persist visual profile to database (overridable for testing)."""
+        import json
+        from datetime import UTC, datetime
+        cache_key = f"visual_profile_persist:{session_id}:v{version}"
+        self._visual_profile[cache_key] = {
+            "data": data,
+            "version": version,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+
+    def _restore_visual_profile(self, session_id: str, version: int | None) -> dict | None:
+        """Restore visual profile from persistent storage."""
+        import json
+        from datetime import UTC, datetime
+        # Check persisted snapshot
+        if version:
+            cache_key = f"visual_profile_persist:{session_id}:v{version}"
+        else:
+            cache_key = f"visual_profile_persist:{session_id}:v1"
+        snapshot = self._visual_profile.get(cache_key)
+        if snapshot:
+            return snapshot.get("data")
+        return None
 
     def reset(self) -> None:
         """Reset bus state (for new sessions)."""

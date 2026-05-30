@@ -98,6 +98,21 @@ class AgentContextMixin:
     async def _record_tool_result(self, tool_name: str, result: dict) -> None:
         """Store a tool result. If the result contains an error, route to the error counter."""
         self._tool_context[tool_name] = result
+
+        # Humanize the finding if applicable
+        try:
+            from core.humanization import FindingHumanizer
+            finding_dict = {"metadata": result, "tool_name": tool_name}
+            if "evidence_verdict" in result:
+                finding_dict["evidence_verdict"] = result["evidence_verdict"]
+            if "reasoning_summary" in result:
+                finding_dict["reasoning_summary"] = result["reasoning_summary"]
+            humanized = FindingHumanizer.humanize_finding(finding_dict)
+            if "court_statement" in humanized:
+                result["court_statement"] = humanized["court_statement"]
+        except Exception:
+            pass
+
         if result.get("error") and not result.get("available", True):
             # Result is a structured failure — count as error, not success
             if hasattr(self, "_tool_error_count"):

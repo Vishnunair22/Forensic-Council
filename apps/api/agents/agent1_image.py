@@ -102,82 +102,78 @@ class Agent1Image(ForensicAgent):
         base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
         return self._compute_ceiling(base_count)
 
+    async def _validate_evidence_artifact(self) -> dict:
+        """Run validation chain BEFORE building task list."""
+        artifact = self.evidence_artifact
+        file_path = str(getattr(artifact, "file_path", "") or "")
+        from pathlib import Path
+
+        p = Path(file_path)
+        if not p.exists():
+            raise ValueError(f"Evidence file not found: {file_path}")
+
+        size_mb = p.stat().st_size / (1024 * 1024)
+        if size_mb > 500:
+            raise ValueError(f"Evidence file too large: {size_mb:.1f}MB")
+
+        try:
+            from PIL import Image
+            with Image.open(file_path) as img:
+                img.verify()
+        except Exception as e:
+            raise ValueError(f"Corrupted image file: {e}")
+
+        mime = getattr(artifact, "mime_type", "") or ""
+        if mime and not mime.startswith("image/"):
+            raise ValueError(f"Not a valid image file: {mime}")
+
+        return {"status": "validated", "mime": mime, "size_mb": size_mb}
+
     @property
     def task_decomposition(self) -> list[str]:
         """
-        Phase 1 — Initial Analysis (fast, runs on every image).
-
-        Ordered by forensic signal value: primary manipulation detectors run
-        first so the investigator sees high-confidence findings early.
-        Cheap context tools (CLIP, OCR, FFT) follow.
-
-        Design rules:
-          - visual_evidence_profile runs first after hash verification to produce
-            the session-wide visual evidence profile and forensic routing context.
-            Domain-specific tools (neural_ela, neural_fingerprint,
-            frequency_domain_analysis, noiseprint_cluster, detect_font_inconsistency,
-            detect_ui_overlay_forgery) are injected reactively by the
-            visual_evidence_profile handler once the routing category is known,
-            avoiding unnecessary tools for each content type.
-          - extract_text_from_image is only useful for documents (scanned text)
-            and screenshots (UI text) — OCR on camera photos or web downloads
-            wastes a task slot. It is reactively injected by _on_tool_result_impl
-            when analyze_image_content detects handwritten content.
+        Phase 1 tasks are derived from file classification.
         """
-        if self._is_document:
-            return [
-                "Run file_hash_verify for evidence integrity check",
-                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run extract_text_from_image for OCR and document content identification",
-                "Run analyze_image_content for semantic document classification",
-            ]
-        if self._is_recompressed_web:
-            # jpeg_ghost_detect and ela_full_image removed from base — reactively
-            # injected by _reason_step when ELA/FFT disagree (no coverage lost).
-            # neural_ela, neural_fingerprint, frequency_domain_analysis are injected
-            # reactively after visual_evidence_profile routing is known.
-            return [
-                "Run file_hash_verify for evidence integrity check",
-                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run analyze_image_content for semantic image understanding",
-            ]
-        if self._is_screen_capture or self._is_digital_capture:
-            # Screenshots: hash integrity → OCR (primary signal for UI) → semantic.
-            # detect_font_inconsistency, detect_ui_overlay_forgery, and
-            # frequency_domain_analysis are injected reactively after
-            # visual_evidence_profile routing is known.
-            return [
-                "Run file_hash_verify for evidence integrity check",
-                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run extract_text_from_image for visible text extraction",
-                "Run analyze_image_content for semantic image understanding",
-            ]
-        if self._is_lossless:
-            # Lossless: noiseprint sensor clustering, neural_fingerprint, and
-            # frequency_domain_analysis are injected reactively after
-            # visual_evidence_profile routing is known.
-            return [
-                "Run file_hash_verify for evidence integrity check",
-                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run analyze_image_content for semantic image understanding",
-            ]
-        if self._is_camera:
-            # Camera JPEGs: neural ELA, neural_fingerprint, and
-            # frequency_domain_analysis are injected reactively after
-            # visual_evidence_profile routing is known.
-            return [
-                "Run file_hash_verify for evidence integrity check",
-                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run analyze_image_content for semantic image understanding",
-            ]
-        # Lossy/JPEG fallback: Neural ELA, neural_fingerprint, and
-        # frequency_domain_analysis are injected reactively after
-        # visual_evidence_profile routing is known.
-        return [
+        classification = getattr(self, '_file_classification', None)
+        if not classification:
+            classification = self._legacy_classify()
+
+        recommended_tools = classification.recommended_tools
+        base_tasks = [
             "Run file_hash_verify for evidence integrity check",
             "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-            "Run analyze_image_content for semantic image understanding",
         ]
+
+        from core.image_routing import TOOL_TO_TASK_DESCRIPTION
+        for tool in recommended_tools:
+            if tool in ("file_hash_verify", "visual_evidence_profile"):
+                continue
+            task_desc = TOOL_TO_TASK_DESCRIPTION.get(tool)
+            if task_desc:
+                base_tasks.append(task_desc)
+
+        if "extract_text_from_image" not in " ".join(base_tasks):
+            if classification.primary_category in ("screenshot", "document"):
+                base_tasks.append("Run extract_text_from_image for visible text extraction")
+
+        return base_tasks
+
+    def _legacy_classify(self):
+        """Fallback classification using legacy heuristics."""
+        from core.file_classifier import FileClassification, classify_evidence_file
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return FileClassification(
+                    primary_category="screenshot" if (self._is_screen_capture or self._is_digital_capture)
+                    else "document" if self._is_document
+                    else "live_photograph",
+                    confidence=0.6,
+                )
+        except RuntimeError:
+            pass
+        return FileClassification(primary_category="live_photograph", confidence=0.5)
 
     @property
     def deep_task_decomposition(self) -> list[str]:
@@ -228,12 +224,22 @@ class Agent1Image(ForensicAgent):
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()
 
-        # ── Domain Handlers (Phase 1 + Phase 2 neural tools) ─────────────────
-        # Audit Fix: ImageHandlers now also provides analyze_image_content,
-        # extract_text_from_image (unified), and frequency_domain_analysis.
-        registry.register_domain_handler(ImageHandlers(self))
+        # ── Pre-flight validation ──────────────────────────────────────────────
+        await self._validate_evidence_artifact()
 
-        # ── Hash verification (from metadata domain) ──────────────────────────
+        # ── File Classification (single source of truth) ──────────────────────
+        from core.file_classifier import classify_evidence_file
+        classification = await classify_evidence_file(self.evidence_artifact)
+        self._file_classification = classification
+
+        logger.info(
+            "Tool registry built for category",
+            category=classification.primary_category,
+            recommended_tools=len(classification.recommended_tools),
+        )
+
+        # ── Register category-specific tools ──────────────────────────────────
+        # Core tools always registered
         metadata_h = MetadataHandlers(self)
         registry.register(
             "file_hash_verify",
@@ -241,6 +247,29 @@ class Agent1Image(ForensicAgent):
             "SHA-256 hash verification against ingestion record",
         )
 
+        # Only register image handlers for tools in the recommended set
+        image_h = ImageHandlers(self)
+        if classification.primary_category == "screenshot":
+            registry.register("extract_text_from_image", image_h.extract_text_from_image_handler, "Gemini Multimodal OCR")
+            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
+            registry.register("detect_font_inconsistency", image_h.detect_font_inconsistency_handler, "Font consistency analysis")
+            registry.register("detect_ui_overlay_forgery", image_h.detect_ui_overlay_forgery_handler, "UI overlay forgery detection")
+            registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
+        elif classification.primary_category in ("live_photograph", "object_scene", "web_image"):
+            registry.register("neural_ela", image_h.neural_ela_handler, "Neural ELA manipulation detection")
+            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
+            registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
+            registry.register("neural_fingerprint", image_h.neural_fingerprint_handler, "SigLIP2 neural fingerprint")
+        elif classification.primary_category == "document":
+            registry.register("extract_text_from_image", image_h.extract_text_from_image_handler, "Gemini Multimodal OCR")
+            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
+            registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
+            registry.register("neural_ela", image_h.neural_ela_handler, "Neural ELA manipulation detection")
+        elif classification.primary_category == "ai_generated_suspect":
+            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
+            registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
+            registry.register("diffusion_artifact_detector", image_h.diffusion_artifact_detector_handler, "Diffusion artifact detection")
+            registry.register("deepfake_frequency_check", image_h.deepfake_frequency_check_handler, "GAN/Deepfake frequency check")
 
         # ── Shared Visual Evidence Profile Handler ─────────────────────────────
         async def visual_evidence_profile_handler(input_data: dict) -> dict:
@@ -434,6 +463,29 @@ class Agent1Image(ForensicAgent):
 
         return registry
 
+    async def _verify_required_tools_executed(self) -> None:
+        """After Phase 1 completes, verify all required tools actually ran."""
+        classification = getattr(self, '_file_classification', None)
+        if not classification:
+            return
+
+        required_tools = set(classification.recommended_tools)
+        executed_tools = set(self._tool_context.keys())
+
+        missing = required_tools - executed_tools
+        if missing:
+            logger.warning(
+                "Incomplete forensic coverage",
+                category=classification.primary_category,
+                missing_tools=list(missing),
+            )
+
+        logger.info(
+            "Tool coverage verified",
+            category=classification.primary_category,
+            required=len(required_tools),
+            executed=len(executed_tools),
+        )
 
     async def build_initial_thought(self) -> str:
         name = os.path.basename(getattr(self.evidence_artifact, "file_path", "unknown"))

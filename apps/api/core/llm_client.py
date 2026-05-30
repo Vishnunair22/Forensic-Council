@@ -97,6 +97,44 @@ class LLMResponse:
     provider: str = ""
 
 
+class _GroqTokensRateLimiter:
+    """Token bucket rate limiter for Groq API. 30 RPM, 7000 RPD."""
+    def __init__(self, rpm_limit: int = 30, rpd_limit: int = 7000):
+        self.rpm = TokenBucket(rpm_limit, rpm_limit / 60.0)
+        self.rpd = TokenBucket(rpd_limit, rpd_limit / 86400.0)
+
+    async def acquire(self) -> tuple[bool, str]:
+        if not self.rpm.try_consume(1.0):
+            return False, f"RPM limit reached, retry in {self.rpm.time_until_refill(1.0):.0f}s"
+        if not self.rpd.try_consume(1.0):
+            return False, "Daily quota exhausted"
+        return True, ""
+
+
+class TokenBucket:
+    def __init__(self, capacity: float, refill_rate: float):
+        self.capacity = capacity
+        self.tokens = capacity
+        self.refill_rate = refill_rate
+        self.last_refill = time.time()
+
+    def try_consume(self, cost: float = 1.0) -> bool:
+        now = time.time()
+        elapsed = now - self.last_refill
+        self.tokens = min(self.capacity, self.tokens + (elapsed * self.refill_rate))
+        self.last_refill = now
+        if self.tokens >= cost:
+            self.tokens -= cost
+            return True
+        return False
+
+    def time_until_refill(self, cost: float = 1.0) -> float:
+        needed = cost - self.tokens
+        if needed <= 0:
+            return 0.0
+        return needed / self.refill_rate if self.refill_rate > 0 else float('inf')
+
+
 class LLMClient:
     """
     Async LLM client with unified interface across Groq and Gemini.
@@ -111,6 +149,7 @@ class LLMClient:
     def __init__(self, config: Settings, use_arbiter_tier: bool = False):
         self.config = config
         self.use_arbiter_tier = use_arbiter_tier
+        self._groq_limiter = _GroqTokensRateLimiter()
         configure_provider_quota_guards(config)
 
         if use_arbiter_tier:
@@ -1101,6 +1140,15 @@ class LLMClient:
         priority: str = "medium",
     ) -> str:
         """Executive summary synthesis with cross-provider fallback support and priority."""
+        # Check Groq rate limiter proactively
+        if self.provider == "groq":
+            allowed, reason = await self._groq_limiter.acquire()
+            if not allowed:
+                logger.warning(f"Groq rate limit hit: {reason}. Falling back to template synthesis.")
+                if priority in ["critical", "high"]:
+                    return self._generate_template_synthesis(user_content)
+                return ""
+
         # Check quota first
         from core.quota_manager import get_quota_manager
 

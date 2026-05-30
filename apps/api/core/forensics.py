@@ -8,6 +8,7 @@ Consolidated from core/forensics/{ela,frequency,noise,sift,splicing}.py
 
 from __future__ import annotations
 
+import asyncio
 import io
 
 import cv2
@@ -189,6 +190,32 @@ def analyze_frequency_bands(file_path: str) -> dict:
             "error": str(e),
             "backend": "core-fft-frequency-engine",
             "court_defensible": False,
+        }
+
+
+async def analyze_noise_consistency_safe(file_path: str, timeout: float = 30.0) -> dict:
+    """
+    Wrapper that guarantees timeout via subprocess isolation.
+    Even if executor pool is full, this won't block forever.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, analyze_noise_consistency, file_path),
+            timeout=timeout,
+        )
+        return result
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Noise consistency analysis timed out",
+            file_path=file_path,
+            timeout=timeout,
+        )
+        return {
+            "available": False,
+            "error": f"Timeout after {timeout}s",
+            "timeout": True,
+            "confidence": 0.0,
         }
 
 

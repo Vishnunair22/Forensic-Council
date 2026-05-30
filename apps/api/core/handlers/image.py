@@ -39,7 +39,7 @@ from core.forensics import (
     check_adversarial_robustness,
     classify_ela_anomalies,
 )
-from core.handlers.base import BaseToolHandler
+from core.handlers.base import BaseToolHandler, InterToolCommunicationMixin
 from core.media_kind import is_screen_capture_like
 from core.ml_subprocess import run_ml_tool
 from core.scoring import ConfidenceCalibrator
@@ -89,7 +89,7 @@ def _ocr_cache_key(artifact: Any) -> str:
         return path
 
 
-class ImageHandlers(BaseToolHandler):
+class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
     """Handles Image Integrity and Content analysis tools."""
 
     def register_tools(self, registry) -> None:
@@ -494,6 +494,18 @@ class ImageHandlers(BaseToolHandler):
 
         result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=15.0)
         result = self._attach_visual_grounding(result, tool_name="neural_ela")
+
+        # Publish anomaly regions for downstream tools
+        if not result.get("error") and result.get("num_anomaly_regions", 0) > 0:
+            await self._publish_tool_signal(
+                'anomaly_regions_found',
+                {
+                    'anomaly_regions': result.get('anomaly_regions', []),
+                    'max_anomaly': result.get('max_anomaly', 0),
+                    'tool': 'neural_ela',
+                }
+            )
+
         if not result.get("error") and result.get("available"):
             if record:
                 # Store under both neural key and legacy key so Gemini reads it correctly.
@@ -896,12 +908,26 @@ class ImageHandlers(BaseToolHandler):
                 aliases=("splicing_detect",),
                 record=record,
             )
+
+        # Check if ELA found anomaly regions to focus on
+        ela_signals = await self._get_tool_signals('anomaly_regions_found')
         from core.inference_client import get_inference_client
 
         client = await get_inference_client()
 
-        # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
-        result = await client.predict_trufor(artifact.file_path)
+        if ela_signals:
+            anomaly_regions = ela_signals[0]['data'].get('anomaly_regions', [])
+            logger.info(
+                "Splicing detector focusing on ELA-identified regions",
+                num_regions=len(anomaly_regions),
+            )
+            result = await client.predict_trufor(
+                artifact.file_path,
+                focus_regions=anomaly_regions,
+            )
+        else:
+            # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
+            result = await client.predict_trufor(artifact.file_path)
 
         if not result.get("error"):
             if record:
