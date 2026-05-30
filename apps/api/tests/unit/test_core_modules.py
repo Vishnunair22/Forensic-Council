@@ -707,7 +707,7 @@ class TestSynthesisService:
             finding_type="voice_clone",
             confidence_raw=0.8,
             status="CONFIRMED",
-            reasoning_summary="Voice analysis complete.",
+            reasoning_summary="Voice analysis processed.",
             metadata={"tool_name": "voice_clone_detect", "court_defensible": True},
         )
 

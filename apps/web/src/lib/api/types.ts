@@ -87,9 +87,14 @@ export interface ReportDTO {
   per_agent_narrative_structured?: Record<
     string,
     {
-      evidence_assessment: string;
-      deep_analysis: string;
-      reliability_verdict: string;
+      evidence_assessment?: string;
+      deep_analysis?: string;
+      reliability_verdict?: string;
+      agent_brief?: string;
+      visual_description?: string;
+      key_findings?: string;
+      opinion?: string;
+      synthesis_source?: string;
     }
   >;
   summary_structured?: {

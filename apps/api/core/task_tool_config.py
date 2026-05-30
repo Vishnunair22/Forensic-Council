@@ -60,6 +60,8 @@ _IMAGE_TOOLS: frozenset[str] = frozenset(
         "visual_evidence_profile",
         "gemini_deep_forensic",  # deprecated compatibility alias
         "read_shared_image_context",
+        "detect_font_inconsistency",
+        "detect_ui_overlay_forgery",
         # Hash / integrity
         "file_hash_verify",
         # Scene / object (Agent 3 also applies to images)

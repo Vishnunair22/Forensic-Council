@@ -9,6 +9,7 @@ Implements Fix 3 (Decentralization) and Initial Analysis Refinements.
 from pathlib import Path
 
 from core.handlers.base import BaseToolHandler
+from core.media_kind import is_screen_capture_like
 from core.ml_subprocess import run_ml_tool
 from core.structured_logging import get_logger
 from tools.metadata_tools import _convert_to_degrees
@@ -268,7 +269,7 @@ class MetadataHandlers(BaseToolHandler):
             gemini_context = str(self.agent._agent1_context.get("content_description") or "")
             gemini_text = str(self.agent._agent1_context.get("metadata", {}).get("extracted_text") or "")
         elif getattr(self.agent, "inter_agent_bus", None):
-            shared = self.agent.inter_agent_bus.get_image_context(str(self.agent.session_id)) or {}
+            shared = self.agent.inter_agent_bus.get_visual_profile(str(self.agent.session_id)) or {}
             gemini_context = str(shared.get("content_description") or "")
             gemini_text = str(shared.get("metadata", {}).get("extracted_text") or "")
             
@@ -467,6 +468,8 @@ class MetadataHandlers(BaseToolHandler):
                 "original_hash": stored,
                 "hash_match": match,
                 "hash_matches": match,
+                "file_name": Path(artifact.file_path).name,
+                "file_size_bytes": Path(artifact.file_path).stat().st_size,
                 "available": True,
                 "confidence": 1.0,
                 "court_defensible": True,
@@ -561,6 +564,23 @@ class MetadataHandlers(BaseToolHandler):
         await self.agent.update_sub_task(
             "Auditing sensor noise residuals for PRNU fingerprint matching..."
         )
+
+        if is_screen_capture_like(artifact):
+            result = {
+                "available": True,
+                "status": "not_applicable",
+                "verdict": "NOT_APPLICABLE",
+                "evidence_verdict": "NOT_APPLICABLE",
+                "prnu_not_applicable": True,
+                "confidence": 0.0,
+                "court_defensible": False,
+                "reason": (
+                    "PRNU sensor matching is not meaningful for screenshots because "
+                    "there is no camera sensor noise pattern to validate."
+                ),
+            }
+            await self.agent._record_tool_result("prnu_sensor_verification", result)
+            return result
 
         # Upgrade: Use real noiseprint ML tool instead of baseline stub (Fix for Checklist Item 10)
         result = await run_ml_tool("noiseprint_clustering.py", artifact.file_path, timeout=30.0)

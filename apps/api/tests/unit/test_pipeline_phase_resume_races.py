@@ -280,6 +280,6 @@ async def test_cold_cache_dto_has_all_fields(monkeypatch):
     dto = _forensic_report_to_dto(FakeReport())
     assert dto.per_agent_narrative_structured == {}
     assert dto.summary_structured == {}
-    assert dto.degraded_findings_summary == ""
+    assert dto.degraded_findings_summary == {}
     assert dto.is_deep_analysis is False
     assert dto.cross_modal_fusion == {}

@@ -47,15 +47,6 @@ type UseSimulationProps = {
 function getMessagePhase(update: BriefUpdate): "initial" | "deep" | null {
   const data = update.data as Record<string, unknown> | undefined;
   const phase = data?.analysis_phase;
-
-  if (!phase) {
-    const status = data?.status;
-    if (status === "initiating" || status === "processing" || status === "analyzing") {
-      return "initial";
-    }
-    return null;
-  }
-
   return phase === "initial" || phase === "deep" ? phase : null;
 }
 
@@ -100,6 +91,8 @@ export const useSimulation = ({
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
   const [arbiterStatus, setArbiterStatus] = useState<string | null>(null);
   const [arbiterThinking, setArbiterThinking] = useState<string | null>(null);
+  const [revealQueue, setRevealQueue] = useState<AgentUpdate[]>([]);
+  const [revealPending, setRevealPending] = useState(false);
   const activePhaseRef = useRef<SimulationPhase>("initial");
 
   const setSimulationPhase = useCallback((phase: SimulationPhase) => {
@@ -597,13 +590,11 @@ export const useSimulation = ({
                   applyUpdate(update);
                 });
               } catch (flushErr) {
-                // Swallow the flushSync invariant violation and apply the
-                // update without forced synchronous flushing. React will batch
-                // it normally on the next commit.
+                console.error("[Simulation] flushSync failed, falling back to async apply:", flushErr);
                 try { applyUpdate(update); } catch (applyErr) {
+                  console.error("[Simulation] applyUpdate fallback also failed:", applyErr);
                   dbg.warn("[Simulation] applyUpdate fallback also failed:", applyErr);
                 }
-                dbg.warn("[Simulation] flushSync failed (likely during navigation), fell back to async apply:", flushErr);
               }
             }
           } finally {
@@ -1246,8 +1237,8 @@ const resumeInvestigation = useCallback(
     hitlCheckpoint,
     isDeepHITL,
     errorMessage,
-    revealQueue: [],
-    revealPending: false,
+    revealQueue,
+    revealPending,
     isReconnecting,
     streamStalled,
   };

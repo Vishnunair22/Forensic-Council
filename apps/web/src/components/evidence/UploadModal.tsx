@@ -16,10 +16,11 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected, authError }: UploadModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const prefersReducedMotion = useReducedMotion();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
   const { playSound } = useSound();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -55,14 +56,15 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
       playSound("error");
       return;
     }
-    if (isSubmitting) return;
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
     playSound("success-chime");
     timeoutRef.current = setTimeout(() => {
       onFileSelected(file);
     }, 600);
-  }, [onFileSelected, playSound, isSubmitting]);
+  }, [onFileSelected, playSound]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

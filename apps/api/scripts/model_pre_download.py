@@ -50,6 +50,7 @@ HF_MODEL_DIRS = {
     "open_clip": "models--" + settings.siglip_model_name.replace("/", "--"),
     "speechbrain_ecapa": "models--speechbrain--spkrec-ecapa-voxceleb",
     "speechbrain_aasist": "models--" + settings.aasist_model_name.replace("/", "--"),
+    "florence2": "models--microsoft--Florence-2-base",
 }
 
 GREEN = "\033[0;32m"
@@ -355,6 +356,37 @@ def download_audio_deepfake(force: bool = False) -> bool:
         return False
 
 
+def download_florence(force: bool = False) -> bool:
+    """Florence-2-base — local VLM for image captioning (Tier 3 Gemini fallback)."""
+    hf_dir = CACHE_DIRS["HF"]
+    model_slug = HF_MODEL_DIRS["florence2"]
+    model_dirs = [
+        Path(hf_dir) / "hub" / model_slug,
+        Path(hf_dir) / "transformers" / model_slug,
+    ]
+    cached = [p for model_dir in model_dirs for p in _large_cached_files(model_dir, 10_000_000)]
+    if cached and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  Florence-2 - already cached ({cached[0]})")
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  Florence-2-base -> {hf_dir}")
+    try:
+        from transformers import AutoModelForCausalLM, AutoProcessor
+
+        AutoProcessor.from_pretrained("microsoft/Florence-2-base", trust_remote_code=True)
+        AutoModelForCausalLM.from_pretrained(
+            "microsoft/Florence-2-base", trust_remote_code=True, attn_implementation="eager"
+        )
+        post_blobs = [p for model_dir in model_dirs for p in _large_cached_files(model_dir, 10_000_000)]
+        if not post_blobs:
+            raise RuntimeError("Florence-2 download succeeded but no large artifact found")
+        print(f"  {GREEN}[OK  ]{RESET}  Florence-2 downloaded.")
+        return True
+    except Exception as exc:
+        print(f"  {YELLOW}[WARN]{RESET}  Florence-2 download failed: {exc}")
+        return False
+
+
 def _validate_lock_file() -> None:
     """Validate models.lock.json syntax and required metadata."""
     lock_path = Path(__file__).parent.parent / "config" / "models.lock.json"
@@ -458,6 +490,14 @@ def check_model_assets() -> bool:
     audio_ready = any(_has_large_file(path) for path in audio_dirs)
     print(f"  {GREEN if audio_ready else YELLOW}[{'OK  ' if audio_ready else 'MISS'}]{RESET}  Audio deepfake detector")
     ok = ok and audio_ready
+
+    florence_dirs = [
+        hf_dir / "hub" / HF_MODEL_DIRS["florence2"],
+        hf_dir / "transformers" / HF_MODEL_DIRS["florence2"],
+    ]
+    florence_ready = any(_has_large_file(path, 10_000_000) for path in florence_dirs)
+    print(f"  {GREEN if florence_ready else YELLOW}[{'OK  ' if florence_ready else 'MISS'}]{RESET}  Florence-2")
+    ok = ok and florence_ready
     print()
     return ok
 
@@ -522,6 +562,7 @@ def main() -> None:
         ("ResNet-50", download_resnet50),
         ("SpeechBrain ECAPA", download_speechbrain),
         ("Audio deepfake detector", download_audio_deepfake),
+        ("Florence-2", download_florence),
     ]
     results = [(name, downloader(args.force)) for name, downloader in download_plan]
 

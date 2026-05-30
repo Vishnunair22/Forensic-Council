@@ -73,6 +73,50 @@ interface Section {
   findings: AgentFindingDTO[];
 }
 
+type ParsedAgentNarrative = {
+  agent_brief: string;
+  visual_description: string;
+  key_findings: string;
+  opinion: string;
+  synthesis_source?: string;
+};
+
+const SCREENSHOT_CAMERA_TOOLS = new Set([
+  "noiseprint_cluster",
+  "noise_fingerprint",
+  "prnu_sensor_verification",
+  "neural_ela",
+  "ela_full_image",
+  "jpeg_ghost_detect",
+  "neural_splicing",
+  "splicing_detect",
+  "neural_copy_move",
+  "copy_move_detect",
+  "adversarial_robustness_check",
+  "roi_extract",
+]);
+
+function toolNameForFinding(f: AgentFindingDTO): string {
+  return String((f.metadata?.tool_name as string) || f.finding_type || "").toLowerCase();
+}
+
+function isScreenshotEvidence(findings: AgentFindingDTO[]): boolean {
+  const visual = findings.find((f) => toolNameForFinding(f) === "visual_evidence_profile");
+  const haystack = [
+    visual?.reasoning_summary,
+    visual?.metadata?.content_description,
+    visual?.metadata?.contextual_narrative,
+    visual?.metadata?.interface_identification,
+    (visual?.metadata?.forensic_routing as { image_category?: string } | undefined)?.image_category,
+    ...findings.map((f) => f.metadata?.image_type),
+  ]
+    .map((x) => String(x || "").toLowerCase())
+    .join(" ");
+  return ["screenshot", "screen capture", "digital ui", "browser", "whatsapp", "telegram", "web page"].some((token) =>
+    haystack.includes(token),
+  );
+}
+
 // ─── Dedup + stale/template filter ───────────────────────────────────────────
 // Many runs leak duplicate tool entries (re-runs append new findings without
 // retiring the prior ones) and stub findings whose entire content is a
@@ -97,10 +141,14 @@ function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] {
   }
 
   const deduped = Array.from(byKey.values());
+  const screenshotEvidence = isScreenshotEvidence(deduped);
 
   return deduped.filter((f) => {
+    const tool = toolNameForFinding(f);
+    if (screenshotEvidence && SCREENSHOT_CAMERA_TOOLS.has(tool)) return false;
     const verdict = String(f.evidence_verdict || "").toUpperCase();
-    // Keep flagged/error/NA regardless — those are informative even without text.
+    // Keep flagged/error rows; not-applicable rows are shown only when they are not
+    // screenshot camera-tool bypasses.
     if (verdict === "POSITIVE" || verdict === "ERROR" || verdict === "NOT_APPLICABLE") return true;
     const summary = deriveSummary(f);
     const hasReal =
@@ -190,6 +238,16 @@ function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsD
 
   const confidence = Math.round((metrics?.confidence_score ?? 0) * 100);
   const errorRate = Math.round((metrics?.error_rate ?? 0) * 100);
+  const visual = findings.find((f) => toolNameForFinding(f) === "visual_evidence_profile");
+  const visualText = cleanSummary(
+    String(
+      visual?.metadata?.content_description ||
+      visual?.metadata?.contextual_narrative ||
+      visual?.reasoning_summary ||
+      "",
+    ),
+    220,
+  );
   const lead =
     positives.length > 0
       ? `${positives.length} check${positives.length === 1 ? "" : "s"} reported manipulation signals`
@@ -203,7 +261,7 @@ function buildAgentOverview(findings: AgentFindingDTO[], metrics?: AgentMetricsD
     .join(" ");
 
   return cleanFindingText(
-    `${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`,
+    `${visualText ? `Visual profile: ${visualText}. ` : ""}${lead}. Confidence is ${confidence}% with ${errorRate}% tool error rate. ${highlights || "Open each tool result for the exact diagnostic metrics."}${errors.length ? ` ${errors.length} check${errors.length === 1 ? "" : "s"} did not complete and are treated only as coverage limits.` : ""}`,
   );
 }
 
@@ -367,7 +425,34 @@ export function AgentFindingCard({
   // Prefer the typed structured narrative from the backend DTO; fall back to JSON
   // parse of per_agent_analysis string (legacy path) if the field is absent.
   const parsedNarrative = useMemo(() => {
-    if (narrativeStructured?.evidence_assessment) return narrativeStructured;
+    const normalizeStructured = (value: unknown): ParsedAgentNarrative | null => {
+      if (!value || typeof value !== "object") return null;
+      const record = value as Record<string, unknown>;
+      if (record.agent_brief || record.visual_description || record.opinion || record.key_findings) {
+        return {
+          agent_brief: String(record.agent_brief || ""),
+          visual_description: String(record.visual_description || record.evidence_assessment || ""),
+          key_findings: String(record.key_findings || record.deep_analysis || ""),
+          opinion: String(record.opinion || record.reliability_verdict || ""),
+          synthesis_source: String(record.synthesis_source || ""),
+        };
+      }
+      if (record.evidence_assessment || record.deep_analysis || record.reliability_verdict) {
+        return {
+          agent_brief: "",
+          visual_description: String(record.evidence_assessment || ""),
+          key_findings: String(record.deep_analysis || ""),
+          opinion: String(record.reliability_verdict || ""),
+          synthesis_source: String(record.synthesis_source || ""),
+        };
+      }
+      return null;
+    };
+
+    if (narrativeStructured) {
+      const normalized = normalizeStructured(narrativeStructured);
+      if (normalized) return normalized;
+    }
     if (!narrative) return null;
     try {
       const cleanNarrative = narrative.trim();
@@ -375,19 +460,8 @@ export function AgentFindingCard({
       const lastBrace = cleanNarrative.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace !== -1) {
         const parsed = JSON.parse(cleanNarrative.slice(firstBrace, lastBrace + 1));
-        if (
-          parsed &&
-          typeof parsed === "object" &&
-          "evidence_assessment" in parsed &&
-          "deep_analysis" in parsed &&
-          "reliability_verdict" in parsed
-        ) {
-          return parsed as {
-            evidence_assessment: string;
-            deep_analysis: string;
-            reliability_verdict: string;
-          };
-        }
+        const normalized = normalizeStructured(parsed);
+        if (normalized) return normalized;
       }
     } catch {
       // Not valid JSON narrative format
@@ -397,7 +471,7 @@ export function AgentFindingCard({
 
   const overview = useMemo(() => {
     if (parsedNarrative) {
-      return `${parsedNarrative.evidence_assessment} ${parsedNarrative.reliability_verdict}`;
+      return parsedNarrative.agent_brief || `${parsedNarrative.visual_description} ${parsedNarrative.opinion}`;
     }
     return buildAgentOverview(realFindings, metrics, narrative);
   }, [realFindings, metrics, narrative, parsedNarrative]);
@@ -551,35 +625,66 @@ export function AgentFindingCard({
 
             {/* Agent overview narrative — full text, no clamp */}
             {parsedNarrative ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                {/* Evidence Assessment Column */}
-                <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 text-primary">
-                    <ShieldCheck className="w-4 h-4 shrink-0 text-primary" />
-                    <h4 className="text-xs font-black tracking-wider font-mono text-primary">Evidence Assessment</h4>
+              <div className="space-y-4 mb-4">
+                {/* Agent Brief hero box */}
+                {parsedNarrative.agent_brief && (
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-1.5">
+                    <div className="flex items-center gap-2 text-primary">
+                      <ShieldCheck className="w-4.5 h-4.5 shrink-0 text-primary" />
+                      <h4 className="text-xs font-black tracking-wider font-mono text-primary">Agent Brief</h4>
+                    </div>
+                    <p className="text-sm text-white/90 leading-relaxed font-medium italic">{parsedNarrative.agent_brief}</p>
                   </div>
-                  <BulletedText text={parsedNarrative.evidence_assessment} colorClass="bg-primary/40" />
-                </div>
-
-                {/* Deep Cross-Validation Column — only shown in deep phase */}
-                {phase === "deep" && (
-                <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 fc-text-primary">
-                    <Activity className="w-4 h-4 shrink-0" />
-                    <h4 className="text-xs font-black tracking-wider font-mono">Deep Validation</h4>
-                  </div>
-                  <BulletedText text={parsedNarrative.deep_analysis} colorClass="bg-white/25" />
-                </div>
                 )}
 
-                {/* Reliability & Verdict Column */}
-                <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                  <div className="flex items-center gap-2 text-success">
-                    <Shield className="w-4 h-4 shrink-0 text-success" />
-                    <h4 className="text-xs font-black tracking-wider font-mono text-success">Reliability & Verdict</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Visual Description column */}
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-blue-300">
+                        <Info className="w-4 h-4 shrink-0" />
+                        <h4 className="text-xs font-black tracking-wider font-mono">Visual Description</h4>
+                      </div>
+                      <div className="mt-2 text-xs text-white/80 leading-relaxed font-medium">
+                        <BulletedText text={parsedNarrative.visual_description} colorClass="bg-blue-500/40" />
+                      </div>
+                    </div>
                   </div>
-                  <BulletedText text={parsedNarrative.reliability_verdict} colorClass="bg-success/40" />
+
+                  {/* Your Opinion column */}
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-success">
+                        <Shield className="w-4 h-4 shrink-0 text-success" />
+                        <h4 className="text-xs font-black tracking-wider font-mono">Your Opinion</h4>
+                      </div>
+                      <div className="mt-2 text-xs text-white/80 leading-relaxed font-medium">
+                        <BulletedText text={parsedNarrative.opinion} colorClass="bg-success/40" />
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Key Findings list */}
+                {parsedNarrative.key_findings && (
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-3">
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <Activity className="w-4 h-4 shrink-0" />
+                      <h4 className="text-xs font-black tracking-wider font-mono">Key Findings</h4>
+                    </div>
+                    <div className="space-y-2">
+                      {(parsedNarrative.key_findings.includes("\n")
+                        ? parsedNarrative.key_findings.split("\n")
+                        : parsedNarrative.key_findings.split(";")
+                      ).filter(Boolean).map((line, idx) => (
+                        <div key={idx} className="flex items-start gap-2.5 text-xs text-white/75 font-mono">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                          <span>{line.replace(/^-\s*/, "").trim()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               overview && (

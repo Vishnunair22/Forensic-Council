@@ -104,15 +104,45 @@ def _humanize_initial_finding(
 
     if "file_hash_verify" in tool or "file hash verify" in text.lower():
         match = _HASH_RE.search(text)
-        digest = f"{match.group(1)[:12]}..." if match else "recorded digest"
+        raw_digest = metadata.get("computed_hash") or metadata.get("current_hash") or (match.group(1) if match else "")
+        digest = f"{str(raw_digest)[:12]}..." if raw_digest else "recorded digest"
+        size = metadata.get("file_size_bytes")
+        size_note = f", {size:,} bytes" if isinstance(size, int) else ""
         return (
-            f"Integrity check passed. The uploaded file hash ({digest}) matches the "
+            f"Integrity check passed. The uploaded file hash ({digest}{size_note}) matches the "
             "chain-of-custody record, so the submitted artifact was not altered after intake."
         )
 
     if "exif" in tool or "metadata" in tool:
+        fields = int(metadata.get("total_fields_extracted") or 0)
+        device = " ".join(
+            str(x)
+            for x in (
+                metadata.get("device_model"),
+                metadata.get("camera_make") or metadata.get("make"),
+                metadata.get("camera_model") or metadata.get("model"),
+            )
+            if x
+        ).strip()
+        captured = (
+            metadata.get("datetime_original")
+            or metadata.get("DateTimeOriginal")
+            or metadata.get("CreateDate")
+            or metadata.get("CreationDate")
+        )
+        size_note = f"; file size {metadata.get('file_size_human')}" if metadata.get("file_size_human") else ""
         if is_screen_capture_like(artifact):
-            return "Container metadata is consistent with a digital screen capture (limited EXIF provenance is expected)."
+            return (
+                f"Container metadata fits a screen-capture workflow: {fields} metadata field(s), "
+                f"device {'recorded as ' + device if device else 'not recorded'}, "
+                f"capture time {'recorded as ' + str(captured) if captured else 'not recorded'}{size_note}."
+            )
+        if device or captured or fields:
+            return (
+                f"EXIF/metadata extracted {fields} field(s); "
+                f"device {'recorded as ' + device if device else 'not recorded'}, "
+                f"capture time {'recorded as ' + str(captured) if captured else 'not recorded'}{size_note}."
+            )
 
         parts = []
         if "device: not recorded" in text.lower() or "device not recorded" in text.lower():
@@ -204,6 +234,31 @@ def _humanize_initial_finding(
                 else "."
             )
         )
+
+    if "detect_font_inconsistency" in tool:
+        score = metadata.get("font_consistency_score")
+        regions = int(metadata.get("num_anomaly_regions") or 0)
+        ratio = metadata.get("anomaly_region_ratio")
+        if evidence_verdict == "POSITIVE":
+            return (
+                f"Screenshot font/rendering check found {regions} localized text-rendering outlier(s)"
+                + (f" (outlier ratio {float(ratio):.3f})" if isinstance(ratio, (int, float)) else "")
+                + ". Review the highlighted text regions before treating this as edited content."
+            )
+        return (
+            "Screenshot font/rendering check found expected variation for a mixed browser/UI capture"
+            + (f" (consistency score {float(score):.3f})" if isinstance(score, (int, float)) else "")
+            + "."
+        )
+
+    if "detect_ui_overlay_forgery" in tool:
+        regions = int(metadata.get("num_suspicious_regions") or 0)
+        if evidence_verdict == "POSITIVE":
+            return (
+                f"UI overlay check found {regions} suspicious banner/overlay region(s); "
+                "review for pasted notifications or inserted interface chrome."
+            )
+        return "UI overlay check found no suspicious pasted notification bars or inserted browser/interface panels."
 
     if "analyze_image_content" in tool or "analyze image content" in text.lower():
         if metadata.get("semantic_scope") == "screenshot_fast_profile":
@@ -356,4 +411,3 @@ def _verdict_score(verdict: Any) -> float | None:
     if value == "INCONCLUSIVE":
         return 0.5
     return None
-

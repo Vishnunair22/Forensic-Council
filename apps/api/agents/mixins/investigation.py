@@ -24,6 +24,31 @@ _TAMPERING_INDICATOR_KEYWORDS = {
     "diffusion", "gan", "deepfake", "inconsistent",
 }
 
+_SCREENSHOT_INAPPLICABLE_TOOLS = {
+    "noiseprint_cluster",
+    "noise_fingerprint",
+    "prnu_sensor_verification",
+    "neural_ela",
+    "ela_full_image",
+    "jpeg_ghost_detect",
+    "neural_splicing",
+    "splicing_detect",
+    "neural_copy_move",
+    "copy_move_detect",
+    "adversarial_robustness_check",
+    "roi_extract",
+}
+
+
+def _tool_from_task_description(description: str) -> str:
+    lower = str(description or "").lower()
+    for tool in _SCREENSHOT_INAPPLICABLE_TOOLS:
+        if tool in lower:
+            return tool
+    if "prnu" in lower or "sensor-region" in lower or "sensor-level" in lower:
+        return "noiseprint_cluster"
+    return ""
+
 
 class AgentInvestigationMixin:
     """
@@ -59,6 +84,16 @@ class AgentInvestigationMixin:
             reactive_agent_id = getattr(self, "_reactive_expansion_agent_id", None)
             target_agent_id = reactive_agent_id or self.agent_id
             phase = "deep" if reactive_agent_id else "initial"
+            blocked_tool = _tool_from_task_description(description)
+            if blocked_tool and self._is_screen_capture_context():
+                logger.info(
+                    "Skipping screenshot-inapplicable dynamic task",
+                    agent_id=self.agent_id,
+                    task=description,
+                    tool_name=blocked_tool,
+                    phase=phase,
+                )
+                return
 
             # Check if task already exists to avoid duplication loops
             # Also block COMPLETE tasks — re-injecting an already-executed
@@ -111,6 +146,29 @@ class AgentInvestigationMixin:
                 logger.debug("tools_total broadcast failed", error=str(e))
         except Exception as e:
             logger.error("Failed to inject dynamic task", agent_id=self.agent_id, error=str(e))
+
+    def _is_screen_capture_context(self) -> bool:
+        """Return true once the shared visual profile identifies a digital UI/screenshot."""
+        try:
+            ctx = getattr(self, "_tool_context", {}) or {}
+            visual = ctx.get("visual_evidence_profile") or {}
+            if hasattr(visual, "to_finding_dict"):
+                visual = visual.to_finding_dict()
+            meta = visual.get("metadata") if isinstance(visual, dict) else {}
+            haystack = " ".join(
+                str(x or "")
+                for x in (
+                    visual.get("content_description") if isinstance(visual, dict) else "",
+                    visual.get("reasoning_summary") if isinstance(visual, dict) else "",
+                    meta.get("content_description") if isinstance(meta, dict) else "",
+                    meta.get("contextual_narrative") if isinstance(meta, dict) else "",
+                    meta.get("interface_identification") if isinstance(meta, dict) else "",
+                    (meta.get("forensic_routing") or {}).get("image_category") if isinstance(meta, dict) and isinstance(meta.get("forensic_routing"), dict) else "",
+                )
+            ).lower()
+            return any(token in haystack for token in ("screenshot", "screen capture", "digital ui", "browser", "whatsapp", "telegram", "web page"))
+        except Exception:
+            return False
 
     async def _check_tool_availability(self) -> None:
         """Log unavailable tools to custody; does not raise — agents degrade gracefully."""
@@ -282,7 +340,7 @@ class AgentInvestigationMixin:
             visual_context: dict = {
                 # Evidence identity
                 "content_description": _gem_str(
-                    "content_description", "reasoning_summary", "content_description"
+                    "content_description", "content_description", "reasoning_summary"
                 ),
                 "image_category": _gem_str(
                     "file_type_assessment", "image_category"
@@ -463,6 +521,12 @@ class AgentInvestigationMixin:
                     "detections",
                     "weapon_detections",
                     "classes_found",
+                    "visual_grounding",
+                    "grounded_by_visual_profile",
+                    "extracted_text",
+                    "text",
+                    "word_count",
+                    "file_size_bytes",
                     "metadata_timeline_consistent",
                     "inconsistency_detected",
                     "anomaly_detected",
@@ -613,11 +677,21 @@ class AgentInvestigationMixin:
         phase: str,
     ) -> dict[str, Any]:
         """Build metrics and evidence-grounded summaries when the LLM is unavailable."""
-        actionable = [
-            f
-            for f in findings
-            if f.status != "NOT_APPLICABLE" and f.evidence_verdict != "NOT_APPLICABLE"
-        ]
+        from core.synthesis import TEMPLATE_PATTERNS
+        def is_template(text: str) -> bool:
+            if not text:
+                return True
+            t = text.lower()
+            return any(p in t for p in TEMPLATE_PATTERNS)
+
+        actionable = []
+        for f in findings:
+            if f.status == "NOT_APPLICABLE" or f.evidence_verdict == "NOT_APPLICABLE":
+                continue
+            summary = f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or ""
+            if is_template(summary):
+                continue
+            actionable.append(f)
         confidence_values = [
             float(f.confidence_raw)
             for f in actionable
@@ -639,6 +713,21 @@ class AgentInvestigationMixin:
         _evidence_artifact = getattr(self, "evidence_artifact", None)
         from core.media_kind import is_screen_capture_like as _is_scap
         _is_screenshot = _is_scap(_evidence_artifact) if _evidence_artifact else False
+        _visual_profile = getattr(self, "_tool_context", {}).get("visual_evidence_profile") or {}
+        _visual_meta = _visual_profile.get("metadata") if isinstance(_visual_profile, dict) else {}
+        if not isinstance(_visual_meta, dict):
+            _visual_meta = {}
+        _visual_desc = (
+            _visual_meta.get("content_description")
+            or _visual_meta.get("contextual_narrative")
+            or (_visual_profile.get("reasoning_summary") if isinstance(_visual_profile, dict) else "")
+            or ""
+        )
+        _routing = _visual_meta.get("forensic_routing")
+        _visual_category = str(_routing.get("image_category") or "") if isinstance(_routing, dict) else ""
+        _visual_category = _visual_category or str(_visual_meta.get("file_type_assessment") or "")
+        _persona = str(getattr(self, "persona", "") or "")
+        _persona_role = _persona.split(".")[0].strip() if _persona else self.agent_name
 
         if positive_count >= 2:
             verdict = "TAMPERED"
@@ -896,14 +985,20 @@ class AgentInvestigationMixin:
         if _is_screenshot and positive_count == 0:
             # Screenshot-specific deterministic narrative — describes what was checked
             _checked = ", ".join(s["label"] for s in sections[:3]) if sections else "integrity tools"
+            _subject = f"The visual profile identified this evidence as {_visual_desc}. " if _visual_desc else ""
             narrative = (
-                f"{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
+                f"{_subject}{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
                 f"({_checked}). No pixel-level manipulation signals were detected — "
                 "hash integrity, OCR content, and frequency/layout checks all returned clean. "
                 "These results confirm the evidence is intact since upload; they do not speak to the original capture device or timestamp."
             )
         elif sections:
-            narrative = f"{self.agent_name} analysis complete. " + sections[0]["opinion"][:220]
+            prefix = ""
+            if _visual_desc:
+                prefix = f"Visual profile context: {_visual_desc[:180]}. "
+            elif _visual_category:
+                prefix = f"Visual profile category: {_visual_category}. "
+            narrative = f"{prefix}{self.agent_name} analysis complete. " + sections[0]["opinion"][:220]
         elif top_findings:
             primary = top_findings[0]
             primary_summary = primary.reasoning_summary.strip()
@@ -916,14 +1011,46 @@ class AgentInvestigationMixin:
                 f"{self.agent_name} found no applicable forensic signals for this file type "
                 f"during {phase} analysis."
             )
+
+        clean_tool_findings = []
+        for section in sections:
+            opinion = str(section.get("opinion") or "").strip()
+            if not opinion:
+                continue
+            clean_tool_findings.append(opinion.rstrip(" .") + ".")
+        if _visual_desc:
+            visual_line = f"Visual profile identified the evidence as {_visual_desc.rstrip(' .')}."
+            clean_tool_findings = [visual_line] + clean_tool_findings
+        if not clean_tool_findings and narrative:
+            clean_tool_findings = [narrative.rstrip(" .") + "."]
+
+        verdict_text = verdict.replace("_", " ").title()
+        if positive_count:
+            tool_conclusion = "one or more applicable tools flagged a manipulation signal"
+        elif actionable:
+            tool_conclusion = "all applicable tools returned clean findings"
+        else:
+            tool_conclusion = "no applicable tools produced a decisive signal"
+        agent_brief = (
+            f"{self.agent_name} identified the evidence as {_visual_desc or _visual_category or 'the submitted evidence file'}. "
+            f"The agent ran {len(actionable)} applicable tool(s); {tool_conclusion}. "
+            f"The evidence is assessed as {verdict_text} with {round(confidence * 100)}% confidence."
+        )
         return {
             "agent_confidence": confidence,
             "agent_error_rate": error_rate,
             "verdict": verdict,
             "narrative_summary": narrative,
+            "agent_brief": agent_brief,
+            "key_findings": clean_tool_findings[:6],
             "sections": sections,
             "synthesis_source": "tool_grounded_deterministic",
-            "fallback_reason": "LLM narrative unavailable; summary generated directly from model/tool outputs.",
+            "agent_role": _persona_role,
+            "visual_profile_context": {
+                "content_description": _visual_desc,
+                "image_category": _visual_category,
+            },
+            "fallback_reason": "LLM narrative unavailable; summary generated directly from visual profile and tool outputs.",
         }
 
     async def run_investigation(self) -> list[AgentFinding]:

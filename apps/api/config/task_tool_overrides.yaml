@@ -177,7 +177,9 @@ agent1_initial:
   # Exact Phase-1 task strings (prevent reliance on substring fallback)
   "run file_hash_verify for evidence integrity check": "file_hash_verify"
   "run analyze_image_content for semantic image understanding": "analyze_image_content"
+  "run analyze_image_content for semantic document classification": "analyze_image_content"
   "run extract_text_from_image for visible text extraction": "extract_text_from_image"
+  "run extract_text_from_image for ocr and document content identification": "extract_text_from_image"
   "run visual_evidence_profile for visual evidence profile and forensic routing hints": "visual_evidence_profile"
   "visual evidence profile and forensic routing hints": "visual_evidence_profile"
 
@@ -185,9 +187,14 @@ agent1_initial:
   "run gemini_deep_forensic for visual evidence profile and forensic routing hints": "visual_evidence_profile"
   "run gemini_deep_forensic for final semantic grounding and court-ready verdict": "visual_evidence_profile"
   "run frequency_domain_analysis for frequency domain analysis": "frequency_domain_analysis"
+  "run detect_font_inconsistency for screenshot text font analysis": "detect_font_inconsistency"
+  "screenshot text font analysis": "detect_font_inconsistency"
+  "run detect_ui_overlay_forgery for screenshot ui overlay analysis": "detect_ui_overlay_forgery"
+  "screenshot ui overlay analysis": "detect_ui_overlay_forgery"
   "run synthid_watermark_detect for synthid and ai watermark detection": "synthid_watermark_detect"
   # Neural ELA / noiseprint Phase-1 exact task strings
   "run neural_ela for high-confidence manipulation detection": "neural_ela"
+  "run neural_ela for jpeg manipulation detection": "neural_ela"
   "high-confidence manipulation detection": "neural_ela"
   "run noiseprint_cluster for sensor-region source inconsistency": "noiseprint_cluster"
   "sensor-region source inconsistency": "noiseprint_cluster"
@@ -212,6 +219,14 @@ agent1_initial:
   "ai-generation signatures": "diffusion_artifact_detector"
   "run diffusion_artifact_detector to confirm ai generation": "diffusion_artifact_detector"
   "confirm ai generation": "diffusion_artifact_detector"
+  "run deepfake_frequency_check for gan/diffusion artifacts": "deepfake_frequency_check"
+  "gan/diffusion artifacts": "deepfake_frequency_check"
+  "run jpeg_ghost_detect for double compression analysis": "jpeg_ghost_detect"
+  "double compression analysis": "jpeg_ghost_detect"
+  "run roi_extract for localized forensic region analysis": "roi_extract"
+  "localized forensic region analysis": "roi_extract"
+  "run roi_extract guided by object detection for targeted ela on subject": "roi_extract"
+  "targeted ela on subject": "roi_extract"
 
 # --- Deep Pass Tools (Agent 1) ---
 deep_agent1:
@@ -238,14 +253,22 @@ agent2_initial:
 
 # --- Agent 3: Phase 1 Tools ---
 agent3_initial:
+  "run object_detection for scene object identification": "object_detection"
+  "scene object identification": "object_detection"
   "run object_detection on full scene": "object_detection"
   "run vector_contraband_search for high-dimensional weapon/threat detection": "vector_contraband_search"
+  "run vector_contraband_search for risk object screening": "vector_contraband_search"
+  "risk object screening": "vector_contraband_search"
   "high-dimensional weapon/threat detection": "vector_contraband_search"
   "vector contraband search": "vector_contraband_search"
   "run lighting_correlation_initial to flag compositing candidates": "lighting_correlation_initial"
+  "run lighting_correlation_initial for initial shadow and light direction audit": "lighting_correlation_initial"
+  "initial shadow and light direction audit": "lighting_correlation_initial"
   "compositing candidates": "lighting_correlation_initial"
   "lighting correlation initial": "lighting_correlation_initial"
   "run scene_incongruence for contextual anomalies": "scene_incongruence"
+  "run scene_incongruence for contextual anomaly detection": "scene_incongruence"
+  "contextual anomaly detection": "scene_incongruence"
   "run screenshot_scene_applicability for screen-capture object/scene scope": "screenshot_scene_applicability"
   "screenshot_scene_applicability": "screenshot_scene_applicability"
   "run screenshot_layout_forensics for ui and document layout anomaly scan": "screenshot_layout_forensics"
@@ -258,6 +281,12 @@ agent3_initial:
   # Issue 1: Add explicit contraband_database mappings
   "run contraband_database for risk object screening": "vector_contraband_search"
   "contraband_database": "vector_contraband_search"
+  "run secondary_classification on flagged objects for validation": "secondary_classification"
+  "flagged objects for validation": "secondary_classification"
+  "run scale_validation for weapon size plausibility check": "scale_validation"
+  "weapon size plausibility check": "scale_validation"
+  "run lighting_consistency for shadow validation on held objects": "lighting_consistency"
+  "shadow validation on held objects": "lighting_consistency"
 
 # --- Deep Pass Tools (Agent 2) ---
 deep_agent2:
@@ -281,6 +310,8 @@ deep_agent5:
   "run metadata_anomaly_score": "metadata_anomaly_score"
   "probabilistic fabrication detection": "metadata_anomaly_score"
   "run provenance_chain_verify": "provenance_chain_verify"
+  "run provenance_chain_verify for c2pa/jumbf integrity check": "provenance_chain_verify"
+  "c2pa/jumbf integrity check": "provenance_chain_verify"
   "c2pa and digital provenance manifests": "provenance_chain_verify"
   "screenshot timestamp and provenance cross-check": "read_shared_image_context"
   "run camera_profile_match": "camera_profile_match"
@@ -291,7 +322,11 @@ deep_agent5:
   "run astro_grounding to verify shadow-sun-gps-time parity": "astro_grounding"
   "shadow-sun-gps-time parity": "astro_grounding"
   "run gps_timezone_validate for coordinate timeline checking": "gps_timezone_validate"
+  "run gps_timezone_validate for coordinate-timezone timeline cross-check": "gps_timezone_validate"
+  "coordinate-timezone timeline cross-check": "gps_timezone_validate"
   "coordinate timeline checking": "gps_timezone_validate"
+  "run file_structure_analysis for hidden hex-level manipulation artifacts": "file_structure_analysis"
+  "hidden hex-level manipulation artifacts": "file_structure_analysis"
 
 # --- Deep Pass Tools (Agent 4) ---
 deep_agent4:

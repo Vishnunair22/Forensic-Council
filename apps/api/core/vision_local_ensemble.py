@@ -3,6 +3,7 @@ import time
 from typing import Any
 
 from core.evidence import EvidenceArtifact, ArtifactType
+from core.image_routing import build_image_forensic_routing
 from core.structured_logging import get_logger
 from core.vision_types import VisualEvidenceFinding
 
@@ -67,8 +68,17 @@ async def analyze_local_visual_profile(
         detr_detect_objects,
     )
 
+    async def _screenshot_ela_skip() -> dict[str, Any]:
+        return {
+            "available": True,
+            "not_applicable": True,
+            "num_anomaly_regions": 0,
+            "max_anomaly": 0.0,
+            "reason": "ELA skipped for screenshot/local visual profile; UI edges are handled by OCR and layout checks.",
+        }
+
     tasks = [
-        ela_full_image(art),
+        _screenshot_ela_skip() if is_screen_capture_like else ela_full_image(art),
         extract_text_from_image(art),
         analyze_image_content(art),
         detr_detect_objects(file_path),
@@ -99,8 +109,8 @@ async def analyze_local_visual_profile(
     detected = detr_res if isinstance(detr_res, list) else []
 
     desc_parts = [
-        f"Local visual profile analysis of {file_path}.",
-        f"CLIP classified image category: '{clip_category}'."
+        "Local visual profile generated after Gemini was unavailable or skipped.",
+        f"Semantic category: {clip_category}.",
     ]
     if detected:
         desc_parts.append(f"Detected objects: {', '.join(detected)}.")
@@ -112,7 +122,7 @@ async def analyze_local_visual_profile(
     signals = []
     verdict = "AUTHENTIC"
     max_anomaly = 0.0
-    if isinstance(ela_res, dict):
+    if isinstance(ela_res, dict) and not ela_res.get("not_applicable"):
         max_anomaly = ela_res.get("max_anomaly", 0.0)
         if max_anomaly > 40.0:
             signals.append(f"High local ELA anomaly variance: {max_anomaly:.1f}")
@@ -121,7 +131,7 @@ async def analyze_local_visual_profile(
             signals.append(f"Multiple suspicious ELA anomaly clusters: {ela_res.get('num_anomaly_regions')}")
             verdict = "SUSPICIOUS"
 
-    is_screenshot = is_screen_capture_like or "screenshot" in clip_category.lower() or "document" in clip_category.lower()
+    is_screenshot = is_screen_capture_like or "screenshot" in clip_category.lower() or "screen capture" in clip_category.lower()
     interface_id = ""
     if is_screenshot:
         interface_id = f"Identified digital interface category: {clip_category}"
@@ -163,6 +173,12 @@ async def analyze_local_visual_profile(
     if partial_execution:
         degradation_flags.append(f"partial_tool_execution:{tools_ok}/{tools_total}")
 
+    routing = build_image_forensic_routing(
+        {"image_category": "screenshot" if is_screenshot else "object_scene"},
+        description=content_description,
+        file_path=file_path,
+    )
+
     finding = VisualEvidenceFinding(
         analysis_type="visual_evidence_profile",
         provider_used="local_visual_ensemble",
@@ -190,9 +206,8 @@ async def analyze_local_visual_profile(
         _authenticity_verdict=verdict,
         _metadata_visual_consistency=metadata_consistency,
         _forensic_routing={
-            "image_category": "screenshot" if is_screenshot else "object_scene",
+            **routing,
             "priority_signals": ["local_ela", "ocr_patterns"],
-            "skip_tools": [],
         },
         _forensic_specifics="Local analysis suggests " + ("digital UI layout" if is_screenshot else "natural photographic scene"),
         provider_attempts=[

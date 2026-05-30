@@ -98,6 +98,8 @@ def assign_severity_tier(f: Any) -> str:
 
     if evidence_verdict == "NOT_APPLICABLE" or na:
         return "INFO"
+    if meta.get("not_applicable") or meta.get("skipped"):
+        return "INFO"
     if meta.get("hash_matches") is True:
         return "INFO"
     if evidence_verdict == "ERROR" or failed or status_str == "INCOMPLETE":

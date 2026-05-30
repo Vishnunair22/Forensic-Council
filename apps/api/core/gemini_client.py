@@ -790,7 +790,11 @@ class GeminiVisionClient:
             if result and not result.error:
                 if cache_key:
                     _deep_forensic_cache_put(cache_key, result)
-                if triage_key:
+                # Only Agent 1 writes the shared triage cache so Agent 3/5
+                # always see Agent 1's pixel-level result, not a downstream
+                # object/scene analysis that would be misleading for pixel
+                # integrity validation.
+                if triage_key and agent_id == "Agent1":
                     _deep_forensic_cache_put(triage_key, result)
             return result
         except Exception as e:
@@ -871,7 +875,7 @@ class GeminiVisionClient:
         t0 = time.monotonic()
 
         try:
-            encoded, mime_type = self._encode_file(file_path)
+            encoded, mime_type = await asyncio.to_thread(self._encode_file, file_path)
         except Exception as exc:
             logger.warning(f"Gemini: failed to encode file {file_path}: {exc}")
             return GeminiVisionFinding(
@@ -895,7 +899,7 @@ class GeminiVisionClient:
 
         generation_config: dict = {
             "temperature": 0.1,
-            "maxOutputTokens": 8192,
+            "maxOutputTokens": 2048,
             # NOTE: responseMimeType="application/json" is intentionally omitted.
             # When set alongside multimodal (image) input it causes Gemini 2.x to
             # enter a JSON-generation mode that suppresses visual perception,
@@ -909,7 +913,7 @@ class GeminiVisionClient:
         # thinkingBudget=0 disables CoT; 1024 gives enough for structured reasoning
         # without excessive latency. Models that don't support it (2.0-) skip silently.
         if any(p in self.model for p in _THINKING_MODEL_PREFIXES):
-            generation_config["thinkingConfig"] = {"thinkingBudget": 1024}
+            generation_config["thinkingConfig"] = {"thinkingBudget": 256}
 
         payload = {
             "contents": [{"parts": parts}],
@@ -923,9 +927,9 @@ class GeminiVisionClient:
             url = f"{_GEMINI_API_BASE}/models/{m}:generateContent"
             if primary_payload is not None:
                 return (m, primary_payload, url)
-            gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 8192}
+            gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 2048}
             if any(p in m for p in _THINKING_MODEL_PREFIXES):
-                gen_cfg["thinkingConfig"] = {"thinkingBudget": 1024}
+                gen_cfg["thinkingConfig"] = {"thinkingBudget": 256}
             return (
                 m,
                 {"contents": [{"parts": parts}], "generationConfig": gen_cfg},
@@ -934,9 +938,21 @@ class GeminiVisionClient:
 
         # Reorder cascade based on model_hint if provided
         primary_model = model_hint if model_hint and model_hint != self.model else self.model
-        models_to_try = [
+        models_to_try: list[tuple] = []
+        seen_models: set[str] = set()
+
+        # Primary model first
+        models_to_try.append(
             _model_entry(primary_model, payload if primary_model == self.model else None)
-        ]
+        )
+        seen_models.add(primary_model)
+
+        # Append the configured fallback chain for true cascade behavior.
+        # Each model gets correct thinkingConfig for its generation family.
+        for fm in self.fallback_chain:
+            if fm not in seen_models:
+                models_to_try.append(_model_entry(fm))
+                seen_models.add(fm)
 
         last_exc: Exception = RuntimeError("no models attempted")
         # Acquire the process-wide quota semaphore before issuing any HTTP call.
@@ -1036,112 +1052,10 @@ class GeminiVisionClient:
             )
         return resp.json()["candidates"][0]["content"]["parts"][0].get("text", "")
 
-    async def _post_with_retry(
-        self,
-        url: str,
-        payload: dict,
-        model_name: str | None = None,
-    ) -> str:
-        """POST to Gemini API with exponential-backoff retry."""
-        api_key = self.api_key or ""
-        headers = {"x-goog-api-key": api_key}
-        active_model = model_name or self.model
-        for attempt in range(_MAX_RETRIES):
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.post(url, json=payload, headers=headers)
-                    if resp.status_code != 200:
-                        error_detail = ""
-                        try:
-                            error_detail = resp.text
-                        except Exception as e:
-                            logger.debug("Could not read Gemini error response body", error=str(e))
-
-                        # 404 means the model doesn't exist on this API key —
-                        # raise immediately (no backoff) so the cascade loop
-                        # can skip to the next model without waiting.
-                        if resp.status_code == 404:
-                            raise _ModelUnavailableError(
-                                f"Model not found (404): {error_detail[:300]}"
-                            )
-                        # Also treat 400 "model not found" body as unavailable.
-                        if resp.status_code == 400 and (
-                            "not found" in error_detail.lower()
-                            or "does not exist" in error_detail.lower()
-                            or "not support" in error_detail.lower()
-                        ):
-                            raise _ModelUnavailableError(
-                                f"Model unavailable (400): {error_detail[:300]}"
-                            )
-                        if resp.status_code == 503:
-                            logger.warning(
-                                f"Gemini model {active_model} unavailable (503) - cascading to next model. "
-                                f"Detail: {error_detail[:200]}"
-                            )
-                            raise _ModelUnavailableError(
-                                f"Model unavailable (503): {error_detail[:300]}"
-                            )
-                        if resp.status_code == 429:
-                            # Quota exhausted for this model — cascade to next model
-                            # instead of retrying on the same model (which will keep failing).
-                            # Distinguish between rate-limit (retry) and quota-exceeded (cascade):
-                            # If the error says "quota" or we've already retried once, cascade.
-                            is_quota = "quota" in error_detail.lower()
-                            if is_quota or attempt > 0:
-                                logger.warning(
-                                    f"Gemini model {self.model} quota exceeded (429) — cascading to next model. "
-                                    f"Detail: {error_detail[:200]}"
-                                )
-                                raise _ModelUnavailableError(
-                                    f"Quota exceeded (429): {error_detail[:300]}"
-                                )
-                            wait = _BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
-                            logger.warning(
-                                f"Gemini API rate limited (429) for model {self.model}. "
-                                f"Retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})..."
-                            )
-                            await asyncio.sleep(wait)
-                            continue
-                        elif resp.status_code in {500, 502, 503, 504}:
-                            wait = _BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
-                            logger.warning(
-                                f"Gemini API error {resp.status_code} for model {self.model}. "
-                                f"Retrying in {wait:.1f}s (attempt {attempt + 1}/{_MAX_RETRIES})..."
-                            )
-                            await asyncio.sleep(wait)
-                            continue
-                        else:
-                            logger.error(
-                                f"Gemini API non-retryable error {resp.status_code} for model {self.model}. "
-                                f"Body: {error_detail[:1000]}"
-                            )
-                            if resp.status_code == 400:
-                                safe_err = error_detail[:200].replace('"', "'").replace("\n", " ")
-                                return (
-                                    '{"error": "'
-                                    + safe_err
-                                    + '", "content_description": "Gemini rejected the payload (400 Bad Request) — analysis skipped.", "confidence": 0, "file_type_assessment": "unknown"}'
-                                )
-                            resp.raise_for_status()
-                    data = resp.json()
-                    # Extract text from Gemini response structure
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        for part in parts:
-                            if "text" in part:
-                                return part["text"]
-                    return ""
-            except (httpx.TimeoutException, httpx.ConnectError) as net_err:
-                if attempt < _MAX_RETRIES - 1:
-                    wait = _BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
-                    logger.warning(
-                        f"Gemini networking error ({type(net_err).__name__}) - retrying in {wait:.1f}s..."
-                    )
-                    await asyncio.sleep(wait)
-                else:
-                    raise
-        raise RuntimeError(f"Gemini API failed after {_MAX_RETRIES} attempts")
+    # NOTE: _post_with_retry was removed as dead code.
+    # The cascade-based approach in _run_vision_analysis tries fallback models
+    # instead of retrying the same model, which is superior for quota/404 errors.
+    # If retry-on-5xx is needed in the future, add it to _post_once.
 
     def _parse_response(
         self, raw_text: str, analysis_type: str, latency_ms: float
@@ -1271,6 +1185,13 @@ class GeminiVisionClient:
                 desc_parts.append(f"Manipulation signals: {'; '.join(none_signals[:3])}")
         content_description = " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
 
+        from core.image_routing import build_image_forensic_routing
+
+        routing = build_image_forensic_routing(
+            data.get("forensic_routing", {}) if isinstance(data.get("forensic_routing"), dict) else {},
+            description=content_description,
+        )
+
         finding = GeminiVisionFinding(
             analysis_type=analysis_type,
             model_used=self.model,
@@ -1292,7 +1213,7 @@ class GeminiVisionClient:
             _contextual_narrative=data.get("contextual_narrative", ""),
             _authenticity_verdict=verdict,
             _metadata_visual_consistency=meta_consistency,
-            _forensic_routing=data.get("forensic_routing", {}),
+            _forensic_routing=routing,
             _forensic_specifics=data.get("forensic_specifics", ""),
         )
         return finding
@@ -1466,17 +1387,18 @@ class GeminiVisionClient:
             file_path=Path(file_path).name
         )
         
-        # Run all local tools concurrently
+        # Run all local tools concurrently (Florence-2 runs alongside — may be slow)
         results = await asyncio.gather(
             self._run_clip_classification(file_path),
             self._run_detr_detection(file_path),
             self._run_opencv_stats(file_path),
             self._run_ela_analysis(file_path),
             self._extract_text_ocr(file_path),
+            self._run_florence_caption(file_path),
             return_exceptions=True
         )
         
-        clip_result, detr_result, opencv_result, ela_result, ocr_result = results
+        clip_result, detr_result, opencv_result, ela_result, ocr_result, florence_result = results
         
         # Handle failures gracefully
         if isinstance(clip_result, Exception): clip_result = {}
@@ -1484,10 +1406,19 @@ class GeminiVisionClient:
         if isinstance(opencv_result, Exception): opencv_result = {}
         if isinstance(ela_result, Exception): ela_result = {}
         if isinstance(ocr_result, Exception): ocr_result = {"lines": []}
+        if isinstance(florence_result, Exception): florence_result = {"description": "", "available": False}
         
         # Synthesize findings
+        extracted_text = ocr_result.get("lines", [])
+        
+        # Tier 1: OCR → Web Search for context (depends on OCR output)
+        web_context = await self._web_search_context(extracted_text)
+        
+        # Tier 3: Florence-2 description (highest quality — use as narrative if available)
+        florence_desc = florence_result.get("description", "") if isinstance(florence_result, dict) else ""
+        
         content_desc = self._synthesize_content_description(
-            clip_result, detr_result, opencv_result
+            clip_result, detr_result, opencv_result, extracted_text, web_context, florence_desc
         )
         
         manipulation_signals = self._synthesize_manipulation_signals(
@@ -1495,66 +1426,177 @@ class GeminiVisionClient:
         )
         
         detected_objects = detr_result.get("objects", [])
-        extracted_text = ocr_result.get("lines", [])
         
         # Confidence based on signal count
-        tool_success_count = sum(
-            1 for r in [clip_result, detr_result, opencv_result, ela_result, ocr_result] if r
-        )
-        confidence = min(0.75, 0.45 + (tool_success_count * 0.06))
+        tool_list = [clip_result, detr_result, opencv_result, ela_result, ocr_result]
+        if isinstance(florence_result, dict) and florence_result.get("available"):
+            tool_list.append(florence_result)
+        tool_success_count = sum(1 for r in tool_list if r)
+        confidence = min(0.78, 0.45 + (tool_success_count * 0.06))
         
         latency_ms = (time.monotonic() - t0) * 1000
         
+        # Choose the best narrative: Florence-2 > web context > stats
+        has_florence = bool(florence_desc)
+        narrative = florence_desc or web_context or content_desc
+        
+        model_label = "local_enhanced_v2+florence" if has_florence else "local_enhanced_v2"
+        caveat_lines = [
+            "Analysis performed using local forensic tools (CLIP, DETR, ELA, OpenCV)"
+        ]
+        if has_florence:
+            caveat_lines.append("and Florence-2 VLM (local image captioning)")
+        caveat_lines.append(
+            "External vision API unavailable; conclusions remain grounded in local tool metrics."
+        )
+        
         finding = GeminiVisionFinding(
             analysis_type="deep_forensic_analysis",
-            model_used="local_enhanced_v2",
+            model_used=model_label,
             content_description=content_desc,
             manipulation_signals=manipulation_signals,
             detected_objects=detected_objects,
             contextual_anomalies=[],
             file_type_assessment=self._assess_file_type(clip_result, exif_summary),
-            confidence=max(confidence, 0.68 if tool_success_count >= 3 else confidence),
+            confidence=max(confidence, 0.70 if has_florence else 0.68 if tool_success_count >= 3 else confidence),
             court_defensible=True,
-            caveat=(
-                "Analysis performed using local forensic tools (CLIP, DETR, ELA, OpenCV). "
-                "External vision API unavailable; conclusions remain grounded in local tool metrics."
-            ),
+            caveat=" ".join(caveat_lines),
             raw_response="",
             latency_ms=latency_ms,
             _extracted_text=extracted_text,
             _interface_identification=self._identify_interface(clip_result, extracted_text),
-            _contextual_narrative=content_desc,
+            _contextual_narrative=narrative,
             _authenticity_verdict=self._compute_verdict(manipulation_signals),
             _metadata_visual_consistency=self._check_metadata_consistency(exif_summary, opencv_result),
-            _forensic_routing=self._compute_routing(clip_result),
+            _forensic_routing=routing,
             _forensic_specifics=self._domain_specifics(clip_result),
         )
         
         return finding
 
+    # Tier 2: detailed CLIP subcategory prompts for hierarchical classification
+    _BROAD_FORENSIC_PROMPTS = (
+        "a professional photograph taken with a camera",
+        "a screenshot of a computer or phone screen",
+        "a digitally generated or AI-generated image",
+        "a photograph of a document or ID card",
+        "a social media post or meme",
+        "a surveillance camera frame",
+        "a crime scene photograph",
+        "a portrait photo of a person",
+    )
+
+    _SUBCATEGORY_PROMPTS = {
+        "screenshot": (
+            "a screenshot of a web browser interface",
+            "a screenshot of a login or sign-in page",
+            "a screenshot of a chat or messaging conversation",
+            "a screenshot of a social media feed or post",
+            "a screenshot of an email inbox or message",
+            "a screenshot of a video or streaming platform",
+            "a screenshot of a mobile phone home screen",
+            "a screenshot of a desktop application window",
+            "a screenshot of a video game or gaming screen",
+            "a screenshot of a document or PDF",
+            "a screenshot of a code editor or terminal",
+            "a screenshot of a map or directions",
+            "a screenshot of an online shopping page",
+            "a screenshot of a search engine results page",
+        ),
+        "photo": (
+            "a photograph of a person or people",
+            "a photograph of a landscape or nature scene",
+            "a photograph of a building or architecture",
+            "a photograph of food or drink",
+            "a photograph of a vehicle or transportation",
+            "a photograph of an animal or pet",
+            "a photograph of an object or item on a surface",
+            "a photograph of a room or indoor space",
+            "a close-up or macro photograph",
+            "a nighttime or low-light photograph",
+            "a photograph of a street or city scene",
+        ),
+        "document": (
+            "a photograph of a passport or ID card",
+            "a photograph of a handwritten note or letter",
+            "a photograph of a printed document or form",
+            "a photograph of a receipt or invoice",
+            "a photograph of a book or textbook page",
+            "a scanned document image",
+            "a photograph of a computer screen showing text",
+        ),
+        "ai_generated": (
+            "an AI-generated portrait or face",
+            "an AI-generated landscape or scene",
+            "an AI-generated text or document",
+            "an AI-generated artwork or illustration",
+        ),
+    }
+
     async def _run_clip_classification(self, file_path: str) -> dict:
-        """Run CLIP zero-shot scene classification."""
+        """Run CLIP zero-shot classification with hierarchical detail (Tier 2).
+
+        Phase 1: broad forensic categories → determines image type.
+        Phase 2: detailed subcategory prompts → identifies specific content.
+        """
         try:
             from tools.clip_utils import get_clip_analyzer
             analyzer = get_clip_analyzer()
-            prompts = [
-                "a professional photograph taken with a camera",
-                "a screenshot of a computer or phone screen",
-                "a digitally generated or AI-generated image",
-                "a photograph of a document or ID card",
-                "a social media post or meme",
-                "a surveillance camera frame",
-                "a crime scene photograph",
-                "a portrait photo of a person",
-            ]
-            result = await asyncio.to_thread(
-                analyzer.analyze_image, file_path, categories=prompts
+            broad_prompts = list(self._BROAD_FORENSIC_PROMPTS)
+
+            # Phase 1: broad classification
+            broad = await asyncio.to_thread(
+                analyzer.analyze_image, file_path, categories=broad_prompts
             )
+            if not broad.available:
+                return {"top_match": "unknown", "confidence": 0.0, "all_scores": []}
+
+            # Detect cascade fallback to TorchVisionClassifier (ImageNet labels)
+            if broad.top_match not in self._BROAD_FORENSIC_PROMPTS:
+                return {
+                    "top_match": "unknown",
+                    "confidence": 0.35,
+                    "all_scores": [(p, 0.0) for p in broad_prompts],
+                    "cascade_fallback": True,
+                    "detail": "CLIP cascade fell through to ImageNet classifier",
+                }
+
+            # Map broad top-match to category key
+            top = broad.top_match
+            if "screenshot" in top:
+                category = "screenshot"
+            elif "document" in top or "ID card" in top:
+                category = "document"
+            elif "social media" in top or "meme" in top:
+                category = "ai_generated"  # reuse ai sub-prompts
+            elif "AI-generated" in top or "digitally generated" in top:
+                category = "ai_generated"
+            elif "surveillance" in top or "crime scene" in top:
+                category = "photo"
+            else:
+                category = "photo"
+
+            # Phase 2: detailed subcategory
+            subcategory = ""
+            sub_confidence = 0.0
+            detail_prompts = list(self._SUBCATEGORY_PROMPTS.get(category, ()))
+            if detail_prompts:
+                detail = await asyncio.to_thread(
+                    analyzer.analyze_image, file_path, categories=detail_prompts
+                )
+                if detail.available and detail.top_match in detail_prompts:
+                    subcategory = detail.top_match
+                    sub_confidence = detail.top_confidence
+
             return {
-                "top_match": result.top_match,
-                "confidence": result.top_confidence,
-                "all_scores": result.all_scores[:5]
+                "top_match": top,
+                "confidence": broad.top_confidence,
+                "category": category,
+                "subcategory": subcategory,
+                "subcategory_confidence": sub_confidence,
+                "all_scores": broad.all_scores[:5],
             }
+
         except Exception as e:
             logger.error(f"CLIP classification failed: {e}")
             return {}
@@ -1570,7 +1612,7 @@ class GeminiVisionClient:
             }
         except Exception as e:
             logger.error(f"DETR/YOLO detection failed: {e}")
-            return {"objects": [], "count": 0}
+            return {}
 
     async def _run_opencv_stats(self, file_path: str) -> dict:
         """Run OpenCV statistics extraction."""
@@ -1578,6 +1620,16 @@ class GeminiVisionClient:
             import numpy as np
             from PIL import Image as PILImage
             import cv2
+
+            def _estimate_noise(_gray: np.ndarray) -> float:
+                gx = cv2.Sobel(_gray.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
+                gy = cv2.Sobel(_gray.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
+                grad_mag = np.sqrt(gx * gx + gy * gy)
+                threshold = max(float(np.percentile(grad_mag, 30)), 5.0)
+                flat_mask = grad_mag < threshold
+                if flat_mask.sum() < 100:
+                    return 0.0
+                return float(np.std(_gray.astype(np.float32)[flat_mask]))
 
             def _stats():
                 img = PILImage.open(file_path).convert("RGB")
@@ -1587,8 +1639,7 @@ class GeminiVisionClient:
                 brightness = float(arr.mean())
                 gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
                 laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-                blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-                noise_residual = float(np.abs(gray.astype(float) - blurred.astype(float)).mean())
+                noise_value = _estimate_noise(gray)
                 block_diff = (
                     float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean())) if h > 16 else 0.0
                 )
@@ -1597,7 +1648,7 @@ class GeminiVisionClient:
                     "height": h,
                     "sharpness": laplacian_var,
                     "brightness": brightness,
-                    "noise": noise_residual,
+                    "noise": noise_value,
                     "blockiness": block_diff,
                     "std_rgb": std_rgb
                 }
@@ -1607,33 +1658,42 @@ class GeminiVisionClient:
             return {}
 
     async def _run_ela_analysis(self, file_path: str) -> dict:
-        """Run Error Level Analysis."""
+        """Run Error Level Analysis (multi-quality sweep)."""
         try:
             from tools.ml_tools.ela_anomaly_classifier import classify_ela
             result = await asyncio.to_thread(classify_ela, file_path)
             return {
                 "hotspot_count": result.get("num_anomalous_blocks", 0),
                 "anomaly_score": result.get("anomaly_score", 0.0),
-                "suspicious": result.get("num_anomalous_blocks", 0) > 3 or result.get("verdict") in ("SUSPICIOUS", "HIGHLY_ANOMALOUS")
+                "suspicious": result.get("verdict") in ("SUSPICIOUS", "HIGHLY_ANOMALOUS")
             }
         except Exception as e:
             logger.error(f"ELA analysis failed: {e}")
             return {}
 
     async def _extract_text_ocr(self, file_path: str) -> dict:
-        """Extract visible text using OCR."""
+        """Extract visible text using OCR (Tesseract with preprocessing, then EasyOCR fallback)."""
         try:
             from PIL import Image as PILImage
+            import numpy as np
             def _ocr():
                 ocr_text_lines = []
                 img = PILImage.open(file_path).convert("RGB")
                 try:
+                    import cv2
                     import pytesseract
-                    ocr_raw = pytesseract.image_to_string(img, config="--psm 3").strip()
+                    # Preprocess with adaptive thresholding for better accuracy
+                    arr = np.array(img)
+                    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+                    processed = cv2.adaptiveThreshold(
+                        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                        cv2.THRESH_BINARY, 31, 2
+                    )
+                    ocr_raw = pytesseract.image_to_string(processed, config="--psm 6").strip()
                     if ocr_raw:
                         ocr_text_lines = [
                             ln.strip() for ln in ocr_raw.splitlines() if len(ln.strip()) > 2
-                        ][:10]
+                        ][:20]
                 except Exception:
                     pass
                 if not ocr_text_lines:
@@ -1644,7 +1704,7 @@ class GeminiVisionClient:
                             _results = _reader.readtext(file_path, detail=0)
                             ocr_text_lines = [
                                 str(t).strip() for t in _results if len(str(t).strip()) > 2
-                            ][:10]
+                            ][:20]
                     except Exception:
                         pass
                 return {"lines": ocr_text_lines}
@@ -1653,18 +1713,123 @@ class GeminiVisionClient:
             logger.error(f"OCR failed: {e}")
             return {"lines": []}
 
+    async def _web_search_context(self, text_lines: list[str]) -> str:
+        """Tier 1: use OCR text to fetch web context via DuckDuckGo API.
+
+        Extracts the most distinctive keyword(s) from OCR text and queries
+        DuckDuckGo's instant-answer API (free, no key needed). Returns
+        a short contextual snippet describing what the image likely shows.
+        """
+        if not text_lines:
+            return ""
+
+        # Extract the most distinctive keywords
+        common_words = frozenset({
+            "the", "a", "an", "is", "it", "of", "in", "on", "to", "for",
+            "with", "and", "or", "by", "at", "from", "as", "be", "are",
+            "was", "were", "been", "has", "have", "had", "do", "does",
+            "did", "will", "would", "can", "could", "may", "might", "so",
+            "if", "no", "not", "but", "all", "each", "every", "this",
+            "that", "these", "those", "my", "your", "his", "her", "its",
+            "our", "their", "sign", "log", "please", "click", "here",
+            "enter", "submit", "cancel", "ok", "next", "back", "home",
+        })
+        words = []
+        for line in text_lines[:8]:
+            for w in line.split():
+                w_clean = w.strip(".,!?;:'\"()[]{}<>").lower()
+                if w_clean and w_clean not in common_words and len(w_clean) > 2:
+                    words.append(w_clean)
+        if not words:
+            return ""
+
+        # Remove duplicates preserving order
+        seen = set()
+        unique = [w for w in words if w not in seen and not seen.add(w)]  # noqa: B301
+        query = " ".join(unique[:3])
+
+        try:
+            import httpx
+
+            headers = {"User-Agent": "ForensicCouncil/1.0"}
+            params = {"q": query[:100], "format": "json", "no_html": "1"}
+            async with httpx.AsyncClient(headers=headers, timeout=8.0) as client:
+                resp = await client.get("https://api.duckduckgo.com/", params=params)
+                data = resp.json()
+
+            heading = data.get("Heading", "") or ""
+            abstract = data.get("AbstractText", "") or ""
+
+            # Also check related topics as fallback
+            snippet = ""
+            if abstract:
+                snippet = abstract[:250]
+            elif heading:
+                snippet = heading[:250]
+            else:
+                topics = data.get("RelatedTopics", [])
+                if topics and isinstance(topics[0], dict):
+                    snippet = topics[0].get("Text", "")[:250]
+
+            if snippet:
+                return f"Possible context: {snippet}"
+        except Exception:
+            pass
+        return ""
+
+    async def _run_florence_caption(self, file_path: str) -> dict:
+        """Tier 3: local VLM caption via Florence-2 (needs torch+transformers).
+
+        Returns a natural-language description of image content. Gracefully
+        degrades if the model is not installed or fails to load.
+        """
+        try:
+            from tools.florence_analyzer import get_florence_analyzer
+
+            analyzer = get_florence_analyzer()
+            result = await asyncio.to_thread(analyzer.analyze, file_path)
+            if not result.available:
+                logger.warning(f"Florence-2 caption not available: {result.error}")
+                return {"description": "", "available": False}
+            return {
+                "description": result.best_description(),
+                "caption": result.caption,
+                "detailed_caption": result.detailed_caption,
+                "available": True,
+            }
+        except Exception as e:
+            logger.warning(f"Florence-2 caption failed: {e}")
+            return {"description": "", "available": False}
+
     def _synthesize_content_description(
         self, 
         clip_result: dict, 
         detr_result: dict,
-        opencv_result: dict
+        opencv_result: dict,
+        extracted_text: list[str] | None = None,
+        web_context: str | None = None,
+        florence_desc: str | None = None,
     ) -> str:
-        """Synthesize rich content description from local tools."""
+        """Synthesize rich content description from local tools + web context."""
         parts = []
+        
+        # Florence-2 VLM description (highest fidelity local narrative)
+        if florence_desc:
+            parts.append(f"Visual Narrative [Florence-2 Fallback]: {florence_desc}")
         
         # CLIP scene classification
         if isinstance(clip_result, dict) and clip_result.get("top_match"):
             parts.append(f"Scene: {clip_result['top_match']} (confidence: {clip_result['confidence']:.2f})")
+        
+        # Web context (Tier 1) — most informative when available
+        if web_context:
+            parts.append(web_context)
+        
+        # OCR context — useful for screenshots/documents
+        if extracted_text:
+            text_preview = "; ".join(extracted_text[:5])
+            if text_preview:
+                parts.append(f"Visible text: {text_preview}")
         
         # DETR objects
         if isinstance(detr_result, dict) and detr_result.get("count", 0) > 0:
@@ -1696,7 +1861,7 @@ class GeminiVisionClient:
         
         # Noise analysis
         if opencv_result:
-            noise_threshold = 15 if is_screen else 8
+            noise_threshold = 5 if is_screen else 10
             if opencv_result.get("noise", 0) > noise_threshold:
                 signals.append(f"Elevated noise residual ({opencv_result['noise']:.2f})")
             
@@ -1753,12 +1918,15 @@ class GeminiVisionClient:
                 category = "document"
             elif "ai-generated" in top:
                 category = "ai_generated_suspect"
-        return {
-            "image_category": category,
-            "priority_signals": ["noise_residual", "ela_hotspots"],
-            "skip_tools": [],
-            "focus_regions": []
-        }
+        from core.image_routing import build_image_forensic_routing
+
+        return build_image_forensic_routing(
+            {
+                "image_category": category,
+                "priority_signals": ["noise_residual", "ela_hotspots"],
+                "focus_regions": [],
+            }
+        )
 
     def _domain_specifics(self, clip_result: dict) -> str:
         """Provide domain specific forensic observations."""

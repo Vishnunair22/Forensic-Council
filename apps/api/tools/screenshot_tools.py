@@ -139,6 +139,7 @@ async def detect_font_inconsistency(
 
         font_consistency_score = max(0.0, 1.0 - inconsistency_score * 2)
 
+        anomaly_ratio = 0.0
         anomaly_detected = font_consistency_score < 0.7
 
         anomaly_regions = []
@@ -157,18 +158,31 @@ async def detect_font_inconsistency(
                         "reason": "Inconsistent stroke width - possible text edit",
                     })
 
+            anomaly_ratio = len(anomaly_regions) / max(len(font_features), 1)
+
+        # Mixed browser/UI screenshots naturally contain several font sizes,
+        # weights, and antialiasing modes. Treat this as a manipulation signal
+        # only when the outlier ratio is substantial enough to be reviewable.
+        anomaly_detected = (
+            font_consistency_score < 0.45
+            and anomaly_ratio >= 0.50
+            and len(anomaly_regions) >= 3
+        )
+
         return {
             "status": "complete",
             "font_consistency_score": round(font_consistency_score, 3),
             "anomaly_detected": anomaly_detected,
-            "confidence": round(0.65 + len(font_features) / 100, 3),
+            "confidence": round(min(0.92, 0.55 + min(len(font_features), 40) / 200), 3),
             "num_text_regions_analyzed": len(font_features),
             "anomaly_regions": anomaly_regions,
             "num_anomaly_regions": len(anomaly_regions),
+            "anomaly_region_ratio": round(anomaly_ratio, 3),
+            "evidence_verdict": "POSITIVE" if anomaly_detected else "NEGATIVE",
             "forensic_note": (
-                "Multiple font styles detected - possible text editing in screenshot"
+                "Localized text-rendering outliers detected; review the highlighted screenshot regions"
                 if anomaly_detected
-                else "Font consistency normal - no obvious text edits"
+                else "Text rendering variation is within the expected range for mixed browser/UI screenshots"
             ),
             "available": True,
             "court_defensible": True,

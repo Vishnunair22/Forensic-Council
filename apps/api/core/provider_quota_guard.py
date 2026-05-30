@@ -130,6 +130,7 @@ class ProviderQuotaGuard:
         model: str,
         *,
         estimated_tokens: int = 0,
+        tpm_limit_override: int | None = None,
     ) -> tuple[bool, QuotaCheckResult]:
         """
         Check quota availability and record a call.
@@ -179,20 +180,21 @@ class ProviderQuotaGuard:
                 )
                 return False, result
 
-            if config.tpm_limit and estimated_tokens > 0:
+            effective_tpm_limit = tpm_limit_override or config.tpm_limit
+            if effective_tpm_limit and estimated_tokens > 0:
                 recent_tokens = [
                     item for item in _TOKEN_TIMESTAMPS[key] if item[0] > cutoff_60s
                 ]
                 token_count = sum(tokens for _, tokens in recent_tokens)
-                if token_count + estimated_tokens > config.tpm_limit:
+                if token_count + estimated_tokens > effective_tpm_limit:
                     result = QuotaCheckResult(
                         allowed=False,
                         reason=(
                             f"{provider} TPM limit would be exceeded "
-                            f"({token_count + estimated_tokens}/{config.tpm_limit})"
+                            f"({token_count + estimated_tokens}/{effective_tpm_limit})"
                         ),
                         calls_in_window=token_count,
-                        limit=config.tpm_limit,
+                        limit=effective_tpm_limit,
                         window_type="tpm",
                     )
                     logger.warning(
@@ -201,7 +203,7 @@ class ProviderQuotaGuard:
                         model=model,
                         tokens=token_count,
                         estimated_tokens=estimated_tokens,
-                        limit=config.tpm_limit,
+                        limit=effective_tpm_limit,
                     )
                     return False, result
 

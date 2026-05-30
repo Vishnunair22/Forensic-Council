@@ -166,10 +166,9 @@ class ForensicReport(BaseModel):
     degradation_flags: list[str] = Field(
         default_factory=list,
         description=(
-            "Populated whenever an analysis subsystem fell back to a reduced-capability "
-            "mode (e.g. Gemini unavailable, LLM synthesis disabled, Redis offline). "
-            "A non-empty list means this report does NOT reflect full AI analysis "
-            "and MUST display a DEGRADED ANALYSIS warning in any UI or printout."
+            "Populated when a called forensic tool fails, times out, or returns "
+            "incomplete output. Provider choice such as Gemini unavailable with "
+            "local visual ensemble fallback is reported as provenance, not degradation."
         ),
     )
     is_deep_analysis: bool = Field(

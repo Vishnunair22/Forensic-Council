@@ -95,6 +95,27 @@ const ALERT_VERDICTS = new Set([
 ]);
 
 const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const SCREENSHOT_CAMERA_TOOLS = new Set([
+  "noiseprint_cluster",
+  "noise_fingerprint",
+  "prnu_sensor_verification",
+  "neural_ela",
+  "ela_full_image",
+  "jpeg_ghost_detect",
+  "neural_splicing",
+  "splicing_detect",
+  "neural_copy_move",
+  "copy_move_detect",
+  "adversarial_robustness_check",
+  "roi_extract",
+]);
+
+function isScreenshotContext(text?: string | null) {
+  const lower = String(text || "").toLowerCase();
+  return ["screenshot", "screen capture", "digital ui", "browser", "whatsapp", "telegram", "web page"].some((token) =>
+    lower.includes(token),
+  );
+}
 
 function normalizeVerdict(verdict?: string) {
   const value = (typeof verdict === "string" ? verdict : (verdict ? String(verdict) : "INCONCLUSIVE")).replace(/_/g, " ");
@@ -285,7 +306,10 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
       return `${alertCount > 0 ? alertCount : "Critical"} anomal${alertCount === 1 ? "y" : "ies"} flagged across ${n} forensic check${n !== 1 ? "s" : ""} (${conf}% confidence).`;
     }
     if (isClean) {
-      return `All ${n} forensic check${n !== 1 ? "s" : ""} returned clean — no manipulation, AI generation, or structural anomalies detected (${conf}% confidence).`;
+      if (isScreenshotContext(imageContext)) {
+        return `Screenshot-specific checks completed cleanly across ${n} applicable tool${n !== 1 ? "s" : ""}: UI layout, visible text, hash custody, and provenance signals found no supported manipulation indicator (${conf}% confidence).`;
+      }
+      return `${n} applicable forensic check${n !== 1 ? "s" : ""} completed cleanly with no supported manipulation indicator (${conf}% confidence).`;
     }
     if (isInconclusive) {
       return `Analysis of ${n} forensic check${n !== 1 ? "s" : ""} is inconclusive (${conf}% confidence). Some signals are ambiguous or limited by available data.`;
@@ -408,6 +432,7 @@ export function AgentStatusCard({
 
     const findings = React.useMemo(() => {
       const raw = Array.isArray(completedData?.findings_preview) ? completedData.findings_preview : [];
+      const screenshotContext = isScreenshotContext(completedData?.image_context);
       const deduped: FindingPreview[] = [];
       const seen = new Set<string>();
       for (const f of raw) {
@@ -417,6 +442,7 @@ export function AgentStatusCard({
         const rawVerdict = typeof f.verdict === "string" ? f.verdict : (f.verdict ? String(f.verdict) : "");
         const rawSeverity = typeof f.severity === "string" ? f.severity : (f.severity ? String(f.severity) : "");
         const rawTool = typeof f.tool === "string" ? f.tool : (f.tool ? String(f.tool) : "");
+        if (screenshotContext && SCREENSHOT_CAMERA_TOOLS.has(rawTool.toLowerCase())) continue;
 
         const summaryText = rawSummary.trim();
         const hasKeySignal = rawKeySignal.trim().length > 0;

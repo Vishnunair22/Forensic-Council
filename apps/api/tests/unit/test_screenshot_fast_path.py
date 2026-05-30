@@ -104,7 +104,7 @@ def test_agent3_skips_physical_scene_tools_for_screen_capture(tmp_path):
         "Run screenshot_layout_forensics for UI and document layout anomaly scan",
     ]
     assert agent.deep_task_decomposition == [
-        "Read shared image context for UI/screenshot grounding from Agent 1 Gemini analysis",
+        "Read shared image context for UI/screenshot grounding from Agent 1 visual profile",
         "Run screenshot_layout_forensics for deep UI/document consistency cross-check",
     ]
 

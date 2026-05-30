@@ -140,13 +140,8 @@ export function HeroAuthActions() {
       return false;
     }
 
-    clearInvestigationPersistence();
     __pendingFileStore.file = selectedFile;
-    try {
-      await savePendingEvidenceFile(selectedFile);
-    } catch (error) {
-      console.warn("[HeroAuthActions] could not persist pending file:", error);
-    }
+    clearInvestigationPersistence();
     sessionOnlyStorage.setItem(STORAGE_KEYS.AUTO_START, "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD, String(Date.now()));
@@ -160,6 +155,11 @@ export function HeroAuthActions() {
       }),
       true,
     );
+    try {
+      await savePendingEvidenceFile(selectedFile);
+    } catch (error) {
+      console.warn("[HeroAuthActions] could not persist pending file:", error);
+    }
 
     setShowUpload(false);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);

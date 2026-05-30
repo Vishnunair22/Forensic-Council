@@ -210,6 +210,10 @@ class ImageHandlers(BaseToolHandler):
           2. Accumulated AgentFinding list (structured verdicts + confidence + reasoning)
           3. Cross-agent signals from Agent 3 (object/context anomalies)
         """
+        artifact = getattr(self.agent, "evidence_artifact", None)
+        if artifact is not None and self._is_screenshot_context(artifact):
+            return False
+
         ctx = self.agent._tool_context
         freq = ctx.get("frequency_domain_analysis", {})
 
@@ -275,6 +279,10 @@ class ImageHandlers(BaseToolHandler):
 
     async def _has_splice_or_copy_move_signal(self) -> bool:
         """Return True when anti-forensic robustness analysis is warranted."""
+        artifact = getattr(self.agent, "evidence_artifact", None)
+        if artifact is not None and self._is_screenshot_context(artifact):
+            return False
+
         ctx = self.agent._tool_context
         local_signal = any(
             [
@@ -362,7 +370,86 @@ class ImageHandlers(BaseToolHandler):
         for alias in alias_keys:
             self.agent._tool_context[alias] = result
 
+    def _visual_grounding_context(self) -> dict[str, Any]:
+        profile = (
+            self.agent._tool_context.get("visual_evidence_profile")
+            or self.agent._tool_context.get("gemini_deep_forensic")
+            or {}
+        )
+        if not profile and getattr(self.agent, "inter_agent_bus", None):
+            try:
+                profile = self.agent.inter_agent_bus.get_visual_profile(str(self.agent.session_id)) or {}
+            except Exception:
+                profile = {}
+        meta = profile.get("metadata") if isinstance(profile, dict) else {}
+        if not isinstance(meta, dict):
+            meta = {}
+        routing = meta.get("forensic_routing") if isinstance(meta.get("forensic_routing"), dict) else {}
+        ocr = self.agent._tool_context.get("extract_text_from_image") or self.agent._tool_context.get("extract_evidence_text") or {}
+        ocr_text = []
+        if isinstance(ocr, dict):
+            for key in ("extracted_text", "text_blocks", "lines"):
+                value = ocr.get(key)
+                if isinstance(value, list) and value:
+                    ocr_text.extend(str(v) for v in value if v)
+            text_value = ocr.get("text") or ocr.get("full_text")
+            if text_value:
+                ocr_text.append(str(text_value))
+        visual_text = meta.get("extracted_text") or profile.get("extracted_text") or []
+        if isinstance(visual_text, str):
+            visual_text = [visual_text]
+        if not isinstance(visual_text, list):
+            visual_text = []
+        merged_text = list(dict.fromkeys([str(v) for v in visual_text + ocr_text if v]))
+        return {
+            "image_category": routing.get("image_category") or meta.get("file_type_assessment") or profile.get("file_type_assessment"),
+            "content_description": profile.get("reasoning_summary") or meta.get("content_description") or "",
+            "interface_identification": meta.get("interface_identification") or profile.get("interface_identification") or "",
+            "visual_verdict": meta.get("authenticity_verdict") or profile.get("authenticity_verdict") or "",
+            "extracted_text": merged_text,
+            "ocr_word_count": ocr.get("word_count") if isinstance(ocr, dict) else None,
+        }
+
+    def _attach_visual_grounding(self, result: dict[str, Any], *, tool_name: str) -> dict[str, Any]:
+        ctx = self._visual_grounding_context()
+        if not any(ctx.values()):
+            return result
+        result.setdefault("visual_grounding", ctx)
+        result.setdefault("image_category", ctx.get("image_category"))
+        result.setdefault("grounded_by_visual_profile", True)
+        if tool_name in {"frequency_domain_analysis", "deepfake_frequency_check", "diffusion_artifact_detector"}:
+            if str(ctx.get("image_category") or "").lower() == "screenshot" and not result.get("anomaly_detected"):
+                result.setdefault(
+                    "context_note",
+                    "Interpreted as a screen capture; sharp UI edges and text are expected rendering features.",
+                )
+        return result
+
     # ── Phase 1: Neural ELA ───────────────────────────────────────────────────
+
+    async def _screen_capture_not_applicable(
+        self,
+        tool_name: str,
+        reason: str,
+        *,
+        aliases: tuple[str, ...] = (),
+        record: bool = True,
+    ) -> dict[str, Any]:
+        result = {
+            "available": True,
+            "not_applicable": True,
+            "skipped": True,
+            "status": "NOT_APPLICABLE",
+            "evidence_verdict": "NOT_APPLICABLE",
+            "reason": reason,
+            "confidence": 0.0,
+            "court_defensible": False,
+            "screenshot_scope_guard": True,
+        }
+        result = self._attach_visual_grounding(result, tool_name=tool_name)
+        if record:
+            await self._store(tool_name, result, *aliases)
+        return result
 
     async def neural_ela_handler(self, input_data: dict, record: bool = True) -> dict:
         """ViT-based Neural ELA. Falls back to multi-quality classical ELA.
@@ -373,6 +460,13 @@ class ImageHandlers(BaseToolHandler):
         signal, producing noise rather than forensic evidence.
         """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "neural_ela",
+                "ELA is not applicable to screen captures; screenshot integrity is assessed with hash, OCR, layout, and UI-rendering checks.",
+                aliases=("ela_full_image",),
+                record=record,
+            )
 
         # ── Screenshot fast-exit — ELA is not meaningful for screen captures ──
         # Sharp UI edges and uniform backgrounds produce large ELA regions that
@@ -399,6 +493,7 @@ class ImageHandlers(BaseToolHandler):
             return not_applicable
 
         result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=15.0)
+        result = self._attach_visual_grounding(result, tool_name="neural_ela")
         if not result.get("error") and result.get("available"):
             if record:
                 # Store under both neural key and legacy key so Gemini reads it correctly.
@@ -407,6 +502,7 @@ class ImageHandlers(BaseToolHandler):
 
         # Fallback: classical multi-quality ELA (pass record=False to avoid double-counting)
         fallback = await self.ela_full_image_handler(input_data, record=False)
+        fallback = self._attach_visual_grounding(fallback, tool_name="neural_ela")
         fallback["degraded"] = True
         fallback["fallback_reason"] = (
             "neural_ela_transformer unavailable or failed; used classical multi-quality ELA"
@@ -421,7 +517,15 @@ class ImageHandlers(BaseToolHandler):
     async def noiseprint_cluster_handler(self, input_data: dict, record: bool = True) -> dict:
         """Noiseprint++ CNN sensor-region clustering. Falls back to heuristic noise analysis."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "noiseprint_cluster",
+                "PRNU/noiseprint sensor clustering is not applicable to screen captures; screenshots are software-rendered and do not carry a camera sensor noise field.",
+                aliases=("noise_fingerprint",),
+                record=record,
+            )
         result = await run_ml_tool("noiseprint_clustering.py", artifact.file_path, timeout=20.0)
+        result = self._attach_visual_grounding(result, tool_name="noiseprint_cluster")
         if not result.get("error") and result.get("available"):
             if record:
                 await self._store("noiseprint_cluster", result, "noise_fingerprint")
@@ -598,6 +702,14 @@ class ImageHandlers(BaseToolHandler):
 
         # Skip for lossy images — heuristic noise analysis on JPEG is unreliable
         # (noiseprint_cluster handles lossless; neural_ela handles JPEG).
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "noise_fingerprint",
+                "PRNU/noise fingerprint analysis is not applicable to screen captures; screenshots are assessed with hash, OCR, layout, and UI-rendering checks.",
+                aliases=("noiseprint_cluster",),
+                record=record,
+            )
+
         if hasattr(self.agent, "_is_lossless") and not self.agent._is_lossless:
             result = {
                 "noise_fingerprint_not_applicable": True,
@@ -634,6 +746,12 @@ class ImageHandlers(BaseToolHandler):
     async def splicing_detect_handler(self, input_data: dict) -> dict:
         """Heuristic image splicing detection (sync CPU call — runs in executor)."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "splicing_detect",
+                "Heuristic camera-image splicing detection is not applicable to screen captures; UI screenshots are reviewed with layout and overlay checks.",
+                aliases=("neural_splicing",),
+            )
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, detect_splicing, artifact.file_path)
         await self.agent._record_tool_result("splicing_detect", result)
@@ -644,12 +762,19 @@ class ImageHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, analyze_frequency_bands, artifact.file_path)
+        result = self._attach_visual_grounding(result, tool_name="deepfake_frequency_check")
         await self._store("deepfake_frequency_check", result, "f3_net_frequency")
         return result
 
     async def copy_move_detect_handler(self, input_data: dict) -> dict:
         """SIFT-based copy-move clone region detection."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "copy_move_detect",
+                "Copy-move clone detection is not applicable to screen captures; repeated UI components are expected and are handled by screenshot layout checks.",
+                aliases=("neural_copy_move",),
+            )
         loop = asyncio.get_running_loop()
         try:
             result = await asyncio.wait_for(
@@ -691,6 +816,7 @@ class ImageHandlers(BaseToolHandler):
             result["diffusion_detected"] = False
             result["is_ai_generated"] = False
 
+        result = self._attach_visual_grounding(result, tool_name="diffusion_artifact_detector")
         await self.agent._record_tool_result("diffusion_artifact_detector", result)
         return result
 
@@ -704,6 +830,11 @@ class ImageHandlers(BaseToolHandler):
     async def adversarial_robustness_check_handler(self, input_data: dict) -> dict:
         """Anti-forensics perturbation stability check (sync CPU call — runs in executor)."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "adversarial_robustness_check",
+                "Adversarial robustness probing is not applicable to screen captures unless a screenshot-specific manipulation check is positive.",
+            )
         if not await self._has_splice_or_copy_move_signal():
             result = {
                 "adversarial_check_skipped": True,
@@ -726,6 +857,13 @@ class ImageHandlers(BaseToolHandler):
     async def neural_copy_move_handler(self, input_data: dict, record: bool = True) -> dict:
         """BusterNet dual-branch copy-move detection. Falls back to SIFT."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "neural_copy_move",
+                "BusterNet copy-move detection is not applicable to screen captures; repeated UI elements and grid structure are expected rendering features.",
+                aliases=("copy_move_detect",),
+                record=record,
+            )
         from core.inference_client import get_inference_client
 
         client = await get_inference_client()
@@ -751,6 +889,13 @@ class ImageHandlers(BaseToolHandler):
     async def neural_splicing_handler(self, input_data: dict, record: bool = True) -> dict:
         """TruFor ViT-based splicing detection. Falls back to heuristic splicing."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        if self._is_screenshot_context(artifact):
+            return await self._screen_capture_not_applicable(
+                "neural_splicing",
+                "TruFor camera-image splicing detection is not applicable to screen captures; screenshots are assessed with UI overlay and layout consistency checks.",
+                aliases=("splicing_detect",),
+                record=record,
+            )
         from core.inference_client import get_inference_client
 
         client = await get_inference_client()
@@ -924,6 +1069,7 @@ class ImageHandlers(BaseToolHandler):
             await self.agent._record_tool_result("analyze_image_content", result)
             return result
         result = await real_analyze_image_content(artifact=artifact)
+        result = self._attach_visual_grounding(result, tool_name="analyze_image_content")
         await self.agent._record_tool_result("analyze_image_content", result)
         return result
 
@@ -933,7 +1079,7 @@ class ImageHandlers(BaseToolHandler):
         try:
             shared = {}
             if getattr(self.agent, "inter_agent_bus", None):
-                shared = self.agent.inter_agent_bus.get_image_context(str(self.agent.session_id)) or {}
+                shared = self.agent.inter_agent_bus.get_visual_profile(str(self.agent.session_id)) or {}
             meta = shared.get("metadata") if isinstance(shared, dict) else {}
             if not isinstance(meta, dict):
                 meta = {}
@@ -994,6 +1140,7 @@ class ImageHandlers(BaseToolHandler):
         """FFT frequency-domain anomaly analysis."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_frequency_domain_analysis(artifact=artifact)
+        result = self._attach_visual_grounding(result, tool_name="frequency_domain_analysis")
         await self.agent._record_tool_result("frequency_domain_analysis", result)
         return result
 
@@ -1007,6 +1154,7 @@ class ImageHandlers(BaseToolHandler):
             artifact=artifact,
             text_regions=text_regions,
         )
+        result = self._attach_visual_grounding(result, tool_name="detect_font_inconsistency")
         await self.agent._record_tool_result("detect_font_inconsistency", result)
         return result
 
@@ -1014,5 +1162,6 @@ class ImageHandlers(BaseToolHandler):
         """UI overlay forgery detection for screenshots."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         result = await real_detect_ui_overlay_forgery(artifact=artifact)
+        result = self._attach_visual_grounding(result, tool_name="detect_ui_overlay_forgery")
         await self.agent._record_tool_result("detect_ui_overlay_forgery", result)
         return result

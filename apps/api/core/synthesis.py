@@ -263,6 +263,20 @@ BAD_SYNTHESIS_PHRASES = (
     "lack of results",
     "no digital traces or anomalies were detected due to",
     "/app/storage/evidence",
+    "multi-agent forensic analysis",
+    "analysis was conducted",
+    "evidence appears authentic",
+    "image integrity confirmed",
+    "based on the analysis",
+    "no significant anomalies were detected",
+    "no manipulation was detected",
+    "the image appears to be authentic",
+    "the evidence is consistent with",
+    "all forensic checks passed",
+    "no evidence of tampering",
+    "the file appears unmodified",
+    "analysis did not reveal",
+    "cannot be conclusively determined",
 )
 
 
@@ -333,6 +347,8 @@ class SynthesisService:
         no_tool_name_findings: list[AgentFinding] = []
         for f in findings:
             summary = f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or ""
+            if self._is_template_finding(summary):
+                continue
             # Use a slightly fuzzy key for deduplication
             norm_summary = summary.lower().strip()
             dedup_key = f"{f.metadata.get('tool_name')}:{norm_summary[:100]}"
@@ -455,7 +471,7 @@ class SynthesisService:
                 "verdict": "TOOL_LIMITATION" if is_tool_limitation else f.status,
                 "evidence_verdict": f.evidence_verdict,
                 "confidence": round(f.confidence_raw, 3) if f.confidence_raw is not None else 0.5,
-                "summary": f.reasoning_summary,
+                "summary": str(f.reasoning_summary or "")[:260],
                 "key_metrics": self._compact_metrics(f),
             })
 
@@ -522,19 +538,19 @@ class SynthesisService:
 {_SAFETY_PREAMBLE}
 
 [ANALYTICAL INSTRUCTIONS]
-You are a court-level Senior Forensic Analyst. Your job is to reason about the combined Gemini visual analysis and deterministic tool evidence — then produce a single cohesive, evidence-specific narrative. Do NOT produce generic or template language.
+You are a court-level Senior Forensic Analyst. Your job is to reason about the combined visual profile (Gemini if available, local ensemble otherwise) and deterministic tool evidence — then produce a single cohesive, evidence-specific narrative. Do NOT produce generic or template language.
 
 ═══ HOW TO WEIGH GEMINI VS TOOLS ═══
-Gemini provides the evidence IDENTITY (what the file IS) and a preliminary visual verdict.
+The visual profile provides the evidence IDENTITY (what the file IS) and a preliminary visual verdict.
 The deterministic forensic tools provide the FORENSIC VERDICT (what manipulation was or was not found).
 Apply this weighting when forming verdict and confidence:
 
-  • Gemini AUTHENTIC + all tools NEGATIVE → verdict: AUTHENTIC, confidence: 0.85–0.95
-  • Gemini AUTHENTIC + tools mostly NEGATIVE (1 weak POSITIVE) → verdict: AUTHENTIC (note the anomaly as a false positive or minor degradation) or INCONCLUSIVE, confidence: 0.60–0.75
-  • Gemini AUTHENTIC + strong/multiple tool POSITIVE(s) → verdict: SUSPICIOUS or LIKELY_MANIPULATED, confidence: 0.65–0.85
-  • Gemini SUSPICIOUS + all tools NEGATIVE → verdict: AUTHENTIC or INCONCLUSIVE (tool findings win), confidence: 0.60–0.70; note the Gemini visual concern explicitly
-  • Gemini SUSPICIOUS + any tool POSITIVE → verdict: SUSPICIOUS or TAMPERED, confidence: 0.75–0.90
-  • Tool POSITIVE findings ALWAYS override a Gemini AUTHENTIC assessment, EXCEPT when the tool finding is explicitly marked as weak or likely noisy (e.g., single ELA edge anomaly)
+  • Visual profile AUTHENTIC + all tools NEGATIVE → verdict: AUTHENTIC, confidence: 0.85–0.95
+  • Visual profile AUTHENTIC + tools mostly NEGATIVE (1 weak POSITIVE) → verdict: AUTHENTIC (note the anomaly as a false positive or minor degradation) or INCONCLUSIVE, confidence: 0.60–0.75
+  • Visual profile AUTHENTIC + strong/multiple tool POSITIVE(s) → verdict: SUSPICIOUS or LIKELY_MANIPULATED, confidence: 0.65–0.85
+  • Visual profile SUSPICIOUS + all tools NEGATIVE → verdict: AUTHENTIC or INCONCLUSIVE (tool findings win), confidence: 0.60–0.70; note the visual concern explicitly
+  • Visual profile SUSPICIOUS + any tool POSITIVE → verdict: SUSPICIOUS or TAMPERED, confidence: 0.75–0.90
+  • Tool POSITIVE findings ALWAYS override an AUTHENTIC visual-profile assessment, EXCEPT when the tool finding is explicitly marked as weak or likely noisy (e.g., single ELA edge anomaly)
   • Tool failures / NOT_APPLICABLE are coverage gaps — they do NOT affect the verdict
   • High tool error rate (>40%) → lower confidence by 0.10–0.15; note coverage gap
 
@@ -543,9 +559,9 @@ Apply this weighting when forming verdict and confidence:
 2. CONTRADICTION: Do any tools disagree with each other or with Gemini? State which and why (method differences, confidence gaps, etc.).
 3. SIGNAL WEIGHT: Name the single strongest POSITIVE signal (manipulation indicator) or 'none'. Name the strongest NEGATIVE signal (clean indicator) or 'none'.
 4. AGENT BRIEF — MANDATORY 3-SENTENCE STRUCTURE (no deviation):
-   Sentence 1: "Gemini identified this evidence as [exact content_description from Gemini — use the actual words, not a paraphrase]. [Add interface/UI detail if present]."
+   Sentence 1: "The visual profile identified this evidence as [exact content_description — use the actual words, not a paraphrase]. [Add interface/UI detail if present]."
    Sentence 2: "[N] forensic tool(s) ran: [list the 2-3 most decisive tool outcomes with their actual metric numbers — e.g. 'file_hash_verify confirmed hash match', 'ELA found 0 anomaly regions', 'OCR extracted 47 words including...']."
-   Sentence 3: "Based on [Gemini's visual verdict] visual assessment and [tool agreement/disagreement], this evidence is assessed as [VERDICT] with [X]% confidence."
+   Sentence 3: "Based on the visual-profile verdict and [tool agreement/disagreement], this evidence is assessed as [VERDICT] with [X]% confidence."
    NEVER write generic phrases like "analysis complete", "no anomalies", "consistent with authenticity".
 5. KEY FINDINGS — exactly 3–5 entries, one per tool. Every finding MUST:
    (a) Name the exact tool used (e.g. "file_hash_verify", "neural_ela", "extract_text_from_image")
@@ -574,7 +590,7 @@ Return ONLY a JSON object with this exact schema:
   "verdict": "AUTHENTIC|SUSPICIOUS|TAMPERED|INCONCLUSIVE",
   "confidence": 0.0,
   "narrative_summary": "Precise 2-3 sentence executive summary, 55-80 words. Specific to THIS evidence.",
-  "agent_brief": "3-sentence structure: (1) what Gemini identified, (2) what tools found with metrics, (3) weighted verdict + confidence%.",
+  "agent_brief": "3-sentence structure: (1) what the visual profile identified, (2) what tools found with metrics, (3) weighted verdict + confidence%.",
   "gemini_tools_agreement": "AGREE|DISAGREE|PARTIAL — one sentence explaining the Gemini vs tool verdict relationship.",
   "key_findings": [
     "tool_name: [exact metric] → [forensic implication for this evidence].",
@@ -626,10 +642,11 @@ Return ONLY a JSON object with this exact schema:
             ])
         user_content = "\n".join(user_content_parts)
         try:
-            # Cap user content to 10000 chars so that even with the ~4500-char system prompt
-            # the total payload stays under 14000 chars — the safe limit for llama-3.1-8b-instant.
-            # llm_client.py applies per-model trimming on top, so larger models still get the full context.
-            MAX_INPUT_CHARS = 10000
+            # Keep synthesis comfortably under free-tier TPM. The prompt already
+            # contains the schema and rules; 4.5k evidence chars is enough for
+            # the top tool metrics while leaving room for 2-3 Groq calls/minute
+            # on llama-3.3-70b's 12K TPM bucket.
+            MAX_INPUT_CHARS = 4500
             original_user_len = len(user_content)
             if len(user_content) > MAX_INPUT_CHARS:
                 user_content = user_content[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
@@ -642,7 +659,7 @@ Return ONLY a JSON object with this exact schema:
             raw = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
-                max_tokens=1400,
+                max_tokens=900,
                 timeout_override=None,
                 json_mode=True,
             )
@@ -693,8 +710,11 @@ Return ONLY a JSON object with this exact schema:
                 grouped_sections_data,
                 screenshot_like=screenshot_like,
                 agent_name=agent_name,
+                visual_profile_context=visual_profile_context,
             )
-            calibrated_confidence = response.get("confidence")
+            calibrated_confidence = response.get("agent_confidence")
+            if calibrated_confidence is None:
+                calibrated_confidence = response.get("confidence")
             if calibrated_confidence is None or not isinstance(calibrated_confidence, (int, float)):
                 calibrated_confidence = pre_confidence
             else:
@@ -783,11 +803,18 @@ Return ONLY a JSON object with this exact schema:
             primary = signal_rows[0] if signal_rows else {}
             primary_tool = str(primary.get("tool") or "forensic tools").replace("_", " ")
             primary_verdict = str(primary.get("evidence_verdict") or "INCONCLUSIVE").lower()
+            visual_desc = ""
+            if visual_profile_context:
+                visual_desc = (
+                    str(visual_profile_context.get("content_description") or "")
+                    or str(visual_profile_context.get("contextual_narrative") or "")
+                ).strip()
+            visual_prefix = f"The visual profile identified this evidence as {visual_desc}. " if visual_desc else ""
             narrative = (
-                f"{primary_tool.title()} is the strongest agent signal: {primary_verdict} "
+                f"{visual_prefix}{primary_tool.title()} is the strongest agent signal: {primary_verdict} "
                 f"across {len(findings)} applicable findings."
                 if primary
-                else f"{agent_name} produced no applicable forensic signal."
+                else f"{visual_prefix}{agent_name} produced no applicable forensic signal."
             )
 
             sections = []
@@ -857,6 +884,37 @@ Return ONLY a JSON object with this exact schema:
                     }
                 )
 
+            grounded_key_findings = []
+            for item in signal_rows:
+                grounded = self._tool_grounded_summary(item, screenshot_like=screenshot_like)
+                if grounded:
+                    grounded_key_findings.append(grounded)
+                else:
+                    grounded_key_findings.append(
+                        f"{item.get('tool', 'tool')}: {item.get('evidence_verdict', 'INCONCLUSIVE')} "
+                        f"({item.get('confidence', 0.0):.2f})"
+                    )
+            if visual_desc:
+                grounded_key_findings.insert(0, f"Visual profile: {visual_desc}")
+
+            if phase == "deep" and phase1_context:
+                phase1_verdict = str(phase1_context.get("phase1_verdict") or "INCONCLUSIVE").upper()
+                if fallback_verdict == phase1_verdict:
+                    phase_delta = "CONFIRMED"
+                    delta_reason = f"Deep analysis confirmed the Phase 1 {phase1_verdict} assessment with no material contradiction."
+                elif positive_count and phase1_verdict in {"AUTHENTIC", "LIKELY_AUTHENTIC"}:
+                    phase_delta = "UPGRADED"
+                    delta_reason = "Deep analysis added a positive tool signal not present in Phase 1."
+                elif fallback_verdict in {"AUTHENTIC", "LIKELY_AUTHENTIC"} and phase1_verdict in {"SUSPICIOUS", "TAMPERED", "MANIPULATED"}:
+                    phase_delta = "DOWNGRADED"
+                    delta_reason = "Deep analysis did not corroborate the Phase 1 suspicious signal."
+                else:
+                    phase_delta = "CONTRADICTED"
+                    delta_reason = f"Deep verdict {fallback_verdict} differs from Phase 1 {phase1_verdict}; review tool-level evidence."
+            else:
+                phase_delta = ""
+                delta_reason = ""
+
             fallback_result = {
                 "agent_confidence": pre_confidence,
                 "agent_error_rate": pre_error_rate,
@@ -877,13 +935,101 @@ Return ONLY a JSON object with this exact schema:
                     grouped_sections_data,
                     screenshot_like=screenshot_like,
                     agent_name=agent_name,
+                    visual_profile_context=visual_profile_context,
                 ).get("sections", sections),
                 "synthesis_source": "tool_grounded_fallback",
             }
+            fallback_result["agent_brief"] = self._build_grounded_agent_brief(
+                agent_name=agent_name,
+                verdict=fallback_verdict,
+                confidence=pre_confidence,
+                tool_rows={str(item.get("tool") or idx): item for idx, item in enumerate(signal_rows)},
+                visual_profile_context=visual_profile_context,
+                screenshot_like=screenshot_like,
+            )
+            fallback_result["key_findings"] = grounded_key_findings[:6]
             if phase == "deep":
-                fallback_result["phase_delta"] = ""
-                fallback_result["delta_reason"] = ""
+                fallback_result["phase_delta"] = phase_delta
+                fallback_result["delta_reason"] = delta_reason
             return fallback_result
+
+    def _build_grounded_agent_brief(
+        self,
+        agent_name: str,
+        verdict: str,
+        confidence: Any,
+        tool_rows: dict[str, dict[str, Any]],
+        visual_profile_context: dict | None,
+        screenshot_like: bool,
+    ) -> str:
+        # Sentence 1: What the visual profile identified
+        desc = self._visual_context_sentence(visual_profile_context)
+        if not desc:
+            desc = "the submitted evidence file"
+        
+        s1 = f"The visual profile identified this evidence as {desc}."
+
+        # Sentence 2: [N] forensic tools ran: decisive outcomes
+        outcomes = []
+        for tool, row in tool_rows.items():
+            grounded = self._tool_grounded_summary(row, screenshot_like=screenshot_like)
+            if grounded:
+                # Get the first sentence of the grounded summary
+                outcomes.append(grounded.split(".")[0].strip())
+        
+        n = len(tool_rows)
+        if outcomes:
+            s2 = f"{n} forensic tool(s) ran: {'; '.join(outcomes[:3])}."
+        else:
+            s2 = f"{n} forensic tool(s) completed without significant indicators."
+
+        # Sentence 3: Verdict + Confidence
+        try:
+            conf_val = float(confidence)
+            if conf_val <= 1.0:
+                conf_val = conf_val * 100.0
+        except Exception:
+            conf_val = 75.0
+            
+        s3 = f"Based on the visual assessment and tool checks, this evidence is assessed as {verdict} with {conf_val:.0f}% confidence."
+
+        return f"{s1} {s2} {s3}"
+
+    def _visual_context_sentence(self, visual_profile_context: dict | None) -> str:
+        if not visual_profile_context:
+            return ""
+        desc = str(
+            visual_profile_context.get("content_description")
+            or visual_profile_context.get("contextual_narrative")
+            or ""
+        ).strip()
+        iface = str(visual_profile_context.get("interface_identification") or "").strip()
+        category = str(visual_profile_context.get("image_category") or "").replace("_", " ").strip()
+        if desc and iface and iface.lower() not in desc.lower():
+            desc = f"{desc} ({iface})"
+        elif not desc and category:
+            desc = category
+        return desc
+
+    def _prepend_visual_context(
+        self,
+        text: str,
+        visual_profile_context: dict | None,
+        *,
+        agent_name: str,
+    ) -> str:
+        desc = self._visual_context_sentence(visual_profile_context)
+        if not desc:
+            return text
+        lower = str(text or "").lower()
+        if desc[:60].lower() in lower or "visual profile identified" in lower:
+            return text
+        role = "Visual context"
+        if "object" in agent_name.lower() or "scene" in agent_name.lower():
+            role = "Scene context"
+        elif "metadata" in agent_name.lower() or "provenance" in agent_name.lower():
+            role = "Provenance context"
+        return f"{role}: {desc}. {str(text or '').strip()}".strip()
 
     def _ground_synthesis_response(
         self,
@@ -892,6 +1038,7 @@ Return ONLY a JSON object with this exact schema:
         *,
         screenshot_like: bool,
         agent_name: str,
+        visual_profile_context: dict | None = None,
     ) -> dict[str, Any]:
         """Replace vague/hallucinated LLM wording with tool-grounded summaries."""
         tool_rows: dict[str, dict[str, Any]] = {}
@@ -904,6 +1051,32 @@ Return ONLY a JSON object with this exact schema:
         def _bad(text: str) -> bool:
             lower = str(text or "").lower()
             return not lower.strip() or any(phrase in lower for phrase in BAD_SYNTHESIS_PHRASES)
+
+        # Check if agent_brief is generic/boilerplate or lacks metrics
+        brief = str(response.get("agent_brief") or "")
+        is_brief_generic = (
+            _bad(brief) 
+            or len(brief.strip()) < 60 
+            or not any(m in brief.lower() for m in (
+                "score", "ratio", "hash", "sha-256", "density", "ocr", "exif", 
+                "hex", "signature", "compression", "metadata", "splicing", "ghost", 
+                "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
+                "trufor", "busternet", "ela", "fft", "prnu"
+            ))
+        )
+        if is_brief_generic:
+            logger.warning(
+                "LLM agent brief is generic or lacks tool-metric citations; replacing with grounded narrative.",
+                agent=agent_name
+            )
+            response["agent_brief"] = self._build_grounded_agent_brief(
+                agent_name=agent_name,
+                verdict=response.get("verdict", "INCONCLUSIVE"),
+                confidence=response.get("confidence") or response.get("agent_confidence") or 0.75,
+                tool_rows=tool_rows,
+                visual_profile_context=visual_profile_context,
+                screenshot_like=screenshot_like,
+            )
 
         raw_sections = response.get("sections")
         sections = raw_sections if isinstance(raw_sections, list) else []
@@ -924,7 +1097,16 @@ Return ONLY a JSON object with this exact schema:
                 section["opinion"] = " ".join(x for x in grounded_any[:2] if x)[:420]
 
         narrative = str(response.get("narrative_summary") or "")
-        needs_grounded_narrative = _bad(narrative) or len(narrative.strip()) < 80
+        needs_grounded_narrative = (
+            _bad(narrative) 
+            or len(narrative.strip()) < 80 
+            or not any(m in narrative.lower() for m in (
+                "score", "ratio", "hash", "sha-256", "density", "ocr", "exif", 
+                "hex", "signature", "compression", "metadata", "splicing", "ghost", 
+                "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
+                "trufor", "busternet", "ela", "fft", "prnu"
+            ))
+        )
         if screenshot_like and "object" in agent_name.lower():
             scope_row = tool_rows.get("screenshot_scene_applicability", {})
             layout_row = tool_rows.get("screenshot_layout_forensics", {})
@@ -993,6 +1175,16 @@ Return ONLY a JSON object with this exact schema:
                 if useful
                 else f"{agent_name} completed screenshot-specific checks; review tool rows for exact OCR, layout, and provenance metrics."
             )
+        response["narrative_summary"] = self._prepend_visual_context(
+            str(response.get("narrative_summary") or ""),
+            visual_profile_context,
+            agent_name=agent_name,
+        )
+        response["agent_brief"] = self._prepend_visual_context(
+            str(response.get("agent_brief") or ""),
+            visual_profile_context,
+            agent_name=agent_name,
+        )
         return response
 
     def _agent_grounded_narrative(
@@ -1184,6 +1376,29 @@ Return ONLY a JSON object with this exact schema:
                 f"Neural fingerprint generated a perceptual signature for comparison; top similarity was {float(sim or 0):.3f}. "
                 + ("No high-confidence prior-media match was reported." if not data.get("match_found") else "A similar prior-media match was reported.")
             )
+        if tool == "detect_font_inconsistency":
+            score = data.get("font_consistency_score")
+            regions = int(data.get("num_anomaly_regions") or 0)
+            ratio = data.get("anomaly_region_ratio")
+            if verdict == "POSITIVE":
+                return (
+                    f"Screenshot font/rendering check found {regions} localized text-rendering outlier(s)"
+                    + (f" (outlier ratio {float(ratio):.3f})" if isinstance(ratio, (int, float)) else "")
+                    + ". Review these regions for possible edited text; mixed UI fonts alone are not treated as proof of manipulation."
+                )
+            return (
+                f"Screenshot font/rendering check found expected UI text variation"
+                + (f" (consistency score {float(score):.3f})" if isinstance(score, (int, float)) else "")
+                + ". No reviewable text-edit signal was detected."
+            )
+        if tool == "detect_ui_overlay_forgery":
+            regions = int(data.get("num_suspicious_regions") or 0)
+            if verdict == "POSITIVE":
+                return (
+                    f"UI overlay check found {regions} suspicious banner/overlay region(s). "
+                    "Review the marked regions for pasted notifications or inserted interface chrome."
+                )
+            return "UI overlay check found no suspicious pasted notification bars or inserted browser/interface panels."
         if tool == "analyze_image_content":
             if row.get("tool_limitation") or verdict == "ERROR":
                 err = str(data.get("error") or data.get("tool_error") or data.get("status") or "tool did not complete")
@@ -1258,9 +1473,35 @@ Return ONLY a JSON object with this exact schema:
             )
             impact = data.get("forensic_reliability_impact") or "not specified"
             penalty = data.get("compression_penalty", 1.0)
+            if screenshot_like:
+                return (
+                    f"Compression/platform audit found {platform}; reliability impact {impact}, "
+                    f"penalty factor {float(penalty or 1.0):.2f}. This is normal for many screenshots and messaging/browser captures; it limits provenance strength but is not a manipulation signal."
+                )
             return (
                 f"Compression/platform audit found {platform}; reliability impact {impact}, "
                 f"penalty factor {float(penalty or 1.0):.2f}. This limits provenance strength but is not a manipulation signal by itself."
+            )
+        if tool == "prnu_sensor_verification":
+            if verdict == "NOT_APPLICABLE" or data.get("prnu_not_applicable"):
+                return (
+                    "PRNU sensor matching was skipped for this screenshot. "
+                    "Screen captures do not contain camera sensor noise, so PRNU cannot prove or disprove screenshot authenticity."
+                )
+            cov = data.get("block_variance_cov")
+            outliers = data.get("outlier_blocks", data.get("outlier_regions"))
+            total = data.get("total_blocks")
+            if verdict == "POSITIVE":
+                return (
+                    f"Sensor-noise proxy reported inconsistent residuals"
+                    + (f" (CoV {float(cov):.3f})" if isinstance(cov, (int, float)) else "")
+                    + (f", outliers {outliers}/{total}" if outliers is not None and total is not None else "")
+                    + ". This is a weak single-image signal and requires corroboration."
+                )
+            return (
+                f"Sensor-noise proxy found no supported multi-source residual pattern"
+                + (f" (CoV {float(cov):.3f})" if isinstance(cov, (int, float)) else "")
+                + "."
             )
         if tool == "file_structure_analysis":
             raw_anomalies = data.get("anomalies")
@@ -1283,11 +1524,17 @@ Return ONLY a JSON object with this exact schema:
                 "Compression artifacts appear uniform across the image, with no evidence of selective pasting or manipulation."
             )
         if tool == "noiseprint_cluster":
+            if screenshot_like or verdict == "NOT_APPLICABLE" or data.get("not_applicable"):
+                return (
+                    "Noiseprint/PRNU sensor clustering was skipped for this screenshot. "
+                    "Screen captures are software-rendered, so camera sensor-noise consistency is not a meaningful authenticity test."
+                )
             clusters = data.get("cluster_count") or data.get("num_clusters") or 0
             inconsistent = data.get("inconsistent_regions") or data.get("anomalous_clusters") or 0
-            if verdict == "POSITIVE" or inconsistent:
+            inconsistent_count = len(inconsistent) if isinstance(inconsistent, list) else int(inconsistent or 0)
+            if verdict == "POSITIVE" or inconsistent_count:
                 return (
-                    f"Noiseprint++ sensor clustering found {clusters} noise-pattern cluster(s) with {inconsistent} inconsistent region(s). "
+                    f"Noiseprint++ sensor clustering found {clusters} noise-pattern cluster(s) with {inconsistent_count} inconsistent region(s). "
                     "Different noise textures in the same image suggest the pixels did not all come from the same camera sensor — a strong indicator of splicing."
                 )
             return (

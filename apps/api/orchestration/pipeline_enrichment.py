@@ -3,7 +3,7 @@ Pipeline Enrichment
 ===================
 
 Post-deliberation report enrichment: metadata collection, custody verification,
-visual profile provenance detection, and degradation flag propagation.
+visual profile provenance recording, and degradation flag propagation.
 """
 
 from __future__ import annotations
@@ -28,10 +28,7 @@ async def enrich_report(
     artifact: Any,
     agent_results: list[AgentLoopResult],
 ) -> None:
-    """Enrich the report with metadata, logs, and degradation flags.
-
-    Mutates *report* in-place. Appends to *pipeline._degradation_flags*.
-    """
+    """Enrich the report with metadata, logs, custody checks, and real degradation flags."""
     _detect_visual_profile_provenance(pipeline, report)
 
     tasks = [
@@ -63,37 +60,39 @@ async def enrich_report(
 
 
 def _detect_visual_profile_provenance(pipeline: Any, report: Any) -> None:
-    """Check visual profile provenance and flag missing remote provider coverage."""
+    """Record visual provider provenance without treating provider choice as degradation."""
     all_findings = []
     for agent_findings in getattr(report, "per_agent_findings", {}).values():
         all_findings.extend(agent_findings)
 
     visual_findings = [
-        f for f in all_findings
+        f
+        for f in all_findings
         if isinstance(f, dict)
-        and (f.get("finding_type") == "visual_evidence_profile"
-             or f.get("metadata", {}).get("tool_name") == "visual_evidence_profile")
+        and (
+            f.get("finding_type") == "visual_evidence_profile"
+            or f.get("metadata", {}).get("tool_name") == "visual_evidence_profile"
+        )
     ]
 
     if not visual_findings:
         pipeline._degradation_flags.append(
-            "No visual evidence profile was recorded — downstream agents may lack visual grounding."
+            "No visual evidence profile was recorded; downstream agents may lack visual grounding."
         )
         return
 
-    remote_profiles = [
-        f for f in visual_findings
-        if f.get("metadata", {}).get("external_ai_used") is True
-    ]
+    providers = []
+    for finding in visual_findings:
+        meta = finding.get("metadata", {}) or {}
+        provider = meta.get("provider_used") or meta.get("analysis_source")
+        if provider:
+            providers.append(str(provider))
 
-    if not remote_profiles and not pipeline.config.local_only_analysis:
-        pipeline._degradation_flags.append(
-            "Visual profile: local ensemble only — no remote AI provider was available. "
-            "Deep-pass agents used local fallback."
-        )
-
-
-
+    if providers:
+        note = f"Visual profile provider(s): {', '.join(sorted(set(providers)))}."
+        existing = getattr(report, "analysis_coverage_note", "") or ""
+        if note not in existing:
+            report.analysis_coverage_note = f"{existing} {note}".strip()
 
 
 async def _verify_custody_integrity(pipeline: Any, session_id: UUID) -> None:

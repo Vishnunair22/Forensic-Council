@@ -591,6 +591,28 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   };
 
   // ── TIER 1: Statistical & Narrative Synthesis (Highest Impact) ───────────────
+  (report.key_findings ?? []).forEach((f) => push(f));
+
+  const toolFindings = Object.values(report.per_agent_findings ?? {})
+    .flat()
+    .filter(Boolean)
+    .map((finding) => ({
+      text: cleanToolSummary(finding),
+      confidence: Number(finding.raw_confidence_score ?? finding.confidence_raw ?? 0),
+      severity: finding.severity_tier ?? "INFO",
+    }))
+    .filter((item) => item.text && !isLowValueFinding(item.text))
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
+
+  for (const item of toolFindings) {
+    if (findings.length >= 6) break;
+    push(item.text);
+  }
+
+  if (findings.length >= 3) {
+    return findings.slice(0, 6);
+  }
+
   const conf    = typeof report.overall_confidence === "number" ? report.overall_confidence : null;
   const manip   = typeof report.manipulation_probability === "number" ? report.manipulation_probability : null;
   const errRate = typeof report.overall_error_rate === "number" ? report.overall_error_rate : null;

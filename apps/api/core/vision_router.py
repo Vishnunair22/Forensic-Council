@@ -11,6 +11,7 @@ from core.gemini_client import (
 from core.structured_logging import get_logger
 from core.vision_local_ensemble import analyze_local_visual_profile
 from core.vision_types import VisualEvidenceFinding
+from core.image_routing import build_image_forensic_routing
 
 logger = get_logger(__name__)
 
@@ -67,11 +68,20 @@ class VisionRouter:
         downstream consumers can distinguish AI-assisted vs local-only findings.
         """
         verdict = getattr(gf, "_authenticity_verdict", "AUTHENTIC") or "AUTHENTIC"
+        model_used = gf.model_used or "gemini-2.5-flash"
+        is_local_fallback = model_used.startswith("local_")
+        provider_used = "local_visual_ensemble" if is_local_fallback else "gemini"
+        
+        content_description = gf.content_description or ""
+        routing = build_image_forensic_routing(
+            dict(getattr(gf, "_forensic_routing", {}) or {}),
+            description=content_description,
+        )
         return VisualEvidenceFinding(
             analysis_type=getattr(gf, "analysis_type", "visual_evidence_profile") or "visual_evidence_profile",
-            model_used=gf.model_used or "gemini-2.5-flash",
-            content_description=gf.content_description or "",
-            provider_used="gemini",
+            model_used=model_used,
+            content_description=content_description,
+            provider_used=provider_used,
             manipulation_signals=list(gf.manipulation_signals or []),
             detected_objects=list(gf.detected_objects or []),
             contextual_anomalies=list(gf.contextual_anomalies or []),
@@ -88,11 +98,11 @@ class VisionRouter:
             _contextual_narrative=getattr(gf, "_contextual_narrative", "") or "",
             _authenticity_verdict=verdict,
             _metadata_visual_consistency=getattr(gf, "_metadata_visual_consistency", "") or "",
-            _forensic_routing=dict(getattr(gf, "_forensic_routing", {}) or {}),
+            _forensic_routing=routing,
             _forensic_specifics=getattr(gf, "_forensic_specifics", "") or "",
             provider_attempts=[],
-            fallback_applied=False,
-            fallback_reason="",
+            fallback_applied=is_local_fallback,
+            fallback_reason=gf.caveat if is_local_fallback else "",
             tool_coverage={},
             degradation_flags=[],
         )
@@ -161,7 +171,6 @@ class VisionRouter:
             ]
             result.fallback_applied = False
             result.fallback_reason = "Gemini reserved for Agent1 single-call policy"
-            result.degradation_flags.append("gemini_skipped:non_agent1")
             return result
 
         # ── Agent1 — attempt Gemini if configured ─────────────────────────
@@ -180,9 +189,15 @@ class VisionRouter:
                 if gf and not gf.error:
                     logger.info("Gemini visual profile succeeded for Agent1")
                     result = self._normalize_gemini_profile(gf)
-                    result.provider_attempts = [
-                        {"provider": "gemini", "success": True},
-                    ]
+                    if gf.model_used.startswith("local_"):
+                        result.provider_attempts = [
+                            {"provider": "gemini", "success": False, "error": "Gemini fallback triggered"},
+                            {"provider": "local_visual_ensemble", "success": True},
+                        ]
+                    else:
+                        result.provider_attempts = [
+                            {"provider": "gemini", "success": True},
+                        ]
                     return result
                 if gf and gf.error:
                     errors.append(f"Gemini error response: {gf.error}")
@@ -208,10 +223,5 @@ class VisionRouter:
         result.provider_attempts = all_attempts
         result.fallback_applied = True
         result.fallback_reason = "; ".join(errors) if errors else "Gemini unavailable or skipped"
-        if errors:
-            result.degradation_flags.append("gemini_failed:fallback_to_local")
-        if not self._gemini_enabled:
-            result.degradation_flags.append("gemini_unconfigured:fallback_to_local")
-
         logger.info("Local visual profile delivered after Gemini fallback")
         return result

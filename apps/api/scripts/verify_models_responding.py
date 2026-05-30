@@ -33,8 +33,27 @@ async def main():
         else:
             failed.append(name)
 
+    print("\nVerifying Florence-2 Vision Fallback...")
+    try:
+        from tools.florence_analyzer import get_florence_analyzer
+        import torch
+        
+        analyzer = get_florence_analyzer()
+        load_success = analyzer._load()
+        if load_success:
+            print(f"  ✓ Florence-2 model is READY (device: {analyzer._device})")
+            succeeded += 1
+        else:
+            print("  ✗ Florence-2 model failed to load")
+            failed.append("florence_analyzer (in-process)")
+    except Exception as e:
+        print(f"  ✗ Florence-2 verification exception: {e}")
+        failed.append(f"florence_analyzer (exception: {e})")
+
     print("-" * 60)
-    print(f"Summary: {succeeded}/{len(_WARMUP_SCRIPTS)} tools ready.")
+    # Add 1 to expected count for Florence-2 VLM
+    total_expected = len(_WARMUP_SCRIPTS) + 1
+    print(f"Summary: {succeeded}/{total_expected} tools ready.")
 
     if failed:
         print("\nFailed tools:")

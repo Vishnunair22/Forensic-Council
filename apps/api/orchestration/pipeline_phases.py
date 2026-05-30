@@ -30,6 +30,13 @@ logger = get_logger(__name__)
 from core.findings_humanizer import _is_discovery_finding, _metric_digest, _humanize_initial_finding, _verdict_score
 
 PREVIEW_EXCLUDED_TOOLS = {"hash_verify", "custody_check", "file_type_validation"}
+SCREENSHOT_PREVIEW_EXCLUDED_TOOLS = {
+    "lighting_consistency",
+    "lighting_correlation_initial",
+    "shadow_validation",
+    "scale_validation",
+    "prnu_sensor_verification",
+}
 
 
 async def run_agents_concurrent(
@@ -95,6 +102,15 @@ async def run_agents_concurrent(
 
             def _normalize_tool_name(raw: str) -> str:
                 return tool_display_names.get(raw, raw.replace("_", " ").title())
+
+            def _suppress_preview_tool(tool_name: Any) -> bool:
+                tool_text = str(tool_name or "")
+                if tool_text in PREVIEW_EXCLUDED_TOOLS:
+                    return True
+                return (
+                    tool_text in SCREENSHOT_PREVIEW_EXCLUDED_TOOLS
+                    and is_screen_capture_like(evidence_artifact)
+                )
 
             def _resolve_image_context(agent_inst) -> str | None:
                 if agent_inst is None:
@@ -191,7 +207,7 @@ async def run_agents_concurrent(
                             or (analysis_phase == "deep" and tool_name in (initial_tool_names or set()))
                         ):
                             continue
-                        if tool_name in PREVIEW_EXCLUDED_TOOLS:
+                        if _suppress_preview_tool(tool_name):
                             continue
                         if tool_name in seen_synthesis_tools:
                             continue
@@ -229,7 +245,7 @@ async def run_agents_concurrent(
                     )
 
                     # Filter out low-signal/internal tools and non-applicable tools from the UI preview
-                    if tool in PREVIEW_EXCLUDED_TOOLS:
+                    if _suppress_preview_tool(tool):
                         continue
                     finding_ev = str(_finding_attr(f, "evidence_verdict", "")).upper()
                     finding_st = str(_finding_attr(f, "status", "")).upper()
@@ -342,7 +358,7 @@ async def run_agents_concurrent(
                     if len(deduped) >= 8:
                         break
                 preview = deduped
-            if isinstance(synthesis, dict) and synthesis.get("narrative_summary"):
+            if isinstance(synthesis, dict) and synthesis.get("narrative_summary") and not preview:
                 summary = str(synthesis.get("narrative_summary") or "").strip()
                 if summary and not any(
                     p in summary.lower()

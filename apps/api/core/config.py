@@ -716,7 +716,11 @@ class Settings(BaseSettings):
         "API+Worker = 30, matching the free-tier limit for llama-3.3-70b).",
     )
     groq_tpm_limit: int = Field(
-        default=6000,
+        default=12000,
+        description=(
+            "Default Groq TPM fallback. Runtime uses per-model overrides where known "
+            "(for example llama-3.3-70b-versatile=12K, llama-3.1-8b-instant=6K)."
+        ),
     )
     # Gemini API key policy acknowledgment — required before using Gemini in production.
     # See: https://ai.google.dev/terms

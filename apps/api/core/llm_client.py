@@ -301,6 +301,7 @@ class LLMClient:
                         self.provider,
                         self.model,
                         estimated_tokens=estimated_tokens,
+                        tpm_limit_override=self._model_tpm_limit(self.provider, self.model),
                     )
                     if not allowed:
                         logger.warning(
@@ -684,6 +685,25 @@ class LLMClient:
     }
     _DEFAULT_PROMPT_CHAR_LIMIT: int = 18000
 
+    _GROQ_MODEL_TPM_LIMITS: dict[str, int] = {
+        "llama-3.3-70b-versatile": 12000,
+        "llama-3.1-8b-instant": 6000,
+        "meta-llama/llama-4-scout-17b-16e-instruct": 30000,
+        "qwen/qwen3-32b": 6000,
+        "openai/gpt-oss-120b": 8000,
+        "openai/gpt-oss-20b": 8000,
+        "groq/compound": 70000,
+        "groq/compound-mini": 70000,
+    }
+
+    def _model_tpm_limit(self, provider: str, model: str) -> int | None:
+        if provider != "groq":
+            return getattr(self.config, f"{provider}_tpm_limit", None)
+        return self._GROQ_MODEL_TPM_LIMITS.get(
+            model,
+            getattr(self.config, "groq_tpm_limit", None),
+        )
+
     async def _chunked_synthesis(
         self,
         system_prompt: str,
@@ -837,6 +857,7 @@ class LLMClient:
                     target_provider,
                     target_model,
                     estimated_tokens=estimated_tokens,
+                    tpm_limit_override=self._model_tpm_limit(target_provider, target_model),
                 )
                 if not allowed:
                     logger.warning(
@@ -962,6 +983,7 @@ class LLMClient:
                         "gemini",
                         lite_model,
                         estimated_tokens=estimated_tokens,
+                        tpm_limit_override=self._model_tpm_limit("gemini", lite_model),
                     )
                     if not allowed:
                         logger.warning(

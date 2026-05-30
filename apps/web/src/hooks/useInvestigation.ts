@@ -247,7 +247,25 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         : phase === "initial"
           ? `${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`
           : null;
-      if (key) storage.setItem(key, completedAgents, true);
+      if (key) {
+        try {
+          storage.setItem(key, completedAgents, true);
+        } catch (_writeErr) {
+          // Truncate findings_preview to fit within localStorage quota (~5MB)
+          const truncated = completedAgents.map((a) => ({
+            ...a,
+            findings_preview: (a.findings_preview ?? []).slice(0, 10).map((f) => ({
+              ...f,
+              summary: f.summary.length > 200 ? f.summary.slice(0, 200) + "…" : f.summary,
+            })),
+          }));
+          try {
+            storage.setItem(key, truncated, true);
+          } catch (_quotaErr) {
+            console.warn("[Investigation] localStorage quota exceeded — agent state not persisted");
+          }
+        }
+      }
     }
   }, [completedAgents, phase, status]);
 

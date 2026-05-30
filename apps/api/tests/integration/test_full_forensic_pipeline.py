@@ -4,7 +4,11 @@ End-to-end integration test for complete forensic investigation flow.
 Tests the investigation endpoint with proper mocking - no torch required.
 """
 
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
+
+if "magic" not in sys.modules:
+    sys.modules["magic"] = MagicMock()
 
 import pytest
 
@@ -109,9 +113,13 @@ class TestFullForensicPipeline:
             patch("api.routes._session_state.update_active_pipeline_metadata", new_callable=AsyncMock),
             patch("api.routes.sessions.get_redis_client", new_callable=AsyncMock),
         ):
+            client.get("/")
+            csrf_token = client.cookies.get("csrf_token")
+            headers = {**auth_headers, "X-CSRF-Token": csrf_token or "dummy"}
+
             response = client.post(
                 "/api/v1/sessions/test-session-456/resume",
-                headers=auth_headers,
+                headers=headers,
                 json={"deep_analysis": True},
             )
 
@@ -184,10 +192,14 @@ class TestInvestigationEndpointContracts:
 
     async def test_investigate_validates_case_id_format(self, client, auth_headers, jpeg_file):
         """Verify case_id is validated against expected format."""
+        client.get("/")
+        csrf_token = client.cookies.get("csrf_token")
+        headers = {**auth_headers, "X-CSRF-Token": csrf_token or "dummy"}
+
         # Missing case_id should return 422
         response = client.post(
             "/api/v1/investigate",
-            headers=auth_headers,
+            headers=headers,
             files={"file": ("test.jpg", jpeg_file, "image/jpeg")},
             data={"investigator_id": "REQ-TEST"},  # No case_id
         )

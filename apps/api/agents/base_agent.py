@@ -53,7 +53,7 @@ class ForensicAgent(
     MRO contract:
     - AgentContextMixin       supplies _tool_context, _tool_registry, _init_context
     - AgentMemoryMixin        depends on context; consumes _record_tool_result
-    - AgentInvestigationMixin depends on memory; defines run_initial_pass / run_deep_pass
+    - AgentInvestigationMixin depends on memory; defines run_investigation / run_deep_investigation
     - AgentReflectionMixin   depends on investigation; uses self._react_chain
     - NeuralSynthesisMixin  depends on context; defines _gemini_deep_forensic_handler
     Mixins must NOT override each other's methods. Add new behaviour to the most specific mixin.

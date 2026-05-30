@@ -293,4 +293,4 @@ class TestSynthesisSource:
 
         parsed = json.loads(narrative)
         assert parsed["synthesis_source"] == "groq_llm"
-        assert parsed["evidence_assessment"] == "Groq-grounded agent brief."
+        assert parsed["agent_brief"] == "Groq-grounded agent brief."

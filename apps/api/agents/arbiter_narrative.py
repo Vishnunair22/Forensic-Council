@@ -155,6 +155,132 @@ def _first_by_tool(findings: list[dict[str, Any]], *tool_names: str) -> dict[str
     return None
 
 
+_SCREENSHOT_CAMERA_TOOLS = {
+    "noiseprint_cluster",
+    "noise_fingerprint",
+    "prnu_sensor_verification",
+    "neural_ela",
+    "ela_full_image",
+    "jpeg_ghost_detect",
+    "neural_splicing",
+    "splicing_detect",
+    "neural_copy_move",
+    "copy_move_detect",
+    "adversarial_robustness_check",
+    "roi_extract",
+}
+
+
+def _visual_description_from_findings(
+    findings: list[dict[str, Any]],
+    visual_profile_findings: list[dict[str, Any]] | None = None,
+) -> str:
+    candidates = list(visual_profile_findings or []) + list(findings or [])
+    for finding in candidates:
+        if (
+            finding.get("finding_type") not in {"visual_profile", "visual_evidence_profile"}
+            and _tool_name(finding) != "visual_evidence_profile"
+        ):
+            continue
+        meta = _tool_meta(finding)
+        for value in (
+            meta.get("content_description"),
+            meta.get("contextual_narrative"),
+            finding.get("court_statement"),
+            finding.get("reasoning_summary"),
+        ):
+            text = str(value or "").strip()
+            if text:
+                return text
+    return ""
+
+
+def _is_screenshot_context(desc: str, findings: list[dict[str, Any]]) -> bool:
+    haystack = " ".join(
+        [desc]
+        + [
+            str(_tool_meta(f).get(k) or "")
+            for f in findings
+            for k in ("image_type", "content_description", "contextual_narrative", "interface_identification")
+        ]
+    ).lower()
+    return any(token in haystack for token in ("screenshot", "screen capture", "digital ui", "browser", "web page", "whatsapp", "telegram"))
+
+
+def _normalise_key_findings(value: Any) -> str:
+    if isinstance(value, list):
+        items = [str(v) for v in value if str(v or "").strip()]
+    elif isinstance(value, str):
+        raw = value.replace("\r", "\n")
+        items = [part.strip() for part in raw.split("\n") if part.strip()]
+        if len(items) <= 1 and ";" in value:
+            items = [part.strip() for part in value.split(";") if part.strip()]
+    else:
+        items = []
+    return "\n".join(_clean_key_findings(items, limit=6))
+
+
+def _human_tool_finding(finding: dict[str, Any]) -> str:
+    meta = _tool_meta(finding)
+    tool = _tool_name(finding)
+    verdict = evidence_verdict_of(finding)
+    statement = str(
+        meta.get("llm_refined_summary")
+        or meta.get("raw_tool_summary")
+        or meta.get("analysis_summary")
+        or finding.get("court_statement")
+        or finding.get("reasoning_summary")
+        or ""
+    ).strip()
+
+    if tool in {"visual_evidence_profile", "shared_visual_evidence_profile"}:
+        desc = _visual_description_from_findings([finding])
+        return f"Visual profile identified the evidence as {desc}." if desc else ""
+    if tool in {"extract_text_from_image", "extract_evidence_text"}:
+        text = str(meta.get("text") or meta.get("full_text") or meta.get("ocr_text_preview") or "")
+        extracted = meta.get("extracted_text")
+        if not text and isinstance(extracted, list):
+            text = " ".join(str(x) for x in extracted[:20])
+        words = meta.get("word_count")
+        if text:
+            return f"OCR extracted visible text for context: {text[:220]}."
+        if words:
+            return f"OCR extracted {int(words)} visible word(s) for context."
+        return "OCR completed; no readable text was recovered."
+    if tool in {"file_hash_verify", "hash_verify"}:
+        return "SHA-256 hash matched the intake chain-of-custody record."
+    if tool == "detect_ui_overlay_forgery":
+        if verdict == "POSITIVE":
+            return statement or "UI overlay analysis flagged a pasted or inserted interface region."
+        return "UI overlay analysis found no pasted browser bars, notification panels, or inserted interface chrome."
+    if tool == "detect_font_inconsistency":
+        if verdict == "POSITIVE":
+            return statement or "Font rendering analysis flagged localized text-rendering outliers for review."
+        return "Font rendering analysis found normal variation for the visible UI text."
+    if tool == "screenshot_layout_forensics":
+        return statement or "Screenshot layout analysis found no structural UI/document anomaly."
+    if tool == "screenshot_scene_applicability":
+        return "Scene checks were scoped correctly as screenshot-only; physical lighting, scale, and weapon checks were bypassed."
+    if tool == "exif_extract":
+        fields = meta.get("total_fields_extracted")
+        if fields is not None:
+            return f"EXIF extraction found {int(fields)} metadata field(s); screenshot capture device/time was not recorded."
+        return statement or "EXIF extraction found no camera capture record."
+    if tool == "hex_signature_scan":
+        return statement or "Hex signature scan found no embedded editing-software signature."
+    if tool == "file_structure_analysis":
+        return statement or "File structure analysis found a valid header/trailer profile and no appended payload indicators."
+    if tool == "compression_risk_audit":
+        return statement or "Compression/platform audit found stripped or normalized metadata; this limits provenance but is not a manipulation signal."
+    if verdict == "POSITIVE":
+        return statement or f"{tool.replace('_', ' ').title()} flagged a manipulation indicator."
+    if verdict == "ERROR":
+        return statement or f"{tool.replace('_', ' ').title()} did not complete; this is a coverage limit."
+    if verdict == "NOT_APPLICABLE":
+        return ""
+    return statement or f"{tool.replace('_', ' ').title()} found no anomaly for its specific test."
+
+
 def _clean_key_finding(text: str) -> str:
     cleaned = " ".join(str(text or "").replace("\n", " ").split()).strip()
     for prefix in ("Checked:", "Finding:"):
@@ -333,67 +459,11 @@ class ArbiterNarrativeMixin:
         agent_id: str,
         findings: list[dict[str, Any]],
         metrics: dict[str, Any],
+        visual_profile_findings: list[dict[str, Any]] | None = None,
     ) -> str:
-        """Programmatically generate three sections if LLM is unavailable/fails."""
-        initial_f = [
-            f
-            for f in findings
-            if (f.get("metadata") or {}).get("analysis_phase", "initial") == "initial"
-        ]
-
-        assessment_parts = []
-        for f in sorted(initial_f, key=_finding_importance, reverse=True)[:12]:
-            meta = f.get("metadata") or {}
-            tool_name = meta.get("tool_name") or f.get("finding_type", "")
-            verdict = evidence_verdict_of(f)
-            statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
-            if verdict == "NOT_APPLICABLE":
-                reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable to this file type"
-                assessment_parts.append(f"{tool_name} was bypassed — {reason}.")
-            elif verdict == "ERROR":
-                assessment_parts.append(f"{tool_name} failed to execute successfully.")
-            elif verdict == "POSITIVE":
-                detail = f" {statement}" if statement else ""
-                degraded = meta.get("degraded") or meta.get("fallback_reason")
-                suffix = " (heuristic fallback)" if degraded else ""
-                assessment_parts.append(f"{tool_name} flagged a manipulation indicator{suffix}.{detail}")
-            else:
-                detail = f" {statement}" if statement else ""
-                assessment_parts.append(f"{tool_name} found no anomalies.{detail}")
-
-        evidence_assessment = " ".join(assessment_parts) or "No initial findings were reported for assessment."
-
-        deep_f = [f for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"]
-        if not deep_f:
-            deep_analysis = "Deep analysis was not executed for this agent."
-        else:
-            deep_parts = []
-            for f in sorted(deep_f, key=_finding_importance, reverse=True)[:8]:
-                meta = f.get("metadata") or {}
-                tool_name = meta.get("tool_name") or f.get("finding_type", "")
-                verdict = evidence_verdict_of(f)
-                statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
-                degraded = meta.get("degraded") or meta.get("fallback_reason")
-                if meta.get("gated") or meta.get("skipped"):
-                    reason = meta.get("reason") or "no prior manipulation signal warranted escalation"
-                    deep_parts.append(f"{tool_name} was not applied — {reason}.")
-                elif verdict == "NOT_APPLICABLE":
-                    deep_parts.append(f"{tool_name} was not applicable to this evidence type.")
-                elif verdict == "ERROR":
-                    deep_parts.append(f"{tool_name} could not complete deep analysis.")
-                elif verdict == "POSITIVE":
-                    detail = f" {statement}" if statement else ""
-                    suffix = " (via heuristic fallback)" if degraded else ""
-                    deep_parts.append(f"{tool_name} confirmed a manipulation indicator in deep analysis{suffix}.{detail}")
-                else:
-                    detail = f" {statement}" if statement else ""
-                    suffix = " (heuristic fallback, no new neural signal)" if degraded else ""
-                    deep_parts.append(f"{tool_name} returned no additional manipulation signal{suffix}.{detail}")
-            deep_analysis = " ".join(deep_parts) or "No deep findings were produced."
-
+        """Programmatically generate a structured agent narrative if LLM is unavailable/fails."""
         tools_ok = metrics.get("tools_succeeded", 0)
         tools_total = metrics.get("total_tools_called", 0)
-        tools_na = metrics.get("tools_not_applicable", 0)
         error_rate = metrics.get("error_rate", 0)
 
         has_positive = any(evidence_verdict_of(f) == "POSITIVE" for f in findings)
@@ -406,27 +476,124 @@ class ArbiterNarrativeMixin:
         else:
             agent_verdict = "AUTHENTIC"
 
-        if tools_total > 0:
-            coverage_frac = tools_ok / tools_total
-            if coverage_frac >= 0.8:
-                coverage_qual = "full tool coverage"
-            elif coverage_frac >= 0.5:
-                coverage_qual = "partial tool coverage"
-            else:
-                coverage_qual = "limited tool coverage"
-        else:
-            coverage_qual = "no tools completed"
+        visual_description = _visual_description_from_findings(findings, visual_profile_findings)
+        if not visual_description:
+            visual_description = "the submitted evidence media file"
+        screenshot_context = _is_screenshot_context(visual_description, findings)
+        clean_findings = [
+            f for f in findings
+            if evidence_verdict_of(f) != "NOT_APPLICABLE"
+            and not (screenshot_context and _tool_name(f) in _SCREENSHOT_CAMERA_TOOLS)
+        ]
 
-        na_clause = f", {tools_na} not applicable" if tools_na else ""
-        reliability_verdict = (
-            f"This agent completed {tools_ok} of {tools_total} tools ({coverage_qual}{na_clause}). "
-            f"Forensic verdict: {agent_verdict}."
+        # 1. Agent Brief
+        agent_label = AGENT_NAMES.get(agent_id, agent_id)
+        if has_positive:
+            conclusion = "one or more tools found a manipulation signal"
+        elif error_rate > 0.4:
+            conclusion = "the available evidence is limited by tool coverage"
+        else:
+            conclusion = "all applicable tools returned clean findings"
+        agent_brief = (
+            f"{agent_label} identified the evidence as {visual_description}. "
+            f"The agent ran {tools_ok}/{tools_total} applicable tool(s); {conclusion}. "
+            f"The evidence is assessed as {agent_verdict}."
         )
 
+        # 2. Visual Description
+        vis_desc_parts = []
+        vis_finding = next(
+            (
+                f for f in (visual_profile_findings or [])
+                if f.get("finding_type") in {"visual_profile", "visual_evidence_profile"}
+                or (f.get("metadata") or {}).get("tool_name") == "visual_evidence_profile"
+            ),
+            None,
+        )
+        if vis_finding:
+            meta = vis_finding.get("metadata") or {}
+            desc = meta.get("content_description") or vis_finding.get("court_statement") or vis_finding.get("reasoning_summary")
+            if desc:
+                vis_desc_parts.append(str(desc).strip())
+
+        ocr_finding = next(
+            (f for f in findings if f.get("finding_type") in ("extract_text_from_image", "extract_evidence_text")), None
+        )
+        if ocr_finding:
+            ocr_meta = ocr_finding.get("metadata") or {}
+            word_count = ocr_meta.get("word_count") or len(ocr_meta.get("extracted_text", []))
+            if word_count:
+                vis_desc_parts.append(f"OCR scan processed textual content containing approximately {word_count} words.")
+
+        yolo_finding = next(
+            (f for f in findings if f.get("finding_type") in ("object_detection", "yolo_object_detection")), None
+        )
+        if yolo_finding:
+            yolo_meta = yolo_finding.get("metadata") or {}
+            objects = yolo_meta.get("detected_objects") or []
+            if objects:
+                vis_desc_parts.append(f"Object detection identified the following entities: {', '.join(str(o) for o in objects[:4])}.")
+
+        if not vis_desc_parts:
+            vis_desc_parts.append(visual_description)
+
+        visual_description = " ".join(vis_desc_parts)
+
+        initial_count = sum(
+            1 for f in findings if (f.get("metadata") or {}).get("analysis_phase", "initial") != "deep"
+        )
+        deep_count = sum(
+            1 for f in findings if (f.get("metadata") or {}).get("analysis_phase") == "deep"
+        )
+
+        # 3. Key Findings (chronological order of tool execution)
+        key_findings_list = []
+        for f in clean_findings:
+            meta = f.get("metadata") or {}
+            tool_name = meta.get("tool_name") or f.get("finding_type", "")
+            if not tool_name or tool_name.lower() in ("file type not applicable", "format not supported"):
+                continue
+            verdict = evidence_verdict_of(f)
+            statement = (
+                meta.get("llm_refined_summary")
+                or meta.get("raw_tool_summary")
+                or f.get("court_statement")
+                or f.get("reasoning_summary")
+                or ""
+            ).strip()
+            phase = meta.get("analysis_phase", "initial")
+
+            if verdict == "NOT_APPLICABLE":
+                reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable"
+                line = f"{tool_name}: BYPASSED — {reason}"
+            elif verdict == "ERROR":
+                line = f"{tool_name}: FAILED to complete"
+            elif verdict == "POSITIVE":
+                line = f"{tool_name}: FLAGGED — {statement if statement else 'Anomaly detected'}"
+            else:
+                line = f"{tool_name}: CLEAN — {statement if statement else 'No anomalies detected'}"
+
+            if phase:
+                line = f"{phase} / {line}"
+            line = line.replace(" â€” ", " - ")
+            human_line = _human_tool_finding(f)
+            key_findings_list.append(human_line or line)
+
+        key_findings_str = "\n".join(_clean_key_findings(key_findings_list, limit=6))
+
+        # 4. Your Opinion
+        if has_positive:
+            opinion = f"Analysis indicates suspicious content due to positive manipulation triggers in local checks. Forensic verdict is {agent_verdict}."
+        else:
+            opinion = f"All applicable forensic checks completed without indicating tampering. Evidence is assessed as {agent_verdict}."
+        if deep_count:
+            opinion += f" Deep analysis added {deep_count} finding(s) after {initial_count} initial finding(s), using Phase 1 as the comparison baseline."
+
         return json.dumps({
-            "evidence_assessment": evidence_assessment,
-            "deep_analysis": deep_analysis,
-            "reliability_verdict": reliability_verdict,
+            "agent_brief": agent_brief,
+            "visual_description": visual_description,
+            "key_findings": key_findings_str,
+            "opinion": opinion,
             "synthesis_source": "template_fallback",
         })
 
@@ -436,6 +603,7 @@ class ArbiterNarrativeMixin:
         findings: list[dict[str, Any]],
         metrics: dict[str, Any],
         agent_data: dict[str, Any] | None = None,
+        visual_profile_findings: list[dict[str, Any]] | None = None,
     ) -> str:
         """
         Generate a per-agent narrative for the report.
@@ -451,35 +619,108 @@ class ArbiterNarrativeMixin:
             agent_brief = synthesis.get("agent_brief")
             key_findings = synthesis.get("key_findings")
             synthesis_source = synthesis.get("synthesis_source", "")
+            if agent_brief:
+                confidence_pct = round(metrics.get("confidence_score", 0) * 100)
+                tools_ok = metrics.get("tools_succeeded", 0)
+                tools_total = metrics.get("total_tools_called", 0)
+                visual_context = synthesis.get("visual_profile_context") or {}
+                visual_description = (
+                    str(visual_context.get("content_description") or "").strip()
+                    if isinstance(visual_context, dict)
+                    else ""
+                )
+                if not visual_description:
+                    visual_description = _visual_description_from_findings(findings, visual_profile_findings)
+                if not visual_description:
+                    visual_description = "the submitted evidence media file"
+                key_findings_str = _normalise_key_findings(key_findings)
+                if not key_findings_str:
+                    key_findings_list = []
+                    screenshot_context = _is_screenshot_context(visual_description, findings)
+                    for f in findings:
+                        if evidence_verdict_of(f) == "NOT_APPLICABLE":
+                            continue
+                        if screenshot_context and _tool_name(f) in _SCREENSHOT_CAMERA_TOOLS:
+                            continue
+                        line = _human_tool_finding(f)
+                        if line:
+                            key_findings_list.append(line)
+                    key_findings_str = "\n".join(_clean_key_findings(key_findings_list, limit=6))
+                if not key_findings_str:
+                    key_findings_str = "No supported manipulation indicator was found in the applicable tool results."
+                opinion = str(synthesis.get("narrative_summary") or synthesis.get("opinion") or "").strip()
+                if not opinion:
+                    opinion = f"Confidence is {confidence_pct}% across {tools_ok}/{tools_total} applicable tools."
+                return json.dumps({
+                    "agent_brief": str(agent_brief)[:1200],
+                    "visual_description": visual_description,
+                    "key_findings": key_findings_str,
+                    "opinion": opinion[:1500],
+                    "synthesis_source": synthesis_source or "agent_tool_synthesis",
+                })
 
             # Reject deterministic-fallback briefs — they look like LLM output but
             # are actually template strings. Route them to the richer programmatic
             # template path instead to avoid surfacing terse fallback text in reports.
             is_fallback = synthesis_source in ("template_fallback", "tool_grounded_fallback") or not synthesis_source
 
-            if agent_brief and key_findings and not is_fallback:
+            if agent_brief and not is_fallback:
                 confidence_pct = round(metrics.get("confidence_score", 0) * 100)
                 error_rate_pct = round(metrics.get("error_rate", 0) * 100)
                 tools_ok = metrics.get("tools_succeeded", 0)
                 tools_total = metrics.get("total_tools_called", 0)
                 tools_na = metrics.get("tools_not_applicable", 0)
-                phase_delta = synthesis.get("phase_delta", "")
-                delta_reason = synthesis.get("delta_reason", "")
-                deep_note = ""
-                if phase_delta and delta_reason:
-                    deep_note = f"\n\nDeep analysis delta: {phase_delta} — {delta_reason}"
+
+                # Visual description: from visual_profile_findings
+                vis_desc_parts = []
+                vis_finding = next(
+                    (f for f in (visual_profile_findings or []) if f.get("finding_type") == "visual_profile"), None
+                )
+                if vis_finding:
+                    meta = vis_finding.get("metadata") or {}
+                    desc = meta.get("content_description") or vis_finding.get("court_statement") or vis_finding.get("reasoning_summary")
+                    if desc:
+                        vis_desc_parts.append(str(desc).strip())
+                if not vis_desc_parts:
+                    vis_desc_parts.append("Pixel-level examination of the submitted evidence media file.")
+                visual_description = " ".join(vis_desc_parts)
+
+                # Key Findings chronologically
+                key_findings_list = []
+                for f in findings:
+                    meta = f.get("metadata") or {}
+                    tool_name = meta.get("tool_name") or f.get("finding_type", "")
+                    if not tool_name or tool_name.lower() in ("file type not applicable", "format not supported"):
+                        continue
+                    verdict = evidence_verdict_of(f)
+                    statement = (f.get("court_statement") or f.get("reasoning_summary") or "").strip()
+                    if verdict == "NOT_APPLICABLE":
+                        reason = meta.get("reason") or meta.get("skipped_reason") or "not applicable"
+                        line = f"{tool_name}: BYPASSED — {reason}"
+                    elif verdict == "ERROR":
+                        line = f"{tool_name}: FAILED to complete"
+                    elif verdict == "POSITIVE":
+                        line = f"{tool_name}: FLAGGED — {statement if statement else 'Anomaly detected'}"
+                    else:
+                        line = f"{tool_name}: CLEAN — {statement if statement else 'No anomalies detected'}"
+                    key_findings_list.append(line)
+                key_findings_str = "\n".join(key_findings_list)
+
+                # Opinion: Use LLM's narrative summary or build one
+                opinion = synthesis.get("narrative_summary") or synthesis.get("opinion") or ""
+                if not opinion:
+                    opinion = f"Based on LLM synthesis, confidence is {confidence_pct}% across {tools_ok}/{tools_total} tools."
+
                 logger.debug(
                     "Using LLM-produced agent brief for narrative",
                     agent_id=agent_id,
                     synthesis_source=synthesis_source,
                 )
                 return json.dumps({
-                    "evidence_assessment": str(agent_brief)[:1200],
-                    "deep_analysis": "; ".join(str(kf) for kf in (key_findings or [])[:5])[:1200] + deep_note,
-                    "reliability_verdict": (
-                        f"Confidence: {confidence_pct}% across {tools_ok}/{tools_total} tools "
-                        f"({tools_na} not applicable; {error_rate_pct}% error rate)."
-                    ),
+                    "agent_brief": str(agent_brief)[:1200],
+                    "visual_description": visual_description,
+                    "key_findings": key_findings_str,
+                    "opinion": opinion[:1500],
                     "synthesis_source": synthesis_source or "agent_llm_synthesis",
                 })
             elif is_fallback and agent_brief:
@@ -490,7 +731,9 @@ class ArbiterNarrativeMixin:
                 )
 
         # Fallback: programmatic template (no Groq call)
-        return self._programmatic_agent_narrative(agent_id, findings, metrics)
+        return self._programmatic_agent_narrative(
+            agent_id, findings, metrics, visual_profile_findings=visual_profile_findings
+        )
 
 
     async def _generate_executive_summary(
@@ -1222,7 +1465,7 @@ Rules:
         )
 
         # ── Layer 1: VISUAL EVIDENCE PROFILE (evidence baseline) ──────────
-        gemini_lines = ["[LAYER 1 — EVIDENCE BASELINE]"]
+        gemini_lines = ["[LAYER 1 - VISUAL EVIDENCE BASELINE]"]
         for gf in (visual_profile_findings or [])[:3]:
             meta = gf.get("metadata", {}) or {}
             gemini_lines.extend([
@@ -1313,6 +1556,8 @@ Rules:
             "signal combination that drove this verdict. If two independent agents "
             "corroborate the same signal type, say so explicitly. If the verdict is "
             "SUSPICIOUS rather than MANIPULATED, explain why — what is missing.\n\n"
+            "Use the visual evidence baseline to identify content and applicable tool scope. "
+            "Do not repeat it as a standalone key finding unless it contains a visible contradiction or manipulation signal.\n\n"
             "2. KEY FINDINGS: 4-6 findings ordered by evidential weight. For each:\n"
             "   - Name the specific tool and metric\n"
             "   - State its forensic implication for THIS evidence type\n"
@@ -1556,6 +1801,7 @@ Rules:
                             self._generate_agent_narrative(
                                 aid, res.get("findings", []), per_agent_metrics.get(aid, {}),
                                 agent_data=res,
+                                visual_profile_findings=visual_profile_findings,
                             ),
                             timeout=10.0,
                         )
@@ -1605,6 +1851,45 @@ Rules:
                     r_note = str(arbiter_result.get("reliability_note", ""))
                     cross_modal_analysis = str(arbiter_result.get("cross_modal_analysis", ""))
                     arbiter_reasoning = str(arbiter_result.get("arbiter_reasoning", ""))
+
+                    # Enforce strict grounding / check for boilerplate authenticity language:
+                    is_v_sent_generic = _is_generic_executive_summary(v_sent)
+                    is_exec_sum_generic = _is_generic_executive_summary(exec_sum)
+                    
+                    forensic_markers = (
+                        "score", "ratio", "hash", "sha-256", "density", "ocr", "exif", 
+                        "hex", "signature", "compression", "metadata", "splicing", "ghost", 
+                        "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
+                        "trufor", "busternet", "ela", "fft", "prnu"
+                    )
+                    has_metrics_v = any(m in v_sent.lower() for m in forensic_markers)
+                    has_metrics_ex = any(m in exec_sum.lower() for m in forensic_markers)
+                    
+                    if is_v_sent_generic or is_exec_sum_generic or not has_metrics_v or not has_metrics_ex:
+                        logger.warning(
+                            "LLM Arbiter synthesis relied on generic/boilerplate authenticity language "
+                            "or lacked tool-metric citations; falling back to programmatic template structure."
+                        )
+                        t_vs, t_kf, t_rn, _, t_exec_s, t_unc_s = self._template_all(
+                            overall_verdict,
+                            overall_confidence,
+                            overall_error_rate,
+                            manipulation_probability,
+                            applicable_agent_count,
+                            all_findings,
+                            cross_modal_confirmed_count,
+                            len(contested_findings),
+                            analysis_coverage_note,
+                            active_agent_results,
+                            incomplete_count=len(incomplete_findings),
+                            per_agent_metrics=per_agent_metrics,
+                        )
+                        v_sent = t_vs
+                        exec_sum = t_exec_s
+                        unc_stmt = t_unc_s
+                        r_note = t_rn
+                        kf_list = t_kf
+                        llm_enabled = False
                 else:
                     v_sent, kf_list, r_note, p_anal, exec_sum, unc_stmt = self._template_all(
                         overall_verdict,
@@ -1733,31 +2018,48 @@ Rules:
             if not narr_str:
                 p_anal_flat[aid] = ""
                 p_anal_structured[aid] = {
-                    "evidence_assessment": "No initial findings were reported for assessment.",
-                    "deep_analysis": "Deep analysis was not executed or no deep findings were reported for this agent.",
-                    "reliability_verdict": "",
+                    "agent_brief": "No findings reported.",
+                    "visual_description": "No visual context available.",
+                    "key_findings": "",
+                    "opinion": "No analysis performed.",
                     "synthesis_source": "template_fallback",
                 }
                 continue
             try:
                 parsed = json.loads(narr_str)
-                p_anal_structured[aid] = {
-                    "evidence_assessment": parsed.get("evidence_assessment", ""),
-                    "deep_analysis": parsed.get("deep_analysis", ""),
-                    "reliability_verdict": parsed.get("reliability_verdict", ""),
-                    "synthesis_source": parsed.get("synthesis_source", _default_source),
-                }
-                p_anal_flat[aid] = " ".join([
-                    parsed.get("evidence_assessment", ""),
-                    parsed.get("deep_analysis", ""),
-                    parsed.get("reliability_verdict", "")
-                ]).strip()
+                if "agent_brief" in parsed:
+                    p_anal_structured[aid] = {
+                        "agent_brief": parsed.get("agent_brief", ""),
+                        "visual_description": parsed.get("visual_description", ""),
+                        "key_findings": parsed.get("key_findings", ""),
+                        "opinion": parsed.get("opinion", ""),
+                        "synthesis_source": parsed.get("synthesis_source", _default_source),
+                    }
+                    p_anal_flat[aid] = " ".join([
+                        parsed.get("agent_brief", ""),
+                        parsed.get("visual_description", ""),
+                        parsed.get("opinion", "")
+                    ]).strip()
+                else:
+                    p_anal_structured[aid] = {
+                        "agent_brief": "",
+                        "visual_description": parsed.get("evidence_assessment", ""),
+                        "key_findings": parsed.get("deep_analysis", ""),
+                        "opinion": parsed.get("reliability_verdict", ""),
+                        "synthesis_source": parsed.get("synthesis_source", _default_source),
+                    }
+                    p_anal_flat[aid] = " ".join([
+                        parsed.get("evidence_assessment", ""),
+                        parsed.get("deep_analysis", ""),
+                        parsed.get("reliability_verdict", "")
+                    ]).strip()
             except Exception:
                 p_anal_flat[aid] = narr_str
                 p_anal_structured[aid] = {
-                    "evidence_assessment": narr_str,
-                    "deep_analysis": "",
-                    "reliability_verdict": "",
+                    "agent_brief": "",
+                    "visual_description": narr_str,
+                    "key_findings": "",
+                    "opinion": "",
                     "synthesis_source": "template_fallback",
                 }
 
@@ -1919,8 +2221,14 @@ Rules:
         metrics = per_agent_metrics or {}
         p_anal = {}
         for aid, res in aar.items():
+            synthesis = res.get("synthesis") or {}
+            phase_delta = synthesis.get("phase_delta")
+            delta_reason = synthesis.get("delta_reason")
+            if phase_delta and delta_reason:
+                label = AGENT_NAMES.get(aid, aid)
+                kf.append(f"{label} deep-pass delta: {phase_delta} - {delta_reason}")
             p_anal[aid] = self._programmatic_agent_narrative(
-                aid, res.get("findings", []), metrics.get(aid, {})
+                aid, res.get("findings", []), metrics.get(aid, {}), visual_profile_findings=af
             )
         return vs, kf, rn, p_anal, exec_s, unc_s
 

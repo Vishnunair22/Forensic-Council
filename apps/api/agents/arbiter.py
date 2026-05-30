@@ -402,12 +402,19 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             return []
 
         # Ensure all findings are dicts
+        # Stage 0: Filter out template/stale findings
+        from core.synthesis import TEMPLATE_PATTERNS
         cleaned = []
         for f in findings:
             if not isinstance(f, dict):
                 logger.warning(
                     "Skipping non-dict finding during deduplication", type=type(f).__name__
                 )
+                continue
+            summary = f.get("reasoning_summary") or f.get("finding_type") or ""
+            meta = f.get("metadata") or {}
+            refined = meta.get("llm_refined_summary") or ""
+            if any(p in str(summary).lower() or p in str(refined).lower() for p in TEMPLATE_PATTERNS):
                 continue
             if "severity_tier" not in f:
                 f["severity_tier"] = assign_severity_tier(f)
@@ -868,25 +875,19 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
     def _get_degradation_flags(self, llm_ok, penalty, findings, metrics, narrative_warnings: list[str] | None = None) -> list[str]:
         flags = []
-        if self.config.llm_enable_post_synthesis and not llm_ok:
-            flags.append("LLM synthesis bypassed")
-        if penalty < 0.80:
-            flags.append(f"Compression penalty applied ({round((1 - penalty) * 100)}%)")
-        # Check visual profile provenance: report if all deep-phase findings
-        # used local fallback (Gemini was unavailable or skipped).
-        has_deep_findings = any(
-            (f.get("metadata") or {}).get("analysis_phase") == "deep" for f in findings
-        )
-        has_remote_profile = any(
-            (f.get("metadata") or {}).get("external_ai_used") is True
-            or (f.get("metadata") or {}).get("provider_used") == "gemini"
-            for f in findings
-        )
-        if has_deep_findings and not has_remote_profile:
-            flags.append("Visual profile: local ensemble only (no remote provider)")
+        for f in findings:
+            meta = f.get("metadata") or {}
+            tool = meta.get("tool_name") or f.get("finding_type") or "tool"
+            if (
+                f.get("status") in {"INCOMPLETE", "ERROR"}
+                or f.get("evidence_verdict") == "ERROR"
+                or meta.get("available") is False
+                or meta.get("error")
+            ):
+                flags.append(f"{tool} failed or returned incomplete output")
         if narrative_warnings:
-            flags.extend(narrative_warnings)
-        return flags
+            flags.extend(w for w in narrative_warnings if "failed" in str(w).lower() or "timeout" in str(w).lower())
+        return list(dict.fromkeys(flags))
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:
         return ForensicReport(

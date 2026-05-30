@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Lock, ArrowRight, X, Play, Mic, FileText, Archive, File } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { formatBytes } from "@/lib/utils";
@@ -22,6 +22,7 @@ export function UploadSuccessModal({
   authError,
 }: UploadSuccessModalProps) {
   const { playSound } = useSound();
+  const prefersReducedMotion = useReducedMotion();
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -150,9 +151,9 @@ export function UploadSuccessModal({
   return (
     <motion.div
       key="success-state"
-      initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
-      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-      exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
+      initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+      animate={prefersReducedMotion ? false : { opacity: 1, scale: 1, filter: "blur(0px)" }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, scale: 1.05, filter: "blur(4px)" }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="p-6 sm:p-8 flex flex-col text-left relative overflow-hidden max-h-[90vh] md:max-h-none"
     >

@@ -31,6 +31,7 @@ REQUIRED_IMPORTS: dict[str, str] = {
     "torch": "torch",
     "torchaudio": "torchaudio",
     "torchvision": "torchvision",
+    "transformers": "transformers",
     "ultralytics": "ultralytics",
 }
 

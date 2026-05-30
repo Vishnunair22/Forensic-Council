@@ -1051,6 +1051,14 @@ class ReActLoopEngine:
 
     @staticmethod
     def _positive_signal(output: dict[str, Any]) -> bool:
+        if (
+            output.get("not_applicable")
+            or output.get("skipped")
+            or str(output.get("status", "")).upper() in {"NOT_APPLICABLE", "SKIPPED"}
+            or str(output.get("verdict", "")).upper() == "NOT_APPLICABLE"
+        ):
+            return False
+
         positive_keys = (
             "manipulation_detected",
             "splicing_detected",
@@ -1110,7 +1118,7 @@ class ReActLoopEngine:
             return True
         verdict = str(output.get("verdict", "")).upper()
         authenticity_verdict = str(output.get("authenticity_verdict", "")).upper()
-        return verdict in {
+        verdict_is_positive = verdict in {
             "SUSPICIOUS",
             "TAMPERED",
             "MANIPULATED",
@@ -1125,6 +1133,9 @@ class ReActLoopEngine:
             "TAMPERED",
             "MANIPULATED",
         }
+        if verdict_is_positive and output.get("court_defensible") is False:
+            return bool(output.get("manipulation_detected") or output.get("splicing_detected"))
+        return verdict_is_positive
 
     def _classify_tool_output(
         self,
@@ -2389,10 +2400,29 @@ class ReActLoopEngine:
 
         if lower_tool == "compression_risk_audit":
             penalty = output.get("compression_penalty", 1.0)
-            platform = output.get("platform", output.get("detected_platform", "unknown"))
+            raw_platform = output.get("platform", output.get("detected_platform", "unknown"))
+            platform = (
+                "stripped or platform-normalized metadata"
+                if str(raw_platform or "").lower() in {"", "unknown", "none"}
+                else raw_platform
+            )
+            impact = output.get("forensic_reliability_impact", "not specified")
             return (
-                f"Compression audit: reliability penalty {float(penalty):.2f}. "
-                f"Detected platform: {platform}."
+                f"Compression/platform audit: {platform}; reliability impact {impact}; "
+                f"penalty factor {float(penalty):.2f}. This limits provenance strength but is not a manipulation signal by itself."
+            )
+
+        if lower_tool == "file_structure_analysis":
+            anomalies = output.get("anomalies")
+            anomaly_count = len(anomalies) if isinstance(anomalies, list) else int(output.get("anomaly_count", 0) or 0)
+            header_valid = output.get("header_valid", output.get("valid_header", True))
+            trailer_valid = output.get("trailer_valid", output.get("valid_trailer", True))
+            if anomaly_count:
+                details = "; ".join(str(x) for x in anomalies[:3]) if isinstance(anomalies, list) else f"{anomaly_count} anomaly flag(s)"
+                return f"File structure check found {details}. Header valid: {bool(header_valid)}; trailer valid: {bool(trailer_valid)}."
+            return (
+                f"File structure check found a valid header/trailer profile and no appended-payload indicators. "
+                f"Header valid: {bool(header_valid)}; trailer valid: {bool(trailer_valid)}."
             )
 
         if lower_tool in ("file_hash_verify", "hash_verify"):

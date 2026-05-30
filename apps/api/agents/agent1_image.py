@@ -26,6 +26,7 @@ from functools import cached_property
 from agents.base_agent import ForensicAgent
 from core.handlers.image import ImageHandlers
 from core.handlers.metadata import MetadataHandlers
+from core.image_routing import TOOL_TO_TASK_DESCRIPTION, build_image_forensic_routing
 from core.image_utils import is_lossless_image
 from core.media_kind import (
     is_camera_still_candidate,
@@ -153,6 +154,8 @@ class Agent1Image(ForensicAgent):
                 "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for visible text extraction",
                 "Run analyze_image_content for semantic image understanding",
+                "Run detect_font_inconsistency for screenshot text font analysis",
+                "Run detect_ui_overlay_forgery for screenshot UI overlay analysis",
                 "Run frequency_domain_analysis for frequency domain analysis",
             ]
         if self._is_lossless:
@@ -290,18 +293,36 @@ class Agent1Image(ForensicAgent):
             # Dynamic content-aware tool gating using forensic_routing.
             try:
                 metadata = result.get("metadata", {}) or {}
-                routing = metadata.get("forensic_routing", {}) or {}
+                description = (
+                    result.get("reasoning_summary")
+                    or result.get("content_description")
+                    or metadata.get("content_description")
+                    or ""
+                )
+                routing = build_image_forensic_routing(
+                    metadata.get("forensic_routing", {}) or {},
+                    description=str(description),
+                    file_path=str(getattr(self.evidence_artifact, "file_path", "") or ""),
+                )
+                metadata["forensic_routing"] = routing
+                result["metadata"] = metadata
                 skip_tools = [
                     str(tool).lower().replace("_", "")
                     for tool in routing.get("skip_tools", [])
                 ]
+                recommended_tools = {
+                    str(tool)
+                    for tool in routing.get("recommended_initial_tools", [])
+                    if tool
+                }
 
-                if skip_tools:
+                if skip_tools or recommended_tools:
                     state = await self.working_memory.get_state(
                         self.session_id,
                         self.agent_id,
                     )
                     updated_tasks = []
+                    seen_tools: set[str] = set()
 
                     for task in state.tasks:
                         matched_tool = None
@@ -311,6 +332,7 @@ class Agent1Image(ForensicAgent):
                                 break
 
                         if matched_tool:
+                            seen_tools.add(matched_tool)
                             normalized = matched_tool.lower().replace("_", "")
                             if normalized in skip_tools:
                                 logger.info(
@@ -331,6 +353,17 @@ class Agent1Image(ForensicAgent):
                         self.agent_id,
                         {"tasks": [task.model_dump() for task in updated_tasks]},
                     )
+
+                    for tool_name in recommended_tools - seen_tools:
+                        task_desc = TOOL_TO_TASK_DESCRIPTION.get(tool_name)
+                        if task_desc and tool_name in registry.handlers:
+                            await self.inject_task(task_desc, priority=14)
+
+                    if self.inter_agent_bus:
+                        self.inter_agent_bus.set_visual_profile(
+                            str(self.session_id),
+                            result,
+                        )
             except Exception as exc:
                 logger.warning(
                     "Error applying visual-profile routing",
@@ -346,12 +379,9 @@ class Agent1Image(ForensicAgent):
             "Shared visual evidence profile and forensic routing context",
         )
 
-        # Compatibility alias for old persisted task descriptions only.
-        registry.register(
-            TOOL_GEMINI_DEEP,
-            visual_evidence_profile_handler,
-            "Deprecated alias for shared visual evidence profile",
-        )
+        # NOTE: TOOL_GEMINI_DEEP ("gemini_deep_forensic") is NOT registered here.
+        # It is a legacy alias kept in tool_names.py for backward-compatible
+        # deserialization of old persisted tasks. New runs use TOOL_VISUAL_PROFILE.
 
         # ── SynthID / AI Watermark Detection ─────────────────────────────────
         async def synthid_watermark_handler(input_data: dict) -> dict:
@@ -456,6 +486,28 @@ class Agent1Image(ForensicAgent):
         tool_name = finding.metadata.get("tool_name")
         if not tool_name:
             return
+
+        if self._is_screen_capture or self._is_digital_capture:
+            screenshot_irrelevant = {
+                "noiseprint_cluster",
+                "noise_fingerprint",
+                "neural_splicing",
+                "splicing_detect",
+                "neural_copy_move",
+                "copy_move_detect",
+                "adversarial_robustness_check",
+                "roi_extract",
+                "ela_full_image",
+                "neural_ela",
+                "jpeg_ghost_detect",
+            }
+            if tool_name in screenshot_irrelevant:
+                logger.info(
+                    "Skipping camera-image reactive expansion for screen capture",
+                    agent_id=self.agent_id,
+                    tool_name=tool_name,
+                )
+                return
 
         findings = self._findings
 
