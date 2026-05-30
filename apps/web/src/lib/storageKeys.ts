@@ -1,15 +1,8 @@
-/**
- * Unified Registry of Web Storage Keys
- * Prevents magic-string mismatch bugs across pages, components, hooks, and tests.
- */
 export const STORAGE_KEYS = {
-  // Session / Authentication Keys
   SESSION_ID: "forensic_session_id",
   AUTH_TOKEN: "forensic_auth_token",
   AUTH_TOKEN_EXPIRY: "forensic_auth_token_expiry",
 
-  // Investigation State & Metadata
-  HISTORY: "forensic_history",
   INVESTIGATION_CTX: "forensic_investigation_ctx",
   THUMBNAIL: "forensic_thumbnail",
   MIME_TYPE: "forensic_mime_type",
@@ -21,15 +14,14 @@ export const STORAGE_KEYS = {
   AUTO_START: "forensic_auto_start",
   RESULT_PHASE: "forensic_result_phase",
 
-  // Agent State & Updates
   INITIAL_AGENTS: "forensic_initial_agents",
   DEEP_AGENTS: "forensic_deep_agents",
 
-  // Identity
   INVESTIGATOR_ID: "forensic_investigator_id",
   AUTH_OK: "forensic_auth_ok",
 
-  // Ephemeral flow-control flags (sessionStorage only, cleared by resetActiveInvestigation)
+  HISTORY: "forensic_history",
+
   FC_SHOW_LOADING: "fc_show_loading",
   FC_LOADING_TEXT: "fc_loading_text",
   FC_LOADING_DISPATCHED: "fc_loading_dispatched",

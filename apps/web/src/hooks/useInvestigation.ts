@@ -14,7 +14,6 @@ import {
   getArbiterStatus,
   getReport,
   getAuthToken,
-  autoLoginAsInvestigator,
   DuplicateInvestigationError,
   WorkerWarmupError,
   type ArbiterStatusResponse,
@@ -35,8 +34,11 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import { validateEvidenceFile } from "@/lib/fileValidation";
-import { clearPendingEvidenceFile, loadPendingEvidenceFile } from "@/lib/pendingFilePersistence";
+import { clearPendingEvidenceFile } from "@/lib/pendingFilePersistence";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { authService } from "@/lib/upload/authService";
+import { fileHandoffManager } from "@/lib/upload/fileHandoffManager";
+import { loadingOverlayController } from "@/lib/upload/loadingOverlayController";
 
 function withTimeout<T>(p: Promise<T>, ms: number, cleanup?: () => void): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -293,43 +295,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     if (typeof window === "undefined" || authReadyRef.current) return;
-
     const initAuth = async () => {
-      if (getAuthToken() !== null) {
-        return; // token in sessionStorage — session is current
-      } else if (__pendingFileStore.authPromise) {
-        await __pendingFileStore.authPromise
-          .then(() => {
-            storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
-            __pendingFileStore.authPromise = null;
-          })
-          .catch((err: unknown) => {
-            __pendingFileStore.authPromise = null;
-            const msg = err instanceof Error ? err.message : "Authentication failed";
-            setAuthError(msg);
-            toast.destructive({
-              title: "Authentication Error",
-              description: `Could not establish session: ${msg}. Please refresh the page.`,
-            });
-            throw err;
-          });
-      } else if (__pendingFileStore.file || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
-        __pendingFileStore.authPromise = autoLoginAsInvestigator();
-        await __pendingFileStore.authPromise
-          .then(() => {
-            storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
-            __pendingFileStore.authPromise = null;
-          })
-          .catch((err: unknown) => {
-            __pendingFileStore.authPromise = null;
-            const msg = err instanceof Error ? err.message : "Authentication failed";
-            setAuthError(msg);
-            toast.destructive({
-              title: "Authentication Error",
-              description: `Could not establish session: ${msg}. Please refresh the page.`,
-            });
-            throw err;
-          });
+      if (getAuthToken() !== null) return;
+      try {
+        await authService.ensureAuthenticated();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Authentication failed";
+        setAuthError(msg);
+        toast.destructive({
+          title: "Authentication Error",
+          description: `Could not establish session: ${msg}. Please refresh the page.`,
+        });
       }
     };
     authReadyRef.current = initAuth();
@@ -421,15 +397,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }
 
       try {
-        await (__pendingFileStore.authPromise ?? Promise.resolve());
-        if (getAuthToken() === null) {
-          await autoLoginAsInvestigator().then(() => {
-            storage.setItem(STORAGE_KEYS.AUTH_OK, "1");
-          });
-          // autoLoginAsInvestigator uses httpOnly cookies — getAuthToken() remains
-          // null even after success. If it resolved without throwing, the session
-          // cookie is established and subsequent credentialed requests will work.
-        }
+        await authService.ensureAuthenticated();
       } catch (authErr) {
         setIsUploading(false);
         setShowLoadingOverlay(false);
@@ -501,6 +469,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           playSound("error");
           toast.destructive({ title: "Investigation Failed", description: errorMsg });
           investigationInFlightRef.current = false;
+          fileHandoffManager.cleanup();
           return;
         }
       } finally {
@@ -647,24 +616,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     let cancelled = false;
 
     const startPendingAnalysis = async () => {
-    let pending = __pendingFileStore.file;
-    if (!pending && sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
-      pending = await loadPendingEvidenceFile().catch(() => null);
-      if (pending) __pendingFileStore.file = pending;
-    }
+    let pending = await fileHandoffManager.recoverFile();
     if (cancelled) return;
     if (!pending) {
       if (autoStartBlocking || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {
-        const pendingMeta = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_PENDING_FILE_META, true, null) as { name: string } | null;
+        const pendingMeta = fileHandoffManager.getFileMeta();
         toast.destructive({
-          title: "File selection was lost after refresh",
+          title: "File selection was lost",
           description: pendingMeta?.name
-            ? `Please reselect "${pendingMeta.name}" to continue. Browsers do not allow restoring file handles after a hard refresh.`
-            : "Please select the evidence file again to continue.",
+            ? `"${pendingMeta.name}" could not be restored after refresh. Please return to the home page and select it again. Browsers cannot retain file access across hard refreshes.`
+            : "The evidence file could not be restored. Please return to the home page and select it again.",
         });
-        clearInvestigationPersistence();
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        fileHandoffManager.cleanup();
         setAutoStartBlocking(false);
         setShowLoadingOverlay(false);
         return;
@@ -678,9 +641,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     const validationError = validateEvidenceFile(pending);
     if (validationError) {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+      fileHandoffManager.cleanup();
       setAutoStartBlocking(false);
       setShowLoadingOverlay(false);
       toast.destructive({ title: "Evidence file rejected", description: validationError });
@@ -1054,11 +1015,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     autoStartBlocking ||
     !!wsConnectionError;
 
-  // Overlay dismissal: dismiss as soon as the WebSocket connection is
-  // established (analysisStreamReady) OR the pipeline sends its first
-  // real status update. An 800ms minimum keeps UX smooth.
-  const SAFETY_TIMEOUT_MS = 5_000;
-  const MIN_DISPLAY_MS = 800;
   useEffect(() => {
     if (!showLoadingOverlay) return;
 
@@ -1067,39 +1023,22 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       (status !== "idle" && status !== "initiating");
 
     if (shouldDismiss) {
+      loadingOverlayController.dismiss();
       const timer = setTimeout(() => {
         setShowLoadingOverlay(false);
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-      }, MIN_DISPLAY_MS);
+      }, 800);
       return () => clearTimeout(timer);
     }
-
-    const safety = setTimeout(() => {
-      setShowLoadingOverlay(false);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-    }, SAFETY_TIMEOUT_MS);
-    return () => clearTimeout(safety);
   }, [showLoadingOverlay, analysisStreamReady, status]);
 
-  // Sync loading state and progress messages to storage for GlobalLoadingOverlay
   useEffect(() => {
     if (showLoadingOverlay) {
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_SHOW_LOADING, "true");
-      const currentText = uploadPhaseText || pipelineMessage || "Initializing workspace";
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_LOADING_TEXT, currentText);
+      loadingOverlayController.show(uploadPhaseText || pipelineMessage || "Initializing workspace");
       const dispatchedCount = Math.min(
         Object.keys(agentUpdates).filter((k) => k !== "Arbiter").length,
         5
       );
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_LOADING_DISPATCHED, String(dispatchedCount));
-    } else {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
+      loadingOverlayController.updateDispatchedCount(dispatchedCount);
     }
   }, [showLoadingOverlay, uploadPhaseText, pipelineMessage, agentUpdates]);
 

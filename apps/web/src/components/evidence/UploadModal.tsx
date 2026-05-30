@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { X, CloudUpload } from "lucide-react";
+import { X, CloudUpload, Loader2 } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
+import { FADE_IN_UP, TRANSITION_FAST } from "@/lib/animations";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -16,19 +17,9 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected, authError }: UploadModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const { playSound } = useSound();
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSubmittingRef = useRef(false);
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
 
   const closeModal = useCallback(() => {
     playSound("click");
@@ -44,7 +35,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Ignore if the cursor moved onto a child element — dragLeave bubbles from children.
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDragging(false);
   }, []);
@@ -58,12 +48,9 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
     }
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
-    setIsSubmitting(true);
     setError(null);
     playSound("success-chime");
-    timeoutRef.current = setTimeout(() => {
-      onFileSelected(file);
-    }, 600);
+    onFileSelected(file);
   }, [onFileSelected, playSound]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -79,10 +66,9 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
       initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, y: 4 }}
-      transition={{ duration: 0.16, ease: "easeOut" }}
+      transition={TRANSITION_FAST}
       className="p-8 sm:p-10 flex flex-col text-left"
     >
-      {/* Close button */}
       <button
         type="button"
         onClick={closeModal}
@@ -92,7 +78,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         <X className="w-5 h-5" aria-hidden="true" />
       </button>
 
-      {/* Elevated Header */}
       <div className="mb-8 border-b border-white/5 pb-4">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
@@ -114,7 +99,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         </div>
       )}
 
-      {/* Elevated Drop Zone */}
       <motion.div
         data-testid="upload-dropzone"
         role="button"
@@ -145,7 +129,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
         className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
       >
-        {/* Simulated Scanner Laser (only visible when dragging) */}
         <AnimatePresence>
           {isDragging && (
             <motion.div
@@ -194,7 +177,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         />
       </motion.div>
 
-      {/* Error message */}
       {error && (
         <div
           className="mt-6 p-4 rounded-2xl"
@@ -208,37 +190,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
           </p>
         </div>
       )}
-
-      {/* Submitting state — High Tech Handshake */}
-      <AnimatePresence>
-        {isSubmitting && !error && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-6 flex flex-col gap-2 overflow-hidden"
-          >
-            <div className="flex items-center justify-between px-1">
-              <p className="text-xs font-mono uppercase tracking-wider fc-text-primary animate-pulse" aria-live="assertive">
-                &gt; Establishing Secure Channel...
-              </p>
-              <span className="text-xs font-mono fc-text-muted">ENC: AES-256</span>
-            </div>
-            {/* Indeterminate Data Bar */}
-            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden relative" role="progressbar" aria-valuetext="Encrypting and uploading file">
-              <motion.div
-                className="absolute top-0 bottom-0 left-0 bg-primary"
-                initial={{ width: "0%", left: "0%" }}
-                animate={{
-                  width: ["20%", "40%", "20%"],
-                  left: ["0%", "100%", "0%"],
-                }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

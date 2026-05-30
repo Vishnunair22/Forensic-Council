@@ -1,28 +1,19 @@
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 
 export const ALLOWED_EXTENSIONS = new Set([
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".tiff",
-  ".tif",
-  ".webp",
-  ".gif",
-  ".bmp",
-  ".mp4",
-  ".mov",
-  ".avi",
-  ".mkv",
-  ".webm",
-  ".wav",
-  ".mp3",
-  ".m4a",
-  ".flac",
+  ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".gif", ".bmp",
+  ".mp4", ".mov", ".avi", ".mkv", ".webm",
+  ".wav", ".mp3", ".m4a", ".flac",
 ]);
 
 export function getFileExtension(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+}
+
+export interface ValidationError {
+  code: "EMPTY_FILE" | "SIZE_EXCEEDED" | "INVALID_EXTENSION" | "INVALID_MIME" | "EXTENSION_MISMATCH";
+  message: string;
 }
 
 export function validateEvidenceFile(file: File): string | null {
@@ -31,7 +22,7 @@ export function validateEvidenceFile(file: File): string | null {
   }
 
   if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-    return "File exceeds 50MB limit.";
+    return "File exceeds 50MB limit. Please select a smaller file.";
   }
 
   const ext = getFileExtension(file.name);
@@ -59,18 +50,48 @@ export function validateEvidenceFile(file: File): string | null {
   const hasAllowedMime = !!mimeType && ALLOWED_MIME_TYPES.has(mimeType);
 
   if (!hasAllowedMime && !hasAllowedExt) {
-    return `File type "${file.type || ext || "unknown"}" is not supported.`;
+    return `File type "${file.type || ext || "unknown"}" is not supported. Accepted: Images (JPG, PNG, TIFF, WEBP, GIF, BMP), Video (MP4, MOV, AVI, MKV, WEBM), Audio (WAV, MP3, M4A, FLAC).`;
   }
 
   if (!hasAllowedMime && hasAllowedExt) {
     if (!file.type || file.type === "application/octet-stream" || file.type === "application/x-zip-compressed") {
       return null;
     }
-    return `File type "${file.type || "unknown"}" is not recognized. Please verify the file type before upload.`;
+    return `File type "${file.type}" does not match extension "${ext}". Please verify the file is not corrupted.`;
   }
 
   if (hasAllowedMime && !hasAllowedExt) {
-    return `File extension "${ext || "unknown"}" does not match content type "${file.type}".`;
+    return `File extension "${ext}" does not match content type "${file.type}". Rename the file or select a different file.`;
+  }
+
+  return null;
+}
+
+export function getValidationErrorCode(file: File): ValidationError | null {
+  if (file.size <= 0) {
+    return { code: "EMPTY_FILE", message: "File is empty or invalid." };
+  }
+
+  if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+    return { code: "SIZE_EXCEEDED", message: "File exceeds 50MB limit." };
+  }
+
+  const ext = getFileExtension(file.name);
+  const hasAllowedExt = ALLOWED_EXTENSIONS.has(ext);
+  const hasAllowedMime = file.type ? ALLOWED_MIME_TYPES.has(file.type) : false;
+
+  if (!hasAllowedExt && !hasAllowedMime) {
+    return {
+      code: "INVALID_EXTENSION",
+      message: `File type "${file.type || ext || "unknown"}" is not supported.`,
+    };
+  }
+
+  if (hasAllowedExt && !hasAllowedMime && file.type && file.type !== "application/octet-stream") {
+    return {
+      code: "EXTENSION_MISMATCH",
+      message: `Extension "${ext}" does not match content type "${file.type}".`,
+    };
   }
 
   return null;

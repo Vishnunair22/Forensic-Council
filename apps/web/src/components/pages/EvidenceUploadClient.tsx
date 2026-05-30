@@ -14,6 +14,7 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
+import { loadingOverlayController } from "@/lib/upload/loadingOverlayController";
 import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
 import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
 
@@ -82,7 +83,7 @@ export function EvidenceUploadClient() {
     // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {
       if (e.persisted && !storage.getItem(STORAGE_KEYS.SESSION_ID)) {
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        loadingOverlayController.forceDismiss();
         router.replace("/");
       }
     };

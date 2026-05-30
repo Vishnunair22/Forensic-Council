@@ -1,8 +1,5 @@
 "use client";
 
-// ROLE: Root-level route-transition overlay that bridges navigation gaps.
-// Delegates to useInvestigation for page-specific loading after /evidence arrives.
-
 import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
@@ -35,8 +32,7 @@ export function GlobalLoadingOverlay() {
     return showLoading;
   });
   const [liveText, setLiveText] = useState(() => {
-    const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT);
-    return stored || "Opening evidence analysis...";
+    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT) || "Opening evidence analysis...";
   });
   const [dispatchedCount, setDispatchedCount] = useState(() => {
     const stored = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
@@ -71,7 +67,6 @@ export function GlobalLoadingOverlay() {
     }
   }, [pathname]);
 
-  // Listen for storage updates dispatched by useInvestigation
   useEffect(() => {
     const handleStorageUpdate = (e: Event) => {
       const { key, value } = (e as CustomEvent<{ key: string; value: string | null }>).detail;
@@ -80,12 +75,6 @@ export function GlobalLoadingOverlay() {
           mountTimeRef.current = Date.now();
           setShow(true);
         } else {
-          // Grace guard: block dismissal only during the narrow handoff window
-          // (FC_SHOW_LOADING is still "true" in sessionStorage, meaning
-          // useInvestigation hasn't explicitly requested dismissal yet).
-          // Once useInvestigation calls removeItem(FC_SHOW_LOADING), that IS
-          // an intentional dismiss — always honour it, even if SESSION_ID
-          // isn't set yet (e.g. upload failed, auth failed, WS failed).
           const isGracePeriod =
             sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" &&
             !storage.getItem(STORAGE_KEYS.SESSION_ID) &&
@@ -104,16 +93,11 @@ export function GlobalLoadingOverlay() {
     return () => window.removeEventListener("fc_storage_update", handleStorageUpdate);
   }, []);
 
-  // Route-change dismissal logic
   useEffect(() => {
     if (pathname !== "/" && !pathname.startsWith("/evidence")) {
       dismiss();
       return;
     }
-
-    // We ARE on /evidence. The overlay is a navigation-gap bridge only.
-    // Start a hard safety timer: if useInvestigation hasn't dismissed it
-    // within EVIDENCE_MAX_DISPLAY_MS, force-dismiss so the page is visible.
     if (show) {
       if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
       const elapsed = Date.now() - mountTimeRef.current;
@@ -122,7 +106,6 @@ export function GlobalLoadingOverlay() {
         dismiss();
       }, remaining);
     }
-
     return () => {
       if (safetyTimerRef.current) {
         clearTimeout(safetyTimerRef.current);
