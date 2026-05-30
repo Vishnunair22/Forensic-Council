@@ -273,12 +273,18 @@ def _human_tool_finding(finding: dict[str, Any]) -> str:
     if tool == "compression_risk_audit":
         return statement or "Compression/platform audit found stripped or normalized metadata; this limits provenance but is not a manipulation signal."
     if verdict == "POSITIVE":
-        return statement or f"{tool.replace('_', ' ').title()} flagged a manipulation indicator."
+        verdict_word = "flagged a manipulation signal"
+        tool_display = tool.replace("_", " ")
+        return statement or f"{tool_display} {verdict_word}."
     if verdict == "ERROR":
-        return statement or f"{tool.replace('_', ' ').title()} did not complete; this is a coverage limit."
+        return statement or f"{tool.replace('_', ' ')} did not complete; this is a coverage limit."
     if verdict == "NOT_APPLICABLE":
         return ""
-    return statement or f"{tool.replace('_', ' ').title()} found no anomaly for its specific test."
+    statement = statement or ""
+    if not statement:
+        tool_display = tool.replace("_", " ")
+        return f"{tool_display} completed with no supported anomaly signal detected."
+    return statement
 
 
 def _clean_key_finding(text: str) -> str:

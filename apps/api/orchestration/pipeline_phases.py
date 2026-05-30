@@ -438,6 +438,9 @@ async def run_agents_concurrent(
                         "section_flags": synthesis.get("sections")
                         if isinstance(synthesis, dict)
                         else None,
+                        "agent_brief": synthesis.get("agent_brief")
+                        if isinstance(synthesis, dict)
+                        else None,
                         "image_context": _resolve_image_context(agent_inst),
                     },
                 ),

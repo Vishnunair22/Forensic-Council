@@ -806,66 +806,66 @@ class AgentInvestigationMixin:
                     num = tool_ctx.get("num_anomaly_regions", 0)
                     score = tool_ctx.get("anomaly_score", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("manipulation_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: ELA detected {num} anomalous region(s) (anomaly score: {score:.2f}). This indicates local resaving or compression inconsistencies typical of spliced segments."
+                        opinion = f"Neural ELA detected {num} compression anomaly region(s) with an anomaly score of {score:.2f}, indicating local re-saving consistent with spliced content."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: ELA compression level is uniform across the image."
+                        opinion = f"Neural ELA measured uniform compression levels across all image blocks (anomaly score: {score:.2f}), showing no sign of selective re-saving."
                 
                 # 2. FFT tools
                 elif tool_name in ("frequency_domain_analysis", "deepfake_frequency_check"):
                     score = tool_ctx.get("high_frequency_score", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("anomaly_detected") or tool_ctx.get("gan_artifact_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: FFT analysis identified periodic high-frequency spectral artifacts (score: {score:.2f}). This grid-like pattern is a classic signature of GAN/Diffusion generators."
+                        opinion = f"Frequency domain analysis identified periodic high-frequency spectral artifacts (score: {score:.2f}), a pattern consistent with GAN or diffusion model generation."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Spectral frequency distribution matches natural optical captures."
+                        opinion = f"Frequency domain analysis found a spectral distribution consistent with natural optical capture (score: {score:.2f})."
                 
                 # 3. Noiseprint tools
                 elif tool_name in ("noiseprint_cluster", "noise_fingerprint"):
                     clusters = tool_ctx.get("num_clusters", 1)
                     if ev == "POSITIVE" or tool_ctx.get("manipulation_detected") or tool_ctx.get("sensor_inconsistency_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: PRNU noise analysis identified {clusters} distinct camera/sensor patterns. A multi-sensor signature indicates that parts of this image originated from different physical devices (splicing composite)."
+                        opinion = f"PRNU noise analysis identified {clusters} distinct camera sensor patterns within the same image, indicating that regions originated from different physical capture devices — a splicing composite."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Sensor noise fingerprint is uniform, consistent with a single camera source."
+                        opinion = f"Sensor noise fingerprint is uniform across the image (single-cluster PRNU), consistent with a single camera source."
                 
                 # 4. Neural Splicing
                 elif tool_name in ("neural_splicing", "splicing_detect"):
                     conf = tool_ctx.get("confidence", 0.0) or tool_ctx.get("splicing_confidence", 0.0) or 0.0
                     if ev == "POSITIVE" or tool_ctx.get("splicing_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Splicing boundaries detected with {conf:.2f} confidence, indicating that content has been inserted from an external source."
+                        opinion = f"Splicing boundary detection found composited region edges with {conf:.2f} confidence, indicating content was inserted from an external source."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: TruFor splicing analysis showed high structural continuity."
+                        opinion = f"TruFor splicing analysis showed high structural continuity across the image, with no evidence of region compositing."
                 
                 # 5. Neural Copy-Move
                 elif tool_name in ("neural_copy_move", "copy_move_detect"):
                     conf = tool_ctx.get("confidence", 0.0) or tool_ctx.get("copy_move_confidence", 0.0) or 0.0
                     if ev == "POSITIVE" or tool_ctx.get("copy_move_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Copy-move cloned regions detected with {conf:.2f} confidence, suggesting self-cloned content within this canvas."
+                        opinion = f"Copy-move analysis detected self-cloned pixel regions with {conf:.2f} confidence, indicating content was duplicated within the same canvas."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: SIFT keypoint self-matching found no duplicated regions."
+                        opinion = f"SIFT keypoint self-matching found no duplicated regions across the image, ruling out copy-move manipulation."
                 
                 # 6. Diffusion detector
                 elif tool_name == "diffusion_artifact_detector":
                     conf = tool_ctx.get("confidence", 0.0) or tool_ctx.get("ai_confidence", 0.0) or 0.0
                     if ev == "POSITIVE" or tool_ctx.get("is_ai_generated") or tool_ctx.get("diffusion_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Diffusion model artifacts detected with {conf:.2f} confidence, confirming AI/Stable Diffusion generation traces."
+                        opinion = f"Diffusion artifact detection found generative model traces with {conf:.2f} confidence, consistent with AI or Stable Diffusion source origin."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: No generative diffusion model signatures detected."
+                        opinion = f"No diffusion or generative model signatures were detected in the image frequency and noise profiles."
                 
                 # 7. SynthID Watermark
                 elif tool_name == "synthid_watermark_detect":
                     wtype = tool_ctx.get("watermark_type", "unknown")
                     conf = tool_ctx.get("confidence", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("watermark_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Embedded digital watermark (type: {wtype}) detected with {conf:.2f} confidence, indicating synthetic source origin."
+                        opinion = f"An embedded AI watermark (type: {wtype}) was detected with {conf:.2f} confidence, confirming the image carries a synthetic-source provenance marker."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: No digital watermark signatures detected."
+                        opinion = f"No SynthID or C2PA AI watermark was found, indicating the image does not carry an embedded synthetic-source marker."
                 
                 # 8. JPEG Ghost
                 elif tool_name == "jpeg_ghost_detect":
                     conf = tool_ctx.get("confidence", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("ghost_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Double-compression ghosts detected (confidence: {conf:.2f}), suggesting parts of the image were resaved at different quality levels."
+                        opinion = f"JPEG ghost analysis found double-compression artifacts (confidence: {conf:.2f}), indicating parts of the image were re-saved at different quality levels — a signature of localized editing."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Single-compression JPEG structure verified."
+                        opinion = f"JPEG structure analysis confirmed single-compression consistency across the entire image."
                 
                 # 9. EXIF extract
                 elif tool_name == "exif_extract":
@@ -873,88 +873,88 @@ class AgentInvestigationMixin:
                     software = tool_ctx.get("software") or "no editor listed"
                     gps = tool_ctx.get("gps_coordinates") or "no GPS tags"
                     if ev == "NEGATIVE" or tool_ctx.get("exif_found"):
-                        opinion = f"{_tool_name(f)} successfully extracted EXIF metadata. Device: {device}, Editor/Software: {software}, GPS: {gps}."
+                        opinion = f"EXIF metadata was successfully extracted. Capture device: {device}. Editing software: {software}. GPS coordinates: {gps}."
                     else:
-                        opinion = f"{_tool_name(f)} failed to find EXIF tags: metadata has been stripped."
+                        opinion = f"EXIF metadata has been stripped from the file — no camera, device, or GPS tags remain."
                 
                 # 10. GPS Timezone
                 elif tool_name == "gps_timezone_validate":
                     offset = tool_ctx.get("offset_hours", 0.0)
                     if ev == "POSITIVE" or not tool_ctx.get("plausible", True):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: GPS coordinates deviate from local timestamp timezone by {offset} hours, indicating edited metadata."
+                        opinion = f"GPS coordinates deviate from the local recording timestamp timezone by {offset} hour(s), indicating the metadata has been altered."
                     else:
-                        opinion = f"{_tool_name(f)} verified metadata timeline: GPS coordinates match the local recording timestamp timezone."
+                        opinion = f"GPS coordinates are consistent with the local recording timestamp timezone, confirming metadata timeline integrity."
                 
                 # 11. Hash verify
                 elif tool_name in ("file_hash_verify", "hash_verify"):
                     h = tool_ctx.get("sha256") or "unknown"
                     if ev == "POSITIVE" or not tool_ctx.get("hash_match", True):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: File hash does not match the ingestion record ({h[:16]}...)."
+                        opinion = f"File hash mismatch detected: the current SHA-256 ({h[:16]}...) does not match the ingestion chain-of-custody record."
                     else:
-                        opinion = f"{_tool_name(f)} confirmed file integrity: SHA-256 hash matches the ingestion ledger ({h[:16]}...)."
+                        opinion = f"SHA-256 hash verification confirmed the file digest has not changed since upload ({h[:16]}...)."
                 
                 # 12. Audio anti-spoofing
                 elif tool_name == "anti_spoofing_detect":
                     prob = tool_ctx.get("spoof_probability", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("spoof_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Synthetic voice clone features detected (spoof probability: {prob:.2%})."
+                        opinion = f"Anti-spoofing analysis detected synthetic voice clone features with a spoof probability of {prob:.2%}, indicating the audio track may be artificially generated."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Speech pattern matches a natural human recording."
+                        opinion = f"Speech pattern analysis found the recording consistent with a natural human voice (no spoofing detected)."
                 
                 # 13. Audio Splice
                 elif tool_name == "audio_splice_detect":
                     anom = tool_ctx.get("anomaly_count", 0)
                     if ev == "POSITIVE" or tool_ctx.get("splice_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Detected {anom} abrupt phase or ambient transitions, indicating cut-and-paste editing."
+                        opinion = f"Audio splice detection found {anom} abrupt phase or ambient transitions in the waveform, consistent with cut-and-paste editing."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Continuous ambient audio phase verified."
+                        opinion = f"Audio waveform analysis found continuous ambient phase with no abrupt transitions, ruling out splice-based editing."
                 
                 # 14. ENF Analysis
                 elif tool_name == "enf_analysis":
                     shifts = tool_ctx.get("frequency_shifts", 0)
                     if ev == "POSITIVE" or tool_ctx.get("inconsistency_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Electrical Network Frequency (ENF) detected {shifts} sudden frequency deviations, indicating temporal discontinuities."
+                        opinion = f"Electrical Network Frequency (ENF) analysis found {shifts} sudden frequency deviation(s) in the recording, indicating temporal discontinuities consistent with editing."
                     else:
-                        opinion = f"{_tool_name(f)} verified ENF timeline: Power grid frequency is continuous and matching the recording date."
+                        opinion = f"ENF analysis confirmed the power grid frequency is continuous throughout the recording and consistent with the claimed date."
                 
                 # 15. Face Swap Detection
                 elif tool_name == "face_swap_detection":
                     conf = tool_ctx.get("confidence", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("face_swap_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Neural biometric analysis detected face-swap deepfake boundaries (confidence: {conf:.2f})."
+                        opinion = f"Face swap detection found deepfake boundary artifacts in facial regions with {conf:.2f} confidence, indicating AI-driven face replacement."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Biometric facial boundaries are authentic."
+                        opinion = f"Biometric facial boundary analysis found no evidence of face-swap manipulation."
                 
                 # 16. Lighting Consistency
                 elif tool_name == "lighting_consistency":
                     deg = tool_ctx.get("shadow_angles", 0.0)
                     if ev == "POSITIVE" or tool_ctx.get("anomaly_detected"):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Mismatched shadow direction detected ({deg} degrees deviation), violating physical scene consistency."
+                        opinion = f"Lighting consistency analysis found mismatched shadow directions ({deg} degrees deviation), violating the physical scene's expected illumination geometry."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Lighting and shadow vectors are geometrically consistent."
+                        opinion = f"Lighting and shadow vectors are geometrically consistent across the scene, matching a single illumination source."
                 
                 # 17. Scale Validation
                 elif tool_name == "scale_validation":
                     if ev == "POSITIVE" or not tool_ctx.get("scale_consistent", True):
-                        opinion = f"{_tool_name(f)} flagged a manipulation indicator: Perspective scale validation detected vanishing point geometry misalignment, indicating composited elements with incorrect relative proportions."
+                        opinion = f"Perspective scale validation detected vanishing point misalignment, indicating composited elements with incorrect relative proportions."
                     else:
-                        opinion = f"{_tool_name(f)} found no anomalies: Relative object scaling matches perspective projections."
+                        opinion = f"Relative object scaling is consistent with the perspective projection geometry of the scene."
                 
                 # 18. Object Detection
                 elif tool_name == "object_detection":
                     weapons = tool_ctx.get("weapon_detections") or []
                     contraband = tool_ctx.get("contraband_detections") or []
                     if weapons or contraband:
-                        opinion = f"{_tool_name(f)} identified suspect content. Weapons: {weapons}, Contraband: {contraband}."
+                        opinion = f"Object detection identified suspect content. Weapons detected: {weapons}. Contraband detected: {contraband}."
                     else:
-                        opinion = f"{_tool_name(f)} successfully completed object detection: no illicit objects identified."
+                        opinion = f"Object detection completed with no illicit items identified in the frame."
 
             # Fallback if no specific opinion was formed
             if not opinion:
                 if ev == "POSITIVE":
-                    opinion = f"{_tool_name(f)} flagged a manipulation indicator." + (f" {summary[:300]}" if summary else "")
+                    opinion = f"{_tool_name(f)} returned a positive signal." + (f" {summary[:300]}" if summary else "")
                 elif ev in {"NEGATIVE", "CLEAN"}:
-                    opinion = f"{_tool_name(f)} found no anomaly." + (f" {summary[:300]}" if summary else "")
+                    opinion = f"{_tool_name(f)} completed and found no supported anomaly signal." + (f" {summary[:300]}" if summary else "")
                 elif ev == "NOT_APPLICABLE":
                     reason = f.metadata.get("reason") or f.metadata.get("skipped_reason") or "not applicable"
                     opinion = f"{_tool_name(f)} was bypassed — {reason}."
@@ -1003,9 +1003,9 @@ class AgentInvestigationMixin:
             primary = top_findings[0]
             primary_summary = primary.reasoning_summary.strip()
             if str(primary.evidence_verdict).upper() == "POSITIVE":
-                narrative = f"{_tool_name(primary)} flagged a manipulation indicator: {primary_summary[:180]}"
+                narrative = f"{_tool_name(primary)} returned a positive finding: {primary_summary[:180]}"
             else:
-                narrative = f"{_tool_name(primary)} found no anomalies: {primary_summary[:180]}"
+                narrative = f"{_tool_name(primary)} completed without issue: {primary_summary[:180]}"
         else:
             narrative = (
                 f"{self.agent_name} found no applicable forensic signals for this file type "

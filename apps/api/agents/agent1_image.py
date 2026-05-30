@@ -112,16 +112,17 @@ class Agent1Image(ForensicAgent):
         Cheap context tools (CLIP, OCR, FFT) follow.
 
         Design rules:
-          - visual_evidence_profile runs once at the beginning as the session-wide
-            visual evidence profile. In local_only mode it is produced exclusively by
-            the local visual ensemble; in hybrid mode it may be produced by a configured
-            provider.
+          - visual_evidence_profile runs first after hash verification to produce
+            the session-wide visual evidence profile and forensic routing context.
+            Domain-specific tools (neural_ela, neural_fingerprint,
+            frequency_domain_analysis, noiseprint_cluster, detect_font_inconsistency,
+            detect_ui_overlay_forgery) are injected reactively by the
+            visual_evidence_profile handler once the routing category is known,
+            avoiding unnecessary tools for each content type.
           - extract_text_from_image is only useful for documents (scanned text)
             and screenshots (UI text) — OCR on camera photos or web downloads
             wastes a task slot. It is reactively injected by _on_tool_result_impl
             when analyze_image_content detects handwritten content.
-          - Camera JPEGs get a dedicated branch (5 tools) instead of falling
-            through to the generic lossy/JPEG default.
         """
         if self._is_document:
             return [
@@ -129,67 +130,53 @@ class Agent1Image(ForensicAgent):
                 "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for OCR and document content identification",
                 "Run analyze_image_content for semantic document classification",
-                "Run frequency_domain_analysis for frequency domain analysis",
-                "Run neural_ela for JPEG manipulation detection",
-                "Run neural_fingerprint for conceptual similarity detection",
             ]
         if self._is_recompressed_web:
             # jpeg_ghost_detect and ela_full_image removed from base — reactively
             # injected by _reason_step when ELA/FFT disagree (no coverage lost).
+            # neural_ela, neural_fingerprint, frequency_domain_analysis are injected
+            # reactively after visual_evidence_profile routing is known.
             return [
                 "Run file_hash_verify for evidence integrity check",
                 "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run neural_ela for high-confidence manipulation detection",
-                "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
-                "Run frequency_domain_analysis for frequency domain analysis",
             ]
         if self._is_screen_capture or self._is_digital_capture:
-            # Screenshots: hash integrity → OCR (primary signal for UI) → semantic →
-            # frequency scan. neural_fingerprint deferred to deep — conceptual similarity
-            # is less informative for screenshots which are inherently unique UI states.
-            # The shared visual evidence profile remains the primary routing context.
+            # Screenshots: hash integrity → OCR (primary signal for UI) → semantic.
+            # detect_font_inconsistency, detect_ui_overlay_forgery, and
+            # frequency_domain_analysis are injected reactively after
+            # visual_evidence_profile routing is known.
             return [
                 "Run file_hash_verify for evidence integrity check",
                 "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
                 "Run extract_text_from_image for visible text extraction",
                 "Run analyze_image_content for semantic image understanding",
-                "Run detect_font_inconsistency for screenshot text font analysis",
-                "Run detect_ui_overlay_forgery for screenshot UI overlay analysis",
-                "Run frequency_domain_analysis for frequency domain analysis",
             ]
         if self._is_lossless:
-            # Lossless: noiseprint sensor clustering is the primary manipulation signal.
-            # neural_fingerprint → CLIP context → FFT supporting.
+            # Lossless: noiseprint sensor clustering, neural_fingerprint, and
+            # frequency_domain_analysis are injected reactively after
+            # visual_evidence_profile routing is known.
             return [
                 "Run file_hash_verify for evidence integrity check",
                 "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run noiseprint_cluster for sensor-region source inconsistency",
-                "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
-                "Run frequency_domain_analysis for frequency domain analysis",
             ]
         if self._is_camera:
-            # Camera JPEGs: neural ELA is the primary manipulation detector.
-            # No Gemini or OCR in Phase 1 — they are expensive and low-value
-            # for natural photos. OCR is reactively injected if text is found.
+            # Camera JPEGs: neural ELA, neural_fingerprint, and
+            # frequency_domain_analysis are injected reactively after
+            # visual_evidence_profile routing is known.
             return [
                 "Run file_hash_verify for evidence integrity check",
                 "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-                "Run neural_ela for high-confidence manipulation detection",
-                "Run neural_fingerprint for conceptual similarity detection",
                 "Run analyze_image_content for semantic image understanding",
-                "Run frequency_domain_analysis for frequency domain analysis",
             ]
-        # Lossy/JPEG fallback: Neural ELA is the primary manipulation signal.
-        # No Gemini or OCR — same reasoning as camera branch.
+        # Lossy/JPEG fallback: Neural ELA, neural_fingerprint, and
+        # frequency_domain_analysis are injected reactively after
+        # visual_evidence_profile routing is known.
         return [
             "Run file_hash_verify for evidence integrity check",
             "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-            "Run neural_ela for high-confidence manipulation detection",
-            "Run neural_fingerprint for conceptual similarity detection",
             "Run analyze_image_content for semantic image understanding",
-            "Run frequency_domain_analysis for frequency domain analysis",
         ]
 
     @property
@@ -206,14 +193,14 @@ class Agent1Image(ForensicAgent):
           - adversarial_robustness_check — only when splicing/copy-move confirmed.
         """
         if self._is_screen_capture or self._is_digital_capture:
-            # Gemini already ran in Phase 1 for screenshots — result is in shared
-            # context for Agents 3/5. Phase 2 uses classical ML tools exclusively.
-            # Deepfake detection is included because modern deepfakes are often
-            # shared as screenshots of videos or generated content.
+            # Gemini already ran in Phase 1 for screenshots. Phase 2 uses
+            # classical ML tools for AI-generation detection (deepfakes are
+            # often shared as screenshots of generated content).
+            # neural_fingerprint excluded — no perceptual signal value for
+            # unique UI states. deepfake_frequency_check excluded — high
+            # false positive rate on compressed UI edge aliasing.
             return [
-                "Run neural_fingerprint for conceptual similarity detection",
                 "Run f3_net_frequency for AI-GAN artifact detection",
-                "Run deepfake_frequency_check for GAN/Diffusion artifacts",
                 "Run diffusion_artifact_detector for AI-generation signatures",
                 "Run synthid_watermark_detect for SynthID and AI watermark detection",
             ]
@@ -299,8 +286,17 @@ class Agent1Image(ForensicAgent):
                     or metadata.get("content_description")
                     or ""
                 )
+                routing_source = metadata.get("forensic_routing") or {}
+                if not routing_source:
+                    routing_source = {
+                        "image_category": (
+                            "screenshot" if self._is_screen_capture or self._is_digital_capture
+                            else "document" if self._is_document
+                            else "live_photograph"
+                        )
+                    }
                 routing = build_image_forensic_routing(
-                    metadata.get("forensic_routing", {}) or {},
+                    routing_source,
                     description=str(description),
                     file_path=str(getattr(self.evidence_artifact, "file_path", "") or ""),
                 )

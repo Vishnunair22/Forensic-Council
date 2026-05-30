@@ -66,12 +66,13 @@ class VisualEvidenceFinding:
         return {
             "agent_id": agent_id,
             "finding_type": "visual_evidence_profile",
+            "content_description": self.content_description,
             "confidence_raw": self.confidence,
             "status": status,
             "evidence_verdict": evidence_verdict,
             "verdict": verdict or evidence_verdict,
             "evidence_refs": [],
-            "reasoning_summary": self.content_description,
+            "reasoning_summary": self.content_description[:200],
             "summary": self.content_description[:240],
             "analysis_source": self.provider_used,
             "provider_used": self.provider_used,
@@ -94,6 +95,7 @@ class VisualEvidenceFinding:
             "degradation_flags": self.degradation_flags,
             "metadata": {
                 "tool_name": tool_name,
+                "content_description": self.content_description,
                 "evidence_verdict": evidence_verdict,
                 "verdict": verdict or evidence_verdict,
                 "analysis_source": self.provider_used,

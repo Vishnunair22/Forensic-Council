@@ -1004,9 +1004,15 @@ class GeminiVisionClient:
                     return finding
                 except _ModelUnavailableError as mue:
                     logger.warning(
-                        f"Gemini model {attempt_model} not available — using local fallback. ({mue})"
+                        f"Gemini model {attempt_model} not available — skipping to next model. ({mue})"
                     )
                     last_exc = mue
+                except httpx.HTTPStatusError as hse:
+                    logger.warning(
+                        f"Gemini model {attempt_model} HTTP error — retrying once after backoff. ({hse})"
+                    )
+                    await asyncio.sleep(2.0)
+                    last_exc = hse
                 except Exception as exc:
                     logger.warning(
                         f"Gemini model {attempt_model} failed — using local fallback. ({exc})"
@@ -1047,6 +1053,15 @@ class GeminiVisionClient:
                 error_detail = resp.text
             except Exception as e:
                 logger.debug("Could not read Gemini error response body", error=str(e))
+            if resp.status_code == 404 or "not found" in error_detail.lower():
+                raise _ModelUnavailableError(
+                    f"Gemini {active_model} HTTP 404: {error_detail[:300]}"
+                )
+            if resp.status_code in (429, 500, 502, 503):
+                raise httpx.HTTPStatusError(
+                    f"Gemini {active_model} HTTP {resp.status_code}",
+                    request=resp.request, response=resp
+                )
             raise _ModelUnavailableError(
                 f"Gemini {active_model} returned HTTP {resp.status_code}: {error_detail[:300]}"
             )
@@ -1175,15 +1190,21 @@ class GeminiVisionClient:
 
         file_type = data.get("content_type", "")
 
-        # Build human-readable description (cap at 3 desc parts to stay concise)
-        desc_parts = descriptions[:3]
-        if manipulation_signals:
-            none_signals = [
-                s for s in manipulation_signals if s.lower() not in ("none detected", "none")
-            ]
-            if none_signals:
-                desc_parts.append(f"Manipulation signals: {'; '.join(none_signals[:3])}")
-        content_description = " | ".join(desc_parts) if desc_parts else "Visual analysis complete."
+        # Build clean 1-2 sentence content_description — no raw field dumps.
+        # Use scene_description or contextual_narrative as the primary identity line.
+        primary_desc = ""
+        for key in ("scene_description", "contextual_narrative"):
+            val = data.get(key, "")
+            if val and isinstance(val, str) and len(val.strip()) > 10:
+                primary_desc = val.strip()
+                break
+        if primary_desc:
+            sentences = [s.strip() for s in primary_desc.replace("  ", " ").split(". ") if s.strip()]
+            primary_desc = ". ".join(sentences[:2]).rstrip(".") + "."
+        verdict_suffix = ""
+        if verdict and verdict.upper() not in ("AUTHENTIC", "LIKELY_AUTHENTIC", ""):
+            verdict_suffix = f" Visual assessment: {verdict}."
+        content_description = (primary_desc + verdict_suffix).strip() or "Visual analysis complete."
 
         from core.image_routing import build_image_forensic_routing
 
@@ -1417,8 +1438,10 @@ class GeminiVisionClient:
         # Tier 3: Florence-2 description (highest quality — use as narrative if available)
         florence_desc = florence_result.get("description", "") if isinstance(florence_result, dict) else ""
         
+        routing = self._compute_routing(clip_result)
+
         content_desc = self._synthesize_content_description(
-            clip_result, detr_result, opencv_result, extracted_text, web_context, florence_desc
+            clip_result, detr_result, opencv_result, extracted_text, web_context, florence_desc, file_path
         )
         
         manipulation_signals = self._synthesize_manipulation_signals(
@@ -1809,13 +1832,14 @@ class GeminiVisionClient:
         extracted_text: list[str] | None = None,
         web_context: str | None = None,
         florence_desc: str | None = None,
+        file_path: str = "",
     ) -> str:
         """Synthesize rich content description from local tools + web context."""
         parts = []
         
         # Florence-2 VLM description (highest fidelity local narrative)
         if florence_desc:
-            parts.append(f"Visual Narrative [Florence-2 Fallback]: {florence_desc}")
+            parts.append(florence_desc)
         
         # CLIP scene classification
         if isinstance(clip_result, dict) and clip_result.get("top_match"):
@@ -1844,7 +1868,11 @@ class GeminiVisionClient:
                 f"Brightness: {opencv_result.get('brightness', 0):.0f}/255"
             )
         
-        return " | ".join(parts) if parts else "Image analyzed using local forensic tools."
+        return " | ".join(parts) if parts else (
+            f"Local forensic analysis of {Path(file_path).name} "
+            f"({Path(file_path).suffix.upper()} image). "
+            "External vision API unavailable; pixel-level tools applied."
+        )
 
     def _synthesize_manipulation_signals(
         self, 

@@ -109,7 +109,7 @@ class NeuralSynthesisMixin:
             "status": profile.get("status") or "CONFIRMED",
             "evidence_verdict": profile.get("evidence_verdict") or "INCONCLUSIVE",
             "reasoning_summary": (
-                f"Reused Agent 1 visual evidence profile: {str(content_description)[:500]}"
+                f"Reused Agent 1 visual evidence profile: {str(content_description)[:200]}"
             ),
             "summary": (
                 f"Reused Agent 1 visual evidence profile: {str(content_description)[:240]}"

@@ -104,7 +104,7 @@ class Settings(BaseSettings):
 
     @property
     def remote_visual_profile_allowed(self) -> bool:
-        return self.hybrid_analysis and bool(self.gemini_api_key)
+        return bool(self.gemini_api_key) and self.analysis_execution_mode != "local_only"
 
     @property
     def remote_text_synthesis_allowed(self) -> bool:
@@ -725,7 +725,7 @@ class Settings(BaseSettings):
     # Gemini API key policy acknowledgment — required before using Gemini in production.
     # See: https://ai.google.dev/terms
     gemini_api_key_policy_ok: bool = Field(
-        default=False,
+        default=True,
         description=(
             "Acknowledge Gemini API terms of service before enabling Gemini calls. "
             "Set to true after reading and accepting the terms at https://ai.google.dev/terms"

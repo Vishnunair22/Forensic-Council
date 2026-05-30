@@ -59,6 +59,10 @@ IMAGE_CATEGORY_TO_INITIAL_TOOLS: dict[str, tuple[str, ...]] = {
 
 
 TOOL_TO_TASK_DESCRIPTION: dict[str, str] = {
+    "neural_ela": "Run neural_ela for high-confidence manipulation detection",
+    "neural_fingerprint": "Run neural_fingerprint for conceptual similarity detection",
+    "frequency_domain_analysis": "Run frequency_domain_analysis for frequency domain analysis",
+    "noiseprint_cluster": "Run noiseprint_cluster for sensor-region source inconsistency",
     "detect_font_inconsistency": "Run detect_font_inconsistency for screenshot text font analysis",
     "detect_ui_overlay_forgery": "Run detect_ui_overlay_forgery for screenshot UI overlay analysis",
     "diffusion_artifact_detector": "Run diffusion_artifact_detector to confirm AI generation",

@@ -593,9 +593,9 @@ Return ONLY a JSON object with this exact schema:
   "agent_brief": "3-sentence structure: (1) what the visual profile identified, (2) what tools found with metrics, (3) weighted verdict + confidence%.",
   "gemini_tools_agreement": "AGREE|DISAGREE|PARTIAL — one sentence explaining the Gemini vs tool verdict relationship.",
   "key_findings": [
-    "tool_name: [exact metric] → [forensic implication for this evidence].",
-    "tool_name: [exact metric] → [forensic implication for this evidence].",
-    "tool_name: [exact metric] → [forensic implication for this evidence]."
+    "File hash verification confirmed the SHA-256 digest has not changed since upload.",
+    "Neural ELA found 0 anomalous compression regions across all blocks, ruling out spliced segments.",
+    "Frequency domain analysis showed no periodic aliasing patterns consistent with generative artifacts."
   ],
   "signal_weight": {{
     "strongest_positive": "Tool name + metric, or 'none'.",
