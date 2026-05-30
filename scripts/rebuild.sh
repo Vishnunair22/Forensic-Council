@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
-MODE="${1:-dev}"           # dev | prod
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/_path_utils.sh"
+source "$SCRIPT_DIR/_docker_utils.sh"
+
+ROOT=$(get_project_root)
+cd "$ROOT"
+
+MODE="${1:-dev}"
 SVC="${2:-}"
 FILES=(-f infra/docker-compose.yml)
 
@@ -17,6 +24,8 @@ case "$MODE" in
     exit 2
     ;;
 esac
+
+check_docker_available || exit 1
 
 echo "==> No-cache rebuild ${SVC:-all services} ($MODE)"
 if [ -n "$SVC" ]; then

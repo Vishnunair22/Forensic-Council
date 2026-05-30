@@ -187,15 +187,13 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
         echo "  Normal Docker builds should bake these into the image."
         echo "  This fallback runs once per empty volume."
         echo "============================================================"
-        for i in 1 2 3; do
-            if [ "$(id -u)" = "0" ]; then
-                runuser -u appuser -- python scripts/model_pre_download.py --strict && break
-            else
-                python scripts/model_pre_download.py --strict && break
-            fi
-            [ "$i" -lt 3 ] && { echo "  HF retry $i/3 in 30s"; sleep 30; } || { echo "  Model download failed after 3 attempts"; exit 1; }
-        done
-        echo "  Model download complete. Log: /tmp/model_download.log"
+        chmod +x scripts/model_download_with_retry.sh
+        if [ "$(id -u)" = "0" ]; then
+            runuser -u appuser -- sh scripts/model_download_with_retry.sh --strict
+        else
+            sh scripts/model_download_with_retry.sh --strict
+        fi
+        echo "  Model download complete."
     else
         echo "  ML model volumes already populated - skipping download."
         echo "  Found: OpenCLIP=$CLIP_READY ECAPA=$ECAPA_READY AASIST=$AASIST_READY $OBJECT_DETECTOR_LABEL=$OBJECT_DETECTOR_READY TorchWeights=$TORCH_WEIGHTS EasyOCR=$EASYOCR_FILES"

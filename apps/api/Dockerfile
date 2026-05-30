@@ -205,7 +205,7 @@ RUN python scripts/validate_ml_tools.py
 # Bake heavyweight model assets into the image so clean Docker volumes start hot.
 # Runtime named volumes shadow /app/cache/*, so the entrypoint seeds them from
 # /opt/forensic-model-cache on first startup.
-# Retry up to 3 times with backoff to handle transient HF 503 errors.
+# Uses centralized retry script for consistent retry logic across build and runtime.
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         export HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" ; \
         export TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" ; \
@@ -214,11 +214,8 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         export YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" ; \
         export YOLO_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" ; \
         export HOME="/tmp" ; \
-        for i in 1 2 3; do \
-            python scripts/model_pre_download.py --strict && exit 0; \
-            if [ "$i" -lt 3 ]; then sleep 30; fi; \
-        done; \
-        exit 1; \
+        chmod +x scripts/model_download_with_retry.sh ; \
+        sh scripts/model_download_with_retry.sh --strict || exit 1; \
     else \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi

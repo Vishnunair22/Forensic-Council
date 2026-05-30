@@ -17,56 +17,23 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 
 ## Universal Quickstart (Zero to Running)
 
+Use the provided scripts for automated setup:
+
 ```bash
-# 1. Clone and enter the repo
-git clone https://github.com/Vishnunair22/Forensic-Council.git && cd Forensic-Council
-
-# 2. Generate the .env from the template
-cp .env.example .env
-
-# 3. Generate strong secrets and update .env automatically
-bash infra/generate_production_keys.sh --update
-
-# 4. Add LLM keys to .env
-#    LLM_API_KEY=<groq key from https://console.groq.com/keys>
-#    GEMINI_API_KEY=<gemini key from https://aistudio.google.com/apikey>
-
-# 5. Start (one command — validates .env, builds, starts, polls health)
+# Development — automated setup with validation
 bash scripts/dev.sh
 
-# 6. Open the app
-#    Frontend (via Caddy):  http://localhost
-#    Frontend (direct):     http://localhost:3000
-#    API docs (via Caddy):  http://localhost/docs
-#    API docs (direct):     http://localhost:8000/docs  (dev overlay exposes 8000)
-```
-
-### Production (one command)
-
-```bash
-# Validates .env invariants and compose config BEFORE building, then boots
+# Production — full production validation before building
 bash scripts/prod.sh
 ```
 
-### Manual docker compose (if you need fine-grained control)
+These scripts automatically:
+- Validate environment and system requirements (disk space, memory, Docker version)
+- Build all images in parallel
+- Start services with proper health checks
+- Report success or provide diagnostic info
 
-```bash
-# Development — validate, build, start
-bash infra/validate_production_readiness.sh   # optional pre-flight for dev
-docker compose \
-  -f infra/docker-compose.yml \
-  -f infra/docker-compose.dev.yml \
-  --env-file .env \
-  up --build -d
-
-# Production — ALWAYS validate BEFORE building/starting
-bash infra/validate_production_readiness.sh
-docker compose \
-  -f infra/docker-compose.yml \
-  -f infra/docker-compose.prod.yml \
-  --env-file .env \
-  up --build -d
-```
+For fine-grained control or advanced usage, see [DOCKER_BUILD.md](DOCKER_BUILD.md) for the complete command reference.
 
 ## Required Environment
 
@@ -333,6 +300,33 @@ bash scripts/clean_project.sh
 
 # Deep clean (also removes local model caches)
 bash scripts/clean_project.sh --deep
+```
+
+## Container Naming
+
+Docker Compose automatically generates container names using the pattern `<project>-<service>-<replica>`. For this project (named `forensic-council`):
+
+- `forensic-council-redis-1`
+- `forensic-council-postgres-1`
+- `forensic-council-backend-1`
+- etc.
+
+**Finding Containers:**
+```bash
+# List all containers in the project
+docker compose -f infra/docker-compose.yml ps
+
+# Get logs for a specific service
+docker compose -f infra/docker-compose.yml logs backend
+
+# Execute command in a service container
+docker compose -f infra/docker-compose.yml exec backend python scripts/model_cache_check.py
+```
+
+**Multiple Instances:** To run multiple stack instances, override the project name:
+```bash
+docker compose -p forensic-test -f infra/docker-compose.yml up -d
+docker compose -p forensic-prod -f infra/docker-compose.yml up -d
 ```
 
 ## Network Segmentation

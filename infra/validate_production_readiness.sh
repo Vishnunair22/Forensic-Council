@@ -42,6 +42,47 @@ if ! docker info >/dev/null 2>&1; then
 fi
 echo "OK: docker daemon reachable."
 
+echo "[0b/3] Checking system resources..."
+
+PRELOAD_VAL=$(grep "^PRELOAD_MODELS=" .env | cut -d= -f2- || echo "1")
+if [[ "$PRELOAD_VAL" == "1" ]]; then
+  REQUIRED_DISK_GB=40
+else
+  REQUIRED_DISK_GB=10
+fi
+
+AVAILABLE_KB=$(df . | tail -1 | awk '{print $4}')
+AVAILABLE_GB=$((AVAILABLE_KB / 1024 / 1024))
+
+if [ "$AVAILABLE_GB" -lt "$REQUIRED_DISK_GB" ]; then
+  echo "FAIL: Insufficient disk space"
+  echo "  Required: ${REQUIRED_DISK_GB}GB"
+  echo "  Available: ${AVAILABLE_GB}GB"
+  exit 1
+fi
+echo "  Disk: ${AVAILABLE_GB}GB available (${REQUIRED_DISK_GB}GB required) \u2713"
+
+DOCKER_TOTAL_MEM=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo "0")
+if [ "$DOCKER_TOTAL_MEM" -gt 0 ]; then
+  DOCKER_TOTAL_GB=$((DOCKER_TOTAL_MEM / 1024 / 1024 / 1024))
+  REQUIRED_MEM_GB=18
+
+  if [ "$DOCKER_TOTAL_GB" -lt "$REQUIRED_MEM_GB" ]; then
+    echo "WARN: Docker has ${DOCKER_TOTAL_GB}GB memory (${REQUIRED_MEM_GB}GB recommended)"
+    echo "  Increase in Docker Desktop: Settings \u2192 Resources \u2192 Memory"
+  else
+    echo "  Memory: ${DOCKER_TOTAL_GB}GB allocated \u2713"
+  fi
+else
+  echo "  Memory: cannot determine (skipped)"
+fi
+
+echo "OK"
+
+# Load shared environment validation
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$SCRIPT_DIR/scripts/_validate_env.sh" 2>/dev/null || true
+
 # 1. Check for unreplaced placeholders in .env and production invariants
 echo "[1/3] Checking for unreplaced placeholders in .env..."
 if grep -E "(_REPLACE_ME|__PASTE_)" .env >/dev/null; then

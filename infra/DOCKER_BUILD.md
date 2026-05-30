@@ -45,7 +45,7 @@ Use this quick-reference table to identify the correct command or script for eve
 | View health status | `bash scripts/troubleshoot.sh` | `bash scripts/troubleshoot.sh` |
 | Wait for full health | `bash scripts/_wait_healthy.sh dev` | `bash scripts/_wait_healthy.sh prod` |
 | Smoke test end-to-end | `bash scripts/_smoke.sh dev` | `bash scripts/_smoke.sh prod` |
-| Verify ML models | `docker exec forensic_api python scripts/model_cache_check.py --strict` | `docker exec forensic_api python scripts/model_cache_check.py --strict` |
+| Verify ML models | `docker compose -f infra/docker-compose.yml --env-file .env exec backend python scripts/model_cache_check.py --strict` | `docker compose -f infra/docker-compose.yml --env-file .env exec backend python scripts/model_cache_check.py --strict` |
 | View logs | `docker compose -f infra/docker-compose.yml --env-file .env logs -f <service>` | `docker compose -f infra/docker-compose.yml --env-file .env logs -f <service>` |
 | Debug merged compose config | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env config` | `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file .env config` |
 
@@ -473,16 +473,16 @@ docker builder prune -f
 
 ## 6. Verifying Model Downloads
 
-After the stack starts, confirm that the model cache directories, Python ML dependencies, and individual required model artifacts are present. While they share the underlying model cache volumes, both the backend (`forensic_api`) and the background worker (`forensic_worker`) verify cache integrity independently at startup.
+After the stack starts, confirm that the model cache directories, Python ML dependencies, and individual required model artifacts are present. While they share the underlying model cache volumes, both the backend and the background worker verify cache integrity independently at startup.
 
 Run the status check against both containers:
 
 ```bash
 # Verify backend container cache
-docker exec forensic_api python scripts/model_cache_check.py --strict
+docker compose -f infra/docker-compose.yml --env-file .env exec backend python scripts/model_cache_check.py --strict
 
 # Verify worker container cache
-docker exec forensic_worker python scripts/model_cache_check.py --strict
+docker compose -f infra/docker-compose.yml --env-file .env exec worker python scripts/model_cache_check.py --strict
 ```
 
 Expected output should show cache directories as healthy and required model assets as `[OK]`. With the default commercial-safe configuration, the object detector is DETR (`facebook/detr-resnet-50`) and the Ultralytics/YOLO cache may be empty.
@@ -503,10 +503,10 @@ To check the individual model artifacts without downloading:
 
 ```bash
 # Check backend container model presence
-docker exec forensic_api python scripts/model_pre_download.py --check --strict
+docker compose -f infra/docker-compose.yml --env-file .env exec backend python scripts/model_pre_download.py --check --strict
 
 # Check worker container model presence
-docker exec forensic_worker python scripts/model_pre_download.py --check --strict
+docker compose -f infra/docker-compose.yml --env-file .env exec worker python scripts/model_pre_download.py --check --strict
 ```
 
 The default model set is DETR object detection, EasyOCR, OpenCLIP/SigLIP, ResNet-50, SpeechBrain ECAPA, and the configured audio deepfake detector. The full model list and their required conditions are documented in [MODEL_REGISTRY.md](../docs/MODEL_REGISTRY.md).
@@ -514,7 +514,7 @@ The default model set is DETR object detection, EasyOCR, OpenCLIP/SigLIP, ResNet
 If any model shows `MISS`, trigger a forced re-download:
 
 ```bash
-docker exec forensic_api python scripts/model_pre_download.py --force
+docker compose -f infra/docker-compose.yml --env-file .env exec backend python scripts/model_pre_download.py --force
 ```
 
 To check raw volume disk usage:
@@ -572,29 +572,32 @@ curl -s http://localhost/health | python -m json.tool
 curl -sI http://localhost:3000/ | head -1
 
 # Redis (inside container; REDISCLI_AUTH is set by compose)
-docker exec forensic_redis redis-cli ping
+docker compose -f infra/docker-compose.yml --env-file .env exec redis redis-cli ping
 
 # PostgreSQL (inside container)
-docker exec forensic_postgres pg_isready -U forensic_user -d forensic_council
+docker compose -f infra/docker-compose.yml --env-file .env exec postgres pg_isready -U forensic_user -d forensic_council
 
 # Qdrant (port not exposed to host — run inside container)
-docker exec forensic_qdrant wget -qO- http://localhost:6333/healthz
+docker compose -f infra/docker-compose.yml --env-file .env exec qdrant wget -qO- http://localhost:6333/healthz
 ```
 
 ### Expected container states after startup
 
-| Container | Expected state | Notes |
-|-----------|---------------|-------|
-| `forensic_postgres` | `healthy` | |
-| `forensic_redis` | `healthy` | |
-| `forensic_qdrant` | `healthy` | |
-| `forensic_jaeger` | `healthy` | |
-| `forensic_migration` | `exited (0)` | Runs once — exit 0 is correct |
-| `forensic_api` | `healthy` | 120 s start period |
-| `forensic_worker` | `healthy` | 300 s start period |
-| `forensic_ui` | `healthy` | 180 s start period (Next.js compilation) |
-| `forensic_caddy` | `healthy` | |
-| `forensic_prometheus` | `healthy` | |
+| Container (service name) | Expected state | Notes |
+|--------------------------|---------------|-------|
+| `postgres` | `healthy` | |
+| `redis` | `healthy` | |
+| `qdrant` | `healthy` | |
+| `jaeger` | `healthy` | |
+| `migration` | `exited (0)` | Runs once — exit 0 is correct |
+| `backend` | `healthy` | 120 s start period |
+| `worker` | `healthy` | 300 s start period |
+| `frontend` | `healthy` | 180 s start period (Next.js compilation) |
+| `caddy` | `healthy` | |
+| `prometheus` | `healthy` | |
+
+Container names are auto-generated as `<project>-<service>-<replica>` (e.g. `forensic-council-postgres-1`).
+Use `docker compose ps` to discover actual container names at runtime.
 
 ---
 
@@ -767,18 +770,14 @@ docker compose -f infra/docker-compose.yml --env-file .env down -v
 
 ### Remove only model volumes (re-download on next start)
 ```bash
-docker volume rm \
-  forensic-council_hf_cache \
-  forensic-council_torch_cache \
-  forensic-council_easyocr_cache \
-  forensic-council_yolo_cache \
-  forensic-council_numba_cache \
-  forensic-council_calibration_models_cache
+docker compose -f infra/docker-compose.yml --env-file .env down
+docker volume ls --filter label=com.docker.compose.project=forensic-council --filter name=hf_cache --filter name=torch_cache --filter name=easyocr_cache --filter name=yolo_cache --filter name=numba_cache --filter name=calibration_models_cache -q | xargs docker volume rm
 ```
 
 ### Remove only the database volume
 ```bash
-docker volume rm forensic-council_postgres_data forensic-council_redis_data
+docker compose -f infra/docker-compose.yml --env-file .env down
+docker volume ls --filter label=com.docker.compose.project=forensic-council --filter name=postgres_data --filter name=redis_data -q | xargs docker volume rm
 ```
 
 ### Full Clean / Nuclear Reset
@@ -839,17 +838,17 @@ docker compose \
 
 ### Backend returns 503 on startup
 
-The backend waits for Postgres, Redis, and Qdrant to pass health checks before starting. Check infra container states:
+The backend waits for Postgres, Redis, and Qdrant to pass health checks before starting. Check infra service states:
 
 ```bash
-docker ps --filter name=forensic_postgres --filter name=forensic_redis --filter name=forensic_qdrant
+docker compose -f infra/docker-compose.yml --env-file .env ps postgres redis qdrant
 ```
 
-If any infra container is `unhealthy`, inspect its logs:
+If any infra service is `unhealthy`, inspect its logs:
 
 ```bash
-docker logs forensic_postgres --tail 30
-docker logs forensic_redis --tail 30
+docker compose -f infra/docker-compose.yml --env-file .env logs --tail 30 postgres
+docker compose -f infra/docker-compose.yml --env-file .env logs --tail 30 redis
 ```
 
 ### `REDIS_PASSWORD must be set` on compose up
@@ -866,7 +865,7 @@ Use the dev overlay (`-f infra/docker-compose.dev.yml`) for development. It moun
 
 ```bash
 # Check secret is mounted
-docker exec forensic_api cat /run/secrets/metrics_scrape_token
+docker compose -f infra/docker-compose.yml --env-file .env exec backend cat /run/secrets/metrics_scrape_token
 
 # Test scrape endpoint manually
 curl -H "Authorization: Bearer $(cat .env | grep METRICS_SCRAPE_TOKEN | cut -d= -f2)" \
@@ -878,7 +877,7 @@ curl -H "Authorization: Bearer $(cat .env | grep METRICS_SCRAPE_TOKEN | cut -d= 
 - Ensure `DOMAIN` in `.env` is a real public hostname (not `localhost`).
 - Port 80 and 443 must be open on your server's firewall and reachable from the internet.
 - `ACME_EMAIL` must be set — Caddy requires it for ACME registration.
-- Check Caddy logs: `docker logs forensic_caddy --tail 50`
+- Check Caddy logs: `docker compose -f infra/docker-compose.yml --env-file .env logs --tail 50 caddy`
 
 ### View effective merged compose config
 

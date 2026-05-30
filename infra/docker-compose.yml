@@ -113,7 +113,6 @@ services:
   # --------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
-    container_name: forensic_redis
     restart: unless-stopped
     # Require a password on the Redis instance so it cannot be accessed
     # without credentials even if the port is accidentally exposed.
@@ -147,7 +146,6 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.16.1
-    container_name: forensic_qdrant
     restart: unless-stopped
     # SECURITY: Drop all capabilities, run as non-root (qdrant runs as uid 1000)
     security_opt:
@@ -174,7 +172,6 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: forensic_postgres
     restart: unless-stopped
     command: >
       postgres
@@ -216,7 +213,6 @@ services:
 
   jaeger:
     image: jaegertracing/all-in-one:1.66.0
-    container_name: forensic_jaeger
     restart: unless-stopped
     ports:
       - "16686:16686"
@@ -239,7 +235,6 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
       target: migration
-    container_name: forensic_migration
     restart: on-failure
     # Run alembic migrations THEN seed data. Do NOT drop this to just init_db.py —
     # that silently bypasses schema migrations (P0-DOCKER-001 fix, audit v6→v7).
@@ -280,7 +275,6 @@ services:
         PRELOAD_MODELS: ${PRELOAD_MODELS:-0}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
-    container_name: forensic_api
     restart: unless-stopped
     # Port 8000 intentionally NOT exposed at base level — host binding lives in
     # infra/docker-compose.dev.yml so default `docker compose up` routes through
@@ -372,7 +366,6 @@ services:
         PRELOAD_MODELS: ${PRELOAD_MODELS:-0}
         YOLO_MODEL_NAME: ${YOLO_MODEL_NAME:-detr-resnet-50}
         AASIST_MODEL_NAME: ${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}
-    container_name: forensic_worker
     restart: unless-stopped
     # I-H-7: long grace so SIGTERM lets the worker drain mid-pipeline
     # investigations (audio/video forensics can take minutes). Without
@@ -450,7 +443,6 @@ services:
   # --------------------------------------------------------------------------
   caddy:
     image: caddy:2-alpine
-    container_name: forensic_caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -509,7 +501,6 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         INTERNAL_API_URL: "http://backend:8000"
-    container_name: forensic_ui
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -567,7 +558,6 @@ services:
   # --------------------------------------------------------------------------
   prometheus:
     image: prom/prometheus:v3.1.0
-    container_name: forensic_prometheus
     restart: unless-stopped
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"

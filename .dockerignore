@@ -1,66 +1,141 @@
-# Root Docker ignore — keeps build context lean
+# Forensic Council - Docker Build Context Exclusions
+# Keeps build context small and prevents accidental inclusion of sensitive files.
 
-# Git
-.git/
+# Version Control
+.git
+.github
 .gitignore
 .gitattributes
 
-# Docs (not needed in container)
-*.md
+# Documentation (not needed in runtime images)
 docs/
-README*
+*.md
+!README.md
+!apps/**/README.md
 LICENSE
 
-# IDE
-.vscode/
-.idea/
+# CI/CD
+.circleci
+.travis.yml
+.gitlab-ci.yml
 
-# OS
+# IDEs & Editors
+.vscode
+.idea
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 nul
 
-# Environment (secrets)
-.env
-.env.*
-!.env.example
-.env.local
-
-# Test/fixtures (run in CI, not inside container)
-**/tests/
-**/fixtures/
-test_*
-
-# Python caches
+# Python Artifacts
 __pycache__/
 *.py[cod]
+*.pyd
 .pytest_cache/
-.mypy_cache/
+.pytest_tmp/
 .ruff_cache/
+.mypy_cache/
 .pyright/
 htmlcov/
 .coverage
 coverage.xml
 coverage.json
+*.cover
+.tox
+.nox
 
-# Frontend build artifacts
+# JavaScript/Node Artifacts
+node_modules/
 apps/web/node_modules/
 apps/web/.next/
+apps/web/out/
 apps/web/coverage/
 apps/web/playwright-report/
 apps/web/test-results/
+apps/web/.swc/
+apps/web/.turbo/
+.eslintcache
+*.tsbuildinfo
 
-# Node caches
-node_modules/
-.npm/
+# Build & Cache Directories
+dist/
+build/
 .cache/
+.local/
+.venv/
+venv/
+.npm/
 .turbo/
 
-# Logs
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+.env.local
+.env.production
+.env.development
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+
+# Storage (uploaded evidence, signing keys, backups)
+storage/evidence/*
+!storage/evidence/.gitkeep
+storage/keys/*
+!storage/keys/.gitkeep
+storage/backups/*
+!storage/backups/.gitkeep
+
+# ML Model Caches
+apps/api/cache/
+apps/api/.cache/
+
+# Reports & Logs
 *.log
 logs/
+reports/
+!apps/api/reports/.gitkeep
 
-# Scratch/temp
+# Test Artifacts
+test-results/
+playwright-report/
+.pytest_tmp/
+test_reports/
+
+# Temporary Files
 tmp/
 temp/
+*.tmp
+*.temp
+
+# OS-Specific
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Docker Files (recursive builds)
+**/.dockerignore
+**/Dockerfile
+**/docker-compose.yml
+**/docker-compose*.yml
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+*.rar
+
+# Database Dumps
+*.sql
+*.sqlite
+*.db
+
+# Scratch
 scratch/
+.hypothesis/

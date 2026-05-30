@@ -30,8 +30,9 @@ See [docs/WORKFLOW_TRACE.md](docs/WORKFLOW_TRACE.md) for the canonical route/sta
 
 ## Fast start
 
-### Docker — development (one command)
+### Recommended: One-Command Start
 
+**Development:**
 ```bash
 [ -f .env ] || cp .env.example .env
 bash infra/generate_production_keys.sh --update
@@ -39,31 +40,17 @@ bash infra/generate_production_keys.sh --update
 bash scripts/dev.sh
 ```
 
-`scripts/dev.sh` validates `.env`, builds all images in parallel, starts the stack, and polls health before returning.
-
-#### Development Hot-Reloading & Workflow Tips
-
-- **Backend & Frontend Hot-Reloading**: Backend API code changes are automatically reloaded by Uvicorn within the container. Frontend Next.js changes are hot-reloaded in the browser via Turbopack HMR.
-- **Worker Code Changes**: Background workers do not auto-reload. To pick up code changes in agents, tools, or orchestration instantly without waiting for the 300s stop grace period, run:
-  ```bash
-  bash scripts/dev-restart-worker.sh
-  ```
-- **Dependency Changes**: If you modify `pyproject.toml` or `uv.lock`, rebuild the python containers:
-  ```bash
-  docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env build backend worker
-  ```
-- **Environment Changes**: If you update `.env`, recreate the containers to apply the changes:
-  ```bash
-  docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --force-recreate
-  ```
-
-### Docker — production (one command)
-
+**Production:**
 ```bash
 bash scripts/prod.sh
 ```
 
-`scripts/prod.sh` runs `validate_production_readiness.sh` first (gates on failures), then builds and starts.
+These scripts validate `.env`, check system resources, build images in parallel, start services, and poll health before returning.
+
+For detailed Docker commands, troubleshooting, and platform-specific instructions, see:
+- [infra/DOCKER_BUILD.md](infra/DOCKER_BUILD.md) — Complete Docker build/run reference
+- [docs/TROUBLESHOOTING_GUIDE.md](docs/TROUBLESHOOTING_GUIDE.md) — Diagnostic decision tree
+- [infra/README.md](infra/README.md) — Infrastructure overview
 
 ### Host app development with Docker infrastructure
 
