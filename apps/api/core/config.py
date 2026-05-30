@@ -817,9 +817,9 @@ class Settings(BaseSettings):
         description="Max seconds an agent waits for Agent 1 visual profile before proceeding.",
     )
     ocr_tool_timeout: float = Field(
-        default=60.0,
+        default=120.0,
         ge=30,
-        le=180,
+        le=300,
         description="Timeout for OCR text extraction tools.",
     )
     clip_analysis_timeout: float = Field(

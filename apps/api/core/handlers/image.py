@@ -1117,12 +1117,12 @@ class ImageHandlers(BaseToolHandler):
             if task is None or task.done():
                 task = asyncio.create_task(real_extract_evidence_text(artifact=artifact))
                 _OCR_INFLIGHT[key] = task
-            result = await asyncio.wait_for(asyncio.shield(task), timeout=55.0)
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=110.0)
             _OCR_CACHE[key] = (time.monotonic(), dict(result))
         except TimeoutError:
             logger.warning("OCR handler timed out — returning timeout error result")
             result = {
-                "error": "OCR extraction timed out after 55s",
+                "error": "OCR extraction timed out after 110s",
                 "timeout": True,
                 "available": True,
                 "confidence": 0.0,

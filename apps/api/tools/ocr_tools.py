@@ -443,11 +443,11 @@ async def extract_text_easyocr(
 
     from core.config import get_settings
     settings = get_settings()
-    total_timeout = getattr(settings, "ocr_tool_timeout", 60.0)
+    total_timeout = getattr(settings, "ocr_tool_timeout", 120.0)
 
     # Allocate 70% to EasyOCR and 30% to Tesseract fallback
-    easyocr_timeout = max(30.0, total_timeout * 0.7)
-    tesseract_timeout = max(20.0, total_timeout * 0.3)
+    easyocr_timeout = max(60.0, total_timeout * 0.7)
+    tesseract_timeout = max(30.0, total_timeout * 0.3)
 
     logger.info(
         f"[OCR] Starting extract_text_easyocr with total_timeout={total_timeout}s. "
