@@ -309,12 +309,29 @@ export function useResult(initialSessionId?: string) {
       }
     }
 
+    // Also check the report query data as a secondary completion signal
+    // (handles the case where a COMPLETE status arrives between poll intervals)
+    const checkInterval = setInterval(() => {
+      if (cancelled || !activeSessionId) return;
+      if (reportQueryData) {
+        const asAny = reportQueryData as unknown as Record<string, unknown>;
+        const completed = asAny.status === "complete" || isReportDTO(asAny);
+        if (completed) {
+          setArbiterComplete(true);
+          setArbiterMsg("Decrypting forensic ledger...");
+          if (timer) clearTimeout(timer);
+          clearInterval(checkInterval);
+        }
+      }
+    }, 1000);
+
     poll();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      clearInterval(checkInterval);
     };
-  }, [mounted, sessionId, arbiterComplete, router]);
+  }, [mounted, sessionId, arbiterComplete, router, reportQueryData]);
 
   // History Persistence (Client Side Only)
   // F-H-10: mark historySavedRef true only AFTER the storage write succeeds,

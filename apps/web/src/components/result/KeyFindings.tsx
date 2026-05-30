@@ -53,6 +53,9 @@ const TONE_CFG = {
 
 export function KeyFindings({ findings }: KeyFindingsProps) {
   const prefersReduced = useReducedMotion();
+
+  if (!Array.isArray(findings) || findings.length === 0) return null;
+
   const clean = findings.map((f) => cleanFindingText(f)).filter(Boolean) as string[];
   if (clean.length === 0) return null;
 

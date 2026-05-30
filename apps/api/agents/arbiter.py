@@ -82,6 +82,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self._pre_warm_case_id: str = ""
         self._pre_warm_report: ForensicReport | None = None
         self._pre_warm_used_llm: bool = False
+        self._pre_warm_task: asyncio.Task | None = None
 
     async def pre_warm(
         self,
@@ -138,6 +139,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         """Finalize cached arbiter inputs into the report returned to the result page."""
         if self._pre_warm_agent_results is None:
             raise RuntimeError("Arbiter has no cached agent findings to finalise")
+
+        # Await pre-warm task if still running — avoids redundant deliberate() call
+        if self._pre_warm_task is not None and not self._pre_warm_task.done():
+            try:
+                await asyncio.wait_for(self._pre_warm_task, timeout=30.0)
+            except TimeoutError:
+                logger.warning("Pre-warm task still running after 30s wait; proceeding independently")
+            except Exception as exc:
+                logger.warning("Pre-warm task failed during await", error=str(exc))
+
         if not use_llm and self._pre_warm_report is not None:
             return self._pre_warm_report
         if use_llm and self._pre_warm_report is not None and self._pre_warm_used_llm:
@@ -352,7 +363,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
             degradation_flags=self._get_degradation_flags(
                 narratives["llm_used"], comp_penalty, all_findings, active_metrics,
-                narratives.get("narrative_warnings", [])
+                narratives.get("narrative_warnings", []),
+                llm_synthesis_failed=use_llm and not narratives.get("llm_used", False),
             ),
             applicable_agent_count=len(active_results),
             skipped_agents=skipped_agents,
@@ -387,21 +399,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
     def _deduplicate_findings(self, findings: list[dict]) -> list[dict]:
         """
-        Multi-stage deduplication that preserves forensic contradictions
-        while merging similar findings across agents.
+        Single-pass deduplication keyed by (tool_name, evidence_verdict, analysis_phase).
+
+        Preserves forensic contradictions (same tool, different verdicts) while
+        keeping deep and initial findings separate so the report can show
+        phase progression.
 
         Stages:
-        1. Exact match: Same agent_id + tool_name + verdict
-        2. Semantic match: Similar finding types (normalized synonym mapping)
-        3. Spatial/evidence overlap: Same evidence region across tools
-        4. Tool correlation: Known overlapping tool pairs (ELA + splicing)
+        1. Filter out template/stale findings
+        2. Group by (tool_name, evidence_verdict, analysis_phase) key
+        3. Within each group, merge similar findings, keeping the highest confidence
         """
         from collections import defaultdict
 
         if not findings:
             return []
 
-        # Ensure all findings are dicts
         # Stage 0: Filter out template/stale findings
         from core.synthesis import TEMPLATE_PATTERNS
         cleaned = []
@@ -423,13 +436,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         if not cleaned:
             return []
 
-        # Stage 1: Group by normalized finding type
+        # Stage 1+2: Group by (tool_name, evidence_verdict, analysis_phase) and merge
         finding_groups = defaultdict(list)
         for f in cleaned:
-            normalized = self._normalize_finding_type(f)
-            finding_groups[normalized].append(f)
+            key = self._dedup_key(f)
+            finding_groups[key].append(f)
 
-        # Stage 2: Within each group, merge similar findings
         deduplicated = []
         for group_key, group in finding_groups.items():
             if len(group) == 1:
@@ -441,43 +453,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return deduplicated
 
     @staticmethod
-    def _normalize_finding_type(finding: dict) -> str:
-        """
-        Normalize finding types to catch duplicates across agents.
-
-        Maps synonyms like 'manipulation'/'forgery'/'alteration' to 'tampering',
-        and 'inconsistency'/'suspicious' to 'anomaly'.
-        """
+    def _dedup_key(finding: dict) -> str:
+        """Build dedup key from (tool_name, evidence_verdict, analysis_phase)."""
         meta = finding.get("metadata") or {}
         tool = str(meta.get("tool_name", ""))
-        finding_type = str(finding.get("finding_type", ""))
-        verdict = evidence_verdict_of(finding)
-
-        # Use normalized tool name as primary key
-        normalized = tool.lower().replace(" ", "_").replace("-", "_")
-        if not normalized:
-            normalized = finding_type.lower().replace(" ", "_").replace("-", "_")
-
-        # Map synonyms
-        synonym_map = {
-            "manipulation": "tampering",
-            "forgery": "tampering",
-            "alteration": "tampering",
-            "inconsistency": "anomaly",
-            "suspicious": "anomaly",
-            "clone": "synthetic",
-            "spoof": "synthetic",
-            "deepfake": "synthetic",
-            "ai_generated": "synthetic",
-            "gan": "synthetic",
-            "diffusion": "synthetic",
-        }
-        for pattern, replacement in synonym_map.items():
-            if pattern in normalized:
-                normalized = normalized.replace(pattern, replacement)
-
-        # Include verdict in key to preserve contradictions
-        return f"{normalized}:{verdict}"
+        evidence_verdict = evidence_verdict_of(finding)
+        phase = meta.get("analysis_phase", "initial")
+        return f"{tool}:{evidence_verdict}:{phase}"
 
     @staticmethod
     def _merge_similar_findings(findings: list[dict]) -> dict:
@@ -657,20 +639,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         all_findings: list[dict],
         mime_type: str = "",
     ) -> str:
-        # File-type-specific thresholds: PNG/lossless screenshots have higher
-        # baselines for manipulation due to common compression artifacts.
-        if mime_type in ("image/png", "image/webp", "image/bmp", "image/gif"):
-            _manipulated_threshold = 0.85
-            _likely_manipulated_threshold = 0.70
-            _suspicious_threshold = 0.55
-            _authentic_conf_threshold = 0.80
-            _likely_authentic_conf_threshold = 0.65
-        else:
-            _manipulated_threshold = ForensicPolicy.MANIPULATED_PROB_THRESHOLD
-            _likely_manipulated_threshold = ForensicPolicy.LIKELY_MANIPULATED_PROB_THRESHOLD
-            _suspicious_threshold = ForensicPolicy.SUSPICIOUS_PROB_THRESHOLD
-            _authentic_conf_threshold = ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
-            _likely_authentic_conf_threshold = ForensicPolicy.LIKELY_AUTHENTIC_CONF_THRESHOLD
+        # File-type-specific thresholds via ForensicPolicy
+        thresholds = ForensicPolicy.get_verdict_thresholds(mime_type)
+        _manipulated_threshold = thresholds["manipulated"]
+        _likely_manipulated_threshold = thresholds["likely_manipulated"]
+        _suspicious_threshold = thresholds["suspicious"]
+        _authentic_conf_threshold = thresholds["authentic_conf"]
+        _likely_authentic_conf_threshold = thresholds["likely_authentic_conf"]
 
         if (
             manipulation_probability >= _manipulated_threshold
@@ -846,20 +821,21 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE"
             )
 
-            if positive > 0:
-                v = "SUSPICIOUS"
-            elif inconclusive > 0:
-                v = "INCONCLUSIVE"
-            elif ForensicPolicy.is_authentic(conf, err):
-                v = "AUTHENTIC"
-            elif ForensicPolicy.is_suspicious(conf, err):
-                v = "SUSPICIOUS"
-            else:
-                v = (
-                    "AUTHENTIC"
-                    if conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
-                    else "INCONCLUSIVE"
-                )
+        if positive > 0:
+            v = "SUSPICIOUS"
+        elif inconclusive > 0:
+            v = "INCONCLUSIVE"
+        elif ForensicPolicy.is_authentic(conf, err):
+            v = "AUTHENTIC"
+        elif ForensicPolicy.is_suspicious(conf, err):
+            v = "SUSPICIOUS"
+        elif (
+            conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+            and err <= ForensicPolicy.AUTHENTIC_ERROR_MAX
+        ):
+            v = "AUTHENTIC"
+        else:
+            v = "INCONCLUSIVE"
 
             if m.get("skipped"):
                 v = "NOT_APPLICABLE"
@@ -873,7 +849,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             }
         return summary
 
-    def _get_degradation_flags(self, llm_ok, penalty, findings, metrics, narrative_warnings: list[str] | None = None) -> list[str]:
+    def _get_degradation_flags(self, llm_ok, penalty, findings, metrics, narrative_warnings: list[str] | None = None, llm_synthesis_failed: bool = False) -> list[str]:
         flags = []
         for f in findings:
             meta = f.get("metadata") or {}
@@ -887,6 +863,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 flags.append(f"{tool} failed or returned incomplete output")
         if narrative_warnings:
             flags.extend(w for w in narrative_warnings if "failed" in str(w).lower() or "timeout" in str(w).lower())
+        if llm_synthesis_failed:
+            flags.append("LLM/Groq synthesis for report narrative failed — template fallback used")
         return list(dict.fromkeys(flags))
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:

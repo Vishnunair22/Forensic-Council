@@ -120,3 +120,27 @@ class ForensicPolicy:
         """
         # Suspicious = medium/high error rate but still some usable confidence
         return confidence >= cls.AGENT_SUSPICIOUS_CONF and error_rate > cls.AGENT_SUSPICIOUS_ERR
+
+    @classmethod
+    def get_verdict_thresholds(cls, mime_type: str = "") -> dict[str, float]:
+        """Return verdict thresholds adjusted for file type.
+
+        Lossless formats (PNG, BMP, GIF, WebP) have higher baselines for
+        manipulation probability due to common compression artifacts that
+        can trigger false positives in frequency-domain and ELA analysis.
+        """
+        if mime_type in ("image/png", "image/webp", "image/bmp", "image/gif"):
+            return {
+                "manipulated": 0.85,
+                "likely_manipulated": 0.70,
+                "suspicious": 0.55,
+                "authentic_conf": 0.80,
+                "likely_authentic_conf": 0.65,
+            }
+        return {
+            "manipulated": cls.MANIPULATED_PROB_THRESHOLD,
+            "likely_manipulated": cls.LIKELY_MANIPULATED_PROB_THRESHOLD,
+            "suspicious": cls.SUSPICIOUS_PROB_THRESHOLD,
+            "authentic_conf": cls.AUTHENTIC_CONF_THRESHOLD,
+            "likely_authentic_conf": cls.LIKELY_AUTHENTIC_CONF_THRESHOLD,
+        }

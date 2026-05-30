@@ -1190,13 +1190,25 @@ class LLMClient:
             return ""
 
         async with LLMClient._synthesis_semaphore:
-            return await self._generate_synthesis_inner(
+            result = await self._generate_synthesis_inner(
                 system_prompt=system_prompt,
                 user_content=user_content,
                 max_tokens=max_tokens,
                 timeout_override=timeout_override,
                 json_mode=json_mode,
             )
+            # Retry once with 3s backoff if all candidates returned empty
+            if not result:
+                logger.warning("Synthesis returned empty; retrying once after 3s backoff")
+                await asyncio.sleep(3.0)
+                result = await self._generate_synthesis_inner(
+                    system_prompt=system_prompt,
+                    user_content=user_content,
+                    max_tokens=max_tokens,
+                    timeout_override=timeout_override,
+                    json_mode=json_mode,
+                )
+            return result
 
 
 def parse_llm_step(content: str, tool_call: dict[str, Any] | None) -> dict[str, Any]:

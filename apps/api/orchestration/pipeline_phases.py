@@ -1108,7 +1108,7 @@ async def _run_agent_deep_only(
             span.set_attribute("total_finding_count", len(all_findings))
             return AgentLoopResult(
                 agent_id=agent_id,
-                findings=[f.model_dump(mode="json") for f in all_findings],
+                findings=[f.model_dump(mode="json") for f in deep_only],
                 reflection_report=(
                     getattr(agent, "_reflection_report", None).model_dump(mode="json")
                     if getattr(agent, "_reflection_report", None)
@@ -1130,54 +1130,9 @@ async def _run_agent_deep_only(
                 agent_active=True,
                 supports_file_type=True,
                 error=str(e),
+                deep_findings_count=0,
                 synthesis=getattr(agent, "_agent_synthesis", None),
             )
-
-
-def _deduplicate_phase_findings(
-    initial_results: list[AgentLoopResult],
-    deep_results: list[AgentLoopResult],
-) -> list[AgentLoopResult]:
-    """Remove duplicate findings between initial and deep phases."""
-
-    def _finding_signature(finding: dict) -> str:
-        tool = finding.get('metadata', {}).get('tool_name', '')
-        verdict = finding.get('evidence_verdict', '')
-        finding_type = finding.get('finding_type', '')
-        return f"{tool}:{verdict}:{finding_type}"
-
-    initial_signatures: dict[str, set[str]] = {}
-    for result in initial_results:
-        agent_id = result.agent_id
-        if agent_id not in initial_signatures:
-            initial_signatures[agent_id] = set()
-        for finding in result.findings:
-            sig = _finding_signature(finding)
-            initial_signatures[agent_id].add(sig)
-
-    deduplicated = []
-    for result in deep_results:
-        agent_id = result.agent_id
-        new_findings = []
-        for finding in result.findings:
-            sig = _finding_signature(finding)
-            if sig not in initial_signatures.get(agent_id, set()):
-                new_findings.append(finding)
-            else:
-                logger.debug(f"Skipping duplicate finding: {sig}")
-        deduplicated.append(AgentLoopResult(
-            agent_id=agent_id,
-            findings=new_findings,
-            error=result.error,
-            agent_active=result.agent_active,
-            reflection_report=result.reflection_report,
-            react_chain=result.react_chain,
-            synthesis=result.synthesis,
-            supports_file_type=result.supports_file_type,
-            deep_findings_count=result.deep_findings_count,
-        ))
-
-    return deduplicated
 
 
 async def _await_deep_analysis_decision(
