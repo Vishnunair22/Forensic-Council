@@ -246,92 +246,187 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             for m in per_agent_metrics.values()
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
-
-        # Extract visual assessment from Agent 1's visual profile for scoring
-        visual_assessment = ""
-        for _vfindings in visual_profile_findings_by_agent.values():
-            for _vf in _vfindings:
-                _vmeta = _vf.get("metadata") or {}
-                _vauth = str(_vmeta.get("authenticity_verdict") or "").lower()
-                if _vauth:
-                    visual_assessment = _vauth
-                    break
-            if visual_assessment:
-                break
-
-        # Weighted stats
         overall_confidence, overall_error_rate = self._calculate_weighted_stats(active_metrics)
+        
+        # ── 3. Tool Coverage ──
+        completed_tools = []
+        failed_tools = []
+        not_applicable_tools = []
+        for aid, res in active_results.items():
+            findings = res.get("findings", [])
+            for f in findings:
+                meta = f.get("metadata") or {}
+                tool = meta.get("tool_name") or f.get("finding_type") or "tool"
+                status = f.get("status")
+                evidence_verdict = f.get("evidence_verdict")
+                
+                if status == "SUCCESS" and evidence_verdict not in ("ERROR", "NOT_APPLICABLE"):
+                    completed_tools.append(tool)
+                elif status in ("FAILED", "ERROR", "TIMEOUT") or evidence_verdict == "ERROR":
+                    failed_tools.append(tool)
+                elif status == "NOT_APPLICABLE" or evidence_verdict == "NOT_APPLICABLE":
+                    not_applicable_tools.append(tool)
+                    
+        completed_tools = list(set(completed_tools))
+        failed_tools = list(set(failed_tools))
+        not_applicable_tools = list(set(not_applicable_tools))
+        tool_coverage = {
+            "completed_tools": completed_tools,
+            "failed_tools": failed_tools,
+            "not_applicable_tools": not_applicable_tools
+        }
 
-        # Confidence range
-        conf_scores = [
-            m["confidence_score"] for m in active_metrics if m.get("confidence_score", 0) > 0
-        ]
-        c_min = min(conf_scores) if conf_scores else 0.0
-        c_max = max(conf_scores) if conf_scores else 0.0
-        c_std = (
-            (
-                sum((x - (sum(conf_scores) / len(conf_scores))) ** 2 for x in conf_scores)
-                / len(conf_scores)
-            )
-            ** 0.5
-            if conf_scores
-            else 0.0
+        # ── 4. Retrieve Visual Context & Per-Agent Synthesis ──
+        from core.visual_context_store import get_visual_context
+        visual_context = await get_visual_context(session_id=str(self.session_id))
+        
+        from core.per_agent_synthesis import split_visual_context, AgentSynthesisInput, refine_synthesis_batch
+        splits = split_visual_context(str(self.session_id), visual_context)
+        
+        inputs = {}
+        for aid in ("Agent1", "Agent3", "Agent5"):
+            if aid in active_results:
+                res = active_results[aid]
+                findings = res.get("findings", [])
+                
+                # Check visual context applicability
+                vc_avail = False
+                vc_sec = None
+                if aid == "Agent1" and splits.agent1_image_integrity:
+                    vc_avail = True
+                    vc_sec = splits.agent1_image_integrity
+                elif aid == "Agent3" and splits.agent3_object_scene:
+                    vc_avail = True
+                    vc_sec = splits.agent3_object_scene
+                elif aid == "Agent5" and splits.agent5_metadata_visual:
+                    vc_avail = True
+                    vc_sec = splits.agent5_metadata_visual
+                    
+                a_completed = []
+                a_failed = []
+                for f in findings:
+                    meta = f.get("metadata") or {}
+                    tool = meta.get("tool_name") or f.get("finding_type") or "tool"
+                    status = f.get("status")
+                    if status == "SUCCESS":
+                        a_completed.append(tool)
+                    elif status in ("FAILED", "ERROR", "TIMEOUT"):
+                        a_failed.append(tool)
+                        
+                # Deterministic agent verdict / confidence
+                a_pos = [f for f in findings if f.get("evidence_verdict") == "POSITIVE"]
+                a_verdict = "SUSPICIOUS" if a_pos else "AUTHENTIC"
+                if len(a_pos) >= 2:
+                    a_verdict = "MANIPULATED"
+                a_conf = 0.8 if a_pos else 0.9
+                
+                inputs[aid] = AgentSynthesisInput(
+                    agent_id=aid,
+                    persona_name=aid,
+                    persona_rules={},
+                    visual_context_available=vc_avail,
+                    visual_context_section=vc_sec,
+                    completed_tools=list(set(a_completed)),
+                    failed_tools=list(set(a_failed)),
+                    findings=findings,
+                    agent_verdict=a_verdict,
+                    agent_confidence=a_conf,
+                    confidence_reason=f"Based on {len(a_completed)} completed tools."
+                )
+                
+        agent_syntheses = await refine_synthesis_batch(inputs, self.config)
+
+        # ── 5. Arbiter Deliberation ──
+        from core.arbiter_deliberation import deliberate_findings
+        deliberation_result = deliberate_findings(all_findings, visual_context, tool_coverage)
+
+        # ── 6. Deterministic Report Builder ──
+        from core.deterministic_report_builder import build_deterministic_report
+        case_data = {
+            "case_id": case_id or f"case_{self.session_id}",
+            "session_id": str(self.session_id),
+            "filename": case_id or "evidence_file",
+            "sha256": "unknown_hash",
+            "mime_type": artifact_mime or "image/png"
+        }
+        for f in all_findings:
+            meta = f.get("metadata") or {}
+            if meta.get("file_name") or meta.get("filename"):
+                case_data["filename"] = meta.get("file_name") or meta.get("filename")
+            if meta.get("file_hash") or meta.get("sha256"):
+                case_data["sha256"] = meta.get("file_hash") or meta.get("sha256")
+            if meta.get("mime_type"):
+                case_data["mime_type"] = meta.get("mime_type")
+            if meta.get("file_size"):
+                case_data["file_size_bytes"] = meta.get("file_size")
+                
+        execution_metadata = {
+            "analysis_mode": self.config.analysis_routing_mode if hasattr(self.config, "analysis_routing_mode") else "hybrid",
+            "visual_context_source": getattr(visual_context, "source", "none") if visual_context else "none",
+        }
+        
+        det_report_dict = build_deterministic_report(
+            case_data=case_data,
+            visual_context=visual_context,
+            agent_syntheses=agent_syntheses,
+            arbiter_deliberation=deliberation_result,
+            tool_coverage=tool_coverage,
+            execution_metadata=execution_metadata,
+            groq_used=False
         )
 
-        # Manipulation detection
-        comp_penalty = self._get_compression_penalty(all_findings)
-        man_prob, man_signals = calculate_manipulation_probability(
-            all_findings, comp_penalty, visual_assessment=visual_assessment
+        # ── 7. Optional Groq Polish ──
+        final_report_dict = det_report_dict
+        groq_used = False
+        if use_llm:
+            from core.final_report_groq_refiner import refine_report_with_groq
+            refined, success = await refine_report_with_groq(det_report_dict, self.config)
+            if success:
+                final_report_dict = refined
+                groq_used = True
+
+        # ── 8. Mapping Back to ForensicReport Pydantic Model ──
+        mapped_verdict = "INCONCLUSIVE"
+        v_upper = deliberation_result.final_verdict.upper()
+        if "LIKELY_MANIPULATED" in v_upper:
+            mapped_verdict = "MANIPULATED"
+        elif "SUSPICIOUS" in v_upper or "PROVENANCE" in v_upper or "CONTENT_RISK" in v_upper:
+            mapped_verdict = "SUSPICIOUS"
+        elif "NO_REPORTABLE_MANIPULATION_DETECTED" in v_upper:
+            mapped_verdict = "AUTHENTIC"
+
+        p_anal = {}
+        p_anal_structured = {}
+        for aid, syn in agent_syntheses.items():
+            p_anal[aid] = syn.agent_brief
+            p_anal_structured[aid] = {
+                "agent_brief": syn.agent_brief,
+                "visual_description": syn.visual_context_summary,
+                "key_findings": "\n".join(syn.key_findings),
+                "opinion": syn.confidence_reason,
+                "synthesis_source": syn.synthesis_source
+            }
+
+        degradation_flags = self._get_degradation_flags(
+            llm_ok=groq_used,
+            penalty=1.0,
+            findings=all_findings,
+            metrics=per_agent_metrics,
+            narrative_warnings=[],
+            llm_synthesis_failed=False
         )
 
-        # ── 3. Cross-Modal Deliberation ───────────────────────────────────
-        await _step("Comparing corroborating and conflicting tool signals.")
+        summary_structured = {
+            "verdict_line": f"{mapped_verdict.title()} at {int(round(deliberation_result.final_confidence * 100))}% confidence.",
+            "integrity_lines": [f.finding_statement for f in deliberation_result.strongest_findings if f.signal_category == "integrity"],
+            "context_lines": [f.finding_statement for f in deliberation_result.supporting_findings],
+            "coverage_line": final_report_dict.get("methodology") or "Completed analysis."
+        }
+
         comparisons = await cross_agent_comparison(all_findings)
-
-        await _step("Resolving cross-agent disagreements.")
         contested = await self._run_challenges(comparisons)
 
-        overall_verdict = self._compute_verdict(
-            man_prob,
-            man_signals,
-            overall_confidence,
-            overall_error_rate,
-            len(contested),
-            active_metrics,
-            all_findings,
-            mime_type=artifact_mime,
-        )
-
-        # ── 4. Narrative Synthesis ────────────────────────────────────────
-        await _step(f"Verdict {overall_verdict}: generating final report.")
-        analysis_cov = self._get_coverage_note(active_metrics, all_findings)
-
-        narratives = await self.deliberate_narratives(
-            overall_verdict,
-            overall_confidence,
-            overall_error_rate,
-            man_prob,
-            len(active_results),
-            all_findings,
-            active_results,
-            per_agent_metrics,
-            [f for fl in visual_profile_findings_by_agent.values() for f in fl],
-            len(
-                [
-                    c
-                    for c in comparisons
-                    if c.verdict == FindingVerdict.AGREEMENT and c.cross_modal_confirmed
-                ]
-            ),
-            contested,
-            [f for f in all_findings if f.get("status") == "INCOMPLETE"],
-            analysis_cov,
-            use_llm=use_llm,
-            step_hook=self._step_hook,
-            comparisons=comparisons,
-        )
-
-        # ── 5. Case Finalisation ───────────────────────────────────────────
+        # ── 9. Case Finalisation ──
         _fusion = {}
         try:
             _fusion_res = cross_modal_fuse(active_results)
@@ -347,16 +442,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         report = ForensicReport(
             session_id=self.session_id,
             case_id=case_id or f"case_{self.session_id}",
-            executive_summary=narratives["executive_summary"],
+            executive_summary=final_report_dict["executive_summary"],
             is_deep_analysis=has_deep_findings,
             per_agent_findings=per_agent_findings,
             per_agent_metrics=per_agent_metrics,
-            per_agent_analysis=narratives["per_agent_analysis"],
-            per_agent_narrative_structured=narratives.get("per_agent_narrative_structured", {}),
-            summary_structured=narratives.get("summary_structured", {}),
-            overall_confidence=overall_confidence,
+            per_agent_analysis=p_anal,
+            per_agent_narrative_structured=p_anal_structured,
+            summary_structured=summary_structured,
+            overall_confidence=deliberation_result.final_confidence,
             overall_error_rate=overall_error_rate,
-            overall_verdict=overall_verdict,
+            overall_verdict=mapped_verdict,
             cross_modal_confirmed=[
                 c.finding_a
                 for c in comparisons
@@ -366,48 +461,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             incomplete_findings=[f for f in all_findings if f.get("status") == "INCOMPLETE"],
             stub_findings=[f for f in all_findings if f.get("stub_result")],
             gemini_vision_findings=[f for fl in visual_profile_findings_by_agent.values() for f in fl],
-            uncertainty_statement=narratives["uncertainty_statement"],
-            verdict_sentence=narratives["verdict_sentence"],
-            key_findings=narratives["key_findings"],
-            reliability_note=narratives["reliability_note"],
-            manipulation_probability=man_prob,
-            confidence_min=c_min,
-            confidence_max=c_max,
-            confidence_std_dev=c_std,
+            uncertainty_statement=final_report_dict["limitations"][0] if final_report_dict["limitations"] else "None",
+            verdict_sentence=final_report_dict["final_conclusion"],
+            key_findings=final_report_dict["key_findings"],
+            reliability_note=final_report_dict["reliability_notes"][0] if final_report_dict["reliability_notes"] else "",
+            manipulation_probability=deliberation_result.final_confidence if mapped_verdict == "MANIPULATED" else 0.0,
+            confidence_min=deliberation_result.final_confidence,
+            confidence_max=deliberation_result.final_confidence,
+            confidence_std_dev=0.0,
             per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
-            degradation_flags=self._get_degradation_flags(
-                narratives["llm_used"], comp_penalty, all_findings, active_metrics,
-                narratives.get("narrative_warnings", []),
-                llm_synthesis_failed=use_llm and not narratives.get("llm_used", False),
-            ),
+            degradation_flags=degradation_flags,
             applicable_agent_count=len(active_results),
             skipped_agents=skipped_agents,
-            analysis_coverage_note=analysis_cov,
+            analysis_coverage_note=final_report_dict["methodology"],
             cross_modal_fusion=_fusion,
-            compression_penalty=comp_penalty,
+            compression_penalty=1.0,
         )
-
-        # Ensure meaningful output in template-mode fallback
-        if not report.verdict_sentence:
-            if report.overall_verdict in ("LIKELY_AUTHENTIC", "AUTHENTIC"):
-                report.verdict_sentence = (
-                    f"Based on {report.applicable_agent_count} specialist analyses, "
-                    "no statistically significant manipulation signals were detected. "
-                    "The evidence appears authentic within the scope of available forensic tools."
-                )
-            elif report.overall_verdict in ("TAMPERED", "MANIPULATED"):
-                report.verdict_sentence = (
-                    f"Multiple forensic agents ({report.applicable_agent_count}) identified "
-                    "manipulation indicators. The evidence shows signs of post-capture modification."
-                )
-            else:
-                report.verdict_sentence = (
-                    f"The forensic council ({report.applicable_agent_count} agents) produced "
-                    "inconclusive results. Manual expert review is recommended."
-                )
-
-        if not report.executive_summary:
-            report.executive_summary = report.verdict_sentence
 
         return await self.sign_report(report)
 
@@ -875,10 +944,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 or meta.get("error")
             ):
                 flags.append(f"{tool} failed or returned incomplete output")
-        if narrative_warnings:
-            flags.extend(w for w in narrative_warnings if "failed" in str(w).lower() or "timeout" in str(w).lower())
-        if llm_synthesis_failed:
-            flags.append("LLM/Groq synthesis for report narrative failed — template fallback used")
         return list(dict.fromkeys(flags))
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:

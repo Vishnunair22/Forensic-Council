@@ -329,12 +329,12 @@ class ToolRegistry:
             logger.warning(
                 f"Tool '{tool_name}' timed out",
                 tool_name=tool_name,
-                timeout=TOOL_TIMEOUTS.get(tool_name, 45.0),
+                timeout=timeout_s,
             )
             result = ToolResult(
                 tool_name=tool_name,
                 success=False,
-                error=f"Tool '{tool_name}' timed out after {TOOL_TIMEOUTS.get(tool_name, 45.0):.0f}s",
+                error=f"Tool '{tool_name}' timed out after {timeout_s:.0f}s",
             )
         except (OSError, ValueError, TypeError, RuntimeError) as e:
             # Specific expected tool errors (file I/O, validation, etc.)

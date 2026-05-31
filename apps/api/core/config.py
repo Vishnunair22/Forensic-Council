@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     )
 
     analysis_execution_mode: str = Field(
-        default="hybrid",
+        default="local_only",
         description=(
             "Analysis execution mode. "
             "'hybrid' allows configured remote providers with local fallback. "
@@ -722,6 +722,13 @@ class Settings(BaseSettings):
             "(for example llama-3.3-70b-versatile=12K, llama-3.1-8b-instant=6K)."
         ),
     )
+    groq_synthesis_rpm_limit: int = Field(default=5)
+    groq_synthesis_rpm_safety_margin: int = Field(default=1)
+    groq_per_agent_batch_enabled: bool = Field(default=True)
+    groq_per_agent_batch_max_calls_per_session: int = Field(default=1)
+    groq_retry_on_429: bool = Field(default=False)
+    groq_retry_on_empty: bool = Field(default=False)
+
     # Gemini API key policy acknowledgment — required before using Gemini in production.
     # See: https://ai.google.dev/terms
     gemini_api_key_policy_ok: bool = Field(

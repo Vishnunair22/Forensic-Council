@@ -40,8 +40,38 @@ class NeuralSynthesisMixin:
             if shared:
                 return shared
 
+        # Try retrieving from the persistent visual context store first
+        from core.visual_context_store import get_visual_context, visual_context_to_profile_dict
+        try:
+            sha256 = getattr(self.evidence_artifact, "content_hash", "") or ""
+            vis_ctx = await get_visual_context(
+                session_id=str(self.session_id),
+                sha256=sha256,
+                working_memory=getattr(self, "working_memory", None),
+                inter_agent_bus=self.inter_agent_bus
+            )
+            if vis_ctx:
+                return visual_context_to_profile_dict(vis_ctx)
+        except Exception as e:
+            logger.debug("Failed retrieving visual context from store at start of wait", error=str(e))
+
         event = getattr(self, "_agent1_context_event", None)
         if event is None:
+            # If there's no event and no context, we can wait a bit for the store
+            from core.visual_context_store import wait_for_visual_context
+            try:
+                sha256 = getattr(self.evidence_artifact, "content_hash", "") or ""
+                vis_ctx = await wait_for_visual_context(
+                    session_id=str(self.session_id),
+                    sha256=sha256,
+                    working_memory=getattr(self, "working_memory", None),
+                    inter_agent_bus=self.inter_agent_bus,
+                    timeout=getattr(self.config, "agent_context_wait_timeout", 30.0)
+                )
+                if vis_ctx:
+                    return visual_context_to_profile_dict(vis_ctx)
+            except Exception as e:
+                logger.warning("Error waiting for visual context from store", error=str(e))
             return {}
 
         if not event.is_set():
@@ -50,6 +80,20 @@ class NeuralSynthesisMixin:
                 # Use shield to prevent cancellation of the wait if the agent pass is still running
                 await asyncio.wait_for(asyncio.shield(event.wait()), timeout=timeout)
             except TimeoutError:
+                # Check store one last time after timeout
+                try:
+                    sha256 = getattr(self.evidence_artifact, "content_hash", "") or ""
+                    vis_ctx = await get_visual_context(
+                        session_id=str(self.session_id),
+                        sha256=sha256,
+                        working_memory=getattr(self, "working_memory", None),
+                        inter_agent_bus=self.inter_agent_bus
+                    )
+                    if vis_ctx:
+                        return visual_context_to_profile_dict(vis_ctx)
+                except Exception:
+                    pass
+
                 logger.warning(
                     "Timed out waiting for Agent 1 context; proceeding with local data",
                     agent_id=self.agent_id,
@@ -309,10 +353,31 @@ class NeuralSynthesisMixin:
                 "tool_name": TOOL_VISUAL_PROFILE,
                 "visual_profile_owner": "Agent1",
                 "execution_mode": self.config.analysis_execution_mode,
-                "external_ai_used": not self.config.local_only_analysis,
+                "external_ai_used": bool((result.get("metadata") or {}).get("external_ai_used", False)),
             }
 
             await self._record_visual_profile_result(result)
+
+            # Persist visual context to the durable store (Redis + inter_agent_bus + working memory)
+            if self.agent_id == "Agent1" and not finding.error:
+                try:
+                    from core.visual_context_store import save_visual_context, build_visual_context_from_finding
+                    sha256 = getattr(artifact, "content_hash", "") or ""
+                    context_obj = build_visual_context_from_finding(
+                        session_id=str(self.session_id),
+                        evidence_sha256=sha256,
+                        finding=finding
+                    )
+                    await save_visual_context(
+                        session_id=str(self.session_id),
+                        sha256=sha256,
+                        context=context_obj,
+                        working_memory=getattr(self, "working_memory", None),
+                        inter_agent_bus=self.inter_agent_bus
+                    )
+                    logger.info("Durable visual context persisted successfully", session_id=self.session_id)
+                except Exception as save_exc:
+                    logger.warning("Failed to save durable visual context", error=str(save_exc))
 
             if self.inter_agent_bus and not result.get("error"):
                 self.inter_agent_bus.set_visual_profile(str(self.session_id), result)

@@ -63,6 +63,88 @@ async def get_visual_context(
 
     return None
 
+
+def build_visual_context_from_finding(
+    session_id: str,
+    evidence_sha256: str,
+    finding: Any
+) -> VisualContext:
+    """Helper to convert VisualEvidenceFinding into the standardized VisualContext model."""
+    import datetime
+    from core.visual_context_models import (
+        VisualContext,
+        ImageIntegrityContext,
+        ObjectSceneContext,
+        MetadataVisualContext,
+        DetectedObject
+    )
+
+    source_val = "llm_assisted" if (finding.provider_used != "local_visual_ensemble" and finding.provider_used != "local") else "local_ensemble"
+    external_llm_used = (source_val == "llm_assisted")
+
+    raw_verdict = str(finding._authenticity_verdict or "").upper()
+    verdict = "CANNOT_DETERMINE"
+    if "AUTHENTIC" in raw_verdict:
+        verdict = "AUTHENTIC"
+    elif "SUSPICIOUS" in raw_verdict:
+        verdict = "SUSPICIOUS"
+    elif "MANIPULATED" in raw_verdict or "TAMPERED" in raw_verdict:
+        verdict = "LIKELY_MANIPULATED"
+    elif "AI_GENERATED" in raw_verdict or "DEEPFAKE" in raw_verdict:
+        verdict = "AI_GENERATED"
+
+    integrity_assessment = "cannot_determine"
+    if verdict == "AUTHENTIC":
+        integrity_assessment = "no_visible_issue"
+    elif verdict == "SUSPICIOUS":
+        integrity_assessment = "suspicious"
+    elif verdict == "LIKELY_MANIPULATED":
+        integrity_assessment = "likely_manipulated"
+    elif verdict == "AI_GENERATED":
+        integrity_assessment = "ai_generated_suspect"
+
+    image_integrity_context = ImageIntegrityContext(
+        visible_manipulation_signals=list(finding.manipulation_signals or []),
+        integrity_assessment=integrity_assessment,
+        confidence=finding.confidence
+    )
+
+    object_scene_context = ObjectSceneContext(
+        scene_description=finding.content_description or "",
+        objects=list(finding.detected_objects or []),
+        visible_text=list(finding._extracted_text or []),
+        confidence=finding.confidence
+    )
+
+    metadata_visual_context = MetadataVisualContext(
+        metadata_consistency_notes=[finding._metadata_visual_consistency] if finding._metadata_visual_consistency else [],
+        confidence=finding.confidence
+    )
+
+    detected_objs = [DetectedObject(label=obj, confidence=finding.confidence) for obj in (finding.detected_objects or [])]
+
+    return VisualContext(
+        session_id=session_id,
+        evidence_sha256=evidence_sha256,
+        source=source_val,
+        provider_name=finding.provider_used,
+        external_llm_used=external_llm_used,
+        image_integrity_context=image_integrity_context,
+        object_scene_context=object_scene_context,
+        metadata_visual_context=metadata_visual_context,
+        extracted_text=list(finding._extracted_text or []),
+        detected_objects=detected_objs,
+        interface_elements=[finding._interface_identification] if finding._interface_identification else [],
+        scene_description=finding.content_description or "",
+        file_type_assessment=finding.file_type_assessment or "",
+        authenticity_verdict=verdict,
+        confidence=finding.confidence,
+        tool_coverage=dict(finding.tool_coverage or {}),
+        provider_attempts=list(finding.provider_attempts or []),
+        created_at=datetime.datetime.utcnow().isoformat()
+    )
+
+
 async def save_visual_context(
     session_id: str,
     sha256: str,
@@ -127,3 +209,28 @@ async def wait_for_visual_context(
             return context
         await asyncio.sleep(1.0)
     return None
+
+
+def visual_context_to_profile_dict(context: VisualContext) -> dict:
+    """Convert VisualContext back into the dictionary format expected by the agents."""
+    return {
+        "content_description": context.scene_description,
+        "confidence_raw": context.confidence,
+        "status": "CONFIRMED",
+        "evidence_verdict": "POSITIVE" if context.authenticity_verdict in ("LIKELY_MANIPULATED", "AI_GENERATED", "SUSPICIOUS") else ("NEGATIVE" if context.authenticity_verdict == "AUTHENTIC" else "INCONCLUSIVE"),
+        "verdict": context.authenticity_verdict,
+        "detected_objects": [obj.label for obj in context.detected_objects],
+        "manipulation_signals": context.image_integrity_context.visible_manipulation_signals,
+        "extracted_text": context.extracted_text,
+        "interface_identification": context.interface_elements[0] if context.interface_elements else "",
+        "metadata": {
+            "tool_name": "shared_visual_evidence_profile",
+            "analysis_source": context.provider_name or "visual_context_store",
+            "provider_used": context.provider_name or "visual_context_store",
+            "external_ai_used": context.external_llm_used,
+            "fallback_applied": context.source == "local_ensemble",
+            "provider_attempts": context.provider_attempts,
+            "tool_coverage": context.tool_coverage,
+        }
+    }
+

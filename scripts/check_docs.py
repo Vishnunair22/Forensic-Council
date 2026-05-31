@@ -59,7 +59,7 @@ def check_env_template_consistency() -> None:
     import shutil
     import os
     
-    cmd = [str(script)]
+    cmd = ["bash", str(script)]
     if os.name == "nt":
         resolved_bash = None
         for shell_cmd in ["bash", "sh"]:

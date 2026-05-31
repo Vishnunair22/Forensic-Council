@@ -10,6 +10,8 @@ from core.evidence import ArtifactType, EvidenceArtifact
 from core.gemini_client import (
     GeminiVisionClient,
     GeminiVisionFinding,
+    GeminiQuotaBlocked,
+    GeminiRateLimited,
 )
 from core.image_routing import build_image_forensic_routing
 from core.structured_logging import get_logger
@@ -260,7 +262,7 @@ class VisionRouter:
                 {"provider": "local_visual_ensemble", "reason": f"agent_id={agent_id} not authorized for Gemini", "success": True}
             ]
             result.fallback_applied = False
-            result.fallback_reason = "Gemini reserved for Agent1 single-call policy"
+            result.fallback_reason = "Visual context provider reserved for Agent1 single-call policy"
             return result
 
         # ── Agent1 — attempt Gemini if configured ─────────────────────────
@@ -281,7 +283,7 @@ class VisionRouter:
                     result = self._normalize_gemini_profile(gf)
                     if gf.model_used.startswith("local_"):
                         result.provider_attempts = [
-                            {"provider": "gemini", "success": False, "error": "Gemini fallback triggered"},
+                            {"provider": "gemini", "success": False, "error": "Visual context fallback triggered"},
                             {"provider": "local_visual_ensemble", "success": True},
                         ]
                     else:

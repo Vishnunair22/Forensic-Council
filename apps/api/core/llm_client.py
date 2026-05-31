@@ -1146,8 +1146,6 @@ class LLMClient:
             if not allowed:
                 self._last_synthesis_blocked_reason = reason
                 logger.warning(f"Groq rate limit hit: {reason}. Falling back to template synthesis.")
-                if priority in ["critical", "high"]:
-                    return self._generate_template_synthesis(user_content)
                 return ""
 
         # Check quota first
@@ -1164,18 +1162,6 @@ class LLMClient:
             rpd_limit=rpd_limit
         )
 
-        if effective_priority in {"critical", "high"}:
-            chunked = await self._chunked_synthesis(
-                system_prompt=system_prompt,
-                user_content=user_content,
-                max_tokens=max_tokens,
-                timeout_override=timeout_override,
-                json_mode=json_mode,
-            )
-            if chunked is not None:
-                logger.info("Using chunked synthesis for large finding set")
-                return chunked
-
         estimated_tokens = (len(system_prompt) + len(user_content)) // 4 + (max_tokens or 2048)
         allowed, reason = await quota_mgr.can_make_call(
             effective_priority, estimated_tokens=estimated_tokens
@@ -1187,23 +1173,14 @@ class LLMClient:
                 f"Quota manager blocked synthesis: {reason}. Using template synthesis.",
                 priority=effective_priority
             )
-            if effective_priority in ["critical", "high"]:
-                return self._generate_template_synthesis(user_content)
             return ""
 
         async with LLMClient._synthesis_semaphore:
             self._last_synthesis_blocked_reason = ""
-            result = await self._generate_synthesis_inner(
-                system_prompt=system_prompt,
-                user_content=user_content,
-                max_tokens=max_tokens,
-                timeout_override=timeout_override,
-                json_mode=json_mode,
-            )
-            # Retry once with 3s backoff if all candidates returned empty
-            if not result and not getattr(self, "_last_synthesis_blocked_reason", ""):
-                logger.warning("Synthesis returned empty; retrying once after 3s backoff")
-                await asyncio.sleep(3.0)
+            # No fallback model cascade: restrict to primary model only for synthesis.
+            original_fallback_models = self.fallback_models
+            self.fallback_models = []
+            try:
                 result = await self._generate_synthesis_inner(
                     system_prompt=system_prompt,
                     user_content=user_content,
@@ -1211,6 +1188,8 @@ class LLMClient:
                     timeout_override=timeout_override,
                     json_mode=json_mode,
                 )
+            finally:
+                self.fallback_models = original_fallback_models
             return result
 
 

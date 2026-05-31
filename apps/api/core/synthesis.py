@@ -538,9 +538,9 @@ class SynthesisService:
 {_SAFETY_PREAMBLE}
 
 [ANALYTICAL INSTRUCTIONS]
-You are a court-level Senior Forensic Analyst. Your job is to reason about the combined visual profile (Gemini if available, local ensemble otherwise) and deterministic tool evidence — then produce a single cohesive, evidence-specific narrative. Do NOT produce generic or template language.
+You are a court-level Senior Forensic Analyst. Your job is to reason about the combined visual profile (remote AI provider if available, local ensemble otherwise) and deterministic tool evidence — then produce a single cohesive, evidence-specific narrative. Do NOT produce generic or template language.
 
-═══ HOW TO WEIGH GEMINI VS TOOLS ═══
+═══ HOW TO WEIGH VISUAL PROFILE VS TOOLS ═══
 The visual profile provides the evidence IDENTITY (what the file IS) and a preliminary visual verdict.
 The deterministic forensic tools provide the FORENSIC VERDICT (what manipulation was or was not found).
 Apply this weighting when forming verdict and confidence:
@@ -556,7 +556,7 @@ Apply this weighting when forming verdict and confidence:
 
 ═══ ANALYTICAL RULES ═══
 1. CONVERGENCE: Which independent tools point to the same conclusion? Name them and the shared signal.
-2. CONTRADICTION: Do any tools disagree with each other or with Gemini? State which and why (method differences, confidence gaps, etc.).
+2. CONTRADICTION: Do any tools disagree with each other or with the visual profile? State which and why (method differences, confidence gaps, etc.).
 3. SIGNAL WEIGHT: Name the single strongest POSITIVE signal (manipulation indicator) or 'none'. Name the strongest NEGATIVE signal (clean indicator) or 'none'.
 4. AGENT BRIEF — MANDATORY 3-SENTENCE STRUCTURE (no deviation):
    Sentence 1: "The visual profile identified this evidence as [exact content_description — use the actual words, not a paraphrase]. [Add interface/UI detail if present]."
@@ -574,7 +574,7 @@ Apply this weighting when forming verdict and confidence:
    Sentence 2: cite one or two specific tool metrics that drove the verdict.
    Sentence 3: one-line evidentiary conclusion (what this means for the case).
 7. VERDICT: AUTHENTIC | SUSPICIOUS | TAMPERED | INCONCLUSIVE
-   Apply the Gemini-vs-Tools weighting above. Never set SUSPICIOUS/TAMPERED without a confirmed POSITIVE tool signal (evidence_verdict=POSITIVE).
+   Apply the Visual-Profile-vs-Tools weighting above. Never set SUSPICIOUS/TAMPERED without a confirmed POSITIVE tool signal (evidence_verdict=POSITIVE).
 8. CONFIDENCE: 0.0–1.0 float. Apply the weighting table above. Do not default to 0.75.
 9. FORBIDDEN phrases: "expected hash", "advanced neural analysis confirms", "signal detected at X%", "produced a positive result", "flagged a manipulation indicator" (without a specific metric), "analysis complete", "no anomalies detected in all tools", "consistent with authenticity", "warrants further review" (without specifying what to review).
 10. Screenshots: State what was checked (OCR text, layout structure, hash integrity since intake, binary container, compression). Do not claim camera authenticity or original capture device.
@@ -591,7 +591,7 @@ Return ONLY a JSON object with this exact schema:
   "confidence": 0.0,
   "narrative_summary": "Precise 2-3 sentence executive summary, 55-80 words. Specific to THIS evidence.",
   "agent_brief": "3-sentence structure: (1) what the visual profile identified, (2) what tools found with metrics, (3) weighted verdict + confidence%.",
-  "gemini_tools_agreement": "AGREE|DISAGREE|PARTIAL — one sentence explaining the Gemini vs tool verdict relationship.",
+  "gemini_tools_agreement": "AGREE|DISAGREE|PARTIAL — one sentence explaining the visual profile vs tool verdict relationship.",
   "key_findings": [
     "File hash verification confirmed the SHA-256 digest has not changed since upload.",
     "Neural ELA found 0 anomalous compression regions across all blocks, ruling out spliced segments.",
@@ -600,7 +600,7 @@ Return ONLY a JSON object with this exact schema:
   "signal_weight": {{
     "strongest_positive": "Tool name + metric, or 'none'.",
     "strongest_negative": "Tool name + metric, or 'none'.",
-    "contradiction": "Describe contradiction between Gemini and tools or between tools, or 'none'."
+    "contradiction": "Describe contradiction between visual profile and tools or between tools, or 'none'."
   }},
   "sections": [
     {{

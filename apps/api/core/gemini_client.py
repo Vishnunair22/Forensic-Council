@@ -186,6 +186,17 @@ class _SafetyBlockError(Exception):
     """
 
 
+class GeminiQuotaBlocked(Exception):
+    """Raised when the process-wide quota guard blocks the model call."""
+    pass
+
+
+class GeminiRateLimited(Exception):
+    """Raised when the Gemini API returns a 429 rate limit error."""
+    pass
+
+
+
 # Supported inline MIME types for Gemini vision
 _VISION_MIME_TYPES = {
     "image/jpeg",
@@ -280,7 +291,7 @@ class GeminiVisionFinding:
     confidence: float = 0.0
     court_defensible: bool = True
     caveat: str = (
-        "Gemini vision analysis — LLM-derived, requires corroboration with deterministic tools."
+        "Visual context analysis — LLM-derived, requires corroboration with deterministic tools."
     )
     raw_response: str = ""
     latency_ms: float = 0.0
@@ -774,6 +785,9 @@ class GeminiVisionClient:
                 if triage_key and agent_id == "Agent1":
                     _deep_forensic_cache_put(triage_key, result)
             return result
+        except (GeminiQuotaBlocked, GeminiRateLimited) as e:
+            logger.error(f"Gemini quota/rate limit error: {e}")
+            raise
         except Exception as e:
             logger.error(f"Gemini vision failed: {e}")
             return await self._local_forensic_fallback(
@@ -897,136 +911,51 @@ class GeminiVisionClient:
             "generationConfig": generation_config,
         }
 
-        # ── Cascade: primary → fallback_chain ────────────────────────────
-        # Build per-model (payload, url) pairs up-front so each model gets
-        # the correct thinkingConfig for its generation family.
-        def _model_entry(m: str, primary_payload: dict | None = None) -> tuple:
-            url = f"{_GEMINI_API_BASE}/models/{m}:generateContent"
-            if primary_payload is not None:
-                return (m, primary_payload, url)
-            gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 2048}
-            if any(p in m for p in _THINKING_MODEL_PREFIXES):
-                gen_cfg["thinkingConfig"] = {"thinkingBudget": 1024}
-            return (
-                m,
-                {"contents": [{"parts": parts}], "generationConfig": gen_cfg},
-                url,
-            )
-
-        # Reorder cascade based on model_hint if provided
         primary_model = model_hint if model_hint and model_hint != self.model else self.model
-        models_to_try: list[tuple] = []
-        seen_models: set[str] = set()
+        attempt_url = f"{_GEMINI_API_BASE}/models/{primary_model}:generateContent"
 
-        # Primary model first
-        models_to_try.append(
-            _model_entry(primary_model, payload if primary_model == self.model else None)
-        )
-        seen_models.add(primary_model)
-
-        # Append the configured fallback chain for true cascade behavior.
-        # Each model gets correct thinkingConfig for its generation family.
-        for fm in self.fallback_chain:
-            if fm not in seen_models:
-                models_to_try.append(_model_entry(fm))
-                seen_models.add(fm)
-
-        last_exc: Exception = RuntimeError("no models attempted")
         # Acquire the process-wide quota semaphore before issuing any HTTP call.
         # This bounds concurrent Gemini requests across all agents/instances so
         # we don't saturate the free-tier RPM quota when 5 agents run in parallel.
         async with self._get_quota_semaphore():
-            for attempt_model, attempt_payload, attempt_url in models_to_try:
-                # Check quota guard AFTER acquiring the semaphore — only decrement
-                # the RPM budget when we actually have a concurrency slot to execute.
-                allowed, quota_result = await ProviderQuotaGuard.check_and_record(
-                    "gemini",
-                    attempt_model,
-                    estimated_tokens=9000,
+            # Check quota guard AFTER acquiring the semaphore
+            allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                "gemini",
+                primary_model,
+                estimated_tokens=9000,
+            )
+            if not allowed:
+                logger.warning(
+                    f"Gemini quota guard blocked {primary_model} for {analysis_type}: {quota_result.reason}"
                 )
-                if not allowed:
-                    logger.warning(
-                        f"Gemini quota guard blocked {attempt_model} for {analysis_type}: {quota_result.reason} — cascading to next model"
-                    )
-                    last_exc = RuntimeError(f"Quota guard blocked model: {quota_result.reason}")
-                    continue
+                raise GeminiQuotaBlocked(f"Quota guard blocked model: {quota_result.reason}")
 
-                try:
-                    m_t0 = time.monotonic()
-                    raw_text = await asyncio.wait_for(
-                        self._post_once(
-                            attempt_url,
-                            attempt_payload,
-                            model_name=attempt_model,
-                        ),
-                        timeout=self.timeout + 5,
-                    )
-                    m_latency = (time.monotonic() - m_t0) * 1000
-                    finding = self._parse_response(raw_text, analysis_type, m_latency)
-                    if attempt_model != self.model:
-                        finding.model_used = attempt_model
-                        finding.caveat = (
-                            f"[Fallback: {attempt_model} — primary {self.model} unavailable] "
-                            + finding.caveat
-                        )
-                    # Record success in circuit breaker and per-session quota meter
-                    self._circuit_breaker.record_success()
-                    pass  # quota tracking removed
-                    return finding
-                except _ApiKeyInvalidError as akie:
-                    logger.error(f"Gemini API key invalid — short-circuiting cascade. ({akie})")
-                    self._enabled = False
-                    last_exc = akie
-                    break
-                except _SafetyBlockError as sbe:
-                    logger.warning(f"Gemini safety block — breaking cascade. ({sbe})")
-                    last_exc = sbe
-                    break
-                except _ModelUnavailableError as mue:
-                    logger.warning(
-                        f"Gemini model {attempt_model} not available — skipping to next model. ({mue})"
-                    )
-                    last_exc = mue
-                except httpx.HTTPStatusError as hse:
-                    status = hse.response.status_code if hse.response else 0
-                    if status == 429:
-                        # Quota exhausted — read Retry-After if present, else skip immediately
-                        retry_after = hse.response.headers.get("Retry-After") if hse.response else None
-                        wait = 0.0
-                        if retry_after and retry_after.isdigit():
-                            wait = min(float(retry_after), 10.0)
-                        if wait > 0:
-                            await asyncio.sleep(wait)
-                        last_exc = hse
-                        # continue to next model (implicit)
-                    elif status in (500, 502, 503):
-                        # Transient error — one retry of the same model after backoff
-                        await asyncio.sleep(2.0)
-                        try:
-                            retry_text = await asyncio.wait_for(
-                                self._post_once(attempt_url, attempt_payload, model_name=attempt_model),
-                                timeout=self.timeout + 5,
-                            )
-                            retry_latency = (time.monotonic() - m_t0) * 1000
-                            finding = self._parse_response(retry_text, analysis_type, retry_latency)
-                            self._circuit_breaker.record_success()
-                            return finding
-                        except Exception:
-                            last_exc = hse
-                    else:
-                        last_exc = hse
-                except Exception as exc:
-                    logger.warning(
-                        f"Gemini model {attempt_model} failed — using local fallback. ({exc})"
-                    )
-                    last_exc = exc
+            try:
+                m_t0 = time.monotonic()
+                raw_text = await asyncio.wait_for(
+                    self._post_once(
+                        attempt_url,
+                        payload,
+                        model_name=primary_model,
+                    ),
+                    timeout=self.timeout + 5,
+                )
+                m_latency = (time.monotonic() - m_t0) * 1000
+                finding = self._parse_response(raw_text, analysis_type, m_latency)
+                self._circuit_breaker.record_success()
+                return finding
+            except httpx.HTTPStatusError as hse:
+                status = hse.response.status_code if hse.response else 0
+                if status == 429:
+                    raise GeminiRateLimited("Gemini API rate limited (HTTP 429)")
+                raise
+            except Exception as exc:
+                logger.warning(
+                    f"Gemini model {primary_model} failed — using local fallback. ({exc})"
+                )
+                raise
 
-        latency_ms = (time.monotonic() - t0) * 1000
-        logger.warning(
-            f"Single Gemini visual probe failed for {analysis_type}. "
-            f"Model: {primary_model}. Last error: {last_exc}"
-        )
-        # Record failure in circuit breaker
+        # Record failure in circuit breaker (this is unreachable if exceptions propagate, but kept for logic safety)
         self._circuit_breaker.record_failure()
         finding = await self._local_forensic_fallback(
             file_path,
@@ -1096,7 +1025,7 @@ class GeminiVisionClient:
             return GeminiVisionFinding(
                 analysis_type=analysis_type,
                 model_used=self.model,
-                content_description="Empty response from Gemini",
+                content_description="Empty response from visual context provider",
                 error="empty_response",
                 confidence=0.0,
                 latency_ms=latency_ms,
@@ -1130,7 +1059,7 @@ class GeminiVisionClient:
                 raw_response=raw_text,
                 confidence=0.4,
                 latency_ms=latency_ms,
-                caveat="Gemini response was not valid JSON — confidence reduced.",
+                caveat="Visual context response was not valid JSON — confidence reduced.",
             )
 
         confidence = float(data.get("confidence", 0.5))
@@ -1161,7 +1090,7 @@ class GeminiVisionClient:
             file_type = data.get("content_type", "") or data.get("file_identity", "")
             detected_objects = data.get("elements", []) or data.get("detected_objects", [])
             if file_type:
-                content_description = f"Gemini identified the evidence as {file_type}."
+                content_description = f"Visual context identified the evidence as {file_type}."
             elif detected_objects:
                 content_description = f"Visible elements include {', '.join(str(o) for o in detected_objects[:5])}."
             else:
@@ -1491,12 +1420,12 @@ class GeminiVisionClient:
         return GeminiVisionFinding(
             analysis_type=analysis_type,
             model_used="gemini_not_configured",
-            content_description="Gemini vision analysis skipped — GEMINI_API_KEY not set.",
+            content_description="Visual context analysis skipped — GEMINI_API_KEY not set.",
             confidence=0.0,
             court_defensible=False,
             error="GEMINI_API_KEY not configured",
             caveat=(
-                "To enable Gemini deep analysis, set GEMINI_API_KEY in your .env file. "
+                "To enable deep visual context analysis, set GEMINI_API_KEY in your .env file. "
                 "Get a free key at https://aistudio.google.com/apikey"
             ),
         )

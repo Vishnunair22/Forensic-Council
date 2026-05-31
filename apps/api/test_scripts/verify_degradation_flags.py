@@ -54,7 +54,7 @@ def _finding(agent_id: str = "Agent1", phase: str = "initial", tool: str = "ela"
         "status": "CONFIRMED",
         "confidence_raw": 0.85,
         "evidence_verdict": verdict,
-        "reasoning_summary": "Analysis complete.",
+        "reasoning_summary": "The neural ELA tool detected zero compression anomalies in the image.",
         "metadata": meta,
     }
 

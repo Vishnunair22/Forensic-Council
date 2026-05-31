@@ -38,11 +38,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from api.routes.investigation import (
-    ALLOWED_MIME_TYPES,
     MAX_FILE_SIZE,
     _append_chunk,
     _detect_mime_from_head,
 )
+from core.file_type_policy import SUPPORTED_MIME_TYPES
 from core.auth import get_current_user
 from core.config import get_settings
 from core.persistence.redis_client import get_redis_client
@@ -176,7 +176,7 @@ async def add_artifact(
     head = await file.read(2048)
     await file.seek(0)
     actual_mime = await _detect_mime_from_head(head)
-    if actual_mime not in ALLOWED_MIME_TYPES:
+    if actual_mime not in SUPPORTED_MIME_TYPES:
         raise HTTPException(status_code=400, detail=f"File type '{actual_mime}' is not allowed.")
     if file.size and file.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds limit.")
