@@ -197,7 +197,12 @@ class Agent5Metadata(ForensicAgent):
 
     @property
     def task_decomposition(self) -> list[str]:
-        # PHASE 1: INITIAL ANALYSIS (Neural Refined)
+        from core.image_evidence_routing import get_agent_plan
+        plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="initial")
+        if plan:
+            return plan
+
+        # Fallback logic
         if self._is_av_media:
             return [
                 "Run file_hash_verify against ingestion hash",
@@ -245,6 +250,12 @@ class Agent5Metadata(ForensicAgent):
 
     @property
     def deep_task_decomposition(self) -> list[str]:
+        from core.image_evidence_routing import get_agent_plan
+        plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="deep")
+        if plan:
+            return plan
+
+        # Fallback logic
         if self._is_screen_capture or self._is_digital_image:
             return [
                 "Run timestamp_analysis for cross-field date and time consistency",
@@ -292,11 +303,6 @@ class Agent5Metadata(ForensicAgent):
             f"hidden editor signatures in the trailer, and EXIF/GPS inconsistencies. "
             f"My goal is to determine if the file's provenance matches its claimed technical origin."
         )
-
-    @property
-    def supported_file_types(self) -> list[str]:
-        # Agent 5 is a universal analyst
-        return ["*"]
 
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()

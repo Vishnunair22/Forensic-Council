@@ -281,12 +281,16 @@ export async function startInvestigation(
   file: File,
   caseId: string,
   investigatorId: string,
+  clientSha256?: string | null,
 ): Promise<InvestigationResponse> {
   return handleAuthError(async () => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("case_id", caseId);
     formData.append("investigator_id", investigatorId);
+    if (clientSha256) {
+      formData.append("client_sha256", clientSha256);
+    }
 
     const headers = await getMutationHeaders();
     const response = await fetch(`${API_BASE}/api/v1/investigate`, {

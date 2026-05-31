@@ -16,6 +16,7 @@ import { type HistoryItem } from "@/lib/types";
 import type { AgentUpdate } from "@/components/evidence/types";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { resetActiveInvestigation } from "@/lib/appReset";
 
 export type Tab = "analysis" | "history";
 export type PageState = "loading" | "arbiter" | "ready" | "error" | "empty";
@@ -64,7 +65,8 @@ export function useResult(initialSessionId?: string) {
   const [reportAlreadyReady, setReportAlreadyReady] = useState(false);
   const [state, setState] = useState<PageState>(() => {
     if (typeof window === "undefined") return "arbiter";
-    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1"
+    const _initialSid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem(STORAGE_KEYS.SESSION_ID) : null);
+    return _initialSid && sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1"
       ? "ready"
       : "arbiter";
   });
@@ -81,11 +83,13 @@ export function useResult(initialSessionId?: string) {
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId ?? null);
   const [minOverlayDone, setMinOverlayDone] = useState(() => {
     if (typeof window === "undefined") return false;
-    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
+    const _initialSid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem(STORAGE_KEYS.SESSION_ID) : null);
+    return _initialSid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1" : false;
   });
   const [arbiterComplete, setArbiterComplete] = useState(() => {
     if (typeof window === "undefined") return false;
-    return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
+    const _initialSid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem(STORAGE_KEYS.SESSION_ID) : null);
+    return _initialSid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1" : false;
   });
 
   const historySavedRef = useRef(false);
@@ -94,8 +98,8 @@ export function useResult(initialSessionId?: string) {
 
   // Mount + hydrate from storage (client only). Runs once.
   useEffect(() => {
-    const ready = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_REPORT_READY) === "1";
     const sid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
+    const ready = sid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`) === "1" : false;
     const ctx = readSessionContext(sid);
     const deep = readResultPhase(sid) === "deep";
 
@@ -112,10 +116,10 @@ export function useResult(initialSessionId?: string) {
     setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
     setAgentTimeline(loadAgentTimelineForSession(sid, deep));
 
-    if (ready) {
+    if (ready && sid) {
       setArbiterMsg(UI_STRINGS.DECRYPTING_LEDGER);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
     }
 
     setMounted(true);
@@ -374,17 +378,7 @@ export function useResult(initialSessionId?: string) {
 
   const _resetAndNavigate = useCallback((path: string) => {
     playSound("reset");
-    const savedHistory = (() => {
-      try {
-        return storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []) ?? [];
-      } catch { return [] as HistoryItem[]; }
-    })();
-    queryClient.clear();
-    storage.clearAllForensicKeys(savedHistory.length > 0);
-    sessionOnlyStorage.clearAllForensicKeys();
-    document.cookie = `${STORAGE_KEYS.SESSION_ID}=; path=/; max-age=0; SameSite=Lax`;
-
-    window.dispatchEvent(new Event("fc:reset-home"));
+    void resetActiveInvestigation(queryClient);
     router.push(path);
   }, [playSound, router, queryClient]);
 

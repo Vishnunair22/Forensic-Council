@@ -102,10 +102,6 @@ class Agent2Audio(ForensicAgent):
         base_count = len(self.task_decomposition) + len(self.deep_task_decomposition)
         return self._compute_ceiling(base_count)
 
-    @property
-    def supported_file_types(self) -> list[str]:
-        return ["audio/", "video/"]
-
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()
 

@@ -9,6 +9,7 @@ Orchestration logic has been moved to orchestration/investigation_runner.py.
 import asyncio
 import hashlib
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +22,12 @@ try:
     import magic
 except ImportError:
     from core import magic_fallback as magic
-from api.constants import _EXACT_MIME_EXT_MAP
+from core.file_type_policy import (
+    EXACT_MIME_EXT_MAP,
+    SUPPORTED_EXTENSIONS,
+    SUPPORTED_MIME_TYPES,
+    get_applicable_agents,
+)
 from api.routes._rate_limiting import (
     check_daily_cost_quota,
     check_investigation_rate_limit,
@@ -50,49 +56,7 @@ settings = get_settings()
 
 router = APIRouter(prefix="/api/v1", tags=["investigation"])
 
-# Allowed MIME types
-ALLOWED_MIME_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/tiff",
-    "image/webp",
-    "image/gif",
-    "image/bmp",
-    "video/mp4",
-    "video/quicktime",
-    "video/x-msvideo",
-    "video/x-matroska",
-    "video/webm",
-    "audio/wav",
-    "audio/x-wav",
-    "audio/mpeg",
-    "audio/mp4",
-    "audio/x-m4a",
-    "audio/flac",
-}
-
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-_ALLOWED_EXTENSIONS = frozenset(
-    {
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".tiff",
-        ".tif",
-        ".webp",
-        ".gif",
-        ".bmp",
-        ".mp4",
-        ".mov",
-        ".avi",
-        ".mkv",
-        ".webm",
-        ".wav",
-        ".mp3",
-        ".m4a",
-        ".flac",
-    }
-)
 
 # B-H-3: hold strong references to deferred-cleanup tasks so the GC
 # can't collect them mid-sleep and silently skip the file unlink.
@@ -137,6 +101,10 @@ async def run_investigation_task(
     case_id: str,
     investigator_id: str,
     original_filename: str | None = None,
+    detected_mime: str | None = None,
+    validated_extension: str | None = None,
+    content_sha256: str | None = None,
+    file_size_bytes: int | None = None,
 ) -> None:
     """Compatibility wrapper for tests and older imports."""
     from orchestration.investigation_runner import (
@@ -150,6 +118,10 @@ async def run_investigation_task(
         case_id=case_id,
         investigator_id=investigator_id,
         original_filename=original_filename,
+        detected_mime=detected_mime,
+        validated_extension=validated_extension,
+        content_sha256=content_sha256,
+        file_size_bytes=file_size_bytes,
     )
 
 
@@ -314,6 +286,7 @@ async def start_investigation(
     file: UploadFile = File(...),  # noqa: B008
     case_id: str = Form(...),  # noqa: B008
     investigator_id: str = Form(...),  # noqa: B008
+    client_sha256: str | None = Form(default=None),  # noqa: B008
     current_user: User = Depends(get_current_user),  # noqa: B008
 ):
     """Start a new forensic investigation by uploading evidence."""
@@ -351,32 +324,25 @@ async def start_investigation(
         except Exception as exc:
             logger.debug("PIL fallback MIME detection failed", error=str(exc))
 
-    # Validate against ALLOWED_MIME_TYPES
-    if actual_mime not in ALLOWED_MIME_TYPES:
+    # Validate against SUPPORTED_MIME_TYPES
+    if actual_mime not in SUPPORTED_MIME_TYPES:
         raise HTTPException(status_code=400, detail=f"File type '{actual_mime}' is not allowed.")
 
-    # Cross-reference with core/mime_registry.py to ensure support
-    from core.mime_registry import MimeRegistry
-
-    is_supported_by_any = False
-    for aid in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
-        if MimeRegistry.is_supported(agent_name=aid, mime_type=actual_mime):
-            is_supported_by_any = True
-            break
-
-    if not is_supported_by_any:
+    # Cross-reference with centralized policy to ensure agent support
+    applicable_agents = get_applicable_agents(actual_mime)
+    if not applicable_agents:
         raise HTTPException(
             status_code=400,
             detail=f"File type '{actual_mime}' is not supported by any specialized forensic agent.",
         )
 
     raw_suffix = Path(file.filename or "").suffix.lower()
-    if raw_suffix not in _ALLOWED_EXTENSIONS:
+    if raw_suffix not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400, detail=f"File extension '{raw_suffix}' is not permitted."
         )
 
-    valid_exts = _EXACT_MIME_EXT_MAP.get(actual_mime, frozenset())
+    valid_exts = EXACT_MIME_EXT_MAP.get(actual_mime, frozenset())
     if not valid_exts or raw_suffix not in valid_exts:
         raise HTTPException(
             status_code=400,
@@ -423,6 +389,21 @@ async def start_investigation(
             raise HTTPException(status_code=400, detail="File is empty.")
 
         content_hash = hasher.hexdigest()
+
+        client_hash_verified = False
+        if client_sha256:
+            client_sha256_norm = client_sha256.strip().lower()
+            if not re.fullmatch(r"[a-f0-9]{64}", client_sha256_norm):
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="Invalid client SHA-256 format.")
+            if client_sha256_norm != content_hash:
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=400,
+                    detail="Client SHA-256 does not match uploaded file content.",
+                )
+            client_hash_verified = True
+
         dedup_key = f"dedup:{case_id}:{content_hash}"
         try:
             from core.persistence.redis_client import get_redis_client
@@ -504,7 +485,6 @@ async def start_investigation(
             try:
                 from PIL import Image
 
-                # Offload image verification to a thread executor
                 def _verify_image(path):
                     with Image.open(path) as img:
                         img.verify()
@@ -529,7 +509,34 @@ async def start_investigation(
                     raise HTTPException(
                         status_code=400, detail="Image verification failed; file may be corrupted."
                     ) from verify_error
+        elif actual_mime.startswith(("audio/", "video/")):
+            try:
+                import subprocess
 
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["ffprobe", "-v", "quiet", "-show_format", "-show_streams",
+                     str(tmp_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode != 0:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Audio/video container verification failed; file may be corrupted or unreadable.",
+                    )
+            except FileNotFoundError:
+                logger.warning("ffprobe not available — skipping AV container verification")
+            except HTTPException:
+                raise
+            except Exception as verify_error:
+                logger.warning(
+                    "AV container integrity check failed",
+                    error=str(verify_error),
+                )
+
+        validated_extension = Path(file.filename or "").suffix.lower()
         session_metadata = {
             "status": "queued",
             "brief": "Initializing forensic pipeline...",
@@ -539,6 +546,12 @@ async def start_investigation(
             "case_investigator_label": investigator_id,
             "file_path": str(tmp_path),
             "original_filename": file.filename,
+            "content_hash": content_hash,
+            "client_hash_verified": client_hash_verified,
+            "detected_mime": actual_mime,
+            "validated_extension": validated_extension,
+            "file_size_bytes": total_size,
+            "applicable_agents": applicable_agents,
             "created_at": datetime.now(UTC).isoformat(),
         }
         await set_active_pipeline_metadata(session_id, session_metadata)
@@ -619,6 +632,10 @@ async def start_investigation(
                     investigator_id=current_user.user_id,
                     evidence_file_path=str(tmp_path),
                     original_filename=file.filename,
+                    detected_mime=actual_mime,
+                    validated_extension=validated_extension,
+                    content_sha256=content_hash,
+                    file_size_bytes=total_size,
                 )
                 pipeline_started = True
             except Exception as q_err:
@@ -647,6 +664,10 @@ async def start_investigation(
                     case_id=case_id,
                     investigator_id=current_user.user_id,
                     original_filename=file.filename,
+                    detected_mime=actual_mime,
+                    validated_extension=validated_extension,
+                    content_sha256=content_hash,
+                    file_size_bytes=total_size,
                 )
             )
             set_active_task(session_id, task)
@@ -654,11 +675,17 @@ async def start_investigation(
 
         increment_investigations_started()
 
+        dispatch_mode = "worker" if settings.use_redis_worker else "in_process"
+        response_status = "queued" if settings.use_redis_worker else "started"
+
         return InvestigationResponse(
             session_id=session_id,
             case_id=case_id,
-            status="started",
-            message=f"Investigation started for {file.filename or 'evidence'}. Track status via WebSocket.",
+            status=response_status,
+            message=f"Investigation {response_status} for {file.filename or 'evidence'}. Track status via WebSocket.",
+            content_hash=content_hash,
+            client_hash_verified=client_hash_verified,
+            dispatch_mode=dispatch_mode,
         )
 
     except HTTPException:

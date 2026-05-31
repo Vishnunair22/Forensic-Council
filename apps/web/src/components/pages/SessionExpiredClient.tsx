@@ -15,7 +15,7 @@ export function SessionExpiredClient() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    resetActiveInvestigation(queryClient);
+    void resetActiveInvestigation(queryClient);
   }, [queryClient]);
 
   return (

@@ -32,6 +32,10 @@ async def _wrap_pipeline_with_broadcasts(
     investigator_id: str,
     original_filename: str | None,
     session_id: str,
+    detected_mime: str | None = None,
+    validated_extension: str | None = None,
+    content_sha256: str | None = None,
+    file_size_bytes: int | None = None,
 ):
     """Run the pipeline and return the produced report."""
     return await pipeline.run_investigation(
@@ -40,6 +44,10 @@ async def _wrap_pipeline_with_broadcasts(
         investigator_id=investigator_id,
         original_filename=original_filename,
         session_id=UUID(session_id),
+        detected_mime=detected_mime,
+        validated_extension=validated_extension,
+        content_sha256=content_sha256,
+        file_size_bytes=file_size_bytes,
     )
 
 
@@ -50,6 +58,10 @@ async def run_investigation_task(
     case_id: str,
     investigator_id: str,
     original_filename: str | None = None,
+    detected_mime: str | None = None,
+    validated_extension: str | None = None,
+    content_sha256: str | None = None,
+    file_size_bytes: int | None = None,
 ) -> None:
     """Run an investigation in-process and persist its terminal state."""
     try:
@@ -60,6 +72,10 @@ async def run_investigation_task(
             investigator_id=investigator_id,
             original_filename=original_filename,
             session_id=session_id,
+            detected_mime=detected_mime,
+            validated_extension=validated_extension,
+            content_sha256=content_sha256,
+            file_size_bytes=file_size_bytes,
         )
 
         await mark_investigation_completed(

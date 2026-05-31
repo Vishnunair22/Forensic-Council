@@ -164,6 +164,8 @@ export interface InvestigationResponse {
   case_id: string;
   status: string;
   message: string;
+  content_hash?: string;
+  client_hash_verified?: boolean;
 }
 
 export interface ReportResponse {

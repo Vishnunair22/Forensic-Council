@@ -139,6 +139,11 @@ class Agent1Image(ForensicAgent):
         """
         Phase 1 tasks are derived from file classification.
         """
+        from core.image_evidence_routing import get_agent_plan
+        plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="initial")
+        if plan:
+            return plan
+
         classification = getattr(self, '_file_classification', None)
         if not classification:
             classification = self._legacy_classify()
@@ -183,6 +188,11 @@ class Agent1Image(ForensicAgent):
             Phase-2 tools reported a tampering signal.
           - adversarial_robustness_check — only when splicing/copy-move confirmed.
         """
+        from core.image_evidence_routing import get_agent_plan
+        plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="deep")
+        if plan:
+            return plan
+
         if self._is_screen_capture or self._is_digital_capture:
             # Gemini already ran in Phase 1 for screenshots. Phase 2 uses
             # classical ML tools for AI-generation detection (deepfakes are
@@ -211,10 +221,6 @@ class Agent1Image(ForensicAgent):
         # _reason_step when neural_splicing or neural_copy_move returns POSITIVE.
         # Gemini removed from Phase 2 — Phase 1 result in shared context.
         return tasks
-
-    @property
-    def supported_file_types(self) -> list[str]:
-        return ["image/"]
 
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()

@@ -707,6 +707,16 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
     ]
 
 
+TOOL_TIMEOUT_POLICY = {
+    "noiseprint_cluster": 300.0,
+    "noise_fingerprint": 240.0,
+    "neural_splicing": 180.0,
+    "ela_full_image": 120.0,
+    "object_detection": 120.0,
+    "vector_contraband_search": 120.0,
+}
+
+
 class ReActLoopEngine:
     """
     Core ReAct (Reasoning + Acting) loop engine.
@@ -792,6 +802,11 @@ class ReActLoopEngine:
         self._resume_event: asyncio.Event | None = None
         self._pending_decision: HumanDecision | None = None
         self._thought_buffer: list[str] = []  # M1: Captures multiple thoughts before an action
+
+        # Initialize reasoning service
+        from core.agent_reasoning import AgentReasoningService
+        bus = getattr(agent, "inter_agent_bus", None)
+        self.reasoning_service = AgentReasoningService(inter_agent_bus=bus)
 
     def _extract_confidence(self, output: Any, tool_name: str) -> tuple[float, bool]:
         """Extract a 0-1 confidence score from tool output. Returns (confidence, from_fallback)."""
@@ -1131,17 +1146,37 @@ class ReActLoopEngine:
                     )
                     await trace.start()
 
+                    # Pre-tool thought validation
+                    tool_input = next_step.tool_input or {}
+                    try:
+                        tool_input = await self.reasoning_service.pre_tool_reasoning(
+                            session_id=str(self.session_id),
+                            agent_id=self.agent_id,
+                            tool_name=next_step.tool_name,
+                            tool_input=tool_input,
+                            working_memory=self.working_memory
+                        )
+                    except Exception as reasoning_err:
+                        logger.warning(
+                            "Pre-tool reasoning validation failed, continuing with original input",
+                            error=str(reasoning_err),
+                            agent_id=self.agent_id
+                        )
+
+                    # Dynamic per-tool timeout selection
+                    tool_timeout = TOOL_TIMEOUT_POLICY.get(next_step.tool_name, self.per_tool_timeout)
+
                     try:
                         tool_result = await asyncio.wait_for(
                             tool_registry.call(
                                 tool_name=next_step.tool_name,
-                                input_data=next_step.tool_input or {},
+                                input_data=tool_input,
                                 agent_id=self.agent_id,
                                 session_id=self.session_id,
                                 custody_logger=self.custody_logger,
                                 semaphore=self.heavy_tool_semaphore,
                             ),
-                            timeout=self.per_tool_timeout,
+                            timeout=tool_timeout,
                         )
                         _tool_span.set_attribute("tool_success", tool_result.success)
 
@@ -1181,142 +1216,109 @@ class ReActLoopEngine:
                         _tool_span.set_attribute("tool_exception", type(tool_exc).__name__)
                     _tool_span.set_attribute("tool_unavailable", tool_result.unavailable)
 
-                # --- Generate AgentFinding from Tool Result ---
+                # --- Normalize and Ground Tool Result ---
+                from core.tool_output_normalizer import normalize_tool_output
                 if tool_result.success:
-                    output = tool_result.output or {}
-                    confidence, _conf_from_fallback = self._extract_confidence(
-                        output, next_step.tool_name
+                    envelope = normalize_tool_output(
+                        tool_name=next_step.tool_name,
+                        output=tool_result.output,
+                        available=not tool_result.unavailable,
+                        agent_id=self.agent_id
                     )
-                    status_val, evidence_verdict, finding_confidence, court_defensible = (
-                        self._classify_tool_output(
-                            output,
-                            next_step.tool_name,
-                            confidence,
-                            _conf_from_fallback,
-                        )
+                else:
+                    envelope = normalize_tool_output(
+                        tool_name=next_step.tool_name,
+                        output={"error": tool_result.error or "Tool execution failed"},
+                        available=not tool_result.unavailable,
+                        agent_id=self.agent_id
                     )
-                    is_stub = isinstance(output, dict) and (
-                        output.get("status") == "stub"
-                        or not court_defensible
-                        or _conf_from_fallback
-                    )
-                    calibrated_prob = None
 
-                    cal_status_str = "UNCALIBRATED"
-                    _ci_dict = None
-                    _uncertainty = None
+                # Post-tool grounding
+                finding = await self.reasoning_service.post_tool_reasoning(
+                    session_id=str(self.session_id),
+                    agent_id=self.agent_id,
+                    tool_name=next_step.tool_name,
+                    envelope=envelope,
+                    working_memory=self.working_memory
+                )
+
+                if tool_result.success:
+                    is_stub = isinstance(envelope.raw, dict) and (
+                        envelope.raw.get("status") == "stub"
+                        or not finding.metadata.get("court_defensible")
+                    )
+                    if finding.evidence_verdict not in ["ERROR", "NOT_APPLICABLE"] and not is_stub and finding.confidence_raw is not None:
+                        try:
+                            from core.calibration import get_calibration_layer
+
+                            calibration_layer = get_calibration_layer()
+                            if calibration_layer:
+                                cal_result = calibration_layer.calibrate(
+                                    agent_id=self.agent_id,
+                                    raw_score=finding.confidence_raw,
+                                    finding_class=next_step.tool_name,
+                                )
+                                finding.raw_confidence_score = cal_result.raw_confidence_score
+                                finding.calibrated = cal_result.calibration_status.value == "TRAINED"
+                                finding.calibration_status = cal_result.calibration_status.value
+                                finding.metadata["confidence_interval"] = cal_result.confidence_interval
+                                if cal_result.uncertainty:
+                                    finding.metadata["uncertainty"] = cal_result.uncertainty.model_dump()
+                                    
+                                    # Check for epistemic uncertainty escalation (arXiv:2512.16614)
+                                    if cal_result.uncertainty.should_escalate:
+                                        logger.warning(
+                                            "Epistemic uncertainty escalation triggered",
+                                            agent_id=self.agent_id,
+                                            tool_name=next_step.tool_name,
+                                            epistemic=cal_result.uncertainty.epistemic_uncertainty,
+                                            reason=cal_result.uncertainty.escalation_reason,
+                                        )
+                                        # Write escalation flag to working memory
+                                        try:
+                                            await self.working_memory.update_state(
+                                                session_id=self.session_id,
+                                                agent_id=self.agent_id,
+                                                updates={
+                                                    "tribunal_escalation": True,
+                                                    "escalation_reason": cal_result.uncertainty.escalation_reason,
+                                                },
+                                            )
+                                        except Exception as exc:
+                                            logger.debug(
+                                                "Failed to persist epistemic escalation flag",
+                                                agent_id=self.agent_id,
+                                                tool_name=next_step.tool_name,
+                                                error=str(exc),
+                                            )
+                        except Exception as cal_err:
+                            logger.warning(
+                                "Calibration layer failed on post_tool_reasoning output",
+                                agent_id=self.agent_id,
+                                error=str(cal_err),
+                                exc_info=True,
+                            )
+
+                # Attach preceding LLM thought/reasoning to metadata
+                llm_reasoning = "\n".join(self._thought_buffer)
+                self._thought_buffer = []
+                finding.metadata["llm_reasoning"] = llm_reasoning
+
+                # Dedup by tool_name
+                tool_name = next_step.tool_name
+                if not any(
+                    f.metadata.get("tool_name") == tool_name
+                    for f in self._findings
+                    if hasattr(f, "metadata") and isinstance(f.metadata, dict)
+                ):
+                    self._findings.append(finding)
+
+                # [INT-DECOMP] Reactive hook: Allow agent to inject tasks based on finding
+                if self.agent is not None:
                     try:
-                        from core.calibration import get_calibration_layer
-
-                        calibration_layer = get_calibration_layer()
-                        if calibration_layer and not is_stub and finding_confidence is not None:
-                            cal_result = calibration_layer.calibrate(
-                                agent_id=self.agent_id,
-                                raw_score=finding_confidence,
-                                finding_class=next_step.tool_name,
-                            )
-                            calibrated_prob = cal_result.raw_confidence_score
-                            cal_status_str = cal_result.calibration_status.value
-                            _ci_dict = cal_result.confidence_interval
-                            _uncertainty = cal_result.uncertainty
-                    except Exception:
-                        logger.warning(
-                            "Calibration layer failed",
-                            agent_id=self.agent_id,
-                            exc_info=True,
-                        )
-                    tool_label = self._TOOL_LABELS.get(
-                        next_step.tool_name,
-                        next_step.tool_name.replace("_", " ").title(),
-                    )
-                    # [M1] Attach preceding thoughts to metadata for trace richness.
-                    llm_reasoning = "\n".join(self._thought_buffer)
-                    self._thought_buffer = []  # Clear after associating with action
-
-                    # Use the tool label as the canonical finding type.
-                    # Attach the preceding LLM thought (if any) separately
-                    # via the llm_reasoning metadata key — not as the label.
-                    task_desc = tool_label
-
-                    finding = AgentFinding(
-                        agent_id=self.agent_id,
-                        agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
-                        finding_type=task_desc,
-                        confidence_raw=finding_confidence,
-                        raw_confidence_score=calibrated_prob,
-                        calibrated=cal_status_str == "TRAINED",
-                        calibration_status=cal_status_str,
-                        evidence_verdict=evidence_verdict,
-                        status=status_val,  # type: ignore[arg-type]
-                        evidence_refs=[],
-                        reasoning_summary=self._build_readable_summary(
-                            next_step.tool_name,
-                            task_desc,
-                            tool_result,
-                            finding_confidence or 0.0,
-                            status_val,
-                            evidence_verdict=evidence_verdict,
-                            llm_reasoning=llm_reasoning,
-                        ),
-                        metadata={
-                            **(output if isinstance(output, dict) else {"raw_output": str(output)}),
-                            "tool_name": next_step.tool_name,
-                            "court_defensible": court_defensible and not is_stub,
-                            "raw_tool_status": str(output.get("status", ""))
-                            if isinstance(output, dict)
-                            else "",
-                            "stub_warning": output.get("warning")
-                            if isinstance(output, dict) and is_stub
-                            else None,
-                            "confidence_interval": _ci_dict,
-                            "uncertainty": _uncertainty.model_dump() if _uncertainty else None,
-                            "llm_reasoning": llm_reasoning,  # [M1] Injected trace data
-                        },
-                    )
-                    # Dedup by tool_name — prevent duplicate findings when a tool
-                    # is re-executed (e.g. by inject_task re-injecting a COMPLETE task).
-                    tool_name = next_step.tool_name
-                    if not any(
-                        f.metadata.get("tool_name") == tool_name
-                        for f in self._findings
-                        if hasattr(f, "metadata") and isinstance(f.metadata, dict)
-                    ):
-                        self._findings.append(finding)
-
-                    # [INT-DECOMP] Reactive hook: Allow agent to inject tasks based on finding
-                    if self.agent is not None:
-                        try:
-                            await self.agent.on_tool_result(finding)
-                        except Exception as hook_err:
-                            logger.debug("Agent on_tool_result hook failed", error=str(hook_err))
-
-                    # Check for epistemic uncertainty escalation (arXiv:2512.16614)
-                    if _uncertainty and _uncertainty.should_escalate:
-                        logger.warning(
-                            "Epistemic uncertainty escalation triggered",
-                            agent_id=self.agent_id,
-                            tool_name=next_step.tool_name,
-                            epistemic=_uncertainty.epistemic_uncertainty,
-                            reason=_uncertainty.escalation_reason,
-                        )
-                        # Write escalation flag to working memory
-                        try:
-                            await self.working_memory.update_state(
-                                session_id=self.session_id,
-                                agent_id=self.agent_id,
-                                updates={
-                                    "tribunal_escalation": True,
-                                    "escalation_reason": _uncertainty.escalation_reason,
-                                },
-                            )
-                        except Exception as exc:
-                            logger.debug(
-                                "Failed to persist epistemic escalation flag",
-                                agent_id=self.agent_id,
-                                tool_name=next_step.tool_name,
-                                error=str(exc),
-                            )
-                # ----------------------------------------------
+                        await self.agent.on_tool_result(finding)
+                    except Exception as hook_err:
+                        logger.debug("Agent on_tool_result hook failed", error=str(hook_err))
 
                 # Create OBSERVATION step
                 observation = ReActStep(
@@ -1347,37 +1349,6 @@ class ReActLoopEngine:
                             agent_id=self.agent_id,
                             tool_name=next_step.tool_name,
                             error=str(exc),
-                        )
-
-                if not tool_result.success:
-                    # Dedup error findings by tool_name — prevent stacking ERROR
-                    # findings when the same tool fails repeatedly.
-                    tool_name = next_step.tool_name
-                    if not any(
-                        f.metadata.get("tool_name") == tool_name
-                        for f in self._findings
-                        if hasattr(f, "metadata") and isinstance(f.metadata, dict)
-                    ):
-                        self._findings.append(
-                            AgentFinding(
-                                agent_id=self.agent_id,
-                                agent_name=self._AGENT_ID_TO_NAME.get(self.agent_id, self.agent_id),
-                                finding_type=f"{tool_name.replace('_', ' ').title()} Incomplete",
-                                confidence_raw=None,
-                                raw_confidence_score=None,
-                                status="INCOMPLETE",
-                                evidence_verdict="ERROR",
-                                reasoning_summary=(
-                                    f"{tool_name.replace('_', ' ').title()} did not complete: "
-                                    f"{tool_result.error or 'tool failed without diagnostic output'}. "
-                                    "The remaining tools were allowed to continue so the investigation can still reach analyst review."
-                                ),
-                                metadata={
-                                    "tool_name": tool_name,
-                                    "court_defensible": False,
-                                    "tool_error": tool_result.error,
-                                },
-                            )
                         )
 
                 # Mark the IN_PROGRESS task as COMPLETE now that the tool has run.

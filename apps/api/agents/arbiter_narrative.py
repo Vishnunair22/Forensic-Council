@@ -1557,10 +1557,10 @@ Rules:
         )
 
         # ── Layer 1: VISUAL EVIDENCE PROFILE (evidence baseline) ──────────
-        gemini_lines = ["[LAYER 1 - VISUAL EVIDENCE BASELINE]"]
+        visual_lines = ["[LAYER 1 - VISUAL EVIDENCE BASELINE]"]
         for gf in (visual_profile_findings or [])[:3]:
             meta = gf.get("metadata", {}) or {}
-            gemini_lines.extend([
+            visual_lines.extend([
                 f"- Agent {gf.get('agent_id', 'unknown')}: {meta.get('analysis_type', 'visual_evidence_profile')}",
                 f"  Content: {gf.get('reasoning_summary', '')[:300]}",
                 f"  Visual verdict: {meta.get('authenticity_verdict') or meta.get('forensic_routing', {}).get('visual_verdict', 'INCONCLUSIVE')}",
@@ -1568,8 +1568,8 @@ Rules:
                 f"  Provider: {meta.get('provider_used', 'unknown')}",
             ])
         if not visual_profile_findings:
-            gemini_lines.append("No visual evidence profile available for this file type.")
-        layer1 = "\n".join(gemini_lines)
+            visual_lines.append("No visual evidence profile available for this file type.")
+        layer1 = "\n".join(visual_lines)
 
         # ── Layer 2: Per-Agent Verdicts ───────────────────────────────────
         agent_lines = ["[LAYER 2 — PER-AGENT VERDICTS]"]

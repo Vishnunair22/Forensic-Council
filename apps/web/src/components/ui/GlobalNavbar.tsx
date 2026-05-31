@@ -6,9 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useReducedMotion } from "framer-motion";
 import { useSound } from "@/hooks/useSound";
 import { BrandLogo } from "./BrandLogo";
-import { resetActiveInvestigation } from "@/lib/appReset";
-import { storage } from "@/lib/storage";
-import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { resetActiveInvestigation, hasResettableInvestigationState } from "@/lib/appReset";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +31,7 @@ export function GlobalNavbar() {
     if (typeof window === "undefined") return;
 
     const checkSession = () => {
-      setHasActiveSession(!!storage.getItem(STORAGE_KEYS.SESSION_ID));
+      setHasActiveSession(hasResettableInvestigationState());
     };
 
     const handleVisibilityChange = () => {
@@ -53,6 +51,10 @@ export function GlobalNavbar() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
+
+  useEffect(() => {
+    setHasActiveSession(hasResettableInvestigationState());
+  }, [pathname]);
 
   const isMounted = useRef(false);
 
@@ -104,7 +106,7 @@ export function GlobalNavbar() {
   }, []);
 
   const executeReset = useCallback(() => {
-    resetActiveInvestigation(queryClient);
+    void resetActiveInvestigation(queryClient);
     if (pathname === "/") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {

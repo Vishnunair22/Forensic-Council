@@ -101,6 +101,12 @@ class WorkingMemoryState(BaseModel):
         default=None,
         description="Last tool failure message for live progress broadcasting",
     )
+    agent_persona_profile: dict | None = None
+    shared_visual_context_digest: dict | None = None
+    tool_result_summaries: dict[str, dict] = Field(default_factory=dict)
+    grounded_findings: list[dict] = Field(default_factory=list)
+    contradiction_register: list[dict] = Field(default_factory=list)
+    followup_decisions: list[dict] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -113,6 +119,12 @@ class WorkingMemoryState(BaseModel):
             "hitl_state": self.hitl_state,
             "tool_registry_snapshot": self.tool_registry_snapshot,
             "last_tool_error": self.last_tool_error,
+            "agent_persona_profile": self.agent_persona_profile,
+            "shared_visual_context_digest": self.shared_visual_context_digest,
+            "tool_result_summaries": self.tool_result_summaries,
+            "grounded_findings": self.grounded_findings,
+            "contradiction_register": self.contradiction_register,
+            "followup_decisions": self.followup_decisions,
         }
 
     @classmethod
@@ -134,6 +146,12 @@ class WorkingMemoryState(BaseModel):
             # Issue 4.2: Restore last_tool_error so heartbeat broadcasts
             # can surface tool errors after a Redis round-trip.
             last_tool_error=data.get("last_tool_error"),
+            agent_persona_profile=data.get("agent_persona_profile"),
+            shared_visual_context_digest=data.get("shared_visual_context_digest"),
+            tool_result_summaries=data.get("tool_result_summaries", {}),
+            grounded_findings=data.get("grounded_findings", []),
+            contradiction_register=data.get("contradiction_register", []),
+            followup_decisions=data.get("followup_decisions", []),
         )
 
 

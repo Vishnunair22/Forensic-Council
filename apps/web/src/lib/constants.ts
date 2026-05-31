@@ -63,19 +63,6 @@ export const ALLOWED_MIME_TYPES = new Set([
   "image/webp",
   "image/gif",
   "image/bmp",
-  // Video
-  "video/mp4",
-  "video/quicktime",
-  "video/x-msvideo",
-  "video/webm",
-  "video/x-matroska",
-  // Audio
-  "audio/wav",
-  "audio/x-wav",
-  "audio/mpeg",
-  "audio/mp4",
-  "audio/x-m4a",
-  "audio/flac",
 ]);
 
 /** Maximum evidence file size — 50 MB. Must match backend MAX_EVIDENCE_SIZE_BYTES in config.py. */

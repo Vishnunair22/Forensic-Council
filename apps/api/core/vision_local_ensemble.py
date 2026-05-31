@@ -16,6 +16,7 @@ Tools (all run in parallel):
   7. Splicing — DCT quantization fingerprint analysis (JPEG only)
   8. Diffusion — GAN/diffusion spectral artifact detection (all images)
   9. Florence-2 — VLM captioning when torch+transformers available
+  10. OpenCV — Statistics extraction (resolution, sharpness, brightness, noise, blockiness)
 
 Synthesis layer (pure Python, deterministic):
   Cross-signal corroboration rules connect independent tool outputs into a
@@ -37,7 +38,28 @@ from core.vision_types import VisualEvidenceFinding
 
 logger = get_logger(__name__)
 
-_TOOL_NAMES = ["ELA", "OCR", "CLIP", "DETR", "FFT", "Noiseprint", "Splicing", "Diffusion", "Florence"]
+_TOOL_NAMES = [
+    "ELA",
+    "OCR",
+    "CLIP",
+    "DETR",
+    "FFT",
+    "Noiseprint",
+    "Splicing",
+    "Diffusion",
+    "Florence",
+    "OpenCV",
+]
+
+
+async def run_with_timeout(name: str, coro, timeout: float) -> Any:
+    """Wrap a tool execution coroutine with a timeout and standardized error handling."""
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    except asyncio.TimeoutError:
+        return {"available": False, "status": "timeout", "error": f"{name} timed out"}
+    except Exception as exc:
+        return {"available": False, "status": "error", "error": str(exc)}
 
 
 def _is_tool_successful(result: Any) -> bool:
@@ -46,7 +68,7 @@ def _is_tool_successful(result: Any) -> bool:
     if isinstance(result, Exception):
         return False
     if isinstance(result, dict):
-        if result.get("status") == "error" or result.get("available") is False:
+        if result.get("status") in ("error", "timeout") or result.get("available") is False:
             return False
         if result.get("error"):
             return False
@@ -60,9 +82,6 @@ def _tool_error_summary(result: Any) -> str:
         return str(result.get("error", "unknown error"))
     return "unknown error"
 
-
-# ── CLIP → routing category mapping ─────────────────────────────────────────
-# Mirrors Path B's _compute_routing() so both paths produce identical routing.
 
 def _clip_to_category(clip_top_match: str) -> str:
     t = clip_top_match.lower()
@@ -78,8 +97,6 @@ def _clip_to_category(clip_top_match: str) -> str:
 
 
 # ── Cross-signal synthesis layer ────────────────────────────────────────────
-# Deterministic rule-based reasoning that connects independent tool outputs
-# into a single coherent manipulation verdict with localization language.
 
 def _cross_signal_synthesis(
     ela_res: dict,
@@ -87,6 +104,7 @@ def _cross_signal_synthesis(
     noiseprint_res: dict,
     splicing_res: dict,
     diffusion_res: dict,
+    opencv_res: dict,
     clip_category: str,
     detected_objects: list[str],
     ocr_lines: list[str],
@@ -145,6 +163,18 @@ def _cross_signal_synthesis(
         if noise_inconsistent and not noise_not_applicable:
             signals.append(f"Sensor noise inconsistency ({noise_clusters} clusters)")
 
+    # OpenCV signals
+    if opencv_res:
+        noise_threshold = 5.0 if is_screenshot else 10.0
+        noise_val = opencv_res.get("noise", 0.0) or 0.0
+        if noise_val > noise_threshold:
+            signals.append(f"Elevated noise residual ({noise_val:.2f})")
+
+        block_threshold = 12.0 if is_screenshot else 8.0
+        blockiness_val = opencv_res.get("blockiness", 0.0) or 0.0
+        if blockiness_val > block_threshold:
+            signals.append(f"JPEG block artifacts detected ({blockiness_val:.1f})")
+
     # Rule 4: AI-generation spectral artifacts
     if diff_detected and diff_probability > 0.5:
         signals.append(f"Diffusion/GAN spectral artifacts detected (probability={diff_probability:.3f})")
@@ -176,6 +206,8 @@ def _cross_signal_synthesis(
     elif len(signals) >= 2:
         verdict = "SUSPICIOUS"
     elif len(signals) == 1 and not signals[0].endswith("detected"):
+        verdict = "SUSPICIOUS"
+    elif len(signals) == 1 and ("elevated noise" in signals[0].lower() or "block artifacts" in signals[0].lower() or "ela hotspot" in signals[0].lower()):
         verdict = "SUSPICIOUS"
     else:
         verdict = "AUTHENTIC"
@@ -239,6 +271,7 @@ async def analyze_local_visual_profile(
       - Splicing detector (DCT quantization fingerprint)
       - Diffusion artifact detector (GAN/diffusion spectral signatures)
       - Florence-2 VLM captioning (optional, torch-dependent)
+      - OpenCV statistics (resolution, sharpness, brightness, noise, blockiness)
 
     Returns a provider-neutral VisualEvidenceFinding with tool_coverage
     populated for downstream provenance reporting.
@@ -353,27 +386,77 @@ async def analyze_local_visual_profile(
         except Exception as e:
             return {"available": False, "error": str(e)}
 
-    # ── Run all tools in parallel ────────────────────────────────────────
-    tasks = [
-        _run_ela(),
-        extract_text_from_image(art),
-        analyze_image_content(art),
-        detr_detect_objects(file_path),
-        _run_fft(),
-        _run_noiseprint(),
-        _run_splicing(),
-        _run_diffusion(),
-        _run_florence(),
-    ]
+    async def _run_opencv_stats() -> dict[str, Any]:
+        """Run OpenCV statistics extraction."""
+        try:
+            import cv2
+            import numpy as np
+            from PIL import Image as PILImage
 
-    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+            def _estimate_noise(_gray: np.ndarray) -> float:
+                gx = cv2.Sobel(_gray.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
+                gy = cv2.Sobel(_gray.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
+                grad_mag = np.sqrt(gx * gx + gy * gy)
+                threshold = max(float(np.percentile(grad_mag, 30)), 5.0)
+                flat_mask = grad_mag < threshold
+                if flat_mask.sum() < 100:
+                    return 0.0
+                return float(np.std(_gray.astype(np.float32)[flat_mask]))
+
+            def _stats():
+                img = PILImage.open(file_path).convert("RGB")
+                arr = np.array(img, dtype=np.float32)
+                h, w = arr.shape[:2]
+                std_rgb = arr.std(axis=(0, 1)).tolist()
+                brightness = float(arr.mean())
+                gray = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2GRAY)
+                laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+                noise_value = _estimate_noise(gray)
+                block_diff = (
+                    float(np.abs(np.diff(gray.astype(float), axis=0)[7::8].mean())) if h > 16 else 0.0
+                )
+                return {
+                    "width": w,
+                    "height": h,
+                    "sharpness": laplacian_var,
+                    "brightness": brightness,
+                    "noise": noise_value,
+                    "blockiness": block_diff,
+                    "std_rgb": std_rgb,
+                    "available": True,
+                }
+            return await asyncio.to_thread(_stats)
+        except Exception as e:
+            logger.error(f"OpenCV stats failed: {e}")
+            return {"available": False, "error": str(e)}
+
+    # ── Run all tools in parallel with timeouts ──────────────────────────
+    tasks = {
+        "ELA": run_with_timeout("ELA", _run_ela(), 45.0),
+        "OCR": run_with_timeout("OCR", extract_text_from_image(art), 65.0),
+        "CLIP": run_with_timeout("CLIP", analyze_image_content(art), 60.0),
+        "DETR": run_with_timeout("DETR", detr_detect_objects(file_path), 60.0),
+        "FFT": run_with_timeout("FFT", _run_fft(), 30.0),
+        "Noiseprint": run_with_timeout("Noiseprint", _run_noiseprint(), 20.0),
+        "Splicing": run_with_timeout("Splicing", _run_splicing(), 30.0),
+        "Diffusion": run_with_timeout("Diffusion", _run_diffusion(), 12.0),
+        "Florence": run_with_timeout("Florence", _run_florence(), 75.0),
+        "OpenCV": run_with_timeout("OpenCV", _run_opencv_stats(), 10.0),
+    }
+
+    keys = list(tasks.keys())
+    raw_results = await asyncio.gather(*(tasks[k] for k in keys), return_exceptions=True)
+
+    results_map = {}
+    for k, r in zip(keys, raw_results):
+        results_map[k] = r
 
     # ── Collect results ──────────────────────────────────────────────────
     tool_results: dict[str, Any] = {}
     tool_errors: dict[str, str] = {}
     tool_coverage: dict[str, bool] = {}
-    for idx, name in enumerate(_TOOL_NAMES):
-        r = raw_results[idx]
+    for name in keys:
+        r = results_map[name]
         if _is_tool_successful(r):
             tool_results[name] = r
             tool_coverage[name] = True
@@ -392,6 +475,7 @@ async def analyze_local_visual_profile(
     splicing_res = tool_results.get("Splicing", {})
     diffusion_res = tool_results.get("Diffusion", {})
     florence_res = tool_results.get("Florence", {})
+    opencv_res = tool_results.get("OpenCV", {})
 
     clip_category = clip_res.get("image_type", "unknown") if isinstance(clip_res, dict) else "unknown"
     ocr_lines = ocr_res.get("extracted_text", []) if isinstance(ocr_res, dict) else []
@@ -403,12 +487,18 @@ async def analyze_local_visual_profile(
 
     # ── Cross-signal synthesis ───────────────────────────────────────────
     verdict, signals, narrative = _cross_signal_synthesis(
-        ela_res, fft_res, noiseprint_res, splicing_res, diffusion_res,
+        ela_res, fft_res, noiseprint_res, splicing_res, diffusion_res, opencv_res,
         clip_category, detected, ocr_lines, florence_desc, is_screenshot,
     )
 
     # ── Content description ──────────────────────────────────────────────
     desc_parts = [f"CLIP classified the image as '{clip_category}'."]
+    if opencv_res:
+        desc_parts.append(
+            f"Resolution: {opencv_res.get('width', 0)}x{opencv_res.get('height', 0)}px, "
+            f"Sharpness: {opencv_res.get('sharpness', 0):.0f}, "
+            f"Brightness: {opencv_res.get('brightness', 0):.0f}/255."
+        )
     if florence_desc:
         desc_parts.append(f"Scene: {florence_desc}")
     if detected:
@@ -477,7 +567,7 @@ async def analyze_local_visual_profile(
     # ── Forensic observations ────────────────────────────────────────────
     forensic_specifics = _synthesize_forensic_observations(
         clip_category, ela_res, fft_res, noiseprint_res, splicing_res,
-        diffusion_res, ocr_res, detr_res, is_screenshot,
+        diffusion_res, ocr_res, detected, opencv_res, is_screenshot,
     )
 
     # ── Build finding ────────────────────────────────────────────────────
@@ -551,7 +641,7 @@ def _synthesize_interface_id(ocr_res: dict, clip_res: dict, detr_res: list) -> s
 def _synthesize_forensic_observations(
     clip_category: str, ela_res: dict, fft_res: dict,
     noiseprint_res: dict, splicing_res: dict, diffusion_res: dict,
-    ocr_res: dict, detr_res: list, is_screenshot: bool,
+    ocr_res: dict, detr_res: list, opencv_res: dict, is_screenshot: bool,
 ) -> str:
     """Build domain-specific forensic observations from all tool results."""
     observations: list[str] = []
@@ -601,6 +691,13 @@ def _synthesize_forensic_observations(
                 observations.append(f"Diffusion artifacts: spectral spikes detected (probability={diffusion_res.get('diffusion_probability', 0):.3f})")
             elif diffusion_res.get("available"):
                 observations.append("Diffusion artifacts: no GAN/diffusion spectral signatures found")
+
+        # OpenCV observations
+        if opencv_res:
+            noise_val = opencv_res.get("noise", 0.0) or 0.0
+            block_val = opencv_res.get("blockiness", 0.0) or 0.0
+            observations.append(f"Noise level: {noise_val:.2f}")
+            observations.append(f"JPEG blockiness: {block_val:.2f}")
 
         # Person/portrait observation
         if "person" in clip_category.lower() or any("person" in str(obj).lower() for obj in (detr_res or [])):

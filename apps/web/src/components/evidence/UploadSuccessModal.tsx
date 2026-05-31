@@ -10,50 +10,20 @@ import { TRANSITION_SMOOTH } from "@/lib/animations";
 
 export interface UploadSuccessModalProps {
   file: File;
+  fileSha256: string | null;
+  hashError?: string | null;
+  isHashComputing?: boolean;
   onStartAnalysis: () => Promise<void> | void;
   onDismiss: () => void;
   isHandingOff?: boolean;
   authError?: string | null;
 }
 
-function useSHA256Checksum(file: File) {
-  const [checksum, setChecksum] = useState("");
-  const [isComputing, setIsComputing] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    setIsComputing(true);
-    const compute = async () => {
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const hash = await crypto.subtle.digest("SHA-256", arrayBuffer);
-        const hashArray = Array.from(new Uint8Array(hash));
-        const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-        if (active) {
-          setChecksum(hashHex);
-          setIsComputing(false);
-        }
-      } catch (err) {
-        console.error("SHA-256 fallback:", err);
-        const ts = Date.now().toString(16).padStart(12, "0");
-        const sz = file.size.toString(16).padStart(8, "0");
-        const nm = Array.from(file.name).reduce((a, c) => (a * 31 + c.charCodeAt(0)) & 0xffffffff, 0).toString(16).padStart(8, "0");
-        const fallback = `${ts}${sz}${nm}${"0".repeat(28)}`.substring(0, 64);
-        if (active) {
-          setChecksum(fallback);
-          setIsComputing(false);
-        }
-      }
-    };
-    compute();
-    return () => { active = false; };
-  }, [file]);
-
-  return { checksum, isComputing };
-}
-
 export function UploadSuccessModal({
   file,
+  fileSha256,
+  hashError,
+  isHashComputing = false,
   onStartAnalysis,
   onDismiss,
   isHandingOff = false,
@@ -64,7 +34,6 @@ export function UploadSuccessModal({
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { checksum, isComputing } = useSHA256Checksum(file);
 
   useEffect(() => {
     let url: string | null = null;
@@ -245,14 +214,19 @@ export function UploadSuccessModal({
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
               className="text-xs font-mono text-primary truncate flex items-center gap-2"
+              title={fileSha256 ?? undefined}
             >
-              {isComputing ? (
+              {isHashComputing ? (
                 <>
                   <span className="w-3 h-3 rounded-full border border-primary border-t-transparent animate-spin" />
-                  <span className="text-primary/60">Calculating...</span>
+                  <span className="text-primary/60">Calculating SHA-256...</span>
                 </>
+              ) : hashError ? (
+                <span className="text-red-400">Hash unavailable — reselect file</span>
+              ) : fileSha256 ? (
+                `${fileSha256.slice(0, 24).toLowerCase()}...${fileSha256.slice(-12).toLowerCase()}`
               ) : (
-                `${checksum.substring(0, 24).toLowerCase()}...`
+                <span className="text-primary/60">Waiting...</span>
               )}
             </motion.span>
           </div>
@@ -275,7 +249,7 @@ export function UploadSuccessModal({
         <button
           type="button"
           onClick={onStartAnalysis}
-          disabled={isHandingOff}
+          disabled={isHandingOff || isHashComputing || !!hashError || !fileSha256}
           data-testid="upload-start-analysis"
           className="fc-btn-primary flex-[2] group relative overflow-hidden text-sm py-2"
         >

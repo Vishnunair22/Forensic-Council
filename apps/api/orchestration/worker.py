@@ -111,13 +111,14 @@ async def main() -> None:
         investigator_id: str,
         original_filename: str | None = None,
         session_id: Any = None,
+        detected_mime: str | None = None,
+        validated_extension: str | None = None,
+        content_sha256: str | None = None,
+        file_size_bytes: int | None = None,
     ):
         session_str = str(session_id)
 
         try:
-            # Robust identity preservation: check for existing metadata
-            # This is critical for the Redis worker where uvicorn/main API may have
-            # already set the initial UUID.
             existing_meta = await get_active_pipeline_metadata(session_str) or {}
             _investigator_id = existing_meta.get("investigator_id", investigator_id)
             _investigator_role = existing_meta.get("investigator_role")
@@ -134,6 +135,11 @@ async def main() -> None:
                     "case_investigator_label": _case_label,
                     "file_path": evidence_file_path,
                     "original_filename": original_filename,
+                    "content_hash": existing_meta.get("content_hash"),
+                    "client_hash_verified": existing_meta.get("client_hash_verified"),
+                    "detected_mime": existing_meta.get("detected_mime", detected_mime),
+                    "validated_extension": existing_meta.get("validated_extension", validated_extension),
+                    "file_size_bytes": existing_meta.get("file_size_bytes", file_size_bytes),
                     "created_at": existing_meta.get("created_at") or datetime.now(UTC).isoformat(),
                 },
             )
@@ -151,10 +157,6 @@ async def main() -> None:
             _active_pipelines[session_str] = pipeline
             register_pipeline(session_id, pipeline)
 
-            # O-C-1 (B-H-10): track active sessions in a Redis SET so the
-            # API process can report the gauge correctly in worker-mode
-            # deployments. Previously the in-process _active_pipelines dict
-            # was always empty on the API side and the gauge reported 0.
             try:
                 from core.persistence.redis_client import get_redis_client as _get_rc
 
@@ -173,6 +175,10 @@ async def main() -> None:
                 investigator_id=investigator_id,
                 original_filename=original_filename,
                 session_id=session_id,
+                detected_mime=detected_mime,
+                validated_extension=validated_extension,
+                content_sha256=content_sha256,
+                file_size_bytes=file_size_bytes,
             )
 
             await mark_investigation_completed(

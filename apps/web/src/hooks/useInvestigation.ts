@@ -443,8 +443,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       let sessionIdToUse: string | undefined;
       let isDuplicateSession = false;
       try {
-        const investigationRes = await startInvestigation(targetFile, caseId, investigatorId);
+        const pendingClientSha256 = fileHandoffManager.getPendingClientSha256();
+        const investigationRes = await startInvestigation(targetFile, caseId, investigatorId, pendingClientSha256);
         sessionIdToUse = investigationRes.session_id;
+
+        if (investigationRes.content_hash) {
+          storage.setItem(`${STORAGE_KEYS.EVIDENCE_SHA256}:${sessionIdToUse}`, investigationRes.content_hash);
+        }
       } catch (err) {
         if (err instanceof DuplicateInvestigationError) {
           sessionIdToUse = err.existingSessionId;
@@ -491,6 +496,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         investigator_id: investigatorId,
         mime_type: targetFile.type,
         pipeline_start: pipelineStart,
+        evidence_sha256: investigationRes.content_hash ?? null,
       };
       storage.setItem(STORAGE_KEYS.INVESTIGATION_CTX, investigationCtx, true);
       storage.setItem(`${STORAGE_KEYS.INVESTIGATION_CTX}:${sessionIdToUse}`, investigationCtx, true);
@@ -509,6 +515,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem(STORAGE_KEYS.PIPELINE_START, pipelineStart);
       storage.setItem(`${STORAGE_KEYS.PIPELINE_START}:${sessionIdToUse}`, pipelineStart);
 
+      if (investigationRes.content_hash) {
+        storage.setItem(`${STORAGE_KEYS.EVIDENCE_SHA256}:${sessionIdToUse}`, investigationRes.content_hash);
+      }
+
       if (thumbnailDataUrl && !isDuplicateSession) {
         storage.setItem(`${STORAGE_KEYS.THUMBNAIL}:${sessionIdToUse}`, thumbnailDataUrl);
       }
@@ -519,7 +529,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         try {
           const st = await getArbiterStatus(sessionIdToUse);
           if (st.status === "complete") {
-            sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+            sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sessionIdToUse}`, "1");
             setIsUploading(false);
             setShowLoadingOverlay(false);
             sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
@@ -719,7 +729,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           return;
         }
         if (st.status === "complete") {
-          sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
+          sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${existingSessionId}`, "1");
           router.push(`/result/${existingSessionId}`, { scroll: true });
           return;
         }
@@ -782,8 +792,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, ARBITER_WAIT_MAX_MS, arbiterAbortControllerRef.current.signal);
       if (!ok) {
-        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
-        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
+        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
+        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
         document.body.setAttribute("data-fc-loading", "1");
         navigationStarted = true;
         router.push(`/result/${encodeURIComponent(sid)}`);
@@ -797,15 +807,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
       }
 
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      router.push(`/result/${sid}`, { scroll: true });
+      router.push(`/result/${encodeURIComponent(sid)}`);
     } catch (err) {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
       toast.destructive({
         title: "Could not start synthesis",
         description: err instanceof Error ? err.message : "Could not resume the investigation.",
@@ -813,9 +823,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     } finally {
       resumeInFlightRef.current = false;
       setIsNavigating(false);
-      // Only clear the overlay if navigation never started. If it did,
-      // the component will unmount when the result page loads — clearing
-      // state here would drop the overlay while the old page is still visible.
       if (!navigationStarted) {
         setArbiterDeliberating(false);
       }
@@ -830,7 +837,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     playSound("scan");
     storage.setItem(STORAGE_KEYS.IS_DEEP, "true");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
-    // Capture the final initial-phase snapshot before any clearing
     const initialAgentSnapshot = (completedAgentsRef.current as AgentUpdate[]).filter(
       (a) => a.status !== "skipped",
     );
@@ -848,10 +854,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       setSimulationPhase("deep");
       await resumeInvestigation(true);
-      // Do NOT reconnect the WebSocket here — the existing connection is still live
-      // after PIPELINE_PAUSED and will receive deep-phase AGENT_UPDATE messages.
-      // Closing and reopening creates a race window where backend messages sent
-      // immediately after /resume are lost, leaving all agents stuck in "checking".
     } catch (err) {
       playSound("error");
       toast.destructive({
@@ -867,7 +869,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (!sid) {
-      // No session to reconnect to — fall back to a fresh upload
       if (file) triggerAnalysis(file);
       return;
     }
@@ -931,30 +932,28 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterAbortControllerRef.current = new AbortController();
       const ok = await waitForFinalReport(sid, setArbiterLiveText, ARBITER_WAIT_MAX_MS, arbiterAbortControllerRef.current.signal);
       if (!ok) {
-        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
-        sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
+        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
+        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
         document.body.setAttribute("data-fc-loading", "1");
         navigationStarted = true;
         router.push(`/result/${encodeURIComponent(sid)}`);
         return;
       }
 
-      // Ensure minimum overlay display time so the arbiter transition doesn't
-      // flash-dismiss when the pre-warmed report resolves in <1s.
       const elapsed = Date.now() - arbiterStartTime;
       if (elapsed < ARBITER_MIN_DISPLAY_MS) {
         await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
       }
 
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
       document.body.setAttribute("data-fc-loading", "1");
       navigationStarted = true;
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
       router.push(`/result/${encodeURIComponent(sid)}`);
     } catch (err) {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
       toast.destructive({
         title: "Could not start synthesis",
         description: err instanceof Error ? err.message : "Could not resume the investigation.",

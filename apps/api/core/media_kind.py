@@ -46,30 +46,16 @@ def _image_probe(file_path: str) -> dict[str, Any]:
 
 
 def is_camera_still_candidate(artifact: Any) -> bool:
-    """Return True for formats that normally originate from cameras."""
+    """Return True for formats that normally originate from cameras, requiring camera EXIF Make/Model tags."""
     file_path = str(getattr(artifact, "file_path", "") or "")
-    ext = os.path.splitext(file_path)[1].lower()
-    mime = _artifact_mime(artifact)
-    return ext in {
-        ".jpg",
-        ".jpeg",
-        ".tiff",
-        ".tif",
-        ".heic",
-        ".heif",
-        ".raw",
-        ".cr2",
-        ".nef",
-        ".arw",
-        ".dng",
-        ".orf",
-    } or mime in {
-        "image/jpeg",
-        "image/tiff",
-        "image/heic",
-        "image/heif",
-        "image/x-adobe-dng",
-    }
+    if not file_path:
+        return False
+    probe = _image_probe(file_path)
+    if not probe:
+        return False
+    fmt = str(probe.get("format") or "").lower()
+    is_cam_format = fmt in {"jpeg", "tiff", "tif"}
+    return is_cam_format and bool(probe.get("has_camera_tags"))
 
 
 def is_screen_capture_like(artifact: Any) -> bool:

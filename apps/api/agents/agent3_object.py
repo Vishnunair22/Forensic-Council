@@ -62,8 +62,12 @@ class Agent3Object(ForensicAgent):
 
     @property
     def task_decomposition(self) -> list[str]:
-        # PHASE 1: INITIAL ANALYSIS
+        from core.image_evidence_routing import get_agent_plan
+        plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="initial")
+        if plan:
+            return plan
 
+        # Fallback logic
         if self._is_screen_capture:
             return [
                 "Run screenshot_scene_applicability for screen-capture object/scene scope",
@@ -87,53 +91,32 @@ class Agent3Object(ForensicAgent):
                 "Run vector_contraband_search for risk object screening",
             ]
 
-        shared = {}
-        if self.inter_agent_bus:
-            shared = self.inter_agent_bus.get_visual_profile(
-                str(self.session_id)
-            ) or {}
-
-        routing = shared.get("metadata", {}).get("forensic_routing", {}) or {}
-        image_category = str(routing.get("image_category") or "").lower()
-        skip_contraband = image_category == "live_photograph"
-
-        tasks = [
+        return [
             "Run object_detection for scene object identification",
             "Run scene_incongruence for contextual anomaly detection",
             "Run lighting_correlation_initial for initial shadow and light direction audit",
+            "Run vector_contraband_search for risk object screening",
         ]
-
-        if not skip_contraband:
-            tasks.append(
-                "Run vector_contraband_search for risk object screening"
-            )
-
-        return tasks
 
     @property
     def deep_task_decomposition(self) -> list[str]:
+        from core.image_evidence_routing import get_agent_plan
+        plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="deep")
+        if plan:
+            return plan
+
+        # Fallback logic
         if self._is_screen_capture or self._is_digital_capture:
             return [
                 "Read shared image context for UI/screenshot grounding from Agent 1 visual profile",
                 "Run screenshot_layout_forensics for deep UI/document consistency cross-check",
             ]
-        object_ctx = self._tool_context.get("object_detection", {})
-        detections = object_ctx.get("detections", []) if isinstance(object_ctx, dict) else []
-        tasks = []
-        # secondary_classification and adversarial_robustness_check removed from base —
-        # both are already reactively injected by _on_tool_result_impl
-        # (secondary from vector_contraband_search, adversarial from scene_incongruence).
-        if detections:
-            tasks.append("Run scale_validation on confirmed objects for geometric proportion validation")
-        else:
-            tasks.append("Run scale_validation for object proportion and geometry consistency")
-        tasks.extend(
-            [
-                "Run lighting_consistency for deep ROI-aware shadow-angle audit",
-                "Read shared image context for object/scene grounding from Agent 1 visual profile",
-            ]
-        )
-        return tasks
+
+        return [
+            "Run scale_validation for object proportion and geometry consistency",
+            "Run lighting_consistency for deep ROI-aware shadow-angle audit",
+            "Read shared image context for object/scene grounding from Agent 1 visual profile",
+        ]
 
     @property
     def iteration_ceiling(self) -> int:
@@ -233,10 +216,6 @@ class Agent3Object(ForensicAgent):
                         session_id=self.session_id,
                         error=str(signal_error),
                     )
-
-    @property
-    def supported_file_types(self) -> list[str]:
-        return ["image/", "video/"]
 
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()

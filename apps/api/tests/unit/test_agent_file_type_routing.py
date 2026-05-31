@@ -95,8 +95,8 @@ AGENTS = [
         ("screenshot.png", "image/png", {"Agent1", "Agent3", "Agent5"}),
         ("audio.wav", "audio/wav", {"Agent2", "Agent5"}),
         ("video.mp4", "video/mp4", {"Agent2", "Agent3", "Agent4", "Agent5"}),
-        ("document.pdf", "application/pdf", {"Agent5"}),
-        ("archive.zip", "application/zip", {"Agent5"}),
+        ("audio.mp3", "audio/mpeg", {"Agent2", "Agent5"}),
+        ("video.mov", "video/quicktime", {"Agent2", "Agent3", "Agent4", "Agent5"}),
     ],
 )
 def test_agent_file_type_support_matrix(path: str, mime_type: str, expected_agents: set[str]):

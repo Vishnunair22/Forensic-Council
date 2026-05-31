@@ -34,6 +34,10 @@ class InvestigationTask(BaseModel):
     investigator_id: str
     evidence_file_path: str
     original_filename: str | None = None
+    detected_mime: str | None = None
+    validated_extension: str | None = None
+    content_sha256: str | None = None
+    file_size_bytes: int | None = None
     status: InvestigationStatus = InvestigationStatus.QUEUED
     created_at: float = Field(default_factory=time.time)
     started_at: float | None = None
@@ -127,6 +131,10 @@ class InvestigationQueue:
         investigator_id: str,
         evidence_file_path: str,
         original_filename: str | None = None,
+        detected_mime: str | None = None,
+        validated_extension: str | None = None,
+        content_sha256: str | None = None,
+        file_size_bytes: int | None = None,
     ) -> InvestigationTask:
         """Submit a new investigation to the Redis queue."""
         redis = await self._get_redis()
@@ -136,6 +144,10 @@ class InvestigationQueue:
             investigator_id=investigator_id,
             evidence_file_path=evidence_file_path,
             original_filename=original_filename,
+            detected_mime=detected_mime,
+            validated_extension=validated_extension,
+            content_sha256=content_sha256,
+            file_size_bytes=file_size_bytes,
         )
 
         try:
@@ -294,6 +306,10 @@ class InvestigationWorker:
                             investigator_id=task.investigator_id,
                             original_filename=task.original_filename,
                             session_id=task.session_id,
+                            detected_mime=task.detected_mime,
+                            validated_extension=task.validated_extension,
+                            content_sha256=task.content_sha256,
+                            file_size_bytes=task.file_size_bytes,
                         ),
                         timeout=timeout_seconds,
                     )

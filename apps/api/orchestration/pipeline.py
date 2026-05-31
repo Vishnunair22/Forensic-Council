@@ -394,6 +394,10 @@ class ForensicCouncilPipeline:
         investigator_id: str,
         original_filename: str | None = None,
         session_id: UUID | None = None,
+        detected_mime: str | None = None,
+        validated_extension: str | None = None,
+        content_sha256: str | None = None,
+        file_size_bytes: int | None = None,
     ):
         """Run a complete forensic investigation on evidence."""
         logger.info(
@@ -408,6 +412,11 @@ class ForensicCouncilPipeline:
         self._case_id = case_id
         self._started_at = datetime.now(UTC).isoformat()
         self._degradation_flags = []
+        self._intake_mime = detected_mime
+        self._intake_extension = validated_extension
+        self._intake_hash = content_sha256
+        self._intake_size = file_size_bytes
+        self._applicable_agents = None
 
         loop = asyncio.get_running_loop()
         self._investigation_deadline = loop.time() + self.config.investigation_timeout
@@ -416,7 +425,11 @@ class ForensicCouncilPipeline:
             self._current_run_task = asyncio.current_task()
             register_pipeline(session_id, self)
             await self._run_investigation_core(
-                evidence_file_path, case_id, investigator_id, original_filename, session_id
+                evidence_file_path, case_id, investigator_id, original_filename, session_id,
+                detected_mime=detected_mime,
+                validated_extension=validated_extension,
+                content_sha256=content_sha256,
+                file_size_bytes=file_size_bytes,
             )
             if self._error:
                 raise RuntimeError(self._error)
@@ -440,6 +453,10 @@ class ForensicCouncilPipeline:
         investigator_id: str,
         original_filename: str | None,
         session_id: UUID,
+        detected_mime: str | None = None,
+        validated_extension: str | None = None,
+        content_sha256: str | None = None,
+        file_size_bytes: int | None = None,
     ) -> None:
         """Core investigation orchestration."""
         from core.agent_registry import get_agent_registry
@@ -497,7 +514,11 @@ class ForensicCouncilPipeline:
             logger.debug("Pipeline-init broadcast skipped", error=str(_e))
 
         evidence_artifact = await self._ingest_evidence(
-            evidence_file_path, session_id, investigator_id, original_filename=original_filename
+            evidence_file_path, session_id, investigator_id,
+            original_filename=original_filename,
+            detected_mime=detected_mime,
+            content_sha256=content_sha256,
+            file_size_bytes=file_size_bytes,
         )
         self._evidence_mime = evidence_artifact.mime_type if evidence_artifact else ""
 
@@ -529,6 +550,11 @@ class ForensicCouncilPipeline:
             case_id=case_id,
             investigator_id=investigator_id,
             agent_ids=all_agents,
+            content_sha256=self._intake_hash or getattr(self, "_intake_hash", None),
+            file_size_bytes=self._intake_size or getattr(self, "_intake_size", None),
+            detected_mime=self._intake_mime or getattr(self, "_intake_mime", None),
+            validated_extension=self._intake_extension or getattr(self, "_intake_extension", None),
+            applicable_agents=getattr(self, "_applicable_agents", None),
         )
 
         try:
@@ -911,6 +937,9 @@ class ForensicCouncilPipeline:
         session_id: UUID,
         investigator_id: str,
         original_filename: str | None = None,
+        detected_mime: str | None = None,
+        content_sha256: str | None = None,
+        file_size_bytes: int | None = None,
     ):
         """Ingest evidence file and create artifact."""
         from core.observability import get_tracer
@@ -921,14 +950,35 @@ class ForensicCouncilPipeline:
             span.set_attribute("session_id", str(session_id))
             file_path_obj = Path(file_path)
 
+            mime_type = detected_mime or self._get_mime_type(file_path)
+            metadata: dict[str, Any] = {
+                "mime_type": mime_type,
+                "original_filename": original_filename or file_path_obj.name,
+            }
+            if content_sha256:
+                metadata["content_sha256"] = content_sha256
+            if file_size_bytes:
+                metadata["file_size_bytes"] = file_size_bytes
+
+            if mime_type and mime_type.startswith("image/"):
+                try:
+                    from core.image_evidence_routing import build_image_evidence_profile, build_image_agent_tool_plan
+                    profile = build_image_evidence_profile(
+                        path=file_path,
+                        original_filename=original_filename or file_path_obj.name,
+                        mime_type=mime_type,
+                    )
+                    plan = build_image_agent_tool_plan(profile)
+                    metadata["image_evidence_profile"] = profile.model_dump()
+                    metadata["agent_tool_plan"] = plan
+                except Exception as route_err:
+                    logger.warning("Failed to construct image routing profile or tool plan", error=str(route_err))
+
             stored_artifact = await self.evidence_store.ingest(
                 file_path=file_path,
                 session_id=session_id,
                 agent_id=investigator_id,
-                metadata={
-                    "mime_type": self._get_mime_type(file_path),
-                    "original_filename": original_filename or file_path_obj.name,
-                },
+                metadata=metadata,
             )
         return stored_artifact
 

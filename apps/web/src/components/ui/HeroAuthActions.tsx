@@ -14,6 +14,7 @@ import { authService } from "@/lib/upload/authService";
 import { fileHandoffManager } from "@/lib/upload/fileHandoffManager";
 import { sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
+import { computeFileSha256 } from "@/lib/crypto/fileHash";
 
 import { UploadModal } from "@/components/evidence/UploadModal";
 import { UploadSuccessModal } from "@/components/evidence/UploadSuccessModal";
@@ -27,6 +28,9 @@ export function HeroAuthActions() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [localAuthError, setLocalAuthError] = useState<string | null>(null);
+  const [selectedFileHash, setSelectedFileHash] = useState<string | null>(null);
+  const [hashError, setHashError] = useState<string | null>(null);
+  const [isHashComputing, setIsHashComputing] = useState(false);
   const sessionExpiredHandledRef = useRef(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
   const isHandingOffRef = useRef(false);
@@ -42,7 +46,7 @@ export function HeroAuthActions() {
         title: "Session Expired",
         description: "Your session has expired due to inactivity. Please begin a new analysis.",
       });
-      resetActiveInvestigation(queryClient);
+      void resetActiveInvestigation(queryClient);
     }
   }, [queryClient]);
 
@@ -63,7 +67,7 @@ export function HeroAuthActions() {
       router.prefetch?.("/evidence");
     };
     const handleSessionExpired = () => {
-      resetActiveInvestigation(queryClient);
+      void resetActiveInvestigation(queryClient);
       router.push("/?session_expired=true");
     };
     window.addEventListener("fc:reset-home", handleReset);
@@ -93,6 +97,15 @@ export function HeroAuthActions() {
 
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile || isHandingOffRef.current) return false;
+
+    if (!selectedFileHash) {
+      toast.destructive({
+        title: "Hash Not Ready",
+        description: "The SHA-256 custody hash must be computed before analysis can begin.",
+      });
+      return false;
+    }
+
     isHandingOffRef.current = true;
     setIsHandingOff(true);
 
@@ -109,13 +122,30 @@ export function HeroAuthActions() {
       return false;
     }
 
-    await fileHandoffManager.prepareUpload(selectedFile);
+    await fileHandoffManager.prepareUpload(selectedFile, {
+      clientSha256: selectedFileHash,
+    });
 
     setShowUpload(false);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
     router.push("/evidence", { scroll: true });
     return true;
-  }, [selectedFile, router]);
+  }, [selectedFile, selectedFileHash, router]);
+
+  const handleFileSelected = useCallback(async (file: File) => {
+    setSelectedFile(file);
+    setSelectedFileHash(null);
+    setHashError(null);
+    setIsHashComputing(true);
+    try {
+      const result = await computeFileSha256(file);
+      setSelectedFileHash(result.hex);
+    } catch (err) {
+      setHashError(err instanceof Error ? err.message : "Could not compute SHA-256.");
+    } finally {
+      setIsHashComputing(false);
+    }
+  }, []);
 
   const handleCTAClick = useCallback(async () => {
     setShowUpload(true);
@@ -183,14 +213,21 @@ export function HeroAuthActions() {
               <UploadModal
                 key="upload-modal"
                 onClose={closeUpload}
-                onFileSelected={(file) => setSelectedFile(file)}
+                onFileSelected={handleFileSelected}
                 authError={localAuthError}
               />
             ) : (
               <UploadSuccessModal
                 key="success-modal"
                 file={selectedFile}
-                onDismiss={() => setSelectedFile(null)}
+                fileSha256={selectedFileHash}
+                hashError={hashError}
+                isHashComputing={isHashComputing}
+                onDismiss={() => {
+                  setSelectedFile(null);
+                  setSelectedFileHash(null);
+                  setHashError(null);
+                }}
                 isHandingOff={isHandingOff}
                 authError={localAuthError}
                 onStartAnalysis={async () => {

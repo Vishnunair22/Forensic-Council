@@ -9,75 +9,22 @@ class MimeRegistry:
     @staticmethod
     def get_supported_types(agent_name: str) -> list[str]:
         """Return list of MIME prefixes supported by the agent."""
+        from core.file_type_policy import AGENT_FILE_CAPABILITIES
         name = agent_name.lower()
-        if "agent1" in name or "imageintegrity" in name:
-            return ["image/"]
-        if "agent2" in name or "audioforensics" in name:
-            return ["audio/", "video/"]
-        if "agent3" in name or "objectdetection" in name:
-            # Audit Fix: Agent 3 handlers support video frame extraction
-            return ["image/", "video/"]
-        if "agent4" in name or "temporalvideo" in name:
-            return ["video/"]
-        if "agent5" in name or "metadatacontext" in name:
-            return ["*"]  # Supports all
-        return ["*"]
+        for key, caps in AGENT_FILE_CAPABILITIES.items():
+            if key.lower() in name or name == key.lower():
+                return caps["mime_prefixes"]
+        return []
 
     @staticmethod
     def get_supported_extensions(agent_name: str) -> list[str]:
         """Return list of file extensions supported by the agent."""
+        from core.file_type_policy import AGENT_FILE_CAPABILITIES
         name = agent_name.lower()
-
-        audio_exts = [
-            ".wav",
-            ".mp3",
-            ".flac",
-            ".ogg",
-            ".aac",
-            ".m4a",
-            ".wma",
-            ".opus",
-            ".amr",
-            ".aiff",
-        ]
-        video_exts = [
-            ".mp4",
-            ".avi",
-            ".mov",
-            ".mkv",
-            ".flv",
-            ".wmv",
-            ".webm",
-            ".m4v",
-            ".3gp",
-            ".ts",
-            ".ogv",
-        ]
-        image_exts = [
-            ".jpg",
-            ".jpeg",
-            ".png",
-            ".gif",
-            ".bmp",
-            ".tiff",
-            ".tif",
-            ".webp",
-            ".heic",
-            ".heif",
-            ".dng",
-            ".avif",
-            ".raw",
-        ]
-
-        if "agent1" in name or "imageintegrity" in name:
-            return image_exts
-        if "agent2" in name or "audioforensics" in name:
-            return audio_exts + video_exts
-        if "agent3" in name or "objectdetection" in name:
-            return image_exts + video_exts
-        if "agent4" in name or "temporalvideo" in name:
-            return video_exts
-        return ["*"]
+        for key, caps in AGENT_FILE_CAPABILITIES.items():
+            if key.lower() in name or name == key.lower():
+                return caps["extensions"]
+        return []
 
     @classmethod
     def is_supported(cls, agent_name: str, mime_type: str = "", file_path: str = "") -> bool:

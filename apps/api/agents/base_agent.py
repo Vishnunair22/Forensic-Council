@@ -130,7 +130,7 @@ class ForensicAgent(
     @property
     def supported_file_types(self) -> list[str]:
         """List of MIME type prefixes supported by this specialist."""
-        return ["*"]
+        return MimeRegistry.get_supported_types(self.agent_name)
 
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """
@@ -149,9 +149,6 @@ class ForensicAgent(
     @property
     def supports_uploaded_file(self) -> bool:
         """Check if this agent supports the uploaded evidence file type."""
-        if "*" in self.supported_file_types:
-            return True
-
         mime_type = getattr(self.evidence_artifact, "mime_type", "") or ""
         file_path = getattr(self.evidence_artifact, "file_path", "") or ""
 

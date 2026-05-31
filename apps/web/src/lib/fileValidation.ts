@@ -2,8 +2,6 @@ import { ALLOWED_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
 
 export const ALLOWED_EXTENSIONS = new Set([
   ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".gif", ".bmp",
-  ".mp4", ".mov", ".avi", ".mkv", ".webm",
-  ".wav", ".mp3", ".m4a", ".flac",
 ]);
 
 export function getFileExtension(name: string): string {
@@ -36,21 +34,12 @@ export function validateEvidenceFile(file: File): string | null {
     else if (ext === ".tiff" || ext === ".tif") mimeType = "image/tiff";
     else if (ext === ".gif") mimeType = "image/gif";
     else if (ext === ".bmp") mimeType = "image/bmp";
-    else if (ext === ".mp4") mimeType = "video/mp4";
-    else if (ext === ".mov") mimeType = "video/quicktime";
-    else if (ext === ".webm") mimeType = "video/webm";
-    else if (ext === ".mkv") mimeType = "video/x-matroska";
-    else if (ext === ".avi") mimeType = "video/x-msvideo";
-    else if (ext === ".wav") mimeType = "audio/wav";
-    else if (ext === ".mp3") mimeType = "audio/mpeg";
-    else if (ext === ".m4a") mimeType = "audio/mp4";
-    else if (ext === ".flac") mimeType = "audio/flac";
   }
 
   const hasAllowedMime = !!mimeType && ALLOWED_MIME_TYPES.has(mimeType);
 
   if (!hasAllowedMime && !hasAllowedExt) {
-    return `File type "${file.type || ext || "unknown"}" is not supported. Accepted: Images (JPG, PNG, TIFF, WEBP, GIF, BMP), Video (MP4, MOV, AVI, MKV, WEBM), Audio (WAV, MP3, M4A, FLAC).`;
+    return `File type "${file.type || ext || "unknown"}" is not supported. Accepted: Images (JPG, PNG, TIFF, WEBP, GIF, BMP).`;
   }
 
   if (!hasAllowedMime && hasAllowedExt) {

@@ -85,10 +85,6 @@ class Agent4Video(ForensicAgent):
             f"and rolling shutter signatures to detect frame-level edits or deepfake compositing."
         )
 
-    @property
-    def supported_file_types(self) -> list[str]:
-        return ["video/"]
-
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()
 

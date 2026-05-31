@@ -77,6 +77,11 @@ class SessionState(BaseModel):
     agent_loops: dict[str, AgentLoopState] = Field(default_factory=dict)
     checkpoints: dict[UUID, HITLCheckpointState] = Field(default_factory=dict)
     final_report_id: UUID | None = None
+    content_sha256: str | None = None
+    file_size_bytes: int | None = None
+    detected_mime: str | None = None
+    validated_extension: str | None = None
+    applicable_agents: list[str] = Field(default_factory=list)
 
 
 class SessionManager:
@@ -114,6 +119,11 @@ class SessionManager:
         case_id: str,
         investigator_id: str,
         agent_ids: list[str],
+        content_sha256: str | None = None,
+        file_size_bytes: int | None = None,
+        detected_mime: str | None = None,
+        validated_extension: str | None = None,
+        applicable_agents: list[str] | None = None,
     ) -> SessionState:
         """Create a new investigation session."""
         # Opportunistic cleanup on every creation
@@ -136,6 +146,11 @@ class SessionManager:
                     )
                     for agent_id in agent_ids
                 },
+                content_sha256=content_sha256,
+                file_size_bytes=file_size_bytes,
+                detected_mime=detected_mime,
+                validated_extension=validated_extension,
+                applicable_agents=applicable_agents or [],
             )
             self._sessions[session_id] = session
 

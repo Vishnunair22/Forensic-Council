@@ -65,6 +65,9 @@ class InvestigationResponse(BaseModel):
     case_id: str
     status: str
     message: str
+    content_hash: str | None = None
+    client_hash_verified: bool = False
+    dispatch_mode: str = "in_process"
 
 
 class AgentFindingDTO(BaseModel):

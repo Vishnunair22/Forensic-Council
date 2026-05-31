@@ -9,7 +9,7 @@ import {
 } from "@/lib/pendingFilePersistence";
 
 export class FileHandoffManager {
-  async prepareUpload(file: File): Promise<void> {
+  async prepareUpload(file: File, options?: { clientSha256?: string | null }): Promise<void> {
     __pendingFileStore.file = file;
     clearInvestigationPersistence();
 
@@ -23,6 +23,7 @@ export class FileHandoffManager {
         type: file.type,
         size: file.size,
         updatedAt: Date.now(),
+        clientSha256: options?.clientSha256 ?? null,
       }),
       true,
     );
@@ -64,6 +65,12 @@ export class FileHandoffManager {
       return raw as { name: string; type: string; size: number };
     }
     return null;
+  }
+
+  getPendingClientSha256(): string | null {
+    const meta = this.getFileMeta() as ({ clientSha256?: string } | null);
+    const hash = meta?.clientSha256 ?? null;
+    return hash && /^[a-f0-9]{64}$/i.test(hash) ? hash.toLowerCase() : null;
   }
 }
 
