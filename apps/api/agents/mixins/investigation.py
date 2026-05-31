@@ -896,11 +896,14 @@ class AgentInvestigationMixin:
 
                 # 11. Hash verify
                 elif tool_name in ("file_hash_verify", "hash_verify"):
-                    h = tool_ctx.get("sha256") or "unknown"
+                    h = tool_ctx.get("computed_hash") or tool_ctx.get("sha256") or tool_ctx.get("current_hash") or "unknown"
+                    stored = tool_ctx.get("stored_hash") or tool_ctx.get("original_hash") or ""
+                    file_size = tool_ctx.get("file_size_bytes")
+                    size_str = f" ({file_size / 1024:.1f} KB)" if file_size else ""
                     if ev == "POSITIVE" or not tool_ctx.get("hash_match", True):
-                        opinion = f"File hash mismatch detected: the current SHA-256 ({h[:16]}...) does not match the ingestion chain-of-custody record."
+                        opinion = f"File hash mismatch detected: computed SHA-256 ({h[:16]}...) does not match the ingestion chain-of-custody record{size_str}."
                     else:
-                        opinion = f"SHA-256 hash verification confirmed the file digest has not changed since upload ({h[:16]}...)."
+                        opinion = f"SHA-256 hash verification confirmed the file is byte-identical to upload ({h[:16]}...){size_str}. This proves integrity-since-upload, not original-capture authenticity."
 
                 # 12. Audio anti-spoofing
                 elif tool_name == "anti_spoofing_detect":
@@ -1027,9 +1030,6 @@ class AgentInvestigationMixin:
             if not opinion:
                 continue
             clean_tool_findings.append(opinion.rstrip(" .") + ".")
-        if _visual_desc:
-            visual_line = f"Visual profile identified the evidence as {_visual_desc.rstrip(' .')}."
-            clean_tool_findings = [visual_line] + clean_tool_findings
         if not clean_tool_findings and narrative:
             clean_tool_findings = [narrative.rstrip(" .") + "."]
 
@@ -1062,10 +1062,36 @@ class AgentInvestigationMixin:
             _software = _exif_ctx.get("software") or "none"
             _hash_ctx = self._tool_context.get("file_hash_verify") or self._tool_context.get("hash_verify") or {}
             _sha = (_hash_ctx.get("sha256") or "")[:16]
-            _meta_line = (
-                f"EXIF: device={_device}, software={_software}."
-                + (f" SHA-256 prefix: {_sha}..." if _sha else "")
-            )
+            # Surface file structure facts that exist in tool context
+            _file_ctx = self._tool_context.get("file_structure_analysis") or self._tool_context.get("extract_exif_metadata") or {}
+            _file_size = _file_ctx.get("file_size_human") or _file_ctx.get("file_size") or ""
+            _file_format = _file_ctx.get("format") or _file_ctx.get("mime_type") or ""
+            _dimensions = ""
+            _w = _file_ctx.get("width") or _file_ctx.get("image_width")
+            _h = _file_ctx.get("height") or _file_ctx.get("image_height")
+            if _w and _h:
+                _dimensions = f"{_w}x{_h}"
+            _created = _file_ctx.get("created_time") or _file_ctx.get("DateTimeOriginal") or ""
+            _modified = _file_ctx.get("modified_time") or ""
+            _meta_parts = []
+            if _device != "unknown":
+                _meta_parts.append(f"device={_device}")
+            if _software != "none":
+                _meta_parts.append(f"software={_software}")
+            if _file_size:
+                _meta_parts.append(f"size={_file_size}")
+            if _file_format:
+                _meta_parts.append(f"format={_file_format}")
+            if _dimensions:
+                _meta_parts.append(f"dims={_dimensions}")
+            if _created:
+                _meta_parts.append(f"created={_created[:19]}")
+            if _sha:
+                _meta_parts.append(f"SHA-256: {_sha}...")
+            _meta_line = ". ".join(_meta_parts) + "." if _meta_parts else ""
+            # Add context about why device is unknown for screenshots
+            if _device == "unknown" and _is_screenshot:
+                _meta_line += " Screenshots carry no camera EXIF; device inferred from visual profile."
             _role_opening = (
                 f"Agent5 (Metadata & Provenance) extracted file provenance: "
                 f"{_visual_desc or _visual_category or 'the submitted file'}. "

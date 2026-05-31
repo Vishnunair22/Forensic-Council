@@ -140,7 +140,7 @@ export function useResult(initialSessionId?: string) {
       if (report) {
         setState("ready");
       }
-    }, 800);
+    }, 250);
     return () => clearTimeout(timer);
   }, [mounted, sessionId, reportAlreadyReady, minOverlayDone, report]);
 

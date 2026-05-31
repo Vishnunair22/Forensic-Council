@@ -105,14 +105,19 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
     <div className="min-h-screen pb-24 pt-20 sm:pt-12 relative">
       {/* ── Arbiter/Loading overlay ── */}
       <AnimatePresence>
-        {(rs.state === "arbiter" || rs.state === "loading" || (rs.state === "ready" && !rs.report)) && (
+        {rs.state === "arbiter" && (
           <ForensicProgressOverlay
-            title={rs.state === "arbiter" ? "Consensus Synthesis" : "Loading Report"}
+            title="Consensus Synthesis"
             liveText={rs.arbiterMsg || "Preparing final forensic report..."}
             telemetryLabel="Compiling agent findings"
             showElapsed
-            variant={rs.state === "arbiter" ? "arbiter" : "loading"}
+            variant="arbiter"
           />
+        )}
+        {rs.state === "loading" && !rs.report && (
+          <div className="fixed inset-0 z-modal flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <AgentAnalysisTabSkeleton />
+          </div>
         )}
       </AnimatePresence>
 

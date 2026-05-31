@@ -72,6 +72,16 @@ async def main() -> None:
         except Exception as exc:
             logger.error("ML warmup failed in worker", error=str(exc), exc_info=True)
 
+        # Pre-warm EasyOCR reader so model init never happens on the request path
+        try:
+            from tools.ocr_tools import _get_easyocr_reader
+            import asyncio as _asyncio
+            loop = _asyncio.get_running_loop()
+            await loop.run_in_executor(None, _get_easyocr_reader)
+            logger.info("EasyOCR reader pre-warmed successfully")
+        except Exception as exc:
+            logger.warning("EasyOCR pre-warm failed (non-fatal)", error=str(exc))
+
     _warmup_task = asyncio.create_task(_warmup_background())
 
     shutdown = asyncio.Event()

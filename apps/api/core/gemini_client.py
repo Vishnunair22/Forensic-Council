@@ -109,10 +109,11 @@ def _build_deep_forensic_prompt(
     persona: str | None,
     is_screen_capture_like: bool,
 ) -> str:
-    """Streamlined 3-point forensic prompt.
+    """Structured forensic identification prompt — tight JSON contract.
     
-    Gemini's value-add: semantic understanding, manipulation signals, routing.
-    Everything else (OCR, objects, technical analysis) is done by specialized tools.
+    Returns ONLY a JSON object with fields that map 1:1 to what the parser
+    and downstream agents consume. Costs fewer tokens than the previous
+    verbose prompt while providing richer, more actionable data.
     """
     category_directive = ""
     if is_screen_capture_like:
@@ -145,23 +146,18 @@ def _build_deep_forensic_prompt(
     prompt = (
         _SAFETY_PREAMBLE
         + persona_preamble
-        + "Analyze this evidence file and provide:\n\n"
-        "1. FILE_IDENTITY: What is this? (photograph/screenshot/document/AI-generated/etc.) "
-        "Describe what you see in 2-3 sentences.\n\n"
-        "2. MANIPULATION_SIGNALS: List any visual forensic red flags: inconsistent lighting, "
-        "copy-paste artifacts, AI generation traces, edge blending issues, or resolution mismatches. "
-        "If none, return empty list.\n\n"
-        "3. ROUTING_CATEGORY: Classify as one of: 'live_photograph', 'screenshot', 'document', "
-        "'web_image', 'object_scene', 'ai_generated_suspect'.\n\n"
-        f"{category_directive}"
-        f"{meta_section}\n\n"
-        "Respond with valid JSON:\n"
+        + "Analyze this evidence file and return ONLY this JSON:\n"
         "{\n"
-        '  "file_identity": "2-3 sentence description",\n'
-        '  "manipulation_signals": ["signal1", "signal2"] or [],\n'
-        '  "routing_category": "live_photograph",\n'
-        '  "confidence": 0.85\n'
+        '  "what_it_is": "<=15 words describing what this file is>",\n'
+        '  "origin": "one of: phone_screenshot | desktop_screenshot | camera_photo | scanned_doc | ai_generated | web_download | re_photographed_screen",\n'
+        '  "manipulation": {"signals": ["..."], "assessment": "none_observed | minor | suspicious"},\n'
+        '  "visible_metadata": {"on_screen_datetime": "<if visible>", "platform": "<OS/app if identifiable>"},\n'
+        '  "elements": ["heading: <text>", "button: <label>", "image", "table", ...],\n'
+        '  "routing_category": "screenshot|document|live_photograph|web_image|object_scene|ai_generated_suspect",\n'
+        '  "confidence": 0.0\n'
         "}"
+        f"{category_directive}"
+        f"{meta_section}"
     )
     return prompt
 
@@ -1138,68 +1134,104 @@ class GeminiVisionClient:
 
         confidence = float(data.get("confidence", 0.5))
 
-        # Build unified description — handle all response shapes including deep_forensic_analysis
-        descriptions = []
-        for key in (
-            "scene_description",
-            "visual_confirmation",
-            "authenticity_assessment",
-            "overall_verdict",
-            "scene_coherence",
-            "contextual_narrative",
-        ):
-            val = data.get(key)
-            if val and isinstance(val, str):
-                descriptions.append(val)
+        # ── Parse new structured JSON contract ──────────────────────────────
+        # New fields: what_it_is, origin, manipulation, visible_metadata, elements
+        # Legacy fields (for backward compat with old prompts): scene_description, etc.
 
-        # deep_forensic_analysis extras: interface + authenticity verdict
-        iface = data.get("interface_identification", "")
-        if iface and isinstance(iface, str) and iface.lower() not in ("none", "n/a", ""):
-            descriptions.insert(0, f"Interface: {iface}")
-        verdict = data.get("authenticity_verdict", "")
-        if verdict and isinstance(verdict, str):
-            descriptions.append(f"Verdict: {verdict}")
-        meta_consistency = data.get("metadata_visual_consistency", "")
-        if (
-            meta_consistency
-            and isinstance(meta_consistency, str)
-            and meta_consistency.lower() not in ("none", "n/a", "")
-        ):
-            descriptions.append(f"Metadata consistency: {meta_consistency}")
+        # content_description: prefer what_it_is (new), fall back to scene_description (legacy)
+        content_description = ""
+        what_it_is = data.get("what_it_is", "")
+        if what_it_is and isinstance(what_it_is, str) and len(what_it_is.strip()) > 5:
+            content_description = what_it_is.strip()
 
-        # Gather manipulation and anomaly signals
+        if not content_description:
+            # Legacy fallback: scene_description, contextual_narrative, etc.
+            for key in ("scene_description", "contextual_narrative", "file_identity"):
+                val = data.get(key, "")
+                if val and isinstance(val, str) and len(val.strip()) > 10:
+                    content_description = val.strip()
+                    break
+            if content_description:
+                sentences = [s.strip() for s in content_description.replace("  ", " ").split(". ") if s.strip()]
+                content_description = ". ".join(sentences[:2]).rstrip(".") + "."
+
+        if not content_description:
+            # Last resort: synthesize from available fields
+            file_type = data.get("content_type", "") or data.get("file_identity", "")
+            detected_objects = data.get("elements", []) or data.get("detected_objects", [])
+            if file_type:
+                content_description = f"Gemini identified the evidence as {file_type}."
+            elif detected_objects:
+                content_description = f"Visible elements include {', '.join(str(o) for o in detected_objects[:5])}."
+            else:
+                content_description = "Visual analysis complete."
+
+        # origin: new field maps to file_type_assessment
+        origin = data.get("origin", "")
+        file_type = origin or data.get("content_type", "") or data.get("file_identity", "")
+
+        # manipulation signals: new structured field + legacy flat field
         manipulation_signals: list[str] = []
-        for key in (
-            "manipulation_signals",
-            "additional_anomalies",
-            "compositing_signals",
-            "content_provenance_flags",
-        ):
-            items = data.get(key, [])
-            if isinstance(items, list):
-                manipulation_signals.extend(str(i) for i in items if i)
-            elif isinstance(items, str) and items.lower() not in (
-                "none",
-                "none detected",
-                "",
-            ):
-                manipulation_signals.append(items)
+        manipulation = data.get("manipulation", {})
+        if isinstance(manipulation, dict):
+            raw_signals = manipulation.get("signals", [])
+            if isinstance(raw_signals, list):
+                manipulation_signals.extend(str(i) for i in raw_signals if i)
+            # authenticity verdict from manipulation.assessment
+            assessment = manipulation.get("assessment", "")
+            if assessment and isinstance(assessment, str):
+                verdict = assessment
+        # Legacy: flat manipulation_signals field
+        if not manipulation_signals:
+            for key in ("manipulation_signals", "additional_anomalies", "compositing_signals", "content_provenance_flags"):
+                items = data.get(key, [])
+                if isinstance(items, list):
+                    manipulation_signals.extend(str(i) for i in items if i)
+                elif isinstance(items, str) and items.lower() not in ("none", "none detected", ""):
+                    manipulation_signals.append(items)
 
-        # Gather contextual anomalies
+        # authenticity verdict: new manipulation.assessment > legacy authenticity_verdict
+        verdict = ""
+        if isinstance(manipulation, dict):
+            verdict = manipulation.get("assessment", "") or ""
+        if not verdict:
+            verdict = data.get("authenticity_verdict", "") or ""
+        # Normalize assessment values to verdict-compatible strings
+        assessment_to_verdict = {
+            "none_observed": "AUTHENTIC",
+            "minor": "SUSPICIOUS",
+            "suspicious": "SUSPICIOUS",
+        }
+        if verdict in assessment_to_verdict:
+            verdict = assessment_to_verdict[verdict]
+
+        # visible_metadata: on-screen datetime and platform
+        visible_meta = data.get("visible_metadata", {})
+        on_screen_datetime = ""
+        platform = ""
+        if isinstance(visible_meta, dict):
+            on_screen_datetime = visible_meta.get("on_screen_datetime", "") or ""
+            platform = visible_meta.get("platform", "") or ""
+
+        # elements: new field maps to detected_objects
+        detected_objects: list[str] = []
+        elements = data.get("elements", [])
+        if isinstance(elements, list):
+            detected_objects.extend(str(i) for i in elements if i)
+        if not detected_objects:
+            for key in ("detected_objects", "validated_objects", "weapons_contraband"):
+                items = data.get(key, [])
+                if isinstance(items, list):
+                    detected_objects.extend(str(i) for i in items if i)
+
+        # contextual anomalies
         contextual_anomalies: list[str] = []
         for key in ("contextual_flags",):
             items = data.get(key, [])
             if isinstance(items, list):
                 contextual_anomalies.extend(str(i) for i in items if i)
 
-        # Gather detected objects (all variants)
-        detected_objects: list[str] = []
-        for key in ("detected_objects", "validated_objects", "weapons_contraband"):
-            items = data.get(key, [])
-            if isinstance(items, list):
-                detected_objects.extend(str(i) for i in items if i)
-
-        # Extracted text (deep_forensic_analysis only)
+        # extracted text (legacy support)
         extracted_text_items: list[str] = []
         raw_text_items = data.get("extracted_text", [])
         if isinstance(raw_text_items, list):
@@ -1207,40 +1239,19 @@ class GeminiVisionClient:
         elif isinstance(raw_text_items, str) and raw_text_items:
             extracted_text_items = [raw_text_items]
 
-        file_type = data.get("content_type", "") or data.get("file_identity", "")
+        # interface identification (legacy support)
+        iface = data.get("interface_identification", "")
+        if not iface and platform:
+            iface = f"Platform: {platform}"
 
-        # Build clean 1-2 sentence content_description — no raw field dumps.
-        # Use scene_description or contextual_narrative as the primary identity line.
-        primary_desc = ""
-        for key in ("scene_description", "contextual_narrative"):
-            val = data.get(key, "")
-            if val and isinstance(val, str) and len(val.strip()) > 10:
-                primary_desc = val.strip()
-                break
-        if primary_desc:
-            sentences = [s.strip() for s in primary_desc.replace("  ", " ").split(". ") if s.strip()]
-            primary_desc = ". ".join(sentences[:2]).rstrip(".") + "."
-        if not primary_desc:
-            fallback_parts: list[str] = []
-            if file_type:
-                fallback_parts.append(f"Gemini classified the evidence as {file_type}.")
-            if detected_objects:
-                fallback_parts.append(
-                    "Visible elements include " + ", ".join(detected_objects[:5]) + "."
-                )
-            if extracted_text_items:
-                fallback_parts.append(
-                    "Visible text includes " + "; ".join(extracted_text_items[:3]) + "."
-                )
-            if manipulation_signals:
-                fallback_parts.append(
-                    "Visual concerns include " + "; ".join(manipulation_signals[:2]) + "."
-                )
-            primary_desc = " ".join(fallback_parts).strip()
+        # metadata consistency (legacy support)
+        meta_consistency = data.get("metadata_visual_consistency", "")
+
+        # Append verdict suffix to content_description if notable
         verdict_suffix = ""
-        if verdict and verdict.upper() not in ("AUTHENTIC", "LIKELY_AUTHENTIC", ""):
+        if verdict and verdict.upper() not in ("AUTHENTIC", "LIKELY_AUTHENTIC", "NONE_OBSERVED", ""):
             verdict_suffix = f" Visual assessment: {verdict}."
-        content_description = (primary_desc + verdict_suffix).strip() or "Visual analysis complete."
+        content_description = (content_description + verdict_suffix).strip()
 
         from core.image_routing import build_image_forensic_routing
 
@@ -1268,7 +1279,7 @@ class GeminiVisionClient:
             latency_ms=latency_ms,
             _extracted_text=extracted_text_items,
             _interface_identification=iface,
-            _contextual_narrative=data.get("contextual_narrative", ""),
+            _contextual_narrative=data.get("contextual_narrative", "") or content_description,
             _authenticity_verdict=verdict,
             _metadata_visual_consistency=meta_consistency,
             _forensic_routing=routing,

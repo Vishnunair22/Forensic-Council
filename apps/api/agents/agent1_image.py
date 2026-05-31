@@ -25,7 +25,6 @@ from functools import cached_property
 
 from agents.base_agent import ForensicAgent
 from core.handlers.image import ImageHandlers
-from core.handlers.metadata import MetadataHandlers
 from core.image_routing import TOOL_TO_TASK_DESCRIPTION, build_image_forensic_routing
 from core.image_utils import is_lossless_image
 from core.media_kind import (
@@ -145,34 +144,18 @@ class Agent1Image(ForensicAgent):
             classification = self._legacy_classify()
 
         recommended_tools = classification.recommended_tools
-        base_tasks = [
-            "Run file_hash_verify for evidence integrity check",
-        ]
-
-        if classification.primary_category == "screenshot":
-            return [
-                "Run file_hash_verify for evidence integrity check",
-                "Run extract_text_from_image for visible text extraction",
-                "Run analyze_image_content for semantic content classification",
-                "Run detect_font_inconsistency for screenshot text font analysis",
-                "Run detect_ui_overlay_forgery for screenshot UI overlay analysis",
-                "Run frequency_domain_analysis for frequency domain analysis",
-                "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
-            ]
+        base_tasks = []
 
         from core.image_routing import TOOL_TO_TASK_DESCRIPTION
         for tool in recommended_tools:
-            if tool in ("file_hash_verify", "visual_evidence_profile"):
+            if tool == "file_hash_verify":
                 continue
             task_desc = TOOL_TO_TASK_DESCRIPTION.get(tool)
             if task_desc:
                 base_tasks.append(task_desc)
 
-        if "extract_text_from_image" not in " ".join(base_tasks):
-            if classification.primary_category in ("screenshot", "document"):
-                base_tasks.append("Run extract_text_from_image for visible text extraction")
-
-        base_tasks.append("Run visual_evidence_profile for visual evidence profile and forensic routing hints")
+        if "visual_evidence_profile" not in " ".join(base_tasks):
+            base_tasks.append("Run visual_evidence_profile for visual evidence profile and forensic routing hints")
 
         return base_tasks
 
@@ -251,13 +234,8 @@ class Agent1Image(ForensicAgent):
         )
 
         # ── Register category-specific tools ──────────────────────────────────
-        # Core tools always registered
-        metadata_h = MetadataHandlers(self)
-        registry.register(
-            "file_hash_verify",
-            metadata_h.file_hash_verify_handler,
-            "SHA-256 hash verification against ingestion record",
-        )
+        # NOTE: file_hash_verify is registered exclusively by Agent 5 (Provenance).
+        # Agent 1 reads the hash result from shared context instead of running it.
 
         # Only register image handlers for tools in the recommended set
         image_h = ImageHandlers(self)

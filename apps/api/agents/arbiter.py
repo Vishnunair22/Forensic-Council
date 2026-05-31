@@ -247,6 +247,18 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
 
+        # Extract visual assessment from Agent 1's visual profile for scoring
+        visual_assessment = ""
+        for _vfindings in visual_profile_findings_by_agent.values():
+            for _vf in _vfindings:
+                _vmeta = _vf.get("metadata") or {}
+                _vauth = str(_vmeta.get("authenticity_verdict") or "").lower()
+                if _vauth:
+                    visual_assessment = _vauth
+                    break
+            if visual_assessment:
+                break
+
         # Weighted stats
         overall_confidence, overall_error_rate = self._calculate_weighted_stats(active_metrics)
 
@@ -268,7 +280,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         # Manipulation detection
         comp_penalty = self._get_compression_penalty(all_findings)
-        man_prob, man_signals = calculate_manipulation_probability(all_findings, comp_penalty)
+        man_prob, man_signals = calculate_manipulation_probability(
+            all_findings, comp_penalty, visual_assessment=visual_assessment
+        )
 
         # ── 3. Cross-Modal Deliberation ───────────────────────────────────
         await _step("Comparing corroborating and conflicting tool signals.")

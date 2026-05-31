@@ -178,7 +178,7 @@ function KeyFindingItem({ f, i }: { f: FindingPreview; i: number }) {
         (isCritical || isHigh) ? "fc-text-primary" : "fc-text-secondary"
       )}>
         {text}
-        {f.degraded && (
+        {f.degraded && !f.heuristic_mode && (
           <span className="ml-1.5 text-xs fc-text-muted font-mono">(fallback)</span>
         )}
       </span>

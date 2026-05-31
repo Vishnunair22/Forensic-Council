@@ -121,6 +121,7 @@ class NeuralSynthesisMixin:
                 "external_ai_used": bool(metadata.get("external_ai_used", False)),
                 "available": True,
                 "court_defensible": metadata.get("court_defensible", True),
+                "content_description": content_description,
             },
             "court_defensible": True,
             "available": True,

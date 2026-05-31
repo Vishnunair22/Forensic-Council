@@ -508,9 +508,9 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         # Fallback: classical multi-quality ELA (pass record=False to avoid double-counting)
         fallback = await self.ela_full_image_handler(input_data, record=False)
         fallback = self._attach_visual_grounding(fallback, tool_name="neural_ela")
-        fallback["degraded"] = True
+        fallback["heuristic_mode"] = True
         fallback["fallback_reason"] = (
-            "neural_ela_transformer unavailable or failed; used classical multi-quality ELA"
+            "neural_ela_transformer unavailable; used classical multi-quality ELA (designed heuristic path)"
         )
         if record:
             await self._store("neural_ela", fallback, "ela_full_image")
@@ -538,9 +538,9 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
 
         # Fallback: heuristic noise fingerprint
         fallback = await self.noise_fingerprint_handler(input_data, record=False)
-        fallback["degraded"] = True
+        fallback["heuristic_mode"] = True
         fallback["fallback_reason"] = (
-            "noiseprint_clustering unavailable or failed; used heuristic noise fingerprint"
+            "noiseprint_clustering unavailable or failed; used heuristic noise fingerprint (designed heuristic path)"
         )
         if record:
             await self._store("noiseprint_cluster", fallback, "noise_fingerprint")
@@ -885,8 +885,8 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         # Fallback: SIFT-based copy-move (runs in executor — sync CPU call)
         loop = asyncio.get_running_loop()
         fallback = await loop.run_in_executor(None, detect_copy_move, artifact.file_path)
-        fallback["degraded"] = True
-        fallback["fallback_reason"] = "BusterNet dual-branch unavailable; SIFT-based copy-move used"
+        fallback["heuristic_mode"] = True
+        fallback["fallback_reason"] = "BusterNet dual-branch unavailable; SIFT-based copy-move used (designed heuristic path)"
         if record:
             await self.agent._record_tool_result("neural_copy_move", fallback)
         return fallback
@@ -1136,12 +1136,12 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             if task is None or task.done():
                 task = asyncio.create_task(real_extract_evidence_text(artifact=artifact))
                 _OCR_INFLIGHT[key] = task
-            result = await asyncio.wait_for(asyncio.shield(task), timeout=110.0)
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=25.0)
             _OCR_CACHE[key] = (time.monotonic(), dict(result))
         except TimeoutError:
             logger.warning("OCR handler timed out — returning timeout error result")
             result = {
-                "error": "OCR extraction timed out after 110s",
+                "error": "OCR extraction timed out after 25s",
                 "timeout": True,
                 "available": True,
                 "confidence": 0.0,

@@ -361,10 +361,15 @@ def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
 def calculate_manipulation_probability(
     all_findings: list[dict[str, Any]],
     compression_penalty: float = 1.0,
+    visual_assessment: str = "",
 ) -> tuple[float, int]:
     """
     Core deterministic calculation of manipulation probability.
     Returns (probability, signals_count).
+    
+    visual_assessment: The visual-profile manipulation.assessment from Gemini
+    (e.g. "none_observed", "minor", "suspicious"). When suspicious, it raises
+    the baseline probability even when pixel tools are clean.
     """
     _diffusion_detected_globally = any(
         (f.get("metadata") or {}).get("diffusion_detected") is True
@@ -429,25 +434,32 @@ def calculate_manipulation_probability(
     signals_count = len(_manip_weighted)
 
     if not _manip_weighted:
-        return 0.0, 0
+        base_prob = 0.0
     elif len(_manip_weighted) == 1:
-        # For a single signal, we apply a more conservative decay unless the weight is very high.
         _c0, _w0 = _manip_weighted[0]
-        _anchored_decay = max(0.4, _w0 * 0.8) # Cap single-signal impact
-        return round(_c0 * _anchored_decay, 3), 1
+        _anchored_decay = max(0.4, _w0 * 0.8)
+        base_prob = _c0 * _anchored_decay
     else:
-        # Multi-signal corroboration: calculate weighted average and add volume bonus
         _sorted_manip = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)
         _top = _sorted_manip[:7]
         _tw = sum(_w for _, _w in _top)
         _sum_weighted = sum(_c * _w for _c, _w in _top)
-        _base_prob = _sum_weighted / _tw if _tw > 0 else 0.0
-
-        # Volume bonus: more signals from independent agents increase the probability
+        base_prob = _sum_weighted / _tw if _tw > 0 else 0.0
         _volume_bonus = min(0.25, (len(_sorted_manip) - 1) * 0.05)
+        base_prob += _volume_bonus
 
-        final_prob = round(min(ForensicPolicy.MANIP_PROBABILITY_CAP, _base_prob + _volume_bonus), 3)
-        return final_prob, signals_count
+    # ── Visual assessment integration ──────────────────────────────────────
+    # When the visual profile flags manipulation but no pixel tool fired,
+    # raise the baseline so a suspicious visual assessment doesn't read AUTHENTIC.
+    _assessment = str(visual_assessment).lower().strip()
+    if _assessment == "suspicious" and base_prob < 0.35:
+        base_prob = max(base_prob, 0.35)
+        signals_count = max(signals_count, 1)
+    elif _assessment == "minor" and base_prob < 0.15:
+        base_prob = max(base_prob, 0.15)
+
+    final_prob = round(min(ForensicPolicy.MANIP_PROBABILITY_CAP, base_prob), 3)
+    return final_prob, signals_count
 
 
 def _get_finding_category(finding_type: str, agent_id: str = "") -> str | None:

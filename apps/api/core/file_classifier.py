@@ -26,13 +26,8 @@ class FileClassification:
 
 CATEGORY_TO_RECOMMENDED_TOOLS: dict[str, list[str]] = {
     "screenshot": [
-        "file_hash_verify",
         "visual_evidence_profile",
-        "extract_text_from_image",
-        "analyze_image_content",
-        "detect_font_inconsistency",
         "detect_ui_overlay_forgery",
-        "frequency_domain_analysis",
     ],
     "document": [
         "file_hash_verify",
@@ -86,6 +81,10 @@ CATEGORY_TO_SKIP_TOOLS: dict[str, list[str]] = {
         "noise_fingerprint",
         "neural_splicing",
         "neural_copy_move",
+        "extract_text_from_image",
+        "analyze_image_content",
+        "frequency_domain_analysis",
+        "detect_font_inconsistency",
     ],
     "document": [
         "detect_font_inconsistency",
