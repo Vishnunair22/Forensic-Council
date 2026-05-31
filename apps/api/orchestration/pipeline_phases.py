@@ -1021,7 +1021,7 @@ async def run_agents_concurrent(
     try:
         _deep_norm = pipeline._normalize_agent_results(results)
         pipeline._pre_warm_task = asyncio.create_task(
-            pipeline._run_arbiter_pre_warm(_deep_norm, pipeline._case_id)
+            pipeline._run_arbiter_pre_warm(_deep_norm, pipeline._case_id, suppress_broadcasts=True)
         )
     except Exception as _pw_err:
         logger.debug("Phase-2 pre-warm task creation failed", error=str(_pw_err))
@@ -1108,7 +1108,7 @@ async def _run_agent_deep_only(
             span.set_attribute("total_finding_count", len(all_findings))
             return AgentLoopResult(
                 agent_id=agent_id,
-                findings=[f.model_dump(mode="json") for f in deep_only],
+                findings=[f.model_dump(mode="json") for f in all_findings],
                 reflection_report=(
                     getattr(agent, "_reflection_report", None).model_dump(mode="json")
                     if getattr(agent, "_reflection_report", None)

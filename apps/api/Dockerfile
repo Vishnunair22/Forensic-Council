@@ -172,7 +172,6 @@ ENV NUMBA_CACHE_DIR="/app/cache/numba_cache" \
     YOLO_MODEL_DIR="/app/cache/ultralytics" \
     TORCH_HOME="/app/cache/torch" \
     HF_HOME="/app/cache/huggingface" \
-    TRANSFORMERS_CACHE="/app/cache/huggingface/transformers" \
     EASYOCR_MODEL_DIR="/app/cache/easyocr"
 
 RUN mkdir -p \
@@ -208,7 +207,6 @@ RUN python scripts/validate_ml_tools.py
 # Uses centralized retry script for consistent retry logic across build and runtime.
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         export HF_HOME="$FORENSIC_MODEL_SEED_DIR/huggingface" ; \
-        export TRANSFORMERS_CACHE="$FORENSIC_MODEL_SEED_DIR/huggingface/transformers" ; \
         export TORCH_HOME="$FORENSIC_MODEL_SEED_DIR/torch" ; \
         export EASYOCR_MODEL_DIR="$FORENSIC_MODEL_SEED_DIR/easyocr" ; \
         export YOLO_CONFIG_DIR="$FORENSIC_MODEL_SEED_DIR/ultralytics" ; \

@@ -621,17 +621,41 @@ def compute_content_hash(content: dict[str, Any]) -> str:
     # and round floats to 10 decimal places to avoid PostgreSQL JSONB
     # float precision changes breaking hash verification.
     def _normalize(obj: Any) -> Any:
+        if isinstance(obj, bool):
+            return obj
         if isinstance(obj, float):
             return float(Decimal(str(obj)).quantize(Decimal("0.0000000001"), rounding=ROUND_DOWN))
         if isinstance(obj, dict):
             return {k: _normalize(v) for k, v in obj.items()}  # type: ignore[return-value]
-        if isinstance(obj, list):
+        if isinstance(obj, (list, tuple)):
             return [_normalize(v) for v in obj]  # type: ignore[return-value]
         return obj
 
     normalized = _normalize(content)
+    # Match the JSONB round trip used by persisted custody rows so signatures
+    # verify after PostgreSQL decodes nested tuples, UUIDs, and other JSON-safe
+    # scalar values.
+    normalized = json.loads(json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str))
     content_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(content_json.encode("utf-8")).hexdigest()
+
+
+def canonicalize_content(content: dict[str, Any]) -> dict[str, Any]:
+    """Return the JSON-stable representation used for custody hashing."""
+
+    def _normalize(obj: Any) -> Any:
+        if isinstance(obj, bool):
+            return obj
+        if isinstance(obj, float):
+            return float(Decimal(str(obj)).quantize(Decimal("0.0000000001"), rounding=ROUND_DOWN))
+        if isinstance(obj, dict):
+            return {k: _normalize(v) for k, v in obj.items()}  # type: ignore[return-value]
+        if isinstance(obj, (list, tuple)):
+            return [_normalize(v) for v in obj]  # type: ignore[return-value]
+        return obj
+
+    normalized = _normalize(content)
+    return json.loads(json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str))
 
 
 def sign_content(
@@ -659,6 +683,8 @@ def sign_content(
         keystore = get_keystore()
 
     key_pair = keystore.get_or_create(agent_id)
+
+    content = canonicalize_content(content)
 
     # Compute content hash
     content_hash = compute_content_hash(content)

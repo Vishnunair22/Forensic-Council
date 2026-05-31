@@ -61,6 +61,10 @@ class FindingHumanizer:
             statement = FindingHumanizer._humanize_font(meta, verdict, conf)
         elif "ui_overlay" in tool_lower:
             statement = FindingHumanizer._humanize_ui_overlay(meta, verdict, conf)
+        elif "scene_incongruence" in tool_lower:
+            statement = FindingHumanizer._humanize_scene_incongruence(meta, verdict, conf)
+        elif "visual_evidence_profile" in tool_lower or "visual_profile" in tool_lower:
+            statement = FindingHumanizer._humanize_visual_profile(meta, verdict, conf)
         else:
             statement = FindingHumanizer._humanize_generic(finding)
 
@@ -137,7 +141,8 @@ class FindingHumanizer:
 
     @staticmethod
     def _humanize_hash(meta: dict, verdict: str, conf: float) -> str:
-        if verdict in ("NEGATIVE", "CLEAN"):
+        hash_matched = meta.get("hash_matches") is True or meta.get("hash_match") is True
+        if hash_matched or verdict in ("NEGATIVE", "CLEAN"):
             return (
                 "Cryptographic hash verification confirmed the file has not been altered "
                 "since initial upload. The file's digital fingerprint matches the original."
@@ -203,6 +208,35 @@ class FindingHumanizer:
             "UI overlay analysis found no suspicious inserted interface elements "
             "in the screenshot."
         )
+
+    @staticmethod
+    def _humanize_scene_incongruence(meta: dict, verdict: str, conf: float) -> str:
+        score = float(meta.get("incongruence_score") or 0.0)
+        anomalies = meta.get("contextual_anomalies") or meta.get("anomalies") or []
+        count = len(anomalies) if isinstance(anomalies, list) else int(meta.get("anomaly_count") or 0)
+        conf_text = FindingHumanizer._confidence_text(conf)
+        if verdict == "POSITIVE" or meta.get("scene_incongruent") or count:
+            return (
+                f"Scene incongruence analysis found {count or 1} contextual mismatch "
+                f"signal(s) with incongruence score {score:.3f} ({conf_text}). "
+                "This suggests the image may contain pasted, synthetic, or visually inconsistent regions."
+            )
+        return (
+            f"Scene incongruence analysis found no supported contextual mismatch "
+            f"signals (score {score:.3f}, {conf_text})."
+        )
+
+    @staticmethod
+    def _humanize_visual_profile(meta: dict, verdict: str, conf: float) -> str:
+        desc = str(meta.get("content_description") or meta.get("contextual_narrative") or "").strip()
+        signals = meta.get("manipulation_signals") if isinstance(meta.get("manipulation_signals"), list) else []
+        if verdict == "POSITIVE" or signals:
+            signal_text = "; ".join(str(s) for s in signals[:3]) or "visual manipulation indicators"
+            return (
+                f"Visual evidence profiling described the content as: {desc or 'submitted image'}. "
+                f"It flagged {len(signals) or 1} visual concern(s): {signal_text}."
+            )
+        return f"Visual evidence profiling described the content as: {desc or 'submitted image'}."
 
     @staticmethod
     def _humanize_generic(finding: dict) -> str:

@@ -28,13 +28,13 @@ fi
 
 echo ""
 echo "POST /api/auth/demo through frontend/Caddy"
-DEMO_RESP=$(curl -fsS \
+DEMO_RESP=$(curl -fsSi \
   -X POST http://localhost/api/auth/demo \
   -H 'Content-Type: application/json' \
   -d '{}')
-echo "$DEMO_RESP" | head -c 500
+echo "$DEMO_RESP" | head -c 1000
 echo
-if ! echo "$DEMO_RESP" | grep -q '"access_token"'; then
-  echo "FAIL: demo auth response missing access_token" >&2
+if ! echo "$DEMO_RESP" | grep -qi 'set-cookie:.*access_token'; then
+  echo "FAIL: demo auth response missing access_token in Set-Cookie header" >&2
   exit 1
 fi

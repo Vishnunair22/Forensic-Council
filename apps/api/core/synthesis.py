@@ -754,7 +754,12 @@ Return ONLY a JSON object with this exact schema:
                 result["delta_reason"] = response.get("delta_reason", "")
             return result
         except Exception as e:
-            logger.error(f"Groq synthesis failed: {e}")
+            logger.warning(
+                "LLM synthesis unavailable; using deterministic grounded fallback",
+                error=str(e),
+                agent=agent_name,
+                phase=phase,
+            )
             positive_count = sum(
                 1
                 for group in grouped_sections_data

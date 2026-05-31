@@ -161,29 +161,17 @@ def _detect_synthid_frequency_signal(file_path: str) -> float:
     (0.0 = clean, 1.0 = strong SynthID signal)
     """
     try:
-        import cv2
         import numpy as np
+        from PIL import Image
     except ImportError:
         # Return -1.0 as sentinel meaning "tool unavailable", not "not detected"
         return -1.0
 
     try:
-        # Pre-resize large files with PIL before cv2 to stay under the 2GB
-        # subprocess memory limit (cv2.imread loads the full raster before crop).
-        file_size = os.path.getsize(file_path)
-        if file_size > 5 * 1024 * 1024:
-            try:
-                from PIL import Image
-                pil_img = Image.open(file_path).convert("L")
-                pil_img.thumbnail((512, 512))
-                img = np.array(pil_img, dtype=np.uint8)
-            except Exception:
-                img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-        else:
-            img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-
-        if img is None:
-            return 0.0
+        with Image.open(file_path) as pil_img:
+            pil_img = pil_img.convert("L")
+            pil_img.thumbnail((512, 512))
+            img = np.array(pil_img, dtype=np.float32)
 
         # Work on center crop to avoid edge effects
         h, w = img.shape
@@ -195,49 +183,33 @@ def _detect_synthid_frequency_signal(file_path: str) -> float:
         if crop.size == 0:
             return 0.0
 
-        # Compute DCT on 8x8 blocks and analyze mid-frequency coefficients
-        img_float = crop.astype(np.float32)
-        block_size = 8
-        n_blocks_y = crop.shape[0] // block_size
-        n_blocks_x = crop.shape[1] // block_size
-
-        # Collect mid-frequency DCT coefficients (positions 3-5 in zigzag)
-        # These are the bands SynthID modulates
-        mid_freq_vals = []
-        for by in range(n_blocks_y):
-            for bx in range(n_blocks_x):
-                block = img_float[
-                    by * block_size : (by + 1) * block_size,
-                    bx * block_size : (bx + 1) * block_size,
-                ]
-                dct_block = cv2.dct(block)
-                # Mid-frequency positions: (1,2), (2,1), (2,2), (1,3), (3,1)
-                mid_freq_vals.extend([
-                    dct_block[1, 2], dct_block[2, 1],
-                    dct_block[2, 2], dct_block[1, 3],
-                    dct_block[3, 1],
-                ])
-
-        if not mid_freq_vals:
+        # Use NumPy FFT instead of OpenCV DCT. The OpenCV import path has
+        # caused native crashes in constrained worker containers; this keeps
+        # the detector deterministic and subprocess-safe.
+        crop = crop - float(np.mean(crop))
+        spectrum = np.abs(np.fft.fftshift(np.fft.fft2(crop)))
+        if spectrum.size == 0:
             return 0.0
 
-        mid_arr = np.array(mid_freq_vals)
-
-        # SynthID creates a subtle periodicity in the distribution of these values
-        # Measure: kurtosis deviation from expected natural image distribution
-        # Natural images: kurtosis ~3-5 for mid-freq DCT
-        # SynthID-watermarked: kurtosis shifts toward 2.2-2.8 (more uniform)
-        mean = float(np.mean(mid_arr))
-        std = float(np.std(mid_arr))
-        if std < 1e-6:
+        yy, xx = np.indices(spectrum.shape)
+        center_y, center_x = (np.array(spectrum.shape) - 1) / 2.0
+        radius = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
+        max_radius = float(radius.max()) or 1.0
+        norm_radius = radius / max_radius
+        mid_band = spectrum[(norm_radius >= 0.18) & (norm_radius <= 0.45)]
+        if mid_band.size == 0:
             return 0.0
 
-        # Excess kurtosis
-        kurtosis = float(np.mean(((mid_arr - mean) / std) ** 4))
-        # Natural image mid-freq kurtosis: typically 4-8
-        # SynthID-modified: typically 2.0-3.5
-        # Map to 0-1 signal strength
-        synthid_signal = max(0.0, min(1.0, (4.0 - kurtosis) / 3.0))
+        mid_mean = float(np.mean(mid_band))
+        mid_std = float(np.std(mid_band))
+        if mid_mean <= 1e-6:
+            return 0.0
+
+        # Imperceptible watermarking tends to flatten portions of the
+        # mid-frequency distribution. This is a weak screening signal only;
+        # metadata-backed detections remain the court-defensible path.
+        regularity = max(0.0, min(1.0, 1.0 - (mid_std / (mid_mean * 2.5))))
+        synthid_signal = min(0.75, regularity)
 
         return round(synthid_signal, 3)
 
@@ -275,7 +247,7 @@ def detect_ai_watermark(file_path: str) -> dict[str, Any]:
         metadata_result["metadata_ai_declared"]
         or metadata_result["generation_params_found"]
         or metadata_result["c2pa_ai_assertion"]
-        or (synthid_available and synthid_signal > 0.55)
+        or (synthid_available and synthid_signal > 0.85)
     )
 
     # Determine watermark type
@@ -286,7 +258,7 @@ def detect_ai_watermark(file_path: str) -> dict[str, Any]:
         watermark_type = "stable_diffusion_metadata"
     elif metadata_result["metadata_ai_declared"]:
         watermark_type = f"software_metadata:{metadata_result.get('ai_software', 'unknown')}"
-    elif synthid_signal > 0.55:
+    elif synthid_signal > 0.85:
         watermark_type = "synthid_frequency_pattern"
 
     # Compute confidence
@@ -297,8 +269,8 @@ def detect_ai_watermark(file_path: str) -> dict[str, Any]:
         signals.append(0.95)
     if metadata_result["c2pa_ai_assertion"]:
         signals.append(0.98)
-    if synthid_signal > 0.55:
-        signals.append(0.60 + (synthid_signal - 0.55) * 0.8)
+    if synthid_signal > 0.85:
+        signals.append(0.60 + (synthid_signal - 0.85) * 0.8)
 
     confidence = max(signals) if signals else (synthid_signal * 0.5)
 

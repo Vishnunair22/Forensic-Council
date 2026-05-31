@@ -42,7 +42,10 @@ class VisualEvidenceFinding:
         *,
         tool_name: str = TOOL_VISUAL_PROFILE,
     ) -> dict[str, Any]:
-        verdict = self._authenticity_verdict.upper()
+        raw_verdict = self._authenticity_verdict.upper()
+        verdict = raw_verdict
+        if self.manipulation_signals and verdict in {"", "AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"}:
+            verdict = "SUSPICIOUS"
         manipulation_detected = verdict in {
             "SUSPICIOUS",
             "LIKELY_MANIPULATED",
@@ -84,7 +87,8 @@ class VisualEvidenceFinding:
             "extracted_text": self._extracted_text,
             "interface_identification": self._interface_identification,
             "contextual_narrative": self._contextual_narrative,
-            "authenticity_verdict": self._authenticity_verdict,
+            "authenticity_verdict": verdict or self._authenticity_verdict,
+            "raw_authenticity_verdict": raw_verdict,
             "metadata_visual_consistency": self._metadata_visual_consistency,
             "forensic_routing": self._forensic_routing,
             "forensic_specifics": self._forensic_specifics,
@@ -110,7 +114,8 @@ class VisualEvidenceFinding:
                 "extracted_text": self._extracted_text,
                 "interface_identification": self._interface_identification,
                 "contextual_narrative": self._contextual_narrative,
-                "authenticity_verdict": self._authenticity_verdict,
+                "authenticity_verdict": verdict or self._authenticity_verdict,
+                "raw_authenticity_verdict": raw_verdict,
                 "metadata_visual_consistency": self._metadata_visual_consistency,
                 "forensic_routing": self._forensic_routing,
                 "forensic_specifics": self._forensic_specifics,

@@ -1162,6 +1162,23 @@ class GeminiVisionClient:
         if primary_desc:
             sentences = [s.strip() for s in primary_desc.replace("  ", " ").split(". ") if s.strip()]
             primary_desc = ". ".join(sentences[:2]).rstrip(".") + "."
+        if not primary_desc:
+            fallback_parts: list[str] = []
+            if file_type:
+                fallback_parts.append(f"Gemini classified the evidence as {file_type}.")
+            if detected_objects:
+                fallback_parts.append(
+                    "Visible elements include " + ", ".join(detected_objects[:5]) + "."
+                )
+            if extracted_text_items:
+                fallback_parts.append(
+                    "Visible text includes " + "; ".join(extracted_text_items[:3]) + "."
+                )
+            if manipulation_signals:
+                fallback_parts.append(
+                    "Visual concerns include " + "; ".join(manipulation_signals[:2]) + "."
+                )
+            primary_desc = " ".join(fallback_parts).strip()
         verdict_suffix = ""
         if verdict and verdict.upper() not in ("AUTHENTIC", "LIKELY_AUTHENTIC", ""):
             verdict_suffix = f" Visual assessment: {verdict}."

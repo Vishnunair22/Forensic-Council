@@ -2121,8 +2121,17 @@ Rules:
             "forged", "spliced", "splice", "cloned", "manipulat",
         )
         if verdict_upper in ("AUTHENTIC", "LIKELY_AUTHENTIC"):
+            negated_signal_patterns = (
+                r"\bno\s+[\w\s-]{0,40}(tamper|fabricat|deepfake|synthetically generat|forg|splic|clon|manipulat)",
+                r"\bnot\s+(?:a\s+)?[\w\s-]{0,40}(tamper|fabricat|deepfake|synthetically generat|forg|splic|clon|manipulat)",
+                r"\bwithout\s+[\w\s-]{0,40}(tamper|fabricat|deepfake|synthetically generat|forg|splic|clon|manipulat)",
+                r"\babsence\s+of\s+[\w\s-]{0,40}(tamper|fabricat|deepfake|synthetically generat|forg|splic|clon|manipulat)",
+            )
+            synthesis_for_signal_check = synthesis
+            for pattern in negated_signal_patterns:
+                synthesis_for_signal_check = re.sub(pattern, "", synthesis_for_signal_check)
             for sig in manipulation_signals:
-                if sig in synthesis:
+                if sig in synthesis_for_signal_check:
                     warnings.append(
                         f"Synthesis references '{sig}' inconsistently with computed verdict "
                         f"{overall_verdict}; section may reflect LLM hallucination."

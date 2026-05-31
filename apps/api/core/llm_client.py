@@ -868,6 +868,7 @@ class LLMClient:
                 
                 allowed_quota, reason = await quota_mgr.can_make_call(priority, estimated_tokens=tokens)
                 if not allowed_quota:
+                    self._last_synthesis_blocked_reason = reason
                     logger.warning(
                         f"Quota manager blocked call for {target_provider}: {reason} — trying next model in chain",
                         priority=priority
@@ -899,6 +900,7 @@ class LLMClient:
                     tpm_limit_override=self._model_tpm_limit(target_provider, target_model),
                 )
                 if not allowed:
+                    self._last_synthesis_blocked_reason = quota_result.reason
                     logger.warning(
                         "Provider quota guard blocked synthesis call",
                         provider=target_provider,
@@ -1144,6 +1146,7 @@ class LLMClient:
         if self.provider == "groq":
             allowed, reason = await self._groq_limiter.acquire()
             if not allowed:
+                self._last_synthesis_blocked_reason = reason
                 logger.warning(f"Groq rate limit hit: {reason}. Falling back to template synthesis.")
                 if priority in ["critical", "high"]:
                     return self._generate_template_synthesis(user_content)
@@ -1181,6 +1184,7 @@ class LLMClient:
         )
 
         if not allowed:
+            self._last_synthesis_blocked_reason = reason
             logger.warning(
                 f"Quota manager blocked synthesis: {reason}. Using template synthesis.",
                 priority=effective_priority
@@ -1190,6 +1194,7 @@ class LLMClient:
             return ""
 
         async with LLMClient._synthesis_semaphore:
+            self._last_synthesis_blocked_reason = ""
             result = await self._generate_synthesis_inner(
                 system_prompt=system_prompt,
                 user_content=user_content,
@@ -1198,7 +1203,7 @@ class LLMClient:
                 json_mode=json_mode,
             )
             # Retry once with 3s backoff if all candidates returned empty
-            if not result:
+            if not result and not getattr(self, "_last_synthesis_blocked_reason", ""):
                 logger.warning("Synthesis returned empty; retrying once after 3s backoff")
                 await asyncio.sleep(3.0)
                 result = await self._generate_synthesis_inner(

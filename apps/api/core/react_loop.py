@@ -861,10 +861,15 @@ class ReActLoopEngine:
             return max(0.0, min(1.0, parsed))
 
         if isinstance(output, dict):
+            if output.get("shared_context_available") is not None:
+                raw_conf = 0.75 if output.get("shared_context_available") else 0.0
+            elif output.get("available") is False or output.get("degraded") is True or "error" in output:
+                raw_conf = 0.0
             for key in ("confidence", "confidence_raw", "confidence_score"):
-                raw_conf = _as_unit_float(output.get(key))
-                if raw_conf is not None:
-                    break
+                if raw_conf is None:
+                    raw_conf = _as_unit_float(output.get(key))
+                    if raw_conf is not None:
+                        break
             if raw_conf is None:
                 for key in (
                     "anomaly_score",
@@ -896,6 +901,8 @@ class ReActLoopEngine:
                     "similarity",
                     "top_similarity",
                     "trace_continuity",
+                    "provenance_score",
+                    "completeness",
                 ):
                     val = _as_unit_float(output.get(key))
                     if val is not None:
@@ -992,6 +999,8 @@ class ReActLoopEngine:
                 elif "plausible" in output:
                     p = output.get("plausible")
                     raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
+                elif output.get("c2pa_present") is not None or output.get("provenance_found") is not None:
+                    raw_conf = 0.85 if output.get("c2pa_present") or output.get("provenance_found") else 0.50
 
         from_fallback = raw_conf is None
         try:
@@ -1310,6 +1319,19 @@ class ReActLoopEngine:
                 )
 
         if not _wm_updated:
+            try:
+                await self.working_memory.get_state(
+                    session_id=self.session_id, agent_id=self.agent_id
+                )
+            except Exception as exc:
+                if "No working memory found" in str(exc):
+                    logger.info(
+                        "Task completion skipped because working memory was already cleared",
+                        agent_id=self.agent_id,
+                        task_id=_task_id_str,
+                        tool=step.tool_name,
+                    )
+                    return
             logger.error(
                 "All task-completion fallbacks exhausted — task remains IN_PROGRESS; "
                 "next iteration may re-run the same tool and produce duplicate findings",

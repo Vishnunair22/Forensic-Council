@@ -32,6 +32,8 @@ def _json_safe(value: Any) -> Any:
     """Return a PostgreSQL JSON-safe copy, replacing non-finite floats and numpy types."""
     import numpy as np
 
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
     if isinstance(value, (float, np.floating)):
         f_val = float(value)
         return f_val if math.isfinite(f_val) else None
@@ -279,21 +281,33 @@ class CustodyLogger:
         """
         # Generate entry ID immediately for consistent tracking
         entry_id = uuid4()
-        content = _json_safe(content)
+        content = json.loads(
+            json.dumps(
+                _json_safe(content),
+                sort_keys=True,
+                allow_nan=False,
+                separators=(",", ":"),
+                default=str,
+            )
+        )
 
-        # Sign the content. Dynamic production signers, such as investigator
-        # IDs, need a persisted DB-backed key before the sync signing helper.
+        # Dynamic production signers, such as investigator IDs, need a
+        # persisted DB-backed key before the sync signing helper.
         keystore = get_keystore()
         await keystore.get_or_create_persistent(agent_id)
-        signed = sign_content(agent_id, content, keystore=keystore)
 
         # Get prior entry hash for chain linking
         # Chain is per-agent to allow concurrent logging without global locks.
         prior_entry_ref = await self._get_last_entry_hash(session_id, agent_id)
 
+        # Sign at the last possible point before persistence. This keeps the
+        # stored JSON payload and hash/signature bound to the exact same
+        # canonical representation even when callers pass mutable tool output.
+        signed = sign_content(agent_id, content, keystore=keystore)
+
         if self._postgres is None:
             await self._queue_to_wal(
-                entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref
+                entry_id, agent_id, session_id, entry_type, signed.content, signed, prior_entry_ref
             )
             return None
 
@@ -313,7 +327,7 @@ class CustodyLogger:
                 agent_id,
                 session_id,
                 signed.timestamp_utc,
-                content,
+                signed.content,
                 signed.content_hash,
                 signed.signature,
                 prior_entry_ref,
@@ -339,7 +353,7 @@ class CustodyLogger:
                 error=str(db_err),
             )
             await self._queue_to_wal(
-                entry_id, agent_id, session_id, entry_type, content, signed, prior_entry_ref
+                entry_id, agent_id, session_id, entry_type, signed.content, signed, prior_entry_ref
             )
             return None
 

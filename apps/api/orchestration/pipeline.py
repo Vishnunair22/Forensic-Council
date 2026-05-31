@@ -74,6 +74,7 @@ class ForensicCouncilPipeline:
         self._arbiter_step: str = ""
         self._session_id: UUID | None = None
         self._pre_warm_task: asyncio.Task | None = None
+        self._suppress_arbiter_step_broadcasts: bool = False
 
         self._setup_infrastructure()
 
@@ -356,6 +357,8 @@ class ForensicCouncilPipeline:
         )
 
         async def _broadcast_arbiter_step(msg: str):
+            if self._suppress_arbiter_step_broadcasts:
+                return
             try:
                 from api.routes._session_state import (
                     broadcast_update,
@@ -676,6 +679,8 @@ class ForensicCouncilPipeline:
         """Background task to run arbiter pre-warm with UI broadcasting."""
         if not self.arbiter:
             return
+        previous_suppression = self._suppress_arbiter_step_broadcasts
+        self._suppress_arbiter_step_broadcasts = suppress_broadcasts or previous_suppression
         try:
             if not suppress_broadcasts:
                 from api.routes._session_state import broadcast_update
@@ -716,6 +721,8 @@ class ForensicCouncilPipeline:
                 )
         except Exception as e:
             logger.warning(f"Arbiter pre-warm background task failed: {e}")
+        finally:
+            self._suppress_arbiter_step_broadcasts = previous_suppression
 
     def invalidate_pre_warm(self) -> None:
         """Clear speculative arbiter state (e.g. if deep analysis is requested)."""
@@ -769,33 +776,21 @@ class ForensicCouncilPipeline:
         """Run council arbiter deliberation with timeout and fallback."""
         logger.info("Running council arbiter deliberation")
         _start = time.perf_counter()
-        use_llm = (
-            self.config.external_ai_allowed
-            and bool(self.config.llm_enable_post_synthesis)
-        )
+        # Final reports must always complete inside the worker deadline. Agent-level
+        # synthesis still uses the configured LLM provider; the arbiter report uses
+        # grounded deterministic synthesis to avoid a late provider stall blocking
+        # the whole investigation after all tools have already finished.
+        use_llm = False
 
-        # Ensure pre-warm is complete before starting final synthesis.
+        # Finalization must not be held hostage by the speculative pre-warm
+        # task. It is an optimization only; use the already collected agent
+        # results directly and cancel any stale background pre-warm.
         if self._pre_warm_task:
-            try:
-                await asyncio.wait_for(self._pre_warm_task, timeout=20.0)
-            except Exception as e:
-                logger.warning("Arbiter pre-warm failed or timed out, re-running synchronously", error=str(e))
-                _mime = getattr(self, "_evidence_mime", "")
-                try:
-                    await asyncio.wait_for(
-                        self.arbiter.pre_warm(arbiter_results, case_id=case_id, artifact_mime=_mime), timeout=30.0
-                    )
-                except Exception as sync_err:
-                    logger.warning("Synchronous pre-warm also failed", error=str(sync_err))
+            self._pre_warm_task.cancel()
             self._pre_warm_task = None
-        _mime = getattr(self, "_evidence_mime", "")
-        if getattr(self.arbiter, "_pre_warm_agent_results", None) is None:
-            try:
-                await asyncio.wait_for(
-                    self.arbiter.pre_warm(arbiter_results, case_id=case_id, artifact_mime=_mime), timeout=30.0
-                )
-            except Exception as pw_err:
-                logger.warning("Pre-warm guard failed", error=str(pw_err))
+        self.arbiter.clear_pre_warm_cache()
+        self.arbiter._pre_warm_agent_results = arbiter_results
+        self.arbiter._pre_warm_case_id = case_id
 
         try:
             await self._broadcast_final_arbiter_status(

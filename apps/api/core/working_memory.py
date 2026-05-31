@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from core.custody_logger import CustodyLogger, EntryType
 from core.persistence.redis_client import RedisClient, get_redis_client
@@ -34,6 +34,8 @@ class TaskStatus(StrEnum):
 
 class Task(BaseModel):
     """A task in working memory."""
+
+    model_config = ConfigDict(validate_assignment=True)
 
     task_id: UUID = Field(default_factory=uuid4)
     description: str
@@ -60,10 +62,13 @@ class Task(BaseModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Task":
         """Create from dictionary."""
+        status = data.get("status", TaskStatus.PENDING)
+        if not isinstance(status, TaskStatus):
+            status = TaskStatus(str(status))
         return cls(
             task_id=UUID(data["task_id"]),
             description=data["description"],
-            status=TaskStatus(data["status"]),
+            status=status,
             result_ref=data.get("result_ref"),
             blocked_reason=data.get("blocked_reason"),
             priority=data.get("priority", 10),
@@ -74,6 +79,8 @@ class Task(BaseModel):
 
 class WorkingMemoryState(BaseModel):
     """Full state of working memory for an agent session."""
+
+    model_config = ConfigDict(validate_assignment=True)
 
     session_id: UUID
     agent_id: str
@@ -111,10 +118,15 @@ class WorkingMemoryState(BaseModel):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WorkingMemoryState":
         """Create from dictionary."""
+        tasks = data.get("tasks", [])
+        if isinstance(tasks, dict):
+            tasks = [] if not tasks else list(tasks.values())
+        elif tasks is None:
+            tasks = []
         return cls(
             session_id=UUID(data["session_id"]),
             agent_id=data["agent_id"],
-            tasks=[Task.from_dict(t) for t in data["tasks"]],
+            tasks=[Task.from_dict(t) if isinstance(t, dict) else t for t in tasks],
             current_iteration=data.get("current_iteration", 0),
             iteration_ceiling=data.get("iteration_ceiling", 10),
             hitl_state=data.get("hitl_state"),
@@ -235,6 +247,35 @@ class WorkingMemory:
             redis.call('SET', key, new_json, 'EX', 86400)
             return new_json
         """
+
+    @staticmethod
+    def _normalise_state_payload(payload: Any) -> tuple[dict[str, Any], str]:
+        """Normalize Redis/cjson quirks before Pydantic validation.
+
+        Lua cjson can round-trip an empty JSON array as an empty object in
+        some paths. Pydantic then rejects `tasks={}` even though semantically
+        it means no tasks. Normalize here so atomic updates stay quiet and
+        the fallback path is reserved for real Redis failures.
+        """
+        if isinstance(payload, dict):
+            state_dict = payload
+        elif isinstance(payload, bytes):
+            state_dict = json.loads(payload.decode("utf-8"))
+        else:
+            state_dict = json.loads(payload)
+
+        tasks = state_dict.get("tasks", [])
+        if isinstance(tasks, dict):
+            state_dict["tasks"] = [] if not tasks else list(tasks.values())
+        elif tasks is None:
+            state_dict["tasks"] = []
+
+        for task in state_dict.get("tasks", []):
+            if isinstance(task, dict) and isinstance(task.get("status"), TaskStatus):
+                task["status"] = task["status"].value
+
+        state_json = json.dumps(state_dict, default=str)
+        return state_dict, state_json
 
     async def __aenter__(self) -> "WorkingMemory":
         """Async context manager entry."""
@@ -560,14 +601,7 @@ class WorkingMemory:
         if data is None:
             raise ValueError(f"No working memory found for {session_id}/{agent_id}")
 
-        # Parse JSON - handle both string and dict responses
-        if isinstance(data, dict):
-            state_dict = data
-        elif isinstance(data, bytes):
-            state_dict = json.loads(data.decode("utf-8"))
-        else:
-            # Fallback for str or other types
-            state_dict = json.loads(data)
+        state_dict, _ = self._normalise_state_payload(data)
 
         state = WorkingMemoryState.from_dict(state_dict)
 
@@ -626,8 +660,9 @@ class WorkingMemory:
                     str(session_id),
                     agent_id,
                 )
-                self._local_cache[key] = result_json
-                state = WorkingMemoryState.model_validate_json(result_json)
+                _state_dict, state_json = self._normalise_state_payload(result_json)
+                self._local_cache[key] = state_json
+                state = WorkingMemoryState.model_validate_json(state_json)
             except Exception as e:
                 logger.warning("Atomic state update failed, falling back", error=str(e))
                 state = await self._legacy_update_state(session_id, agent_id, updates)

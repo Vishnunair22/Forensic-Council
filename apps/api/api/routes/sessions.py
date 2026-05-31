@@ -1020,8 +1020,16 @@ async def resume_investigation(
 
     if pipeline_status == "awaiting_deep_report":
         decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
-    else:
+    elif pipeline_status == "awaiting_decision":
         decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Pipeline is not at a resumable gate; current status is "
+                f"'{pipeline_status or 'unknown'}'"
+            ),
+        )
 
     # Check for existing decision key (idempotency)
     existing_decision = await redis.get(decision_key)

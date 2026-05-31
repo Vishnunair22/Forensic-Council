@@ -11,6 +11,7 @@ Design: Fix 2 (Audit Modernization)
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Any, Optional
 
 from core.config import get_settings
@@ -26,14 +27,41 @@ class _DetrObjectDetector:
         from transformers import AutoImageProcessor, AutoModelForObjectDetection
 
         self.repo = repo
-        self.ckpt_path = repo
-        self.processor = AutoImageProcessor.from_pretrained(repo, local_files_only=offline)
-        self.model = AutoModelForObjectDetection.from_pretrained(repo, local_files_only=offline)
+        load_path = self._resolve_local_snapshot(repo) or repo
+        self.ckpt_path = str(load_path)
+        self.processor = AutoImageProcessor.from_pretrained(load_path, local_files_only=offline)
+        self.model = AutoModelForObjectDetection.from_pretrained(load_path, local_files_only=offline)
         self.model.eval()
         self.names = {
             int(label_id): label
             for label_id, label in getattr(self.model.config, "id2label", {}).items()
         }
+
+    @staticmethod
+    def _resolve_local_snapshot(repo: str) -> str | None:
+        if repo != "facebook/detr-resnet-50":
+            return None
+        roots = [
+            Path(os.environ.get("HF_HOME", "")),
+            Path("/app/cache/huggingface"),
+            Path("/opt/forensic-model-cache/huggingface"),
+        ]
+        rels = [
+            Path("hub/models--facebook--detr-resnet-50/snapshots"),
+            Path("transformers/models--facebook--detr-resnet-50/snapshots"),
+            Path("models--facebook--detr-resnet-50/snapshots"),
+        ]
+        for root in roots:
+            if not str(root):
+                continue
+            for rel in rels:
+                base = root / rel
+                if not base.exists():
+                    continue
+                for snapshot in sorted(base.iterdir(), reverse=True):
+                    if (snapshot / "preprocessor_config.json").exists():
+                        return str(snapshot)
+        return None
 
     def __call__(self, image_path: str, **kwargs):
         import torch
