@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     if reload_enabled:
         try:
-            from watchfiles import run
+            from watchfiles import run_process
 
             # Watch these directories for .py changes
             watch_dirs = [
@@ -56,9 +56,9 @@ if __name__ == "__main__":
             for p in watch_paths:
                 print(f"  - {p}")
 
-            run(
-                _run_worker,
+            run_process(
                 *watch_paths,
+                target=_run_worker,
                 watch_filter=lambda change, path: path.endswith(".py"),
                 debug=False,
             )

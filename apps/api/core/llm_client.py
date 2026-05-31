@@ -824,7 +824,6 @@ class LLMClient:
             if (
                 self.gemini_api_key
                 and not is_placeholder_secret(self.gemini_api_key)
-                and (self.use_arbiter_tier or self.provider == "gemini")
                 and getattr(self.config, "gemini_text_calls_enabled", False)
             ):
                 for gem_model in [

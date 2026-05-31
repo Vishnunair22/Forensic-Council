@@ -7,8 +7,20 @@ Supports async context managers and logs connection events.
 """
 
 import asyncio
+import warnings
 from typing import Any
 from uuid import UUID
+
+# Suppress the Qdrant SDK "Api key is used with an insecure connection" UserWarning.
+# In development (Docker internal networking), Qdrant is not internet-exposed and
+# using http is intentional. The warning is noise in dev logs.
+warnings.filterwarnings(
+    "ignore",
+    message="Api key is used with an insecure connection",
+    category=UserWarning,
+    module="qdrant_client",
+)
+
 
 from qdrant_client import AsyncQdrantClient as QdrantAsyncClient
 from qdrant_client.models import (

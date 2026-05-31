@@ -70,28 +70,45 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 # ------ 1a. Seed calibration models into volume on first start ---------------------------------------------------------
-# Calibration model JSON files are baked into the image at /app/storage/calibration_models.
-# CALIBRATION_MODELS_PATH points to /app/cache/calibration_models (a named Docker volume)
-# so models can be updated at runtime without rebuilding the image.
-# On first start the volume is empty - copy the baked-in models in so agents find them.
+# Calibration model JSON files are generated at runtime by the forensic agents.
+# CALIBRATION_MODELS_PATH points to /app/cache/calibration_models (a named Docker volume).
+# On first start the volume is empty — this is expected and agents will generate models
+# on first analysis run and write them to the volume for subsequent runs.
+# If /app/storage/calibration_models contains pre-seeded JSON files (baked into image),
+# copy them into the volume now.
 CAL_SRC="${FORENSIC_MODEL_SEED_DIR:-/opt/forensic-model-cache}/calibration_models"
+CAL_APP_SRC="/app/storage/calibration_models"
 CAL_DST="${CALIBRATION_MODELS_PATH:-/app/cache/calibration_models}"
-if [ -d "$CAL_SRC" ] && [ -d "$CAL_DST" ]; then
-    CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
-    if [ "${CAL_COUNT:-0}" -lt 1 ]; then
-        echo "  Seeding calibration models into volume: $CAL_SRC -> $CAL_DST"
-        cp -r "$CAL_SRC/." "$CAL_DST/" 2>/dev/null || true
+
+# Try the primary seed dir, then fall back to the app storage dir
+_seed_calibration() {
+    SRC="$1"
+    SRC_JSONS=$(find "$SRC" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    if [ "${SRC_JSONS:-0}" -ge 1 ]; then
+        echo "  Seeding calibration models into volume: $SRC -> $CAL_DST"
+        cp -r "$SRC/." "$CAL_DST/" 2>/dev/null || true
         if [ "$(id -u)" = "0" ]; then
             chown -R appuser:appgroup "$CAL_DST" 2>/dev/null || true
         fi
-        echo "  Calibration model seed complete."
+        echo "  Calibration model seed complete ($SRC_JSONS model files)."
+        return 0
+    fi
+    return 1
+}
+
+if [ -d "$CAL_DST" ]; then
+    CAL_COUNT=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    if [ "${CAL_COUNT:-0}" -lt 1 ]; then
+        # Try primary seed dir first, then app storage fallback
+        _seed_calibration "$CAL_SRC" || _seed_calibration "$CAL_APP_SRC" || true
     fi
 fi
 
 CAL_FINAL=$(find "$CAL_DST" -type f -name "*.json" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 if [ "${CAL_FINAL:-0}" -lt 1 ]; then
-    echo "  WARNING: Calibration models volume is EMPTY after seed step."
-    echo "  Forensic probabilities will fall back to identity calibration."
+    # First-boot: calibration models are runtime-generated, this is expected on a fresh volume.
+    echo "  INFO: Calibration volume empty on startup (expected on first run)."
+    echo "  Agents will use identity calibration until models are generated after first analysis."
 fi
 
 # ------ 1b. Seed build-time ML model cache into mounted volumes ---------------------------------------------------------

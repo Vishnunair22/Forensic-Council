@@ -939,27 +939,21 @@ class GeminiVisionClient:
         # This bounds concurrent Gemini requests across all agents/instances so
         # we don't saturate the free-tier RPM quota when 5 agents run in parallel.
         async with self._get_quota_semaphore():
-            # Check quota guard AFTER acquiring the semaphore — only decrement
-            # the RPM budget when we actually have a concurrency slot to execute.
-            allowed, quota_result = await ProviderQuotaGuard.check_and_record(
-                "gemini",
-                primary_model,
-                estimated_tokens=9000,
-            )
-            if not allowed:
-                logger.warning(
-                    f"Gemini quota guard blocked {analysis_type}: {quota_result.reason} — using local fallback"
-                )
-                finding = await self._local_forensic_fallback(
-                    file_path,
-                    is_screen_capture_like=is_screen_capture_like,
-                )
-                finding.analysis_type = analysis_type
-                finding.caveat = (
-                    f"{finding.caveat} Gemini skipped before API call: {quota_result.reason}."
-                )
-                return finding
             for attempt_model, attempt_payload, attempt_url in models_to_try:
+                # Check quota guard AFTER acquiring the semaphore — only decrement
+                # the RPM budget when we actually have a concurrency slot to execute.
+                allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                    "gemini",
+                    attempt_model,
+                    estimated_tokens=9000,
+                )
+                if not allowed:
+                    logger.warning(
+                        f"Gemini quota guard blocked {attempt_model} for {analysis_type}: {quota_result.reason} — cascading to next model"
+                    )
+                    last_exc = RuntimeError(f"Quota guard blocked model: {quota_result.reason}")
+                    continue
+
                 try:
                     m_t0 = time.monotonic()
                     raw_text = await asyncio.wait_for(
