@@ -71,6 +71,7 @@ async def test_deep_analysis_gate_consumes_decision_after_pause(monkeypatch):
 
     assert should_run_deep is True
     assert pipeline.run_deep_analysis_flag is True
+    assert pipeline._awaiting_user_decision is False
 
 
 @pytest.mark.asyncio
@@ -138,6 +139,7 @@ async def test_deep_report_gate_consumes_decision_after_pause(monkeypatch):
 
     await _await_deep_report_request(pipeline, uuid4())
 
+    assert pipeline._awaiting_user_decision is False
     assert redis.deleted == []
 
 

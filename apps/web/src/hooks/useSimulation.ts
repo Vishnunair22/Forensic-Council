@@ -1094,13 +1094,15 @@ const resumeInvestigation = useCallback(
       const headers = await getMutationHeaders({
         "Content-Type": "application/json",
       });
+      const resultPhase = storage.getItem<string>(`${STORAGE_KEYS.RESULT_PHASE}:${targetId}`);
+      const expectedPhase = deep ? "initial" : resultPhase === "deep" ? "deep" : "initial";
       const response = await fetch(
         `${API_BASE}/api/v1/sessions/${targetId}/resume`,
         {
           method: "POST",
           headers,
           credentials: "include",
-          body: JSON.stringify({ deep_analysis: deep }),
+          body: JSON.stringify({ deep_analysis: deep, expected_phase: expectedPhase }),
         },
       );
 

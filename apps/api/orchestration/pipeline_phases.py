@@ -1227,6 +1227,7 @@ async def _await_deep_analysis_decision(
                 session_id=str(session_id),
                 deep_analysis=pipeline.run_deep_analysis_flag,
             )
+            pipeline._awaiting_user_decision = False
             return pipeline.run_deep_analysis_flag
 
         logger.info(
@@ -1344,6 +1345,7 @@ async def _await_deep_report_request(
             session_id=str(session_id),
             decision_key=decision_key,
         )
+        pipeline._awaiting_user_decision = False
         return
 
     try:

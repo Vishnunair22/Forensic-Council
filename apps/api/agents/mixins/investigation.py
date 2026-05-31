@@ -12,10 +12,17 @@ from typing import Any
 from core.llm_client import LLMClient
 from core.react_loop import AgentFinding, ReActLoopEngine, create_llm_step_generator
 from core.structured_logging import get_logger
-from core.synthesis import SynthesisService
+from core.synthesis import SynthesisService, TEMPLATE_PATTERNS
 from core.tracing import PipelineTrace
 
 logger = get_logger(__name__)
+
+
+def _is_template_text(text: str | None) -> bool:
+    if not text:
+        return True
+    t = text.lower()
+    return any(p in t for p in TEMPLATE_PATTERNS)
 
 
 _TAMPERING_INDICATOR_KEYWORDS = {
@@ -686,19 +693,12 @@ class AgentInvestigationMixin:
         phase: str,
     ) -> dict[str, Any]:
         """Build metrics and evidence-grounded summaries when the LLM is unavailable."""
-        from core.synthesis import TEMPLATE_PATTERNS
-        def is_template(text: str) -> bool:
-            if not text:
-                return True
-            t = text.lower()
-            return any(p in t for p in TEMPLATE_PATTERNS)
-
         actionable = []
         for f in findings:
             if f.status == "NOT_APPLICABLE" or f.evidence_verdict == "NOT_APPLICABLE":
                 continue
             summary = f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or ""
-            if is_template(summary):
+            if _is_template_text(summary):
                 continue
             actionable.append(f)
         confidence_values = [
@@ -998,12 +998,34 @@ class AgentInvestigationMixin:
             # Screenshot-specific deterministic narrative — describes what was checked
             _checked = ", ".join(s["label"] for s in sections[:3]) if sections else "integrity tools"
             _subject = f"The visual profile identified this evidence as {_visual_desc}. " if _visual_desc else ""
-            narrative = (
-                f"{_subject}{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
-                f"({_checked}). No pixel-level manipulation signals were detected — "
-                "hash integrity, OCR content, and frequency/layout checks all returned clean. "
-                "These results confirm the evidence is intact since upload; they do not speak to the original capture device or timestamp."
-            )
+            _agent_id_lower_narr = str(self.agent_id).lower()
+            if "agent1" in _agent_id_lower_narr or "image" in _agent_id_lower_narr:
+                narrative = (
+                    f"{_subject}{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
+                    f"({_checked}). No pixel-level manipulation signals were detected — "
+                    "compression history, noise patterns, and spectral analysis all returned clean. "
+                    "These results confirm the screenshot is intact since upload."
+                )
+            elif "agent3" in _agent_id_lower_narr or "object" in _agent_id_lower_narr:
+                narrative = (
+                    f"{_subject}{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
+                    f"({_checked}). Scene content analysis — layout, UI elements, and visual consistency — "
+                    "returned no evidence of manipulation or compositing. "
+                    "The screenshot appears to be a genuine capture of the displayed interface."
+                )
+            elif "agent5" in _agent_id_lower_narr or "metadata" in _agent_id_lower_narr:
+                narrative = (
+                    f"{_subject}{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
+                    f"({_checked}). File metadata, structure, and hash verification all confirmed "
+                    "the file is intact and untampered since upload. "
+                    "As expected for a screenshot, no camera EXIF or GPS data is present."
+                )
+            else:
+                narrative = (
+                    f"{_subject}{self.agent_name} ran {len(actionable)} tool(s) on this screen capture "
+                    f"({_checked}). All applicable checks returned clean results. "
+                    "The evidence is intact since upload."
+                )
         elif sections:
             prefix = ""
             if _visual_desc:
@@ -1210,7 +1232,11 @@ class AgentInvestigationMixin:
         self._react_chain = loop_result.react_chain
         self._loop_result = loop_result
 
-        self._tool_success_count = sum(1 for f in self._findings if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE")
+        self._tool_success_count = sum(
+            1 for f in self._findings
+            if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE"
+            and not _is_template_text(f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or "")
+        )
         self._tool_error_count = sum(1 for f in self._findings if f.evidence_verdict == "ERROR" or f.status == "INCOMPLETE")
 
         synthesis = await self._synthesize_findings_once(
@@ -1317,7 +1343,11 @@ class AgentInvestigationMixin:
         ]
         self._findings = self._findings + deduped_deep
 
-        self._tool_success_count = sum(1 for f in self._findings if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE")
+        self._tool_success_count = sum(
+            1 for f in self._findings
+            if f.evidence_verdict != "ERROR" and f.status != "INCOMPLETE"
+            and not _is_template_text(f.metadata.get("llm_refined_summary") or f.reasoning_summary or f.finding_type or "")
+        )
         self._tool_error_count = sum(1 for f in self._findings if f.evidence_verdict == "ERROR" or f.status == "INCOMPLETE")
 
         # Generate agent brief (Fix 5)

@@ -401,7 +401,13 @@ class InMemoryRedisClient:
     def __init__(self) -> None:
         self._fallback_store: dict[str, Any] = {}
         self._hash_store: dict[str, dict[str, Any]] = {}
+        self._list_store: dict[str, list[Any]] = {}
         self._expiry: dict[str, int] = {}
+
+    @property
+    def client(self) -> "InMemoryRedisClient":
+        """Expose redis-py-like `.client` access for fallback-safe callers."""
+        return self
 
     async def ping(self) -> bool:
         return True
@@ -444,14 +450,23 @@ class InMemoryRedisClient:
     async def delete(self, *keys: str) -> int:
         deleted = 0
         for key in keys:
-            deleted += int(key in self._fallback_store or key in self._hash_store)
+            deleted += int(
+                key in self._fallback_store
+                or key in self._hash_store
+                or key in self._list_store
+            )
             self._fallback_store.pop(key, None)
             self._hash_store.pop(key, None)
+            self._list_store.pop(key, None)
             self._expiry.pop(key, None)
         return deleted
 
     async def exists(self, *keys: str) -> int:
-        return sum(1 for key in keys if key in self._fallback_store or key in self._hash_store)
+        return sum(
+            1
+            for key in keys
+            if key in self._fallback_store or key in self._hash_store or key in self._list_store
+        )
 
     async def expire(self, key: str, seconds: int) -> bool:
         self._expiry[key] = seconds
@@ -468,7 +483,7 @@ class InMemoryRedisClient:
     async def keys(self, pattern: str = "*") -> list[str]:
         import fnmatch
 
-        all_keys = set(self._fallback_store) | set(self._hash_store)
+        all_keys = set(self._fallback_store) | set(self._hash_store) | set(self._list_store)
         return [key for key in all_keys if fnmatch.fnmatch(key, pattern)]
 
     async def scan_iter(self, match: str | None = None, count: int | None = None) -> Any:
@@ -476,7 +491,7 @@ class InMemoryRedisClient:
         Return an async iterator that scans keys matching pattern in the in-memory fallback.
         """
         import fnmatch
-        all_keys = set(self._fallback_store) | set(self._hash_store)
+        all_keys = set(self._fallback_store) | set(self._hash_store) | set(self._list_store)
         for key in all_keys:
             if match is None or fnmatch.fnmatch(key, match):
                 yield key
@@ -487,8 +502,65 @@ class InMemoryRedisClient:
     def get_pubsub(self):
         raise RedisConnectionError("Redis pub/sub unavailable in in-memory fallback")
 
-    def pipeline(self):
+    def pipeline(self, transaction: bool = True):
         return _InMemoryPipeline(self)
+
+    async def rpush(self, key: str, *values: Any) -> int:
+        bucket = self._list_store.setdefault(key, [])
+        bucket.extend(values)
+        return len(bucket)
+
+    async def lpush(self, key: str, *values: Any) -> int:
+        bucket = self._list_store.setdefault(key, [])
+        for value in values:
+            bucket.insert(0, value)
+        return len(bucket)
+
+    async def lpop(self, key: str) -> Any | None:
+        bucket = self._list_store.get(key) or []
+        if not bucket:
+            return None
+        return bucket.pop(0)
+
+    async def blpop(self, key: str, timeout: int = 0) -> tuple[str, Any] | None:
+        value = await self.lpop(key)
+        if value is None:
+            return None
+        return key, value
+
+    async def lrange(self, key: str, start: int, end: int) -> list[Any]:
+        bucket = list(self._list_store.get(key) or [])
+        if end == -1:
+            return bucket[start:]
+        return bucket[start : end + 1]
+
+    async def llen(self, key: str) -> int:
+        return len(self._list_store.get(key) or [])
+
+    async def ltrim(self, key: str, start: int, end: int) -> bool:
+        bucket = list(self._list_store.get(key) or [])
+        if end == -1:
+            self._list_store[key] = bucket[start:]
+        else:
+            self._list_store[key] = bucket[start : end + 1]
+        return True
+
+    async def sadd(self, key: str, *values: Any) -> int:
+        current = set(json.loads(self._fallback_store.get(key, "[]")))
+        before = len(current)
+        current.update(values)
+        self._fallback_store[key] = json.dumps(list(current), default=str)
+        return len(current) - before
+
+    async def srem(self, key: str, *values: Any) -> int:
+        current = set(json.loads(self._fallback_store.get(key, "[]")))
+        before = len(current)
+        current.difference_update(values)
+        self._fallback_store[key] = json.dumps(list(current), default=str)
+        return before - len(current)
+
+    async def scard(self, key: str) -> int:
+        return len(set(json.loads(self._fallback_store.get(key, "[]"))))
 
     async def hset(self, name: str, key: str, value: Any) -> int:
         bucket = self._hash_store.setdefault(name, {})
@@ -534,6 +606,12 @@ class _InMemoryPipeline:
         self._redis = redis
         self._ops: list[tuple[str, tuple[Any, ...]]] = []
 
+    async def __aenter__(self) -> "_InMemoryPipeline":
+        return self
+
+    async def __aexit__(self, _exc_type, _exc, _tb) -> None:
+        return None
+
     def hincrby(self, name: str, key: str, amount: int = 1):
         self._ops.append(("hincrby", (name, key, amount)))
         return self
@@ -544,6 +622,22 @@ class _InMemoryPipeline:
 
     def expire(self, key: str, seconds: int):
         self._ops.append(("expire", (key, seconds)))
+        return self
+
+    def set(self, key: str, value: Any, **kwargs):
+        self._ops.append(("set", (key, value, kwargs)))
+        return self
+
+    def delete(self, *keys: str):
+        self._ops.append(("delete", keys))
+        return self
+
+    def rpush(self, key: str, *values: Any):
+        self._ops.append(("rpush", (key, *values)))
+        return self
+
+    def publish(self, channel: str, message: Any):
+        self._ops.append(("publish", (channel, message)))
         return self
 
     async def execute(self) -> list[Any]:
@@ -559,6 +653,16 @@ class _InMemoryPipeline:
                 results.append(await self._redis.hset(*args))
             elif op == "expire":
                 results.append(await self._redis.expire(*args))
+            elif op == "set":
+                key, value, kwargs = args
+                results.append(await self._redis.set(key, value, **kwargs))
+            elif op == "delete":
+                results.append(await self._redis.delete(*args))
+            elif op == "rpush":
+                key, *values = args
+                results.append(await self._redis.rpush(key, *values))
+            elif op == "publish":
+                results.append(await self._redis.publish(*args))
         self._ops.clear()
         return results
 

@@ -329,6 +329,16 @@ async def get_arbiter_status(
                     return {"status": "complete", "report_id": real_report_id}
                 if status == "error":
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
+                if status == "awaiting_decision":
+                    return {
+                        "status": "awaiting_decision",
+                        "message": metadata.get("brief") or "Initial analysis complete. Awaiting analyst decision.",
+                    }
+                if status == "awaiting_deep_report":
+                    return {
+                        "status": "awaiting_deep_report",
+                        "message": metadata.get("brief") or "Deep analysis complete. Awaiting final report request.",
+                    }
                 if status == "paused_resume_requested":
                     return {
                         "status": "running",

@@ -451,6 +451,48 @@ class TestArbiterStatusEndpoint:
         body = resp.json()
         assert body["status"] == "running"
 
+    def test_arbiter_status_initial_gate_returns_awaiting_decision(self, client):
+        with (
+            patch("api.routes._session_state.get_final_report", return_value=None),
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+        ):
+            metadata = {
+                "status": "awaiting_decision",
+                "brief": "Initial analysis complete. Awaiting analyst decision.",
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_meta.return_value = metadata
+            mock_meta_sessions.return_value = metadata
+            resp = client.get(
+                f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
+                headers=_csrf(client, _auth()),
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "awaiting_decision"
+
+    def test_arbiter_status_deep_gate_returns_awaiting_deep_report(self, client):
+        with (
+            patch("api.routes._session_state.get_final_report", return_value=None),
+            patch("api.routes._session_state.get_active_pipeline_metadata") as mock_meta,
+            patch("api.routes.sessions.get_active_pipeline_metadata") as mock_meta_sessions,
+        ):
+            metadata = {
+                "status": "awaiting_deep_report",
+                "brief": "Deep analysis complete. Awaiting analyst request for arbiter synthesis.",
+                "investigator_id": OWNER_USER_ID,
+            }
+            mock_meta.return_value = metadata
+            mock_meta_sessions.return_value = metadata
+            resp = client.get(
+                f"/api/v1/sessions/{SESSION_ID}/arbiter-status",
+                headers=_csrf(client, _auth()),
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "awaiting_deep_report"
+
     def test_arbiter_status_complete_returns_report_id(self, client):
         with (
             patch("api.routes._session_state.get_final_report") as mock_report,
@@ -1097,14 +1139,16 @@ class TestTerminateSession:
                 mock_redis = AsyncMock()
                 mock_redis.delete = AsyncMock()
                 mock_redis.hdel = AsyncMock()
-                mock_redis.client = AsyncMock()
+                mock_redis.client = MagicMock()
                 mock_redis.client.lrange = AsyncMock(return_value=[])
-                mock_pipe_ctx = AsyncMock()
-                mock_pipe_ctx.delete = AsyncMock()
-                mock_pipe_ctx.rpush = AsyncMock()
+                mock_pipe_ctx = MagicMock()
+                mock_pipe_ctx.delete = MagicMock(return_value=mock_pipe_ctx)
+                mock_pipe_ctx.rpush = MagicMock(return_value=mock_pipe_ctx)
                 mock_pipe_ctx.execute = AsyncMock(return_value=[])
-                mock_redis.client.pipeline.return_value.__aenter__ = AsyncMock(return_value=mock_pipe_ctx)
-                mock_redis.client.pipeline.return_value.__aexit__ = AsyncMock(return_value=False)
+                mock_pipeline = MagicMock()
+                mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipe_ctx)
+                mock_pipeline.__aexit__ = AsyncMock(return_value=False)
+                mock_redis.client.pipeline.return_value = mock_pipeline
                 mock_redis_getter.return_value = mock_redis
                 mock_persistence = AsyncMock()
                 mock_persistence.update_session_status = AsyncMock()
