@@ -289,6 +289,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_api
       GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS: ${GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS:-120}
+      RELOAD: "true"
+      LOG_FORMAT: "console"
       # Allow first-run startup fallback if PRELOAD_MODELS=0 or a seed cache is
       # missing. Set SKIP_MODEL_DOWNLOAD=1 explicitly for CI smoke builds.
       SKIP_MODEL_DOWNLOAD: ${SKIP_MODEL_DOWNLOAD:-0}
@@ -377,6 +379,7 @@ services:
       <<: *backend-env
       APP_NAME: forensic_worker
       RELOAD: "false"
+      LOG_FORMAT: "console"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_worker
     depends_on:

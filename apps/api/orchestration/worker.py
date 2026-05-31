@@ -70,7 +70,7 @@ async def main() -> None:
             else:
                 logger.info(f"All {total} ML tools warmed up successfully")
         except Exception as exc:
-            logger.warning("ML warmup failed in worker", error=str(exc))
+            logger.error("ML warmup failed in worker", error=str(exc), exc_info=True)
 
     _warmup_task = asyncio.create_task(_warmup_background())
 
@@ -281,7 +281,7 @@ async def main() -> None:
                     try:
                         await pubsub.close()
                     except Exception:
-                        pass
+                        logger.debug("Failed to close pubsub on reconnect", exc_info=True)
 
     consumer_task = asyncio.create_task(notify_decision_consumer())
 

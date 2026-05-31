@@ -440,6 +440,15 @@ class AgentInvestigationMixin:
 
             keepalive_task = asyncio.create_task(_broadcast_keepalive())
 
+            # Stagger synthesis calls across agents to avoid bursting the shared
+            # Groq RPM quota. Agent index (1-5) maps to a 0-10s spread.
+            import re as _re
+            _agent_num_match = _re.search(r'\d+', str(self.agent_id))
+            _agent_num = int(_agent_num_match.group(0) or 0) if _agent_num_match else 0
+            _stagger_s = _agent_num * 2.0  # 0s, 2s, 4s, 6s, 8s, 10s for agents 0-5
+            if _stagger_s > 0:
+                await asyncio.sleep(_stagger_s)
+
             # Fix 3: Pass Phase 1 synthesis as frozen context for deep phase
             phase1_context = None
             if phase == "deep":
@@ -1031,10 +1040,59 @@ class AgentInvestigationMixin:
             tool_conclusion = "all applicable tools returned clean findings"
         else:
             tool_conclusion = "no applicable tools produced a decisive signal"
+        _agent_id_lower = str(self.agent_id).lower()
+        if "agent1" in _agent_id_lower or "image" in _agent_id_lower:
+            _role_opening = (
+                f"Agent1 (Image Integrity) assessed the overall image: "
+                f"{_visual_desc or _visual_category or 'the submitted image evidence'}. "
+                f"This covers pixel-level integrity — compression history, sensor noise patterns, and generative model traces."
+            )
+        elif "agent3" in _agent_id_lower or "object" in _agent_id_lower:
+            _yolo_ctx = self._tool_context.get("object_detection") or self._tool_context.get("yolo_detection") or {}
+            _objects = _yolo_ctx.get("detected_objects") or _yolo_ctx.get("objects") or []
+            _obj_summary = f"Detected objects/entities: {', '.join(str(o) for o in _objects[:5])}." if _objects else "No objects, UI elements, or contraband flagged."
+            _role_opening = (
+                f"Agent3 (Object & Scene Analysis) examined scene content: "
+                f"{_visual_desc or _visual_category or 'the submitted image evidence'}. "
+                f"{_obj_summary}"
+            )
+        elif "agent5" in _agent_id_lower or "metadata" in _agent_id_lower:
+            _exif_ctx = self._tool_context.get("exif_extract") or self._tool_context.get("exif_analysis") or {}
+            _device = _exif_ctx.get("device_model") or _exif_ctx.get("camera_model") or "unknown"
+            _software = _exif_ctx.get("software") or "none"
+            _hash_ctx = self._tool_context.get("file_hash_verify") or self._tool_context.get("hash_verify") or {}
+            _sha = (_hash_ctx.get("sha256") or "")[:16]
+            _meta_line = (
+                f"EXIF: device={_device}, software={_software}."
+                + (f" SHA-256 prefix: {_sha}..." if _sha else "")
+            )
+            _role_opening = (
+                f"Agent5 (Metadata & Provenance) extracted file provenance: "
+                f"{_visual_desc or _visual_category or 'the submitted file'}. "
+                f"{_meta_line}"
+            )
+        else:
+            _role_opening = (
+                f"{self.agent_name} identified the evidence as "
+                f"{_visual_desc or _visual_category or 'the submitted evidence file'}."
+            )
+
+        _top_metric = ""
+        if top_findings:
+            _top_f = top_findings[0]
+            _top_tool = str(_top_f.metadata.get("tool_name") or _top_f.finding_type)
+            _top_ctx = self._tool_context.get(_top_tool) or {}
+            if isinstance(_top_ctx, dict):
+                for _mk in ("anomaly_score", "confidence", "spoof_probability", "score", "sha256", "num_clusters", "num_anomaly_regions"):
+                    _mv = _top_ctx.get(_mk)
+                    if _mv is not None:
+                        _top_metric = f" ({_top_tool}: {_mk}={_mv})"
+                        break
+
         agent_brief = (
-            f"{self.agent_name} identified the evidence as {_visual_desc or _visual_category or 'the submitted evidence file'}. "
-            f"The agent ran {len(actionable)} applicable tool(s); {tool_conclusion}. "
-            f"The evidence is assessed as {verdict_text} with {round(confidence * 100)}% confidence."
+            f"{_role_opening} "
+            f"Ran {len(actionable)} tool(s); {tool_conclusion}{_top_metric}. "
+            f"Assessment: {verdict_text}, {round(confidence * 100)}% confidence."
         )
         return {
             "agent_confidence": confidence,

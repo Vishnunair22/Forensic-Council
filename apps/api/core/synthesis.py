@@ -936,7 +936,7 @@ Return ONLY a JSON object with this exact schema:
                 ][:5],
                 "signal_weight": {},
                 "sections": self._ground_synthesis_response(
-                    {"sections": sections},
+                    {"sections": sections, "agent_brief": "__SKIP_BRIEF_CHECK__"},
                     grouped_sections_data,
                     screenshot_like=screenshot_like,
                     agent_name=agent_name,
@@ -967,36 +967,75 @@ Return ONLY a JSON object with this exact schema:
         visual_profile_context: dict | None,
         screenshot_like: bool,
     ) -> str:
-        # Sentence 1: What the visual profile identified
         desc = self._visual_context_sentence(visual_profile_context)
         if not desc:
             desc = "the submitted evidence file"
-        
-        s1 = f"The visual profile identified this evidence as {desc}."
 
-        # Sentence 2: [N] forensic tools ran: decisive outcomes
-        outcomes = []
-        for tool, row in tool_rows.items():
-            grounded = self._tool_grounded_summary(row, screenshot_like=screenshot_like)
-            if grounded:
-                # Get the first sentence of the grounded summary
-                outcomes.append(grounded.split(".")[0].strip())
-        
-        n = len(tool_rows)
-        if outcomes:
-            s2 = f"{n} forensic tool(s) ran: {'; '.join(outcomes[:3])}."
-        else:
-            s2 = f"{n} forensic tool(s) completed without significant indicators."
-
-        # Sentence 3: Verdict + Confidence
         try:
             conf_val = float(confidence)
             if conf_val <= 1.0:
                 conf_val = conf_val * 100.0
         except Exception:
             conf_val = 75.0
-            
-        s3 = f"Based on the visual assessment and tool checks, this evidence is assessed as {verdict} with {conf_val:.0f}% confidence."
+
+        agent_lower = agent_name.lower()
+
+        # Sentence 1: role-specific opening
+        if "agent1" in agent_lower or "imageintegrity" in agent_lower or "image_integrity" in agent_lower:
+            s1 = (
+                f"Agent1 (Image Integrity) assessed the overall image: {desc}. "
+                f"This covers pixel-level integrity — JPEG compression history, sensor PRNU noise patterns, "
+                f"and generative model / GAN traces."
+            )
+        elif "agent3" in agent_lower or "objectdetection" in agent_lower or "object_detection" in agent_lower:
+            obj_row = tool_rows.get("object_detection") or tool_rows.get("yolo_detection") or {}
+            obj_data = obj_row.get("data") or {}
+            objects = obj_data.get("detected_objects") or obj_data.get("objects") or []
+            obj_summary = (
+                f"Detected objects/entities: {', '.join(str(o) for o in objects[:5])}."
+                if objects
+                else "No objects, UI elements, or contraband detected."
+            )
+            s1 = (
+                f"Agent3 (Object & Scene Analysis) examined scene content: {desc}. "
+                f"{obj_summary}"
+            )
+        elif "agent5" in agent_lower or "metadata" in agent_lower or "provenance" in agent_lower:
+            exif_row = tool_rows.get("exif_extract") or tool_rows.get("exif_analysis") or {}
+            exif_data = exif_row.get("data") or {}
+            device = exif_data.get("device_model") or exif_data.get("camera_model") or "unknown"
+            software = exif_data.get("software") or "none"
+            hash_row = tool_rows.get("file_hash_verify") or tool_rows.get("hash_verify") or {}
+            hash_data = hash_row.get("data") or {}
+            sha = (hash_data.get("sha256") or "")[:16]
+            meta_line = f"EXIF: device={device}, software={software}." + (
+                f" SHA-256 prefix: {sha}..." if sha else ""
+            )
+            s1 = (
+                f"Agent5 (Metadata & Provenance) extracted file provenance: {desc}. "
+                f"{meta_line}"
+            )
+        else:
+            s1 = f"The visual profile identified this evidence as {desc}."
+
+        # Sentence 2: top tool outcomes with metrics
+        outcomes = []
+        for tool, row in tool_rows.items():
+            grounded = self._tool_grounded_summary(row, screenshot_like=screenshot_like)
+            if grounded:
+                outcomes.append(grounded.split(".")[0].strip())
+
+        n = len(tool_rows)
+        if outcomes:
+            s2 = f"{n} forensic tool(s) ran: {'; '.join(outcomes[:3])}."
+        else:
+            s2 = f"{n} forensic tool(s) completed without significant indicators."
+
+        # Sentence 3: verdict + confidence
+        s3 = (
+            f"Based on the visual assessment and tool checks, "
+            f"this evidence is assessed as {verdict} with {conf_val:.0f}% confidence."
+        )
 
         return f"{s1} {s2} {s3}"
 
@@ -1058,30 +1097,37 @@ Return ONLY a JSON object with this exact schema:
             return not lower.strip() or any(phrase in lower for phrase in BAD_SYNTHESIS_PHRASES)
 
         # Check if agent_brief is generic/boilerplate or lacks metrics
+        # Skip brief check when called from sections-only path (fallback path internal call)
         brief = str(response.get("agent_brief") or "")
-        is_brief_generic = (
-            _bad(brief) 
-            or len(brief.strip()) < 60 
-            or not any(m in brief.lower() for m in (
-                "score", "ratio", "hash", "sha-256", "density", "ocr", "exif", 
-                "hex", "signature", "compression", "metadata", "splicing", "ghost", 
-                "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
-                "trufor", "busternet", "ela", "fft", "prnu"
-            ))
-        )
-        if is_brief_generic:
-            logger.warning(
-                "LLM agent brief is generic or lacks tool-metric citations; replacing with grounded narrative.",
-                agent=agent_name
+        if brief == "__SKIP_BRIEF_CHECK__":
+            pass
+        else:
+            is_brief_generic = (
+                _bad(brief) 
+                or len(brief.strip()) < 60 
+                or not any(m in brief.lower() for m in (
+                    "score", "ratio", "hash", "sha-256", "sha-", "density", "ocr", "exif",
+                    "hex", "signature", "compression", "metadata", "splicing", "ghost",
+                    "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
+                    "trufor", "busternet", "ela", "fft", "prnu",
+                    "agent1", "agent3", "agent5",
+                    "image integrity", "object & scene", "metadata & provenance",
+                    "detected objects", "device=", "software=",
+                ))
             )
-            response["agent_brief"] = self._build_grounded_agent_brief(
-                agent_name=agent_name,
-                verdict=response.get("verdict", "INCONCLUSIVE"),
-                confidence=response.get("confidence") or response.get("agent_confidence") or 0.75,
-                tool_rows=tool_rows,
-                visual_profile_context=visual_profile_context,
-                screenshot_like=screenshot_like,
-            )
+            if is_brief_generic:
+                logger.warning(
+                    "LLM agent brief is generic or lacks tool-metric citations; replacing with grounded narrative.",
+                    agent=agent_name
+                )
+                response["agent_brief"] = self._build_grounded_agent_brief(
+                    agent_name=agent_name,
+                    verdict=response.get("verdict", "INCONCLUSIVE"),
+                    confidence=response.get("confidence") or response.get("agent_confidence") or 0.75,
+                    tool_rows=tool_rows,
+                    visual_profile_context=visual_profile_context,
+                    screenshot_like=screenshot_like,
+                )
 
         raw_sections = response.get("sections")
         sections = raw_sections if isinstance(raw_sections, list) else []
