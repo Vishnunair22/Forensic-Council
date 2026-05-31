@@ -25,6 +25,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
+from core.finding_formatter import (
+    TOOL_LABELS as _EXTRACTED_TOOL_LABELS,
+    build_detailed_reasoning as _fmt_build_detailed_reasoning,
+    build_readable_summary as _fmt_build_readable_summary,
+    format_tool_result as _fmt_format_tool_result,
+    shape_analyst_finding as _fmt_shape_analyst_finding,
+)
 from core.hitl import (
     HITLCheckpointReason,
     HITLCheckpointState,
@@ -37,6 +44,7 @@ from core.observability import get_tracer
 from core.structured_logging import get_logger
 from core.task_tool_config import get_task_tool_overrides
 from core.tool_interpreters import _TOOL_INTERPRETERS
+from core.tool_output_classifier import ToolOutputClassifier
 from core.tool_registry import ToolRegistry, ToolResult
 from core.tracing import PipelineTrace
 from core.working_memory import TaskStatus, WorkingMemory, WorkingMemoryState
@@ -726,69 +734,7 @@ class ReActLoopEngine:
         "Agent5_deep": "Metadata Forensics",
     }
 
-    _TOOL_LABELS: dict[str, str] = {
-        "ela_full_image": "ELA — Image Manipulation",
-        "ela_anomaly_classify": "ELA Anomaly Classification",
-        "jpeg_ghost_detect": "JPEG Ghost Detection",
-        "frequency_domain_analysis": "Frequency Domain Analysis",
-        "deepfake_frequency_check": "GAN/Deepfake Frequency Check",
-        "noise_fingerprint": "PRNU Noise Fingerprint",
-        "copy_move_detect": "Copy-Move Forgery Detection",
-        "extract_evidence_text": "OCR Text Extraction",
-        "extract_text_from_image": "OCR Text Extraction",
-        "analyze_image_content": "Semantic Image Analysis",
-        "file_hash_verify": "File Hash Verification",
-        "splicing_detect": "Splicing Detection",
-        "roi_extract": "Region of Interest Extraction",
-        "speaker_diarize": "Speaker Diarization",
-        "anti_spoofing_detect": "Anti-Spoofing Detection",
-        "prosody_analyze": "Prosody Analysis",
-        "audio_splice_detect": "Audio Splice Detection",
-        "background_noise_analysis": "Background Noise Consistency",
-        "codec_fingerprinting": "Codec Fingerprinting",
-        "audio_visual_sync": "Audio-Visual Sync Check",
-        "object_detection": "Object Detection (YOLO)",
-        "lighting_consistency": "Lighting & Shadow Consistency",
-        "scene_incongruence": "Scene Incongruence (CLIP)",
-        "secondary_classification": "Secondary Object Classification",
-        "scale_validation": "Scale & Proportion Validation",
-        "vector_contraband_search": "Threat / Contraband Vector Search",
-        "lighting_correlation_initial": "Initial Lighting Correlation",
-        "optical_flow_analysis": "Optical Flow Analysis",
-        "frame_extraction": "Frame Window Extraction",
-        "frame_consistency_analysis": "Frame Consistency Analysis",
-        "face_swap_detection": "Face-Swap Detection",
-        "video_metadata": "Video Metadata Extraction",
-        "vfi_error_map": "VFI Motion Error Map",
-        "thumbnail_coherence": "Thumbnail Coherence Check",
-        "interframe_forgery_detector": "Interframe Forgery Detection",
-        "rolling_shutter_validation": "Rolling Shutter Validation",
-        "mediainfo_profile": "MediaInfo Container Profile",
-        "av_file_identity": "AV File Identity Pre-Screen",
-        "exif_extract": "EXIF Metadata Extraction",
-        "metadata_anomaly_score": "Metadata Anomaly Score (ML)",
-        "gps_timezone_validate": "GPS-Timezone Validation",
-        "steganography_scan": "Steganography Scan",
-        "file_structure_analysis": "File Structure Analysis",
-        "hex_signature_scan": "Hex Signature Scan",
-        "timestamp_analysis": "Timestamp Consistency Analysis",
-        "device_fingerprint_db": "Device Fingerprint Analysis",
-        "adversarial_robustness_check": "Adversarial Robustness Check",
-        "neural_ela": "Neural ELA — ViT Manipulation Detection",
-        "noiseprint_cluster": "Noiseprint++ Sensor Clustering",
-        "neural_fingerprint": "SigLIP2 Neural Perceptual Fingerprint",
-        "neural_splicing": "TruFor ViT Splicing Detection",
-        "neural_copy_move": "BusterNet Dual-Branch Copy-Move",
-        "anomaly_tracer": "ManTra-Net Universal Anomaly Tracer",
-        "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
-        "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
-        "synthid_watermark_detect": "SynthID / AI Watermark Detection",
-        "visual_evidence_profile": "Visual Evidence Profile",
-        "gemini_deep_forensic": "Visual Evidence Profile",
-        "voice_clone_detect": "Voice Clone Detection",
-        "enf_analysis": "ENF Frequency Analysis",
-        "sensor_db_query": "Camera Sensor DB Query",
-    }
+    _TOOL_LABELS: dict[str, str] = _EXTRACTED_TOOL_LABELS
 
     @classmethod
     def _get_task_tool_overrides(cls) -> dict[str, str]:
@@ -849,305 +795,19 @@ class ReActLoopEngine:
 
     def _extract_confidence(self, output: Any, tool_name: str) -> tuple[float, bool]:
         """Extract a 0-1 confidence score from tool output. Returns (confidence, from_fallback)."""
-        raw_conf: float | None = None
-
-        def _as_unit_float(value: Any) -> float | None:
-            try:
-                parsed = float(value)
-            except (TypeError, ValueError):
-                return None
-            if parsed > 1.0 and parsed <= 100.0:
-                parsed = parsed / 100.0
-            return max(0.0, min(1.0, parsed))
-
-        if isinstance(output, dict):
-            if output.get("shared_context_available") is not None:
-                raw_conf = 0.75 if output.get("shared_context_available") else 0.0
-            elif output.get("available") is False or output.get("degraded") is True or "error" in output:
-                raw_conf = 0.0
-            for key in ("confidence", "confidence_raw", "confidence_score"):
-                if raw_conf is None:
-                    raw_conf = _as_unit_float(output.get(key))
-                    if raw_conf is not None:
-                        break
-            if raw_conf is None:
-                for key in (
-                    "anomaly_score",
-                    "tampering_score",
-                    "synthetic_probability",
-                    "forgery_score",
-                    "diffusion_probability",
-                ):
-                    val = _as_unit_float(output.get(key))
-                    if val is not None:
-                        # These keys are often anomaly probabilities. For a
-                        # positive finding, confidence is the anomaly strength;
-                        # for a clean finding, confidence is the absence signal.
-                        raw_conf = val if self._positive_signal(output) else 1.0 - val
-                        break
-            if raw_conf is None:
-                for key in (
-                    "noise_consistency_score",
-                    "consistency_score",
-                    "overall_consistency",
-                    "avg_confidence",
-                    "confidence_score",
-                    "top_confidence",
-                    "max_confidence",
-                    "mean_confidence",
-                    "score",
-                    "probability",
-                    "top_score",
-                    "similarity",
-                    "top_similarity",
-                    "trace_continuity",
-                    "provenance_score",
-                    "completeness",
-                ):
-                    val = _as_unit_float(output.get(key))
-                    if val is not None:
-                        raw_conf = val
-                        break
-            if raw_conf is None:
-                if "detections" in output:
-                    detections = output.get("detections") or []
-                    raw_conf = 0.65 if len(detections) > 0 else 0.82
-                elif "objects_detected" in output:
-                    raw_conf = 0.65 if len(output.get("objects_detected") or []) > 0 else 0.82
-                elif "weapon_detections" in output:
-                    raw_conf = 0.70 if len(output.get("weapon_detections") or []) > 0 else 0.82
-                elif "detection_count" in output:
-                    raw_conf = 0.70 if int(output.get("detection_count") or 0) > 0 else 0.82
-                elif "classes_found" in output:
-                    classes_found = output.get("classes_found") or []
-                    raw_conf = 0.65 if hasattr(classes_found, "__len__") and len(classes_found) > 0 else 0.82
-                elif output.get("hash_matches") is True or output.get("hash_match") is True:
-                    raw_conf = 1.0
-                elif output.get("hash_matches") is False or output.get("hash_match") is False:
-                    raw_conf = 0.30
-                elif output.get("scale_consistent") is True:
-                    raw_conf = 0.85
-                elif output.get("scale_consistent") is False:
-                    raw_conf = 0.40
-                elif "verdict" in output:
-                    v = str(output.get("verdict", "")).upper()
-                    if v in (
-                        "CONSISTENT",
-                        "AUTHENTIC",
-                        "CLEAN",
-                        "NATURAL_OR_CLEAN",
-                        "LIKELY_AUTHENTIC",
-                        "LIKELY_GENUINE",
-                        "CONTENT_CREDENTIALS_PRESENT",
-                        "NO_CONTENT_CREDENTIALS",
-                    ):
-                        raw_conf = 0.85
-                    elif v in (
-                        "INCONSISTENT",
-                        "SUSPICIOUS",
-                        "TAMPERED",
-                        "SPLICE_SUSPECTED",
-                        "SPLICE_DETECTED",
-                    ):
-                        raw_conf = 0.40
-                    elif v in ("INCONCLUSIVE", "ERROR", "NO_ENF_SIGNAL", "TOO_SHORT"):
-                        raw_conf = 0.50
-                    elif v == "NOT_APPLICABLE":
-                        raw_conf = 0.0
-                elif output.get("ai_probability") is not None:
-                    raw_conf = round(max(0.10, 1.0 - float(output["ai_probability"])), 3)
-                elif output.get("synthetic_probability") is not None:
-                    raw_conf = round(max(0.10, 1.0 - float(output["synthetic_probability"])), 3)
-                elif output.get("spoof_probability") is not None:
-                    raw_conf = round(max(0.10, 1.0 - float(output["spoof_probability"])), 3)
-                elif "gemini_verdict" in output:
-                    v = str(output.get("gemini_verdict", "")).upper()
-                    if v in ("AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"):
-                        raw_conf = 0.85
-                    elif v in ("SUSPICIOUS", "MANIPULATED", "ALTERED"):
-                        raw_conf = 0.40
-                    else:
-                        raw_conf = 0.50
-                elif "anomalies" in output and isinstance(output["anomalies"], list):
-                    # For tools like prosody_analyze that return an anomaly list
-                    num_anomalies = len(output["anomalies"])
-                    raw_conf = max(0.40, 1.0 - (num_anomalies * 0.15))
-                elif output.get("num_anomaly_regions") is not None:
-                    raw_conf = 0.85 if int(output["num_anomaly_regions"]) == 0 else 0.40
-                elif (
-                    output.get("anomaly_detected") is True
-                    or output.get("inconsistency_detected") is True
-                ):
-                    raw_conf = 0.40
-                elif (
-                    output.get("anomaly_detected") is False
-                    or output.get("inconsistency_detected") is False
-                ):
-                    raw_conf = 0.85
-                elif output.get("header_valid") is not None:
-                    anomalies = output.get("anomalies", [])
-                    raw_conf = 0.85 if isinstance(anomalies, list) and len(anomalies) == 0 else 0.40
-                elif output.get("editing_software_detected") is True:
-                    raw_conf = 0.30
-                elif output.get("editing_software_detected") is False:
-                    raw_conf = 0.90
-                elif "present_fields" in output and "absent_fields" in output:
-                    present = len(output.get("present_fields") or [])
-                    absent = len(output.get("absent_fields") or [])
-                    total = present + absent
-                    raw_conf = max(0.40, min(0.90, present / total)) if total > 0 else 0.50
-                elif "plausible" in output:
-                    p = output.get("plausible")
-                    raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
-                elif output.get("c2pa_present") is not None or output.get("provenance_found") is not None:
-                    raw_conf = 0.85 if output.get("c2pa_present") or output.get("provenance_found") else 0.50
-
-        from_fallback = raw_conf is None
-        try:
-            confidence = float(raw_conf) if raw_conf is not None else 0.50
-        except (TypeError, ValueError):
-            confidence = 0.50
-            from_fallback = True
-
-        if from_fallback:
-            logger.warning(
-                "Unrecognised tool output format — confidence fallback to 0.50",
-                tool=tool_name,
-                agent_id=self.agent_id,
-                output_keys=list(output.keys())
-                if isinstance(output, dict)
-                else type(output).__name__,
-            )
-        return confidence, from_fallback
+        return ToolOutputClassifier.extract_confidence(output, tool_name, self.agent_id)
 
     @staticmethod
     def _has_not_applicable_marker(output: dict[str, Any]) -> bool:
-        if str(output.get("verdict", "")).upper() == "NOT_APPLICABLE":
-            return True
-        if output.get("not_applicable") is True or output.get("skipped") is True:
-            return True
-        return any(
-            bool(output.get(k))
-            for k in (
-                "ela_not_applicable",
-                "ghost_not_applicable",
-                "noise_fingerprint_not_applicable",
-                "prnu_not_applicable",
-                "gan_not_applicable",
-                "roi_skipped",
-            )
-        )
+        return ToolOutputClassifier.has_not_applicable_marker(output)
 
     @staticmethod
     def _looks_like_condition_skip(output: dict[str, Any]) -> bool:
-        text = " ".join(
-            str(output.get(k, ""))
-            for k in ("reason", "note", "skipped_reason", "file_format_note", "limitation_note")
-        ).lower()
-        condition_words = (
-            "not applicable",
-            "requires",
-            "no gps",
-            "no timestamp",
-            "no readable",
-            "no face",
-            "no audio",
-            "not enough",
-            "insufficient",
-            "cannot be verified from metadata",
-        )
-        return any(word in text for word in condition_words)
+        return ToolOutputClassifier.looks_like_condition_skip(output)
 
     @staticmethod
     def _positive_signal(output: dict[str, Any]) -> bool:
-        if (
-            output.get("not_applicable")
-            or output.get("skipped")
-            or str(output.get("status", "")).upper() in {"NOT_APPLICABLE", "SKIPPED"}
-            or str(output.get("verdict", "")).upper() == "NOT_APPLICABLE"
-        ):
-            return False
-
-        positive_keys = (
-            "manipulation_detected",
-            "splicing_detected",
-            "copy_move_detected",
-            "is_ai_generated",
-            "gan_artifact_detected",
-            "anomaly_detected",
-            "inconsistency_detected",
-            "contextual_anomalies_detected",
-            "scene_incongruent",
-            "concern_flag",
-            "spoofing_detected",
-            "spoof_detected",
-            "is_spoofed",
-            "synthetic_detected",
-            "splice_detected",
-            "re_encoding_detected",
-            "shift_detected",
-            "prosody_anomaly",
-            "sync_drift_detected",
-            "desync_detected",
-            "face_swap_detected",
-            "deepfake_suspected",
-            "discontinuity_detected",
-            "chimeric_signature_detected",
-            "has_appended_data",
-            "editing_software_detected",
-            "is_anomalous",
-        )
-        nested_metadata = output.get("metadata") if isinstance(output.get("metadata"), dict) else {}
-        if nested_metadata and ReActLoopEngine._positive_signal(nested_metadata):
-            return True
-        if any(bool(output.get(k)) for k in positive_keys):
-            return True
-        if any(bool(output.get(f"gemini_{k}")) for k in positive_keys):
-            return True
-        if output.get("gemini_manipulation_signals") or output.get("manipulation_signals"):
-            # Require meaningful confidence for list-based positive checks
-            confidence = float(output.get("confidence", 0.0) or 0.0)
-            if confidence >= 0.40:
-                return True
-        if output.get("weapon_detections") or output.get("contraband_detections"):
-            return True
-        if (
-            output.get("plausible") is False
-            or output.get("hash_match") is False
-            or output.get("hash_matches") is False
-            or output.get("scale_consistent") is False
-            or output.get("lighting_consistent") is False
-            or output.get("inconsistency_detected") is True
-        ):
-            return True
-
-        if output.get("contextual_anomalies") and len(output.get("contextual_anomalies", [])) > 0:
-            return True
-
-        if output.get("manipulation_signals") and len(output.get("manipulation_signals", [])) > 0:
-            return True
-        if int(output.get("anomaly_count", 0) or 0) > 0:
-            return True
-        verdict = str(output.get("verdict", "")).upper()
-        authenticity_verdict = str(output.get("authenticity_verdict", "")).upper()
-        verdict_is_positive = verdict in {
-            "SUSPICIOUS",
-            "TAMPERED",
-            "MANIPULATED",
-            "INCONSISTENT",
-            "ANOMALOUS",
-            "SPLICE_DETECTED",
-            "SPLICE_SUSPECTED",
-        } or authenticity_verdict in {
-            "SUSPICIOUS",
-            "LIKELY_MANIPULATED",
-            "AI_GENERATED",
-            "TAMPERED",
-            "MANIPULATED",
-        }
-        if verdict_is_positive and output.get("court_defensible") is False:
-            return bool(output.get("manipulation_detected") or output.get("splicing_detected"))
-        return verdict_is_positive
+        return ToolOutputClassifier.positive_signal(output)
 
     def _classify_tool_output(
         self,
@@ -1161,62 +821,7 @@ class ReActLoopEngine:
 
         Returns (status, evidence_verdict, confidence_or_none, court_defensible).
         """
-        if not isinstance(output, dict):
-            return "INCONCLUSIVE", "INCONCLUSIVE", confidence, False
-
-        if output.get("error"):
-            return "INCOMPLETE", "ERROR", None, False
-
-        if self._has_not_applicable_marker(output):
-            return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
-
-        if output.get("available") is False:
-            if self._looks_like_condition_skip(output):
-                return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
-            return "INCOMPLETE", "ERROR", None, False
-
-        if self._looks_like_condition_skip(output) and confidence <= 0.05:
-            return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
-
-        declared_status = str(output.get("status", "")).upper()
-        if declared_status in {"INCOMPLETE", "FAILED", "ERROR"}:
-            return "INCOMPLETE", "ERROR", None, False
-        if declared_status in {"NOT_APPLICABLE", "SKIPPED"}:
-            return "NOT_APPLICABLE", "NOT_APPLICABLE", None, False
-
-        court_defensible = bool(output.get("court_defensible", True))
-        declared_evidence_verdict = str(
-            output.get("evidence_verdict")
-            or (
-                output.get("metadata", {}).get("evidence_verdict")
-                if isinstance(output.get("metadata"), dict)
-                else ""
-            )
-            or ""
-        ).upper()
-        if declared_evidence_verdict == "POSITIVE":
-            return "CONFIRMED", "POSITIVE", confidence, court_defensible
-        if declared_evidence_verdict == "NEGATIVE":
-            return "CONFIRMED", "NEGATIVE", confidence, court_defensible
-        if declared_evidence_verdict == "INCONCLUSIVE":
-            return "INCONCLUSIVE", "INCONCLUSIVE", confidence, court_defensible
-        if self._positive_signal(output):
-            return "CONFIRMED", "POSITIVE", confidence, court_defensible
-
-        inconclusive_verdicts = {"INCONCLUSIVE", "UNKNOWN", "NO_ENF_SIGNAL"}
-        verdict = str(output.get("verdict", "")).upper()
-        declared_clean = verdict in {
-            "AUTHENTIC",
-            "CLEAN",
-            "CONSISTENT",
-            "LIKELY_AUTHENTIC",
-            "LIKELY_GENUINE",
-            "NATURAL_OR_CLEAN",
-        } or declared_status in {"CONFIRMED", "COMPLETE", "OK", "SUCCESS"}
-        if verdict in inconclusive_verdicts or (conf_from_fallback and not declared_clean):
-            return "INCONCLUSIVE", "INCONCLUSIVE", confidence, court_defensible
-
-        return "CONFIRMED", "NEGATIVE", confidence, court_defensible
+        return ToolOutputClassifier.classify(output, tool_name, confidence, conf_from_fallback)
 
     async def _handle_hitl_pause(
         self, checkpoint: HITLCheckpointState, hitl_reason: HITLCheckpointReason
@@ -2338,207 +1943,7 @@ class ReActLoopEngine:
         Generate specific, court-admissible reasoning based on tool output.
         Each tool type produces a unique numerical-rich summary sentence.
         """
-        if not isinstance(output, dict):
-            return ""
-
-        lower_tool = tool_name.lower()
-
-        if lower_tool in ("ela_full_image", "neural_ela"):
-            num_regions = output.get("num_anomaly_regions", 0)
-            threshold = output.get("threshold_used", output.get("ela_threshold", "N/A"))
-            max_ela = output.get("max_ela_value", output.get("max_ela", "N/A"))
-            return (
-                f"ELA analysis at threshold {threshold}: {num_regions} anomaly regions detected. "
-                f"Maximum ELA value: {max_ela}."
-            )
-
-        if lower_tool in ("noise_fingerprint", "noiseprint_cluster"):
-            consistency = output.get("noise_consistency_score", output.get("consistency_score", 0))
-            blocks = output.get("blocks_analyzed", output.get("num_blocks", 0))
-            verdict = str(output.get("verdict", "") or "")
-            return (
-                f"PRNU noise fingerprint: Consistency score {float(consistency):.3f} "
-                f"across {int(blocks)} analyzed blocks. "
-                f"{'No sensor inconsistencies detected.' if not verdict or 'inconsist' not in verdict.lower() else 'Potential sensor mismatch detected.'}"
-            )
-
-        if lower_tool == "object_detection":
-            detections = output.get("detections", [])
-            classes = set(d.get("class", "") for d in detections if isinstance(d, dict) and d.get("class"))
-            return (
-                f"YOLO object detection: {len(detections)} objects detected "
-                f"across {len(classes)} classes. "
-                f"Objects: {', '.join(sorted(classes)[:5])}."
-            )
-
-        if lower_tool in {"visual_evidence_profile", "gemini_deep_forensic"}:
-            verdict = output.get(
-                "authenticity_verdict",
-                output.get("verdict", "INCONCLUSIVE"),
-            )
-            signals = output.get(
-                "manipulation_signals",
-                output.get("visual_manipulation_signals", []),
-            )
-            text = output.get(
-                "text_content",
-                output.get("extracted_text", ""),
-            )
-            parts = [f"Visual evidence profile verdict: {verdict}."]
-            if signals and isinstance(signals, list):
-                parts.append(
-                    f"Manipulation signals: {', '.join(str(item) for item in signals[:3])}."
-                )
-            if text and isinstance(text, str) and len(text) > 3:
-                parts.append(f"Text extracted: '{text[:120]}'.")
-            return " ".join(parts)
-
-        if lower_tool == "frequency_domain_analysis":
-            anomaly_score = output.get("anomaly_score", 0)
-            hfr = output.get("high_freq_ratio", output.get("high_frequency_ratio", "N/A"))
-            regions = output.get("num_anomaly_regions", 0)
-            detected = output.get("anomaly_detected", False)
-            return (
-                f"FFT frequency analysis: anomaly score {float(anomaly_score):.3f}, "
-                f"high-frequency ratio {hfr}, {int(regions)} anomalous region(s). "
-                f"{'Anomalies detected.' if detected else 'No significant frequency anomalies.'}"
-            )
-
-        if lower_tool == "extract_text_from_image":
-            word_count = output.get("word_count", 0)
-            method = output.get("method", output.get("ocr_engine", "OCR"))
-            preview = str(output.get("text", output.get("full_text", "")) or "")[:120]
-            return (
-                f"{method} OCR: {int(word_count)} words extracted. "
-                f"Content: '{preview}'" if preview else f"{method} OCR: {int(word_count)} words extracted."
-            )
-
-        if lower_tool in ("exif_extract",):
-            fields = output.get("total_fields_extracted", 0)
-            camera = output.get("camera_make", output.get("device_model", ""))
-            gps = "GPS coordinates present" if output.get("gps_coordinates") else "No GPS data"
-            return (
-                f"EXIF extraction: {int(fields)} fields found. "
-                f"{'Camera: ' + str(camera) + '. ' if camera else ''}"
-                f"{gps}."
-            )
-
-        if lower_tool == "compression_risk_audit":
-            penalty = output.get("compression_penalty", 1.0)
-            raw_platform = output.get("platform", output.get("detected_platform", "unknown"))
-            platform = (
-                "stripped or platform-normalized metadata"
-                if str(raw_platform or "").lower() in {"", "unknown", "none"}
-                else raw_platform
-            )
-            impact = output.get("forensic_reliability_impact", "not specified")
-            return (
-                f"Compression/platform audit: {platform}; reliability impact {impact}; "
-                f"penalty factor {float(penalty):.2f}. This limits provenance strength but is not a manipulation signal by itself."
-            )
-
-        if lower_tool == "file_structure_analysis":
-            anomalies = output.get("anomalies")
-            anomaly_count = len(anomalies) if isinstance(anomalies, list) else int(output.get("anomaly_count", 0) or 0)
-            header_valid = output.get("header_valid", output.get("valid_header", True))
-            trailer_valid = output.get("trailer_valid", output.get("valid_trailer", True))
-            if anomaly_count:
-                details = "; ".join(str(x) for x in anomalies[:3]) if isinstance(anomalies, list) else f"{anomaly_count} anomaly flag(s)"
-                return f"File structure check found {details}. Header valid: {bool(header_valid)}; trailer valid: {bool(trailer_valid)}."
-            return (
-                f"File structure check found a valid header/trailer profile and no appended-payload indicators. "
-                f"Header valid: {bool(header_valid)}; trailer valid: {bool(trailer_valid)}."
-            )
-
-        if lower_tool in ("file_hash_verify", "hash_verify"):
-            match = output.get("hash_matches", output.get("hash_match", None))
-            status_str = "matched intake custody" if match else "mismatched intake custody"
-            return f"SHA-256 hash verification: {status_str}."
-
-        if lower_tool in ("lighting_consistency", "lighting_correlation_initial"):
-            score = output.get("lighting_consistency_score", output.get("correlation_score", 0))
-            direction = output.get("light_direction_consistency", "unknown")
-            return (
-                f"Lighting analysis: consistency score {float(score):.3f}, "
-                f"direction consistency: {direction}."
-            )
-
-        if lower_tool in ("scene_incongruence",):
-            score = output.get("incongruence_score", 0)
-            anomalies = output.get("anomalies", output.get("contextual_anomalies", []))
-            return (
-                f"Scene incongruence analysis: score {float(score):.3f} "
-                f"with {len(anomalies) if isinstance(anomalies, list) else 0} anomaly flag(s)."
-            )
-
-        if lower_tool in ("neural_splicing", "splicing_detect"):
-            detected = output.get("splicing_detected", output.get("manipulation_detected", False))
-            conf = output.get("confidence", output.get("tampering_score", 0))
-            return (
-                f"Splicing detection: {'SPLICE DETECTED' if detected else 'No splice detected'}. "
-                f"Confidence: {float(conf):.3f}."
-            )
-
-        if lower_tool == "neural_copy_move":
-            detected = output.get("copy_move_detected", output.get("manipulation_detected", False))
-            matches = output.get("keypoint_matches", output.get("num_matches", 0))
-            return (
-                f"Copy-move detection: {'FORGERY DETECTED' if detected else 'No copy-move forgery detected'}. "
-                f"Keypoint matches: {int(matches)}."
-            )
-
-        if lower_tool == "deepfake_frequency_check":
-            prob = output.get("deepfake_probability", output.get("ai_probability", 0))
-            return f"Deepfake frequency analysis: AI generation probability {float(prob):.3f}."
-
-        if lower_tool == "diffusion_artifact_detector":
-            detected = output.get("diffusion_detected", output.get("ai_generated", False))
-            prob = output.get("diffusion_probability", output.get("ai_probability", 0))
-            return (
-                f"Diffusion artifact detection: "
-                f"{'AI-generation artifacts detected' if detected else 'No AI-generation artifacts detected'}. "
-                f"Probability: {float(prob):.3f}."
-            )
-
-        if lower_tool == "audio_splice_detect":
-            detected = output.get("splice_detected", False)
-            count = output.get("splice_count", output.get("num_splices", 0))
-            return f"Audio splice detection: {int(count)} splice(s) {'detected' if detected else 'found'}."
-
-        if lower_tool == "codec_fingerprinting":
-            detected = output.get("re_encoding_detected", False)
-            codec = output.get("detected_codec", output.get("codec", "unknown"))
-            return (
-                f"Codec fingerprinting: {'Re-encoding detected' if detected else 'No re-encoding detected'}. "
-                f"Codec: {codec}."
-            )
-
-        if lower_tool in ("optical_flow_analysis",):
-            anomalies = output.get("anomaly_count", 0)
-            flow_score = output.get("flow_consistency_score", output.get("consistency_score", 0))
-            return (
-                f"Optical flow analysis: {int(anomalies)} anomaly frame(s), "
-                f"consistency score {float(flow_score):.3f}."
-            )
-
-        if lower_tool in ("frame_consistency_analysis", "interframe_forgery_detector"):
-            discontinuities = output.get("discontinuity_count", output.get("anomaly_count", 0))
-            ssim = output.get("ssim_variance", output.get("consistency_score", 0))
-            return (
-                f"Frame consistency: {int(discontinuities)} discontinuity(ies), "
-                f"SSIM variance {float(ssim):.3f}."
-            )
-
-        # Fallback: extract key numerical fields
-        key_results = []
-        for key in ("verdict", "score", "confidence", "confidence_raw", "anomaly_count",
-                     "detection_count", "num_anomaly_regions", "splice_count", "word_count"):
-            if key in output:
-                key_results.append(f"{key}={output[key]}")
-        if key_results:
-            return f"Tool results: {', '.join(key_results)}."
-
-        return ""
+        return _fmt_build_detailed_reasoning(tool_name, output)
 
     def _build_readable_summary(
         self,
@@ -2556,173 +1961,16 @@ class ReActLoopEngine:
         Uses tool-specific detailed reasoning builders for rich,
         court-admissible findings. Falls back to generic scalar extraction.
         """
-        tool_label = tool_name.replace("_", " ").title()
-
-        if not tool_result.success:
-            err = tool_result.error or "unknown error"
-            for prefix in (
-                "[ToolUnavailableError]",
-                "[ToolError]",
-                "ToolError:",
-                "Exception:",
-                "ValueError:",
-                "TypeError:",
-                "KeyError:",
-            ):
-                err = err.replace(prefix, "").strip()
-            # Classify error type for a cleaner message
-            if "ModuleNotFoundError" in err or "ImportError" in err or "No module named" in err:
-                dep_name = err.split("'")[1] if "'" in err else "required dependency"
-                err_msg = f"ML dependency '{dep_name}' not installed — tool skipped."
-            elif "Timeout" in err or "timeout" in err:
-                err_msg = "Tool timed out — likely model cold-start. Result skipped."
-            elif "FileNotFoundError" in err:
-                err_msg = "Evidence file not accessible — skipped."
-            else:
-                err_msg = err[:140] + ("…" if len(err) > 140 else "")
-            return (
-                f"{tool_label}: Incomplete: {err_msg} "
-                "This is a tool/runtime limitation, not evidence of manipulation. "
-                "Other available checks continued."
-            )
-
-        # M1 Refinement: If LLM generated specific reasoning, prepend it to the technical result
-        reasoning_prefix = ""
-        if llm_reasoning:
-            # Clean up the reasoning — take the last sentence or first 100 chars
-            last_thought = llm_reasoning.strip().split("\n")[-1]
-            if len(last_thought) > 120:
-                last_thought = last_thought[:117] + "..."
-            reasoning_prefix = f"[{last_thought}] "
-
-        output = tool_result.output or {}
-
-        if isinstance(output, dict):
-            if self._has_not_applicable_marker(output) or (
-                output.get("available") is False and self._looks_like_condition_skip(output)
-            ):
-                reason = (
-                    output.get("reason")
-                    or output.get("note")
-                    or output.get("skipped_reason")
-                    or output.get("limitation_note")
-                    or "This tool is not applicable to the submitted evidence."
-                )
-                return (
-                    f"{tool_label}: Skipped: {str(reason)[:220]} "
-                    "This does not count as suspicious evidence."
-                )
-
-            if output.get("available") is False and not output.get("error"):
-                reason = (
-                    output.get("note")
-                    or output.get("reason")
-                    or "Tool unavailable in this environment."
-                )
-                return (
-                    f"{tool_label}: Incomplete: {str(reason)[:220]} "
-                    "This is reported as a limitation, not as a forensic signal."
-                )
-
-        def _is_stub(output: Any) -> bool:
-            """Unified stub detection across different response formats."""
-            if not isinstance(output, dict):
-                return False
-            return (
-                output.get("status") in ("stub", "stub_response")
-                or output.get("stub_result") is True
-            )
-
-        if _is_stub(output):
-            return (
-                f"{reasoning_prefix}{tool_label}: The agent's external module returned a temporary placeholder response. "
-                f"This indicates that advanced ML features are still structurally integrating. "
-                f"Confidence: {confidence:.0%}."
-            )
-
-        # Try tool-specific detailed reasoning builder first
-        detailed = self._build_detailed_reasoning(tool_name, output)
-        if detailed:
-            return self._shape_analyst_finding(
-                tool_label=tool_label,
-                message=str(detailed),
-                evidence_verdict=evidence_verdict,
-                status=status,
-                output=output,
-            )
-
-        # Use imported tool interpreters as second priority
-        global _TOOL_INTERPRETERS
-
-        interpreter = _TOOL_INTERPRETERS.get(tool_name)
-        if interpreter and tool_result.success:
-            try:
-                interpreted_msg = interpreter(output)
-                return self._shape_analyst_finding(
-                    tool_label=tool_label,
-                    message=str(interpreted_msg),
-                    evidence_verdict=evidence_verdict,
-                    status=status,
-                    output=output,
-                )
-            except Exception as exc:
-                logger.debug(
-                    "Tool interpreter failed; using generic summary",
-                    agent_id=self.agent_id,
-                    tool_name=tool_name,
-                    error=str(exc),
-                )
-
-        highlights: list[str] = []
-        for key, value in output.items():
-            if key.startswith("_") or key in (
-                "status",
-                "tool_name",
-                "analysis_report",
-                "artifact_id",
-                "session_id",
-                "case_id",
-            ):
-                continue
-
-            clean_key = key.replace("_", " ")
-
-            if isinstance(value, list):
-                if len(value) > 5:
-                    highlights.append(f"{len(value)} {clean_key}")
-                else:
-                    items = ", ".join(str(v) for v in value)
-                    if items:
-                        highlights.append(f"{clean_key}: {items}")
-                continue
-
-            if isinstance(value, dict):
-                continue
-
-            if isinstance(value, bool):
-                highlights.append(f"{clean_key}: {'yes' if value else 'no'}")
-            elif isinstance(value, float):
-                highlights.append(f"{clean_key} {value:.3f}")
-            elif isinstance(value, int):
-                highlights.append(f"{clean_key} {value}")
-            elif isinstance(value, str) and len(value) < 200:
-                highlights.append(f"{clean_key}: {value}")
-
-        if highlights:
-            # Show top 4 metrics concisely
-            top = highlights[:4]
-            detail = "; ".join(top)
-            if len(highlights) > 4:
-                detail += f" (+{len(highlights) - 4} more)"
-            return self._shape_analyst_finding(
-                tool_label=tool_label,
-                message=f"{detail}.",
-                evidence_verdict=evidence_verdict,
-                status=status,
-                output=output if isinstance(output, dict) else {},
-            )
-        else:
-            return f"{tool_label}: analysis complete — no anomalies detected."
+        return _fmt_build_readable_summary(
+            tool_name=tool_name,
+            task_description=task_description,
+            tool_result=tool_result,
+            confidence=confidence,
+            status=status,
+            evidence_verdict=evidence_verdict,
+            llm_reasoning=llm_reasoning,
+            agent_id=self.agent_id,
+        )
 
     def _shape_analyst_finding(
         self,
@@ -2733,47 +1981,17 @@ class ReActLoopEngine:
         output: dict[str, Any],
     ) -> str:
         """Turn technical tool output into a concise analyst-facing finding."""
-        verdict = (evidence_verdict or "INCONCLUSIVE").upper()
-        limitation = (
-            output.get("limitation")
-            or output.get("limitation_note")
-            or output.get("note")
-            or output.get("fallback_reason")
-            or ""
+        return _fmt_shape_analyst_finding(
+            tool_label=tool_label,
+            message=message,
+            evidence_verdict=evidence_verdict,
+            status=status,
+            output=output,
         )
-        limitation = str(limitation).strip()
-        if len(limitation) > 180:
-            limitation = limitation[:177] + "..."
-
-        if verdict == "POSITIVE":
-            prefix = "Finding"
-            meaning = "This is a forensic signal and should be weighed with corroborating tools."
-        elif verdict == "NEGATIVE":
-            prefix = "Checked"
-            meaning = "This supports the absence of this specific anomaly."
-        elif verdict == "NOT_APPLICABLE":
-            prefix = "Skipped"
-            meaning = "This does not count for or against authenticity."
-        elif verdict == "ERROR" or status == "INCOMPLETE":
-            prefix = "Incomplete"
-            meaning = "This is a tool limitation, not evidence of manipulation."
-        else:
-            prefix = "Inconclusive"
-            meaning = "The signal is not strong enough to support a firm conclusion."
-
-        parts = [f"{tool_label}: {prefix}: {message.strip()}"]
-        if limitation and verdict in {"INCONCLUSIVE", "ERROR", "NOT_APPLICABLE"}:
-            parts.append(f"Limitation: {limitation}")
-        parts.append(meaning)
-        return " ".join(parts)
 
     def _format_tool_result(self, result: ToolResult) -> str:
         """Format a tool result for observation content."""
-        if result.unavailable:
-            return f"Tool '{result.tool_name}' is unavailable. Error: {result.error}"
-        if result.success:
-            return f"Tool '{result.tool_name}' succeeded. Output: {result.output}"
-        return f"Tool '{result.tool_name}' failed. Error: {result.error}"
+        return _fmt_format_tool_result(result)
 
     def add_finding(self, finding: AgentFinding) -> None:
         """Add a finding to the result."""

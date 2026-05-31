@@ -306,7 +306,7 @@ class TestInvestigationEndpoint:
                     "api.routes.investigation.set_active_pipeline_metadata", new=mock_noop
                 ),
                 patch("api.routes.investigation.run_investigation_task", new=mock_noop),
-                patch("magic.from_buffer", return_value="image/jpeg"),
+                patch("api.routes.investigation.magic.from_buffer", return_value="image/jpeg"),
                 patch(
                     "api.routes.investigation.settings",
                     MagicMock(evidence_storage_path=tempfile.gettempdir(), use_redis_worker=False),

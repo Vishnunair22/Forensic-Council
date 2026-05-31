@@ -14,8 +14,6 @@ from core.structured_logging import get_logger
 from core.tool_names import TOOL_VISUAL_PROFILE
 from core.vision_router import VisionRouter
 
-from .._context_utils import aggregate_tool_context
-
 logger = get_logger(__name__)
 
 

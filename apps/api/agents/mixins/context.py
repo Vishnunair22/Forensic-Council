@@ -110,8 +110,8 @@ class AgentContextMixin:
             humanized = FindingHumanizer.humanize_finding(finding_dict)
             if "court_statement" in humanized:
                 result["court_statement"] = humanized["court_statement"]
-        except Exception:
-            pass
+        except Exception as _humanize_err:  # noqa: S110
+            logger.debug("Finding humanization skipped", error=str(_humanize_err))
 
         if result.get("error") and not result.get("available", True):
             # Result is a structured failure — count as error, not success
@@ -133,10 +133,10 @@ class AgentContextMixin:
 
         # Exempt high-signal tools from payload truncation — their text content
         # is the primary input for Gemini forensic context and OCR analysis.
-        _EXEMPT_FROM_TRUNCATION = {"extract_text_from_image", "analyze_image_content"}
+        _exempt_from_truncation = frozenset({"extract_text_from_image", "analyze_image_content"})
         # Truncate large string/list payloads
         for _key, val in self._tool_context.items():
-            if _key in _EXEMPT_FROM_TRUNCATION:
+            if _key in _exempt_from_truncation:
                 continue
             if isinstance(val, dict):
                 for k in list(val.keys()):

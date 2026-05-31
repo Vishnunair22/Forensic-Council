@@ -301,8 +301,8 @@ class AgentInvestigationMixin:
                     bus_ctx = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
                     if bus_ctx:
                         visual_profile = bus_ctx
-                except Exception:
-                    pass
+                except Exception as _bus_err:  # noqa: S110
+                    logger.debug("Visual profile bus lookup failed", error=str(_bus_err))
 
             # visual_profile is the full to_finding_dict() output:
             #   { "reasoning_summary": ..., "confidence_raw": ..., "metadata": { ... } }
@@ -435,8 +435,8 @@ class AgentInvestigationMixin:
                                 },
                             ),
                         )
-                    except Exception:
-                        pass
+                    except Exception as _kp_err:  # noqa: S110
+                        logger.debug("Keepalive broadcast failed", error=str(_kp_err))
 
             keepalive_task = asyncio.create_task(_broadcast_keepalive())
 
@@ -897,7 +897,7 @@ class AgentInvestigationMixin:
                 # 11. Hash verify
                 elif tool_name in ("file_hash_verify", "hash_verify"):
                     h = tool_ctx.get("computed_hash") or tool_ctx.get("sha256") or tool_ctx.get("current_hash") or "unknown"
-                    stored = tool_ctx.get("stored_hash") or tool_ctx.get("original_hash") or ""
+                    _stored = tool_ctx.get("stored_hash") or tool_ctx.get("original_hash") or ""  # reserved for future chain-of-custody diff display
                     file_size = tool_ctx.get("file_size_bytes")
                     size_str = f" ({file_size / 1024:.1f} KB)" if file_size else ""
                     if ev == "POSITIVE" or not tool_ctx.get("hash_match", True):

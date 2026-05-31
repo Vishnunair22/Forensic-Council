@@ -74,8 +74,9 @@ async def main() -> None:
 
         # Pre-warm EasyOCR reader so model init never happens on the request path
         try:
-            from tools.ocr_tools import _get_easyocr_reader
             import asyncio as _asyncio
+
+            from tools.ocr_tools import _get_easyocr_reader
             loop = _asyncio.get_running_loop()
             await loop.run_in_executor(None, _get_easyocr_reader)
             logger.info("EasyOCR reader pre-warmed successfully")

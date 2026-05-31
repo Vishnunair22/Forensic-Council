@@ -43,7 +43,7 @@ class TestFullForensicPipeline:
                 patch(
                     "api.routes.investigation.set_active_pipeline_metadata", new_callable=AsyncMock
                 ),
-                patch("magic.from_buffer", return_value="image/jpeg"),
+                patch("api.routes.investigation.magic.from_buffer", return_value="image/jpeg"),
                 patch(
                     "api.routes.investigation.settings",
                     MagicMock(evidence_storage_path=str(tmp_path), use_redis_worker=False),

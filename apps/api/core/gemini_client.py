@@ -90,7 +90,7 @@ _SAFETY_PREAMBLE = (
 
 def _track_preamble_usage() -> None:
     """Track how many times the safety preamble is sent.
-    
+
     Once CACHED_PREAMBLE_COUNT exceeds a threshold, prompt caching should
     be implemented via Gemini's context caching API to reduce token costs.
     """
@@ -110,7 +110,7 @@ def _build_deep_forensic_prompt(
     is_screen_capture_like: bool,
 ) -> str:
     """Structured forensic identification prompt — tight JSON contract.
-    
+
     Returns ONLY a JSON object with fields that map 1:1 to what the parser
     and downstream agents consume. Costs fewer tokens than the previous
     verbose prompt while providing richer, more actionable data.
@@ -352,10 +352,11 @@ class GeminiVisionFinding:
         }
 
 
-# Backwards-compatible alias — all new code should import VisualEvidenceFinding
-# from core.vision_types. GeminiVisionFinding is preserved so existing provider-cascade
-# tests and imports continue to work.
-GeminiVisionFinding = VisualEvidenceFinding
+# GeminiVisionFinding is a backwards-compatible alias kept for existing provider-cascade
+# tests and imports. All new code should import VisualEvidenceFinding from core.vision_types.
+# NOTE: The @dataclass GeminiVisionFinding defined above is intentionally shadowed here so
+# that callers get the canonical VisualEvidenceFinding shape without a separate definition.
+GeminiVisionFinding = VisualEvidenceFinding  # noqa: F811
 
 
 class GeminiVisionClient:
@@ -1205,12 +1206,10 @@ class GeminiVisionClient:
         if verdict in assessment_to_verdict:
             verdict = assessment_to_verdict[verdict]
 
-        # visible_metadata: on-screen datetime and platform
+        # visible_metadata: platform (on_screen_datetime reserved for future use)
         visible_meta = data.get("visible_metadata", {})
-        on_screen_datetime = ""
         platform = ""
         if isinstance(visible_meta, dict):
-            on_screen_datetime = visible_meta.get("on_screen_datetime", "") or ""
             platform = visible_meta.get("platform", "") or ""
 
         # elements: new field maps to detected_objects
@@ -1451,7 +1450,7 @@ class GeminiVisionClient:
     ) -> GeminiVisionFinding:
         """
         Enhanced local fallback with CLIP + DETR + ELA context.
-        
+
         This should NEVER produce garbage. We have powerful tools.
         """
         t0 = time.monotonic()
@@ -1476,12 +1475,18 @@ class GeminiVisionClient:
         clip_result, detr_result, opencv_result, ela_result, ocr_result, florence_result = results
 
         # Handle failures gracefully
-        if isinstance(clip_result, Exception): clip_result = {}
-        if isinstance(detr_result, Exception): detr_result = {"objects": [], "count": 0}
-        if isinstance(opencv_result, Exception): opencv_result = {}
-        if isinstance(ela_result, Exception): ela_result = {}
-        if isinstance(ocr_result, Exception): ocr_result = {"lines": []}
-        if isinstance(florence_result, Exception): florence_result = {"description": "", "available": False}
+        if isinstance(clip_result, Exception):
+            clip_result = {}
+        if isinstance(detr_result, Exception):
+            detr_result = {"objects": [], "count": 0}
+        if isinstance(opencv_result, Exception):
+            opencv_result = {}
+        if isinstance(ela_result, Exception):
+            ela_result = {}
+        if isinstance(ocr_result, Exception):
+            ocr_result = {"lines": []}
+        if isinstance(florence_result, Exception):
+            florence_result = {"description": "", "available": False}
 
         # Synthesize findings
         extracted_text = ocr_result.get("lines", [])
@@ -1771,8 +1776,8 @@ class GeminiVisionClient:
                         ocr_text_lines = [
                             ln.strip() for ln in ocr_raw.splitlines() if len(ln.strip()) > 2
                         ][:20]
-                except Exception:
-                    pass
+                except Exception as _tess_err:  # noqa: S110
+                    logger.debug("Tesseract OCR pass skipped", error=str(_tess_err))
                 if not ocr_text_lines:
                     try:
                         from tools.ocr_tools import _get_easyocr_reader
@@ -1782,8 +1787,8 @@ class GeminiVisionClient:
                             ocr_text_lines = [
                                 str(t).strip() for t in _results if len(str(t).strip()) > 2
                             ][:20]
-                    except Exception:
-                        pass
+                    except Exception as _easy_err:  # noqa: S110
+                        logger.debug("EasyOCR pass skipped", error=str(_easy_err))
                 return {"lines": ocr_text_lines}
             return await asyncio.to_thread(_ocr)
         except Exception as e:
@@ -1850,8 +1855,8 @@ class GeminiVisionClient:
 
             if snippet:
                 return f"Possible context: {snippet}"
-        except Exception:
-            pass
+        except Exception as _web_err:  # noqa: S110
+            logger.debug("Web search context lookup skipped", error=str(_web_err))
         return ""
 
     async def _run_florence_caption(self, file_path: str) -> dict:

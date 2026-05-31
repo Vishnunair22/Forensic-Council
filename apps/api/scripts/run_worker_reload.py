@@ -18,6 +18,7 @@ ensure_bcrypt_compat()
 
 def _run_worker():
     import asyncio
+
     from core.config import get_settings
     from core.structured_logging import configure_root_logger, get_logger
     from orchestration.worker import main

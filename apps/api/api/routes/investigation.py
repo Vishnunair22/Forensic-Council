@@ -17,7 +17,10 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-import magic
+try:
+    import magic
+except ImportError:
+    from core import magic_fallback as magic
 from api.constants import _EXACT_MIME_EXT_MAP
 from api.routes._rate_limiting import (
     check_daily_cost_quota,

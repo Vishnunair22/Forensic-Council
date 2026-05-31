@@ -116,6 +116,10 @@ apps/api/storage/reports/
 apps/api/storage/*.json
 apps/api/storage/*.db
 apps/api/storage/*.sqlite*
+
+# Root-level storage (evidence uploads belong in apps/api/storage/)
+/storage/
+
 infra/caddy_data/
 infra/caddy_config/
 infra/data/

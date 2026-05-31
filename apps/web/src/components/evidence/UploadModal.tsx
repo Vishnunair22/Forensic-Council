@@ -17,6 +17,7 @@ export interface UploadModalProps {
 export function UploadModal({ onClose, onFileSelected, authError }: UploadModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSecuring, setIsSecuring] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const { playSound } = useSound();
   const isSubmittingRef = useRef(false);
@@ -43,12 +44,14 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
     const validationError = validateEvidenceFile(file);
     if (validationError) {
       setError(validationError);
+      setIsSecuring(false);
       playSound("error");
       return;
     }
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setError(null);
+    setIsSecuring(true);
     playSound("success-chime");
     onFileSelected(file);
   }, [onFileSelected, playSound]);
@@ -155,7 +158,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
               isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
             }`}
           >
-            {isDragging ? "Initiate Transfer" : "Select Evidence"}
+            {isSecuring ? "Establishing Secure Channel" : isDragging ? "Initiate Transfer" : "Select Evidence"}
           </span>
           <p id="upload-file-help" className="text-xs font-mono fc-text-muted opacity-70 uppercase tracking-wider">
             Supported: IMG, VID, AUD // Max 50MB
