@@ -184,14 +184,14 @@ def _score_signals(signals: dict[str, bool]) -> tuple[str, float]:
     if signals["is_digitally_created"] and signals["has_screenshot_dimensions"]:
         return "screenshot", 0.75
 
+    if signals["is_camera_candidate"] and signals["has_camera_exif"]:
+        return "live_photograph", 0.85
+
     if signals["is_document_like"]:
         return "document", 0.80
 
     if signals["is_recompressed_web"]:
         return "web_image", 0.75
-
-    if signals["is_camera_candidate"] and signals["has_camera_exif"]:
-        return "live_photograph", 0.85
 
     if signals["is_camera_candidate"]:
         return "live_photograph", 0.70

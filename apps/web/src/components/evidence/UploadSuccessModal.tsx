@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Lock, ArrowRight, X, Play, Mic, FileText, Archive, File } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { formatBytes } from "@/lib/utils";
-import { FADE_IN_SCALE, TRANSITION_SMOOTH } from "@/lib/animations";
+import { TRANSITION_SMOOTH } from "@/lib/animations";
 
 export interface UploadSuccessModalProps {
   file: File;
@@ -23,9 +23,6 @@ function useSHA256Checksum(file: File) {
     let active = true;
     setIsComputing(true);
     const compute = async () => {
-      const CHUNK_SIZE = 10 * 1024 * 1024;
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      const hashBuffer = new Uint8Array(32);
       try {
         const arrayBuffer = await file.arrayBuffer();
         const hash = await crypto.subtle.digest("SHA-256", arrayBuffer);
@@ -268,10 +265,11 @@ export function UploadSuccessModal({
       )}
 
       <div className="flex gap-3 relative z-10 mt-auto">
-        <button onClick={onDismiss} className="fc-btn-secondary flex-1 text-sm py-2">
+        <button type="button" onClick={onDismiss} className="fc-btn-secondary flex-1 text-sm py-2">
           Cancel
         </button>
         <button
+          type="button"
           onClick={onStartAnalysis}
           disabled={isHandingOff}
           data-testid="upload-start-analysis"

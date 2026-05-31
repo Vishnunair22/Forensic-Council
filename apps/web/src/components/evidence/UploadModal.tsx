@@ -6,7 +6,7 @@ import { X, CloudUpload, Loader2 } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
-import { FADE_IN_UP, TRANSITION_FAST } from "@/lib/animations";
+import { TRANSITION_FAST } from "@/lib/animations";
 
 export interface UploadModalProps {
   onClose: () => void;

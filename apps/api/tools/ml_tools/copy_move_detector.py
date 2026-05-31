@@ -32,9 +32,9 @@ import numpy as np
 
 def detect_copy_move(
     image_path: str,
-    descriptor_distance_threshold: float = 50.0,
+    descriptor_distance_threshold: float = 35.0,
     spatial_distance_threshold: float = 30.0,
-    min_pairs_for_detection: int = 5,
+    min_pairs_for_detection: int = 12,
 ) -> dict:
     """
     Detect copy-move forgery in an image using SIFT feature matching.
@@ -119,7 +119,20 @@ def detect_copy_move(
                     )
 
     detected = len(copy_move_pairs) > min_pairs_for_detection
-    confidence = min(0.95, len(copy_move_pairs) / 50.0)
+
+    # Verify geometric consistency via RANSAC homography
+    # Repeated textures produce many SIFT matches but no consistent affine transform
+    if detected and len(copy_move_pairs) >= 4:
+        src_pts = np.array([[p["from"][0], p["from"][1]] for p in copy_move_pairs], dtype=np.float32)
+        dst_pts = np.array([[p["to"][0], p["to"][1]] for p in copy_move_pairs], dtype=np.float32)
+        try:
+            _, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+            inliers = int(mask.sum()) if mask is not None else 0
+            detected = inliers >= 8
+        except cv2.error:
+            detected = False
+
+    confidence = min(0.95, len(copy_move_pairs) / 50.0) if detected else max(0.05, 1.0 - len(copy_move_pairs) / 50.0)
 
     # Group pairs by spatial proximity to find copied regions
     if len(copy_move_pairs) > 0:

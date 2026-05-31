@@ -27,9 +27,9 @@ export function HeroAuthActions() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [localAuthError, setLocalAuthError] = useState<string | null>(null);
-  const [isAuthing, setIsAuthing] = useState(false);
   const sessionExpiredHandledRef = useRef(false);
   const ctaRef = useRef<HTMLButtonElement>(null);
+  const isHandingOffRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -49,11 +49,6 @@ export function HeroAuthActions() {
   useEffect(() => {
     router.prefetch?.("/evidence");
   }, [router]);
-
-  useEffect(() => {
-    document.body.style.overflow = showUpload ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [showUpload]);
 
   useEffect(() => {
     const handleReset = () => {
@@ -97,8 +92,8 @@ export function HeroAuthActions() {
   }, []);
 
   const handleStartAnalysis = useCallback(async () => {
-    if (!selectedFile) return false;
-
+    if (!selectedFile || isHandingOffRef.current) return false;
+    isHandingOffRef.current = true;
     setIsHandingOff(true);
 
     try {
@@ -109,6 +104,7 @@ export function HeroAuthActions() {
         title: "Authentication Failed",
         description: error instanceof Error ? error.message : "Could not authenticate your credentials. Please try again.",
       });
+      isHandingOffRef.current = false;
       setIsHandingOff(false);
       return false;
     }
@@ -132,14 +128,11 @@ export function HeroAuthActions() {
     } catch { /* non-blocking */ }
 
     authService.reset();
-    setIsAuthing(true);
     authService.ensureAuthenticated()
       .then(() => {
-        setIsAuthing(false);
         setLocalAuthError(null);
       })
       .catch((err: unknown) => {
-        setIsAuthing(false);
         const msg = err instanceof Error ? err.message : "Authentication failed";
         setLocalAuthError(msg);
       });
@@ -148,6 +141,7 @@ export function HeroAuthActions() {
   const closeUpload = useCallback(() => {
     setShowUpload(false);
     setSelectedFile(null);
+    isHandingOffRef.current = false;
     setIsHandingOff(false);
     authService.reset();
     setLocalAuthError(null);

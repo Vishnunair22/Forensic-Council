@@ -111,11 +111,6 @@ export const HOW_IT_WORKS = [
 // start at 1.5 s
 export const ARBITER_POLL_INTERVAL_MS = 1500;
 
-// Maximum arbiter polling attempts before declaring a graceful timeout.
-// 250 × up-to-3s ≈ 750s, which covers the 600s arbiter budget (waitForFinalReport)
-// at backoff steady-state plus headroom for transient network errors.
-export const ARBITER_POLL_MAX_ATTEMPTS = 250;
-
 // 30 s permits 50MB uploads and slow Redis/Docker cold starts without timing out.
 export const INVESTIGATION_REQUEST_TIMEOUT_MS = 30_000;
 

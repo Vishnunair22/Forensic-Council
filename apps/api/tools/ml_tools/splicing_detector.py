@@ -91,13 +91,17 @@ def detect_splicing(image_path: str) -> dict:
     gmm.fit(X_scaled)
 
     log_probs = gmm.score_samples(X_scaled)
-    threshold = np.percentile(log_probs, 5)  # bottom 5% as candidates
+    # Absolute z-score threshold instead of relative percentile
+    # (percentile always produces outliers on any sufficiently large image)
+    mean_lp = np.mean(log_probs)
+    std_lp = np.std(log_probs)
+    threshold = mean_lp - 2.5 * std_lp
 
     outlier_mask = log_probs < threshold
     outlier_indices = np.where(outlier_mask)[0]
 
     inconsistency_ratio = float(len(outlier_indices) / len(features))
-    splicing_detected = inconsistency_ratio > 0.03 and len(outlier_indices) > 5
+    splicing_detected = inconsistency_ratio > 0.05 and len(outlier_indices) > 8
 
     # Group nearby outlier blocks into regions
     suspicious_regions = []

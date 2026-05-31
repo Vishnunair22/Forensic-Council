@@ -26,6 +26,12 @@ import {
   ARBITER_POLL_INTERVAL_MS,
   UI_STRINGS,
 } from "@/lib/constants";
+import {
+  ARBITER_MIN_DISPLAY_MS,
+  ARBITER_WAIT_MAX_MS,
+  WARMUP_RETRY_DELAY_MS,
+  REPORT_POLL_DELAY_MS,
+} from "@/lib/timings";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
 import { type SoundType } from "@/hooks/useSound";
@@ -108,7 +114,7 @@ async function waitForFinalReport(
           }
           if (attempt < 4) {
             await new Promise<void>((r) => {
-              const t = setTimeout(r, 800);
+              const t = setTimeout(r, REPORT_POLL_DELAY_MS);
               signal?.addEventListener("abort", () => clearTimeout(t), { once: true });
             });
           }
@@ -156,7 +162,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const investigatorIdRef = useRef<string>(_initInvestigatorId());
   const warmupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhaseText, setUploadPhaseText] = useState<string>("");
   const [autoStartBlocking, setAutoStartBlocking] = useState(() => {
@@ -273,8 +278,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   const sessionExistsRef = useRef(typeof window !== "undefined" && !!storage.getItem(STORAGE_KEYS.SESSION_ID));
 
-  const [_authError, setAuthError] = useState<string | null>(null);
-
   const authReadyRef = useRef<Promise<void> | null>(null);
 
   // Fresh-mount guard: if we arrived here with a pending file in the store,
@@ -301,7 +304,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         await authService.ensureAuthenticated();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Authentication failed";
-        setAuthError(msg);
         toast.destructive({
           title: "Authentication Error",
           description: `Could not establish session: ${msg}. Please refresh the page.`,
@@ -457,7 +459,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           warmupTimeoutRef.current = setTimeout(() => {
             warmupTimeoutRef.current = null;
             triggerAnalysis(targetFile);
-          }, 15000);
+          }, WARMUP_RETRY_DELAY_MS);
           return;
         } else {
           const errorMsg = err instanceof Error ? err.message : "Failed to start investigation";
@@ -772,14 +774,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText(UI_STRINGS.COMPILING_FINDINGS);
-    const ARBITER_MIN_DISPLAY_MS = 1500;
-    const _arbiterStartTime = Date.now();
+    const arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
       arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, ARBITER_WAIT_MAX_MS, arbiterAbortControllerRef.current.signal);
       if (!ok) {
         sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
         sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
@@ -791,9 +792,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       // Ensure minimum overlay display time so the arbiter transition doesn't
       // flash-dismiss when the pre-warmed report resolves in <1s.
-      const _elapsed = Date.now() - _arbiterStartTime;
-      if (_elapsed < ARBITER_MIN_DISPLAY_MS) {
-        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - _elapsed));
+      const elapsed = Date.now() - arbiterStartTime;
+      if (elapsed < ARBITER_MIN_DISPLAY_MS) {
+        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
       }
 
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
@@ -886,19 +887,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       });
   }, [file, triggerAnalysis, startSimulation, connectWebSocket, resetSimulation]);
 
-  const handleFile = useCallback((targetFile: File) => {
-    const error = validateEvidenceFile(targetFile);
-    if (error) {
-      setValidationError(error);
-      setFile(null);
-      playSound("error");
-      return;
-    }
-
-    setValidationError(null);
-    setFile(targetFile);
-  }, [playSound]);
-
   const handleNewUpload = useCallback(() => {
     playSound("click");
     arbiterControl.abort();
@@ -932,8 +920,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     setIsNavigating(true);
     setArbiterDeliberating(true);
     setArbiterLiveText(UI_STRINGS.FINAL_SYNTHESIS);
-    const ARBITER_MIN_DISPLAY_MS = 1500;
-    const _arbiterStartTime = Date.now();
+    const arbiterStartTime = Date.now();
     let navigationStarted = false;
     try {
       if (!sid) throw new Error("No active session");
@@ -942,7 +929,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         await resumeInvestigation(false);
       }
       arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, 300_000, arbiterAbortControllerRef.current.signal);
+      const ok = await waitForFinalReport(sid, setArbiterLiveText, ARBITER_WAIT_MAX_MS, arbiterAbortControllerRef.current.signal);
       if (!ok) {
         sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
         sessionOnlyStorage.setItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING, "1");
@@ -954,9 +941,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       // Ensure minimum overlay display time so the arbiter transition doesn't
       // flash-dismiss when the pre-warmed report resolves in <1s.
-      const _elapsed = Date.now() - _arbiterStartTime;
-      if (_elapsed < ARBITER_MIN_DISPLAY_MS) {
-        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - _elapsed));
+      const elapsed = Date.now() - arbiterStartTime;
+      if (elapsed < ARBITER_MIN_DISPLAY_MS) {
+        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
       }
 
       sessionOnlyStorage.setItem(STORAGE_KEYS.FC_REPORT_READY, "1");
@@ -1043,12 +1030,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [showLoadingOverlay, uploadPhaseText, pipelineMessage, agentUpdates]);
 
   return {
-    file, setFile,
-    validationError,
-    handleFile,
-    showUploadForm: !hasStartedAnalysis,
     isUploading,
-    uploadPhaseText,
     showLoadingOverlay,
     phase,
     isSubmittingHITL,

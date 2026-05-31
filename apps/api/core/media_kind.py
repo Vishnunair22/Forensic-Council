@@ -128,7 +128,7 @@ def is_screen_capture_like(artifact: Any) -> bool:
               1440, 1600, 2160, 2340, 2400, 2532, 2556, 2664, 2796, 3088}
         for v in (width, height)
     )
-    return monitor_like and (metadata_hint or common_axis or width >= 1000)
+    return monitor_like and (metadata_hint or common_axis)
 
 
 def is_digitally_created_image(artifact: Any) -> bool:
@@ -169,11 +169,8 @@ def is_document_like(artifact: Any) -> bool:
     fmt = str(probe.get("format") or "").lower()
     width = int(probe.get("width") or 0)
     height = int(probe.get("height") or 0)
-    is_portrait = height > width
-    is_lossless_fmt = fmt in {"png", "tiff"}
-    is_portrait_lossless = is_portrait and is_lossless_fmt
 
-    return has_text_hints or has_keyword or is_portrait_lossless
+    return has_text_hints or has_keyword
 
 
 def is_recompressed_web_image(artifact: Any) -> bool:

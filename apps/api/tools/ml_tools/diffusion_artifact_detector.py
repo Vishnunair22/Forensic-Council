@@ -90,18 +90,18 @@ def analyze_spectral_artifacts(image_path: str) -> dict:
         score += 0.25
         signals.append("Moderate spectral grid signatures detected")
 
-    if var_cv < 0.35:
+    if var_cv < 0.30:
         score += 0.35
         signals.append("Unnaturally uniform local variance (Diffusion smoothing signature)")
-    elif var_cv < 0.5:
-        score += 0.15
-        signals.append("Low texture variance consistency")
+    elif var_cv < 0.40:
+        score += 0.10
+        signals.append("Slightly low texture variance (weak indicator)")
 
-    # Final verdict
+    # Final verdict — require stronger combined signal for SUSPICIOUS
     score = min(0.98, score)
     if score > 0.6:
         verdict = "GEN_AI_DETECTION"
-    elif score > 0.3:
+    elif score > 0.45:
         verdict = "SUSPICIOUS"
     else:
         verdict = "NATURAL_OR_CLEAN"

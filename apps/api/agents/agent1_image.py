@@ -141,7 +141,6 @@ class Agent1Image(ForensicAgent):
         recommended_tools = classification.recommended_tools
         base_tasks = [
             "Run file_hash_verify for evidence integrity check",
-            "Run visual_evidence_profile for visual evidence profile and forensic routing hints",
         ]
 
         from core.image_routing import TOOL_TO_TASK_DESCRIPTION
@@ -155,6 +154,8 @@ class Agent1Image(ForensicAgent):
         if "extract_text_from_image" not in " ".join(base_tasks):
             if classification.primary_category in ("screenshot", "document"):
                 base_tasks.append("Run extract_text_from_image for visible text extraction")
+
+        base_tasks.append("Run visual_evidence_profile for visual evidence profile and forensic routing hints")
 
         return base_tasks
 

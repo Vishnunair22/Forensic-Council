@@ -313,7 +313,7 @@ def confidence_of(finding: dict[str, Any], default: float | None = None) -> floa
 # final report synthesis. Low-confidence semantic matches (e.g. CLIP 5%)
 # are excluded from manipulation probability and should be excluded from
 # "Suspicious" status labels to prevent false alarms.
-MIN_CONFIDENCE_THRESHOLD = 0.15
+MIN_CONFIDENCE_THRESHOLD = 0.35
 
 
 def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:

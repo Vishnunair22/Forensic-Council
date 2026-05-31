@@ -52,6 +52,11 @@ class VisionRouter:
             and config.remote_visual_profile_allowed
         )
 
+        # Prune unavailable models from the fallback chain at startup.
+        # This is a lightweight GET to models.list — no quota burned.
+        if self._gemini_enabled:
+            asyncio.create_task(self.gemini_client.validate_model_availability())
+
         logger.info(
             "VisionRouter initialized",
             execution_mode=config.analysis_execution_mode,

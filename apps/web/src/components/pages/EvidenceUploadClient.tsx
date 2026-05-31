@@ -50,6 +50,7 @@ class AgentProgressErrorBoundary extends Component<
         <div className="w-full max-w-2xl mx-auto text-center p-8">
           <p className="text-danger mb-4">Analysis display encountered an error.</p>
           <button
+            type="button"
             onClick={() => window.location.reload()}
             className="fc-btn-primary"
           >
@@ -224,6 +225,7 @@ export function EvidenceUploadClient() {
                   Return to the home page to upload evidence and begin a new investigation.
                 </p>
                 <button
+                  type="button"
                   onClick={() => {
                     resetActiveInvestigation(queryClient);
                     router.push("/");

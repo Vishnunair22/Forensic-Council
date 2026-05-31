@@ -54,12 +54,14 @@ export default function EvidenceError({
       </div>
       <div className="flex gap-3">
         <button
+          type="button"
           onClick={handleReset}
           className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-wide bg-amber-500/15 text-amber-300 border border-amber-500/25 hover:bg-amber-500/25 transition-all cursor-pointer"
         >
           <RotateCcw className="w-4 h-4" /> Retry
         </button>
         <button
+          type="button"
           onClick={handleHome}
           className="flex items-center gap-2 px-8 py-3 rounded-full text-xs font-black tracking-wide text-foreground/50 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06] transition-all cursor-pointer"
         >

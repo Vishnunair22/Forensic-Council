@@ -816,6 +816,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 for f in agent_findings
                 if evidence_verdict_of(f) == "POSITIVE"
                 and (confidence_of(f) or 0) >= MIN_CONFIDENCE_THRESHOLD
+                and f.get("court_defensible", True)
             )
             inconclusive = sum(
                 1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE"

@@ -1105,7 +1105,10 @@ class ReActLoopEngine:
         if any(bool(output.get(f"gemini_{k}")) for k in positive_keys):
             return True
         if output.get("gemini_manipulation_signals") or output.get("manipulation_signals"):
-            return True
+            # Require meaningful confidence for list-based positive checks
+            confidence = float(output.get("confidence", 0.0) or 0.0)
+            if confidence >= 0.40:
+                return True
         if output.get("weapon_detections") or output.get("contraband_detections"):
             return True
         if (

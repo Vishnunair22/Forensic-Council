@@ -286,7 +286,11 @@ def analyze(image_path: str) -> dict[str, Any]:
 
     if outlier_count == 0 or best_k == 1:
         verdict = "CONSISTENT"
-    elif outlier_count <= 1 and best_k <= 2 and best_score < 0.3:
+    elif best_score < 0.35:
+        # Silhouette too low — clusters not well-separated; likely natural texture variation
+        verdict = "INCONCLUSIVE"
+    elif outlier_count <= 2 and best_k == 2 and consistency_score > 0.80:
+        # Only 1-2 outlier regions with dominant cluster holding >80% → inconclusive
         verdict = "INCONCLUSIVE"
     else:
         verdict = "INCONSISTENT"

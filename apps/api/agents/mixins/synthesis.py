@@ -212,10 +212,31 @@ class NeuralSynthesisMixin:
         # 2. Integrate Agent 1 context for cross-modal grounding
         agent1_profile = await self._wait_for_agent1_visual_profile()
 
-        full_context = {
-            "tools": dynamic_context,
-            "agent1_visual_profile": agent1_profile,
-        }
+        # Extract flat EXIF fields for the prompt builder — do NOT pass the
+        # full tool context dict as exif_summary; the prompt builder expects
+        # flat keys like camera_make, datetime_original, gps_location.
+        exif_fields: dict[str, Any] = {}
+        # File-level facts always available
+        exif_fields["mime_type"] = getattr(artifact, "mime_type", None) or ""
+        exif_fields["filename"] = getattr(artifact, "original_filename", None) or getattr(artifact, "file_path", "")
+        # Try Agent 5 inter-agent bus for richer EXIF if available
+        if self.inter_agent_bus:
+            try:
+                from core.agent_registry import AgentID
+                agent5_ctx = await self.inter_agent_bus.get_agent_context(
+                    str(self.session_id), AgentID.AGENT5
+                )
+                agent5_meta = (agent5_ctx or {}).get("tool_context", {})
+                exif_extract = agent5_meta.get("extract_exif_metadata") or agent5_meta.get("exif_extract") or {}
+                if isinstance(exif_extract, dict):
+                    exif_fields["camera_make"] = exif_extract.get("camera_make") or exif_extract.get("Make")
+                    exif_fields["camera_model"] = exif_extract.get("camera_model") or exif_extract.get("Model")
+                    exif_fields["datetime_original"] = exif_extract.get("datetime_original") or exif_extract.get("DateTimeOriginal")
+                    exif_fields["gps_location"] = exif_extract.get("gps_location") or exif_extract.get("GPS")
+            except Exception:
+                pass  # Agent 5 not available yet — file-level facts are enough
+
+        full_context = exif_fields
 
         # 3. Initialize router and execute
         try:

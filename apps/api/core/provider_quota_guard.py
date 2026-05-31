@@ -279,83 +279,6 @@ class ProviderQuotaGuard:
         return rpm, rpd
 
 
-class GeminiTokenBucket:
-    """
-    Token bucket rate limiter for Gemini API calls.
-    Prevents burst exhaustion of RPM quota.
-    """
-    def __init__(self, rpm_limit: int = 10, burst_allowance: int = 3):
-        self.capacity = rpm_limit
-        self.tokens = rpm_limit
-        self.refill_rate = rpm_limit / 60.0
-        self.last_refill = time.time()
-        self.burst_allowance = burst_allowance
-        self.lock = asyncio.Lock()
-
-    async def acquire(self, cost: float = 1.0) -> bool:
-        async with self.lock:
-            now = time.time()
-            elapsed = now - self.last_refill
-            self.tokens = min(
-                self.capacity + self.burst_allowance,
-                self.tokens + (elapsed * self.refill_rate)
-            )
-            self.last_refill = now
-
-            if self.tokens >= cost:
-                self.tokens -= cost
-                return True
-
-            needed = cost - self.tokens
-            wait_time = needed / self.refill_rate
-            logger.warning(f"Gemini rate limit reached. Need to wait {wait_time:.1f}s")
-            return False
-
-
-class GroqRateLimiter:
-    """
-    Token bucket rate limiter for Groq API.
-    Groq free tier: 30 RPM, 7000 RPD.
-    """
-    def __init__(self, rpm_limit: int = 30, rpd_limit: int = 7000):
-        self.rpm_bucket = _TokenBucket(capacity=rpm_limit, refill_rate=rpm_limit / 60.0)
-        self.rpd_bucket = _TokenBucket(capacity=rpd_limit, refill_rate=rpd_limit / 86400.0)
-        self.lock = asyncio.Lock()
-
-    async def acquire(self) -> tuple[bool, str]:
-        async with self.lock:
-            if not self.rpm_bucket.try_consume(1.0):
-                wait_time = self.rpm_bucket.time_until_refill(1.0)
-                return False, f"RPM limit reached, retry in {wait_time:.0f}s"
-            if not self.rpd_bucket.try_consume(1.0):
-                return False, "Daily quota exhausted"
-            return True, ""
-
-
-class _TokenBucket:
-    def __init__(self, capacity: float, refill_rate: float):
-        self.capacity = capacity
-        self.tokens = capacity
-        self.refill_rate = refill_rate
-        self.last_refill = time.time()
-
-    def try_consume(self, cost: float = 1.0) -> bool:
-        now = time.time()
-        elapsed = now - self.last_refill
-        self.tokens = min(self.capacity, self.tokens + (elapsed * self.refill_rate))
-        self.last_refill = now
-        if self.tokens >= cost:
-            self.tokens -= cost
-            return True
-        return False
-
-    def time_until_refill(self, cost: float = 1.0) -> float:
-        needed = cost - self.tokens
-        if needed <= 0:
-            return 0.0
-        return needed / self.refill_rate if self.refill_rate > 0 else float('inf')
-
-
 def configure_provider_quota_guards(settings) -> None:
     """Configure all provider quota guards from app settings.
 
@@ -371,7 +294,7 @@ def configure_provider_quota_guards(settings) -> None:
     )
     ProviderQuotaGuard.configure(
         "gemini",
-        rpm_limit=getattr(settings, "gemini_rpm_limit", 5),
+        rpm_limit=getattr(settings, "gemini_rpm_limit", 10),
         rpd_limit=getattr(settings, "gemini_rpd_limit", 1500),
     )
     ProviderQuotaGuard.configure(

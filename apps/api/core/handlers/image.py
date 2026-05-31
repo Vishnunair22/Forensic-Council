@@ -41,6 +41,7 @@ from core.forensics import (
 )
 from core.handlers.base import BaseToolHandler, InterToolCommunicationMixin
 from core.media_kind import is_screen_capture_like
+from core.image_utils import is_lossless_image
 from core.ml_subprocess import run_ml_tool
 from core.scoring import ConfidenceCalibrator
 from core.structured_logging import get_logger
@@ -468,24 +469,16 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 record=record,
             )
 
-        # ── Screenshot fast-exit — ELA is not meaningful for screen captures ──
-        # Sharp UI edges and uniform backgrounds produce large ELA regions that
-        # mimic JPEG manipulation residuals but are actually rendering artifacts.
-        # Running ELA on screenshots is the #1 source of false-SUSPICIOUS verdicts.
-        if self._is_screenshot_context(artifact):
+        if is_lossless_image(artifact.file_path, getattr(artifact, "mime_type", None)):
             not_applicable: dict = {
                 "available": True,
                 "not_applicable": True,
                 "reason": (
-                    "ELA (Error Level Analysis) measures JPEG re-compression residuals. "
-                    "Screen captures are software-rendered with no prior JPEG compression "
-                    "history, so ELA produces non-informative results. Screenshot integrity "
-                    "is assessed via hash, OCR, layout, and provenance checks instead."
+                    "ELA measures JPEG re-compression residuals and is not applicable "
+                    "to lossless formats (PNG, BMP, TIFF, lossless WebP). "
+                    "Use noiseprint_cluster for sensor-noise analysis on lossless images."
                 ),
-                "confidence": 0.85,
-                "court_defensible": False,
-                "num_anomaly_regions": 0,
-                "max_anomaly": 0.0,
+                "confidence": 0.0,
                 "manipulation_detected": False,
             }
             if record:
@@ -610,8 +603,8 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             )
             # Prevent false positives on sharp edges by raising the threshold
             result["manipulation_detected"] = (
-                result.get("num_anomaly_regions", 0) >= 2 
-                and result.get("max_anomaly", 0.0) >= 20.0
+                result.get("num_anomaly_regions", 0) >= 4
+                and result.get("max_anomaly", 0.0) >= 25.0
             )
 
         if record:

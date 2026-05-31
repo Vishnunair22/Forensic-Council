@@ -174,6 +174,22 @@ class _ModelUnavailableError(Exception):
     """
 
 
+class _ApiKeyInvalidError(Exception):
+    """Raised when the API returns 401 — invalid or expired API key.
+
+    Signals the cascade loop to short-circuit immediately — all models
+    will fail with the same 401, so trying remaining models is wasteful.
+    """
+
+
+class _SafetyBlockError(Exception):
+    """Raised when Gemini's safety filter blocks the image analysis.
+
+    Signals the cascade loop to break immediately — other models will
+    apply the same safety policy to the same image.
+    """
+
+
 # Supported inline MIME types for Gemini vision
 _VISION_MIME_TYPES = {
     "image/jpeg",
@@ -650,8 +666,11 @@ class GeminiVisionClient:
             else "None yet."
         )
         prompt = (
-            "You are a forensic scene analyst. Preliminary ML object detection found:\n"
-            f"{detections_text}\n\n"
+            _SAFETY_PREAMBLE
+            + "You are a forensic scene analyst. Preliminary ML object detection found:\n"
+            "[UNTRUSTED EVIDENCE START]\n"
+            f"{detections_text}\n"
+            "[UNTRUSTED EVIDENCE END]\n\n"
             "Examine this file and identify all "
             "relevant objects and contextual features. Specially confirm or correct the preliminary detections in your response. "
             "Address:\n\n"
@@ -963,17 +982,48 @@ class GeminiVisionClient:
                     self._circuit_breaker.record_success()
                     pass  # quota tracking removed
                     return finding
+                except _ApiKeyInvalidError as akie:
+                    logger.error(f"Gemini API key invalid — short-circuiting cascade. ({akie})")
+                    self._enabled = False
+                    last_exc = akie
+                    break
+                except _SafetyBlockError as sbe:
+                    logger.warning(f"Gemini safety block — breaking cascade. ({sbe})")
+                    last_exc = sbe
+                    break
                 except _ModelUnavailableError as mue:
                     logger.warning(
                         f"Gemini model {attempt_model} not available — skipping to next model. ({mue})"
                     )
                     last_exc = mue
                 except httpx.HTTPStatusError as hse:
-                    logger.warning(
-                        f"Gemini model {attempt_model} HTTP error — retrying once after backoff. ({hse})"
-                    )
-                    await asyncio.sleep(2.0)
-                    last_exc = hse
+                    status = hse.response.status_code if hse.response else 0
+                    if status == 429:
+                        # Quota exhausted — read Retry-After if present, else skip immediately
+                        retry_after = hse.response.headers.get("Retry-After") if hse.response else None
+                        wait = 0.0
+                        if retry_after and retry_after.isdigit():
+                            wait = min(float(retry_after), 10.0)
+                        if wait > 0:
+                            await asyncio.sleep(wait)
+                        last_exc = hse
+                        # continue to next model (implicit)
+                    elif status in (500, 502, 503):
+                        # Transient error — one retry of the same model after backoff
+                        await asyncio.sleep(2.0)
+                        try:
+                            retry_text = await asyncio.wait_for(
+                                self._post_once(attempt_url, attempt_payload, model_name=attempt_model),
+                                timeout=self.timeout + 5,
+                            )
+                            retry_latency = (time.monotonic() - m_t0) * 1000
+                            finding = self._parse_response(retry_text, analysis_type, retry_latency)
+                            self._circuit_breaker.record_success()
+                            return finding
+                        except Exception:
+                            last_exc = hse
+                    else:
+                        last_exc = hse
                 except Exception as exc:
                     logger.warning(
                         f"Gemini model {attempt_model} failed — using local fallback. ({exc})"
@@ -1014,6 +1064,10 @@ class GeminiVisionClient:
                 error_detail = resp.text
             except Exception as e:
                 logger.debug("Could not read Gemini error response body", error=str(e))
+            if resp.status_code == 401:
+                raise _ApiKeyInvalidError(
+                    f"Gemini API key is invalid or expired (HTTP 401). All cascade models will fail."
+                )
             if resp.status_code == 404 or "not found" in error_detail.lower():
                 raise _ModelUnavailableError(
                     f"Gemini {active_model} HTTP 404: {error_detail[:300]}"
@@ -1026,7 +1080,17 @@ class GeminiVisionClient:
             raise _ModelUnavailableError(
                 f"Gemini {active_model} returned HTTP {resp.status_code}: {error_detail[:300]}"
             )
-        return resp.json()["candidates"][0]["content"]["parts"][0].get("text", "")
+        # Extract text from response, filtering out thinking/CoT blocks
+        candidate = resp.json()["candidates"][0]
+        finish_reason = candidate.get("finishReason", "STOP")
+        if finish_reason == "SAFETY":
+            raise _SafetyBlockError(
+                f"Gemini safety filter blocked analysis of this image on {active_model}"
+            )
+        parts_list = candidate.get("content", {}).get("parts", [])
+        # Skip thought blocks (chain-of-thought reasoning tokens from thinking models)
+        answer_parts = [p for p in parts_list if not p.get("thought", False)]
+        return (answer_parts[0] if answer_parts else parts_list[0]).get("text", "") if (answer_parts or parts_list) else ""
 
     # NOTE: _post_with_retry was removed as dead code.
     # The cascade-based approach in _run_vision_analysis tries fallback models
@@ -1149,7 +1213,7 @@ class GeminiVisionClient:
         elif isinstance(raw_text_items, str) and raw_text_items:
             extracted_text_items = [raw_text_items]
 
-        file_type = data.get("content_type", "")
+        file_type = data.get("content_type", "") or data.get("file_identity", "")
 
         # Build clean 1-2 sentence content_description — no raw field dumps.
         # Use scene_description or contextual_narrative as the primary identity line.
@@ -1189,6 +1253,7 @@ class GeminiVisionClient:
         routing = build_image_forensic_routing(
             data.get("forensic_routing", {}) if isinstance(data.get("forensic_routing"), dict) else {},
             description=content_description,
+            image_category=data.get("routing_category") if isinstance(data.get("routing_category"), str) else None,
         )
 
         finding = GeminiVisionFinding(
@@ -1285,6 +1350,12 @@ class GeminiVisionClient:
                 img.save(buf, format=save_format, quality=85)
                 raw = buf.getvalue()
                 mime_type = save_mime
+                # PNG compression ratio is content-dependent — verify we're under the limit
+                if len(raw) > _MAX_RAW_BYTES:
+                    buf2 = io.BytesIO()
+                    img.save(buf2, format="JPEG", quality=80)
+                    raw = buf2.getvalue()
+                    mime_type = "image/jpeg"
                 logger.debug(
                     f"Gemini: resized large image {path.name} to {new_w}×{new_h} "
                     f"({len(raw) // 1024} KB) for inline encoding"

@@ -3,59 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-
-IMAGE_CATEGORY_TO_INITIAL_TOOLS: dict[str, tuple[str, ...]] = {
-    "screenshot": (
-        "file_hash_verify",
-        "visual_evidence_profile",
-        "extract_text_from_image",
-        "analyze_image_content",
-        "detect_font_inconsistency",
-        "detect_ui_overlay_forgery",
-        "frequency_domain_analysis",
-    ),
-    "document": (
-        "file_hash_verify",
-        "visual_evidence_profile",
-        "extract_text_from_image",
-        "analyze_image_content",
-        "frequency_domain_analysis",
-        "neural_ela",
-    ),
-    "ai_generated_suspect": (
-        "file_hash_verify",
-        "visual_evidence_profile",
-        "analyze_image_content",
-        "frequency_domain_analysis",
-        "diffusion_artifact_detector",
-        "deepfake_frequency_check",
-        "synthid_watermark_detect",
-    ),
-    "web_image": (
-        "file_hash_verify",
-        "visual_evidence_profile",
-        "neural_ela",
-        "analyze_image_content",
-        "frequency_domain_analysis",
-        "neural_fingerprint",
-    ),
-    "object_scene": (
-        "file_hash_verify",
-        "visual_evidence_profile",
-        "neural_ela",
-        "analyze_image_content",
-        "frequency_domain_analysis",
-        "neural_fingerprint",
-    ),
-    "live_photograph": (
-        "file_hash_verify",
-        "visual_evidence_profile",
-        "neural_ela",
-        "analyze_image_content",
-        "frequency_domain_analysis",
-        "neural_fingerprint",
-    ),
-}
+from core.file_classifier import CATEGORY_TO_RECOMMENDED_TOOLS, CATEGORY_TO_SKIP_TOOLS
 
 
 TOOL_TO_TASK_DESCRIPTION: dict[str, str] = {
@@ -68,29 +16,6 @@ TOOL_TO_TASK_DESCRIPTION: dict[str, str] = {
     "diffusion_artifact_detector": "Run diffusion_artifact_detector to confirm AI generation",
     "deepfake_frequency_check": "Run deepfake_frequency_check for GAN/Diffusion artifacts",
     "synthid_watermark_detect": "Run synthid_watermark_detect for SynthID and AI watermark detection",
-}
-
-CATEGORY_HARD_SKIP_TOOLS: dict[str, tuple[str, ...]] = {
-    "screenshot": (
-        "neural_ela",
-        "ela_full_image",
-        "jpeg_ghost_detect",
-        "noiseprint_cluster",
-        "noise_fingerprint",
-        "neural_splicing",
-        "neural_copy_move",
-    ),
-    "document": (
-        "detect_font_inconsistency",
-        "detect_ui_overlay_forgery",
-        "noiseprint_cluster",
-        "noise_fingerprint",
-    ),
-    "ai_generated_suspect": (
-        "noiseprint_cluster",
-        "noise_fingerprint",
-        "jpeg_ghost_detect",
-    ),
 }
 
 
@@ -115,22 +40,23 @@ def build_image_forensic_routing(
     *,
     description: str = "",
     file_path: str = "",
+    image_category: str | None = None,
 ) -> dict[str, Any]:
     """Return explicit image routing that can safely drive task gating."""
     source = dict(routing or {})
-    category = normalize_image_category(
+    category = image_category if image_category else normalize_image_category(
         source.get("image_category") or source.get("category"),
         description=description,
         file_path=file_path,
     )
-    recommended = list(IMAGE_CATEGORY_TO_INITIAL_TOOLS.get(category, IMAGE_CATEGORY_TO_INITIAL_TOOLS["live_photograph"]))
+    recommended = list(CATEGORY_TO_RECOMMENDED_TOOLS.get(category, CATEGORY_TO_RECOMMENDED_TOOLS["live_photograph"]))
     existing_skip = [str(tool) for tool in source.get("skip_tools") or [] if tool]
     other_category_tools = set().union(
-        *[set(v) for k, v in IMAGE_CATEGORY_TO_INITIAL_TOOLS.items() if k != category]
+        *[set(v) for k, v in CATEGORY_TO_RECOMMENDED_TOOLS.items() if k != category]
     )
     skip = sorted(
         (set(existing_skip) | other_category_tools)
-        | set(CATEGORY_HARD_SKIP_TOOLS.get(category, ()))
+        | set(CATEGORY_TO_SKIP_TOOLS.get(category, ()))
         - set(recommended)
         - {"file_hash_verify", "visual_evidence_profile"}
     )
