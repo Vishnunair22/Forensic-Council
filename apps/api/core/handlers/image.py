@@ -40,8 +40,8 @@ from core.forensics import (
     classify_ela_anomalies,
 )
 from core.handlers.base import BaseToolHandler, InterToolCommunicationMixin
-from core.media_kind import is_screen_capture_like
 from core.image_utils import is_lossless_image
+from core.media_kind import is_screen_capture_like
 from core.ml_subprocess import run_ml_tool
 from core.scoring import ConfidenceCalibrator
 from core.structured_logging import get_logger
@@ -62,17 +62,17 @@ from tools.image_tools import (
 from tools.image_tools import (
     roi_extract as real_roi_extract,
 )
+
+# ML fallback tools (importable CLI scripts in tools/ml_tools/)
+from tools.ml_tools.copy_move_detector import detect_copy_move  # sync, run in executor
+from tools.ml_tools.splicing_detector import detect_splicing  # sync, run in executor
+from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
 from tools.screenshot_tools import (
     detect_font_inconsistency as real_detect_font_inconsistency,
 )
 from tools.screenshot_tools import (
     detect_ui_overlay_forgery as real_detect_ui_overlay_forgery,
 )
-
-# ML fallback tools (importable CLI scripts in tools/ml_tools/)
-from tools.ml_tools.copy_move_detector import detect_copy_move  # sync, run in executor
-from tools.ml_tools.splicing_detector import detect_splicing  # sync, run in executor
-from tools.ocr_tools import extract_evidence_text as real_extract_evidence_text
 
 logger = get_logger(__name__)
 
@@ -323,16 +323,16 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         # 1. Base heuristic check (magic bytes, dimensions, EXIF)
         if is_screen_capture_like(artifact):
             return True
-            
+
         tool_ctx = getattr(self.agent, "_tool_context", {})
         if not tool_ctx:
             return False
-            
+
         # 2. Check Semantic CLIP Analysis
         clip_ctx = tool_ctx.get("analyze_image_content") or {}
         if "screenshot" in str(clip_ctx.get("image_type", "")).lower():
             return True
-            
+
         # 3. Check shared visual evidence profile.
         visual_ctx = (
             tool_ctx.get("visual_evidence_profile")
@@ -340,7 +340,7 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             or {}
         )
         visual_meta = visual_ctx.get("metadata") or {}
-        
+
         cat = str(
             visual_meta.get("file_type_assessment")
             or visual_meta.get("image_category")
@@ -348,7 +348,7 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         ).lower()
         if "screenshot" in cat or "screen capture" in cat:
             return True
-            
+
         desc = str(
             visual_ctx.get("reasoning_summary")
             or visual_ctx.get("content_description")
@@ -356,7 +356,7 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         ).lower()
         if "screenshot" in desc or "screen capture" in desc:
             return True
-            
+
         return False
 
     async def _store(self, primary_key: str, result: dict, *alias_keys: str) -> None:
@@ -581,7 +581,7 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 ),
                 timeout=30.0,  # 4-pass sweep should finish well within 30s via executor
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "Classical ELA timed out after 30s; using minimal fallback",
                 artifact_id=artifact.artifact_id,

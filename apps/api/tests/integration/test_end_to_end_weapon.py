@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from core.evidence import ArtifactType, EvidenceArtifact
 from core.config import Settings
+from core.evidence import ArtifactType, EvidenceArtifact
 
 
 @pytest.fixture

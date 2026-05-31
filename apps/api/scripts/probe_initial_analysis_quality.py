@@ -21,18 +21,17 @@ os.environ.setdefault("DEMO_PASSWORD", "test")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-" + "x" * 32)
 os.environ.setdefault("GEMINI_API_KEY_POLICY_OK", "false")
 
+from agents.arbiter import CouncilArbiter
+from agents.arbiter_verdict import ForensicReport
+from agents.mixins.investigation import AgentInvestigationMixin
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
 from core.gemini_client import GeminiVisionClient
+from core.handlers.image import ImageHandlers
 from core.image_routing import build_image_forensic_routing
 from core.react_loop import AgentFinding
 from core.synthesis import SynthesisService
-from core.handlers.image import ImageHandlers
-from agents.mixins.investigation import AgentInvestigationMixin
-from agents.arbiter import CouncilArbiter
-from agents.arbiter_verdict import ForensicReport
 from orchestration.pipeline_enrichment import _detect_visual_profile_provenance
-
 
 SCENARIOS = {
     "person": {

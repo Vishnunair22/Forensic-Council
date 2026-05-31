@@ -10,11 +10,9 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-import httpx
-
+from core.structured_logging import get_logger
 from core.tool_names import TOOL_VISUAL_PROFILE
 from core.vision_router import VisionRouter
-from core.structured_logging import get_logger
 
 from .._context_utils import aggregate_tool_context
 
@@ -207,8 +205,6 @@ class NeuralSynthesisMixin:
                 return result
 
         # 1. Aggregate local tool context
-        dynamic_context = aggregate_tool_context(self._tool_context, agent_id=self.agent_id)
-
         # 2. Integrate Agent 1 context for cross-modal grounding
         agent1_profile = await self._wait_for_agent1_visual_profile()
 
@@ -233,7 +229,8 @@ class NeuralSynthesisMixin:
                     exif_fields["camera_model"] = exif_extract.get("camera_model") or exif_extract.get("Model")
                     exif_fields["datetime_original"] = exif_extract.get("datetime_original") or exif_extract.get("DateTimeOriginal")
                     exif_fields["gps_location"] = exif_extract.get("gps_location") or exif_extract.get("GPS")
-            except Exception:
+            except Exception as exc:
+                logger.debug("Agent 5 context unavailable for visual synthesis", error=str(exc))
                 pass  # Agent 5 not available yet — file-level facts are enough
 
         full_context = exif_fields
@@ -383,7 +380,7 @@ class NeuralSynthesisMixin:
                 return llm_synthesis
             logger.info(f"{self.agent_id}: LLM synthesis too short, using template")
             return self._template_synthesis(findings)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"{self.agent_id}: LLM synthesis timeout, using template")
             return self._template_synthesis(findings)
         except Exception as e:

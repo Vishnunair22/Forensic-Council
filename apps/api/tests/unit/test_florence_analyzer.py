@@ -12,7 +12,8 @@ sys.modules["torch"] = mock_torch
 sys.modules["transformers"] = mock_transformers
 
 import pytest
-from tools.florence_analyzer import get_florence_analyzer, reset_florence_analyzer, FlorenceResult
+
+from tools.florence_analyzer import FlorenceResult, get_florence_analyzer, reset_florence_analyzer
 
 
 @pytest.fixture(autouse=True)
@@ -88,14 +89,14 @@ def test_florence_analyze_success(mock_image_open):
     # Mock the internal _run_task method
     with patch.object(analyzer, "_run_task") as mock_run_task:
         mock_run_task.side_effect = lambda task, img: f"result for {task}"
-        
+
         result = analyzer.analyze("fake_image.png")
-        
+
         assert result.available is True
         assert result.caption == "result for <CAPTION>"
         assert result.detailed_caption == "result for <DETAILED_CAPTION>"
         assert result.best_description() == "result for <DETAILED_CAPTION>"
-        
+
         mock_run_task.assert_any_call("<CAPTION>", mock_converted_image)
         mock_run_task.assert_any_call("<DETAILED_CAPTION>", mock_converted_image)
 

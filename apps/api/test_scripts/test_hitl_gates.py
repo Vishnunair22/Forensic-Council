@@ -2,7 +2,9 @@
 Test HITL gate timeout behavior with short timeouts.
 """
 import asyncio
-import os, uuid, json
+import json
+import os
+import uuid
 
 os.environ["APP_ENV"] = "testing"
 os.environ["SIGNING_KEY"] = "test-signing-key-" + "x" * 32
@@ -14,8 +16,7 @@ os.environ["DEMO_PASSWORD"] = "test"
 os.environ["LLM_PROVIDER"] = "none"
 os.environ["LLM_API_KEY"] = ""
 
-from unittest.mock import AsyncMock, patch, MagicMock
-from uuid import UUID
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def _patch_redis(redis_mock):

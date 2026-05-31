@@ -378,7 +378,7 @@ services:
     environment:
       <<: *backend-env
       APP_NAME: forensic_worker
-      RELOAD: "false"
+      RELOAD: "true"
       LOG_FORMAT: "console"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: forensic_worker

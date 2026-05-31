@@ -17,9 +17,8 @@ from core._bcrypt_shim import ensure_bcrypt_compat  # noqa: E402
 
 ensure_bcrypt_compat()
 
-from core.structured_logging import configure_root_logger, get_logger  # noqa: E402
-
 from core.config import get_settings  # noqa: E402
+from core.structured_logging import configure_root_logger, get_logger  # noqa: E402
 from orchestration.worker import main  # noqa: E402
 
 if __name__ == "__main__":

@@ -12,12 +12,9 @@ The tool includes graceful degradation with on-device image analysis fallback.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
-import io
 import os
-import tempfile
 from typing import Any
 
 import httpx
@@ -126,9 +123,9 @@ async def _google_search_by_image(image_path: str) -> tuple[list[str], int]:
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="encoded_image"; filename="{os.path.basename(image_path)}"\r\n'
         f"Content-Type: image/jpeg\r\n\r\n"
-    ).encode("utf-8")
+    ).encode()
     body += _read_file_bytes(image_path)
-    body += f"\r\n--{boundary}--\r\n".encode("utf-8")
+    body += f"\r\n--{boundary}--\r\n".encode()
 
     headers = {
         "User-Agent": random.choice(_USER_AGENTS),

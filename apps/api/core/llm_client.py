@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import random
 import time
 from dataclasses import dataclass
@@ -759,12 +758,12 @@ class LLMClient:
         """
         if len(user_content) <= 6000:
             return None  # No chunking needed
-        
+
         try:
             data = json.loads(user_content) if isinstance(user_content, str) else user_content
         except (json.JSONDecodeError, TypeError):
             return None
-        
+
         # Try to split by agent_id
         findings_by_agent: dict[str, list] = {}
         if isinstance(data, dict):
@@ -776,10 +775,10 @@ class LLMClient:
                 for f in agent_section:
                     aid = f.get("agent_id", "unknown") if isinstance(f, dict) else "unknown"
                     findings_by_agent.setdefault(aid, []).append(f)
-        
+
         if not findings_by_agent or len(findings_by_agent) <= 1:
             return None  # Can't effectively chunk
-        
+
         micro_syntheses = []
         for agent_id, agent_findings in findings_by_agent.items():
             chunk_content = json.dumps({agent_id: agent_findings}, default=str)
@@ -792,7 +791,7 @@ class LLMClient:
             )
             if micro and len(micro.strip()) > 10:
                 micro_syntheses.append(f"{agent_id}: {micro.strip()}")
-        
+
         if micro_syntheses:
             combined = " | ".join(micro_syntheses)
             logger.info(
@@ -801,7 +800,7 @@ class LLMClient:
                 combined_chars=len(combined),
             )
             return combined
-        
+
         return None
 
     async def _generate_synthesis_inner(
@@ -856,16 +855,16 @@ class LLMClient:
                 # Check priority-based quota manager
                 from core.quota_manager import get_quota_manager
                 priority = "critical" if self.use_arbiter_tier else "medium"
-                
+
                 rpm_limit = getattr(self.config, f"{target_provider}_rpm_limit", 15)
                 rpd_limit = getattr(self.config, f"{target_provider}_rpd_limit", 1500)
-                
+
                 quota_mgr = get_quota_manager(
                     f"{target_provider}_synthesis",
                     rpm_limit=rpm_limit,
                     rpd_limit=rpd_limit
                 )
-                
+
                 allowed_quota, reason = await quota_mgr.can_make_call(priority, estimated_tokens=tokens)
                 if not allowed_quota:
                     self._last_synthesis_blocked_reason = reason

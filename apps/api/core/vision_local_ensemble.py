@@ -29,7 +29,7 @@ import asyncio
 import time
 from typing import Any
 
-from core.evidence import EvidenceArtifact, ArtifactType
+from core.evidence import EvidenceArtifact
 from core.image_routing import build_image_forensic_routing
 from core.image_utils import is_lossless_image
 from core.structured_logging import get_logger
@@ -252,10 +252,10 @@ async def analyze_local_visual_profile(
 
     # ── Import tools ─────────────────────────────────────────────────────
     from tools.image_tools import (
-        ela_full_image,
-        extract_text_from_image,
         analyze_image_content,
         detr_detect_objects,
+        ela_full_image,
+        extract_text_from_image,
         frequency_domain_analysis,
     )
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-from core.findings_humanizer import _is_discovery_finding, _metric_digest, _humanize_initial_finding, _verdict_score
+from core.findings_humanizer import _humanize_initial_finding, _is_discovery_finding, _verdict_score
 
 PREVIEW_EXCLUDED_TOOLS = {"hash_verify", "custody_check", "file_type_validation"}
 SCREENSHOT_PREVIEW_EXCLUDED_TOOLS = {

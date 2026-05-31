@@ -35,9 +35,9 @@ async def main():
 
     print("\nVerifying Florence-2 Vision Fallback...")
     try:
+
         from tools.florence_analyzer import get_florence_analyzer
-        import torch
-        
+
         analyzer = get_florence_analyzer()
         load_success = analyzer._load()
         if load_success:

@@ -1,14 +1,14 @@
 """End-to-end integration tests for PNG/screenshot investigations."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from core.evidence import ArtifactType, EvidenceArtifact
 from core.config import Settings
+from core.evidence import ArtifactType, EvidenceArtifact
 
 
 @pytest.fixture
@@ -85,7 +85,6 @@ async def test_png_mime_detection_fallback(tmp_path, settings):
 async def test_arbiter_file_type_thresholds(settings):
     """Arbiter should apply different thresholds for PNG vs JPEG."""
     from agents.arbiter import CouncilArbiter
-    from core.forensic_policy import ForensicPolicy
 
     arbiter = CouncilArbiter(
         session_id=uuid4(),

@@ -215,8 +215,13 @@ fi
 if [ "$#" -eq 0 ]; then
     set -- python scripts/run_api.py
 elif [ "$1" = "worker" ]; then
-    echo "  Mode: Forensic Worker - consuming tasks from Redis"
-    set -- python scripts/run_worker.py
+    if [ "${RELOAD:-false}" = "true" ]; then
+        echo "  Mode: Forensic Worker - consuming tasks from Redis (auto-reload enabled)"
+        set -- python scripts/run_worker_reload.py
+    else
+        echo "  Mode: Forensic Worker - consuming tasks from Redis"
+        set -- python scripts/run_worker.py
+    fi
 elif [ "${1#*.}" = "py" ]; then
     set -- python "$@"
 else

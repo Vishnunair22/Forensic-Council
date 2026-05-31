@@ -144,7 +144,6 @@ async def test_deep_report_gate_consumes_decision_after_pause(monkeypatch):
 @pytest.mark.asyncio
 async def test_pre_warm_case_id_preserved(monkeypatch):
     """Pre-warm calls should propagate the actual case_id, not empty string."""
-    from orchestration.pipeline import ForensicCouncilPipeline
 
     pre_warm_args: list[tuple] = []
 
@@ -195,7 +194,6 @@ async def test_visual_profile_bus_methods(monkeypatch):
 async def test_context_event_set_on_broadcast_failure(monkeypatch):
     """context_event must be set even when _broadcast_context's injection step fails."""
     import asyncio
-    from uuid import UUID
 
     context_event = asyncio.Event()
     injected = {"called": False}

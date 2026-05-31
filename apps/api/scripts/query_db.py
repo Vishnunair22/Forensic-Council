@@ -1,13 +1,13 @@
 import asyncio
-import json
 import sys
 
 from core.persistence.postgres_client import get_postgres_client
 
+
 async def main():
     try:
         client = await get_postgres_client()
-        
+
         print("=== Investigations ===")
         states = await client.fetch("SELECT session_id, case_id, status, created_at FROM investigation_state")
         for row in states:
@@ -26,7 +26,7 @@ async def main():
             print(f"  Error: {row['error']}")
             print("-" * 50)
         print()
-        
+
         print("=== Audit Logs (Errors/Warnings) ===")
         audit = await client.fetch(
             "SELECT session_id, action, status, details, timestamp_utc FROM audit_log WHERE status IN ('FAIL', 'FAILED', 'ERROR', 'WARN', 'WARNING')"

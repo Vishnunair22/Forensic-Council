@@ -1,19 +1,24 @@
 import asyncio
-import time
+import hashlib
+import json
+import mimetypes
 from typing import Any
+from uuid import uuid4
 
 from core.config import Settings
-from core.evidence import EvidenceArtifact
+from core.evidence import ArtifactType, EvidenceArtifact
 from core.gemini_client import (
     GeminiVisionClient,
     GeminiVisionFinding,
 )
+from core.image_routing import build_image_forensic_routing
 from core.structured_logging import get_logger
 from core.vision_local_ensemble import analyze_local_visual_profile
 from core.vision_types import VisualEvidenceFinding
-from core.image_routing import build_image_forensic_routing
 
 logger = get_logger(__name__)
+analyze_local_ensemble = analyze_local_visual_profile
+_ORIGINAL_LOCAL_ENSEMBLE = analyze_local_visual_profile
 
 
 class VisionRouter:
@@ -65,6 +70,26 @@ class VisionRouter:
         )
 
     @staticmethod
+    def _coerce_artifact(artifact: EvidenceArtifact | str) -> EvidenceArtifact:
+        if isinstance(artifact, EvidenceArtifact):
+            return artifact
+        file_path = str(artifact)
+        try:
+            with open(file_path, "rb") as fh:
+                content_hash = hashlib.sha256(fh.read()).hexdigest()
+        except OSError:
+            content_hash = ""
+        return EvidenceArtifact.create_root(
+            artifact_type=ArtifactType.ORIGINAL,
+            file_path=file_path,
+            content_hash=content_hash,
+            action="vision_router_input",
+            agent_id="system",
+            session_id=uuid4(),
+            metadata={"mime_type": mimetypes.guess_type(file_path)[0] or ""},
+        )
+
+    @staticmethod
     def _normalize_gemini_profile(gf: GeminiVisionFinding) -> VisualEvidenceFinding:
         """Convert a GeminiVisionFinding into a provider-neutral VisualEvidenceFinding.
 
@@ -76,7 +101,7 @@ class VisionRouter:
         model_used = gf.model_used or "gemini-2.5-flash"
         is_local_fallback = model_used.startswith("local_")
         provider_used = "local_visual_ensemble" if is_local_fallback else "gemini"
-        
+
         content_description = gf.content_description or ""
         routing = build_image_forensic_routing(
             dict(getattr(gf, "_forensic_routing", {}) or {}),
@@ -118,10 +143,69 @@ class VisionRouter:
         exif_summary: dict[str, Any] | None = None,
         is_screen_capture_like: bool = False,
     ) -> VisualEvidenceFinding:
-        return await analyze_local_visual_profile(
+        local_runner = (
+            analyze_local_ensemble
+            if analyze_local_ensemble is not _ORIGINAL_LOCAL_ENSEMBLE
+            else analyze_local_visual_profile
+        )
+        return await local_runner(
             artifact=artifact,
             exif_summary=exif_summary,
             is_screen_capture_like=is_screen_capture_like,
+        )
+
+    async def _run_groq_vision(self, file_path: str) -> VisualEvidenceFinding:
+        import base64
+
+        import httpx
+
+        api_key = self.config.groq_vision_api_key or (
+            self.config.llm_api_key if self.config.llm_provider == "groq" else None
+        )
+        if not api_key:
+            raise RuntimeError("Groq Vision API key is not configured")
+
+        model = self.config.groq_vision_model
+        mime_type = mimetypes.guess_type(file_path)[0] or "image/jpeg"
+        with open(file_path, "rb") as fh:
+            encoded = base64.b64encode(fh.read()).decode("ascii")
+
+        async with httpx.AsyncClient(timeout=self.config.groq_vision_timeout) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Return JSON forensic visual profile."},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
+                                },
+                            ],
+                        }
+                    ],
+                    "temperature": 0,
+                },
+            )
+        if response.status_code >= 400:
+            raise RuntimeError(f"Groq Vision returned HTTP {response.status_code}")
+        content = response.json()["choices"][0]["message"]["content"]
+        profile = json.loads(content)
+        return VisualEvidenceFinding(
+            analysis_type="visual_evidence_profile",
+            model_used=model,
+            content_description=profile.get("scene_description")
+            or profile.get("content_description")
+            or "",
+            provider_used="groq_vision",
+            detected_objects=list(profile.get("detected_objects") or []),
+            confidence=float(profile.get("confidence") or 0.0),
+            court_defensible=True,
+            _authenticity_verdict=str(profile.get("authenticity_verdict") or "INCONCLUSIVE"),
         )
 
     async def deep_forensic_analysis(
@@ -147,6 +231,7 @@ class VisionRouter:
         The fallback_applied / fallback_reason / provider_attempts fields are
         populated on the result so every report discloses the actual provenance.
         """
+        artifact = self._coerce_artifact(artifact)
         file_path = artifact.file_path
         provider_attempts: list[dict] = []
         errors: list[str] = []
@@ -214,6 +299,20 @@ class VisionRouter:
         else:
             logger.info("Gemini not enabled — skipping for Agent1")
             provider_attempts.append({"provider": "gemini", "success": False, "reason": "not_enabled"})
+
+        if "groq_vision" in (getattr(self.config, "vision_provider_chain", "") or ""):
+            try:
+                result = await self._run_groq_vision(file_path)
+                result.provider_attempts = provider_attempts + [
+                    {"provider": "groq_vision", "success": True}
+                ]
+                return result
+            except Exception as e:
+                logger.warning("Groq Vision visual profile failed", error=str(e))
+                errors.append(f"Groq Vision exception: {str(e)}")
+                provider_attempts.append(
+                    {"provider": "groq_vision", "success": False, "error": str(e)}
+                )
 
         # ── Fallback: local ensemble ───────────────────────────────────────
         logger.info("Falling back to local visual ensemble")

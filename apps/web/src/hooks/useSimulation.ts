@@ -91,8 +91,8 @@ export const useSimulation = ({
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
   const [arbiterStatus, setArbiterStatus] = useState<string | null>(null);
   const [arbiterThinking, setArbiterThinking] = useState<string | null>(null);
-  const [revealQueue, setRevealQueue] = useState<AgentUpdate[]>([]);
-  const [revealPending, setRevealPending] = useState(false);
+  const [revealQueue] = useState<AgentUpdate[]>([]);
+  const [revealPending] = useState(false);
   const activePhaseRef = useRef<SimulationPhase>("initial");
 
   const setSimulationPhase = useCallback((phase: SimulationPhase) => {

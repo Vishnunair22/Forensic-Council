@@ -1,13 +1,14 @@
 import asyncio
 import os
 import sys
+
 from PIL import Image, ImageDraw
 
 # Add apps/api to path
 sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
-from core.gemini_client import GeminiVisionClient, GeminiVisionFinding
 from core.config import Settings
+from core.gemini_client import GeminiVisionClient
 
 
 def create_test_image(path: str):
@@ -48,7 +49,7 @@ async def main():
         bootstrap_admin_password="Admin_123!",
         bootstrap_investigator_password="Inv_123!",
     )
-    
+
     client = GeminiVisionClient(settings)
     print(f"    - Client Gemini Enabled: {client._enabled}")
 
@@ -56,7 +57,7 @@ async def main():
     print("\n[2] Executing forensic analysis (triggers local ensemble + Florence-2 fallback)...")
     try:
         finding = await client.identify_file_content(test_img_path)
-        
+
         # 4. Display Results
         print("\n==========================================================")
         print("                 FORENSIC REPORT FINDINGS")
@@ -74,7 +75,7 @@ async def main():
         print("\n--- DETECTED OBJECTS ---")
         print(finding.detected_objects)
         print("==========================================================")
-        
+
     except Exception as e:
         print(f"\n[ERROR] Fallback execution failed: {e}")
         import traceback

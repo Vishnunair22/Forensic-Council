@@ -155,7 +155,7 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_success(self, mock_pg, mock_decode):
-        from core.auth import TokenData, get_current_user, _user_status_cache
+        from core.auth import TokenData, _user_status_cache, get_current_user
         _user_status_cache.clear()
 
         mock_decode.return_value = TokenData(
@@ -178,7 +178,7 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_disabled(self, mock_pg, mock_decode):
-        from core.auth import TokenData, get_current_user, _user_status_cache
+        from core.auth import TokenData, _user_status_cache, get_current_user
         _user_status_cache.clear()
 
         mock_decode.return_value = TokenData(
@@ -232,7 +232,7 @@ class TestRS256Auth:
     @pytest.mark.asyncio
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_cookie_fallback(self, mock_pg):
-        from core.auth import TokenData, get_current_user, _user_status_cache
+        from core.auth import TokenData, _user_status_cache, get_current_user
         _user_status_cache.clear()
 
         mock_request = MagicMock()
@@ -254,7 +254,7 @@ class TestRS256Auth:
     @patch("core.auth.decode_token")
     @patch("core.persistence.postgres_client.get_postgres_client")
     async def test_get_current_user_optional(self, mock_pg, mock_decode):
-        from core.auth import TokenData, get_current_user_optional, _user_status_cache
+        from core.auth import TokenData, _user_status_cache, get_current_user_optional
         _user_status_cache.clear()
 
         # Unauthenticated

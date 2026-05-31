@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import re
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -78,7 +76,7 @@ async def lens_style_multimodal_scan(
 async def _run_with_timeout(coro, label: str):
     try:
         return await asyncio.wait_for(coro, timeout=_TIMEOUT_PER_TASK)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.debug("Lens modality timed out", modality=label)
         return {"status": "timeout", "modality": label}
     except Exception as exc:
@@ -89,8 +87,8 @@ async def _run_with_timeout(coro, label: str):
 async def _do_ocr_scan(path: str) -> dict[str, Any]:
     """Extract text via pytesseract with language auto-detect."""
     try:
-        from PIL import Image
         import pytesseract
+        from PIL import Image
     except ImportError:
         return {"status": "unavailable", "modality": "ocr", "reason": "pytesseract not installed"}
 
@@ -121,8 +119,8 @@ async def _do_ocr_scan(path: str) -> dict[str, Any]:
 async def _do_barcode_scan(path: str) -> dict[str, Any]:
     """Scan for barcodes and QR codes using pyzbar."""
     try:
-        from pyzbar import pyzbar
         from PIL import Image
+        from pyzbar import pyzbar
     except ImportError:
         return {"status": "unavailable", "modality": "barcode", "reason": "pyzbar not installed"}
 
@@ -179,7 +177,7 @@ async def _try_clip_classify(path: str) -> dict | None:
     try:
         from tools.clip_utils import get_clip_analyzer
         analyzer = get_clip_analyzer()
-        if not analyzer or not getattr(analyzer, "available", True) is False:
+        if not analyzer or getattr(analyzer, "available", True) is not False:
             loop = asyncio.get_running_loop()
             with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
                 result = await loop.run_in_executor(

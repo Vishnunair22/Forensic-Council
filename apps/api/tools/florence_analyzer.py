@@ -93,8 +93,6 @@ class FlorenceAnalyzer:
         try:
             from PIL import Image
 
-            import torch
-
             image = Image.open(image_path).convert("RGB")
             caption = self._run_task("<CAPTION>", image)
             detailed = self._run_task("<DETAILED_CAPTION>", image)

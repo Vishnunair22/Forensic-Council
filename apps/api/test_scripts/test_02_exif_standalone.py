@@ -3,7 +3,7 @@ Test 2: EXIF Extraction (Agent 5 - Metadata)
 Tests exif_extract on synthetic images with known EXIF data.
 """
 import asyncio
-import os
+
 import piexif
 from PIL import Image
 

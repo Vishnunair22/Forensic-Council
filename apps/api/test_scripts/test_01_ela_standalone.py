@@ -3,6 +3,7 @@ Test 1: ELA Anomaly Classification (Agent 1 - Classical ML)
 Tests the ela_anomaly_classifier on a synthetic test image.
 """
 import asyncio
+
 import numpy as np
 from PIL import Image
 
@@ -32,14 +33,13 @@ async def test_ela_classifier():
 
 
 async def test_ela_production_tool():
+    from core.evidence import ArtifactType, EvidenceArtifact
     from tools.image_tools import ela_full_image
-    from core.evidence import EvidenceArtifact, ArtifactType
 
     img = np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8)
     test_path = "/tmp/test_ela_production.jpg"
     Image.fromarray(img).save(test_path, format="JPEG", quality=95)
 
-    from core.evidence import ArtifactType
     artifact = EvidenceArtifact.create_root(
         artifact_type=ArtifactType.ORIGINAL,
         file_path=test_path,

@@ -1,6 +1,6 @@
 """Tests for weapon detection priority in CLIP and object detection pipeline."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import numpy as np
@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from core.evidence import ArtifactType, EvidenceArtifact
-from tools.clip_utils import CLIPImageAnalyzer, CLIPAnalysisResult
+from tools.clip_utils import CLIPImageAnalyzer
 
 
 @pytest.fixture

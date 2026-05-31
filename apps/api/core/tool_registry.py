@@ -51,6 +51,9 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # No-API fallback tools
     "reverse_image_search": 25.0,
     "lens_style_multimodal_scan": 40.0,
+    # visual_evidence_profile runs CLIP/SigLIP embedding + scene analysis;
+    # model cold-start + inference can exceed 60s on first call in Docker.
+    "visual_evidence_profile": 120.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0

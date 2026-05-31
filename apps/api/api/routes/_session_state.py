@@ -180,6 +180,16 @@ async def update_active_pipeline_metadata(
 
     redis = await _get_redis()
     key = f"{SESSION_METADATA_KEY_PREFIX}{session_id}"
+    if not hasattr(redis, "client"):
+        raw = await redis.get(key)
+        try:
+            decoded = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+            existing = _json.loads(decoded) if isinstance(decoded, str) else (decoded or {})
+        except (ValueError, TypeError):
+            existing = {}
+        merged = {**existing, **fields}
+        await redis.set(key, _json.dumps(merged, default=str), ex=_METADATA_TTL_SECONDS)
+        return merged
     raw_client = redis.client  # underlying redis.asyncio.Redis
     for _attempt in range(max_retries):
         try:
@@ -194,6 +204,8 @@ async def update_active_pipeline_metadata(
                         existing = _json.loads(decoded) if isinstance(decoded, str) else (decoded or {})
                     except (ValueError, TypeError):
                         existing = {}
+                if not isinstance(existing, dict):
+                    existing = {}
                 merged = {**existing, **fields}
                 pipe.multi()
                 await _maybe_await(
@@ -215,6 +227,8 @@ async def update_active_pipeline_metadata(
                 error=str(exc),
             )
             existing = await get_active_pipeline_metadata(session_id) or {}
+            if not isinstance(existing, dict):
+                existing = {}
             merged = {**existing, **fields}
             await set_active_pipeline_metadata(session_id, merged)
             return merged
@@ -227,6 +241,8 @@ async def update_active_pipeline_metadata(
         retries=max_retries,
     )
     existing = await get_active_pipeline_metadata(session_id) or {}
+    if not isinstance(existing, dict):
+        existing = {}
     merged = {**existing, **fields}
     await set_active_pipeline_metadata(session_id, merged)
     return merged

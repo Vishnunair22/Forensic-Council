@@ -719,7 +719,7 @@ Return ONLY a JSON object with this exact schema:
                 calibrated_confidence = pre_confidence
             else:
                 calibrated_confidence = float(calibrated_confidence)
-                
+
             if screenshot_like and "object" in agent_name.lower():
                 layout_rows = [
                     finding
@@ -1103,8 +1103,8 @@ Return ONLY a JSON object with this exact schema:
             pass
         else:
             is_brief_generic = (
-                _bad(brief) 
-                or len(brief.strip()) < 60 
+                _bad(brief)
+                or len(brief.strip()) < 60
                 or not any(m in brief.lower() for m in (
                     "score", "ratio", "hash", "sha-256", "sha-", "density", "ocr", "exif",
                     "hex", "signature", "compression", "metadata", "splicing", "ghost",
@@ -1149,11 +1149,11 @@ Return ONLY a JSON object with this exact schema:
 
         narrative = str(response.get("narrative_summary") or "")
         needs_grounded_narrative = (
-            _bad(narrative) 
-            or len(narrative.strip()) < 80 
+            _bad(narrative)
+            or len(narrative.strip()) < 80
             or not any(m in narrative.lower() for m in (
-                "score", "ratio", "hash", "sha-256", "density", "ocr", "exif", 
-                "hex", "signature", "compression", "metadata", "splicing", "ghost", 
+                "score", "ratio", "hash", "sha-256", "density", "ocr", "exif",
+                "hex", "signature", "compression", "metadata", "splicing", "ghost",
                 "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
                 "trufor", "busternet", "ela", "fft", "prnu"
             ))
@@ -1438,7 +1438,7 @@ Return ONLY a JSON object with this exact schema:
                     + ". Review these regions for possible edited text; mixed UI fonts alone are not treated as proof of manipulation."
                 )
             return (
-                f"Screenshot font/rendering check found expected UI text variation"
+                "Screenshot font/rendering check found expected UI text variation"
                 + (f" (consistency score {float(score):.3f})" if isinstance(score, (int, float)) else "")
                 + ". No reviewable text-edit signal was detected."
             )
@@ -1544,13 +1544,13 @@ Return ONLY a JSON object with this exact schema:
             total = data.get("total_blocks")
             if verdict == "POSITIVE":
                 return (
-                    f"Sensor-noise proxy reported inconsistent residuals"
+                    "Sensor-noise proxy reported inconsistent residuals"
                     + (f" (CoV {float(cov):.3f})" if isinstance(cov, (int, float)) else "")
                     + (f", outliers {outliers}/{total}" if outliers is not None and total is not None else "")
                     + ". This is a weak single-image signal and requires corroboration."
                 )
             return (
-                f"Sensor-noise proxy found no supported multi-source residual pattern"
+                "Sensor-noise proxy found no supported multi-source residual pattern"
                 + (f" (CoV {float(cov):.3f})" if isinstance(cov, (int, float)) else "")
                 + "."
             )

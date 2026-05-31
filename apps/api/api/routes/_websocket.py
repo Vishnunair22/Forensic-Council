@@ -12,6 +12,7 @@ from collections import deque
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from redis.asyncio import Redis
 
 from api.routes._authz import assert_session_access
 from api.routes._session_state import (
@@ -175,7 +176,6 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
 
     async def _redis_subscriber():
         nonlocal last_activity
-        from redis.asyncio import Redis
 
         settings = get_settings()
         dedicated_redis = None
@@ -279,7 +279,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                     await asyncio.wait_for(websocket.ping(), timeout=10.0)
                     await websocket.send_json({"type": "PING", "timestamp": time.time()})
                     last_activity = time.time()
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     logger.warning(
                         "WebSocket ping timeout — client unresponsive",
                         session_id=session_id,

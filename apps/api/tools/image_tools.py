@@ -558,7 +558,7 @@ async def frequency_domain_analysis(
         if not os.path.exists(original_path):
             raise ToolUnavailableError(f"File not found: {original_path}")
 
-        from core.media_kind import is_screen_capture_like, is_digitally_created_image
+        from core.media_kind import is_digitally_created_image, is_screen_capture_like
         is_digital = is_screen_capture_like(artifact) or is_digitally_created_image(artifact)
 
         # ── offload blocking FFT computation to a thread ──────────────────────
@@ -591,7 +591,7 @@ async def frequency_domain_analysis(
 
             high_freq_ratio = high_freq_energy / total_energy
             natural_ceil = 0.20
-            
+
             if is_digital:
                 anomaly_score = 0.0
                 anomaly_detected = False

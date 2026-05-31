@@ -14,6 +14,10 @@ from typing import Any
 
 from PIL import Image
 
+from core.structured_logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def _artifact_mime(artifact: Any) -> str:
     return (getattr(artifact, "mime_type", "") or "").lower()
@@ -166,10 +170,6 @@ def is_document_like(artifact: Any) -> bool:
     doc_keywords = {"scan", "document", "receipt", "invoice", "letter", "form", "id", "passport", "certificate"}
     has_keyword = any(k in filename or k in orig_name for k in doc_keywords)
 
-    fmt = str(probe.get("format") or "").lower()
-    width = int(probe.get("width") or 0)
-    height = int(probe.get("height") or 0)
-
     return has_text_hints or has_keyword
 
 
@@ -199,8 +199,7 @@ def is_recompressed_web_image(artifact: Any) -> bool:
     try:
         with Image.open(file_path) as img:
             has_quantization = bool(getattr(img, "quantization", None))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not inspect JPEG quantization", file_path=file_path, error=str(exc))
 
     return has_quantization or has_web_keyword
-

@@ -893,7 +893,7 @@ class GeminiVisionClient:
         # thinkingBudget=0 disables CoT; 1024 gives enough for structured reasoning
         # without excessive latency. Models that don't support it (2.0-) skip silently.
         if any(p in self.model for p in _THINKING_MODEL_PREFIXES):
-            generation_config["thinkingConfig"] = {"thinkingBudget": 256}
+            generation_config["thinkingConfig"] = {"thinkingBudget": 1024}
 
         payload = {
             "contents": [{"parts": parts}],
@@ -909,7 +909,7 @@ class GeminiVisionClient:
                 return (m, primary_payload, url)
             gen_cfg: dict = {"temperature": 0.1, "maxOutputTokens": 2048}
             if any(p in m for p in _THINKING_MODEL_PREFIXES):
-                gen_cfg["thinkingConfig"] = {"thinkingBudget": 256}
+                gen_cfg["thinkingConfig"] = {"thinkingBudget": 1024}
             return (
                 m,
                 {"contents": [{"parts": parts}], "generationConfig": gen_cfg},
@@ -1066,7 +1066,7 @@ class GeminiVisionClient:
                 logger.debug("Could not read Gemini error response body", error=str(e))
             if resp.status_code == 401:
                 raise _ApiKeyInvalidError(
-                    f"Gemini API key is invalid or expired (HTTP 401). All cascade models will fail."
+                    "Gemini API key is invalid or expired (HTTP 401). All cascade models will fail."
                 )
             if resp.status_code == 404 or "not found" in error_detail.lower():
                 raise _ModelUnavailableError(
@@ -1451,12 +1451,12 @@ class GeminiVisionClient:
         """
         t0 = time.monotonic()
         Path(file_path)
-        
+
         logger.warning(
             "Gemini unavailable. Running enhanced local forensic analysis.",
             file_path=Path(file_path).name
         )
-        
+
         # Run all local tools concurrently (Florence-2 runs alongside — may be slow)
         results = await asyncio.gather(
             self._run_clip_classification(file_path),
@@ -1467,9 +1467,9 @@ class GeminiVisionClient:
             self._run_florence_caption(file_path),
             return_exceptions=True
         )
-        
+
         clip_result, detr_result, opencv_result, ela_result, ocr_result, florence_result = results
-        
+
         # Handle failures gracefully
         if isinstance(clip_result, Exception): clip_result = {}
         if isinstance(detr_result, Exception): detr_result = {"objects": [], "count": 0}
@@ -1477,41 +1477,41 @@ class GeminiVisionClient:
         if isinstance(ela_result, Exception): ela_result = {}
         if isinstance(ocr_result, Exception): ocr_result = {"lines": []}
         if isinstance(florence_result, Exception): florence_result = {"description": "", "available": False}
-        
+
         # Synthesize findings
         extracted_text = ocr_result.get("lines", [])
-        
+
         # Tier 1: OCR → Web Search for context (depends on OCR output)
         web_context = await self._web_search_context(extracted_text)
-        
+
         # Tier 3: Florence-2 description (highest quality — use as narrative if available)
         florence_desc = florence_result.get("description", "") if isinstance(florence_result, dict) else ""
-        
+
         routing = self._compute_routing(clip_result)
 
         content_desc = self._synthesize_content_description(
             clip_result, detr_result, opencv_result, extracted_text, web_context, florence_desc, file_path
         )
-        
+
         manipulation_signals = self._synthesize_manipulation_signals(
             ela_result, opencv_result, is_screen_capture_like
         )
-        
+
         detected_objects = detr_result.get("objects", [])
-        
+
         # Confidence based on signal count
         tool_list = [clip_result, detr_result, opencv_result, ela_result, ocr_result]
         if isinstance(florence_result, dict) and florence_result.get("available"):
             tool_list.append(florence_result)
         tool_success_count = sum(1 for r in tool_list if r)
         confidence = min(0.78, 0.45 + (tool_success_count * 0.06))
-        
+
         latency_ms = (time.monotonic() - t0) * 1000
-        
+
         # Choose the best narrative: Florence-2 > web context > stats
         has_florence = bool(florence_desc)
         narrative = florence_desc or web_context or content_desc
-        
+
         model_label = "local_enhanced_v2+florence" if has_florence else "local_enhanced_v2"
         caveat_lines = [
             "Analysis performed using local forensic tools (CLIP, DETR, ELA, OpenCV)"
@@ -1521,7 +1521,7 @@ class GeminiVisionClient:
         caveat_lines.append(
             "External vision API unavailable; conclusions remain grounded in local tool metrics."
         )
-        
+
         finding = GeminiVisionFinding(
             analysis_type="deep_forensic_analysis",
             model_used=model_label,
@@ -1543,7 +1543,7 @@ class GeminiVisionClient:
             _forensic_routing=routing,
             _forensic_specifics=self._domain_specifics(clip_result),
         )
-        
+
         return finding
 
     # Tier 2: detailed CLIP subcategory prompts for hierarchical classification
@@ -1689,9 +1689,9 @@ class GeminiVisionClient:
     async def _run_opencv_stats(self, file_path: str) -> dict:
         """Run OpenCV statistics extraction."""
         try:
+            import cv2
             import numpy as np
             from PIL import Image as PILImage
-            import cv2
 
             def _estimate_noise(_gray: np.ndarray) -> float:
                 gx = cv2.Sobel(_gray.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
@@ -1746,8 +1746,8 @@ class GeminiVisionClient:
     async def _extract_text_ocr(self, file_path: str) -> dict:
         """Extract visible text using OCR (Tesseract with preprocessing, then EasyOCR fallback)."""
         try:
-            from PIL import Image as PILImage
             import numpy as np
+            from PIL import Image as PILImage
             def _ocr():
                 ocr_text_lines = []
                 img = PILImage.open(file_path).convert("RGB")
@@ -1874,8 +1874,8 @@ class GeminiVisionClient:
             return {"description": "", "available": False}
 
     def _synthesize_content_description(
-        self, 
-        clip_result: dict, 
+        self,
+        clip_result: dict,
         detr_result: dict,
         opencv_result: dict,
         extracted_text: list[str] | None = None,
@@ -1885,30 +1885,30 @@ class GeminiVisionClient:
     ) -> str:
         """Synthesize rich content description from local tools + web context."""
         parts = []
-        
+
         # Florence-2 VLM description (highest fidelity local narrative)
         if florence_desc:
             parts.append(florence_desc)
-        
+
         # CLIP scene classification
         if isinstance(clip_result, dict) and clip_result.get("top_match"):
             parts.append(f"Scene: {clip_result['top_match']} (confidence: {clip_result['confidence']:.2f})")
-        
+
         # Web context (Tier 1) — most informative when available
         if web_context:
             parts.append(web_context)
-        
+
         # OCR context — useful for screenshots/documents
         if extracted_text:
             text_preview = "; ".join(extracted_text[:5])
             if text_preview:
                 parts.append(f"Visible text: {text_preview}")
-        
+
         # DETR objects
         if isinstance(detr_result, dict) and detr_result.get("count", 0) > 0:
             objects_str = ", ".join(detr_result["objects"][:5])
             parts.append(f"Detected objects: {objects_str}")
-        
+
         # OpenCV stats
         if opencv_result:
             parts.append(
@@ -1916,7 +1916,7 @@ class GeminiVisionClient:
                 f"Sharpness: {opencv_result.get('sharpness', 0):.0f}, "
                 f"Brightness: {opencv_result.get('brightness', 0):.0f}/255"
             )
-        
+
         return " | ".join(parts) if parts else (
             f"Local forensic analysis of {Path(file_path).name} "
             f"({Path(file_path).suffix.upper()} image). "
@@ -1924,29 +1924,29 @@ class GeminiVisionClient:
         )
 
     def _synthesize_manipulation_signals(
-        self, 
+        self,
         ela_result: dict,
         opencv_result: dict,
         is_screen: bool
     ) -> list[str]:
         """Extract manipulation signals from tool results."""
         signals = []
-        
+
         # ELA findings
         if isinstance(ela_result, dict) and ela_result.get("suspicious"):
             signals.append(f"ELA hotspots detected ({ela_result.get('hotspot_count', 0)})")
-        
+
         # Noise analysis
         if opencv_result:
             noise_threshold = 5 if is_screen else 10
             if opencv_result.get("noise", 0) > noise_threshold:
                 signals.append(f"Elevated noise residual ({opencv_result['noise']:.2f})")
-            
+
             # Blockiness (JPEG artifacts)
             block_threshold = 12 if is_screen else 8
             if opencv_result.get("blockiness", 0) > block_threshold:
                 signals.append(f"JPEG block artifacts detected ({opencv_result['blockiness']:.1f})")
-        
+
         return signals
 
     def _assess_file_type(self, clip_result: dict, exif_summary: dict | None) -> str:

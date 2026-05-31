@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { Lock, ArrowRight, X, Play, Mic, FileText, Archive, File } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
@@ -165,10 +166,13 @@ export function UploadSuccessModal({
           >
             {objectUrl && file.type.startsWith("image/") ? (
               <>
-                <img
+                <Image
                   src={objectUrl}
                   alt={file.name}
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="(max-width: 640px) 100vw, 640px"
+                  unoptimized
+                  className="object-cover"
                 />
                 <motion.div
                   initial={{ top: "0%", opacity: 1 }}

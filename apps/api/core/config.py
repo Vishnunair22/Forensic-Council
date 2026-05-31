@@ -725,7 +725,7 @@ class Settings(BaseSettings):
     # Gemini API key policy acknowledgment — required before using Gemini in production.
     # See: https://ai.google.dev/terms
     gemini_api_key_policy_ok: bool = Field(
-        default=True,
+        default=False,
         description=(
             "Acknowledge Gemini API terms of service before enabling Gemini calls. "
             "Set to true after reading and accepting the terms at https://ai.google.dev/terms"
@@ -1091,6 +1091,10 @@ def validate_production_settings() -> None:
     if "your_gemini_key" in _gk or "paste_gemini_key_here" in _gk:
         errors.append(
             "GEMINI_API_KEY placeholder detected in production! Please set a valid key or leave empty for local fallback."
+        )
+    if s.gemini_api_key and not s.gemini_api_key_policy_ok:
+        errors.append(
+            "GEMINI_API_KEY_POLICY_OK must be true when GEMINI_API_KEY is configured in production"
         )
 
     # Entropy check for both main secrets.

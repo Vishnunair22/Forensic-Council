@@ -3,7 +3,7 @@ Test 3: Object Detection (Agent 3 - Object/Scene)
 Tests object_detection_handler with graceful degradation when ML models unavailable.
 """
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 async def test_object_detection_handler_with_mock():
@@ -51,8 +51,8 @@ async def test_object_detection_handler_with_mock():
 
 
 async def test_model_availability_check():
-    from core.inference_client import get_inference_client
     from core.config import get_settings
+    from core.inference_client import get_inference_client
 
     settings = get_settings()
     try:

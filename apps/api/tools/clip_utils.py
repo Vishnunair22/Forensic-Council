@@ -89,7 +89,6 @@ class TorchVisionClassifier(ImageClassifierBase):
             return False
 
         try:
-            from core.config import get_settings
 
             self._device = torch.device("cpu")
 

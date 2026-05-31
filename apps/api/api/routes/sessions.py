@@ -982,13 +982,13 @@ async def resume_investigation(
     _phase_token = request.expected_phase
     if _phase_token:
         pipeline_status = metadata.get("status", "")
-        if _phase_token == "initial" and pipeline_status != "awaiting_decision":
+        if _phase_token == "initial" and pipeline_status != "awaiting_decision":  # noqa: S105
             raise HTTPException(
                 status_code=409,
                 detail=f"Phase mismatch: expected initial gate (awaiting_decision), "
                        f"current status is '{pipeline_status}'",
             )
-        if _phase_token == "deep" and pipeline_status != "awaiting_deep_report":
+        if _phase_token == "deep" and pipeline_status != "awaiting_deep_report":  # noqa: S105
             raise HTTPException(
                 status_code=409,
                 detail=f"Phase mismatch: expected deep gate (awaiting_deep_report), "
@@ -1020,7 +1020,7 @@ async def resume_investigation(
 
     if pipeline_status == "awaiting_deep_report":
         decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
-    elif pipeline_status == "awaiting_decision":
+    elif pipeline_status in {"awaiting_decision", "paused"}:
         decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
     else:
         raise HTTPException(

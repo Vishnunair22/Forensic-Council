@@ -242,7 +242,6 @@ class FindingHumanizer:
     def _humanize_generic(finding: dict) -> str:
         tool = _tool_name(finding)
         verdict = _evidence_verdict_of(finding)
-        conf = _confidence_of(finding)
         reasoning = finding.get("reasoning_summary", "")
 
         if verdict == "POSITIVE":

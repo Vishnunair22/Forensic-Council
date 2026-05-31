@@ -18,7 +18,6 @@ from typing import Any
 import httpx
 from PIL import Image, ImageDraw, ImageFont, ImageOps, PngImagePlugin
 
-
 ROOT = Path(__file__).resolve().parents[3]
 OUT_DIR = ROOT / "scratch" / "acceptance_images"
 RESULTS_DIR = ROOT / "scratch" / "acceptance_results"

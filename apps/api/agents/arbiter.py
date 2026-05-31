@@ -443,7 +443,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             finding_groups[key].append(f)
 
         deduplicated = []
-        for group_key, group in finding_groups.items():
+        for group in finding_groups.values():
             if len(group) == 1:
                 deduplicated.append(group[0])
             else:
@@ -822,24 +822,23 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE"
             )
 
-        if positive > 0:
-            v = "SUSPICIOUS"
-        elif inconclusive > 0:
-            v = "INCONCLUSIVE"
-        elif ForensicPolicy.is_authentic(conf, err):
-            v = "AUTHENTIC"
-        elif ForensicPolicy.is_suspicious(conf, err):
-            v = "SUSPICIOUS"
-        elif (
-            conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
-            and err <= ForensicPolicy.AUTHENTIC_ERROR_MAX
-        ):
-            v = "AUTHENTIC"
-        else:
-            v = "INCONCLUSIVE"
-
             if m.get("skipped"):
                 v = "NOT_APPLICABLE"
+            elif positive > 0:
+                v = "SUSPICIOUS"
+            elif inconclusive > 0:
+                v = "INCONCLUSIVE"
+            elif ForensicPolicy.is_authentic(conf, err):
+                v = "AUTHENTIC"
+            elif ForensicPolicy.is_suspicious(conf, err):
+                v = "SUSPICIOUS"
+            elif (
+                conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
+                and err <= ForensicPolicy.AUTHENTIC_ERROR_MAX
+            ):
+                v = "AUTHENTIC"
+            else:
+                v = "INCONCLUSIVE"
 
             summary[aid] = {
                 "agent_name": AGENT_NAMES.get(aid, aid),
@@ -877,6 +876,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             per_agent_metrics=metrics,
             uncertainty_statement="Analysis was skipped for all agents.",
             overall_verdict="INCONCLUSIVE",
+            per_agent_summary=self._get_agent_summary(metrics, findings),
             degradation_flags=[
                 "All agents failed or were skipped — report based on incomplete data."
             ],

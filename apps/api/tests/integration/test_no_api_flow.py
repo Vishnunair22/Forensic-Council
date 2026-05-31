@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import numpy as np
@@ -21,7 +20,6 @@ from PIL import Image
 
 from core.evidence import ArtifactType, EvidenceArtifact
 from core.react_loop import ReActLoopEngine
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

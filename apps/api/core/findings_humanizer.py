@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+
 from core.media_kind import is_screen_capture_like
 
 _HASH_RE = re.compile(r"SHA-256\s*=\s*([0-9a-fA-F]{10,})")
@@ -286,7 +287,7 @@ def _humanize_initial_finding(
             "completed; review detailed tool metrics",
             "analysis complete",
         )
-        
+
         # dynamic measurement-backed narratives for NEGATIVE findings
         tool_key = (tool_name or "").lower()
         if tool_key == "neural_ela":
@@ -302,11 +303,10 @@ def _humanize_initial_finding(
                 f"consistent with an unmodified JPEG."
             )
         elif tool_key == "noiseprint_cluster":
-            outliers = metadata.get("outlier_region_count", 0)
             return (
-                f"Sensor-noise clustering found no inconsistent camera-source regions — "
-                f"0 anomalous or outlier regions detected — the image noise signature "
-                f"appears homogeneous throughout."
+                "Sensor-noise clustering found no inconsistent camera-source regions — "
+                "0 anomalous or outlier regions detected — the image noise signature "
+                "appears homogeneous throughout."
             )
         elif tool_key == "diffusion_artifact_detector":
             prob = metadata.get("diffusion_probability", 0.0)

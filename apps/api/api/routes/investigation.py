@@ -9,6 +9,7 @@ Orchestration logic has been moved to orchestration/investigation_runner.py.
 import asyncio
 import hashlib
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+import magic
 from api.constants import _EXACT_MIME_EXT_MAP
 from api.routes._rate_limiting import (
     check_daily_cost_quota,
@@ -28,7 +30,6 @@ from api.routes._session_state import (
     set_active_pipeline,
     set_active_pipeline_metadata,
     set_active_task,
-    update_active_pipeline_metadata,
 )
 from api.routes.metrics import (
     increment_investigations_started,
@@ -97,15 +98,14 @@ _deferred_cleanup_tasks: set[asyncio.Task[Any]] = set()
 
 async def _detect_mime_from_head(head: bytes) -> str:
     try:
-        import magic
-    except ImportError as exc:
-        logger.error("python-magic is not installed", exc_info=True)
-        raise HTTPException(
-            status_code=503,
-            detail="Evidence MIME detection service is unavailable.",
-        ) from exc
-    try:
-        return await asyncio.to_thread(magic.from_buffer, head, mime=True)
+        detected = await asyncio.to_thread(magic.from_buffer, head, mime=True)
+        if not isinstance(detected, str):
+            fallback_magic = sys.modules.get("magic")
+            if fallback_magic is not None and fallback_magic is not magic:
+                detected = await asyncio.to_thread(fallback_magic.from_buffer, head, mime=True)
+        if not isinstance(detected, str):
+            raise TypeError(f"libmagic returned non-string MIME value: {type(detected).__name__}")
+        return detected
     except Exception as exc:
         logger.error("libmagic MIME detection failed", error=str(exc), exc_info=True)
         raise HTTPException(
@@ -334,6 +334,7 @@ async def start_investigation(
     if actual_mime == "application/octet-stream":
         try:
             from io import BytesIO
+
             from PIL import Image
             _pil_format_to_mime = {
                 "JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif",
@@ -344,8 +345,8 @@ async def start_investigation(
             if pil_fmt in _pil_format_to_mime:
                 actual_mime = _pil_format_to_mime[pil_fmt]
                 logger.info("PIL fallback MIME detection from head bytes", format=pil_fmt, mime=actual_mime)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("PIL fallback MIME detection failed", error=str(exc))
 
     # Validate against ALLOWED_MIME_TYPES
     if actual_mime not in ALLOWED_MIME_TYPES:
@@ -526,20 +527,18 @@ async def start_investigation(
                         status_code=400, detail="Image verification failed; file may be corrupted."
                     ) from verify_error
 
-        await set_active_pipeline_metadata(
-            session_id,
-            {
-                "status": "queued",
-                "brief": "Initializing forensic pipeline...",
-                "case_id": case_id,
-                "investigator_id": current_user.user_id,
-                "investigator_role": current_user.role.value,
-                "case_investigator_label": investigator_id,
-                "file_path": str(tmp_path),
-                "original_filename": file.filename,
-                "created_at": datetime.now(UTC).isoformat(),
-            },
-        )
+        session_metadata = {
+            "status": "queued",
+            "brief": "Initializing forensic pipeline...",
+            "case_id": case_id,
+            "investigator_id": current_user.user_id,
+            "investigator_role": current_user.role.value,
+            "case_investigator_label": investigator_id,
+            "file_path": str(tmp_path),
+            "original_filename": file.filename,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        await set_active_pipeline_metadata(session_id, session_metadata)
 
         if settings.app_env == "production":
             try:
@@ -633,7 +632,10 @@ async def start_investigation(
         else:
             pipeline = ForensicCouncilPipeline()
             set_active_pipeline(session_id, pipeline)
-            await update_active_pipeline_metadata(session_id, {"status": "running"})
+            await set_active_pipeline_metadata(
+                session_id,
+                {**session_metadata, "status": "running"},
+            )
             task = asyncio.create_task(
                 run_investigation_task(
                     session_id=session_id,

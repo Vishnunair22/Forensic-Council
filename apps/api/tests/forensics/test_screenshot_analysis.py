@@ -1,7 +1,6 @@
 """Tests for screenshot-specific forensic tools (font inconsistency, UI overlay forgery)."""
 
-import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import numpy as np

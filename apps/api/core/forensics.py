@@ -205,7 +205,7 @@ async def analyze_noise_consistency_safe(file_path: str, timeout: float = 30.0) 
             timeout=timeout,
         )
         return result
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "Noise consistency analysis timed out",
             file_path=file_path,

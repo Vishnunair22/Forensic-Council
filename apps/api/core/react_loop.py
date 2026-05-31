@@ -2806,7 +2806,7 @@ class ReActLoopEngine:
         tool_chain = self._get_prioritized_tools()
 
         logger.info(
-            f"Executing deterministic tool chain",
+            "Executing deterministic tool chain",
             agent_id=self.agent_id,
             tool_count=len(tool_chain),
             tools=[t["name"] for t in tool_chain]
@@ -2830,7 +2830,7 @@ class ReActLoopEngine:
 
             except Exception as e:
                 logger.error(
-                    f"Tool execution failed in deterministic mode",
+                    "Tool execution failed in deterministic mode",
                     tool=tool_name,
                     error=str(e)
                 )

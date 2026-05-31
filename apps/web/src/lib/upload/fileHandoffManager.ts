@@ -1,5 +1,5 @@
 import { __pendingFileStore } from "@/lib/pendingFileStore";
-import { sessionOnlyStorage, storage } from "@/lib/storage";
+import { sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import {

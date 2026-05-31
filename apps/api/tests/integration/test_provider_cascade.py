@@ -2,7 +2,6 @@ import io
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import httpx
 import pytest
@@ -30,7 +29,7 @@ async def test_cascade_gemini_success(tmp_path: Path):
     settings = Settings()
     # Force Gemini to be configured and at the front
     settings.vision_provider_chain = "gemini,groq_vision,local_ensemble"
-    
+
     mock_finding = GeminiVisionFinding(
         analysis_type="deep_forensic_analysis",
         model_used="gemini-2.5-flash",
@@ -48,7 +47,7 @@ async def test_cascade_gemini_success(tmp_path: Path):
         mock_deep.return_value = mock_finding
 
         res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent1")
-        
+
         assert res.model_used == "gemini-2.5-flash"
         assert res.content_description == "Gemini direct success"
         mock_deep.assert_called_once()
@@ -130,9 +129,9 @@ async def test_cascade_all_fail_local_success(tmp_path: Path):
     # Mock all API attempts to fail
     with patch.object(router.gemini_client, "deep_forensic_analysis", new_callable=AsyncMock) as mock_gemini, \
          patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        
+
         mock_gemini.side_effect = Exception("Gemini error")
-        
+
         # httpx calls return 500 for Groq and OpenRouter
         mock_error_resp = MagicMock(spec=httpx.Response)
         mock_error_resp.status_code = 500
@@ -196,9 +195,11 @@ async def test_cascade_skips_gemini_for_non_agent1(tmp_path: Path):
 
 @pytest.fixture
 def test_client():
-    from fastapi.testclient import TestClient
-    from api.main import app
     from unittest.mock import AsyncMock, patch
+
+    from fastapi.testclient import TestClient
+
+    from api.main import app
 
     mock_redis = AsyncMock()
     mock_redis.ping = AsyncMock(return_value=True)

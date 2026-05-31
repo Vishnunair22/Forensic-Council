@@ -386,6 +386,23 @@ class TestArbiterDeliberation:
         assert "error_rate" in m
 
     @pytest.mark.asyncio
+    async def test_per_agent_summary_populated_for_each_agent(self):
+        arbiter = _arbiter()
+        report = await arbiter.deliberate(_results("Agent1", "Agent2", "Agent3"))
+
+        assert set(report.per_agent_summary) == {"Agent1", "Agent2", "Agent3"}
+        for agent_id in ("Agent1", "Agent2", "Agent3"):
+            summary = report.per_agent_summary[agent_id]
+            assert summary["agent_name"]
+            assert summary["verdict"] in {
+                "AUTHENTIC",
+                "INCONCLUSIVE",
+                "NOT_APPLICABLE",
+                "SUSPICIOUS",
+            }
+            assert isinstance(summary["confidence_pct"], int)
+
+    @pytest.mark.asyncio
     async def test_manipulation_probability_in_range(self):
         arbiter = _arbiter()
         report = await arbiter.deliberate(_results("Agent1"))

@@ -4,9 +4,7 @@ Tests the full pipeline gracefully degrades when API keys are missing.
 Uses mocked infrastructure where needed.
 """
 import asyncio
-import os
 import uuid
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 async def test_degradation_flags_in_report():
@@ -36,8 +34,8 @@ async def test_degradation_flags_in_report():
 
 async def test_pipeline_init_degradation():
     """Verify pipeline records degradation flags during initialization."""
-    from orchestration.pipeline import ForensicCouncilPipeline
     from core.config import Settings
+    from orchestration.pipeline import ForensicCouncilPipeline
 
     settings = Settings(
         app_env="testing",

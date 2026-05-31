@@ -1242,13 +1242,13 @@ async def providers_health(request: Request):
     for the vision/text LLM providers in the cascade.
     """
     settings = _settings_from_app(request)
-    from core.provider_quota_guard import ProviderQuotaGuard
     from core.llm_client import is_placeholder_secret
-    
+    from core.provider_quota_guard import ProviderQuotaGuard
+
     # Parse chains
     v_chain_str = getattr(settings, "vision_provider_chain", "gemini,groq_vision,openrouter,local_ensemble")
     v_chain = [p.strip().lower() for p in v_chain_str.split(",") if p.strip()]
-    
+
     t_chain_str = getattr(settings, "text_provider_chain", "gemini,groq,openrouter,cerebras,local")
     t_chain = [p.strip().lower() for p in t_chain_str.split(",") if p.strip()]
 

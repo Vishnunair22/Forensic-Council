@@ -5,7 +5,6 @@ from typing import Any
 
 from core.file_classifier import CATEGORY_TO_RECOMMENDED_TOOLS, CATEGORY_TO_SKIP_TOOLS
 
-
 TOOL_TO_TASK_DESCRIPTION: dict[str, str] = {
     "neural_ela": "Run neural_ela for high-confidence manipulation detection",
     "neural_fingerprint": "Run neural_fingerprint for conceptual similarity detection",

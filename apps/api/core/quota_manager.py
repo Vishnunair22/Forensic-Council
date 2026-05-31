@@ -39,19 +39,19 @@ class QuotaManager:
     - MEDIUM: Per-agent text synthesis (post-analysis narratives)
     - LOW: ReAct LLM reasoning, self-reflection passes
     """
-    
+
     # Priority definitions
     PRIORITY_CRITICAL = "critical"
     PRIORITY_HIGH = "high"
     PRIORITY_MEDIUM = "medium"
     PRIORITY_LOW = "low"
-    
+
     def __init__(self, provider: str, rpm_limit: int, rpd_limit: int):
         self.provider = provider
         self.rpm_limit = rpm_limit
         self.rpd_limit = rpd_limit
         self.allocation = QuotaAllocation()
-        
+
         # Tracking
         self._minute_calls: dict[str, list[datetime]] = {
             "critical": [], "high": [], "medium": [], "low": []
@@ -61,9 +61,9 @@ class QuotaManager:
         }
         self._lock = asyncio.Lock()
         self._last_reset = datetime.now()
-    
+
     async def can_make_call(
-        self, 
+        self,
         priority: Literal["critical", "high", "medium", "low"],
         estimated_tokens: int = 1000
     ) -> tuple[bool, str]:
@@ -75,21 +75,21 @@ class QuotaManager:
         """
         async with self._lock:
             self._cleanup_old_calls()
-            
+
             # Calculate available quota per priority
             rpm_available = self._get_available_rpm(priority)
             rpd_available = self._get_available_rpd(priority)
-            
+
             # Check minute quota
             minute_used = len(self._minute_calls[priority])
             if minute_used >= rpm_available:
                 return False, f"{self.provider} RPM limit reached for {priority} priority"
-            
+
             # Check daily quota
             daily_used = self._daily_calls[priority]
             if daily_used >= rpd_available:
                 return False, f"{self.provider} daily limit reached for {priority} priority"
-            
+
             # Allow call
             return True, "ok"
 
@@ -117,9 +117,9 @@ class QuotaManager:
             priority=priority,
         )
         return False
-    
+
     async def record_call(
-        self, 
+        self,
         priority: Literal["critical", "high", "medium", "low"],
         success: bool = True
     ):
@@ -128,16 +128,16 @@ class QuotaManager:
             now = datetime.now()
             self._minute_calls[priority].append(now)
             self._daily_calls[priority] += 1
-            
+
             logger.debug(
-                f"Quota recorded",
+                "Quota recorded",
                 provider=self.provider,
                 priority=priority,
                 success=success,
                 minute_used=len(self._minute_calls[priority]),
                 daily_used=self._daily_calls[priority]
             )
-    
+
     def _get_available_rpm(self, priority: str) -> int:
         """Calculate available RPM for priority level."""
         allocations = {
@@ -148,7 +148,7 @@ class QuotaManager:
         }
         val = int(self.rpm_limit * allocations[priority])
         return max(1, val) if allocations[priority] > 0 and self.rpm_limit > 0 else val
-    
+
     def _get_available_rpd(self, priority: str) -> int:
         """Calculate available RPD for priority level."""
         allocations = {
@@ -159,20 +159,20 @@ class QuotaManager:
         }
         val = int(self.rpd_limit * allocations[priority])
         return max(1, val) if allocations[priority] > 0 and self.rpd_limit > 0 else val
-    
+
     def _cleanup_old_calls(self):
         """Remove calls older than 1 minute."""
         now = datetime.now()
         cutoff = now - timedelta(seconds=60)
-        
+
         for priority in self._minute_calls:
             self._minute_calls[priority] = [
                 ts for ts in self._minute_calls[priority] if ts > cutoff
             ]
-        
+
         # Reset daily at midnight
         if now.date() > self._last_reset.date():
-            self._daily_calls = {k: 0 for k in self._daily_calls}
+            self._daily_calls = dict.fromkeys(self._daily_calls, 0)
             self._last_reset = now
 
 

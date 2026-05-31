@@ -759,10 +759,8 @@ class ArbiterNarrativeMixin:
 
             if agent_brief and not is_fallback:
                 confidence_pct = round(metrics.get("confidence_score", 0) * 100)
-                error_rate_pct = round(metrics.get("error_rate", 0) * 100)
                 tools_ok = metrics.get("tools_succeeded", 0)
                 tools_total = metrics.get("total_tools_called", 0)
-                tools_na = metrics.get("tools_not_applicable", 0)
 
                 # Visual description: from visual_profile_findings
                 vis_desc_parts = []
@@ -989,7 +987,6 @@ If RAG context contradicts the computed finding data, trust the finding data, no
 
         # --- RAG: Inject relevant forensic knowledge citations into user context ---
         rag_context_block = ""
-        rag_failed = False
         try:
             from core.rag_forensic_knowledge import get_forensic_rag
 
@@ -1004,11 +1001,8 @@ If RAG context contradicts the computed finding data, trust the finding data, no
             )
             if citations:
                 rag_context_block = "\n\n" + rag.build_arbiter_context(citations, max_chars=800)
-            else:
-                rag_failed = True
         except Exception as _rag_err:
             logger.debug("RAG context retrieval failed (non-fatal)", error=str(_rag_err))
-            rag_failed = True
         # -------------------------------------------------------------------------
 
         # S-H-5: wrap user-derived tool / RAG / visual profile content in
@@ -1211,7 +1205,7 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
         lines = [line_one, line_two]
         if line_three:
             lines.append(line_three)
-        return "\n".join(_truncate_at_sentence(l) for l in lines)
+        return "\n".join(_truncate_at_sentence(line) for line in lines)
 
     async def _generate_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
@@ -1533,6 +1527,9 @@ Rules:
         """
         Build the layered prompt and call the LLM for arbiter-level narrative synthesis.
         """
+        client = getattr(self, "_synthesis_client", None) or LLMClient(
+            self.config, use_arbiter_tier=True
+        )
 
         # derived data from parameters
         active_agent_metrics = {
@@ -1718,7 +1715,6 @@ Rules:
 
         # ── RAG Layer: Forensic Knowledge Context ─────────────────────────
         rag_context_block = ""
-        rag_failed = False
         try:
             from core.rag_forensic_knowledge import get_forensic_rag
             rag = get_forensic_rag()
@@ -1738,13 +1734,14 @@ Rules:
                 rag_context_block = rag.build_arbiter_context(citations, max_chars=600)
         except Exception as _rag_err:
             logger.debug("RAG context retrieval failed (non-fatal) in arbiter synthesis", error=str(_rag_err))
-            rag_failed = True
 
         rag_layer = f"[RAG — FORENSIC KNOWLEDGE CONTEXT]\n{rag_context_block}" if rag_context_block else ""
 
         # ── Context Budget Management (Fix 5) ─────────────────────────────
         MAX_INPUT_CHARS = 5000
         user_parts = [
+            _wrap_untrusted("agent_capability_map", layer0),
+            "",
             layer1,
             "",
             _wrap_untrusted("per_agent_verdicts", layer2),
@@ -1797,7 +1794,11 @@ Rules:
 
         if len(user_content) > MAX_INPUT_CHARS:
             # Final trim: shorten Layer 1 scene description
-            _l1_short_lines = [l for l in layer1.split("\n") if not l.startswith("Scene:") or len(l) < 100]
+            _l1_short_lines = [
+                line
+                for line in layer1.split("\n")
+                if not line.startswith("Scene:") or len(line) < 100
+            ]
             layer1_short = "\n".join(_l1_short_lines)
             user_parts = [
                 layer1_short,
@@ -1941,7 +1942,7 @@ Rules:
                 results: dict[str, str] = {}
                 agent_items = list(active_agent_results.items())
 
-                for i, (aid, res) in enumerate(agent_items):
+                for aid, res in agent_items:
                     try:
                         await _step(f"Summarizing {AGENT_NAMES.get(aid, aid)} findings.")
                         narr = await asyncio.wait_for(
@@ -2002,16 +2003,16 @@ Rules:
                     # Enforce strict grounding / check for boilerplate authenticity language:
                     is_v_sent_generic = _is_generic_executive_summary(v_sent)
                     is_exec_sum_generic = _is_generic_executive_summary(exec_sum)
-                    
+
                     forensic_markers = (
-                        "score", "ratio", "hash", "sha-256", "density", "ocr", "exif", 
-                        "hex", "signature", "compression", "metadata", "splicing", "ghost", 
+                        "score", "ratio", "hash", "sha-256", "density", "ocr", "exif",
+                        "hex", "signature", "compression", "metadata", "splicing", "ghost",
                         "diarization", "prosody", "amplitude", "frequency", "flow", "yolo",
                         "trufor", "busternet", "ela", "fft", "prnu"
                     )
                     has_metrics_v = any(m in v_sent.lower() for m in forensic_markers)
                     has_metrics_ex = any(m in exec_sum.lower() for m in forensic_markers)
-                    
+
                     if is_v_sent_generic or is_exec_sum_generic or not has_metrics_v or not has_metrics_ex:
                         logger.warning(
                             "LLM Arbiter synthesis relied on generic/boilerplate authenticity language "

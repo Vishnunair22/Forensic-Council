@@ -257,7 +257,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (key) {
         try {
           storage.setItem(key, completedAgents, true);
-        } catch (_writeErr) {
+        } catch {
           // Truncate findings_preview to fit within localStorage quota (~5MB)
           const truncated = completedAgents.map((a) => ({
             ...a,
@@ -268,7 +268,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           }));
           try {
             storage.setItem(key, truncated, true);
-          } catch (_quotaErr) {
+          } catch {
             console.warn("[Investigation] localStorage quota exceeded — agent state not persisted");
           }
         }
@@ -618,7 +618,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     let cancelled = false;
 
     const startPendingAnalysis = async () => {
-    let pending = await fileHandoffManager.recoverFile();
+    const pending = await fileHandoffManager.recoverFile();
     if (cancelled) return;
     if (!pending) {
       if (autoStartBlocking || sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") {

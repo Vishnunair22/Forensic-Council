@@ -49,8 +49,8 @@ async def test_ml_subprocess_timeout_returns_error():
 @pytest.mark.asyncio
 async def test_agent_timeout_is_handled_gracefully():
     """Agent timeout should produce graceful error result with partial findings."""
-    from orchestration.pipeline_phases import run_agents_concurrent
     from core.config import Settings
+    from orchestration.pipeline_phases import run_agents_concurrent
 
     settings = Settings(
         app_env="testing",
@@ -72,7 +72,6 @@ async def test_agent_timeout_is_handled_gracefully():
         metadata={"mime_type": "image/jpeg"},
     )
 
-    from core.agent_registry import get_agent_registry
 
     class HangingAgent:
         agent_id = "Agent1"
@@ -99,7 +98,7 @@ async def test_agent_timeout_is_handled_gracefully():
         results = await run_agents_concurrent(pipeline, artifact, artifact.session_id)
 
     assert len(results) > 0
-    agent1_result = next((r for r in results if r.agent_id == "Agent1"))
+    agent1_result = next(r for r in results if r.agent_id == "Agent1")
     assert agent1_result.error is not None or agent1_result.agent_active is False
 
 
@@ -142,7 +141,6 @@ async def test_ocr_timeout_scales_with_resolution(tmp_path, mock_artifact):
     huge_img.save(path, "PNG")
     mock_artifact.file_path = path
 
-    from unittest.mock import PropertyMock
 
     with (
         patch("os.path.exists", return_value=True),

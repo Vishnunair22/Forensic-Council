@@ -272,7 +272,7 @@ class MetadataHandlers(BaseToolHandler):
             shared = self.agent.inter_agent_bus.get_visual_profile(str(self.agent.session_id)) or {}
             gemini_context = str(shared.get("content_description") or "")
             gemini_text = str(shared.get("metadata", {}).get("extracted_text") or "")
-            
+
         gemini_validation = {}
         if gemini_context or gemini_text:
             has_time = bool(result.get("DateTimeOriginal") or result.get("datetime_original") or result.get("CreationDate"))
@@ -282,13 +282,13 @@ class MetadataHandlers(BaseToolHandler):
                 if any(x in gemini_text.lower() for x in ["date", "time", "202", "am", "pm", ":"]):
                     gemini_validation["note"] += "However, Gemini visual analysis extracted potential date/time text directly from the image content."
                     gemini_validation["corroborated_from_visuals"] = True
-            
+
             make = str(result.get("make") or "").lower()
             if make and "screenshot" in gemini_context.lower() and make not in gemini_context.lower():
                 note = gemini_validation.get("note", "")
                 gemini_validation["note"] = note + f" Note: EXIF claims device '{make}', but visual analysis identifies this as a screenshot."
                 gemini_validation["hallucination_risk"] = True
-            
+
             if gemini_validation:
                 result["gemini_cross_validation"] = gemini_validation
 

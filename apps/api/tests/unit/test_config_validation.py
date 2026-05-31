@@ -26,6 +26,7 @@ def _strong_env(monkeypatch, **overrides):
         "SIGNING_KEY": "VeryStr0ngKeyWithH!ghEntr0py_1234567890",
         "JWT_SECRET_KEY": "VeryStr0ngKeyWithH!ghEntr0py_1234567890",
         "GEMINI_API_KEY": "AIzaSyFakeKey1234567890",
+        "GEMINI_API_KEY_POLICY_OK": "true",
         "QDRANT_API_KEY": "qdrant_test_key_1234567890",
         "BOOTSTRAP_ADMIN_PASSWORD": "Str0ngAdm!nPwd_XYZ789",
         "BOOTSTRAP_INVESTIGATOR_PASSWORD": "Str0ngInv!Pwd_XYZ789",
@@ -58,6 +59,13 @@ def test_validate_production_settings_placeholder_gemini_key(monkeypatch):
     """Placeholder GEMINI_API_KEY should fail validation."""
     _strong_env(monkeypatch, GEMINI_API_KEY="your_gemini_key_here")
     with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+        validate_production_settings()
+
+
+def test_validate_production_settings_requires_gemini_policy_ack(monkeypatch):
+    """Configured Gemini keys require explicit policy acknowledgement in production."""
+    _strong_env(monkeypatch, GEMINI_API_KEY_POLICY_OK="false")
+    with pytest.raises(ValueError, match="GEMINI_API_KEY_POLICY_OK"):
         validate_production_settings()
 
 

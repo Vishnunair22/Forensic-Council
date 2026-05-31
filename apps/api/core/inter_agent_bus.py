@@ -519,7 +519,6 @@ class InterAgentBus:
 
     def _persist_visual_profile(self, session_id: str, data: dict, version: int) -> None:
         """Persist visual profile to database (overridable for testing)."""
-        import json
         from datetime import UTC, datetime
         cache_key = f"visual_profile_persist:{session_id}:v{version}"
         self._visual_profile[cache_key] = {
@@ -530,8 +529,6 @@ class InterAgentBus:
 
     def _restore_visual_profile(self, session_id: str, version: int | None) -> dict | None:
         """Restore visual profile from persistent storage."""
-        import json
-        from datetime import UTC, datetime
         # Check persisted snapshot
         if version:
             cache_key = f"visual_profile_persist:{session_id}:v{version}"
