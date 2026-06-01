@@ -562,6 +562,17 @@ export const useSimulation = ({
                     }
                   }
                   break;
+
+                case "DEGRADED":
+                  toast.warning({
+                    title: "Analysis Degraded",
+                    description: update.message || "Some forensic capabilities are unavailable. Results may be limited.",
+                  });
+                  break;
+
+                default:
+                  dbg.warn("[WebSocket] Unhandled event type:", update.type);
+                  break;
           }
         };
 

@@ -56,12 +56,13 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
       console.log(`[PROXY] ${req.method} ${url}`);
     }
     try {
+      const isReportExport = apiPath.includes("/report");
       const upstream = await fetch(url, {
         method: req.method,
         headers,
         body,
         redirect: "manual",
-        signal: AbortSignal.timeout(apiPath.startsWith("/api/v1/report") ? 60_000 : 30_000),
+        signal: AbortSignal.timeout(isReportExport ? 60_000 : 30_000),
       });
       if (RETRYABLE_STATUSES.has(upstream.status)) {
         const isIdempotent = ["GET", "HEAD", "OPTIONS", "PUT", "DELETE"].includes(req.method);

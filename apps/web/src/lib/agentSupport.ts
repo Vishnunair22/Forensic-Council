@@ -47,7 +47,7 @@ export function supportedAgentIdsForMime(
 
   const normalized = mimeType.toLowerCase();
   if (normalized.startsWith("image/")) return new Set(["Agent1", "Agent3", "Agent5"]);
-  return new Set(["Agent5"]);
+  return new Set();
 }
 
 export function isAgentSupportedForMime(
