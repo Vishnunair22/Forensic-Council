@@ -8,6 +8,43 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
   }
 }
 
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+): Promise<Response> {
+  const isRetryable = (err: Error) => {
+    const msg = err.message ?? "";
+    return (
+      msg.includes("ECONNREFUSED") ||
+      msg.includes("EAI_AGAIN") ||
+      msg.includes("ENOTFOUND") ||
+      msg.includes("fetch failed")
+    );
+  };
+
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = Math.min(200 * 2 ** (attempt - 1) + Math.random() * 100, 2000);
+      console.log(`[AUTH-DEMO] retry ${attempt}/${maxRetries} after ${Math.round(delay)}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeout);
+      return response;
+    } catch (err) {
+      clearTimeout(timeout);
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (!isRetryable(lastError)) break;
+    }
+  }
+  throw lastError ?? new Error("Request failed after retries");
+}
+
 export async function POST() {
   const fallbackTarget = process.env.RUNNING_IN_DOCKER === "1"
     ? "http://backend:8000"
@@ -23,11 +60,21 @@ export async function POST() {
   body.set("username", "investigator");
   body.set("password", password);
 
-  const response = await fetch(`${target}/api/v1/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
+  let response: Response;
+  try {
+    response = await fetchWithRetry(`${target}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[AUTH-DEMO] backend unreachable after retries: ${msg}`);
+    return NextResponse.json(
+      { error: "Authentication service unavailable. Please try again." },
+      { status: 503 },
+    );
+  }
   const data = await responseJson(response);
   if (!response.ok) {
     return NextResponse.json(

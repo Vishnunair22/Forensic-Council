@@ -22,7 +22,9 @@ REQUIRED_SECTIONS = [
     "reliability_notes"
 ]
 
-# Blacklist of prohibited vendor/model phrases to ensure neutrality
+# Blacklist of prohibited vendor/model phrases to ensure report neutrality.
+# "claude" stays here so vendor names are scrubbed from output even though the
+# app never calls Claude — keep it.
 PROHIBITED_WORDS = [
     "gemini", "groq", "cerebras", "openai", "llama", "google", "meta", "gpt-", "claude", "llm assisted", "llm-assisted"
 ]

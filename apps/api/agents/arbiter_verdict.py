@@ -458,6 +458,11 @@ def calculate_manipulation_probability(
     elif _assessment == "minor" and base_prob < 0.15:
         base_prob = max(base_prob, 0.15)
 
+    # ── Single-signal downgrade ───────────────────────────────────────────
+    # A single weak signal must not drive a "manipulated"/"AI-generated" verdict.
+    if signals_count < 2 and base_prob >= 0.5:
+        base_prob = min(base_prob, 0.45)
+
     final_prob = round(min(ForensicPolicy.MANIP_PROBABILITY_CAP, base_prob), 3)
     return final_prob, signals_count
 

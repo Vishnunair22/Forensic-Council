@@ -60,8 +60,6 @@ x-backend-env: &backend-env
   LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-false}
   VISION_PROVIDER_CHAIN: ${VISION_PROVIDER_CHAIN:-local_ensemble}
   GROQ_VISION_API_KEY: ${GROQ_VISION_API_KEY:-}
-  OPENROUTER_ENABLED: ${OPENROUTER_ENABLED:-false}
-  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
   # Docker stacks use the worker queue by default (DOCKER_USE_REDIS_WORKER=true).
   # Direct `uv run` uses USE_REDIS_WORKER=false from .env for in-process mode.
   # Keep these separate so host-local defaults do not silently disable the
@@ -105,6 +103,8 @@ x-backend-env: &backend-env
   # backend and worker run simultaneous pools on a mem_limit: 4g budget.
   # Set to 0 in .env to restore auto (min(4, cpu_count)) for bare-metal.
   FORENSIC_MAX_WORKERS: ${FORENSIC_MAX_WORKERS:-2}
+  ENABLE_AUDIO_MODELS: ${ENABLE_AUDIO_MODELS:-false}
+  ENABLE_VIDEO_MODELS: ${ENABLE_VIDEO_MODELS:-false}
 
 services:
   # --------------------------------------------------------------------------

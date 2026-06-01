@@ -955,11 +955,14 @@ class LLMClient:
                     # Fast-fail on 429 — skip to next candidate with short backoff.
                     if resp.status_code == 429:
                         await quota_mgr.record_call(priority, success=False)
+                        # Honor Retry-After header if provided
+                        ra_header = resp.headers.get("Retry-After")
+                        delay = float(ra_header) if ra_header else 5.0
                         logger.warning(
                             f"Synthesis {target_provider}/{target_model} rate-limited — "
-                            f"trying next candidate"
+                            f"trying next candidate (retry-after={delay:.0f}s)"
                         )
-                        await asyncio.sleep(5.0)
+                        await asyncio.sleep(delay)
                         continue
 
                     # Fast-fail on 413 — prompt too large for this model, try next.

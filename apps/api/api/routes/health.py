@@ -152,10 +152,10 @@ async def providers_health(request: Request):
     from core.llm_client import is_placeholder_secret
     from core.provider_quota_guard import ProviderQuotaGuard
 
-    v_chain_str = getattr(settings, "vision_provider_chain", "gemini,groq_vision,openrouter,local_ensemble")
+    v_chain_str = getattr(settings, "vision_provider_chain", "gemini,local_ensemble")
     v_chain = [p.strip().lower() for p in v_chain_str.split(",") if p.strip()]
 
-    t_chain_str = getattr(settings, "text_provider_chain", "gemini,groq,openrouter,cerebras,local")
+    t_chain_str = getattr(settings, "text_provider_chain", "groq,gemini,cerebras,template")
     t_chain = [p.strip().lower() for p in t_chain_str.split(",") if p.strip()]
 
     providers_status = {}
@@ -190,25 +190,6 @@ async def providers_health(request: Request):
             "rpm_limit": settings.groq_vision_rpm_limit,
             "current_rpd": groq_rpd,
             "rpd_limit": settings.groq_vision_rpd_limit,
-        },
-    }
-
-    or_enabled = getattr(settings, "openrouter_enabled", False)
-    or_key = settings.openrouter_api_key
-    or_configured = bool(or_key and not is_placeholder_secret(or_key))
-    or_models = [m.strip() for m in settings.openrouter_vision_models.split(",") if m.strip()]
-    or_rpm, or_rpd = 0, 0
-    if or_models:
-        or_rpm, or_rpd = ProviderQuotaGuard.get_current_counts("openrouter", or_models[0])
-    providers_status["openrouter"] = {
-        "enabled": "openrouter" in v_chain or "openrouter" in t_chain,
-        "configured": or_configured and or_enabled,
-        "models": or_models,
-        "quota": {
-            "current_rpm": or_rpm,
-            "rpm_limit": settings.openrouter_rpm_limit,
-            "current_rpd": or_rpd,
-            "rpd_limit": settings.openrouter_rpd_limit,
         },
     }
 

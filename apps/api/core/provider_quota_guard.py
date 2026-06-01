@@ -294,18 +294,13 @@ def configure_provider_quota_guards(settings) -> None:
     )
     ProviderQuotaGuard.configure(
         "gemini",
-        rpm_limit=getattr(settings, "gemini_rpm_limit", 10),
+        rpm_limit=getattr(settings, "gemini_rpm_limit", 5),   # was 10
         rpd_limit=getattr(settings, "gemini_rpd_limit", 1500),
     )
     ProviderQuotaGuard.configure(
         "groq_vision",
         rpm_limit=getattr(settings, "groq_vision_rpm_limit", 15),
         rpd_limit=getattr(settings, "groq_vision_rpd_limit", 14400),
-    )
-    ProviderQuotaGuard.configure(
-        "openrouter",
-        rpm_limit=getattr(settings, "openrouter_rpm_limit", 20),
-        rpd_limit=getattr(settings, "openrouter_rpd_limit", 200),
     )
     ProviderQuotaGuard.configure(
         "cerebras",
