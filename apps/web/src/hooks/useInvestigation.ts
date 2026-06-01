@@ -374,6 +374,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       arbiterControl.abort();
       resetSimulationHook();
       clearInvestigationPersistence();
+      try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch {}
       lastSessionIdRef.current = null;
       completedAgentsRef.current = [];
       analysisCompleteSoundedRef.current = false;
@@ -469,7 +470,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
                 updatedAt: Date.now(),
                 clientSha256: pendingClientSha256,
               }),
-              true,
             );
           } catch {
             throw new Error("Could not compute SHA-256 custody hash before upload.");
@@ -713,7 +713,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         updatedAt: Date.now(),
         clientSha256: existingMeta?.clientSha256 ?? null,
       }),
-      true,
     );
     triggerAnalysis(pending);
     };
@@ -750,8 +749,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     setPhase(restoredPhase);
     startSimulation();
-    if (savedAgents.length > 0) {
-      restoreSimulationState(savedAgents, "awaiting_decision");
+    const savedAgentCount = savedAgents.length;
+    const restoredStatus: "awaiting_decision" | "analyzing" = 
+      savedAgentCount > 0 ? "awaiting_decision" : "analyzing";
+    if (savedAgentCount > 0) {
+      restoreSimulationState(savedAgents, restoredStatus);
     }
     setAnalysisStreamReady(false);
     setUploadPhaseText("Reconnecting to analysis stream");

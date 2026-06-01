@@ -59,6 +59,13 @@ export function GlobalLoadingOverlay() {
   };
 
   useEffect(() => {
+    // Guard: never dismiss while a handoff is actively in progress, regardless of pathname
+    if (
+      sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" &&
+      sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true"
+    ) {
+      return;
+    }
     if (pathname === "/" && sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true") {
       return;
     }

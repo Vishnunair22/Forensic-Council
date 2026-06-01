@@ -220,8 +220,11 @@ class WorkingMemory:
                 state[k] = v
             end
 
-            if type(state.tasks) == 'table' and next(state.tasks) == nil then
-                setmetatable(state.tasks, cjson.empty_array)
+            local list_fields = {"tasks", "grounded_findings", "contradiction_register", "followup_decisions"}
+            for _, field in ipairs(list_fields) do
+                if type(state[field]) == 'table' and next(state[field]) == nil then
+                    setmetatable(state[field], cjson.empty_array)
+                end
             end
 
             local new_json = cjson.encode(state)
@@ -257,8 +260,11 @@ class WorkingMemory:
 
             if not found then return nil end
 
-            if type(state.tasks) == 'table' and next(state.tasks) == nil then
-                setmetatable(state.tasks, cjson.empty_array)
+            local list_fields = {"tasks", "grounded_findings", "contradiction_register", "followup_decisions"}
+            for _, field in ipairs(list_fields) do
+                if type(state[field]) == 'table' and next(state[field]) == nil then
+                    setmetatable(state[field], cjson.empty_array)
+                end
             end
 
             local new_json = cjson.encode(state)
@@ -282,11 +288,12 @@ class WorkingMemory:
         else:
             state_dict = json.loads(payload)
 
-        tasks = state_dict.get("tasks", [])
-        if isinstance(tasks, dict):
-            state_dict["tasks"] = [] if not tasks else list(tasks.values())
-        elif tasks is None:
-            state_dict["tasks"] = []
+        for key_name in ["tasks", "grounded_findings", "contradiction_register", "followup_decisions"]:
+            val = state_dict.get(key_name, [])
+            if isinstance(val, dict):
+                state_dict[key_name] = [] if not val else list(val.values())
+            elif val is None:
+                state_dict[key_name] = []
 
         for task in state_dict.get("tasks", []):
             if isinstance(task, dict) and isinstance(task.get("status"), TaskStatus):

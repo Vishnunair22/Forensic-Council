@@ -1017,6 +1017,14 @@ export const useSimulation = ({
   // Restore any pending HITL checkpoint that survived a page refresh
   useEffect(() => {
     try {
+      // Only restore HITL checkpoint if this is a genuine reconnect,
+      // not a fresh upload initiated from the home page
+      const isFreshUpload = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true" ||
+                            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
+      if (isFreshUpload) {
+        storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT);
+        return;
+      }
       const stored = storage.getItem<HITLCheckpoint>(STORAGE_KEYS.HITL_CHECKPOINT, true);
       if (stored) setHitlCheckpoint(stored);
     } catch (e) { dbg.warn("[Simulation] HITL checkpoint restore failed:", e); }

@@ -33,7 +33,6 @@ export class FileHandoffManager {
         updatedAt: Date.now(),
         clientSha256: options?.clientSha256 ?? null,
       }),
-      true,
     );
 
     try {

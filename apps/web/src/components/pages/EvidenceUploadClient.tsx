@@ -10,7 +10,7 @@ import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 
 import { useInvestigation } from "@/hooks/useInvestigation";
 import { useSound } from "@/hooks/useSound";
-import { storage } from "@/lib/storage";
+import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { resetActiveInvestigation } from "@/lib/appReset";
@@ -83,9 +83,15 @@ export function EvidenceUploadClient() {
     // On bfcache restore with no session, navigate home rather than reloading
     // to avoid potential infinite reload loops in some browsers.
     const onShow = (e: PageTransitionEvent) => {
-      if (e.persisted && !storage.getItem(STORAGE_KEYS.SESSION_ID)) {
-        loadingOverlayController.forceDismiss();
-        router.replace("/");
+      if (e.persisted) {
+        // Defer check by one tick so sessionStorage writes from triggerAnalysis can complete
+        setTimeout(() => {
+          if (!storage.getItem(STORAGE_KEYS.SESSION_ID) && 
+              sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) !== "1") {
+            loadingOverlayController.forceDismiss();
+            router.replace("/");
+          }
+        }, 200);
       }
     };
     window.addEventListener("pageshow", onShow);
