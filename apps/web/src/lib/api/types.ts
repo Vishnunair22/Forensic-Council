@@ -71,6 +71,13 @@ export interface ReportDTO {
   applicable_agent_count?: number;
   skipped_agents?: Record<string, string>;
   analysis_coverage_note?: string;
+  agent_summaries?: Array<{
+    agent_id: string;
+    agent_name?: string;
+    status?: string;
+    completed_at?: string;
+    message?: string;
+  }>;
   per_agent_summary?: Record<
     string,
     {

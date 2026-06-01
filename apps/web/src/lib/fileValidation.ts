@@ -38,6 +38,11 @@ export function validateEvidenceFile(file: File): string | null {
 
   const hasAllowedMime = !!mimeType && ALLOWED_MIME_TYPES.has(mimeType);
 
+  // Backend only supports image MIME types — reject audio/video at frontend
+  if (mimeType && (mimeType.startsWith("audio/") || mimeType.startsWith("video/"))) {
+    return `File type "${mimeType}" is not currently supported. Only image files (JPG, PNG, TIFF, WEBP, GIF, BMP) are accepted.`;
+  }
+
   if (!hasAllowedMime && !hasAllowedExt) {
     return `File type "${file.type || ext || "unknown"}" is not supported. Accepted: Images (JPG, PNG, TIFF, WEBP, GIF, BMP).`;
   }

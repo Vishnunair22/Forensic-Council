@@ -34,7 +34,7 @@ describe("BUG-23 — DynamicResultClient motion animation has no delay", () => {
     expect(container.querySelector("[data-testid='result-layout']")).toBeInTheDocument();
   });
 
-  it("uses duration 0.45 and no delay in transition", () => {
+  it("uses duration 0.8 and no delay in transition", () => {
     render(
       React.createElement(
         require("@/components/pages/DynamicResultClient").DynamicResultClient,
@@ -45,7 +45,7 @@ describe("BUG-23 — DynamicResultClient motion animation has no delay", () => {
     const callProps = mockMotionDiv.mock.calls[0][0];
     const transition = callProps.transition as any;
     expect(transition).toBeDefined();
-    expect(transition.duration).toBe(0.45);
+    expect(transition.duration).toBe(0.8);
     expect(transition.delay).toBeUndefined();
   });
 });

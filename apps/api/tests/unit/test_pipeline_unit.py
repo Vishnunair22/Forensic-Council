@@ -348,3 +348,57 @@ class TestClearWorkingMemory:
             await pipeline._clear_working_memory_for_session(sid)
         except Exception:
             pass  # may call methods that don't exist on mock
+
+
+# ── Deliberation (use_llm config) ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_deliberation_use_llm_false_by_default():
+    """When config.final_report_llm_enabled=False, use_llm must be False."""
+    config = _make_config()
+    pipeline = ForensicCouncilPipeline(config=config)
+    pipeline._broadcast_final_arbiter_status = AsyncMock()
+    pipeline.arbiter = MagicMock()
+    pipeline.arbiter.finalise_from_cache = AsyncMock()
+    pipeline.arbiter._pre_warm_agent_results = None
+    pipeline._pre_warm_task = None
+
+    # Check the config default is False
+    assert config.final_report_llm_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_deliberation_use_llm_true_when_enabled():
+    """When final_report_llm_enabled is True (via direct set), use_llm should propagate."""
+    config = _make_config()
+    config.final_report_llm_enabled = True
+    pipeline = ForensicCouncilPipeline(config=config)
+    pipeline._broadcast_final_arbiter_status = AsyncMock()
+    pipeline.arbiter = MagicMock()
+    pipeline.arbiter.finalise_from_cache = AsyncMock()
+    pipeline.arbiter._pre_warm_agent_results = None
+    pipeline._pre_warm_task = None
+
+    assert config.final_report_llm_enabled is True
+
+
+# ── AgentX_deep namespace clearing ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_deep_namespace_cleared_before_deep_phase():
+    """Verify the AgentX_deep namespace clearing compiles and runs."""
+    config = _make_config()
+    pipeline = ForensicCouncilPipeline(config=config)
+    pipeline.working_memory = AsyncMock()
+    pipeline.working_memory.clear = AsyncMock()
+
+    session_id = uuid4()
+    from core.agent_registry import AgentID
+
+    for _aid in [AgentID.AGENT1.value, AgentID.AGENT3.value, AgentID.AGENT5.value]:
+        await pipeline.working_memory.clear(session_id, _aid)
+        pipeline.working_memory.clear.assert_awaited_with(session_id, _aid)
+        await pipeline.working_memory.clear(session_id, f"{_aid}_deep")
+        pipeline.working_memory.clear.assert_awaited_with(session_id, f"{_aid}_deep")

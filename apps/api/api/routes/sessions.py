@@ -926,9 +926,9 @@ class ResumeRequest(_BaseModel):
     """Request body for the resume endpoint."""
 
     deep_analysis: bool
-    expected_phase: str | None = None
+    expected_phase: str
     """
-    Optional phase gate token to prevent writing to the wrong decision key.
+    Phase gate token to prevent writing to the wrong decision key.
     - "initial"  → expects pipeline status to be awaiting_decision
     - "deep"     → expects pipeline status to be awaiting_deep_report
     When provided, the request is rejected if the actual pipeline phase does

@@ -5,6 +5,7 @@ import { useSimulation } from "@/hooks/useSimulation";
 import { useRouter } from "next/navigation";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
+import { authService } from "@/lib/upload/authService";
 import type { HITLCheckpoint } from "@/lib/api/types";
 
 jest.mock("next/navigation", () => ({
@@ -13,6 +14,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/hooks/useSimulation", () => ({
   useSimulation: jest.fn(),
+}));
+
+jest.mock("@/lib/crypto/fileHash", () => ({
+  computeFileSha256: jest.fn(() => Promise.resolve({ hex: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" })),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -27,6 +32,25 @@ jest.mock("@/lib/api", () => ({
 if (typeof window !== "undefined") {
   window.URL.createObjectURL = jest.fn(() => "mock-url");
   window.URL.revokeObjectURL = jest.fn();
+  // JSDOM never fires Image onload/onerror for blob URLs, which hangs
+  // triggerAnalysis indefinitely. Provide a mock Image that fires onload
+  // on the next tick when src is assigned.
+  const OriginalImage = window.Image;
+  window.Image = jest.fn().mockImplementation(function MockImage() {
+    const img = new OriginalImage(1, 1);
+    let _src = "";
+    Object.defineProperty(img, "src", {
+      get() { return _src; },
+      set(url: string) {
+        _src = url;
+        setTimeout(() => {
+          img.dispatchEvent(new Event("load"));
+        }, 0);
+      },
+      configurable: true,
+    });
+    return img;
+  }) as unknown as typeof window.Image;
 }
 
 const mockPlaySound = jest.fn();
@@ -73,6 +97,7 @@ function setupSimulationMock(
 describe("useInvestigation Hook", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    authService.reset();
     storage.clearAllForensicKeys();
     sessionOnlyStorage.clearAllForensicKeys();
     storage.setItem("forensic_auth_ok", "1");
@@ -145,8 +170,7 @@ describe("useInvestigation Hook", () => {
   });
 
   test("auto-start retries after worker warmup without staying in-flight", async () => {
-    jest.useFakeTimers();
-    const testFile = new File(["audio"], "evidence.wav", { type: "audio/wav" });
+    const testFile = new File(["img"], "evidence.jpg", { type: "image/jpeg" });
     __pendingFileStore.file = testFile;
     sessionOnlyStorage.setItem("forensic_auto_start", "true");
     (api.startInvestigation as jest.Mock)
@@ -155,17 +179,14 @@ describe("useInvestigation Hook", () => {
 
     renderHook(() => useInvestigation(mockPlaySound));
 
-    await waitFor(() => expect(api.startInvestigation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.startInvestigation).toHaveBeenCalledTimes(1), { timeout: 10000 });
 
-    await act(async () => {
-      jest.advanceTimersByTime(15000);
-      await Promise.resolve();
-    });
-
-    await waitFor(() => expect(api.startInvestigation).toHaveBeenCalledTimes(2));
+    await waitFor(
+      () => expect(api.startInvestigation).toHaveBeenCalledTimes(2),
+      { timeout: 30000 },
+    );
     expect(mockConnectWebSocket).toHaveBeenCalledWith("retry-sid");
-    jest.useRealTimers();
-  });
+  }, 60000);
 
   test("reconnect not_found clears stale session and returns home with upload prompt", async () => {
     storage.setItem("forensic_session_id", "missing-sid");

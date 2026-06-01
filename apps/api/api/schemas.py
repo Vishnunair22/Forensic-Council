@@ -68,6 +68,16 @@ class InvestigationResponse(BaseModel):
     content_hash: str | None = None
     client_hash_verified: bool = False
     dispatch_mode: str = "in_process"
+    detected_mime: str | None = None
+    applicable_agents: list[str] = Field(default_factory=list)
+
+
+class CapabilitiesResponse(BaseModel):
+    """Backend capability contract for frontend policy sync."""
+
+    supported_mime_types: list[str]
+    max_file_size_bytes: int
+    agent_capabilities: dict[str, list[str]]
 
 
 class AgentFindingDTO(BaseModel):

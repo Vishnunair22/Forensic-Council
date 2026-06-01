@@ -384,7 +384,7 @@ class TestResumeEndpoint:
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth()),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "initial"},
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -418,7 +418,7 @@ class TestResumeEndpoint:
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth()),
-                json={"deep_analysis": True},
+                json={"deep_analysis": True, "expected_phase": "initial"},
             )
         assert resp.status_code == 200
         body = resp.json()
@@ -731,7 +731,7 @@ class TestOwnershipEnforcement:
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth(user_id=OTHER_USER_ID)),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "deep"},
             )
         assert resp.status_code == 403
 
@@ -765,7 +765,7 @@ class TestInputValidation:
         resp = client.post(
             "/api/v1/sessions/not-a-uuid!!/resume",
             headers=_csrf(client, _auth()),
-            json={"deep_analysis": False},
+            json={"deep_analysis": False, "expected_phase": "deep"},
         )
         assert resp.status_code in (404, 422)
 
@@ -1021,7 +1021,7 @@ class TestResumeIdempotency:
             resp1 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth()),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "initial"},
             )
 
             mock_pipeline.deep_analysis_decision_event.is_set.return_value = True
@@ -1030,7 +1030,7 @@ class TestResumeIdempotency:
             resp2 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth()),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "initial"},
             )
 
         assert resp1.status_code == 200, f"First resume failed: {resp1.status_code}"
@@ -1059,13 +1059,13 @@ class TestResumeIdempotency:
             resp1 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth(user_id=OTHER_USER_ID)),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "initial"},
             )
 
             resp2 = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth(user_id=OTHER_USER_ID)),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "initial"},
             )
 
         assert resp1.status_code == 403, f"Wrong owner should get 403: {resp1.status_code}"
@@ -1298,10 +1298,10 @@ class TestResumeTerminalStatus:
             resp = client.post(
                 f"/api/v1/sessions/{SESSION_ID}/resume",
                 headers=_csrf(client, _auth()),
-                json={"deep_analysis": False},
+                json={"deep_analysis": False, "expected_phase": "deep"},
             )
 
-        assert resp.status_code == 400, (
-            f"Resuming a '{terminal_status}' investigation must return 400, "
-            f"got {resp.status_code}: {resp.text}"
+        assert resp.status_code == 409, (
+            f"Resuming a '{terminal_status}' investigation must return 409 "
+            f"(phase mismatch before terminal check), got {resp.status_code}: {resp.text}"
         )

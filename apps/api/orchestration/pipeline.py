@@ -821,15 +821,31 @@ class ForensicCouncilPipeline:
         # synthesis still uses the configured LLM provider; the arbiter report uses
         # grounded deterministic synthesis to avoid a late provider stall blocking
         # the whole investigation after all tools have already finished.
-        use_llm = False
+        use_llm = self.config.final_report_llm_enabled
 
-        # Finalization must not be held hostage by the speculative pre-warm
-        # task. It is an optimization only; use the already collected agent
-        # results directly and cancel any stale background pre-warm.
-        if self._pre_warm_task:
-            self._pre_warm_task.cancel()
-            self._pre_warm_task = None
-        self.arbiter.clear_pre_warm_cache()
+        # Preserve pre-warm if it matches the current arbiter results hash,
+        # otherwise cancel and replace.
+        _pre_warm_ok = False
+        if self._pre_warm_task and not self._pre_warm_task.done():
+            try:
+                _cached = getattr(self.arbiter, "_pre_warm_agent_results", None)
+                if _cached is not None:
+                    import hashlib
+
+                    _old_hash = hashlib.sha256(
+                        str(sorted(_cached.items())).encode()
+                    ).hexdigest()[:16]
+                    _new_hash = hashlib.sha256(
+                        str(sorted(arbiter_results.items())).encode()
+                    ).hexdigest()[:16]
+                    _pre_warm_ok = _old_hash == _new_hash
+            except Exception:
+                pass
+        if not _pre_warm_ok:
+            if self._pre_warm_task:
+                self._pre_warm_task.cancel()
+                self._pre_warm_task = None
+            self.arbiter.clear_pre_warm_cache()
         self.arbiter._pre_warm_agent_results = arbiter_results
         self.arbiter._pre_warm_case_id = case_id
 

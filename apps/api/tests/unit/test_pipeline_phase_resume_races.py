@@ -137,10 +137,12 @@ async def test_deep_report_gate_consumes_decision_after_pause(monkeypatch):
         config=SimpleNamespace(hitl_decision_timeout=3600),
     )
 
-    await _await_deep_report_request(pipeline, uuid4())
+    sid = uuid4()
+    await _await_deep_report_request(pipeline, sid)
 
     assert pipeline._awaiting_user_decision is False
-    assert redis.deleted == []
+    # Cleanup deletes the wrong-phase key during setup
+    assert redis.deleted == [f"forensic:session:resume_decision:{sid}:initial_to_deep"]
 
 
 @pytest.mark.asyncio
@@ -226,8 +228,8 @@ async def test_resume_expected_phase_validation(monkeypatch):
     assert r1.deep_analysis is True
     assert r1.expected_phase == "initial"
 
-    r2 = ResumeRequest(deep_analysis=False)
-    assert r2.expected_phase is None
+    r2 = ResumeRequest(deep_analysis=False, expected_phase="deep")
+    assert r2.expected_phase == "deep"
 
     r3 = ResumeRequest(deep_analysis=False, expected_phase="deep")
     assert r3.expected_phase == "deep"

@@ -294,7 +294,7 @@ class Agent1Image(ForensicAgent):
                 signal_callback=_signal_cb,
             )
 
-            if result and not result.get("error"):
+            if result and result.get("available", True):
                 try:
                     if self.inter_agent_bus:
                         self.inter_agent_bus.set_visual_profile(

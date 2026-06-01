@@ -100,7 +100,7 @@ class TestFullForensicPipeline:
         """Test POST /sessions/{id}/resume triggers deep analysis."""
         mock_session_data = {
             "session_id": "test-session-456",
-            "status": "paused",
+            "status": "awaiting_decision",
             "investigator_id": "user-1",
             "phase": "initial",
         }
@@ -120,7 +120,7 @@ class TestFullForensicPipeline:
             response = client.post(
                 "/api/v1/sessions/test-session-456/resume",
                 headers=headers,
-                json={"deep_analysis": True},
+                json={"deep_analysis": True, "expected_phase": "initial"},
             )
 
             # Should return 200 or 202

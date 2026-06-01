@@ -10,7 +10,7 @@ import { TRANSITION_FAST } from "@/lib/animations";
 
 export interface UploadModalProps {
   onClose: () => void;
-  onFileSelected: (file: File) => void;
+  onFileSelected: (file: File) => void | Promise<void>;
   authError?: string | null;
 }
 
@@ -40,11 +40,12 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
     setIsDragging(false);
   }, []);
 
-  const selectFile = useCallback((file: File) => {
+  const selectFile = useCallback(async (file: File) => {
     const validationError = validateEvidenceFile(file);
     if (validationError) {
       setError(validationError);
       setIsSecuring(false);
+      isSubmittingRef.current = false;
       playSound("error");
       return;
     }
@@ -53,7 +54,15 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
     setError(null);
     setIsSecuring(true);
     playSound("success-chime");
-    onFileSelected(file);
+
+    try {
+      await onFileSelected(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not prepare file.");
+      setIsSecuring(false);
+      isSubmittingRef.current = false;
+      playSound("error");
+    }
   }, [onFileSelected, playSound]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {

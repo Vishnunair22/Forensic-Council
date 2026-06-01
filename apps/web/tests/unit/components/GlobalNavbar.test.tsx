@@ -13,7 +13,10 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/hooks/useSound", () => ({ useSound: () => ({ playSound: jest.fn() }) }));
 jest.mock("framer-motion", () => ({ useReducedMotion: () => false }));
 jest.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ clear: jest.fn() }) }));
-jest.mock("@/lib/appReset", () => ({ resetActiveInvestigation: jest.fn() }));
+jest.mock("@/lib/appReset", () => ({
+  resetActiveInvestigation: jest.fn(),
+  hasResettableInvestigationState: jest.fn(() => false),
+}));
 jest.mock("@/lib/storage", () => ({
   storage: { getItem: jest.fn(() => null), setItem: jest.fn(), removeItem: jest.fn() },
   sessionOnlyStorage: { getItem: jest.fn(() => null), setItem: jest.fn(), removeItem: jest.fn() },

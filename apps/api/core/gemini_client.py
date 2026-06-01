@@ -901,66 +901,125 @@ class GeminiVisionClient:
             # We rely on our own _parse_response() JSON extraction instead.
         }
 
-        # Thinking models (2.5+, 3+) support thinkingConfig.
-        # Enable chain-of-thought with a modest budget for forensic analysis —
-        # visual reasoning improves accuracy for manipulation detection.
-        # thinkingBudget=0 disables CoT; 1024 gives enough for structured reasoning
-        # without excessive latency. Models that don't support it (2.0-) skip silently.
-        if any(p in self.model for p in _THINKING_MODEL_PREFIXES):
-            generation_config["thinkingConfig"] = {"thinkingBudget": 1024}
+        # Build ordered model cascade with deduplication.
+        models_to_try: list[str] = []
+        if model_hint:
+            models_to_try.append(model_hint)
+        models_to_try.append(self.model)
+        models_to_try.extend(self.fallback_chain)
 
-        payload = {
-            "contents": [{"parts": parts}],
-            "generationConfig": generation_config,
-        }
+        seen_models: set[str] = set()
+        models_to_try = [
+            m for m in models_to_try
+            if m and not (m in seen_models or seen_models.add(m))
+        ]
 
-        primary_model = model_hint if model_hint and model_hint != self.model else self.model
-        attempt_url = f"{_GEMINI_API_BASE}/models/{primary_model}:generateContent"
+        last_error: Exception | None = None
 
-        # Acquire the process-wide quota semaphore before issuing any HTTP call.
-        # This bounds concurrent Gemini requests across all agents/instances so
-        # we don't saturate the free-tier RPM quota when 5 agents run in parallel.
-        async with self._get_quota_semaphore():
-            # Check quota guard AFTER acquiring the semaphore
-            allowed, quota_result = await ProviderQuotaGuard.check_and_record(
-                "gemini",
-                primary_model,
-                estimated_tokens=9000,
-            )
-            if not allowed:
-                logger.warning(
-                    f"Gemini quota guard blocked {primary_model} for {analysis_type}: {quota_result.reason}"
+        for active_model in models_to_try:
+            attempt_url = f"{_GEMINI_API_BASE}/models/{active_model}:generateContent"
+
+            generation_config_for_model = dict(generation_config)
+            if any(p in active_model for p in _THINKING_MODEL_PREFIXES):
+                generation_config_for_model["thinkingConfig"] = {"thinkingBudget": 1024}
+            else:
+                generation_config_for_model.pop("thinkingConfig", None)
+
+            payload_for_model = {
+                "contents": [{"parts": parts}],
+                "generationConfig": generation_config_for_model,
+            }
+
+            async with self._get_quota_semaphore():
+                allowed, quota_result = await ProviderQuotaGuard.check_and_record(
+                    "gemini",
+                    active_model,
+                    estimated_tokens=9000,
                 )
-                raise GeminiQuotaBlocked(f"Quota guard blocked model: {quota_result.reason}")
 
-            try:
-                m_t0 = time.monotonic()
-                raw_text = await asyncio.wait_for(
-                    self._post_once(
-                        attempt_url,
-                        payload,
-                        model_name=primary_model,
-                    ),
-                    timeout=self.timeout + 5,
-                )
-                m_latency = (time.monotonic() - m_t0) * 1000
-                finding = self._parse_response(raw_text, analysis_type, m_latency)
-                self._circuit_breaker.record_success()
-                return finding
-            except httpx.HTTPStatusError as hse:
-                status = hse.response.status_code if hse.response else 0
-                if status == 429:
-                    raise GeminiRateLimited("Gemini API rate limited (HTTP 429)")
-                raise
-            except Exception as exc:
-                logger.warning(
-                    f"Gemini model {primary_model} failed — using local fallback. ({exc})"
-                )
-                raise
+                if not allowed:
+                    logger.warning(
+                        "Gemini quota guard blocked model",
+                        model=active_model,
+                        analysis_type=analysis_type,
+                        reason=quota_result.reason,
+                    )
+                    last_error = GeminiQuotaBlocked(f"{active_model}: {quota_result.reason}")
+                    continue
 
-        # Unreachable — exceptions propagate to the caller (VisionRouter)
-        # which handles fallback. Kept as assertion for future refactoring safety.
-        raise AssertionError("Unreachable: Gemini call did not return or raise")
+                try:
+                    m_t0 = time.monotonic()
+                    raw_text = await asyncio.wait_for(
+                        self._post_once(
+                            attempt_url,
+                            payload_for_model,
+                            model_name=active_model,
+                        ),
+                        timeout=self.timeout + 5,
+                    )
+                    m_latency = (time.monotonic() - m_t0) * 1000
+                    finding = self._parse_response(raw_text, analysis_type, m_latency)
+                    finding.model_used = active_model
+                    self._circuit_breaker.record_success()
+                    return finding
+
+                except _ModelUnavailableError as exc:
+                    logger.warning(
+                        "Gemini model unavailable; trying next fallback",
+                        model=active_model,
+                        error=str(exc),
+                    )
+                    last_error = exc
+                    continue
+
+                except GeminiRateLimited as exc:
+                    logger.warning(
+                        "Gemini model rate-limited; trying next fallback",
+                        model=active_model,
+                        error=str(exc),
+                    )
+                    last_error = exc
+                    continue
+
+                except _ApiKeyInvalidError:
+                    self._circuit_breaker.record_failure()
+                    raise
+
+                except _SafetyBlockError:
+                    self._circuit_breaker.record_failure()
+                    raise
+
+                except httpx.HTTPStatusError as exc:
+                    status = exc.response.status_code if exc.response else 0
+                    if status == 429:
+                        last_error = GeminiRateLimited(f"{active_model}: HTTP 429")
+                        continue
+
+                    logger.warning(
+                        "Gemini transient HTTP failure; trying next fallback",
+                        model=active_model,
+                        status=status,
+                        error=str(exc),
+                    )
+                    last_error = exc
+                    continue
+
+                except Exception as exc:
+                    logger.warning(
+                        "Gemini model failed; trying next fallback",
+                        model=active_model,
+                        error=str(exc),
+                    )
+                    last_error = exc
+                    continue
+
+        # All models in cascade exhausted.
+        self._circuit_breaker.record_failure()
+
+        if last_error:
+            raise last_error
+
+        raise RuntimeError("Gemini cascade exhausted without a usable response.")
 
     async def _post_once(
         self,

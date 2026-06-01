@@ -901,6 +901,7 @@ export const useSimulation = ({
     // All state is accessed via refs (completedAgentsRef, playSoundRef, etc.)
     // to avoid re-creating the socket on every state change.
     // DO NOT add state dependencies here without thinking carefully.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

@@ -387,9 +387,10 @@ class TestAgent5SupportsFile:
         )
         assert result is False
 
-    def test_agent2_supports_audio(self):
+    def test_agent2_does_not_support_audio(self):
+        """Agent2 audio support is not yet activated (AGENT_FILE_CAPABILITIES empty for Agent2)."""
         from agents.agent2_audio import Agent2Audio
 
         agent = _make_agent(Agent2Audio, "Agent2")
         agent.evidence_artifact.metadata["mime_type"] = "audio/wav"
-        assert agent.supports_uploaded_file is True
+        assert agent.supports_uploaded_file is False

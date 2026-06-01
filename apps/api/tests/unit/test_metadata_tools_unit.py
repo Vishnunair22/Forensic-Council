@@ -21,6 +21,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
+try:
+    import geopy  # noqa: F401
+    _HAS_GEOPY = True
+except ImportError:
+    _HAS_GEOPY = False
+
 os.environ.setdefault("APP_ENV", "testing")
 os.environ.setdefault("SIGNING_KEY", "test-signing-key-" + "x" * 32)
 os.environ.setdefault("POSTGRES_USER", "test")
@@ -206,6 +212,7 @@ class TestGpsTimezoneValidate:
         assert isinstance(result, dict)
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _HAS_GEOPY, reason="geopy not installed")
     async def test_returns_unavailable_on_timeout(self):
         from geopy.exc import GeocoderTimedOut
 

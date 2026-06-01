@@ -45,6 +45,7 @@ import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { authService } from "@/lib/upload/authService";
 import { fileHandoffManager } from "@/lib/upload/fileHandoffManager";
 import { loadingOverlayController } from "@/lib/upload/loadingOverlayController";
+import { computeFileSha256 } from "@/lib/crypto/fileHash";
 
 
 
@@ -450,7 +451,31 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       let isDuplicateSession = false;
       let contentHash: string | null = null;
       try {
-        const pendingClientSha256 = fileHandoffManager.getPendingClientSha256();
+        let pendingClientSha256 = fileHandoffManager.getPendingClientSha256();
+
+        if (!pendingClientSha256) {
+          try {
+            const computed = await computeFileSha256(targetFile);
+            pendingClientSha256 = computed.hex.toLowerCase();
+
+            const existingMeta = fileHandoffManager.getFileMeta();
+            sessionOnlyStorage.setItem(
+              STORAGE_KEYS.FC_PENDING_FILE_META,
+              JSON.stringify({
+                ...existingMeta,
+                name: targetFile.name,
+                type: targetFile.type,
+                size: targetFile.size,
+                updatedAt: Date.now(),
+                clientSha256: pendingClientSha256,
+              }),
+              true,
+            );
+          } catch {
+            throw new Error("Could not compute SHA-256 custody hash before upload.");
+          }
+        }
+
         const investigationRes = await startInvestigation(targetFile, caseId, investigatorId, pendingClientSha256);
         sessionIdToUse = investigationRes.session_id;
         contentHash = investigationRes.content_hash ?? null;
@@ -488,7 +513,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           return;
         }
       } finally {
-        if (!sessionIdToUse || isDuplicateSession) {
+        if (!sessionIdToUse) {
           investigationInFlightRef.current = false;
         }
       }
@@ -527,7 +552,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         storage.setItem(`${STORAGE_KEYS.EVIDENCE_SHA256}:${sessionIdToUse}`, contentHash);
       }
 
-      if (thumbnailDataUrl && !isDuplicateSession) {
+      if (thumbnailDataUrl) {
         storage.setItem(`${STORAGE_KEYS.THUMBNAIL}:${sessionIdToUse}`, thumbnailDataUrl);
       }
 
@@ -677,12 +702,18 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.setItem(STORAGE_KEYS.FC_HANDOFF_FIRED, "1");
     setFile(pending);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
-    sessionOnlyStorage.setItem(STORAGE_KEYS.FC_PENDING_FILE_META, JSON.stringify({
-      name: pending.name,
-      type: pending.type,
-      size: pending.size,
-      updatedAt: Date.now(),
-    }), true);
+    const existingMeta = fileHandoffManager.getFileMeta();
+    sessionOnlyStorage.setItem(
+      STORAGE_KEYS.FC_PENDING_FILE_META,
+      JSON.stringify({
+        name: pending.name,
+        type: pending.type,
+        size: pending.size,
+        updatedAt: Date.now(),
+        clientSha256: existingMeta?.clientSha256 ?? null,
+      }),
+      true,
+    );
     triggerAnalysis(pending);
     };
 
@@ -868,6 +899,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setSimulationPhase("deep");
       await resumeInvestigation(true);
     } catch (err) {
+      // Roll back to initial phase so the user can retry
+      const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
+      if (sid) {
+        storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "initial");
+        sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`);
+      }
+      setPhase("initial");
       playSound("error");
       toast.destructive({
         title: "Deep analysis failed to start",

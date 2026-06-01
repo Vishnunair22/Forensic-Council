@@ -54,6 +54,23 @@ function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): Agent
   return [];
 }
 
+function buildAgentTimelineFromReport(report: ReportDTO): AgentUpdate[] {
+  if (!report.agent_summaries || !Array.isArray(report.agent_summaries)) return [];
+  return (report.agent_summaries as Array<Record<string, unknown>>)
+    .filter((s) => typeof s === "object" && s !== null && typeof s.agent_id === "string")
+    .map((s) => ({
+      agent_id: s.agent_id as string,
+      agent_name: (s.agent_name as string) ?? (s.agent_id as string),
+      status: ((s.status as string) ?? "complete") as AgentUpdate["status"],
+      completed_at: (s.completed_at as string) ?? null,
+      message: (s.message as string) ?? "",
+      confidence: (s.confidence as number) ?? 0,
+      findings_count: (s.findings_count as number) ?? 0,
+    }));
+}
+
+export { buildAgentTimelineFromReport };
+
 export function useResult(initialSessionId?: string) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -234,6 +251,13 @@ export function useResult(initialSessionId?: string) {
     if (finalReportData.is_deep_analysis === true || finalReportData.is_deep_analysis === false) {
       setIsDeepPhase(finalReportData.is_deep_analysis);
     }
+    // Fallback: build agent timeline from report data when storage is empty
+    if (agentTimeline.length === 0) {
+      const fromReport = buildAgentTimelineFromReport(finalReportData);
+      if (fromReport.length > 0) {
+        setAgentTimeline(fromReport);
+      }
+    }
     // Only transition to "ready" after the min overlay duration has elapsed
     // to prevent blank flash during overlay exit animation.
     if (minOverlayDone) {
@@ -244,6 +268,7 @@ export function useResult(initialSessionId?: string) {
       }, 200);
       return () => clearTimeout(id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalReportData, minOverlayDone]);
 
   useEffect(() => {

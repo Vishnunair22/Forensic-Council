@@ -313,7 +313,13 @@ class VisionRouter:
             logger.info("Gemini not enabled — skipping for Agent1")
             provider_attempts.append({"provider": "gemini", "success": False, "reason": "not_enabled"})
 
-        if "groq_vision" in (getattr(self.config, "vision_provider_chain", "") or ""):
+        allow_groq_vision = (
+            "groq_vision" in (getattr(self.config, "vision_provider_chain", "") or "")
+            and getattr(self.config, "allow_groq_vision_visual_profile", False)
+            and agent_id == "Agent1"
+        )
+
+        if allow_groq_vision:
             try:
                 result = await self._run_groq_vision(file_path)
                 result.provider_attempts = provider_attempts + [

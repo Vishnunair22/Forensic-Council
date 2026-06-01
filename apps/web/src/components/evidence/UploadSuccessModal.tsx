@@ -3,7 +3,7 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
-import { Lock, ArrowRight, X, Play, Mic, FileText, Archive, File } from "lucide-react";
+import { Lock, ArrowRight, X, Play, Mic, FileText, Archive, File, Image as ImageFileIcon } from "lucide-react";
 import { useSound } from "@/hooks/useSound";
 import { formatBytes } from "@/lib/utils";
 import { TRANSITION_SMOOTH } from "@/lib/animations";
@@ -68,6 +68,9 @@ export function UploadSuccessModal({
   const getFileCategoryDetails = () => {
     const type = file.type || "";
     const name = file.name || "";
+    if (type.startsWith("image/")) {
+      return { icon: ImageFileIcon, accentClass: "from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-300", label: "Image Evidence" };
+    }
     if (type.startsWith("audio/")) {
       return { icon: Mic, accentClass: "from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400", label: "Audio Evidence" };
     }

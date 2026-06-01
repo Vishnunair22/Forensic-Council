@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
 import { GlobalLoadingOverlay } from "@/components/ui/GlobalLoadingOverlay";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
@@ -20,6 +20,10 @@ jest.mock("@/hooks/useSound", () => ({
 
 jest.mock("@/lib/pendingFilePersistence", () => ({
   savePendingEvidenceFile: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("@/lib/crypto/fileHash", () => ({
+  computeFileSha256: jest.fn(() => Promise.resolve({ hex: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" })),
 }));
 
 jest.mock("@tanstack/react-query", () => ({
@@ -108,6 +112,9 @@ describe("HeroAuthActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /upload a file to begin analysis/i }));
     fireEvent.click(screen.getByRole("button", { name: /select test file/i }));
+
+    // Flush microtasks so the async SHA-256 hash computation resolves before we click start
+    await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /start analysis/i }));
 
     await waitFor(() => {

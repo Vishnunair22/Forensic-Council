@@ -735,13 +735,18 @@ async def run_agents_concurrent(
     except Exception:
         pass
 
-    # Clear stale findings from working memory before deep phase to prevent carry-over
+    # Clear stale findings and AgentX_deep namespaces from working memory before deep phase
     for _aid in registry.get_all_agent_ids():
         try:
             await pipeline.working_memory.clear(session_id, _aid)
             logger.debug(f"Cleared working memory for {_aid} before deep phase")
         except Exception as _wm_err:
             logger.debug(f"Working memory clear failed for {_aid}: {_wm_err}")
+        try:
+            await pipeline.working_memory.clear(session_id, f"{_aid}_deep")
+            logger.debug(f"Cleared {_aid}_deep namespace before deep phase")
+        except Exception as _wm_err:
+            logger.debug(f"Working memory clear failed for {_aid}_deep: {_wm_err}")
 
     # --- Phase 2: Deep passes with early context sync ----------------------
 
@@ -1076,7 +1081,11 @@ async def _run_agent_deep_only(
         span.set_attribute("agent_id", agent_id)
         try:
             logger.info(f"Running {agent_id} deep investigation")
-            deep_timeout = min(pipeline.config.investigation_timeout // 4, 480.0)
+            deep_timeout = min(
+                pipeline.config.deep_agent_timeout_seconds,
+                pipeline.config.deep_agent_hard_cap_seconds,
+            )
+            agent.deep_tool_timeout = pipeline.config.deep_tool_timeout_seconds
             await asyncio.wait_for(
                 agent.run_deep_investigation(),
                 timeout=deep_timeout,
@@ -1087,6 +1096,7 @@ async def _run_agent_deep_only(
                 if not isinstance(meta, dict):
                     meta = {}
                     finding.metadata = meta
+                meta["context_version"] = 2
                 phase = meta.get("analysis_phase", "")
                 if phase != "deep":
                     continue

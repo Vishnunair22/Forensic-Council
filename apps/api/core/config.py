@@ -544,6 +544,31 @@ class Settings(BaseSettings):
         default=3600,
         description="Max seconds to wait for HITL decision before auto-skipping deep analysis",
     )
+    deep_agent_timeout_seconds: int = Field(
+        default=900,
+        description=(
+            "Per-agent timeout for the deep analysis pass. Default 900s (15 min) "
+            "allows heavy neural tools to complete without starving. "
+            "Overrides the legacy investigation_timeout // 4 derivation."
+        ),
+    )
+    deep_tool_timeout_seconds: int = Field(
+        default=300,
+        description="Per-tool timeout within the deep analysis pass. Default 300s (5 min).",
+    )
+    deep_agent_hard_cap_seconds: int = Field(
+        default=1800,
+        description="Absolute upper bound on any single deep agent pass (30 min).",
+    )
+    final_report_llm_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable LLM synthesis for the final arbiter report. When False, "
+            "the arbiter produces a deterministic template-based report. "
+            "When True, the arbiter may use the configured LLM provider "
+            "for narrative synthesis of the final verdict."
+        ),
+    )
     investigation_max_retries: int = Field(
         default=3, description="Max retry attempts for failed investigations"
     )
@@ -798,6 +823,14 @@ class Settings(BaseSettings):
     groq_vision_timeout: float = Field(default=30.0)
     groq_vision_rpm_limit: int = Field(default=15)
     groq_vision_rpd_limit: int = Field(default=14400)
+    allow_groq_vision_visual_profile: bool = Field(
+        default=False,
+        description=(
+            "When True, Groq Vision may be used in the Agent1 initial visual profile "
+            "cascade before falling back to the local ensemble. Default False so the "
+            "Gemini → local_ensemble contract is the safe default."
+        ),
+    )
 
     # ─── OpenRouter (free vision models, opt-in) ────────────────────────────
     openrouter_enabled: bool = Field(default=False)

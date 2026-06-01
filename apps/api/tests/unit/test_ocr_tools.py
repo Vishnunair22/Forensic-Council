@@ -3,6 +3,12 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from core.evidence import EvidenceArtifact
+
+try:
+    import easyocr  # noqa: F401
+    _HAS_EASYOCR = True
+except ImportError:
+    _HAS_EASYOCR = False
 from tools.ocr_tools import (
     _build_summary,
     _extract_text_easyocr_sync,
@@ -33,6 +39,7 @@ class TestOCRTools:
         with patch("builtins.open", mock_open(read_data=b"not a pdf")):
             assert _is_pdf("dummy.txt") is False
 
+    @pytest.mark.skipif(not _HAS_EASYOCR, reason="easyocr not installed")
     def test_get_easyocr_reader_caching(self):
         with patch("easyocr.Reader") as mock_reader:
             reader1 = _get_easyocr_reader()

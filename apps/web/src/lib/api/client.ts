@@ -105,6 +105,37 @@ export class DuplicateInvestigationError extends Error {
   }
 }
 
+function normalizeApiDetail(detail: unknown, fallback: string): string {
+  if (!detail) return fallback;
+
+  if (typeof detail === "string") return detail;
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          return String(record.msg ?? record.message ?? JSON.stringify(record));
+        }
+        return String(item);
+      })
+      .join("; ");
+  }
+
+  if (typeof detail === "object") {
+    const record = detail as Record<string, unknown>;
+    return String(
+      record.message ??
+      record.detail ??
+      record.error ??
+      JSON.stringify(record),
+    );
+  }
+
+  return String(detail);
+}
+
 function extractDuplicateSessionId(detail: unknown): string | null {
   if (detail === null || detail === undefined) return null;
 
@@ -305,7 +336,10 @@ export async function startInvestigation(
       if (response.status === 409) {
         const existingSessionId = extractDuplicateSessionId(err.detail);
         if (existingSessionId) {
-          throw new DuplicateInvestigationError(existingSessionId, err.detail);
+          throw new DuplicateInvestigationError(
+            existingSessionId,
+            normalizeApiDetail(err.detail, "Duplicate investigation request"),
+          );
         }
       }
       if (response.status === 503) {
@@ -314,7 +348,7 @@ export async function startInvestigation(
           throw new WorkerWarmupError(detailStr);
         }
       }
-      throw new Error(err.detail || `HTTP ${response.status}`);
+      throw new Error(normalizeApiDetail(err.detail, `HTTP ${response.status}`));
     }
     return response.json();
   });

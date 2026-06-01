@@ -8,6 +8,14 @@ import {
   clearPendingEvidenceFile,
 } from "@/lib/pendingFilePersistence";
 
+export interface PendingEvidenceFileMeta {
+  name: string;
+  type: string;
+  size: number;
+  updatedAt?: number;
+  clientSha256?: string | null;
+}
+
 export class FileHandoffManager {
   async prepareUpload(file: File, options?: { clientSha256?: string | null }): Promise<void> {
     __pendingFileStore.file = file;
@@ -59,17 +67,34 @@ export class FileHandoffManager {
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
   }
 
-  getFileMeta(): { name: string; type: string; size: number } | null {
+  getFileMeta(): PendingEvidenceFileMeta | null {
     const raw = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_PENDING_FILE_META, true, null);
-    if (raw && typeof raw === "object" && "name" in raw) {
-      return raw as { name: string; type: string; size: number };
+
+    if (!raw || typeof raw !== "object") return null;
+
+    const meta = raw as Partial<PendingEvidenceFileMeta>;
+    if (
+      typeof meta.name === "string" &&
+      typeof meta.type === "string" &&
+      typeof meta.size === "number"
+    ) {
+      return {
+        name: meta.name,
+        type: meta.type,
+        size: meta.size,
+        updatedAt: typeof meta.updatedAt === "number" ? meta.updatedAt : undefined,
+        clientSha256:
+          typeof meta.clientSha256 === "string" && /^[a-f0-9]{64}$/i.test(meta.clientSha256)
+            ? meta.clientSha256.toLowerCase()
+            : null,
+      };
     }
+
     return null;
   }
 
   getPendingClientSha256(): string | null {
-    const meta = this.getFileMeta() as ({ clientSha256?: string } | null);
-    const hash = meta?.clientSha256 ?? null;
+    const hash = this.getFileMeta()?.clientSha256 ?? null;
     return hash && /^[a-f0-9]{64}$/i.test(hash) ? hash.toLowerCase() : null;
   }
 }

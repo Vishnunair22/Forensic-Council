@@ -115,7 +115,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           />
         )}
         {rs.state === "loading" && !rs.report && (
-          <div className="fixed inset-0 z-modal flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-modal flex items-center justify-center fc-surface-overlay">
             <AgentAnalysisTabSkeleton />
           </div>
         )}

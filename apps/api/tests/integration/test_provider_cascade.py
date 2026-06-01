@@ -63,6 +63,7 @@ async def test_cascade_gemini_fail_groq_success(tmp_path: Path):
     settings.vision_provider_chain = "gemini,groq_vision,local_ensemble"
     settings.groq_vision_api_key = "mock_groq_api_key_123"
     settings.groq_vision_model = "mock-groq-model"
+    settings.allow_groq_vision_visual_profile = True
 
     router = VisionRouter(settings)
 

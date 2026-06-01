@@ -44,6 +44,7 @@ from api.routes.metrics import (
     increment_investigations_started,
 )
 from api.schemas import (
+    CapabilitiesResponse,
     InvestigationResponse,
 )
 from core.auth import User, get_current_user
@@ -55,6 +56,23 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/api/v1", tags=["investigation"])
+
+
+@router.get("/capabilities", response_model=CapabilitiesResponse)
+async def get_capabilities():
+    """Return the backend's supported file types and agent capabilities."""
+    from core.file_type_policy import AGENT_FILE_CAPABILITIES, SUPPORTED_MIME_TYPES
+
+    max_size = getattr(settings, "max_upload_size_bytes", 50 * 1024 * 1024)
+    agent_caps: dict[str, list[str]] = {}
+    for agent_id, caps in AGENT_FILE_CAPABILITIES.items():
+        agent_caps[agent_id] = [p for p in caps["mime_prefixes"]]
+
+    return CapabilitiesResponse(
+        supported_mime_types=sorted(SUPPORTED_MIME_TYPES),
+        max_file_size_bytes=max_size,
+        agent_capabilities=agent_caps,
+    )
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
@@ -130,6 +148,7 @@ async def _register_session_before_dispatch(
     session_id: str,
     case_id: str,
     investigator_id: str,
+    status: str = "queued",
 ) -> None:
     from core import session_persistence
 
@@ -138,8 +157,8 @@ async def _register_session_before_dispatch(
         session_id=session_id,
         case_id=case_id,
         investigator_id=investigator_id,
-        pipeline_state={"status": "running"},
-        status="running",
+        pipeline_state={"status": status},
+        status=status,
     )
     if not ok:
         raise RuntimeError("session persistence returned false")
@@ -391,7 +410,7 @@ async def start_investigation(
         content_hash = hasher.hexdigest()
 
         client_hash_verified = False
-        if client_sha256:
+        if client_sha256 and isinstance(client_sha256, str):
             client_sha256_norm = client_sha256.strip().lower()
             if not re.fullmatch(r"[a-f0-9]{64}", client_sha256_norm):
                 tmp_path.unlink(missing_ok=True)
@@ -556,12 +575,15 @@ async def start_investigation(
         }
         await set_active_pipeline_metadata(session_id, session_metadata)
 
+        pre_dispatch_status = "queued" if settings.use_redis_worker else "running"
+
         if settings.app_env == "production":
             try:
                 await _register_session_before_dispatch(
                     session_id=session_id,
                     case_id=case_id,
                     investigator_id=current_user.user_id,
+                    status=pre_dispatch_status,
                 )
             except Exception as exc:
                 await _cleanup_stale_investigation_session(
@@ -580,6 +602,7 @@ async def start_investigation(
                     session_id=session_id,
                     case_id=case_id,
                     investigator_id=current_user.user_id,
+                    status=pre_dispatch_status,
                 )
             except Exception as exc:
                 logger.warning(
@@ -686,6 +709,8 @@ async def start_investigation(
             content_hash=content_hash,
             client_hash_verified=client_hash_verified,
             dispatch_mode=dispatch_mode,
+            detected_mime=actual_mime,
+            applicable_agents=applicable_agents,
         )
 
     except HTTPException:
