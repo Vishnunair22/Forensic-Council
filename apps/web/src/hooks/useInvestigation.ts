@@ -620,8 +620,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         .then(() => {
           setAnalysisStreamReady(true);
           setUploadPhaseText("Agents dispatching");
-          // Overlay dismissal is handled by the status-tracking effect below,
-          // which enforces a 2.5s minimum display duration.
+          // Overlay dismissal is handled by the status-tracking effect below.
+          // The dismiss effect enforces an 800ms minimum display duration via
+          // both the controller's internal timer and a React setTimeout.
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -1069,7 +1070,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   }, [showLoadingOverlay, analysisStreamReady, status]);
 
   useEffect(() => {
-    if (showLoadingOverlay) {
+    if (showLoadingOverlay && !analysisStreamReady) {
       loadingOverlayController.show(uploadPhaseText || pipelineMessage || "Initializing workspace");
       const dispatchedCount = Math.min(
         Object.keys(agentUpdates).filter((k) => k !== "Arbiter").length,
@@ -1077,7 +1078,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       );
       loadingOverlayController.updateDispatchedCount(dispatchedCount);
     }
-  }, [showLoadingOverlay, uploadPhaseText, pipelineMessage, agentUpdates]);
+  }, [showLoadingOverlay, uploadPhaseText, pipelineMessage, agentUpdates, analysisStreamReady]);
 
   return {
     isUploading,
