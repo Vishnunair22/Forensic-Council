@@ -119,11 +119,8 @@ async def test_cascade_all_fail_local_success(tmp_path: Path):
 
     settings = Settings()
     # Explicitly configure cascade to try all cloud services before fallback
-    settings.vision_provider_chain = "gemini,groq_vision,openrouter,local_ensemble"
+    settings.vision_provider_chain = "gemini,groq_vision,local_ensemble"
     settings.groq_vision_api_key = "mock_groq_key"
-    settings.openrouter_enabled = True
-    settings.openrouter_api_key = "mock_openrouter_key"
-    settings.openrouter_vision_models = "mock-openrouter-model"
 
     router = VisionRouter(settings)
 
@@ -133,7 +130,7 @@ async def test_cascade_all_fail_local_success(tmp_path: Path):
 
         mock_gemini.side_effect = Exception("Gemini error")
 
-        # httpx calls return 500 for Groq and OpenRouter
+        # httpx calls return 500 for Groq Vision
         mock_error_resp = MagicMock(spec=httpx.Response)
         mock_error_resp.status_code = 500
         mock_error_resp.text = "Internal Server Error"
@@ -243,5 +240,5 @@ def test_health_providers_endpoint(test_client):
     assert "providers" in data
     assert "gemini" in data["providers"]
     assert "groq_vision" in data["providers"]
-    assert "openrouter" in data["providers"]
+
     assert "local_ensemble" in data["providers"]

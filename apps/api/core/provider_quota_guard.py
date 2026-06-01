@@ -303,11 +303,6 @@ def configure_provider_quota_guards(settings) -> None:
         rpd_limit=getattr(settings, "groq_vision_rpd_limit", 14400),
     )
     ProviderQuotaGuard.configure(
-        "openrouter",
-        rpm_limit=getattr(settings, "openrouter_rpm_limit", 20),
-        rpd_limit=getattr(settings, "openrouter_rpd_limit", 200),
-    )
-    ProviderQuotaGuard.configure(
         "cerebras",
         rpm_limit=getattr(settings, "cerebras_rpm_limit", 30),
         rpd_limit=getattr(settings, "cerebras_rpd_limit", 14400),

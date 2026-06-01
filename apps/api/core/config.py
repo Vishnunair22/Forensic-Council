@@ -803,7 +803,7 @@ class Settings(BaseSettings):
             "Comma-separated cascade for the session visual profile. "
             "Recommended hybrid production route: gemini,local_ensemble. "
             "Gemini is attempted only by Agent1; local_ensemble is the forensic fallback. "
-            "Groq Vision and OpenRouter remain available as opt-in experimental configurations."
+            "Groq Vision remains available as an opt-in experimental configuration."
         ),
     )
     text_provider_chain: str = Field(
@@ -831,17 +831,6 @@ class Settings(BaseSettings):
             "Gemini → local_ensemble contract is the safe default."
         ),
     )
-
-    # ─── OpenRouter (free vision models, opt-in) ────────────────────────────
-    openrouter_enabled: bool = Field(default=False)
-    openrouter_api_key: str | None = Field(default=None)
-    openrouter_referer: str | None = Field(default=None)
-    openrouter_vision_models: str = Field(
-        default="meta-llama/llama-3.2-11b-vision-instruct:free,qwen/qwen2.5-vl-7b-instruct:free,google/gemma-3-12b-it:free",
-    )
-    openrouter_timeout: float = Field(default=45.0)
-    openrouter_rpm_limit: int = Field(default=20)
-    openrouter_rpd_limit: int = Field(default=200)
 
     # ─── Cerebras (text only, free tier) ────────────────────────────────────
     cerebras_api_key: str | None = Field(default=None)
@@ -935,6 +924,9 @@ class Settings(BaseSettings):
         # In free_tier_mode, forbid paid-tier default model strings
         if free_tier and provider == "groq":
             model = data.get("llm_model", "")
+            # NOTE: "claude" is listed here intentionally as a *blocked* paid-model
+            # prefix for free-tier mode. The app does not use Claude/Anthropic; this
+            # is a safety guard, not a provider reference. Do not remove.
             _paid_prefixes = ("gpt-4", "gpt-3.5", "claude")
             if any(p.lower() in model.lower() for p in _paid_prefixes):
                 raise ValueError(

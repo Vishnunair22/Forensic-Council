@@ -313,3 +313,14 @@ docs/DOCUMENTATION_INVENTORY.md
 *.backup
 *.orig
 .directory
+
+# ── Merge / patch rejects ────────────────────────────────────────────────────
+*.rej
+*.patch
+
+# ── Additional AI agent artifacts (belt-and-suspenders) ──────────────────────
+.aider.*
+.claude/
+.gemini/
+.codeium/
+.sourcegraph/

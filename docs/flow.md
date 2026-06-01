@@ -1176,11 +1176,11 @@ FIREBASE_PROJECT_ID=...
 FIREBASE_PRIVATE_KEY=...
 FIREBASE_CLIENT_EMAIL=...
 
-# LLM
-LLM_PROVIDER=openai|anthropic|azure|ollama
+# LLM (text synthesis) — Forensic Council supports groq | gemini | none
+LLM_PROVIDER=groq
 LLM_API_KEY=...
-LLM_MODEL=gpt-4o|claude-3-opus
-LLM_MAX_TOKENS=128000
+LLM_MODEL=llama-3.3-70b-versatile   # Groq free tier; or gemini-2.5-flash for Gemini
+LLM_MAX_TOKENS=8192
 LLM_TEMPERATURE=0.1
 
 # ML
