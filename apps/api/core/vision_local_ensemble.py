@@ -110,15 +110,17 @@ def _cross_signal_synthesis(
     ocr_lines: list[str],
     florence_desc: str,
     is_screenshot: bool,
-) -> tuple[str, list[str], str]:
-    """Produce (verdict, signals, narrative) from cross-tool corroboration.
+) -> tuple[str, list[str], str, bool]:
+    """Produce (verdict, signals, narrative, conflict_detected) from cross-tool corroboration.
 
     Returns:
         verdict: One of AUTHENTIC, SUSPICIOUS, INCONCLUSIVE
         signals: List of corroborated manipulation signal descriptions
         narrative: Single coherent scene description paragraph
+        conflict_detected: True when cross-signals disagree (e.g., CLIP says camera but diffusion says AI)
     """
     signals: list[str] = []
+    conflict_detected = False
 
     # Extract raw metrics
     ela_max = ela_res.get("max_anomaly", 0.0) if isinstance(ela_res, dict) else 0.0
@@ -180,7 +182,8 @@ def _cross_signal_synthesis(
         signals.append(f"Diffusion/GAN spectral artifacts detected (probability={diff_probability:.3f})")
         # Cross-check: CLIP says it's a camera photo but diffusion says AI-generated
         if clip_category.lower() in ("live_photograph",) and not is_screenshot:
-            signals.append("Spectral GAN artifacts detected in an image presented as a camera photograph — possible AI-generated content with metadata mismatch")
+            signals.append("Conflicting authenticity signals — manual review advised")
+            conflict_detected = True
 
     # Rule 5: All clean
     if not signals:
@@ -245,7 +248,7 @@ def _cross_signal_synthesis(
             narrative_parts.append("Four+ independent forensic measures show no manipulation indicators.")
         narrative = " ".join(narrative_parts)
 
-    return verdict, signals, narrative
+    return verdict, signals, narrative, conflict_detected
 
 
 async def analyze_local_visual_profile(
@@ -486,7 +489,7 @@ async def analyze_local_visual_profile(
     is_screenshot = is_screen_capture_like or clip_routing_category == "screenshot"
 
     # ── Cross-signal synthesis ───────────────────────────────────────────
-    verdict, signals, narrative = _cross_signal_synthesis(
+    verdict, signals, narrative, conflict_detected = _cross_signal_synthesis(
         ela_res, fft_res, noiseprint_res, splicing_res, diffusion_res, opencv_res,
         clip_category, detected, ocr_lines, florence_desc, is_screenshot,
     )
@@ -538,6 +541,9 @@ async def analyze_local_visual_profile(
         base_confidence = max(base_confidence, 0.60)
     if florence_desc:
         base_confidence = min(base_confidence + 0.10, 0.88)
+    if conflict_detected:
+        base_confidence = min(base_confidence, 0.50)
+        signals.append("Conflicting authenticity signals — manual review advised")
     confidence = round(min(base_confidence, 0.88), 4)
 
     caveat_parts = [
@@ -581,7 +587,7 @@ async def analyze_local_visual_profile(
         contextual_anomalies=[],
         file_type_assessment=clip_routing_category,
         confidence=confidence,
-        court_defensible=not partial_execution,
+        court_defensible=not partial_execution and not conflict_detected,
         caveat=" ".join(caveat_parts),
         raw_response="",
         latency_ms=latency,

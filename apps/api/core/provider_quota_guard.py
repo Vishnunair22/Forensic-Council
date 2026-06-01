@@ -294,7 +294,7 @@ def configure_provider_quota_guards(settings) -> None:
     )
     ProviderQuotaGuard.configure(
         "gemini",
-        rpm_limit=getattr(settings, "gemini_rpm_limit", 10),
+        rpm_limit=getattr(settings, "gemini_rpm_limit", 5),   # was 10
         rpd_limit=getattr(settings, "gemini_rpd_limit", 1500),
     )
     ProviderQuotaGuard.configure(

@@ -103,6 +103,8 @@ x-backend-env: &backend-env
   # backend and worker run simultaneous pools on a mem_limit: 4g budget.
   # Set to 0 in .env to restore auto (min(4, cpu_count)) for bare-metal.
   FORENSIC_MAX_WORKERS: ${FORENSIC_MAX_WORKERS:-2}
+  ENABLE_AUDIO_MODELS: ${ENABLE_AUDIO_MODELS:-false}
+  ENABLE_VIDEO_MODELS: ${ENABLE_VIDEO_MODELS:-false}
 
 services:
   # --------------------------------------------------------------------------

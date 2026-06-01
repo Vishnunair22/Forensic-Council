@@ -304,6 +304,16 @@ class Settings(BaseSettings):
             "These models are non-commercial only. Set True only for research deployments."
         ),
     )
+    enable_audio_models: bool = Field(
+        default=False,
+        description="When False, audio ML models (SpeechBrain ECAPA, audio deepfake "
+        "detector) are NOT pre-downloaded at startup. They lazy-load on first audio "
+        "use if audio analysis is ever re-enabled.",
+    )
+    enable_video_models: bool = Field(
+        default=False,
+        description="When False, video-specific ML models are not pre-downloaded at startup.",
+    )
     siglip_model_name: str = Field(
         default="ViT-B-32",
         description=(

@@ -115,7 +115,12 @@ async def retry_async(
                 )
                 raise
 
-            delay = calculate_delay(attempt + 1, config)
+            # Honor server-provided Retry-After if available
+            retry_after = getattr(e, "retry_after", None)
+            if retry_after is not None:
+                delay = float(retry_after)
+            else:
+                delay = calculate_delay(attempt + 1, config)
 
             logger.warning(
                 "Retry attempt failed",

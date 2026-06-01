@@ -479,8 +479,11 @@ def check_model_assets() -> bool:
         hf_dir / "transformers" / "models--speechbrain--spkrec-ecapa-voxceleb",
     ]
     speechbrain_ready = any(_has_large_file(path) for path in speechbrain_dirs)
-    print(f"  {GREEN if speechbrain_ready else YELLOW}[{'OK  ' if speechbrain_ready else 'MISS'}]{RESET}  SpeechBrain ECAPA")
-    ok = ok and speechbrain_ready
+    if getattr(settings, "enable_audio_models", False) or not speechbrain_ready:
+        print(f"  {GREEN if speechbrain_ready else YELLOW}[{'OK  ' if speechbrain_ready else 'MISS'}]{RESET}  SpeechBrain ECAPA")
+    else:
+        print(f"  {YELLOW}[SKIP]{RESET}  SpeechBrain ECAPA (audio gated off)")
+    ok = ok and (speechbrain_ready or not getattr(settings, "enable_audio_models", False))
 
     audio_dirs = [
         hf_dir / HF_MODEL_DIRS["speechbrain_aasist"],
@@ -488,8 +491,11 @@ def check_model_assets() -> bool:
         hf_dir / "transformers" / HF_MODEL_DIRS["speechbrain_aasist"],
     ]
     audio_ready = any(_has_large_file(path) for path in audio_dirs)
-    print(f"  {GREEN if audio_ready else YELLOW}[{'OK  ' if audio_ready else 'MISS'}]{RESET}  Audio deepfake detector")
-    ok = ok and audio_ready
+    if getattr(settings, "enable_audio_models", False) or not audio_ready:
+        print(f"  {GREEN if audio_ready else YELLOW}[{'OK  ' if audio_ready else 'MISS'}]{RESET}  Audio deepfake detector")
+    else:
+        print(f"  {YELLOW}[SKIP]{RESET}  Audio deepfake detector (audio gated off)")
+    ok = ok and (audio_ready or not getattr(settings, "enable_audio_models", False))
 
     florence_dirs = [
         hf_dir / "hub" / HF_MODEL_DIRS["florence2"],
@@ -560,10 +566,20 @@ def main() -> None:
         ("EasyOCR", download_easyocr),
         ("OpenCLIP ViT-B-32", download_open_clip),
         ("ResNet-50", download_resnet50),
-        ("SpeechBrain ECAPA", download_speechbrain),
-        ("Audio deepfake detector", download_audio_deepfake),
         ("Florence-2", download_florence),
     ]
+
+    # Audio models are gated — skipped unless explicitly enabled.
+    if getattr(settings, "enable_audio_models", False):
+        download_plan += [
+            ("SpeechBrain ECAPA", download_speechbrain),
+            ("Audio deepfake detector", download_audio_deepfake),
+        ]
+    else:
+        print(f"  {YELLOW}[SKIP]{RESET}  Audio models gated off "
+              f"(set ENABLE_AUDIO_MODELS=true to pre-download).")
+
+    # (Video pre-download functions, if added later, gate on enable_video_models.)
     results = [(name, downloader(args.force)) for name, downloader in download_plan]
 
     elapsed = time.monotonic() - t0

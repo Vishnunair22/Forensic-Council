@@ -104,6 +104,29 @@ def _track_preamble_usage() -> None:
         )
 
 
+def _parse_retry_after(resp: httpx.Response) -> float | None:
+    """Extract Retry-After header from a response, or retryDelay from Gemini error body, or None."""
+    # Try Retry-After header first
+    ra_header = resp.headers.get("Retry-After")
+    if ra_header is not None:
+        try:
+            return float(ra_header)
+        except (ValueError, TypeError):
+            pass
+    # Try Gemini error body for retryDelay in details
+    try:
+        body = resp.json()
+        for detail in body.get("error", {}).get("details", []):
+            rd = detail.get("retryDelay")
+            if rd:
+                # Parse duration like "3s" or "1.5s"
+                rd_str = str(rd).rstrip("s")
+                return float(rd_str)
+    except (ValueError, TypeError, KeyError):
+        pass
+    return None
+
+
 def _build_deep_forensic_prompt(
     exif_summary: dict[str, Any] | None,
     persona: str | None,
@@ -193,7 +216,9 @@ class GeminiQuotaBlocked(Exception):
 
 class GeminiRateLimited(Exception):
     """Raised when the Gemini API returns a 429 rate limit error."""
-    pass
+    def __init__(self, message: str = "", retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 
@@ -992,7 +1017,8 @@ class GeminiVisionClient:
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code if exc.response else 0
                     if status == 429:
-                        last_error = GeminiRateLimited(f"{active_model}: HTTP 429")
+                        retry_after = _parse_retry_after(exc.response)
+                        last_error = GeminiRateLimited(f"{active_model}: HTTP 429", retry_after=retry_after)
                         continue
 
                     logger.warning(
