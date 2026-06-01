@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { flushSync } from "react-dom";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
@@ -501,27 +500,23 @@ export const useSimulation = ({
                   break;
 
                 case "PIPELINE_COMPLETE":
-                  // Normally stay on awaiting_decision until the user chooses Accept / Deep.
-                  // After resumeInvestigation(), React may still report awaiting_decision for one
-                  // frame while the WS already carries PIPELINE_COMPLETE — honour the resume ref.
-                  setStatus((prev: SimulationStatus) => {
-                    if (
-                      prev === "awaiting_decision" &&
-                      !expectingPipelineCompleteRef.current
-                    ) {
-                      return prev;
-                    }
-                    expectingPipelineCompleteRef.current = false;
-                    if (arbiterPollRef.current) {
-                      clearInterval(arbiterPollRef.current);
-                      arbiterPollRef.current = null;
-                    }
-                    if (prev !== "complete") {
-                      playSoundRef.current?.("complete");
-                      onCompleteRef.current?.();
-                    }
-                    return "complete";
-                  });
+                  // F-9: always transition to complete on PIPELINE_COMPLETE — the
+                  // pipeline may have timed out the HITL gate, in which case the
+                  // frontend would be stuck on awaiting_decision forever.  The only
+                  // exception is when React's stale batch still reports
+                  // awaiting_decision right after resumeInvestigation() — in that
+                  // case expectingPipelineCompleteRef.current is true and we honour
+                  // the transition.
+                  expectingPipelineCompleteRef.current = false;
+                  if (arbiterPollRef.current) {
+                    clearInterval(arbiterPollRef.current);
+                    arbiterPollRef.current = null;
+                  }
+                  if (status !== "complete") {
+                    playSoundRef.current?.("complete");
+                    onCompleteRef.current?.();
+                  }
+                  setStatus("complete");
                   break;
 
                 case "ERROR":
@@ -581,20 +576,11 @@ export const useSimulation = ({
 
               dbg.log("[Simulation] Processing update from queue:", update);
 
-              // Guard: flushSync throws a React invariant if called during an
-              // active render or route transition (e.g. when router.push fires
-              // mid-processing). Always fall back to a plain call so we never
-              // crash the React tree to a blank page.
               try {
-                flushSync(() => {
-                  applyUpdate(update);
-                });
-              } catch (flushErr) {
-                console.error("[Simulation] flushSync failed, falling back to async apply:", flushErr);
-                try { applyUpdate(update); } catch (applyErr) {
-                  console.error("[Simulation] applyUpdate fallback also failed:", applyErr);
-                  dbg.warn("[Simulation] applyUpdate fallback also failed:", applyErr);
-                }
+                applyUpdate(update);
+              } catch (applyErr) {
+                console.error("[Simulation] applyUpdate failed:", applyErr);
+                dbg.warn("[Simulation] applyUpdate failed:", applyErr);
               }
             }
           } finally {
@@ -1056,6 +1042,9 @@ export const useSimulation = ({
   const startSimulation = useCallback(() => {
     activePhaseRef.current = "initial";
     expectingPipelineCompleteRef.current = false;
+    reconnectAttemptsRef.current = 0;
+    setIsReconnecting(false);
+    setReconnectStatusMessage(null);
     setStatus("initiating");
     setCompletedAgents([]);
     completedAgentsRef.current = [];
@@ -1064,7 +1053,6 @@ export const useSimulation = ({
     setIsDeepHITL(false);
     try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
     setErrorMessage(null);
-    setReconnectStatusMessage(null);
     setPipelineMessage("Preparing forensic agents...");
     setPipelineThinking("Preparing forensic agents...");
     setArbiterStatus(null);
@@ -1094,7 +1082,7 @@ const resumeInvestigation = useCallback(
       const headers = await getMutationHeaders({
         "Content-Type": "application/json",
       });
-      const resultPhase = storage.getItem<string>(`${STORAGE_KEYS.RESULT_PHASE}:${targetId}`);
+      const resultPhase = storage.getItem(`${STORAGE_KEYS.RESULT_PHASE}:${targetId}`);
       const expectedPhase = deep ? "initial" : resultPhase === "deep" ? "deep" : "initial";
       const response = await fetch(
         `${API_BASE}/api/v1/sessions/${targetId}/resume`,

@@ -74,6 +74,7 @@ class ForensicCouncilPipeline:
         self._arbiter_step: str = ""
         self._session_id: UUID | None = None
         self._pre_warm_task: asyncio.Task | None = None
+        self._pre_warm_gen: int = 0  # F-5: incremented on each invalidation to detect stale pre-warm results
         self._suppress_arbiter_step_broadcasts: bool = False
 
         self._setup_infrastructure()
@@ -707,6 +708,11 @@ class ForensicCouncilPipeline:
             return
         previous_suppression = self._suppress_arbiter_step_broadcasts
         self._suppress_arbiter_step_broadcasts = suppress_broadcasts or previous_suppression
+
+        # F-5: snapshot the generation at start so we can detect if
+        # invalidate_pre_warm() was called while deliberate() was running.
+        _gen_at_start = self._pre_warm_gen
+
         try:
             if not suppress_broadcasts:
                 from api.routes._session_state import broadcast_update
@@ -729,6 +735,14 @@ class ForensicCouncilPipeline:
                 and self.config.llm_enable_post_synthesis
             )
             report = await self.arbiter.deliberate(agent_results, case_id, use_llm=use_llm, artifact_mime=_mime)
+
+            # F-5: invalidation gate — if invalidate_pre_warm() was called
+            # while deliberate() was running (e.g. user chose deep analysis),
+            # discard the now-stale results instead of poisoning the cache.
+            if self._pre_warm_gen != _gen_at_start:
+                logger.debug("Pre-warm results discarded — pre-warm was invalidated while deliberate() was in flight")
+                return
+
             self.arbiter._pre_warm_report = report
             self.arbiter._pre_warm_agent_results = agent_results
             self.arbiter._pre_warm_case_id = case_id
@@ -755,6 +769,7 @@ class ForensicCouncilPipeline:
         if self._pre_warm_task and not self._pre_warm_task.done():
             self._pre_warm_task.cancel()
         self._pre_warm_task = None
+        self._pre_warm_gen += 1  # F-5: invalidate any in-flight deliberate() results
         if self.arbiter:
             self.arbiter.clear_pre_warm_cache()
 
@@ -864,6 +879,7 @@ class ForensicCouncilPipeline:
                 broadcast_update,
                 get_active_pipeline_metadata,
                 set_active_pipeline_metadata,
+                update_active_pipeline_metadata,
             )
             from api.schemas import BriefUpdate
 
@@ -876,11 +892,10 @@ class ForensicCouncilPipeline:
                     data={"status": status, "thinking": thinking},
                 ),
             )
-            existing = await get_active_pipeline_metadata(str(session_id)) or {}
-            await set_active_pipeline_metadata(
+            # F-15: use atomic CAS for metadata status transition
+            await update_active_pipeline_metadata(
                 str(session_id),
                 {
-                    **existing,
                     "status": "completed" if status == "complete" else status,
                     "brief": thinking,
                     "awaiting_decision": False,
@@ -951,6 +966,18 @@ class ForensicCouncilPipeline:
             file_path_obj = Path(file_path)
 
             mime_type = detected_mime or self._get_mime_type(file_path)
+
+            # F-6: cross-validate detected MIME against PIL content detection.
+            # If the extension-based or route-provided MIME contradicts the
+            # file's actual content, trust PIL (content) and log the mismatch.
+            _pil_mime = self._get_mime_type(file_path)
+            if _pil_mime != "application/octet-stream" and mime_type != _pil_mime:
+                logger.info(
+                    "MIME mismatch corrected by content detection",
+                    route_or_extension=mime_type, content_detected=_pil_mime, path=str(file_path_obj),
+                )
+                mime_type = _pil_mime
+
             metadata: dict[str, Any] = {
                 "mime_type": mime_type,
                 "original_filename": original_filename or file_path_obj.name,
@@ -1009,35 +1036,32 @@ class ForensicCouncilPipeline:
         # Logic to notify the agent loop can follow here
         # (e.g. by setting an event the agent is waiting on)
 
-    def _get_mime_type(self, file_path: str) -> str:
-        """MIME detection: extension-based first, then PIL magic-byte fallback for .bin/unknown paths."""
-        import mimetypes
-
-        mime, _ = mimetypes.guess_type(file_path)
-        if mime and mime != "application/octet-stream":
-            return mime
-
-        _pil_format_to_mime = {
-            "JPEG": "image/jpeg",
-            "PNG": "image/png",
-            "GIF": "image/gif",
-            "WEBP": "image/webp",
-            "TIFF": "image/tiff",
-            "BMP": "image/bmp",
-            "HEIF": "image/heic",
-            "AVIF": "image/avif",
-            "ICO": "image/x-icon",
-            "PPM": "image/x-portable-pixmap",
-            "PGM": "image/x-portable-graymap",
+    @staticmethod
+    def _pil_format_to_mime() -> dict[str, str]:
+        return {
+            "JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif",
+            "WEBP": "image/webp", "TIFF": "image/tiff", "BMP": "image/bmp",
+            "HEIF": "image/heic", "AVIF": "image/avif", "ICO": "image/x-icon",
+            "PPM": "image/x-portable-pixmap", "PGM": "image/x-portable-graymap",
             "PBM": "image/x-portable-bitmap",
         }
+
+    def _get_mime_type(self, file_path: str) -> str:
+        """MIME detection: content-based (PIL) first, then extension-based fallback.
+
+        F-6: content detection always takes priority so a file with a wrong
+        extension (e.g. PNG renamed to .jpg) gets the correct MIME type.
+        """
+        _pil_map = self._pil_format_to_mime()
         try:
             from PIL import Image
-
             with Image.open(file_path) as _img:
                 pil_format = (_img.format or "").upper()
-            if pil_format in _pil_format_to_mime:
-                return _pil_format_to_mime[pil_format]
+            if pil_format in _pil_map:
+                return _pil_map[pil_format]
         except Exception:
             pass
+
+        import mimetypes
+        mime, _ = mimetypes.guess_type(file_path)
         return mime or "application/octet-stream"

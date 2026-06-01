@@ -161,7 +161,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
             {isSecuring ? "Establishing Secure Channel" : isDragging ? "Initiate Transfer" : "Select Evidence"}
           </span>
           <p id="upload-file-help" className="text-xs font-mono fc-text-muted opacity-70 uppercase tracking-wider">
-            Supported: IMG, VID, AUD // Max 50MB
+            Supported: JPG, PNG, TIFF, WEBP, GIF, BMP // Max 50MB
           </p>
         </div>
 

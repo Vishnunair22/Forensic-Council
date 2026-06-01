@@ -82,15 +82,15 @@ class InvestigationQueue:
                 broadcast_update,
                 get_active_pipeline_metadata,
                 set_active_pipeline_metadata,
+                update_active_pipeline_metadata,
             )
             from api.schemas import BriefUpdate
 
             session_id = str(task.session_id)
-            existing = await get_active_pipeline_metadata(session_id) or {}
-            await set_active_pipeline_metadata(
+            # F-15: use atomic CAS instead of non-atomic RMW
+            await update_active_pipeline_metadata(
                 session_id,
                 {
-                    **existing,
                     "status": "error",
                     "brief": error,
                     "error": error,

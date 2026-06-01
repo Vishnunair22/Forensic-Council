@@ -18,6 +18,12 @@ URL.createObjectURL = jest.fn(() => "blob:mock");
 URL.revokeObjectURL = jest.fn();
 
 const testFile = new File(["test-content"], "evidence.jpg", { type: "image/jpeg" });
+const defaultProps = {
+  file: testFile,
+  fileSha256: null,
+  onStartAnalysis: jest.fn(),
+  onDismiss: jest.fn(),
+};
 
 describe("BUG-09 — Filename and hash rendered below preview (stacked card)", () => {
   beforeEach(() => {
@@ -26,7 +32,7 @@ describe("BUG-09 — Filename and hash rendered below preview (stacked card)", (
 
   it("renders file name below the preview area, not beside it", () => {
     const { container } = render(
-      <UploadSuccessModal file={testFile} onStartAnalysis={jest.fn()} onDismiss={jest.fn()} />,
+      <UploadSuccessModal {...defaultProps} />,
     );
 
     const previewDivs = container.querySelectorAll(".border-b.border-white\\/5");
@@ -38,7 +44,7 @@ describe("BUG-09 — Filename and hash rendered below preview (stacked card)", (
 
   it("does not use grid-cols layout for metadata", () => {
     const { container } = render(
-      <UploadSuccessModal file={testFile} onStartAnalysis={jest.fn()} onDismiss={jest.fn()} />,
+      <UploadSuccessModal {...defaultProps} />,
     );
 
     expect(container.querySelector('[class*="grid-cols-1"]')).not.toBeInTheDocument();
@@ -48,7 +54,7 @@ describe("BUG-09 — Filename and hash rendered below preview (stacked card)", (
 
   it("shows file size in the metadata footer", () => {
     render(
-      <UploadSuccessModal file={testFile} onStartAnalysis={jest.fn()} onDismiss={jest.fn()} />,
+      <UploadSuccessModal {...defaultProps} />,
     );
 
     expect(screen.getByText(/12\s*bytes|12\s*B/i)).toBeInTheDocument();

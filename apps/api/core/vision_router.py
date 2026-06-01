@@ -43,6 +43,10 @@ class VisionRouter:
     never need to handle a provider-specific type.
     """
 
+    # F5-2: Module-level set of running validation tasks + once-validated flag.
+    _validation_tasks: set[asyncio.Task] = set()
+    _validated_once: bool = False
+
     @classmethod
     def configure_quota_pool(cls, max_concurrent: int) -> None:
         """Forward concurrency settings to GeminiVisionClient."""
@@ -59,10 +63,17 @@ class VisionRouter:
             and config.remote_visual_profile_allowed
         )
 
-        # Prune unavailable models from the fallback chain at startup.
-        # This is a lightweight GET to models.list — no quota burned.
-        if self._gemini_enabled:
-            asyncio.create_task(self.gemini_client.validate_model_availability())
+        # F5-2: Prune unavailable models once per process lifetime.
+        if self._gemini_enabled and not VisionRouter._validated_once:
+            VisionRouter._validated_once = True
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    task = loop.create_task(self.gemini_client.validate_model_availability())
+                    VisionRouter._validation_tasks.add(task)
+                    task.add_done_callback(VisionRouter._validation_tasks.discard)
+            except RuntimeError:
+                logger.warning("No running event loop — skipping Gemini model validation")
 
         logger.info(
             "VisionRouter initialized",

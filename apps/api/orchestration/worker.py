@@ -22,6 +22,7 @@ from api.routes._session_state import (  # noqa: E402
     clear_session_websockets,
     get_active_pipeline_metadata,
     set_active_pipeline_metadata,
+    update_active_pipeline_metadata,
 )
 from api.schemas import BriefUpdate  # noqa: E402
 from core.config import get_settings  # noqa: E402
@@ -119,28 +120,20 @@ async def main() -> None:
         session_str = str(session_id)
 
         try:
-            existing_meta = await get_active_pipeline_metadata(session_str) or {}
-            _investigator_id = existing_meta.get("investigator_id", investigator_id)
-            _investigator_role = existing_meta.get("investigator_role")
-            _case_label = existing_meta.get("case_investigator_label")
-
-            await set_active_pipeline_metadata(
+            # F-15: use atomic CAS for session status transition; the route
+            # already wrote metadata before enqueueing.
+            await update_active_pipeline_metadata(
                 session_str,
                 {
                     "status": "running",
                     "brief": "Initializing forensic pipeline...",
                     "case_id": case_id,
-                    "investigator_id": _investigator_id,
-                    "investigator_role": _investigator_role,
-                    "case_investigator_label": _case_label,
                     "file_path": evidence_file_path,
                     "original_filename": original_filename,
-                    "content_hash": existing_meta.get("content_hash"),
-                    "client_hash_verified": existing_meta.get("client_hash_verified"),
-                    "detected_mime": existing_meta.get("detected_mime", detected_mime),
-                    "validated_extension": existing_meta.get("validated_extension", validated_extension),
-                    "file_size_bytes": existing_meta.get("file_size_bytes", file_size_bytes),
-                    "created_at": existing_meta.get("created_at") or datetime.now(UTC).isoformat(),
+                    "detected_mime": detected_mime,
+                    "validated_extension": validated_extension,
+                    "content_sha256": content_sha256,
+                    "file_size_bytes": file_size_bytes,
                 },
             )
             await broadcast_update(

@@ -740,6 +740,9 @@ class GeminiVisionClient:
         # analysis is not interchangeable with Agent 1's pixel analysis.
         cache_key = _deep_forensic_cache_key(str(file_path), agent_id=agent_id)
         # Shared triage cache: Agents 3/5 check if Agent 1 already ran.
+        # NOTE (F5-4): Currently vestigial — VisionRouter routes only Agent1
+        # to Gemini, so Agents 3/5 never reach this code path. If the router
+        # policy is later relaxed, the triage cache will avoid duplicate calls.
         triage_key = _deep_forensic_cache_key_triage(str(file_path))
         # Check triage cache first (Agent 1's result, which can serve all agents)
         if triage_key and triage_key in _DEEP_FORENSIC_CACHE:
@@ -955,16 +958,9 @@ class GeminiVisionClient:
                 )
                 raise
 
-        # Record failure in circuit breaker (this is unreachable if exceptions propagate, but kept for logic safety)
-        self._circuit_breaker.record_failure()
-        finding = await self._local_forensic_fallback(
-            file_path,
-            is_screen_capture_like=is_screen_capture_like,
-        )
-        finding.analysis_type = analysis_type
-        finding.latency_ms = latency_ms
-        finding.caveat = f"{finding.caveat} Gemini single visual probe failed: {last_exc}."
-        return finding
+        # Unreachable — exceptions propagate to the caller (VisionRouter)
+        # which handles fallback. Kept as assertion for future refactoring safety.
+        raise AssertionError("Unreachable: Gemini call did not return or raise")
 
     async def _post_once(
         self,

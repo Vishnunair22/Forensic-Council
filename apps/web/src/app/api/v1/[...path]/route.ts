@@ -7,7 +7,7 @@ import { backendUrlFor, getBackendBaseUrls } from "@/lib/backendTargets";
 // Override to "0" in prod if the proxy is intentionally kept on. Leave unset
 // in dev so direct localhost:3000 works for local testing.
 const DISABLE_NEXT_API_PROXY =
-  process.env.DISABLE_NEXT_API_PROXY ?? (process.env.NODE_ENV === "production" ? "1" : "") === "1";
+  (process.env.DISABLE_NEXT_API_PROXY ?? (process.env.NODE_ENV === "production" ? "1" : "")) === "1";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",

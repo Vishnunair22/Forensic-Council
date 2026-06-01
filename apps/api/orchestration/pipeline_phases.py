@@ -1146,12 +1146,20 @@ async def _await_deep_analysis_decision(
         broadcast_update,
         get_active_pipeline_metadata,
         set_active_pipeline_metadata,
+        update_active_pipeline_metadata,
     )
     from api.schemas import BriefUpdate
     from core.persistence.redis_client import get_redis_client
 
     decision_key = f"forensic:session:resume_decision:{session_id}:initial_to_deep"
     redis = await get_redis_client()
+
+    # F-2: delete the wrong-phase decision key (deep_to_report) so a
+    # resume request racing between phases cannot write to the wrong key.
+    try:
+        await redis.delete(f"forensic:session:resume_decision:{session_id}:deep_to_report")
+    except Exception:
+        pass
 
     # Set pause status BEFORE consuming any pre-existing decision.
     # This ensures the resume endpoint writes to the correct key and
@@ -1176,13 +1184,10 @@ async def _await_deep_analysis_decision(
     except Exception as broadcast_err:
         logger.warning("Initial complete broadcast failed", error=str(broadcast_err))
 
-    existing_metadata = await get_active_pipeline_metadata(str(session_id))
-    if not isinstance(existing_metadata, dict):
-        existing_metadata = {}
-    await set_active_pipeline_metadata(
+    # F-14: use atomic CAS for phase-gate status transition
+    await update_active_pipeline_metadata(
         str(session_id),
         {
-            **existing_metadata,
             "status": "awaiting_decision",
             "brief": "Initial analysis complete. Awaiting analyst decision.",
             "awaiting_decision": True,
@@ -1288,12 +1293,20 @@ async def _await_deep_report_request(
         broadcast_update,
         get_active_pipeline_metadata,
         set_active_pipeline_metadata,
+        update_active_pipeline_metadata,
     )
     from api.schemas import BriefUpdate
     from core.persistence.redis_client import get_redis_client
 
     decision_key = f"forensic:session:resume_decision:{session_id}:deep_to_report"
     redis = await get_redis_client()
+
+    # F-2: delete the wrong-phase decision key (initial_to_deep) so a
+    # resume request racing between phases cannot write to the wrong key.
+    try:
+        await redis.delete(f"forensic:session:resume_decision:{session_id}:initial_to_deep")
+    except Exception:
+        pass
 
     # Set pause status BEFORE consuming any pre-existing decision.
     # This ensures the resume endpoint writes to the correct key and
@@ -1302,13 +1315,10 @@ async def _await_deep_report_request(
     pipeline.deep_analysis_decision_event.clear()
     pipeline.run_deep_analysis_flag = False
 
-    existing_metadata = await get_active_pipeline_metadata(str(session_id))
-    if not isinstance(existing_metadata, dict):
-        existing_metadata = {}
-    await set_active_pipeline_metadata(
+    # F-14: use atomic CAS for phase-gate status transition
+    await update_active_pipeline_metadata(
         str(session_id),
         {
-            **existing_metadata,
             "status": "awaiting_deep_report",
             "brief": "Deep analysis complete. Awaiting analyst request for arbiter synthesis.",
             "awaiting_decision": True,

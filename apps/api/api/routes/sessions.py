@@ -1041,24 +1041,9 @@ async def resume_investigation(
             ),
         )
 
-    # Check for existing decision key (idempotency)
-    existing_decision = await redis.get(decision_key)
-    if existing_decision:
-        _log.info(
-            "Resume called but decision already exists — returning idempotent response",
-            session_id=session_id,
-        )
-        return {
-            "status": "running",
-            "phase": "deep" if request.deep_analysis else "initial",
-            "session_id": session_id,
-            "deep_analysis": request.deep_analysis,
-            "message": "Deep analysis already running"
-            if request.deep_analysis
-            else "Final report synthesis already running",
-        }
-
-    # Now write the decision key + publish atomically using a Redis transaction
+    # Write the decision key atomically with SET NX so two concurrent
+    # resume requests cannot both see "empty" and proceed. The first to
+    # SET wins; the second gets a clean idempotent 200 without writing.
     decision_payload = json.dumps(
         {
             "deep_analysis": request.deep_analysis,
@@ -1072,10 +1057,23 @@ async def resume_investigation(
             "deep_analysis": request.deep_analysis,
         }
     )
-    async with redis.client.pipeline(transaction=True) as pipe:
-        pipe.set(decision_key, decision_payload, ex=14400)
-        pipe.publish("forensic:notify_decision", publish_payload)
-        await pipe.execute()
+    was_set = await redis.set(decision_key, decision_payload, nx=True, ex=14400)
+    if not was_set:
+        _log.info(
+            "Resume called but decision already exists (SET NX conflict) — returning idempotent response",
+            session_id=session_id,
+        )
+        return {
+            "status": "running",
+            "phase": "deep" if request.deep_analysis else "initial",
+            "session_id": session_id,
+            "deep_analysis": request.deep_analysis,
+            "message": "Deep analysis already running"
+            if request.deep_analysis
+            else "Final report synthesis already running",
+        }
+
+    await redis.publish("forensic:notify_decision", publish_payload)
 
     # Dual signaling for deployments where Redis is the single point of truth
     # but the pipeline may run in a different process/worker.

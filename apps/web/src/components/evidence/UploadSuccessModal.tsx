@@ -101,7 +101,7 @@ export function UploadSuccessModal({
       <button
         type="button"
         onClick={closeModal}
-        aria-label="Close evidence dialog"
+        aria-label="Reselect file"
         data-testid="success-modal-close"
         className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer z-20"
       >
@@ -243,7 +243,7 @@ export function UploadSuccessModal({
       )}
 
       <div className="flex gap-3 relative z-10 mt-auto">
-        <button type="button" onClick={onDismiss} className="fc-btn-secondary flex-1 text-sm py-2">
+        <button type="button" onClick={closeModal} className="fc-btn-secondary flex-1 text-sm py-2">
           Cancel
         </button>
         <button

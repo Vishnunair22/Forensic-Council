@@ -63,7 +63,7 @@ export default function RootLayout({
           <QueryProvider>
             <GlobalLoadingOverlay />
             <GlobalNavbar />
-            <main className="flex-1 relative z-10 pt-16" id="main-content" tabIndex={-1}>
+            <main className={`flex-1 relative z-10 ${process.env.NEXT_PUBLIC_API_URL ? "pt-[92px]" : "pt-16"}`} id="main-content" tabIndex={-1}>
               {children}
             </main>
 

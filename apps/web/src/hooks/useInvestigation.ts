@@ -46,6 +46,8 @@ import { authService } from "@/lib/upload/authService";
 import { fileHandoffManager } from "@/lib/upload/fileHandoffManager";
 import { loadingOverlayController } from "@/lib/upload/loadingOverlayController";
 
+
+
 function withTimeout<T>(p: Promise<T>, ms: number, cleanup?: () => void): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => {
@@ -65,6 +67,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, cleanup?: () => void): Promis
     );
   });
 }
+
+const _MAX_ARBITER_POLLS = 300;
 
 async function waitForFinalReport(
   sessionId: string,
@@ -87,7 +91,8 @@ async function waitForFinalReport(
   const deadline = Date.now() + maxMs;
   let pollInterval = ARBITER_POLL_INTERVAL_MS;
   let consecutiveNotFound = 0;
-  while (Date.now() < deadline) {
+  let pollCount = 0;
+  while (Date.now() < deadline && pollCount < _MAX_ARBITER_POLLS) {
     if (signal?.aborted) return false;
     try {
       const st = await withTimeout(
@@ -142,6 +147,7 @@ async function waitForFinalReport(
     });
     if (signal?.aborted) return false;
     pollInterval = Math.min(pollInterval * 1.2, 3000);
+    pollCount++;
   }
   return false;
 }
@@ -442,10 +448,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       let sessionIdToUse: string | undefined;
       let isDuplicateSession = false;
+      let contentHash: string | null = null;
       try {
         const pendingClientSha256 = fileHandoffManager.getPendingClientSha256();
         const investigationRes = await startInvestigation(targetFile, caseId, investigatorId, pendingClientSha256);
         sessionIdToUse = investigationRes.session_id;
+        contentHash = investigationRes.content_hash ?? null;
 
         if (investigationRes.content_hash) {
           storage.setItem(`${STORAGE_KEYS.EVIDENCE_SHA256}:${sessionIdToUse}`, investigationRes.content_hash);
@@ -496,7 +504,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         investigator_id: investigatorId,
         mime_type: targetFile.type,
         pipeline_start: pipelineStart,
-        evidence_sha256: investigationRes.content_hash ?? null,
+        evidence_sha256: contentHash,
       };
       storage.setItem(STORAGE_KEYS.INVESTIGATION_CTX, investigationCtx, true);
       storage.setItem(`${STORAGE_KEYS.INVESTIGATION_CTX}:${sessionIdToUse}`, investigationCtx, true);
@@ -515,8 +523,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem(STORAGE_KEYS.PIPELINE_START, pipelineStart);
       storage.setItem(`${STORAGE_KEYS.PIPELINE_START}:${sessionIdToUse}`, pipelineStart);
 
-      if (investigationRes.content_hash) {
-        storage.setItem(`${STORAGE_KEYS.EVIDENCE_SHA256}:${sessionIdToUse}`, investigationRes.content_hash);
+      if (contentHash) {
+        storage.setItem(`${STORAGE_KEYS.EVIDENCE_SHA256}:${sessionIdToUse}`, contentHash);
       }
 
       if (thumbnailDataUrl && !isDuplicateSession) {
@@ -621,8 +629,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   // Effect A — Auto-start from pending file (set by HeroAuthActions before navigating here)
   useEffect(() => {
-    // Guard: sessionStorage flag survives Strict Mode double-mount where refs
-    // are re-initialized. Prevents triggerAnalysis from firing twice.
+    // F-H-4: clear stale FC_HANDOFF_FIRED when there is no pending file
+    // (retry after page refresh or SPA re-navigation).  The flag survives
+    // Strict Mode double-mount because __pendingFileStore.file is still
+    // set during both mounts.
+    if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" && !__pendingFileStore.file && !autoStartBlocking) {
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+    }
     if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1") return;
     if (autoStartFiredRef.current) return;
     let cancelled = false;

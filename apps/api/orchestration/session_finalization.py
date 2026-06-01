@@ -14,6 +14,7 @@ from api.routes._session_state import (
     get_active_pipeline_metadata,
     set_active_pipeline_metadata,
     set_final_report,
+    update_active_pipeline_metadata,
 )
 from api.routes.metrics import (
     increment_investigations_completed,
@@ -90,7 +91,7 @@ async def mark_investigation_completed(
         await persistence.update_session_status(session_id, "completed")
     except Exception as exc:
         logger.error("Failed to persist completed investigation", error=str(exc))
-        await set_active_pipeline_metadata(
+        await update_active_pipeline_metadata(
             session_id,
             {
                 "status": "degraded",
@@ -117,8 +118,8 @@ async def mark_investigation_completed(
         return
 
     await set_final_report(session_id, report)
-    existing_meta = await get_active_pipeline_metadata(session_id) or {}
-    await set_active_pipeline_metadata(
+    # F-15: use atomic CAS for terminal status transition
+    await update_active_pipeline_metadata(
         session_id,
         {
             "status": "completed",
@@ -129,7 +130,6 @@ async def mark_investigation_completed(
             "case_investigator_label": _case_label,
             "file_path": evidence_file_path,
             "original_filename": original_filename,
-            "created_at": existing_meta.get("created_at"),
             "completed_at": datetime.now(UTC).isoformat(),
             "report_id": str(report.report_id),
         },
@@ -178,7 +178,7 @@ async def mark_investigation_failed(
     logger.error("Investigation task failed", error=error, exc_info=True)
     increment_investigations_failed()
 
-    await set_active_pipeline_metadata(
+    await update_active_pipeline_metadata(
         session_id,
         {
             "status": "error",

@@ -208,22 +208,51 @@ class AgentInvestigationMixin:
         """Expose the live tool catalogue to working memory for LLM ReAct mode.
 
         Tools are filtered to only include those applicable to the evidence
-        MIME type (Fix 3) so the LLM never suggests semantically wrong tools.
+        MIME type so the LLM never suggests semantically wrong tools.
+
+        When an agent_tool_plan exists in evidence metadata, the snapshot is
+        further intersected with the plan's initial + deep tool set (the
+        per-subtype allowlist) and the plan's forbidden set is subtracted,
+        so even in LLM ReAct mode the model only sees subtype-appropriate tools.
         """
         registry = getattr(self, "_tool_registry", None)
         if registry is None:
             return
 
         # Apply MIME-type filtering so the LLM only sees relevant tools.
-        mime_type: str = (
-            getattr(getattr(self, "evidence_artifact", None), "mime_type", None) or ""
-        )
+        evidence = getattr(self, "evidence_artifact", None)
+        mime_type: str = getattr(evidence, "mime_type", None) or ""
         try:
-            from core.task_tool_config import get_allowed_tools_for_mime
+            from core.task_tool_config import get_allowed_tools_for_mime, _ALWAYS_ALLOWED
 
             allowed = get_allowed_tools_for_mime(mime_type) if mime_type else None
         except Exception:
             allowed = None
+
+        # F4-4: Harden by intersecting with per-subtype tool plan when available.
+        target_id = agent_id or self.agent_id
+        try:
+            from core.image_evidence_routing import get_agent_forbidden_tools
+
+            metadata = getattr(evidence, "metadata", {}) or {}
+            agent_plan = metadata.get("agent_tool_plan", {})
+            agent_key = None
+            for k in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
+                if k.lower() in target_id.lower():
+                    agent_key = k
+                    break
+            if agent_key and agent_key in agent_plan:
+                plan_entry = agent_plan[agent_key]
+                plan_tools = set(plan_entry.get("initial", []) + plan_entry.get("deep", []))
+                forbidden = set(plan_entry.get("forbidden", []))
+                from core.task_tool_config import _ALWAYS_ALLOWED
+                plan_tools |= _ALWAYS_ALLOWED
+            else:
+                plan_tools = None
+                forbidden = set()
+        except Exception:
+            plan_tools = None
+            forbidden = set()
 
         all_tools = registry.list_tools()
         if allowed is not None:
@@ -232,16 +261,26 @@ class AgentInvestigationMixin:
             snapshot = [t.model_dump() for t in (filtered if filtered else all_tools)]
         else:
             snapshot = [t.model_dump() for t in all_tools]
+
+        if plan_tools is not None and evidence:
+            bare_names = {t["name"] for t in snapshot}
+            subtype_allowed = bare_names & plan_tools
+            if subtype_allowed:
+                snapshot = [t for t in snapshot if t["name"] in subtype_allowed]
+
+        if forbidden:
+            snapshot = [t for t in snapshot if t["name"] not in forbidden]
+
         try:
             await self.working_memory.update_state(
                 session_id=self.session_id,
-                agent_id=agent_id or self.agent_id,
+                agent_id=target_id,
                 updates={"tool_registry_snapshot": snapshot},
             )
         except Exception as exc:
             logger.debug(
                 "Failed to publish tool registry snapshot",
-                agent_id=agent_id or self.agent_id,
+                agent_id=target_id,
                 error=str(exc),
             )
 

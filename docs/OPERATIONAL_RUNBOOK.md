@@ -297,6 +297,21 @@ grep GEMINI_API_KEY_POLICY_OK .env
 # Then: docker compose -f infra/docker-compose.yml --env-file .env up -d --force-recreate backend
 ```
 
+### Gemini Multi-Worker Quota
+
+The per-process `gemini_rpm_limit` defaults to 5 RPM (half the free-tier 10 RPM),
+which assumes exactly one worker replica. The Gemini vision call runs only in the
+forensic worker, so a single worker is safely ≤5 < 10.
+
+**If you scale to N worker replicas**, the combined RPM = 5·N can exceed the
+free-tier 10 RPM (and RPD=1500 likewise sums), causing `429 Too Many Requests`
+from the Gemini API. To fix:
+
+- Set `gemini_rpm_limit = floor(10 / worker_replicas)` in `core/config.py`, or
+- Deploy a Redis-backed sliding window (see `core/provider_quota_guard.py` for
+  the in-process reference implementation — upgrade the `_CALL_TIMESTAMPS` dict
+  to Redis for true cross-process enforcement).
+
 ---
 
 ## Observability

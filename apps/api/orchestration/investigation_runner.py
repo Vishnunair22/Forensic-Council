@@ -24,6 +24,10 @@ from orchestration.session_finalization import (
 
 logger = get_logger(__name__)
 
+# F-13: track files currently being cleaned up to prevent races between the
+# runner's finally-block and the route's deferred-cleanup task.
+_cleanup_in_flight: set[str] = set()
+
 
 async def _wrap_pipeline_with_broadcasts(
     pipeline: ForensicCouncilPipeline,
@@ -98,13 +102,32 @@ async def run_investigation_task(
             original_filename=original_filename,
             error=error_msg,
         )
-    finally:
+        # F-8: clean up the dedup key on failure so the same file can be re-uploaded
         try:
-            from pathlib import Path
+            from api.routes._session_state import get_active_pipeline_metadata
+            from core.persistence.redis_client import get_redis_client
 
-            Path(evidence_file_path).unlink(missing_ok=True)
-        except Exception:
-            logger.warning("Failed to remove temporary evidence file", path=evidence_file_path)
+            meta = await get_active_pipeline_metadata(session_id) or {}
+            _case_id = meta.get("case_id") or case_id
+            _content_hash = meta.get("content_hash") or content_sha256
+            if _case_id and _content_hash:
+                _redis = await get_redis_client()
+                await _redis.delete(f"dedup:{_case_id}:{_content_hash}")
+        except Exception as dedup_err:
+            logger.debug("Dedup key cleanup skipped", error=str(dedup_err))
+    finally:
+        if evidence_file_path in _cleanup_in_flight:
+            logger.debug("Evidence file cleanup already in progress", path=evidence_file_path)
+        else:
+            _cleanup_in_flight.add(evidence_file_path)
+            try:
+                from pathlib import Path
+
+                Path(evidence_file_path).unlink(missing_ok=True)
+            except Exception:
+                logger.warning("Failed to remove temporary evidence file", path=evidence_file_path)
+            finally:
+                _cleanup_in_flight.discard(evidence_file_path)
         remove_active_pipeline(session_id)
         _active_tasks.pop(session_id, None)
         clear_session_websockets(session_id)

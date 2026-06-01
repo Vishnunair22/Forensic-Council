@@ -5,8 +5,9 @@ File Type Policy
 Single source of truth for supported MIME types, file extensions, and
 agent-level file-type capabilities across the Forensic Council product.
 
-Media-only scope: JPEG, PNG, TIFF, WEBP, GIF, BMP, MP4, MOV, AVI, MKV,
-WEBM, WAV, MP3, M4A, FLAC.
+Current scope: JPEG, PNG, TIFF, WEBP, GIF, BMP (image-only). Audio/video
+agent capabilities are wired but empty — AV support is inactive until
+AGENT_FILE_CAPABILITIES is populated for Agent2/Agent4.
 """
 
 from __future__ import annotations

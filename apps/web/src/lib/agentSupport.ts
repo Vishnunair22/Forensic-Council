@@ -1,12 +1,12 @@
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 
 /*
- * Must stay in sync with backend MimeRegistry (apps/api/core/mime_registry.py):
+ * Must stay in sync with backend AGENT_FILE_CAPABILITIES (apps/api/core/file_type_policy.py):
  *   Agent1 → image/
- *   Agent2 → audio/, video/
- *   Agent3 → image/, video/
- *   Agent4 → video/
- *   Agent5 → *
+ *   Agent2 → (none — empty capabilities, currently disabled)
+ *   Agent3 → image/
+ *   Agent4 → (none — empty capabilities, currently disabled)
+ *   Agent5 → image/
  */
 export function supportedAgentIdsForMime(mimeType?: string | null): Set<string> {
   const allIds = new Set(AGENTS_DATA.filter((a) => a.id !== "Arbiter").map((a) => a.id));

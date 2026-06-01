@@ -87,9 +87,10 @@ def is_screen_capture_like(artifact: Any) -> bool:
 
     # Special Case: Large JPEGs that are clearly screenshots (phone exports)
     if ext == ".jpg" and (mime in {"image/jpeg", ""} or is_camera_still_candidate(artifact)):
+        orig_name = str(getattr(artifact, "original_filename", "") or "").lower()
         filename = os.path.basename(file_path).lower()
         screenshot_keywords = {"screenshot", "screen", "capture", "snap", "export"}
-        has_keyword = any(k in filename for k in screenshot_keywords)
+        has_keyword = any(k in orig_name for k in screenshot_keywords) or any(k in filename for k in screenshot_keywords)
         if width >= 1080 and not probe.get("has_camera_tags") and has_keyword:
             return True
         return False

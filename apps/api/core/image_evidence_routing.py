@@ -114,6 +114,8 @@ def build_image_evidence_profile(
         route_classes.append(ImageEvidenceClass.CAMERA_PHOTO)
         route_classes.append(ImageEvidenceClass.PHYSICAL_SCENE)
         route_classes.append(ImageEvidenceClass.PEOPLE_OBJECT_WEAPON)
+        if is_doc:
+            route_classes.append(ImageEvidenceClass.DOCUMENT_OR_PAPER)
     elif is_screenshot:
         route_classes.append(ImageEvidenceClass.SCREENSHOT)
         if is_doc:
@@ -146,7 +148,15 @@ def build_image_evidence_profile(
 
 
 def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict[str, list[str]]]:
-    """Generates deterministic initial and deep phase tool plans for specialists."""
+    """Generates deterministic initial and deep phase tool plans for specialists.
+
+    IMPORTANT (F5-5): This function is the SINGLE source of truth for tool
+    selection. Gemini's ``routing_category`` field (returned by the visual
+    profile) feeds only narrative/forensic-naming context — it MUST NOT be
+    wired back into tool selection, as that would create non-deterministic
+    routing that varies per API call and could bypass the forbidden-set
+    guarantees established here.
+    """
     plan = {
         "Agent1": {"initial": [], "deep": [], "forbidden": []},
         "Agent3": {"initial": [], "deep": [], "forbidden": []},
@@ -204,6 +214,61 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
         ]
         plan["Agent5"]["forbidden"] = ["camera_profile_match", "astro_grounding"]
 
+    elif ImageEvidenceClass.CAMERA_PHOTO in profile.route_classes:
+        # Agent 1
+        is_doc_route = ImageEvidenceClass.DOCUMENT_OR_PAPER in profile.route_classes
+        plan["Agent1"]["initial"] = [
+            "file_hash_verify",
+            "visual_evidence_profile",
+            "neural_ela",
+            "neural_fingerprint",
+            "analyze_image_content",
+            "frequency_domain_analysis",
+        ]
+        if is_doc_route:
+            plan["Agent1"]["initial"].append("extract_text_from_image")
+        plan["Agent1"]["deep"] = [
+            "diffusion_artifact_detector",
+            "synthid_watermark_detect",
+            "f3_net_frequency",
+            "neural_splicing",
+            "neural_copy_move",
+        ]
+        if is_doc_route:
+            plan["Agent1"]["deep"].append("detect_font_inconsistency")
+
+        # Agent 3
+        plan["Agent3"]["initial"] = [
+            "object_detection",
+            "scene_incongruence",
+            "lighting_correlation_initial",
+            "vector_contraband_search",
+        ]
+        plan["Agent3"]["deep"] = [
+            "scale_validation",
+            "lighting_consistency",
+            "read_shared_image_context",
+        ]
+
+        # Agent 5
+        plan["Agent5"]["initial"] = [
+            "file_hash_verify",
+            "exif_extract",
+            "file_structure_analysis",
+            "hex_signature_scan",
+            "compression_risk_audit",
+            "timestamp_analysis",
+        ]
+        plan["Agent5"]["deep"] = [
+            "metadata_anomaly_score",
+            "exif_isolation_forest",
+            "provenance_chain_verify",
+        ]
+        if profile.has_camera_make_model:
+            plan["Agent5"]["deep"].append("camera_profile_match")
+        if profile.has_gps:
+            plan["Agent5"]["deep"].extend(["gps_timezone_validate", "astro_grounding"])
+
     elif ImageEvidenceClass.DOCUMENT_OR_PAPER in profile.route_classes:
         # Agent 1
         plan["Agent1"]["initial"] = [
@@ -251,56 +316,6 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
             plan["Agent5"]["deep"].append("camera_profile_match")
         if profile.has_gps:
             plan["Agent5"]["deep"].append("gps_timezone_validate")
-
-    elif ImageEvidenceClass.CAMERA_PHOTO in profile.route_classes:
-        # Agent 1
-        plan["Agent1"]["initial"] = [
-            "file_hash_verify",
-            "visual_evidence_profile",
-            "neural_ela",
-            "neural_fingerprint",
-            "analyze_image_content",
-            "frequency_domain_analysis",
-        ]
-        plan["Agent1"]["deep"] = [
-            "diffusion_artifact_detector",
-            "synthid_watermark_detect",
-            "f3_net_frequency",
-            "neural_splicing",
-            "neural_copy_move",
-        ]
-
-        # Agent 3
-        plan["Agent3"]["initial"] = [
-            "object_detection",
-            "scene_incongruence",
-            "lighting_correlation_initial",
-            "vector_contraband_search",
-        ]
-        plan["Agent3"]["deep"] = [
-            "scale_validation",
-            "lighting_consistency",
-            "read_shared_image_context",
-        ]
-
-        # Agent 5
-        plan["Agent5"]["initial"] = [
-            "file_hash_verify",
-            "exif_extract",
-            "file_structure_analysis",
-            "hex_signature_scan",
-            "compression_risk_audit",
-            "timestamp_analysis",
-        ]
-        plan["Agent5"]["deep"] = [
-            "metadata_anomaly_score",
-            "exif_isolation_forest",
-            "provenance_chain_verify",
-        ]
-        if profile.has_camera_make_model:
-            plan["Agent5"]["deep"].append("camera_profile_match")
-        if profile.has_gps:
-            plan["Agent5"]["deep"].extend(["gps_timezone_validate", "astro_grounding"])
 
     else:
         # Web or digital image (or animated GIF)
@@ -432,3 +447,25 @@ def get_agent_plan(
         return []
 
     return [_TOOL_TO_TASK_DESC.get(t, t) for t in tools]
+
+
+def get_agent_forbidden_tools(
+    evidence_artifact: Any,
+    agent_id: str,
+) -> list[str]:
+    """Return the forbidden tool list for an agent from the evidence plan metadata."""
+    metadata = getattr(evidence_artifact, "metadata", {}) or {}
+    agent_plan = metadata.get("agent_tool_plan", {})
+    if not agent_plan:
+        return []
+
+    agent_key = None
+    for k in ["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]:
+        if k.lower() in agent_id.lower():
+            agent_key = k
+            break
+
+    if not agent_key or agent_key not in agent_plan:
+        return []
+
+    return agent_plan[agent_key].get("forbidden", [])
