@@ -5,9 +5,7 @@ from __future__ import annotations
 import os
 
 from fastapi import Request
-from fastapi.responses import JSONResponse
 
-from core.config import get_settings
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)

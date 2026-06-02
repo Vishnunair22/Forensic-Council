@@ -1,6 +1,6 @@
 # Model Registry — Forensic Council
 
-**Version:** v1.7.0 | **Source-of-truth:** `apps/api/config/models.lock.json`
+**Version:** v1.0.0 | **Source-of-truth:** `apps/api/config/models.lock.json`
 
 This document covers model pinning, provider setup, licensing, and verification for the Forensic Council system. It supersedes the removed `docs/MODELS.md`.
 
@@ -20,10 +20,12 @@ Default: `FREE_TIER_MODE=true`
 
 ### Groq (Logic & Reasoning)
 
-| Role | Model | Use case |
-|------|-------|---------|
-| Agent synthesis | `llama-3.1-8b-instant` | Fast, cost-effective agent reasoning |
-| Arbiter synthesis | `llama-3.3-70b-versatile` | High-quality narrative and verdict reasoning |
+| Role | Primary model | Fallback | Use case |
+|------|---------------|----------|---------|
+| Agent synthesis | `llama-3.3-70b-versatile` | `llama-3.1-8b-instant` | Per-agent forensic narrative synthesis |
+| Arbiter synthesis | `llama-3.3-70b-versatile` | `llama-3.1-8b-instant` | Cross-agent deliberation, narrative, and verdict reasoning |
+
+Both roles default to `llama-3.3-70b-versatile` (primary) with `llama-3.1-8b-instant` as the automatic fallback, configured via `LLM_MODEL` / `LLM_FALLBACK_MODELS` (agents) and `ARBITER_*` settings (arbiter).
 
 **Get a key:** https://console.groq.com/keys
 

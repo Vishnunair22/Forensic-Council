@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-from typing import Any, List, Dict
-
+from pydantic import BaseModel
 
 # ── Narrative voice personas ──────────────────────────────────────────────────
 #
@@ -25,13 +23,13 @@ class AgentNarrativePersona(BaseModel):
     title: str
     voice_style: str
     """Two-sentence description of HOW this expert writes."""
-    vocabulary_signature: List[str]
+    vocabulary_signature: list[str]
     """Domain-specific terms this expert uses naturally."""
     emphasis: str
     """What this expert foregrounds in every analysis."""
     finding_lead: str
     """How findings should open — the pattern that makes each expert recognisable."""
-    forbidden_phrases: List[str]
+    forbidden_phrases: list[str]
     """Phrases that break the expert voice — never appear in output."""
 
 class ReasoningRule(BaseModel):
@@ -42,13 +40,13 @@ class ReasoningRule(BaseModel):
 class AgentPersonaProfile(BaseModel):
     agent_id: str
     role: str
-    allowed_claims: List[str]
-    forbidden_claims: List[str]
-    required_cross_checks: List[str]
-    positive_thresholds: Dict[str, float]
-    followup_rules: List[ReasoningRule]
+    allowed_claims: list[str]
+    forbidden_claims: list[str]
+    required_cross_checks: list[str]
+    positive_thresholds: dict[str, float]
+    followup_rules: list[ReasoningRule]
 
-AGENT_PERSONA_PROFILES: Dict[str, AgentPersonaProfile] = {
+AGENT_PERSONA_PROFILES: dict[str, AgentPersonaProfile] = {
     "Agent1": AgentPersonaProfile(
         agent_id="Agent1",
         role="Pixel-level and image-integrity forensic examiner.",
@@ -164,7 +162,7 @@ def get_agent_persona_profile(agent_id: str) -> AgentPersonaProfile | None:
     return AGENT_PERSONA_PROFILES.get(clean_id)
 
 
-AGENT_NARRATIVE_PERSONAS: Dict[str, AgentNarrativePersona] = {
+AGENT_NARRATIVE_PERSONAS: dict[str, AgentNarrativePersona] = {
     "Agent1": AgentNarrativePersona(
         agent_id="Agent1",
         expert_name="Dr. Haruto Yashima",

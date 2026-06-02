@@ -33,7 +33,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3000/ > /dev/null || exit 1
 
-RUN echo '⚠ frontend running in DEVELOPMENT target — do not expose publicly' \
+RUN echo 'WARNING: frontend running in DEVELOPMENT target - do not expose publicly' \
     > /app/apps/web/.dev_target_banner
 
 CMD ["npm", "run", "dev"]
@@ -48,7 +48,7 @@ COPY apps/web/ ./
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN test -z "${NEXT_PUBLIC_API_URL}" || \
-    echo "ℹ Baked NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} into bundle. To change, rebuild."
+    echo "NOTE: Baked NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} into bundle. To change, rebuild."
 RUN mkdir -p /app/apps/web/.next \
  && printf '%s' "${NEXT_PUBLIC_API_URL}" > /app/apps/web/.next/NEXT_PUBLIC_API_URL.bake
 ENV NEXT_TELEMETRY_DISABLED=1

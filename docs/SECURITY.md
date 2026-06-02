@@ -212,7 +212,7 @@ Response time: 48 hours for acknowledgement, 7 days for triage.
 
 - **CSP is owned by Next.js middleware** (`apps/web/src/middleware.ts`), not Caddy.
   Caddy previously set a conflicting CSP header that broke `'unsafe-inline'` styles;
-  that header was removed in v3→v4 audit (see `AUDIT_CHANGES.md` `DOCKER-004`).
+  that header was removed so Next.js middleware is the sole CSP authority.
 - **COOP / COEP**: Currently not set. SharedArrayBuffer is not used. If COOP/COEP are
   added in future, they must be set in Next.js middleware (not Caddy) to avoid the same
   double-header conflict.

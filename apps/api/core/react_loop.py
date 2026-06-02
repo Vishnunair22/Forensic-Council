@@ -27,9 +27,17 @@ from core.config import Settings
 from core.custody_logger import CustodyLogger, EntryType
 from core.finding_formatter import (
     TOOL_LABELS as _EXTRACTED_TOOL_LABELS,
+)
+from core.finding_formatter import (
     build_detailed_reasoning as _fmt_build_detailed_reasoning,
+)
+from core.finding_formatter import (
     build_readable_summary as _fmt_build_readable_summary,
+)
+from core.finding_formatter import (
     format_tool_result as _fmt_format_tool_result,
+)
+from core.finding_formatter import (
     shape_analyst_finding as _fmt_shape_analyst_finding,
 )
 from core.hitl import (
@@ -43,7 +51,6 @@ from core.llm_client import LLMClient, LLMResponse, parse_llm_step
 from core.observability import get_tracer
 from core.structured_logging import get_logger
 from core.task_tool_config import get_task_tool_overrides
-from core.tool_interpreters import _TOOL_INTERPRETERS
 from core.tool_output_classifier import ToolOutputClassifier
 from core.tool_registry import ToolRegistry, ToolResult
 from core.tracing import PipelineTrace
@@ -1264,7 +1271,7 @@ class ReActLoopEngine:
                                 finding.metadata["confidence_interval"] = cal_result.confidence_interval
                                 if cal_result.uncertainty:
                                     finding.metadata["uncertainty"] = cal_result.uncertainty.model_dump()
-                                    
+
                                     # Check for epistemic uncertainty escalation (arXiv:2512.16614)
                                     if cal_result.uncertainty.should_escalate:
                                         logger.warning(

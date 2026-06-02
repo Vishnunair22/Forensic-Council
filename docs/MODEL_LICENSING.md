@@ -2,7 +2,7 @@
 
 This file documents ML model licensing for the Forensic Council system. For detailed information, see [MODEL_REGISTRY.md](MODEL_REGISTRY.md).
 
-Last updated: 2026-04-25 | Status: v1.7.0
+Last updated: 2026-04-25 | Status: v1.0.0
 
 ---
 

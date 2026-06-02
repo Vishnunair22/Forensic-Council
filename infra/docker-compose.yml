@@ -20,9 +20,10 @@
 # making all previously signed report signatures unverifiable. Back up the postgres
 # volume before running `down -v` if you need to preserve signature chain of custody.
 #
-# IMPORTANT: COMPOSE_PROJECT_NAME is set to "forensic-council" in .env.example.
-# This ensures dev and production builds share the SAME named volumes and never
-# re-download ML models when switching between dev and prod modes.
+# IMPORTANT: The Docker project name is locked to "forensic-council" via the
+# `name:` directive below (NOT via COMPOSE_PROJECT_NAME, which is intentionally
+# left unset). This ensures dev and production builds share the SAME named volumes
+# and never re-download ML models when switching between dev and prod modes.
 # ============================================================================
 
 # Locks the Docker project name so all compose variants (dev, prod, override)

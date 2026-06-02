@@ -42,9 +42,9 @@ from api.routes.investigation import (
     _append_chunk,
     _detect_mime_from_head,
 )
-from core.file_type_policy import SUPPORTED_MIME_TYPES
 from core.auth import get_current_user
 from core.config import get_settings
+from core.file_type_policy import SUPPORTED_MIME_TYPES
 from core.persistence.redis_client import get_redis_client
 from core.structured_logging import get_logger
 

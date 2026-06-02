@@ -790,7 +790,6 @@ class GeminiVisionClient:
         Raises RuntimeError if Gemini is not enabled or the call fails, so the
         caller can fall back to the local ensemble.
         """
-        from core.visual_context_models import VisualContext as _VisualContext
 
         if not self._enabled:
             raise RuntimeError("Gemini client is not configured (GEMINI_API_KEY missing or policy not accepted)")
@@ -1700,7 +1699,8 @@ class GeminiVisionClient:
         import hashlib
         import mimetypes
         from uuid import uuid4
-        from core.evidence import EvidenceArtifact, ArtifactType
+
+        from core.evidence import ArtifactType, EvidenceArtifact
         from core.vision_local_ensemble import analyze_local_visual_profile
 
         logger.warning(

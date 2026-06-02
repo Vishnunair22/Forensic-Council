@@ -125,11 +125,10 @@ async def _dump_visual_context(session_id):
 
 
 async def main(path: str, suffix: str = "001"):
-    from orchestration.pipeline import ForensicCouncilPipeline
-
     # Load signing keys from Postgres (worker does this at startup) so the
     # in-pipeline arbiter can sign the final report.
     from core.signing import get_keystore
+    from orchestration.pipeline import ForensicCouncilPipeline
     await get_keystore().initialize()
 
     data = open(path, "rb").read()

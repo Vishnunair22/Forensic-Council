@@ -1,6 +1,6 @@
 # API Contract — Forensic Council
 
-**Version:** v1.7.0 | **Base URL:** `http://localhost:8000`
+**Version:** v1.0.0 | **Base URL:** `http://localhost:8000`
 
 Application REST endpoints are prefixed with `/api/v1`; health/liveness probes
 are also exposed at root-level aliases for container checks. Authentication uses
@@ -123,6 +123,22 @@ frontend avoids the subprotocol token path when an auth cookie is present.
 
 ---
 
+## Capabilities
+
+### GET `/api/v1/capabilities`
+
+Backend capability contract for frontend policy sync. **No authentication required** — the frontend calls this before login to mirror server-side upload policy (supported MIME types, max size, per-agent capabilities).
+
+```json
+{
+  "supported_mime_types": ["image/jpeg", "image/png", "..."],
+  "max_file_size_bytes": 52428800,
+  "agent_capabilities": {"Agent1": ["image/"], "Agent5": ["image/", "video/"]}
+}
+```
+
+---
+
 ## Health
 
 | Method | Path | Purpose |
@@ -133,6 +149,7 @@ frontend avoids the subprotocol token path when an auth cookie is present.
 | GET | `/api/v1/live` | Lightweight liveness probe under API prefix |
 | GET | `/api/v1/health/ml-tools` | ML tool readiness summary |
 | GET | `/api/v1/health/tools` | Tool registry readiness summary |
+| GET | `/api/v1/health/providers` | LLM/vision provider readiness + quota summary |
 
 ### GET `/api/v1/sessions/{session_id}/progress`
 
@@ -220,6 +237,10 @@ Submit a Human-in-the-Loop decision. **Auth required.**
 
 List pending HITL checkpoints. **Auth required.** Returns array or `[]` if none pending.
 
+### GET `/api/v1/hitl/checkpoint/{session_id}/{agent_id}`
+
+Poll a specific HITL checkpoint for expiry. **Auth required.** Returns the checkpoint JSON while the Redis key is live; once the 900s TTL elapses, emits a `HITL_EXPIRED` SSE event and returns `{"status": "expired", ...}` so a review widget can auto-dismiss.
+
 ---
 
 ## Report
@@ -246,6 +267,10 @@ Download report as PDF (falls back to JSON with `X-PDF-Fallback: true` header if
 
 The PDF fallback behavior returns JSON with `Content-Type: application/json` and `X-PDF-Fallback: true` on PDF export error (Phase 5.13). The JSON still contains full report data.
 
+### GET `/api/v1/sessions/{session_id}/report/docx`
+
+Download report as a DOCX (Word) file via python-docx. **Auth required.** Returns `503` if the DOCX exporter is unavailable; same resolution order as `/report` (returns `202` if still in progress).
+
 ---
 
 ## Other Session Endpoints
@@ -257,20 +282,6 @@ Get the most recent thinking brief for a specific agent. **Auth required.**
 ### GET `/api/v1/sessions/{session_id}/brief`
 
 Get session brief and metadata. **Auth required.**
-
-### GET `/api/v1/sessions/{session_id}/quota`
-
-Get per-session API usage data. **Auth required.**
-
-```json
-{
-  "tokens_used": 42000,
-  "tokens_limit": 100000,
-  "cost_estimate_usd": 0.0525,
-  "calls_total": 12,
-  "degraded": false
-}
-```
 
 ---
 

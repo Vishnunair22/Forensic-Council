@@ -1,6 +1,6 @@
 # Testing Guide — Forensic Council
 
-**Version:** v1.8.0 | Comprehensive Forensic & App Testing Reference.
+**Version:** v1.0.0 | Comprehensive Forensic & App Testing Reference.
 
 ---
 
@@ -94,14 +94,11 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | `test_api_routes.py` | REST Endpoint Health | `FastAPI TestClient`, `magic` | 200/4xx/5xx status codes, MIME-type allow-lists, and CORS header reflection. |
 | `websocket_flow.test.ts` | Real-time WebSocket & report polling contracts | `Jest`, WS-Mocks | Unit tests for `createLiveSocket` connect/resolve/reject paths. Lives in `tests/unit/lib/`. |
-| `accessibility.spec.ts` | Automated A11y Audit | `Playwright`, `axe-core` | Full-page runtime audits; verifies color contrast, heading hierarchy, and modal focus. |
-| `useForensicData.test.ts` | Data Transformation | `Jest` | Mapping backend DTOs to UI models; calibration and court-statement formatting. |
 
 ### ♿ UI & Accessibility (WCAG 2.1 AA)
 | File | Aspect Tested | Dependencies | Coverage |
 | :--- | :--- | :--- | :--- |
 | `accessibility.spec.ts` | Automated A11y Audit | `Playwright`, `axe-core` | Full-page runtime audits; verifies color contrast, heading hierarchy, and modal focus. |
-| `accessibility.test.tsx` | Component A11y | `RTL`, `jest-axe` | Keyboard navigation (Tab/Enter), ARIA labels, and screen-reader error announcements. |
 | `components.test.tsx` | UI Interactions | `React Testing Library` | Render states for `AgentProgressDisplay` and `LoadingOverlay`. |
 
 ---
@@ -228,7 +225,7 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env
     });
     ```
 
-### 2. Live Playwright Test Hangs (`full_journey.live.spec.ts`)
+### 2. Live Playwright Test Hangs (`full_journey.spec.ts`)
 - **Symptom**: Test hangs indefinitely on page redirection or during the upload flow.
 - **Resolution**:
   - Ensure the backend is fully healthy by waiting for the `/api/v1/health` endpoint:

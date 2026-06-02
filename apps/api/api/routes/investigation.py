@@ -22,12 +22,6 @@ try:
     import magic
 except ImportError:
     from core import magic_fallback as magic
-from core.file_type_policy import (
-    EXACT_MIME_EXT_MAP,
-    SUPPORTED_EXTENSIONS,
-    SUPPORTED_MIME_TYPES,
-    get_applicable_agents,
-)
 from api.routes._rate_limiting import (
     check_daily_cost_quota,
     check_investigation_rate_limit,
@@ -49,6 +43,12 @@ from api.schemas import (
 )
 from core.auth import User, get_current_user
 from core.config import get_settings
+from core.file_type_policy import (
+    EXACT_MIME_EXT_MAP,
+    SUPPORTED_EXTENSIONS,
+    SUPPORTED_MIME_TYPES,
+    get_applicable_agents,
+)
 from core.structured_logging import get_logger
 from orchestration.pipeline import ForensicCouncilPipeline
 

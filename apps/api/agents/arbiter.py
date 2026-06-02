@@ -16,14 +16,12 @@ from uuid import UUID
 from agents.arbiter_narrative import ArbiterNarrativeMixin
 from agents.arbiter_verdict import (
     AGENT_NAMES,
-    MIN_CONFIDENCE_THRESHOLD,
     AgentMetrics,
     ChallengeResult,
     FindingComparison,
     FindingVerdict,
     ForensicReport,
     TribunalCase,
-    calculate_manipulation_probability,
     confidence_of,
     cross_agent_comparison,
     evidence_verdict_of,
@@ -265,7 +263,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
         overall_confidence, overall_error_rate = self._calculate_weighted_stats(active_metrics)
-        
+
         # ── 3. Tool Coverage ──
         completed_tools = []
         failed_tools = []
@@ -277,7 +275,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 tool = meta.get("tool_name") or f.get("finding_type") or "tool"
                 status = f.get("status")
                 evidence_verdict = f.get("evidence_verdict")
-                
+
                 # A tool "completed" if it produced a verdict and did not fail or
                 # opt out. Finding status is CONFIRMED/INCONCLUSIVE/etc. (never the
                 # literal "SUCCESS"), so classify by failure/NA first, then treat
@@ -289,7 +287,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     not_applicable_tools.append(tool)
                 else:
                     completed_tools.append(tool)
-                    
+
         completed_tools = list(set(completed_tools))
         failed_tools = list(set(failed_tools))
         not_applicable_tools = list(set(not_applicable_tools))
@@ -365,22 +363,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             logger.debug("Corroboration grounding skipped", error=str(_corr_err))
 
         from core.per_agent_synthesis import (
-            split_visual_context,
             AgentSynthesisInput,
-            refine_synthesis_batch,
             compose_evidence_identity,
+            refine_synthesis_batch,
+            split_visual_context,
         )
         splits = split_visual_context(str(self.session_id), visual_context)
         # Compose the shared "what the evidence appears to be" fragment once so
         # all three agent briefs open with consistent observed context.
         evidence_identity = compose_evidence_identity(visual_context)
-        
+
         inputs = {}
         for aid in ("Agent1", "Agent3", "Agent5"):
             if aid in active_results:
                 res = active_results[aid]
                 findings = res.get("findings", [])
-                
+
                 # Check visual context applicability
                 vc_avail = False
                 vc_sec = None
@@ -393,7 +391,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 elif aid == "Agent5" and splits.agent5_metadata_visual:
                     vc_avail = True
                     vc_sec = splits.agent5_metadata_visual
-                    
+
                 a_completed = []
                 a_failed = []
                 for f in findings:
@@ -404,7 +402,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                         a_completed.append(tool)
                     elif status in ("FAILED", "ERROR", "TIMEOUT"):
                         a_failed.append(tool)
-                        
+
                 # Deterministic, severity-aware per-agent verdict / confidence.
                 # Replaces the prior crude POSITIVE-count rule: only MEDIUM+
                 # POSITIVE signals move the verdict, NOT_APPLICABLE/ERROR/failed
@@ -427,7 +425,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     agent_confidence=a_conf,
                     confidence_reason=a_reason,
                 )
-                
+
         agent_syntheses = await refine_synthesis_batch(inputs, self.config)
 
         # ── 5. Arbiter Deliberation ──
@@ -453,7 +451,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 case_data["mime_type"] = meta.get("mime_type")
             if meta.get("file_size"):
                 case_data["file_size_bytes"] = meta.get("file_size")
-                
+
         execution_metadata = {
             "analysis_mode": self.config.analysis_routing_mode if hasattr(self.config, "analysis_routing_mode") else "hybrid",
             "visual_context_source": getattr(visual_context, "source", "none") if visual_context else "none",

@@ -2,7 +2,7 @@
 
 Forensic Council is a multi-agent forensic analysis platform for digital media verification. It accepts evidence uploads, runs five specialist agents through an initial and deep analysis pipeline, and returns a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.7.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](#)
 [![Status](https://img.shields.io/badge/status-production_hardening-yellow.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) Python 3.12 (tested/recommended); `pyproject.toml` supports 3.11–3.14
@@ -46,6 +46,9 @@ bash scripts/prod.sh
 ```
 
 These scripts validate `.env`, check system resources, build images in parallel, start services, and poll health before returning.
+
+> [!NOTE]
+> The `.sh` scripts require a POSIX shell — on Windows run them from **Git Bash** or **WSL2**. The `docker compose` commands they wrap also work directly in PowerShell/`cmd`. See [scripts/README.md](scripts/README.md) for a full catalog of helper scripts.
 
 For detailed Docker commands, troubleshooting, and platform-specific instructions, see:
 - [infra/DOCKER_BUILD.md](infra/DOCKER_BUILD.md) — Complete Docker build/run reference
@@ -149,7 +152,7 @@ See [docs/TESTING.md](docs/TESTING.md) for full test commands and coverage targe
 ## Operations
 
 - [docs/OPERATIONAL_RUNBOOK.md](docs/OPERATIONAL_RUNBOOK.md) — incident triage, common failures, recovery commands
-- [docs/PRODUCTION_CHECKLIST.md](docs/PRODUCTION_CHECKLIST.md) — production deployment gates
+- [infra/validate_production_readiness.sh](infra/validate_production_readiness.sh) — production readiness gate (run before deploying)
 - [infra/README.md](infra/README.md) — Docker/infra quickstart and commands
 
 ## Security
@@ -167,10 +170,6 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system runtime topology, ag
 ## API contract
 
 See [docs/API_CONTRACT.md](docs/API_CONTRACT.md) for complete backend/frontend API contract including auth, investigation, WebSocket/SSE, HITL, report, and termination endpoints.
-
-## Contributor Handoff
-
-See [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) — read this before editing the repo. It contains the current phase, changed files, verification commands, and local contributor rules.
 
 ## License
 

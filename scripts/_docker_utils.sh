@@ -124,7 +124,7 @@ check_docker_memory() {
       platform=$(detect_platform)
       case "$platform" in
         windows|macos)
-          echo "  Increase in Docker Desktop: Settings \u2192 Resources \u2192 Memory" >&2
+          echo "  Increase in Docker Desktop: Settings -> Resources -> Memory" >&2
           ;;
       esac
     fi

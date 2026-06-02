@@ -71,12 +71,13 @@ def build_visual_context_from_finding(
 ) -> VisualContext:
     """Helper to convert VisualEvidenceFinding into the standardized VisualContext model."""
     import datetime
+
     from core.visual_context_models import (
-        VisualContext,
+        DetectedObject,
         ImageIntegrityContext,
-        ObjectSceneContext,
         MetadataVisualContext,
-        DetectedObject
+        ObjectSceneContext,
+        VisualContext,
     )
 
     source_val = "llm_assisted" if (finding.provider_used != "local_visual_ensemble" and finding.provider_used != "local") else "local_ensemble"
@@ -276,6 +277,7 @@ async def create_visual_context_preflight(
         try:
             import mimetypes
             from uuid import UUID
+
             from core.evidence import ArtifactType, EvidenceArtifact
             from core.vision_local_ensemble import analyze_local_visual_profile
 

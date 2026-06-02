@@ -4,8 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.persistence.redis_client import get_redis_client
-from core.persistence.redis_client import InMemoryRedisClient
+from core.persistence.redis_client import InMemoryRedisClient, get_redis_client
 
 
 @pytest.mark.asyncio

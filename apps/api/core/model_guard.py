@@ -31,7 +31,6 @@ positive evidence that memory is insufficient.
 from __future__ import annotations
 
 import contextlib
-import os
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -184,7 +183,7 @@ def guarded_load(model_name: str, required_mb: float | None = None, *, lock_time
             MODEL_LOAD_LOCK.release()
 
 
-def cap_image_dimension(image: "_PILImage.Image", max_dim: int | None = None) -> "_PILImage.Image":
+def cap_image_dimension(image: _PILImage.Image, max_dim: int | None = None) -> _PILImage.Image:
     """Downscale a PIL image so its longest side is at most ``max_dim`` px.
 
     Heavy vision models allocate memory proportional to input area; a single

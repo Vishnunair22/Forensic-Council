@@ -12,7 +12,7 @@ from typing import Any
 from core.llm_client import LLMClient
 from core.react_loop import AgentFinding, ReActLoopEngine, create_llm_step_generator
 from core.structured_logging import get_logger
-from core.synthesis import SynthesisService, TEMPLATE_PATTERNS
+from core.synthesis import TEMPLATE_PATTERNS, SynthesisService
 from core.tracing import PipelineTrace
 
 logger = get_logger(__name__)
@@ -273,7 +273,7 @@ class AgentInvestigationMixin:
         evidence = getattr(self, "evidence_artifact", None)
         mime_type: str = getattr(evidence, "mime_type", None) or ""
         try:
-            from core.task_tool_config import get_allowed_tools_for_mime, _ALWAYS_ALLOWED
+            from core.task_tool_config import _ALWAYS_ALLOWED, get_allowed_tools_for_mime
 
             allowed = get_allowed_tools_for_mime(mime_type) if mime_type else None
         except Exception:
@@ -282,7 +282,6 @@ class AgentInvestigationMixin:
         # F4-4: Harden by intersecting with per-subtype tool plan when available.
         target_id = agent_id or self.agent_id
         try:
-            from core.image_evidence_routing import get_agent_forbidden_tools
 
             metadata = getattr(evidence, "metadata", {}) or {}
             agent_plan = metadata.get("agent_tool_plan", {})

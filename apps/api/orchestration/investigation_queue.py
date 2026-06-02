@@ -80,8 +80,6 @@ class InvestigationQueue:
         try:
             from api.routes._session_state import (
                 broadcast_update,
-                get_active_pipeline_metadata,
-                set_active_pipeline_metadata,
                 update_active_pipeline_metadata,
             )
             from api.schemas import BriefUpdate

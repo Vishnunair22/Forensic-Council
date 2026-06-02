@@ -1,6 +1,6 @@
 [project]
 name = "forensic_council"
-version = "1.7.0"
+version = "1.0.0"
 description = "Multi-Agent Forensic Evidence Analysis System"
 # Pinned to 3.12: praat-parselmouth and librosa lack wheels for 3.13+,
 # and Docker/CI both pin to 3.12. Widen only after those packages ship 3.13 wheels.

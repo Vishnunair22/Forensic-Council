@@ -10,7 +10,6 @@ import asyncio
 import os
 import signal
 import sys
-from datetime import UTC, datetime
 from typing import Any
 
 # Add current directory to path so imports work when the worker is launched as a script.
@@ -20,8 +19,6 @@ from api.routes._session_state import (  # noqa: E402
     _active_pipelines,
     broadcast_update,
     clear_session_websockets,
-    get_active_pipeline_metadata,
-    set_active_pipeline_metadata,
     update_active_pipeline_metadata,
 )
 from api.schemas import BriefUpdate  # noqa: E402

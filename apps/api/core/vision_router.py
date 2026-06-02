@@ -9,8 +9,6 @@ from core.evidence import ArtifactType, EvidenceArtifact
 from core.gemini_client import (
     GeminiVisionClient,
     GeminiVisionFinding,
-    GeminiQuotaBlocked,
-    GeminiRateLimited,
 )
 from core.image_routing import build_image_forensic_routing
 from core.structured_logging import get_logger
@@ -206,8 +204,8 @@ class VisionRouter:
         if session_id:
             try:
                 from core.visual_context_store import (
-                    wait_for_visual_context,
                     visual_context_to_profile_dict,
+                    wait_for_visual_context,
                 )
 
                 # Bounded wait, not a one-shot read: the preflight is fired as a

@@ -496,6 +496,13 @@ export const useSimulation = ({
                   }
                   break;
 
+                case "INITIAL_ANALYSIS_COMPLETE":
+                  // Informational marker emitted immediately before PIPELINE_PAUSED.
+                  // The awaiting-decision transition is driven by PIPELINE_PAUSED, so no
+                  // state change is needed here; this explicit case keeps the event
+                  // contract complete and avoids the default "unhandled event" warning.
+                  break;
+
                 case "PIPELINE_PAUSED":
                   setStatus("awaiting_decision");
                   setIsDeepHITL(

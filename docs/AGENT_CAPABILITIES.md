@@ -1,4 +1,4 @@
-# Forensic Agent Capabilities (v1.8.0)
+# Forensic Agent Capabilities (v1.0.0)
 
 This document provides a definitive list of the diagnostic tools available to each specialist agent in the Forensic Council. Every tool includes a "Court Defensible" seal when running in its primary (ML-backed) mode.
 

@@ -60,7 +60,7 @@ if [ "$AVAILABLE_GB" -lt "$REQUIRED_DISK_GB" ]; then
   echo "  Available: ${AVAILABLE_GB}GB"
   exit 1
 fi
-echo "  Disk: ${AVAILABLE_GB}GB available (${REQUIRED_DISK_GB}GB required) \u2713"
+echo "  Disk: ${AVAILABLE_GB}GB available (${REQUIRED_DISK_GB}GB required) OK"
 
 DOCKER_TOTAL_MEM=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo "0")
 if [ "$DOCKER_TOTAL_MEM" -gt 0 ]; then
@@ -69,9 +69,9 @@ if [ "$DOCKER_TOTAL_MEM" -gt 0 ]; then
 
   if [ "$DOCKER_TOTAL_GB" -lt "$REQUIRED_MEM_GB" ]; then
     echo "WARN: Docker has ${DOCKER_TOTAL_GB}GB memory (${REQUIRED_MEM_GB}GB recommended)"
-    echo "  Increase in Docker Desktop: Settings \u2192 Resources \u2192 Memory"
+    echo "  Increase in Docker Desktop: Settings -> Resources -> Memory"
   else
-    echo "  Memory: ${DOCKER_TOTAL_GB}GB allocated \u2713"
+    echo "  Memory: ${DOCKER_TOTAL_GB}GB allocated OK"
   fi
 else
   echo "  Memory: cannot determine (skipped)"
@@ -116,7 +116,7 @@ DEMO_PWD=$(grep DEMO_PASSWORD= .env | cut -d= -f2-)
 [ "$INVESTIGATOR_PWD" = "$DEMO_PWD" ] || { echo "FAIL: BOOTSTRAP_INVESTIGATOR_PASSWORD must equal DEMO_PASSWORD"; exit 1; }
 
 # Research-only models must never run in production (non-commercial licences).
-# (P3-DOCS-001 fix, audit v6→v7)
+# (P3-DOCS-001 fix, audit v6->v7)
 RESEARCH_MODELS=$(grep ENABLE_RESEARCH_MODELS= .env | cut -d= -f2-)
 [ "$RESEARCH_MODELS" = "false" ] || [ -z "$RESEARCH_MODELS" ] || { echo "FAIL: ENABLE_RESEARCH_MODELS must be false in production"; exit 1; }
 

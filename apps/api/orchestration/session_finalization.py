@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from api.routes._session_state import (
     broadcast_update,
     get_active_pipeline_metadata,
-    set_active_pipeline_metadata,
     set_final_report,
     update_active_pipeline_metadata,
 )

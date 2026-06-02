@@ -56,7 +56,7 @@ async def run_with_timeout(name: str, coro, timeout: float) -> Any:
     """Wrap a tool execution coroutine with a timeout and standardized error handling."""
     try:
         return await asyncio.wait_for(coro, timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"available": False, "status": "timeout", "error": f"{name} timed out"}
     except Exception as exc:
         return {"available": False, "status": "error", "error": str(exc)}

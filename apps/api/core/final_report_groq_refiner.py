@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import json
-from typing import Any, Dict
+from typing import Any
+
 from core.config import Settings
 from core.llm_client import LLMClient
 from core.structured_logging import get_logger
@@ -34,7 +36,7 @@ async def refine_report_with_groq(
     config: Settings
 ) -> tuple[dict[str, Any], bool]:
     """Uses Groq to polish the report narrative. Returns the updated report dict and a boolean indicating success."""
-    
+
     llm_client = LLMClient(config=config, use_arbiter_tier=True)
     if not (config.llm_enable_post_synthesis and config.llm_api_key and llm_client.is_available):
         logger.info("Skipping Groq report polish: LLM disabled or api key unavailable.")
@@ -96,14 +98,14 @@ async def refine_report_with_groq(
             cleaned_resp = "\n".join(lines).strip()
 
         parsed = json.loads(cleaned_resp)
-        
+
         # --- Perform Post-Groq Validation ---
-        
+
         # 1. Check verdict and confidence are unchanged
         if parsed.get("final_verdict") != deterministic_report.get("final_verdict"):
             logger.warning("Groq attempt rejected: modified final_verdict.")
             return deterministic_report, False
-            
+
         if parsed.get("confidence_score") != deterministic_report.get("confidence_score"):
             logger.warning("Groq attempt rejected: modified confidence_score.")
             return deterministic_report, False
@@ -114,13 +116,13 @@ async def refine_report_with_groq(
             if not sec_val:
                 logger.warning(f"Groq attempt rejected: missing required section `{sec}`.")
                 return deterministic_report, False
-            
+
             text_to_check = ""
             if isinstance(sec_val, list):
                 text_to_check = " ".join([str(x) for x in sec_val]).lower()
             else:
                 text_to_check = str(sec_val).lower()
-                
+
             for word in PROHIBITED_WORDS:
                 if word in text_to_check:
                     logger.warning(f"Groq attempt rejected: prohibited word `{word}` found in section `{sec}`.")
@@ -131,7 +133,7 @@ async def refine_report_with_groq(
         if not isinstance(refined_kfs, list) or not refined_kfs:
             logger.warning("Groq attempt rejected: key_findings is not a list or is empty.")
             return deterministic_report, False
-            
+
         for kf in refined_kfs:
             kf_str = str(kf)
             if " — " not in kf_str:
@@ -152,16 +154,16 @@ async def refine_report_with_groq(
         )
         if det_note in reliability_notes:
             reliability_notes.remove(det_note)
-            
+
         groq_note = (
             "Reliability note: Final narrative cohesion was assisted by an external text model. "
             "The verdict, confidence, and evidentiary findings were computed by the arbiter from grounded tool outputs."
         )
         if groq_note not in reliability_notes:
             reliability_notes.append(groq_note)
-            
+
         final_report["reliability_notes"] = reliability_notes
-        
+
         logger.info("Successfully refined report narrative using Groq.")
         return final_report, True
 

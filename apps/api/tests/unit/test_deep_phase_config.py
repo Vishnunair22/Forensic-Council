@@ -9,8 +9,7 @@ Covers:
 """
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -89,7 +88,6 @@ class TestDeepTimeoutConfig:
 
     def test_deep_tool_timeout_injected(self):
         """deep_tool_timeout_seconds should be assigned to agent.deep_tool_timeout."""
-        from core.config import Settings
         config = _make_config(deep_tool_timeout_seconds=120)
         agent = MagicMock()
         agent.deep_tool_timeout = config.deep_tool_timeout_seconds
@@ -158,7 +156,6 @@ class TestFinalReportModes:
         """Pre-warm task should be preserved when hash matches arbiter results."""
         import hashlib
 
-        from core.config import Settings
         config = _make_config()
 
         pipeline = MagicMock()
@@ -196,7 +193,6 @@ class TestFinalReportModes:
         """Pre-warm task should be cancelled when hash doesn't match."""
         import hashlib
 
-        from core.config import Settings
         config = _make_config()
 
         pipeline = MagicMock()

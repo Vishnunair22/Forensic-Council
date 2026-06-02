@@ -366,7 +366,10 @@ class NeuralSynthesisMixin:
             # Persist visual context to the durable store (Redis + inter_agent_bus + working memory)
             if self.agent_id == "Agent1" and not finding.error:
                 try:
-                    from core.visual_context_store import save_visual_context, build_visual_context_from_finding
+                    from core.visual_context_store import (
+                        build_visual_context_from_finding,
+                        save_visual_context,
+                    )
                     sha256 = getattr(artifact, "content_hash", "") or ""
                     context_obj = build_visual_context_from_finding(
                         session_id=str(self.session_id),

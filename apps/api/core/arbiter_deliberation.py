@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 from enum import Enum
-import math
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
+
 from core.react_loop import AgentFinding
-from core.visual_context_models import VisualContext
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -59,24 +60,22 @@ def deliberate_findings(
             findings.append(dict(f or {}))
 
     deliberated: list[DeliberatedFinding] = []
-    
+
     # Track metrics for verdict rules
     completed_tools = set(tool_coverage.get("completed_tools", []))
     failed_tools = set(tool_coverage.get("failed_tools", []))
-    
+
     positive_integrity_tools: list[str] = []
     positive_integrity_findings: list[dict] = []
-    
+
     provenance_anomalies: list[str] = []
     content_risks: list[str] = []
-    
-    critical_failures: list[str] = []
-    
+
     # Define critical/important tools
     critical_tools = {"file_structure_analysis", "exif_extract", "ela_full_image", "neural_ela"}
     important_tools = {
-        "ela_full_image", "neural_ela", "frequency_domain_analysis", 
-        "diffusion_artifact_detector", "object_detection", 
+        "ela_full_image", "neural_ela", "frequency_domain_analysis",
+        "diffusion_artifact_detector", "object_detection",
         "screenshot_layout_forensics", "exif_extract", "file_structure_analysis"
     }
 
@@ -87,14 +86,14 @@ def deliberate_findings(
         meta = f.get("metadata") or {}
         tool_name = str(meta.get("tool_name") or f.get("finding_type") or "")
         verdict = str(f.get("evidence_verdict") or "INCONCLUSIVE").upper()
-        
+
         # Decide report safe
         report_safe = True
         if verdict == "ERROR" or f.get("status") in ("TIMEOUT", "INCOMPLETE"):
             report_safe = False
         if not meta.get("court_defensible", True):
             report_safe = False
-            
+
         # Determine weight
         weight = EvidenceWeight.MEDIUM
         if tool_name in critical_tools:
@@ -105,7 +104,7 @@ def deliberate_findings(
             weight = EvidenceWeight.CRITICAL
         elif tool_name in ("jpeg_ghost_detect", "copy_move_detect"):
             weight = EvidenceWeight.LOW
-            
+
         if not report_safe:
             weight = EvidenceWeight.EXCLUDED
 
@@ -146,7 +145,7 @@ def deliberate_findings(
     # Detect conflicts and agreements
     agreements: list[str] = []
     conflicts: list[str] = []
-    
+
     # Conflict: positive integrity signal from ELA but clean visual context or vice versa
     has_vc_integrity_issue = False
     if visual_context:
@@ -165,14 +164,14 @@ def deliberate_findings(
                 df.conflicts_with.append("visual_context")
                 df.limitation_notes.append("Tool anomaly uncorroborated by visual context.")
     elif positive_integrity_tools and has_vc_integrity_issue:
-        agreements.append(f"Agreement: Local integrity tools and visual context both flag potential manipulation.")
+        agreements.append("Agreement: Local integrity tools and visual context both flag potential manipulation.")
 
     # Rule-based final verdict determination
     final_verdict = "NO_REPORTABLE_MANIPULATION_DETECTED"
-    
+
     # Check custody hash mismatch
     hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") == "file_hash_verify" and f.get("evidence_verdict") == "POSITIVE"]
-    
+
     # Determine verdict
     if hash_mismatches:
         final_verdict = "LIKELY_MANIPULATED"
@@ -220,7 +219,7 @@ def deliberate_findings(
     total_important = len(important_tools)
     completed_important = len(important_tools.intersection(completed_tools))
     failed_important = len(important_tools.intersection(failed_tools))
-    
+
     # If key tools failed, it is inconclusive
     if failed_important >= 2 or (total_important > 0 and (completed_important / total_important) < 0.4):
         final_verdict = "INCONCLUSIVE_LIMITED_COVERAGE"
@@ -250,11 +249,11 @@ def deliberate_findings(
 
     # 1. important_tool_completion_rate
     important_tool_completion_rate = (completed_important / total_important) if total_important > 0 else 1.0
-    
+
     # 2. cross_agent_agreement_score
     # If no conflicts, score is 1.0. If conflicts, score is 0.0.
     cross_agent_agreement_score = 1.0 if not conflicts else 0.0
-    
+
     # 3. high_weight_evidence_score
     # If all critical/high tools that completed are clean/negative, or support the final verdict
     high_weight_completed = [df for df in deliberated if df.report_safe and df.evidence_weight in (EvidenceWeight.CRITICAL, EvidenceWeight.HIGH)]
@@ -263,17 +262,17 @@ def deliberate_findings(
         high_weight_evidence_score = len(supporting_high_weight) / len(high_weight_completed)
     else:
         high_weight_evidence_score = 1.0
-        
+
     # 4. visual_context_support_score
     visual_context_support_score = 1.0 if visual_context else 0.0
-    
+
     # 5. critical_tool_failure_rate
     failed_critical = critical_tools.intersection(failed_tools)
     critical_tool_failure_rate = (len(failed_critical) / len(critical_tools)) if critical_tools else 0.0
-    
+
     # 6. unresolved_conflict_score
     unresolved_conflict_score = 1.0 if conflicts else 0.0
-    
+
     # 7. weak_single_signal_penalty
     # If only 1 integrity signal and it is low weight
     weak_completed_positives = [df for df in deliberated if df.report_safe and df.evidence_verdict == "POSITIVE" and df.evidence_weight == EvidenceWeight.LOW]

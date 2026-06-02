@@ -97,10 +97,11 @@ apps/web/.swc/
 .pnpm-store/
 .yarn/
 .yarn-cache/
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 bun.lockb
+
+
+# ── Local test media (developer-supplied evidence samples) ───────────────────
+/test-images/
 
 
 # ── Docker build artefacts ───────────────────────────────────────────────────
@@ -183,6 +184,8 @@ $RECYCLE.BIN/
 pytest-cache-files-*
 .pytest_tmp/
 .pytest_tmp_run/
+.pytest-tmp/
+apps/api/.pytest-tmp/
 tmp_*
 temp/
 tmp/
@@ -287,7 +290,6 @@ end to end audit plan.md
 "Full App Audit Plan.md"
 Full*Audit*.md
 *Audit*Plan*.md
-scripts/__init__.py
 .github/.secrets.baseline
 *.secrets.baseline
 **/tests/load/*.log
@@ -319,8 +321,6 @@ docs/DOCUMENTATION_INVENTORY.md
 *.patch
 
 # ── Additional AI agent artifacts (belt-and-suspenders) ──────────────────────
-.aider.*
-.claude/
 .gemini/
 .codeium/
 .sourcegraph/

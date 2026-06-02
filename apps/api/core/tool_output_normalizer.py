@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Literal, List, Dict, Optional
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
-from core.tool_output_classifier import ToolOutputClassifier
 from core.structured_logging import get_logger
+from core.tool_output_classifier import ToolOutputClassifier
 
 logger = get_logger(__name__)
 
@@ -31,10 +32,10 @@ class ToolOutputEnvelope(BaseModel):
     confidence: float | None = None
     court_defensible: bool = False
     summary: str = ""
-    measurements: Dict[str, Any] = Field(default_factory=dict)
-    regions: List[Dict[str, Any]] = Field(default_factory=list)
-    limitations: List[str] = Field(default_factory=list)
-    raw: Dict[str, Any] = Field(default_factory=dict)
+    measurements: dict[str, Any] = Field(default_factory=dict)
+    regions: list[dict[str, Any]] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    raw: dict[str, Any] = Field(default_factory=dict)
 
 TOOL_SIGNAL_CATEGORIES = {
     # Agent 1 (Pixel Integrity)

@@ -76,6 +76,7 @@ if _settings_for_import is not None:
     app.state.settings = _settings_for_import
 # Flag for lifespan/startup_gate to detect settings failure at import time
 app.state.startup_failed = _settings_import_error is not None
+app.state.settings_import_error = _settings_import_error
 
 # ── CORS (FastAPI built-in middleware — must stay in main.py) ────────────────
 app.add_middleware(

@@ -1,14 +1,17 @@
 from __future__ import annotations
-import json
+
 import asyncio
-from typing import Literal, Any, Dict, List, Optional
+import json
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
-from core.config import Settings
-from core.llm_client import LLMClient
-from core.visual_context_models import VisualContext
-from core.finding_formatter import TOOL_LABELS
-from core.structured_logging import get_logger
+
 from core.agent_personas import get_agent_narrative_persona
+from core.config import Settings
+from core.finding_formatter import TOOL_LABELS
+from core.llm_client import LLMClient
+from core.structured_logging import get_logger
+from core.visual_context_models import VisualContext
 
 logger = get_logger(__name__)
 
@@ -28,7 +31,7 @@ class AgentSynthesisInput(BaseModel):
     agent_id: Literal["Agent1", "Agent3", "Agent5"]
     persona_name: str
     persona_rules: dict = Field(default_factory=dict)
-    visual_context_section: Optional[dict] = None
+    visual_context_section: dict | None = None
     visual_context_available: bool = False
     evidence_identity: str = ""
     completed_tools: list[str] = Field(default_factory=list)
@@ -51,9 +54,9 @@ class AgentSynthesisOutput(BaseModel):
     confidence_reason: str = ""
     limitations: list[str] = Field(default_factory=list)
     synthesis_source: Literal[
-        "groq_refined", 
-        "deterministic_with_visual_context", 
-        "deterministic_tool_only", 
+        "groq_refined",
+        "deterministic_with_visual_context",
+        "deterministic_tool_only",
         "groq_tool_only"
     ]
 
@@ -72,14 +75,14 @@ def split_visual_context(session_id: str, context_obj: VisualContext | None) -> 
             available=False,
             limitations=["Visual context not available."]
         )
-    
+
     # Image integrity
     img_integrity = (
         context_obj.image_integrity_context.model_dump()
         if hasattr(context_obj.image_integrity_context, "model_dump")
         else dict(context_obj.image_integrity_context or {})
     )
-    
+
     # Object scene
     obj_scene = (
         context_obj.object_scene_context.model_dump()
@@ -492,15 +495,15 @@ async def refine_synthesis_batch(
                     brief = polished_data.get("agent_brief")
                     if brief and isinstance(brief, str):
                         outputs[aid].agent_brief = brief
-                    
+
                     vc_sum = polished_data.get("visual_context_summary")
                     if vc_sum and isinstance(vc_sum, str):
                         outputs[aid].visual_context_summary = vc_sum
-                    
+
                     reason = polished_data.get("confidence_reason")
                     if reason and isinstance(reason, str):
                         outputs[aid].confidence_reason = reason
-                    
+
                     kfs = polished_data.get("key_findings")
                     if kfs and isinstance(kfs, list):
                         validated_kfs = []
@@ -512,7 +515,7 @@ async def refine_synthesis_batch(
                                 validated_kfs.append(kf_str)
                         if validated_kfs:
                             outputs[aid].key_findings = validated_kfs
-                    
+
                     outputs[aid].synthesis_source = "groq_refined"
                     logger.info(f"Refined synthesis for {aid} using LLM.")
     except Exception as e:

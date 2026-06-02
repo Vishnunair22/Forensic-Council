@@ -1201,8 +1201,6 @@ async def _await_deep_analysis_decision(
     """
     from api.routes._session_state import (
         broadcast_update,
-        get_active_pipeline_metadata,
-        set_active_pipeline_metadata,
         update_active_pipeline_metadata,
     )
     from api.schemas import BriefUpdate
@@ -1348,8 +1346,6 @@ async def _await_deep_report_request(
     """Pause after deep analysis so the analyst controls final arbiter synthesis."""
     from api.routes._session_state import (
         broadcast_update,
-        get_active_pipeline_metadata,
-        set_active_pipeline_metadata,
         update_active_pipeline_metadata,
     )
     from api.schemas import BriefUpdate

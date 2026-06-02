@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ── Supported MIME types (the authoritative allow-list) ──────────────────
 SUPPORTED_MIME_TYPES: frozenset[str] = frozenset({
     "image/jpeg",

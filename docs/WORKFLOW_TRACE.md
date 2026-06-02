@@ -2,7 +2,7 @@
 
 > **Purpose:** Document how state flows through the Forensic Council frontend journey, which files own which state, and what invariants must hold for future changes not to break the user experience.
 
-> **Last updated:** Phase 7
+> **Version:** v1.0.0
 
 ---
 

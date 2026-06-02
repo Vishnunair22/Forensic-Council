@@ -1,6 +1,6 @@
 # System Architecture — Forensic Council
 
-**Version:** v1.7.0
+**Version:** v1.0.0
 
 ---
 
@@ -30,7 +30,7 @@ Browser
   │       │       │
   │       │       └─ CouncilArbiter.deliberate()
   │       │               ├─ Finding deduplication + cross-modal comparison
-  │       │               ├─ Verdict (5-tier) + per-agent Groq narrative
+  │       │               ├─ Verdict (graduated scale) + per-agent Groq narrative
   │       │               └─ ECDSA P-256 signing → PIPELINE_COMPLETE broadcast
   │       │
   │       └─ Persist report → PostgreSQL
@@ -66,7 +66,7 @@ Browser
   - `users`, `user_sessions`, `audit_log` — auth & audit trail
   - `calibration_models` — Platt scaling model params
   - `forensic_reports` — final signed report archive
-- **Migrations:** Version-controlled via `core/migrations.py` (5 migrations, idempotent)
+- **Migrations:** Managed by Alembic (`apps/api/alembic/versions/`)
 
 ### Qdrant — Episodic Memory (Vector Similarity)
 - **Purpose:** Historical finding correlation for episodic memory
@@ -120,9 +120,9 @@ All 5 specialist agents extend `ForensicAgent` (abstract base class) and share:
 
 - **REST** — Synchronous commands: upload, resume, fetch report, HITL decision
 - **WebSocket** — Unidirectional backend→frontend: agent cognitive traces, phase transitions
-  - Protocol: client sends `{"type":"AUTH","token":"..."}` → server sends `CONNECTED`
-  - Then: server pushes `AGENT_UPDATE`, `AGENT_COMPLETE`, `PIPELINE_PAUSED`, `PIPELINE_COMPLETE`
+  - Auth: the `access_token` HttpOnly cookie is sent on the WS upgrade request — there is no in-band auth message
   - Subprotocol: `forensic-v1`
+  - On connect the server sends `CONNECTED`, then pushes `AGENT_UPDATE`, `AGENT_COMPLETE`, `PIPELINE_PAUSED`, `PIPELINE_COMPLETE`
 
 ---
 
@@ -186,7 +186,7 @@ On startup, the API server pre-warms critical ML models. This eliminates the 30-
 
 ## Frontend Implementation Details
 
-For extremely detailed breakdowns of the Next.js component hierarchy, props, and custom hooks, refer to the **[Component Guide](COMPONENTS.md)**.
+For the frontend route/state-ownership map — which files own which state and the invariants the user journey depends on — see **[WORKFLOW_TRACE.md](WORKFLOW_TRACE.md)**.
 
 ---
 

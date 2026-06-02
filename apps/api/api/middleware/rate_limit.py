@@ -64,7 +64,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         window = 60
 
         try:
-            from core.persistence.redis_client import get_redis_client as get_rate_limit_redis_client
+            from core.persistence.redis_client import (
+                get_redis_client as get_rate_limit_redis_client,
+            )
 
             redis = await get_rate_limit_redis_client()
             key = f"rate_limit:{identifier}"

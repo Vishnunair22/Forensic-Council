@@ -152,9 +152,9 @@ def _get_easyocr_reader():
         try:
             import warnings  # noqa: PLC0415
 
-            from core.model_guard import guarded_load  # noqa: PLC0415
-
             import easyocr  # noqa: PLC0415
+
+            from core.model_guard import guarded_load  # noqa: PLC0415
             # Suppress known informational noise from EasyOCR in CPU-only environments
             warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
             warnings.filterwarnings("ignore", message=".*Using CPU.*faster with a GPU.*", category=UserWarning, module="easyocr")

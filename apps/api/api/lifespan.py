@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error(
             "Settings failed to load at module import — API started without routes. "
             "All requests will return 503 until the server is restarted with valid configuration.",
-            error=str(_settings_import_error),
+            error=str(getattr(app.state, "settings_import_error", None) or "settings import failed"),
         )
 
     # ── Process pool ─────────────────────────────────────────────────────────

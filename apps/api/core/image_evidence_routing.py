@@ -8,16 +8,17 @@ before analysis starts, avoiding inter-agent dependencies on visual profiles.
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
-from pydantic import BaseModel
-from PIL import Image
+from typing import Any
 
-from core.structured_logging import get_logger
+from PIL import Image
+from pydantic import BaseModel
+
 from core.media_kind import (
-    is_screen_capture_like,
-    is_document_like,
     is_camera_still_candidate,
+    is_document_like,
+    is_screen_capture_like,
 )
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -41,7 +42,7 @@ class ImageEvidenceProfile(BaseModel):
     has_exif: bool
     has_camera_make_model: bool
     has_gps: bool
-    software: Optional[str] = None
+    software: str | None = None
     is_lossless: bool
     is_animated: bool
     is_screenshot_like: bool
@@ -400,7 +401,7 @@ _TOOL_TO_TASK_DESC = {
     "deepfake_frequency_check": "run deepfake_frequency_check for gan/diffusion artifacts",
     "jpeg_ghost_detect": "run jpeg_ghost_detect for double compression analysis",
     "roi_extract": "run roi_extract for localized forensic region analysis",
-    
+
     # Agent 3
     "object_detection": "run object_detection for scene object identification",
     "vector_contraband_search": "run vector_contraband_search for risk object screening",

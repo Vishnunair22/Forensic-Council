@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
-from pydantic import BaseModel
 
+from core.agent_personas import get_agent_persona_profile
+from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
-from core.agent_personas import get_agent_persona_profile, AgentPersonaProfile
 from core.tool_output_normalizer import ToolOutputEnvelope
 from core.visual_context_models import (
-    VisualContext,
     ImageIntegrityContext,
+    MetadataVisualContext,
     ObjectSceneContext,
-    MetadataVisualContext
+    VisualContext,
 )
 from core.visual_context_store import get_visual_context
-from core.react_loop import AgentFinding
 
 logger = get_logger(__name__)
 
@@ -81,9 +80,9 @@ class AgentReasoningService:
         session_id: str,
         agent_id: str,
         tool_name: str,
-        tool_input: Dict[str, Any],
+        tool_input: dict[str, Any],
         working_memory: Any
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Cognitive verification before a tool runs.
         Ensures persona context is loaded and tracks intention.
@@ -103,7 +102,7 @@ class AgentReasoningService:
             state = None
 
         persona = get_agent_persona_profile(agent_id)
-        
+
         # Update working memory state with persona profile if present
         if state and persona:
             state.agent_persona_profile = persona.model_dump()
@@ -121,7 +120,7 @@ class AgentReasoningService:
                     "objects_count": len(vis_ctx.object_scene_context.objects),
                     "weapons_count": len(vis_ctx.object_scene_context.weapons_or_dangerous_items)
                 }
-            
+
             # Save the updated state
             try:
                 await working_memory.save_state(UUID(session_id), agent_id, state)
@@ -192,7 +191,7 @@ class AgentReasoningService:
                 label = str(r.get("label") or r.get("class_name") or r.get("name") or "").lower()
                 if any(w in label for w in ["weapon", "gun", "knife", "pistol", "rifle", "firearm", "contraband", "bomb"]):
                     detected_weapons_or_contraband.append(label)
-            
+
             if detected_weapons_or_contraband:
                 # Check visual context for corresponding mentions
                 vc_weapons = [w.lower() for w in vis_ctx.object_scene_context.weapons_or_dangerous_items]
@@ -273,7 +272,7 @@ class AgentReasoningService:
                 exif_summary = state.tool_result_summaries.get("exif_extract", {})
                 if exif_summary.get("status") == "NOT_APPLICABLE" or exif_summary.get("evidence_verdict") == "NOT_APPLICABLE":
                     exif_present = False
-            
+
             # Or check the raw EXIF extraction fields
             if tool_name == "exif_extract":
                 if envelope.evidence_verdict == "NOT_APPLICABLE" or not envelope.raw.get("present_fields"):
@@ -428,7 +427,7 @@ class AgentReasoningService:
             grounding_notes.append("[VISUAL INFERENCE ONLY - NOT PHYSICAL METADATA]")
         if is_forbidden_claim_breach:
             grounding_notes.append("[PERSONA CONTRACT BREACH]")
-        
+
         prefix = " ".join(grounding_notes) + " " if grounding_notes else ""
         readable_summary = f"{prefix}{envelope.summary}"
 

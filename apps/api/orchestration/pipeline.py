@@ -895,8 +895,6 @@ class ForensicCouncilPipeline:
         try:
             from api.routes._session_state import (
                 broadcast_update,
-                get_active_pipeline_metadata,
-                set_active_pipeline_metadata,
                 update_active_pipeline_metadata,
             )
             from api.schemas import BriefUpdate
@@ -1007,7 +1005,10 @@ class ForensicCouncilPipeline:
 
             if mime_type and mime_type.startswith("image/"):
                 try:
-                    from core.image_evidence_routing import build_image_evidence_profile, build_image_agent_tool_plan
+                    from core.image_evidence_routing import (
+                        build_image_agent_tool_plan,
+                        build_image_evidence_profile,
+                    )
                     profile = build_image_evidence_profile(
                         path=file_path,
                         original_filename=original_filename or file_path_obj.name,
