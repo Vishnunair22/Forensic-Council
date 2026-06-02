@@ -129,3 +129,85 @@ def assign_severity_tier(f: Any) -> str:
     if has_anomaly:
         return "MEDIUM"
     return "LOW"
+
+
+_SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+
+
+def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
+    """Compute a per-agent verdict + confidence from its findings, severity-aware.
+
+    Replaces the previous crude rule (1 POSITIVE → SUSPICIOUS, 2 → MANIPULATED,
+    hardcoded 0.8/0.9 confidence) which ignored severity tiers and counted
+    grounded-to-LOW / not-applicable signals as real alerts.
+
+    Rules:
+      - NOT_APPLICABLE / ERROR / failed findings never move the verdict.
+      - Only POSITIVE findings at MEDIUM+ severity count as alert signals;
+        HIGH/CRITICAL count as strong signals. This means a camera-physics
+        tool that was grounded to LOW (or returned NOT_APPLICABLE) on a
+        screenshot does not inflate the verdict.
+      - Confidence is graduated by signal strength and tool coverage, not
+        hardcoded.
+
+    Returns (verdict, confidence, reason) where verdict is one of
+    AUTHENTIC / INCONCLUSIVE / SUSPICIOUS / MANIPULATED.
+    """
+    completed = 0
+    failed = 0
+    alert_signals = 0          # POSITIVE, MEDIUM+
+    strong_signals = 0         # POSITIVE, HIGH/CRITICAL
+
+    for f in findings or []:
+        meta = _get_metadata(f)
+        verdict = ""
+        if hasattr(f, "evidence_verdict"):
+            verdict = str(getattr(f, "evidence_verdict", "")).upper()
+        elif isinstance(f, dict):
+            verdict = str(f.get("evidence_verdict", "")).upper()
+        status = _get_status(f)
+
+        if verdict == "NOT_APPLICABLE" or status == "NOT_APPLICABLE" or is_not_applicable(meta):
+            continue
+        if verdict == "ERROR" or status in ("ERROR", "TIMEOUT", "INCOMPLETE"):
+            failed += 1
+            continue
+
+        completed += 1
+        if verdict != "POSITIVE":
+            continue
+
+        # Prefer a pre-computed grounded severity_tier; fall back to deriving one.
+        sev = ""
+        if isinstance(f, dict):
+            sev = str(f.get("severity_tier") or meta.get("severity_tier") or meta.get("severity") or "")
+        if not sev:
+            sev = assign_severity_tier(f)
+        rank = _SEVERITY_RANK.get(str(sev).upper(), 1)
+        if rank >= 3:
+            strong_signals += 1
+            alert_signals += 1
+        elif rank >= 2:
+            alert_signals += 1
+
+    if strong_signals >= 2:
+        verdict, conf = "MANIPULATED", 0.85
+    elif strong_signals == 1:
+        verdict, conf = "SUSPICIOUS", 0.72
+    elif alert_signals >= 1:
+        # Only medium-strength signals — genuinely ambiguous, not a manipulation call.
+        verdict, conf = "INCONCLUSIVE", 0.6
+    elif completed == 0:
+        # No usable tool output — cannot assert authenticity.
+        verdict, conf = "INCONCLUSIVE", 0.4
+    else:
+        # Clean: confidence scales modestly with coverage breadth, capped.
+        verdict, conf = "AUTHENTIC", min(0.92, 0.74 + 0.03 * completed)
+
+    reason = (
+        f"{completed} tool(s) completed"
+        + (f", {strong_signals} strong + {alert_signals - strong_signals} moderate signal(s)" if alert_signals else ", no alert signals")
+        + (f", {failed} failed" if failed else "")
+        + "."
+    )
+    return verdict, round(conf, 2), reason

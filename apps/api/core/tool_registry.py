@@ -40,8 +40,9 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "speaker_diarize": 60.0,
     # Pure I/O — hash is computed in-process with no subprocess
     "file_hash_verify": 10.0,
-    # Pure NumPy FFT — never exceeds 5s; tight bound prevents stall
-    "frequency_domain_analysis": 30.0,
+    # Pure NumPy FFT — fast in isolation, but can be CPU-starved under concurrent
+    # deep-phase load; 60s prevents spurious INCOMPLETE under contention.
+    "frequency_domain_analysis": 60.0,
     # Gemini deep forensic includes up to 30s wait for Agent1 context plus
     # Gemini API latency (60s quota refresh cycle on Free tier). 180s gives
     # adequate headroom for a single 429 retry without killing the tool.

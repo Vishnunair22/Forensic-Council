@@ -333,21 +333,21 @@ def _humanize_initial_finding(
                 "This is expected for natural photographic content without visible labels or documents."
             ),
             "f3_net_frequency": (
-                "F3-Net frequency analysis found no frequency-space GAN artifact patterns."
+                "Frequency-domain screening (DWT/FFT) found no frequency-space GAN artifact patterns."
             ),
             "anomaly_tracer": (
-                "ManTra-Net universal anomaly tracer found no manipulation pattern across the image."
+                "Statistical anomaly screening (One-Class SVM) found no manipulation pattern across the image."
             ),
             "deepfake_frequency_check": (
-                "Frequency-band GAN/deepfake scan found no high-frequency spectral artifacts "
+                "Frequency-band GAN/deepfake screening found no high-frequency spectral artifacts "
                 "associated with synthetic generation."
             ),
             "neural_splicing": (
-                "TruFor ViT splicing analysis found no evidence of regional composition "
+                "SRM-residual splicing screening found no evidence of regional composition "
                 "or cut-and-paste insertion."
             ),
             "neural_copy_move": (
-                "BusterNet copy-move analysis found no cloned or duplicated regions within the image."
+                "ORB+RANSAC copy-move screening found no cloned or duplicated regions within the image."
             ),
             "synthid_watermark_detect": (
                 "No SynthID, C2PA ai_generated marker, or AI software watermark was detected."
@@ -402,7 +402,13 @@ def _is_discovery_finding(tool_name: str | None, metadata: dict[str, Any]) -> bo
 def _verdict_score(verdict: Any) -> float | None:
     """Map agent verdicts to frontend severity color/risk score."""
     value = str(verdict or "").upper()
-    if value in {"TAMPERED", "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC"}:
+    # Includes the bare MANIPULATED / AI_GENERATED verdicts that
+    # compute_agent_verdict emits, so a strong-signal agent verdict always
+    # maps to a high risk score (previously returned None → no alert colour).
+    if value in {
+        "MANIPULATED", "TAMPERED", "AI_GENERATED",
+        "LIKELY_MANIPULATED", "LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC",
+    }:
         return 0.9
     if value in {"SUSPICIOUS", "NEEDS_REVIEW"}:
         return 0.65

@@ -95,26 +95,59 @@ const ALERT_VERDICTS = new Set([
 ]);
 
 const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+// Tools that produce meaningless or misleading findings on screenshots —
+// all are camera-physics-based and assume a photographic sensor chain.
 const SCREENSHOT_CAMERA_TOOLS = new Set([
   "noiseprint_cluster",
   "noise_fingerprint",
+  "prnu_analysis",
   "prnu_sensor_verification",
   "neural_ela",
   "ela_full_image",
   "jpeg_ghost_detect",
+  "frequency_domain_analysis",
+  "deepfake_frequency_check",
   "neural_splicing",
   "splicing_detect",
   "neural_copy_move",
   "copy_move_detect",
   "adversarial_robustness_check",
+  "camera_profile_match",
   "roi_extract",
 ]);
 
+// Match any label that describes a screen-rendered or UI-generated image.
+// Agent1's CLIP/visual-profile tool can return many variants of these concepts.
+const SCREENSHOT_TOKENS = [
+  "screenshot",
+  "screen capture",
+  "screen shot",
+  "screengrab",
+  "digital ui",
+  "browser",
+  "web page",
+  "webpage",
+  "website",
+  "whatsapp",
+  "telegram",
+  "app interface",
+  "mobile app",
+  "application interface",
+  "application screenshot",
+  "social media",
+  "chat interface",
+  "news article",
+  "ui mockup",
+  "user interface",
+  "desktop",
+  "document screenshot",
+  "rendered image",
+  "screen recording",
+];
+
 function isScreenshotContext(text?: string | null) {
   const lower = String(text || "").toLowerCase();
-  return ["screenshot", "screen capture", "digital ui", "browser", "whatsapp", "telegram", "web page"].some((token) =>
-    lower.includes(token),
-  );
+  return SCREENSHOT_TOKENS.some((token) => lower.includes(token));
 }
 
 function normalizeVerdict(verdict?: string) {
@@ -481,6 +514,7 @@ export function AgentStatusCard({
        ? completedData.tools_ran
        : findings.length;
   const fallbackTotal = getDefaultProgressTotal(agentId);
+  const backendKnowsTotal = typeof liveUpdate?.tools_total === "number";
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;
   // Once the backend has emitted a concrete tool, trust that progress instead
   // of cycling through synthetic stages. This keeps live text from advancing
@@ -584,7 +618,7 @@ export function AgentStatusCard({
                   <span className="mr-2 opacity-50">&gt;</span>
                   {status === "checking"
                     ? (phase === "deep" ? "Re-arming for deep analysis..." : "Synchronizing with pipeline...")
-                    : (Math.max(liveTotal, currentToolIndex, 1) > 1
+                    : (backendKnowsTotal && Math.max(liveTotal, currentToolIndex, 1) > 1
                         ? `${progressDescriptor.label} ${currentToolIndex}/${Math.max(liveTotal, currentToolIndex, 1)}`
                         : progressDescriptor.label
                       )}
@@ -733,9 +767,6 @@ export function AgentStatusCard({
                   completedData?.message ||
                   "This specialist does not support the submitted file type."}
               </p>
-              <span className="fc-eyebrow fc-text-muted">
-                Hidden after 10s
-              </span>
             </div>
           ) : null}
         </AnimatePresence>

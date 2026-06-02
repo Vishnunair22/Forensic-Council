@@ -152,6 +152,8 @@ def _get_easyocr_reader():
         try:
             import warnings  # noqa: PLC0415
 
+            from core.model_guard import guarded_load  # noqa: PLC0415
+
             import easyocr  # noqa: PLC0415
             # Suppress known informational noise from EasyOCR in CPU-only environments
             warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
@@ -160,13 +162,17 @@ def _get_easyocr_reader():
             model_dir = os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr")
             os.makedirs(model_dir, exist_ok=True)
             os.environ.setdefault("HOME", model_dir)
-            _EASYOCR_READER = easyocr.Reader(
-                ["en"],
-                gpu=False,
-                model_storage_directory=model_dir,
-                user_network_directory=model_dir,
-                download_enabled=True,
-            )
+            # Memory-guard the load: if the container lacks headroom, refuse here
+            # so the caller falls back to lightweight Tesseract instead of risking
+            # an OOM SIGKILL that would crash the worker.
+            with guarded_load("easyocr"):
+                _EASYOCR_READER = easyocr.Reader(
+                    ["en"],
+                    gpu=False,
+                    model_storage_directory=model_dir,
+                    user_network_directory=model_dir,
+                    download_enabled=True,
+                )
         except (ImportError, Exception) as exc:
             logger.warning(f"EasyOCR initialization failed: {str(exc)}")
             return None
@@ -381,7 +387,22 @@ def _extract_text_easyocr_sync(
     try:
         logger.info(f"[OCR] Running EasyOCR readtext on {file_path}")
         inference_start = time.time()
-        results = reader.readtext(file_path, detail=1, paragraph=False)
+        # Cap input resolution so an oversized image can't OOM CPU inference.
+        ocr_input: Any = file_path
+        try:
+            import numpy as np  # noqa: PLC0415
+            from PIL import Image as PILImage  # noqa: PLC0415
+
+            from core.model_guard import cap_image_dimension  # noqa: PLC0415
+
+            with PILImage.open(file_path) as _img:
+                _capped = cap_image_dimension(_img.convert("RGB"))
+                if _capped is not _img:
+                    ocr_input = np.asarray(_capped)
+        except Exception as _resize_err:
+            logger.debug(f"[OCR] input downscale skipped: {_resize_err}")
+            ocr_input = file_path
+        results = reader.readtext(ocr_input, detail=1, paragraph=False)
         inference_duration = time.time() - inference_start
         logger.info(f"[OCR] EasyOCR readtext inference completed in {inference_duration:.3f}s")
 

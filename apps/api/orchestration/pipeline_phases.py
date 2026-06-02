@@ -77,6 +77,16 @@ async def run_agents_concurrent(
             from api.routes._session_state import AGENT_NAMES, broadcast_update
             from api.schemas import BriefUpdate
             from core.severity import assign_severity_tier
+            from core.visual_grounding import apply_visual_grounding
+
+            # Fetch the pre-flight visual context once per broadcast — used to
+            # calibrate finding severity for all findings in this agent's batch.
+            _visual_profile: dict | None = None
+            if pipeline.inter_agent_bus is not None:
+                try:
+                    _visual_profile = pipeline.inter_agent_bus.get_visual_profile(str(session_id)) or None
+                except Exception:
+                    pass
 
             aname = AGENT_NAMES.get(aid, aid)
             preview = []
@@ -162,13 +172,16 @@ async def run_agents_concurrent(
                     finding, "finding_type", "forensic tool"
                 )
                 evidence_verdict = str(_finding_attr(finding, "evidence_verdict", "")).upper()
+                _label = str(tool_name).replace("_", " ").title()
                 if evidence_verdict == "NEGATIVE":
-                    return f"{tool_name} completed and found no supported anomaly signal."
+                    return f"No anomaly detected ({_label})."
                 if evidence_verdict == "POSITIVE":
-                    return f"{tool_name} completed and reported a supported forensic signal."
+                    return f"Forensic signal detected ({_label})."
                 if evidence_verdict == "NOT_APPLICABLE":
-                    return f"{tool_name} is not applicable to this file type."
-                return f"{tool_name} completed; review detailed tool metrics for this finding."
+                    return f"Not applicable to this file type ({_label})."
+                if evidence_verdict == "ERROR":
+                    return f"Did not complete — coverage gap, not evidence of authenticity ({_label})."
+                return f"No determinate signal ({_label})."
 
             def _append_synthesis_sections(synthesis_data: dict[str, Any]) -> None:
                 # Build actual_tools from the passed findings.
@@ -223,8 +236,12 @@ async def run_agents_concurrent(
                                 "key_signal": "",
                                 "confidence": synthesis_data.get("agent_confidence"),
                                 "section": section.get("label") or "",
-                                "degraded": bool(synthesis_data.get("fallback_reason")),
-                                "fallback_reason": synthesis_data.get("fallback_reason"),
+                                # A refined narrative section is NOT a degraded/fallback
+                                # result just because LLM synthesis was off (deterministic
+                                # is the normal free-tier path). Only flag genuine section
+                                # degradation.
+                                "degraded": bool(section.get("degraded")),
+                                "fallback_reason": section.get("fallback_reason"),
                                 "finding_kind": "discovery" if (section.get("severity") or "LOW") in ("HIGH", "CRITICAL", "MEDIUM") else "confirmation",
                             }
                         )
@@ -264,6 +281,18 @@ async def run_agents_concurrent(
 
                     s = _summary_for_finding(f, m)
                     sev = assign_severity_tier(f)
+
+                    # Ground severity against visual context — calibrates
+                    # camera-physics tool noise and surfaces cross-modal conflicts.
+                    _grounding = apply_visual_grounding(
+                        tool_name=str(tool or ""),
+                        agent_id=aid,
+                        current_severity=sev,
+                        visual_context=_visual_profile,
+                        metadata=m,
+                    )
+                    sev = _grounding.adjusted_severity
+
                     evidence_verdict = str(
                         _finding_attr(f, "evidence_verdict", "")
                     ).upper()
@@ -312,10 +341,17 @@ async def run_agents_concurrent(
                                 or ""
                             ),
                             "section": m.get("section") or "",
-                            "degraded": bool(m.get("degraded") or m.get("fallback_reason")),
+                            # Badge "(fallback)" only on GENUINE tool degradation —
+                            # an explicit degraded flag or a real failure/incomplete
+                            # status. A benign fallback_reason (e.g. Gemini->local
+                            # ensemble switch) on a clean result must not be flagged.
+                            "degraded": bool(m.get("degraded")) or evidence_verdict == "ERROR" or finding_status in ("INCOMPLETE", "TIMEOUT", "ERROR"),
                             "fallback_reason": m.get("fallback_reason"),
                             "elapsed_s": m.get("elapsed_s"),
                             "finding_kind": "discovery" if tv in ("FLAGGED", "NEEDS_REVIEW") or _is_discovery_finding(tool, m) else "confirmation",
+                            # Visual context grounding fields — present only when grounding applied
+                            "context_note": _grounding.context_note if _grounding.grounded else None,
+                            "grounding_type": _grounding.grounding_type if _grounding.grounded else None,
                         }
                     )
 
@@ -428,7 +464,18 @@ async def run_agents_concurrent(
                         "tool_error_rate": getattr(agent_inst, "_agent_error_rate", None)
                         if agent_inst
                         else None,
-                        "tools_ran": getattr(agent_inst, "_tool_success_count", None)
+                        # Reconcile with the findings the user actually sees: count the
+                        # distinct forensic tools represented in the displayed preview,
+                        # not the raw success count (which includes deduped, suppressed,
+                        # and not-applicable tools → "4 ran but 2 findings" discrepancy).
+                        "tools_ran": (
+                            len({
+                                p.get("tool")
+                                for p in preview
+                                if p.get("tool") and p.get("tool") != "agent_synthesis"
+                            })
+                            or getattr(agent_inst, "_tool_success_count", None)
+                        )
                         if agent_inst
                         else None,
                         "tools_failed": getattr(agent_inst, "_tool_error_count", None)

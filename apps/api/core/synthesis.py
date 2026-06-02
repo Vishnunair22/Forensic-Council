@@ -851,9 +851,10 @@ Return ONLY a JSON object with this exact schema:
                         artifact=evidence_artifact
                     )
                     if not human_summary:
-                        if finding.get("tool_limitation"):
+                        _status = str(finding.get("status") or "").upper()
+                        if finding.get("tool_limitation") or verdict.upper() == "ERROR" or _status in ("INCOMPLETE", "TIMEOUT", "FAILED"):
                             human_summary = (
-                                f"{tool.replace('_', ' ').title()} did not produce a usable result; "
+                                f"{tool.replace('_', ' ').title()} did not complete; "
                                 f"treat this as a coverage gap, not evidence of tampering.{metric_text}"
                             )
                         elif verdict.upper() == "POSITIVE":
@@ -867,7 +868,7 @@ Return ONLY a JSON object with this exact schema:
                             )
                         else:
                             human_summary = (
-                                f"{tool.replace('_', ' ').title()} returned an inconclusive result.{metric_text}"
+                                f"{tool.replace('_', ' ').title()} ran but produced no determinate signal; the result is inconclusive.{metric_text}"
                             )
                     refined.append({"tool": tool, "user_friendly_summary": human_summary})
                 top_signal = next(

@@ -137,7 +137,9 @@ class TorchVisionClassifier(ImageClassifierBase):
         from PIL import Image as PILImage
 
         try:
-            image = PILImage.open(image_path).convert("RGB")
+            from core.model_guard import cap_image_dimension
+
+            image = cap_image_dimension(PILImage.open(image_path).convert("RGB"))
             tensor = self._preprocess(image).unsqueeze(0).to(self._device)
 
             with torch.no_grad():
@@ -325,11 +327,17 @@ class CLIPImageAnalyzer:
 
             logger.info(f"Loading Vision-Language model {self._model_name}...")
 
-            self._model, _, self._preprocess = open_clip.create_model_and_transforms(
-                self._model_name,
-                pretrained=_pretrained,
-                cache_dir=os.path.join(settings.hf_home, "open_clip"),
-            )
+            from core.model_guard import guarded_load
+
+            # Memory-guard + serialise the load. On insufficient memory this
+            # raises ModelMemoryError (caught below → cascade falls to the
+            # lighter torchvision classifiers) instead of risking an OOM kill.
+            with guarded_load("clip"):
+                self._model, _, self._preprocess = open_clip.create_model_and_transforms(
+                    self._model_name,
+                    pretrained=_pretrained,
+                    cache_dir=os.path.join(settings.hf_home, "open_clip"),
+                )
             self._tokenizer = open_clip.get_tokenizer(self._model_name)
 
             # Use CPU to avoid GPU memory issues
@@ -396,8 +404,10 @@ class CLIPImageAnalyzer:
             if check_concerns:
                 categories = categories + self.CONCERN_CATEGORIES
 
-            # Load and preprocess image
-            image = PILImage.open(image_path).convert("RGB")
+            # Load and preprocess image (cap resolution to bound inference memory)
+            from core.model_guard import cap_image_dimension
+
+            image = cap_image_dimension(PILImage.open(image_path).convert("RGB"))
             image_tensor = self._preprocess(image).unsqueeze(0).to(self._device)
 
             # Tokenize category descriptions

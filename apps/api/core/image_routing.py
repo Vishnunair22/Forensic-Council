@@ -53,9 +53,18 @@ def build_image_forensic_routing(
     other_category_tools = set().union(
         *[set(v) for k, v in CATEGORY_TO_RECOMMENDED_TOOLS.items() if k != category]
     )
+    # NOTE: set '-' binds tighter than '|' in Python, so the recommended/keep
+    # subtraction MUST wrap the full union — otherwise it only applies to the
+    # last operand (CATEGORY_TO_SKIP_TOOLS) and tools that are recommended for
+    # THIS category but appear in other categories' recommended lists (e.g. OCR,
+    # analyze_image_content, frequency_domain_analysis for screenshots) get
+    # wrongly skipped. Explicit parentheses keep the subtraction global.
     skip = sorted(
-        (set(existing_skip) | other_category_tools)
-        | set(CATEGORY_TO_SKIP_TOOLS.get(category, ()))
+        (
+            set(existing_skip)
+            | other_category_tools
+            | set(CATEGORY_TO_SKIP_TOOLS.get(category, ()))
+        )
         - set(recommended)
         - {"file_hash_verify", "visual_evidence_profile"}
     )

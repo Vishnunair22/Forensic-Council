@@ -122,7 +122,7 @@ function isScreenshotEvidence(findings: AgentFindingDTO[]): boolean {
 // retiring the prior ones) and stub findings whose entire content is a
 // generic template. We pick the richest version per tool, then drop anything
 // that has no actionable signal left.
-function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] {
+export function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] {
   const byKey = new Map<string, AgentFindingDTO>();
   for (const f of findings) {
     const key =
@@ -134,7 +134,19 @@ function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] {
       byKey.set(key, f);
       continue;
     }
-    // Keep the richer entry. Ties go to the later one (assumed freshest).
+    // A deep-phase finding always supersedes an initial-phase one for the same
+    // tool — the deep result is authoritative and the initial is stale. Only
+    // when both share the same phase do we fall back to keeping the richer entry
+    // (ties → the later one). This guarantees a stale initial reading can never
+    // be displayed over its fresh deep replacement.
+    const phaseOf = (x: AgentFindingDTO) =>
+      String(x.metadata?.analysis_phase || "initial") === "deep" ? 1 : 0;
+    const newPhase = phaseOf(f);
+    const oldPhase = phaseOf(existing);
+    if (newPhase !== oldPhase) {
+      if (newPhase > oldPhase) byKey.set(key, f);
+      continue;
+    }
     const newScore = summaryRichness(f);
     const oldScore = summaryRichness(existing);
     if (newScore >= oldScore) byKey.set(key, f);
@@ -546,11 +558,12 @@ export function AgentFindingCard({
             <meta.icon className="w-6 h-6" />
           </div>
 
-          {/* Name + meta */}
+          {/* Name + meta. Collapsed shows ONLY the agent name; all metrics,
+              role, timing and badges are revealed on expand. */}
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
                <h3 className="text-lg font-black text-white tracking-tight">{meta.name}</h3>
-              {metrics && (
+              {open && metrics && (
                 <span className={verdictClasses(displayVerdict)}>
                   {displayVerdict === "HIGH" ? "High Confidence"
                     : displayVerdict === "MEDIUM" ? "Med Confidence"
@@ -558,37 +571,36 @@ export function AgentFindingCard({
                     : displayVerdict.replace(/_/g, " ")}
                 </span>
               )}
-              {anomalyCount > 0 && (
+              {open && anomalyCount > 0 && (
                 <span className="fc-badge fc-badge-danger flex items-center gap-1">
                   <AlertTriangle className="w-3.5 h-3.5" /> {anomalyCount}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2.5 text-sm font-mono font-bold fc-text-muted flex-wrap">
-              <span>{meta.role}</span>
-              <span className="fc-text-faint">·</span>
-              <span>{realFindings.length} checks</span>
-              {totalTimingMs > 0 && (
-                <>
-                  <span className="fc-text-faint">·</span>
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>{totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}</span>
-                </>
-              )}
-            </div>
-            {!open && overview && (
-              <p className="text-sm fc-text-secondary leading-relaxed font-medium line-clamp-3 italic">
-                {overview}
-              </p>
+            {open && (
+              <div className="flex items-center gap-2.5 text-sm font-mono font-bold fc-text-muted flex-wrap">
+                <span>{meta.role}</span>
+                <span className="fc-text-faint">·</span>
+                <span>{realFindings.length} checks</span>
+                {totalTimingMs > 0 && (
+                  <>
+                    <span className="fc-text-faint">·</span>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{totalTimingMs >= 1000 ? `${(totalTimingMs / 1000).toFixed(1)}s` : `${totalTimingMs}ms`}</span>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Right: confidence + show/hide pill */}
+          {/* Right: metrics revealed on expand; chevron always present */}
           <div className="flex items-center gap-3 shrink-0">
-            <ConfidenceBar value={confidence} />
-            <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-black tracking-wide text-white/65">
-              {phase === 'deep' ? 'Deep' : 'Initial'}
-            </div>
+            {open && <ConfidenceBar value={confidence} />}
+            {open && (
+              <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-black tracking-wide text-white/65">
+                {phase === 'deep' ? 'Deep' : 'Initial'}
+              </div>
+            )}
             <span
               className={clsx(
                 "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-black tracking-wide border transition-colors",

@@ -62,14 +62,20 @@ class FlorenceAnalyzer:
             import torch
             from transformers import AutoModelForCausalLM, AutoProcessor
 
+            from core.model_guard import guarded_load
+
             self._device = "cuda" if torch.cuda.is_available() else "cpu"
 
-            self._processor = AutoProcessor.from_pretrained(
-                self._model_name, trust_remote_code=True
-            )
-            self._model = AutoModelForCausalLM.from_pretrained(
-                self._model_name, trust_remote_code=True, attn_implementation="eager"
-            ).to(self._device)
+            # Memory-guard + serialise the load. On a constrained container this
+            # raises ModelMemoryError (caught below → unavailable) rather than
+            # risking an OOM SIGKILL that would crash the whole process.
+            with guarded_load("florence2"):
+                self._processor = AutoProcessor.from_pretrained(
+                    self._model_name, trust_remote_code=True
+                )
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    self._model_name, trust_remote_code=True, attn_implementation="eager"
+                ).to(self._device)
             self._model.eval()
             self._available = True
             logger.info(
@@ -93,7 +99,9 @@ class FlorenceAnalyzer:
         try:
             from PIL import Image
 
-            image = Image.open(image_path).convert("RGB")
+            from core.model_guard import cap_image_dimension
+
+            image = cap_image_dimension(Image.open(image_path).convert("RGB"))
             caption = self._run_task("<CAPTION>", image)
             detailed = self._run_task("<DETAILED_CAPTION>", image)
             return FlorenceResult(

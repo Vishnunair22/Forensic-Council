@@ -173,11 +173,12 @@ def normalize_tool_output(
         if env_status == "POSITIVE":
             summary = f"Forensic signal identified by {tool_name} with confidence {final_conf}."
         elif env_status == "NEGATIVE":
-            summary = f"No forensic anomaly detected by {tool_name}."
+            # Finding-first, tool kept as a quiet trailing attribution.
+            summary = f"No anomaly detected ({tool_name.replace('_', ' ').title()})."
         elif env_status == "NOT_APPLICABLE":
-            summary = f"{tool_name} was not applicable to the evidence format or constraints."
+            summary = f"Not applicable to this evidence ({tool_name.replace('_', ' ').title()})."
         else:
-            summary = f"{tool_name} completed with inconclusive or mixed results."
+            summary = f"No determinate signal ({tool_name.replace('_', ' ').title()})."
 
     return ToolOutputEnvelope(
         tool_name=tool_name,

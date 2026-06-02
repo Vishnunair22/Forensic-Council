@@ -152,6 +152,8 @@ class InferenceClient:
         """Get or load the configured object detector."""
         async with self._load_locks["yolo"]:
             if "yolo" not in self._models:
+                from core.model_guard import ensure_load_headroom
+
                 model_name = getattr(self.settings, "yolo_model_name", "detr-resnet-50")
 
                 # Commercial-safe path. If an operator configured a YOLO model
@@ -161,6 +163,9 @@ class InferenceClient:
                     "yolo" in model_name.lower() and not self.settings.enable_agpl_models
                 ):
                     repo = "facebook/detr-resnet-50"
+                    # Refuse the load if memory is insufficient (→ caller degrades
+                    # gracefully) rather than risking an OOM SIGKILL.
+                    ensure_load_headroom("detr")
                     if "yolo" in model_name.lower():
                         logger.warning(
                             "YOLO configured without AGPL mode; using DETR fallback",
@@ -217,6 +222,7 @@ class InferenceClient:
                         )
                         model_path = fallback_path
 
+                ensure_load_headroom("yolo")
                 logger.info(f"Loading YOLO model from {model_path}...")
                 self._models["yolo"] = YOLO(model_path)
 
@@ -242,6 +248,12 @@ class InferenceClient:
             if "aasist" not in self._models:
                 try:
                     from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
+
+                    from core.model_guard import ensure_load_headroom
+
+                    # Memory preflight — raises if insufficient, handled by the
+                    # except below (returns None → audio tool degrades gracefully).
+                    ensure_load_headroom("aasist")
 
                     logger.info(
                         f"Loading audio deepfake model {self.settings.aasist_model_name}..."

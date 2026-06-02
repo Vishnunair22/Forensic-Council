@@ -955,12 +955,16 @@ class LLMClient:
                     # Fast-fail on 429 — skip to next candidate with short backoff.
                     if resp.status_code == 429:
                         await quota_mgr.record_call(priority, success=False)
-                        # Honor Retry-After header if provided
+                        # Synthesis has a fast deterministic fallback, so a long
+                        # rate-limit backoff is counterproductive — it compounds
+                        # across the many per-agent/arbiter synthesis calls in one
+                        # investigation and blows the deliberation timeout. Cap the
+                        # backoff tightly and move to the next candidate quickly.
                         ra_header = resp.headers.get("Retry-After")
-                        delay = float(ra_header) if ra_header else 5.0
+                        delay = min(float(ra_header) if ra_header else 1.5, 2.0)
                         logger.warning(
                             f"Synthesis {target_provider}/{target_model} rate-limited — "
-                            f"trying next candidate (retry-after={delay:.0f}s)"
+                            f"trying next candidate (backoff={delay:.1f}s, capped)"
                         )
                         await asyncio.sleep(delay)
                         continue
@@ -1126,12 +1130,12 @@ class LLMClient:
 
             # If we have NO real data, be explicit
             if not summary_parts:
-                return "Classical forensic tools executed. No anomalies detected."
+                return "No reportable signal could be extracted from the structured analysis output; refer to the per-tool findings."
 
             return " ".join(summary_parts)
 
         except Exception:
-            return "Forensic analysis complete. Tool-based findings available in detailed report."
+            return "A synthesis summary could not be generated from the analysis output; refer to the per-tool findings in the detailed report."
 
     async def generate_synthesis(
         self,

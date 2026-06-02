@@ -327,13 +327,17 @@ class MetadataHandlers(BaseToolHandler):
                         "ML metadata scorer unavailable; low-risk baseline applied."
                     )
                 else:
-                    score = 0.85  # High risk: completely stripped EXIF in a format that should have it
-                    note = "ML metadata scorer unavailable; zero EXIF fields in a format that typically carries them — high-risk baseline applied."
+                    # Stripped EXIF is routine for messaging-app / social-media
+                    # transmission — provenance is unverifiable, not tampered. This
+                    # completeness fallback sees only absence (no edit signatures),
+                    # so it must never assert manipulation (kept below is_anomalous).
+                    score = 0.35
+                    note = "ML metadata scorer unavailable; EXIF stripped/absent — provenance unverifiable (common for messaging-app transmission), not a manipulation signal."
             elif len(absent) >= 10:
-                score = 0.65
-                note = "ML metadata scorer unavailable; many mandatory EXIF fields absent."
+                score = 0.4
+                note = "ML metadata scorer unavailable; many mandatory EXIF fields absent — provenance incomplete, not a tampering signal."
             elif len(absent) >= 5:
-                score = 0.45
+                score = 0.3
                 note = "ML metadata scorer unavailable; several mandatory EXIF fields absent."
             else:
                 note = "ML metadata scorer unavailable; used deterministic EXIF completeness fallback."

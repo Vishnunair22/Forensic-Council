@@ -131,7 +131,9 @@ export interface BriefUpdate {
     | "ARBITER_UPDATE"
     | "REPORT_READY"
     | "INITIAL_ANALYSIS_COMPLETE"
-    | "BATCH";
+    | "BATCH"
+    | "DEGRADED"
+    | "PING";
   session_id: string;
   agent_id: string | null;
   agent_name: string | null;

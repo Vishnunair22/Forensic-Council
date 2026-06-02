@@ -175,6 +175,8 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     CLIP_READY=$(find "$HF_DIR/open_clip" "$HF_DIR/hub/models--timm--vit_base_patch32_clip_224.openai/blobs" -type f -size +100M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     ECAPA_READY=$(find -L "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb" -type f \( -name "*.ckpt" -o -name "embedding_model.ckpt" -o -name "*.yaml" \) -size +5k 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    AI_GEN_SAFE_NAME=$(printf '%s' "${AI_IMAGE_DETECTOR_MODEL:-Organika/sdxl-detector}" | sed 's#/#--#g')
+    AI_GEN_READY=$(find "$HF_DIR/hub/models--$AI_GEN_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AI_GEN_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
     OBJECT_MODEL="${YOLO_MODEL_NAME:-detr-resnet-50}"
     if printf '%s' "$OBJECT_MODEL" | grep -qi 'yolo' && [ "${ENABLE_AGPL_MODELS:-false}" = "true" ]; then
@@ -197,21 +199,34 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     OBJ_OK=0;   [ "${OBJECT_DETECTOR_READY:-0}" -ge 1 ] && OBJ_OK=1
     TORCH_OK=0; [ "${TORCH_WEIGHTS:-0}"         -ge 1 ] && TORCH_OK=1
     OCR_OK=0;   [ "${EASYOCR_FILES:-0}"         -ge 2 ] && OCR_OK=1
+    AI_GEN_OK=0;[ "${AI_GEN_READY:-0}"          -ge 1 ] && AI_GEN_OK=1
 
-    if [ "$CLIP_OK" -eq 0 ] || [ "$ECAPA_OK" -eq 0 ] || [ "$AASIST_OK" -eq 0 ] || [ "$OBJ_OK" -eq 0 ] || [ "$TORCH_OK" -eq 0 ] || [ "$OCR_OK" -eq 0 ]; then
+    if [ "$CLIP_OK" -eq 0 ] || [ "$ECAPA_OK" -eq 0 ] || [ "$AASIST_OK" -eq 0 ] || [ "$OBJ_OK" -eq 0 ] || [ "$TORCH_OK" -eq 0 ] || [ "$OCR_OK" -eq 0 ] || [ "$AI_GEN_OK" -eq 0 ]; then
         echo ""
         echo "============================================================"
         echo "  ML cache incomplete - downloading models before startup"
         echo "  Normal Docker builds should bake these into the image."
         echo "  This fallback runs once per empty volume."
         echo "============================================================"
-        chmod +x scripts/model_download_with_retry.sh
+        # chmod is best-effort: scripts/ is bind-mounted read-only in dev, and the
+        # script is invoked via `sh` anyway, so a failed chmod must not be fatal.
+        chmod +x scripts/model_download_with_retry.sh 2>/dev/null || true
+        # Non-fatal at RUNTIME: a model download that fails after retries (e.g. a
+        # transient Hugging Face / network outage) must NOT crash-loop the service.
+        # The app starts and any missing-model tool degrades to an honest coverage
+        # gap. (Build-time preload in the Dockerfile stays fail-fast so a broken
+        # image is caught by the developer, not shipped.)
+        DL_FAILED=0
         if [ "$(id -u)" = "0" ]; then
-            runuser -u appuser -- sh scripts/model_download_with_retry.sh --strict
+            runuser -u appuser -- sh scripts/model_download_with_retry.sh --strict || DL_FAILED=1
         else
-            sh scripts/model_download_with_retry.sh --strict
+            sh scripts/model_download_with_retry.sh --strict || DL_FAILED=1
         fi
-        echo "  Model download complete."
+        if [ "$DL_FAILED" = "1" ]; then
+            echo "  WARNING: model pre-download incomplete - starting anyway; affected tools will report coverage gaps (not a crash)."
+        else
+            echo "  Model download complete."
+        fi
     else
         echo "  ML model volumes already populated - skipping download."
         echo "  Found: OpenCLIP=$CLIP_READY ECAPA=$ECAPA_READY AASIST=$AASIST_READY $OBJECT_DETECTOR_LABEL=$OBJECT_DETECTOR_READY TorchWeights=$TORCH_WEIGHTS EasyOCR=$EASYOCR_FILES"

@@ -45,7 +45,6 @@ export class AuthService {
   }
 
   reset(): void {
-    this.status = "IDLE";
     this.promise = null;
     this.error = null;
     this.setStatus("IDLE");

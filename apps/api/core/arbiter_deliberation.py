@@ -192,7 +192,30 @@ def deliberate_findings(
         final_verdict = "PROVENANCE_CONCERN"
     elif content_risks:
         final_verdict = "CONTENT_RISK_OBSERVED"
-    
+
+    # ── Corroboration gate ──
+    # A manipulation/suspicion verdict driven by integrity tool signals must be
+    # corroborated by the holistic visual model (Gemini) OR by 2+ strong,
+    # court-defensible agreeing signals. A lone screening/single-model positive
+    # that Gemini does NOT see is, in practice, a false positive on a processed or
+    # recompressed real photo (e.g. WhatsApp/phone-pipeline artifacts) — hold the
+    # verdict inconclusive rather than asserting manipulation. Hard provenance
+    # evidence (hash mismatch) is exempt; it is not overridden by visual assessment.
+    if final_verdict in ("LIKELY_MANIPULATED", "SUSPICIOUS_INTEGRITY_SIGNALS") and not hash_mismatches:
+        gemini_available_and_clean = visual_context is not None and not has_vc_integrity_issue
+        strong_corroborating = sum(
+            1
+            for f in positive_integrity_findings
+            if (f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or 0) >= 0.7
+            and (f.get("metadata") or {}).get("court_defensible", True)
+        )
+        if gemini_available_and_clean and strong_corroborating < 2:
+            final_verdict = "INCONCLUSIVE_UNCORROBORATED_SIGNAL"
+            conflicts.append(
+                "Integrity signal(s) uncorroborated by the visual model — consistent with "
+                "processing/recompression artifacts rather than manipulation; verdict held inconclusive."
+            )
+
     # Coverage calculation
     total_important = len(important_tools)
     completed_important = len(important_tools.intersection(completed_tools))

@@ -83,6 +83,82 @@ def _tool_error_summary(result: Any) -> str:
     return "unknown error"
 
 
+import re as _re
+
+# Patterns for provenance clues visible inside the image (OCR-extracted text).
+_TIME_RE = _re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp]\.?[Mm]\.?)?\b")
+_DATE_RE = _re.compile(
+    r"\b("
+    r"\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}"  # 2023-06-01, 01/06/2023
+    r"|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,?\s+\d{4})?"  # Jun 1, 2023
+    r"|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*"  # 1 June
+    r")\b",
+    _re.IGNORECASE,
+)
+_PLATFORM_KEYWORDS = {
+    "iOS": ("iphone", "ios", "imessage", "airdrop", "facetime"),
+    "Android": ("android", "google play", "play store"),
+    "WhatsApp": ("whatsapp", "last seen", "typing…", "typing..."),
+    "Telegram": ("telegram",),
+    "Instagram": ("instagram",),
+    "Twitter/X": ("twitter", "retweet", "tweet"),
+    "Facebook": ("facebook",),
+    "Gmail": ("gmail",),
+    "Web/Browser": ("http://", "https://", "www."),
+}
+
+
+def _extract_visible_metadata_clues(
+    ocr_lines: list[str],
+    interface_id: str,
+    exif_summary: dict[str, Any] | None,
+    is_screenshot: bool,
+) -> dict[str, list[str]]:
+    """Extract provenance clues visible in the image (timestamps, device/platform,
+    app, location) from OCR text + interface identification.
+
+    This fills the metadata-provenance section so the no-Gemini path still
+    produces Agent5-usable context (the Gemini preflight does this natively).
+    Pure inference from pixels — never asserts EXIF facts.
+    """
+    text = " ".join(str(line) for line in (ocr_lines or []))
+    clues: dict[str, list[str]] = {
+        "visible_timestamps": [],
+        "device_platform_clues": [],
+        "software_clues": [],
+        "location_clues": [],
+    }
+    if not text and not interface_id:
+        return clues
+
+    lower = text.lower()
+
+    # Timestamps visible on-screen (status-bar clock, message times, overlays)
+    seen_ts: set[str] = set()
+    for match in list(_TIME_RE.findall(text)) + [m if isinstance(m, str) else m[0] for m in _DATE_RE.findall(text)]:
+        val = str(match).strip()
+        if val and val not in seen_ts and len(val) >= 3:
+            seen_ts.add(val)
+            clues["visible_timestamps"].append(val)
+    clues["visible_timestamps"] = clues["visible_timestamps"][:8]
+
+    # Device / platform / app from OCR keywords + interface identification
+    platforms: list[str] = []
+    for platform, keywords in _PLATFORM_KEYWORDS.items():
+        if any(kw in lower for kw in keywords):
+            platforms.append(platform)
+    if interface_id:
+        clues["software_clues"].append(interface_id)
+    # OS-level vs app-level split
+    for p in platforms:
+        if p in ("iOS", "Android", "Web/Browser"):
+            clues["device_platform_clues"].append(p)
+        else:
+            clues["software_clues"].append(p)
+
+    return clues
+
+
 def _clip_to_category(clip_top_match: str) -> str:
     t = clip_top_match.lower()
     if "screenshot" in t or "screen capture" in t:
@@ -365,10 +441,25 @@ async def analyze_local_visual_profile(
             return {"available": False, "error": str(e)}
 
     async def _run_diffusion() -> dict[str, Any]:
-        """Run diffusion artifact detector (pure numpy/cv2). All images."""
+        """AI-generation detection. Primary = real ViT classifier; the spectral
+        heuristic is the labelled fallback when the model is unavailable, so the
+        no-Gemini path gets a real trained signal whenever weights are present."""
         try:
             from core.ml_subprocess import run_ml_tool
-            return await run_ml_tool("diffusion_artifact_detector.py", art.file_path, timeout=12.0)
+
+            result = await run_ml_tool("ai_generation_detector.py", art.file_path, timeout=25.0)
+            if result.get("available") and result.get("method") == "vit_classifier":
+                return result
+            # Model unavailable → spectral heuristic, honestly labelled as screening.
+            spectral = await run_ml_tool("diffusion_artifact_detector.py", art.file_path, timeout=12.0)
+            if isinstance(spectral, dict):
+                spectral["method"] = "spectral_heuristic"
+                spectral["court_defensible"] = False
+                spectral.setdefault(
+                    "fallback_reason",
+                    result.get("error") or "AI-generation model unavailable — spectral screening only",
+                )
+            return spectral
         except Exception as e:
             return {"available": False, "error": str(e)}
 
@@ -433,6 +524,22 @@ async def analyze_local_visual_profile(
             logger.error(f"OpenCV stats failed: {e}")
             return {"available": False, "error": str(e)}
 
+    async def _run_provenance() -> dict[str, Any]:
+        """Offline provenance screen: perceptual-hash match + C2PA presence.
+        Free, local, no third party sees the evidence. Screening tier."""
+        try:
+            from core.perceptual_provenance import analyze_provenance
+            return await asyncio.to_thread(analyze_provenance, file_path)
+        except Exception as e:
+            return {"available": False, "error": str(e)}
+
+    # Provenance runs concurrently but is kept OUT of the coverage/confidence
+    # accounting below — it is metadata enrichment / an OSINT lead, not a
+    # manipulation-detection tool, so it must not inflate ensemble confidence.
+    provenance_future = asyncio.ensure_future(
+        run_with_timeout("Provenance", _run_provenance(), 15.0)
+    )
+
     # ── Run all tools in parallel with timeouts ──────────────────────────
     tasks = {
         "ELA": run_with_timeout("ELA", _run_ela(), 45.0),
@@ -442,7 +549,7 @@ async def analyze_local_visual_profile(
         "FFT": run_with_timeout("FFT", _run_fft(), 30.0),
         "Noiseprint": run_with_timeout("Noiseprint", _run_noiseprint(), 20.0),
         "Splicing": run_with_timeout("Splicing", _run_splicing(), 30.0),
-        "Diffusion": run_with_timeout("Diffusion", _run_diffusion(), 12.0),
+        "Diffusion": run_with_timeout("Diffusion", _run_diffusion(), 40.0),
         "Florence": run_with_timeout("Florence", _run_florence(), 75.0),
         "OpenCV": run_with_timeout("OpenCV", _run_opencv_stats(), 10.0),
     }
@@ -469,6 +576,18 @@ async def analyze_local_visual_profile(
             if name != "Florence":  # Florence is optional — don't log as error
                 logger.error(f"Ensemble tool {name} failed", error=tool_errors[name])
 
+    # Share heavy whole-image tool results so per-agent handlers reuse them
+    # instead of re-running (CLIP + FFT call the identical functions the handlers
+    # use, so a cache hit is byte-for-byte equivalent to a fresh run).
+    _content_hash = getattr(artifact, "content_hash", "") or ""
+    if _content_hash:
+        from core.tool_result_cache import cache_tool_result
+
+        if _is_tool_successful(tool_results.get("CLIP")):
+            await cache_tool_result(_content_hash, "analyze_image_content", tool_results["CLIP"])
+        if _is_tool_successful(tool_results.get("FFT")):
+            await cache_tool_result(_content_hash, "frequency_domain_analysis", tool_results["FFT"])
+
     ela_res = tool_results.get("ELA", {})
     ocr_res = tool_results.get("OCR", {})
     clip_res = tool_results.get("CLIP", {})
@@ -485,8 +604,22 @@ async def analyze_local_visual_profile(
     detected = detr_res if isinstance(detr_res, list) else []
     florence_desc = florence_res.get("description", "") if isinstance(florence_res, dict) else ""
 
+    # Ground the file-type assessment with the canonical deterministic categorizer
+    # (the SAME one the registry + plan use) so the ensemble can't introduce a
+    # third, divergent category. CLIP becomes a corroborating signal, not the
+    # sole authority.
     clip_routing_category = _clip_to_category(clip_category)
-    is_screenshot = is_screen_capture_like or clip_routing_category == "screenshot"
+    try:
+        from core.file_classifier import classify_evidence_file_sync
+        canonical_category = classify_evidence_file_sync(artifact).primary_category
+    except Exception:
+        canonical_category = ""
+    final_category = canonical_category or clip_routing_category
+    is_screenshot = (
+        is_screen_capture_like
+        or final_category == "screenshot"
+        or clip_routing_category == "screenshot"
+    )
 
     # ── Cross-signal synthesis ───────────────────────────────────────────
     verdict, signals, narrative, conflict_detected = _cross_signal_synthesis(
@@ -565,10 +698,37 @@ async def analyze_local_visual_profile(
 
     # ── Routing ──────────────────────────────────────────────────────────
     routing = build_image_forensic_routing(
-        {"image_category": clip_routing_category},
+        {"image_category": final_category},
         description=content_description,
         file_path=file_path,
     )
+
+    # ── Visible provenance clues (fills Agent5 metadata section) ──────────
+    visible_metadata_clues = _extract_visible_metadata_clues(
+        ocr_lines=ocr_lines,
+        interface_id=interface_id,
+        exif_summary=exif_summary,
+        is_screenshot=is_screenshot,
+    )
+
+    # ── Offline provenance screen (perceptual hash + C2PA) ────────────────
+    # Merge as metadata clues (always) and as manipulation signals only on a
+    # confirmed known-bad match. Appended AFTER the confidence computation above
+    # so this screening-tier lead never inflates the deterministic confidence.
+    try:
+        prov_res = await provenance_future
+    except Exception as _prov_err:
+        prov_res = {"available": False, "error": str(_prov_err)}
+    if isinstance(prov_res, dict) and prov_res.get("available"):
+        # visible_metadata_clues is a categorized dict; provenance facts go in
+        # the software/app clue bucket (surfaced as software_or_app_clues).
+        prov_bucket = visible_metadata_clues.setdefault("software_clues", [])
+        for clue in prov_res.get("provenance_clues") or []:
+            if clue not in prov_bucket:
+                prov_bucket.append(clue)
+        for sig in prov_res.get("signals") or []:
+            if sig not in signals:
+                signals.append(sig)
 
     # ── Forensic observations ────────────────────────────────────────────
     forensic_specifics = _synthesize_forensic_observations(
@@ -585,7 +745,7 @@ async def analyze_local_visual_profile(
         manipulation_signals=signals,
         detected_objects=detected,
         contextual_anomalies=[],
-        file_type_assessment=clip_routing_category,
+        file_type_assessment=final_category,
         confidence=confidence,
         court_defensible=not partial_execution and not conflict_detected,
         caveat=" ".join(caveat_parts),
@@ -600,6 +760,7 @@ async def analyze_local_visual_profile(
         _contextual_narrative=narrative,
         _authenticity_verdict=verdict,
         _metadata_visual_consistency=metadata_consistency,
+        _visible_metadata_clues=visible_metadata_clues,
         _forensic_routing={
             **routing,
             "priority_signals": ["local_ela", "frequency_domain", "noiseprint", "splicing", "diffusion"],

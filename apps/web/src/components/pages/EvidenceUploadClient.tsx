@@ -162,7 +162,7 @@ export function EvidenceUploadClient() {
         {investigation.wsConnectionError && !investigation.isReconnecting && (
           <ForensicErrorModal
             isVisible
-            isTransient={investigation.isReconnecting}
+            isTransient={false}
             title="Stream Connection Failed"
             message={investigation.wsConnectionError}
             errorCode="0xFC_WS_LOST"
@@ -194,6 +194,7 @@ export function EvidenceUploadClient() {
                   onRunDeepAnalysis={investigation.handleDeepAnalysis}
                   isNavigating={investigation.isNavigating}
                   mimeType={investigation.mimeType || undefined}
+                  capabilities={investigation.capabilities}
                   playSound={playSound}
                   revealQueue={investigation.revealQueue}
                   arbiterDeliberating={investigation.arbiterDeliberating}

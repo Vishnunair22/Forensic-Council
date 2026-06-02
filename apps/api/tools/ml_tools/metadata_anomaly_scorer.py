@@ -85,12 +85,19 @@ def score_metadata(image_path: str) -> dict:
     violations = []
     score = 0.0
 
+    # "Hard" violations actively indicate editing/tampering. "Absence" conditions
+    # (no/few EXIF fields) only mean provenance is unverifiable — routine for
+    # messaging-app and social-media images that strip metadata — and must not, on
+    # their own, raise a SUSPICIOUS (tampering) verdict.
+    hard_violation = False
+
     # Rule 1: Editing software in hex
     if hex_sigs:
         violations.append(f"Editing software signature found in file bytes: {', '.join(hex_sigs)}")
         score += 0.35
+        hard_violation = True
 
-    # Rule 2: Missing mandatory camera fields
+    # Rule 2: Missing mandatory camera fields (absence — unverifiable, not tampering)
     if exif:
         missing = [f for f in EXPECTED_CAMERA_FIELDS if f not in exif]
         if len(missing) > 3:
@@ -109,6 +116,7 @@ def score_metadata(image_path: str) -> dict:
     ):
         violations.append(f"EXIF Software field indicates editing: '{software}'")
         score += 0.25
+        hard_violation = True
 
     # Rule 4: DateTimeOriginal vs DateTime mismatch
     dt_orig = str(exif.get("DateTimeOriginal", ""))
@@ -118,6 +126,7 @@ def score_metadata(image_path: str) -> dict:
             f"DateTimeOriginal ({dt_orig}) differs from DateTime ({dt_mod}) — indicates re-save"
         )
         score += 0.15
+        hard_violation = True
 
     # Rule 5: GPS present but no timezone-confirming fields
     gps_info = exif.get("GPSInfo")
@@ -138,15 +147,22 @@ def score_metadata(image_path: str) -> dict:
             if exp_val == 0.0 or exp_val > 30.0:
                 violations.append(f"Suspicious exposure time: {exp_val}s")
                 score += 0.10
+                hard_violation = True
         except Exception:
             pass
 
     score = min(1.0, score)
 
-    if score > 0.5:
+    # Only hard tampering indicators (edit signatures, re-save, impossible values)
+    # justify a SUSPICIOUS/TAMPERED verdict. Score driven purely by metadata
+    # absence is unverifiable provenance, reported as INCONCLUSIVE — not a
+    # manipulation signal — so stripped-metadata images are not false-flagged.
+    if score > 0.5 and hard_violation:
         verdict = "TAMPERED"
-    elif score > 0.2 or violations:
+    elif hard_violation:
         verdict = "SUSPICIOUS"
+    elif score > 0.2 or violations:
+        verdict = "INCONCLUSIVE"
     else:
         verdict = "CLEAN"
 

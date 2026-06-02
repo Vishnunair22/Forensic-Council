@@ -31,82 +31,26 @@ import sys
 
 import cv2
 import numpy as np
-from PIL import Image
 
-# Optional PyTorch imports - gracefully handle if not available
-try:
-    import torch
-    import torchvision.models as models
-    import torchvision.transforms as T
-
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    torch = None
-    models = None
-    T = None
-
-
-def load_univfd_model():
-    """
-    Use ResNet-50 feature extractor as UnivFD backbone.
-    In production: load actual UnivFD weights from:
-    https://github.com/WisconsinAIVision/UniversalFakeDetect
-    """
-    if not TORCH_AVAILABLE:
-        return None
-
-    try:
-        from core.config import get_settings
-
-        settings = get_settings()
-
-        # Enforce local-only mode if configured
-        if settings.offline_mode:
-            import torch.hub
-
-            torch.hub.set_dir(settings.torch_home)
-            # torchvision models check the hub dir; if weights are missing and
-            # we are offline, it will raise an error rather than downloading.
-
-        model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        model.fc = torch.nn.Linear(2048, 1)  # binary: real vs fake
-        model.eval()
-        return model
-    except Exception:
-        return None
-
-
-# Module-level singleton — model weights are downloaded once and reused across calls
-_univfd_model_cache = None
-
-
-def get_univfd_model():
-    """Return cached ResNet-50 UnivFD model, loading on first call."""
-    global _univfd_model_cache
-    if _univfd_model_cache is None:
-        _univfd_model_cache = load_univfd_model()
-    return _univfd_model_cache
-
-
-# Image preprocessing transform for ResNet-50
-_transform = T.Compose(
-    [
-        T.Resize((224, 224)),
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    ]
-)
+# NOTE: This tool is a frequency-domain SCREENING heuristic (FFT checkerboard +
+# 1/f spectral deviation). The real, trained AI-generation classifier lives in
+# ai_generation_detector.py and is the primary signal via the
+# diffusion_artifact_detector handler. A prior version loaded a ResNet-50 with an
+# *untrained* classification head whose output was never actually used — that
+# dead, misleading code has been removed so this tool reports only the real
+# signal-processing measurements it actually computes.
 
 
 def compute_frequency_features(image_path: str) -> dict:
     """
-    Compute deepfake detection features using frequency domain analysis.
+    Compute AI-generation screening features using frequency-domain analysis.
 
-    Combines:
-    - FFT checkerboard artifact detection (GANs)
+    Combines two real signal-processing measurements:
+    - FFT checkerboard artifact detection (GAN upsampling)
     - 1/f spectral deviation (diffusion models)
-    - Optional PyTorch-based feature extraction (when available)
+
+    This is a SCREENING heuristic. The primary AI-generation signal is the
+    trained ViT classifier in ai_generation_detector.py.
     """
     from core.config import get_settings
 
@@ -125,12 +69,6 @@ def compute_frequency_features(image_path: str) -> dict:
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         return {"error": "Cannot read image", "available": False}
-
-    # Also load with PIL for PyTorch processing
-    try:
-        pil_img = Image.open(image_path).convert("RGB")
-    except Exception:
-        pil_img = None
 
     # Resize to standard size for FFT analysis
     img_resized = cv2.resize(img, (256, 256)).astype(np.float32)
@@ -189,20 +127,8 @@ def compute_frequency_features(image_path: str) -> dict:
     )
     spectral_anomaly_score = min(1.0, spectral_dev / 5.0)
 
-    # --- PyTorch-based feature extraction (optional) ---
-    pytorch_score = 0.0
-    if TORCH_AVAILABLE and pil_img is not None:
-        try:
-            _transform(pil_img).unsqueeze(0)
-            # In production: load actual UnivFD weights
-            # For now, use heuristic based on image statistics
-            # that correlate with generated image artifacts
-            pytorch_score = spectral_anomaly_score * 0.5
-        except Exception:
-            pass
-
-    # Combined score with weighted contributions
-    combined = checkerboard_score * 0.4 + spectral_anomaly_score * 0.4 + pytorch_score * 0.2
+    # Combined score from the two real frequency-domain measurements.
+    combined = checkerboard_score * 0.5 + spectral_anomaly_score * 0.5
 
     # Determine verdict
     if combined > 0.4:
@@ -217,11 +143,12 @@ def compute_frequency_features(image_path: str) -> dict:
         "confidence": round(float(combined), 3),
         "checkerboard_score": round(float(checkerboard_score), 3),
         "spectral_anomaly_score": round(float(spectral_anomaly_score), 3),
-        "pytorch_score": round(float(pytorch_score), 3),
         "verdict": verdict,
         "available": True,
-        "torch_available": TORCH_AVAILABLE,
-        "note": "Swap model.fc weights with UnivFD checkpoint for production accuracy",
+        "method": "frequency_domain_screening",
+        # Screening heuristic — not a standalone court-defensible determination.
+        "court_defensible": False,
+        "note": "Frequency-domain screening signal; primary AI-generation verdict is the trained ViT classifier.",
     }
 
 
@@ -242,7 +169,7 @@ if __name__ == "__main__":
                 json.dumps(
                     {
                         "status": "warmed_up",
-                        "dependencies": ["torch", "torchvision", "cv2", "numpy"],
+                        "dependencies": ["cv2", "numpy"],
                         "message": "Deepfake frequency detector ready",
                     }
                 )

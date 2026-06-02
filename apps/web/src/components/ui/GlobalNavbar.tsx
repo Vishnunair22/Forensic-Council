@@ -38,7 +38,6 @@ export function GlobalNavbar() {
       if (document.visibilityState === "visible") checkSession();
     };
 
-    checkSession();
     window.addEventListener("fc_storage_update", checkSession);
     window.addEventListener("storage", checkSession);
     window.addEventListener("focus", checkSession);
@@ -56,11 +55,11 @@ export function GlobalNavbar() {
     setHasActiveSession(hasResettableInvestigationState());
   }, [pathname]);
 
-  const isMounted = useRef(false);
+  const scrollEnabledRef = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      isMounted.current = true;
+      scrollEnabledRef.current = true;
     }, 300);
     return () => clearTimeout(timer);
   }, []);
@@ -73,7 +72,7 @@ export function GlobalNavbar() {
     }
 
     const handleScroll = () => {
-      if (!isMounted.current) return;
+      if (!scrollEnabledRef.current) return;
       const currentScrollY = window.scrollY;
       if (currentScrollY < 60) {
         setIsVisible(true);

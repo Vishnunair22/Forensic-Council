@@ -97,38 +97,38 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         """Register tools with the agent's ToolRegistry."""
         # ── Phase 1: Initial Analysis ────────────────────────────────────────
         registry.register(
-            "neural_ela", self.neural_ela_handler, "Neural ELA Transformer manipulation detection"
+            "neural_ela", self.neural_ela_handler, "Multi-quality ELA screening (Isolation Forest)"
         )
         registry.register(
             "noiseprint_cluster",
             self.noiseprint_cluster_handler,
-            "Noiseprint++ sensor-region consistency clustering",
+            "Sensor noise residual clustering (K-means)",
         )
 
         # ── Phase 2: Deep Neural Forensics ───────────────────────────────────
         registry.register(
             "neural_copy_move",
             self.neural_copy_move_handler,
-            "BusterNet dual-branch copy-move detection",
+            "ORB+RANSAC copy-move screening",
         )
         registry.register(
-            "neural_splicing", self.neural_splicing_handler, "TruFor ViT-based splicing detection"
+            "neural_splicing", self.neural_splicing_handler, "SRM-residual splicing screening (Isolation Forest)"
         )
         registry.register(
-            "anomaly_tracer", self.anomaly_tracer_handler, "ManTra-Net universal anomaly tracing"
+            "anomaly_tracer", self.anomaly_tracer_handler, "Statistical anomaly screening (One-Class SVM)"
         )
         registry.register(
-            "f3_net_frequency", self.f3_net_frequency_handler, "F3-Net frequency artifact analysis"
+            "f3_net_frequency", self.f3_net_frequency_handler, "Frequency-domain AI-artifact screening (DWT/FFT)"
         )
         registry.register(
             "neural_fingerprint",
             self.neural_fingerprint_handler,
-            "SigLIP2 neural perceptual fingerprint",
+            "OpenCLIP perceptual fingerprint (ViT-B-32)",
         )
         registry.register(
             "diffusion_artifact_detector",
             self.diffusion_artifact_detector_handler,
-            "Diffusion/AI-generation artifact detection",
+            "AI-generation detection (ViT classifier)",
         )
 
         # ── Global Semantic & Content Tools ──────────────────────────────────
@@ -426,6 +426,49 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 )
         return result
 
+    async def _collect_upstream_suspect_regions(self) -> list[dict[str, Any]]:
+        """Aggregate suspect regions published by upstream pixel/sensor tools
+        (ELA, noiseprint) within this agent run.
+
+        These whole-image neural detectors (TruFor, BusterNet) cannot be ROI-
+        focused at the model level, so this is NOT a model focus — it is
+        cross-tool corroboration context recorded on the downstream finding so
+        the synthesis can note spatial agreement when multiple independent tools
+        flag the same evidence.
+        """
+        regions: list[dict[str, Any]] = []
+        # 1. Same-pass published signals (handler-instance scoped).
+        for signal_type in ("anomaly_regions_found", "sensor_inconsistency_regions"):
+            try:
+                signals = await self._get_tool_signals(signal_type)
+            except Exception:
+                signals = []
+            for sig in signals or []:
+                data = (sig.get("data") if isinstance(sig, dict) else {}) or {}
+                for r in (data.get("anomaly_regions") or data.get("regions") or []):
+                    if isinstance(r, dict):
+                        regions.append(r)
+        # 2. Cross-pass: read the agent's persisted tool context. ELA/noiseprint
+        #    run in the INITIAL pass; splicing/copy-move run in the DEEP pass on a
+        #    fresh handler instance, so the instance signal above does not carry —
+        #    but the agent's _tool_context persists across both passes.
+        tool_ctx = getattr(self.agent, "_tool_context", {}) or {}
+        for tool_key in ("neural_ela", "ela_full_image", "noiseprint_cluster", "noise_fingerprint"):
+            ctx = tool_ctx.get(tool_key)
+            if isinstance(ctx, dict):
+                for r in (ctx.get("anomaly_regions") or ctx.get("inconsistent_regions") or []):
+                    if isinstance(r, dict):
+                        regions.append(r)
+        # Dedup identical region dicts (signal + context may overlap).
+        seen: set[tuple] = set()
+        unique: list[dict[str, Any]] = []
+        for r in regions:
+            key = (r.get("x"), r.get("y"), r.get("w"), r.get("h"))
+            if key not in seen:
+                seen.add(key)
+                unique.append(r)
+        return unique
+
     # ── Phase 1: Neural ELA ───────────────────────────────────────────────────
 
     async def _screen_capture_not_applicable(
@@ -531,6 +574,20 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             )
         result = await run_ml_tool("noiseprint_clustering.py", artifact.file_path, timeout=20.0)
         result = self._attach_visual_grounding(result, tool_name="noiseprint_cluster")
+        # Publish sensor-inconsistent regions so splicing/copy-move findings can
+        # be cross-referenced for spatial corroboration (sensor noise + pixel
+        # anomalies overlapping is a high-confidence local-splice signal).
+        if not result.get("error") and result.get("sensor_inconsistency_detected"):
+            await self._publish_tool_signal(
+                "sensor_inconsistency_regions",
+                {
+                    "regions": result.get("inconsistent_regions")
+                    or result.get("anomaly_regions")
+                    or [],
+                    "num_clusters": result.get("num_clusters", 0),
+                    "tool": "noiseprint_cluster",
+                },
+            )
         if not result.get("error") and result.get("available"):
             if record:
                 await self._store("noiseprint_cluster", result, "noise_fingerprint")
@@ -798,11 +855,46 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         return result
 
     async def diffusion_artifact_detector_handler(self, input_data: dict) -> dict:
-        """Diffusion model / AI-generation artifact detection."""
+        """AI-generation / diffusion artifact detection.
+
+        Primary signal is a REAL trained ViT classifier (ai_generation_detector.py).
+        The spectral heuristic (diffusion_artifact_detector.py) runs as local,
+        quota-free corroboration — and becomes the sole signal (honestly labelled)
+        only when the model is unavailable, so a failed model degrades to a
+        screening result rather than a fabricated clean one.
+        """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+
         result = await run_ml_tool(
-            "diffusion_artifact_detector.py", artifact.file_path, timeout=12.0
+            "ai_generation_detector.py", artifact.file_path, timeout=25.0
         )
+        model_ran = bool(result.get("available")) and result.get("method") == "vit_classifier"
+
+        if model_ran:
+            # Cross-check with the cheap local spectral heuristic for corroboration.
+            spectral = await run_ml_tool(
+                "diffusion_artifact_detector.py", artifact.file_path, timeout=12.0
+            )
+            if spectral.get("available"):
+                spec_ai = float(spectral.get("diffusion_probability") or 0.0) > 0.45
+                model_ai = bool(result.get("is_ai_generated"))
+                result["spectral_corroboration"] = {
+                    "spectral_probability": spectral.get("diffusion_probability"),
+                    "agrees": spec_ai == model_ai,
+                }
+                result["method"] = "vit_classifier+spectral_corroboration"
+        else:
+            # Model unavailable → fall back to the spectral heuristic, labelled honestly.
+            spectral = await run_ml_tool(
+                "diffusion_artifact_detector.py", artifact.file_path, timeout=12.0
+            )
+            spectral["method"] = "spectral_heuristic"
+            spectral.setdefault(
+                "fallback_reason",
+                result.get("error") or "AI-generation model unavailable — spectral screening only",
+            )
+            spectral["court_defensible"] = False
+            result = spectral
 
         diffusion_probability = result.get("diffusion_probability")
         if diffusion_probability is not None:
@@ -873,11 +965,21 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
 
         client = await get_inference_client()
 
+        # Cross-tool context from upstream ELA / noiseprint (whole-image model;
+        # regions are corroboration metadata, not a model-level ROI focus).
+        upstream_regions = await self._collect_upstream_suspect_regions()
+
         # No outer wait_for here — predict_busternet delegates to run_ml_tool which
         # manages its own timeout and subprocess cleanup.
         result = await client.predict_busternet(artifact.file_path)
 
         if not result.get("error"):
+            if upstream_regions and isinstance(result, dict):
+                result["upstream_suspect_regions"] = len(upstream_regions)
+                result["cross_tool_context"] = (
+                    f"{len(upstream_regions)} region(s) flagged by upstream "
+                    "ELA/noiseprint analysis — available for spatial corroboration."
+                )
             if record:
                 await self.agent._record_tool_result("neural_copy_move", result)
             return result
@@ -902,27 +1004,30 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 record=record,
             )
 
-        # Check if ELA found anomaly regions to focus on
-        ela_signals = await self._get_tool_signals('anomaly_regions_found')
         from core.inference_client import get_inference_client
 
         client = await get_inference_client()
 
-        if ela_signals:
-            anomaly_regions = ela_signals[0]['data'].get('anomaly_regions', [])
-            logger.info(
-                "Splicing detector focusing on ELA-identified regions",
-                num_regions=len(anomaly_regions),
-            )
-            result = await client.predict_trufor(
-                artifact.file_path,
-                focus_regions=anomaly_regions,
-            )
-        else:
-            # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
-            result = await client.predict_trufor(artifact.file_path)
+        # Cross-tool context: ELA / noiseprint may have flagged suspect regions.
+        # TruFor is a whole-image ViT (no ROI focus), so we run it unguided and
+        # annotate the finding with the upstream regions for spatial corroboration
+        # in synthesis — when multiple independent tools agree, confidence rises.
+        upstream_regions = await self._collect_upstream_suspect_regions()
+
+        # No outer wait_for — run_ml_tool inside handles timeout + proc.kill().
+        result = await client.predict_trufor(artifact.file_path)
 
         if not result.get("error"):
+            if upstream_regions and isinstance(result, dict):
+                result["upstream_suspect_regions"] = len(upstream_regions)
+                result["cross_tool_context"] = (
+                    f"{len(upstream_regions)} region(s) independently flagged by upstream "
+                    "ELA/noiseprint analysis — available for spatial corroboration."
+                )
+                logger.info(
+                    "Splicing detector annotated with upstream suspect regions",
+                    num_regions=len(upstream_regions),
+                )
             if record:
                 await self.agent._record_tool_result("neural_splicing", result)
             return result
@@ -1087,7 +1192,12 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 }
             await self.agent._record_tool_result("analyze_image_content", result)
             return result
-        result = await real_analyze_image_content(artifact=artifact)
+        from core.tool_result_cache import cache_tool_result, get_cached_tool_result
+        _hash = getattr(artifact, "content_hash", "") or ""
+        result = await get_cached_tool_result(_hash, "analyze_image_content")
+        if result is None:
+            result = await real_analyze_image_content(artifact=artifact)
+            await cache_tool_result(_hash, "analyze_image_content", result)
         result = self._attach_visual_grounding(result, tool_name="analyze_image_content")
         await self.agent._record_tool_result("analyze_image_content", result)
         return result
@@ -1105,6 +1215,21 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             extracted = []
             if isinstance(shared, dict):
                 extracted = meta.get("extracted_text") or shared.get("extracted_text") or []
+                # Gemini often places on-screen text in detected_objects (e.g.
+                # "text: ...", "heading: ...", "button: ...") rather than in
+                # extracted_text. Reuse those so screenshots don't fall through to
+                # slow EasyOCR when the model already read the text.
+                if not extracted:
+                    objs = shared.get("detected_objects") or meta.get("detected_objects") or []
+                    _text_prefixes = ("text:", "heading:", "title:", "paragraph:", "button:", "label:", "url_bar:", "system_tray")
+                    derived = []
+                    for o in objs:
+                        s = str(o).strip()
+                        low = s.lower()
+                        if any(low.startswith(p) for p in _text_prefixes):
+                            derived.append(s.split(":", 1)[1].strip() if ":" in s else s)
+                    if derived:
+                        extracted = derived
             if isinstance(extracted, list) and extracted:
                 lines = [str(line).strip() for line in extracted if str(line).strip()]
                 full_text = "\n".join(lines)
@@ -1136,12 +1261,17 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             if task is None or task.done():
                 task = asyncio.create_task(real_extract_evidence_text(artifact=artifact))
                 _OCR_INFLIGHT[key] = task
-            result = await asyncio.wait_for(asyncio.shield(task), timeout=25.0)
+            # EasyOCR on a full-resolution screenshot needs well over 25s on CPU.
+            # The tool budget is 130s; allow up to 90s so OCR completes instead of
+            # being killed and recorded as a coverage gap.
+            _ocr_wait = float(getattr(self.agent.config, "ocr_tool_timeout", 120.0) or 120.0)
+            _ocr_wait = max(60.0, min(_ocr_wait, 110.0))
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=_ocr_wait)
             _OCR_CACHE[key] = (time.monotonic(), dict(result))
         except TimeoutError:
             logger.warning("OCR handler timed out — returning timeout error result")
             result = {
-                "error": "OCR extraction timed out after 25s",
+                "error": "OCR extraction timed out",
                 "timeout": True,
                 "available": True,
                 "confidence": 0.0,
@@ -1158,7 +1288,12 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
     async def frequency_domain_analysis_handler(self, input_data: dict) -> dict:
         """FFT frequency-domain anomaly analysis."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
-        result = await real_frequency_domain_analysis(artifact=artifact)
+        from core.tool_result_cache import cache_tool_result, get_cached_tool_result
+        _hash = getattr(artifact, "content_hash", "") or ""
+        result = await get_cached_tool_result(_hash, "frequency_domain_analysis")
+        if result is None:
+            result = await real_frequency_domain_analysis(artifact=artifact)
+            await cache_tool_result(_hash, "frequency_domain_analysis", result)
         result = self._attach_visual_grounding(result, tool_name="frequency_domain_analysis")
         await self.agent._record_tool_result("frequency_domain_analysis", result)
         return result

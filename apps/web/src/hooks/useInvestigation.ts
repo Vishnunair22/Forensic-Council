@@ -38,6 +38,7 @@ import { type SoundType } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/types";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
+import { useCapabilities } from "@/hooks/useCapabilities";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
 import { validateEvidenceFile } from "@/lib/fileValidation";
 import { clearPendingEvidenceFile } from "@/lib/pendingFilePersistence";
@@ -155,6 +156,7 @@ async function waitForFinalReport(
 
 export function useInvestigation(playSound: (type: SoundType) => void) {
   const router = useRouter();
+  const { capabilities } = useCapabilities();
 
   const _initInvestigatorId = () => {
     if (typeof window === "undefined") return "REQ-000000";
@@ -573,14 +575,16 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           // ignore status errors, fall through to WS reconnect
         }
 
-        const savedDeepAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.DEEP_AGENTS}:${sessionIdToUse}`, true, []);
-        const savedInitialAgents = storage.getItem<AgentUpdate[]>(`${STORAGE_KEYS.INITIAL_AGENTS}:${sessionIdToUse}`, true, []);
-        const savedAgents = (savedDeepAgents?.length ? savedDeepAgents : savedInitialAgents) ?? [];
-        const restoredPhase = savedDeepAgents?.length ? "deep" : "initial";
-        setPhase(restoredPhase as "initial" | "deep");
-        if (savedAgents.length > 0) {
-          restoreSimulationState(savedAgents, "awaiting_decision");
-        }
+        // Re-uploading the same evidence dedups to an existing session. Do NOT
+        // optimistically replay this browser's locally-cached agent findings —
+        // that cache can be STALE (from a prior run of the same content with older
+        // code) and was the cause of stale findings resurfacing. Purge it and let
+        // the server's WebSocket replay buffer deliver the AUTHORITATIVE current
+        // findings (the backend re-sends all buffered agent cards on reconnect).
+        storage.removeItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sessionIdToUse}`);
+        storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sessionIdToUse}`);
+        resetSimulation();
+        setPhase("initial");
         connectWebSocket(sessionIdToUse, true)
         .then(() => {
           setAnalysisStreamReady(true);
@@ -649,7 +653,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
-    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, restoreSimulationState, setSimulationPhase, router]
+    [playSound, startSimulation, connectWebSocket, resetSimulation, resetSimulationHook, setSimulationPhase, router]
   );
 
 
@@ -766,13 +770,24 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         const st = await withTimeout(getArbiterStatus(existingSessionId), 8_000);
         if (effectCancelled) return;
         if (st.status === "not_found") {
+          // The backend no longer has this session (expired or wiped). Purge ALL
+          // per-session client caches so its STALE agent findings can never be
+          // re-restored into the view — this was the root cause of stale findings
+          // resurfacing after a backend wipe.
+          storage.removeItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${existingSessionId}`);
+          storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${existingSessionId}`);
           storage.removeItem(STORAGE_KEYS.SESSION_ID);
           storage.removeItem(STORAGE_KEYS.INVESTIGATION_CTX);
+          if (typeof document !== "undefined") {
+            document.cookie = `${STORAGE_KEYS.SESSION_ID}=; path=/; max-age=0; SameSite=Lax`;
+          }
           resetSimulation();
           setShowLoadingOverlay(false);
           sessionOnlyStorage.setItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE, "1");
           sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
-          router.push("/?upload=1");
+          // Land on the evidence/upload page (NOT the landing hero) so there is no
+          // home-page flash before the analysis page.
+          router.push("/evidence");
           return;
         }
         if (st.status === "complete") {
@@ -815,6 +830,34 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
   };
 
+  // Shared navigation tail — polls for the final report, enforces minimum
+  // overlay display time, then pushes to the result page.
+  // Returns true so callers can track that navigation was initiated.
+  const _navigateToResult = useCallback(async (
+    sid: string,
+    arbiterStartTime: number,
+  ): Promise<boolean> => {
+    arbiterAbortControllerRef.current = new AbortController();
+    const ok = await waitForFinalReport(
+      sid,
+      setArbiterLiveText,
+      ARBITER_WAIT_MAX_MS,
+      arbiterAbortControllerRef.current.signal,
+    );
+    if (ok) {
+      const elapsed = Date.now() - arbiterStartTime;
+      if (elapsed < ARBITER_MIN_DISPLAY_MS) {
+        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
+      }
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    }
+    sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
+    sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
+    document.body.setAttribute("data-fc-loading", "1");
+    router.push(`/result/${encodeURIComponent(sid)}`);
+    return true;
+  }, [router]);
+
   const handleAcceptAnalysis = useCallback(async () => {
     if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
@@ -836,30 +879,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     try {
       if (!sid) throw new Error("No active session");
       await resumeInvestigation(false);
-      arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, ARBITER_WAIT_MAX_MS, arbiterAbortControllerRef.current.signal);
-      if (!ok) {
-        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
-        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
-        document.body.setAttribute("data-fc-loading", "1");
-        navigationStarted = true;
-        router.push(`/result/${encodeURIComponent(sid)}`);
-        return;
-      }
-
-      // Ensure minimum overlay display time so the arbiter transition doesn't
-      // flash-dismiss when the pre-warmed report resolves in <1s.
-      const elapsed = Date.now() - arbiterStartTime;
-      if (elapsed < ARBITER_MIN_DISPLAY_MS) {
-        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
-      }
-
-      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
-      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
-      document.body.setAttribute("data-fc-loading", "1");
-      navigationStarted = true;
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      router.push(`/result/${encodeURIComponent(sid)}`);
+      navigationStarted = await _navigateToResult(sid, arbiterStartTime);
     } catch (err) {
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
@@ -874,7 +894,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         setArbiterDeliberating(false);
       }
     }
-  }, [playSound, resumeInvestigation, router, isNavigating]);
+  }, [playSound, resumeInvestigation, isNavigating, _navigateToResult]);
 
   const handleDeepAnalysis = useCallback(async () => {
     if (investigationInFlightRef.current || resumeInFlightRef.current) return;
@@ -903,10 +923,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       await resumeInvestigation(true);
     } catch (err) {
       // Roll back to initial phase so the user can retry
-      const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
-      if (sid) {
-        storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "initial");
-        sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`);
+      const rollbackSid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
+      if (rollbackSid) {
+        storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${rollbackSid}`, "initial");
+        sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${rollbackSid}`);
       }
       setPhase("initial");
       playSound("error");
@@ -983,28 +1003,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (arbiterSt?.status !== "complete") {
         await resumeInvestigation(false);
       }
-      arbiterAbortControllerRef.current = new AbortController();
-      const ok = await waitForFinalReport(sid, setArbiterLiveText, ARBITER_WAIT_MAX_MS, arbiterAbortControllerRef.current.signal);
-      if (!ok) {
-        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
-        sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
-        document.body.setAttribute("data-fc-loading", "1");
-        navigationStarted = true;
-        router.push(`/result/${encodeURIComponent(sid)}`);
-        return;
-      }
-
-      const elapsed = Date.now() - arbiterStartTime;
-      if (elapsed < ARBITER_MIN_DISPLAY_MS) {
-        await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
-      }
-
-      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
-      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
-      document.body.setAttribute("data-fc-loading", "1");
-      navigationStarted = true;
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      router.push(`/result/${encodeURIComponent(sid)}`);
+      navigationStarted = await _navigateToResult(sid, arbiterStartTime);
     } catch (err) {
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
@@ -1019,14 +1018,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         setArbiterDeliberating(false);
       }
     }
-  }, [playSound, resumeInvestigation, router, isNavigating]);
+  }, [playSound, resumeInvestigation, isNavigating, _navigateToResult]);
 
   const validAgentsData = AGENTS_DATA.filter((a) => a.name !== "Council Arbiter");
   const validCompletedAgents = completedAgents.filter((c: AgentUpdate) =>
     validAgentsData.some((v) => v.id === c.agent_id)
   );
 
-  const expectedAgentIds = useMemo(() => supportedAgentIdsForMime(mimeType), [mimeType]);
+  const expectedAgentIds = useMemo(() => supportedAgentIdsForMime(mimeType, capabilities), [mimeType, capabilities]);
 
   const expectedCompletedCount = validCompletedAgents.filter((c: AgentUpdate) =>
     expectedAgentIds.has(c.agent_id)
@@ -1041,12 +1040,27 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     ? (status === "complete" || expectedCompletedCount >= expectedAgentIds.size)
     : (status === "awaiting_decision" || expectedCompletedCount >= expectedAgentIds.size);
 
+  // The "analysis_done" cue must follow the findings, not the status flip. The
+  // PIPELINE_PAUSED status change can land a beat before the agent finding cards
+  // have rendered/revealed, so gate the sound on the findings actually being
+  // present (all expected agents surfaced) and defer one paint so it plays after
+  // the cards are on screen — matching "the sound indicates initial analysis
+  // finished" only once the user can see the findings.
+  // awaiting_decision already means the backend finished every initial agent, so
+  // requiring at least one finding card present (rather than an exact count that
+  // could under-count when an agent is skipped/not-applicable) is enough to know
+  // the findings have surfaced — and avoids a never-fire edge case.
+  const findingsSurfaced = validCompletedAgents.length > 0;
+
   useEffect(() => {
-    if ((awaitingDecision || (phase === "deep" && allAgentsDone)) && !analysisCompleteSoundedRef.current) {
+    const ready =
+      (awaitingDecision && findingsSurfaced) || (phase === "deep" && allAgentsDone);
+    if (ready && !analysisCompleteSoundedRef.current) {
       analysisCompleteSoundedRef.current = true;
-      playSound("analysis_done");
+      const t = setTimeout(() => playSound("analysis_done"), 420);
+      return () => clearTimeout(t);
     }
-  }, [awaitingDecision, phase, allAgentsDone, playSound]);
+  }, [awaitingDecision, findingsSurfaced, phase, allAgentsDone, playSound]);
 
   const hasStartedAnalysis =
     status !== "idle" ||
@@ -1114,6 +1128,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     allAgentsDone,
     awaitingDecision,
     mimeType,
+    capabilities,
     handoffRecovering: autoStartBlocking || showLoadingOverlay,
   };
 }

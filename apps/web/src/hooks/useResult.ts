@@ -82,7 +82,7 @@ export function useResult(initialSessionId?: string) {
   const [reportAlreadyReady, setReportAlreadyReady] = useState(false);
   const [state, setState] = useState<PageState>(() => {
     if (typeof window === "undefined") return "arbiter";
-    const _initialSid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem(STORAGE_KEYS.SESSION_ID) : null);
+    const _initialSid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
     return _initialSid && sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1"
       ? "ready"
       : "arbiter";
@@ -100,16 +100,17 @@ export function useResult(initialSessionId?: string) {
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId ?? null);
   const [minOverlayDone, setMinOverlayDone] = useState(() => {
     if (typeof window === "undefined") return false;
-    const _initialSid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem(STORAGE_KEYS.SESSION_ID) : null);
+    const _initialSid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
     return _initialSid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1" : false;
   });
   const [arbiterComplete, setArbiterComplete] = useState(() => {
     if (typeof window === "undefined") return false;
-    const _initialSid = initialSessionId ?? (typeof window !== "undefined" ? storage.getItem(STORAGE_KEYS.SESSION_ID) : null);
+    const _initialSid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
     return _initialSid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1" : false;
   });
 
   const historySavedRef = useRef(false);
+  const revealSoundedRef = useRef(false);
   const { playSound } = useSound();
   const soundRef = useRef(playSound);
 
@@ -175,6 +176,7 @@ export function useResult(initialSessionId?: string) {
       setArbiterComplete(false);
       setMinOverlayDone(false);
       historySavedRef.current = false;
+      revealSoundedRef.current = false;
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
       setIsDeepPhase(readResultPhase(initialSessionId) === "deep");
@@ -199,6 +201,7 @@ export function useResult(initialSessionId?: string) {
     setReport(null);
     setState("arbiter");
     historySavedRef.current = false;
+    revealSoundedRef.current = false;
     setArbiterMsg("Council deliberating on evidence...");
     setIsDeepPhase(nextIsDeep);
     setThumbnail(storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${sid}`) ?? storage.getItem(STORAGE_KEYS.THUMBNAIL));
@@ -262,11 +265,18 @@ export function useResult(initialSessionId?: string) {
     // to prevent blank flash during overlay exit animation.
     if (minOverlayDone) {
       setState("ready");
-      const id = setTimeout(() => {
-        soundRef.current("arbiter_done");
-        soundRef.current("result_reveal");
-      }, 200);
-      return () => clearTimeout(id);
+      // ONE reveal sound, synced to the moment the report content actually
+      // appears, fired at most once per session (guarded against React Query
+      // refetches). Previously three sounds (mount-time stamp + arbiter_done +
+      // result_reveal) clashed and the stamp fired during loading. The 220ms
+      // delay aligns the seal with the content paint / flash clearing.
+      if (!revealSoundedRef.current) {
+        revealSoundedRef.current = true;
+        const id = setTimeout(() => {
+          soundRef.current("stamp");
+        }, 220);
+        return () => clearTimeout(id);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalReportData, minOverlayDone]);
@@ -338,29 +348,15 @@ export function useResult(initialSessionId?: string) {
       }
     }
 
-    // Also check the report query data as a secondary completion signal
-    // (handles the case where a COMPLETE status arrives between poll intervals)
-    const checkInterval = setInterval(() => {
-      if (cancelled || !activeSessionId) return;
-      if (reportQueryData) {
-        const asAny = reportQueryData as unknown as Record<string, unknown>;
-        const completed = asAny.status === "complete" || isReportDTO(asAny);
-        if (completed) {
-          setArbiterComplete(true);
-          setArbiterMsg("Decrypting forensic ledger...");
-          if (timer) clearTimeout(timer);
-          clearInterval(checkInterval);
-        }
-      }
-    }, 1000);
-
     poll();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      clearInterval(checkInterval);
     };
-  }, [mounted, sessionId, arbiterComplete, router, reportQueryData]);
+  // reportQueryData intentionally excluded: the finalReportData effect handles
+  // the reportQueryData → arbiterComplete transition, so including it here
+  // would cancel and restart the entire poll on every React Query refetch.
+  }, [mounted, sessionId, arbiterComplete, router]);
 
   // History Persistence (Client Side Only)
   // F-H-10: mark historySavedRef true only AFTER the storage write succeeds,

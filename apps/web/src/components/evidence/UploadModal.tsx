@@ -45,7 +45,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
     if (validationError) {
       setError(validationError);
       setIsSecuring(false);
-      isSubmittingRef.current = false;
       playSound("error");
       return;
     }
@@ -57,6 +56,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
 
     try {
       await onFileSelected(file);
+      isSubmittingRef.current = false;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not prepare file.");
       setIsSecuring(false);
@@ -129,13 +129,13 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         variants={{
           idle: {
             scale: 1,
-            borderColor: "rgba(var(--color-primary-rgb), 0.2)",
-            backgroundColor: "rgba(var(--color-primary-rgb), 0.02)",
+            borderColor: "rgba(59,130,246,0.2)",
+            backgroundColor: "rgba(59,130,246,0.02)",
           },
           active: {
             scale: 1.02,
-            borderColor: "rgba(var(--color-primary-rgb), 0.8)",
-            backgroundColor: "rgba(var(--color-primary-rgb), 0.08)",
+            borderColor: "rgba(59,130,246,0.8)",
+            backgroundColor: "rgba(59,130,246,0.08)",
           },
         }}
         transition={{ type: "spring", stiffness: 300, damping: 20 }}

@@ -387,6 +387,42 @@ def download_florence(force: bool = False) -> bool:
         return False
 
 
+def download_ai_generation(force: bool = False) -> bool:
+    """AI-generation detector — real ViT image classifier (primary AI-gen signal).
+
+    NON-FATAL: returns True even on download failure. The runtime tool
+    (ai_generation_detector.py) degrades gracefully to the spectral heuristic
+    when the model is absent, so a flaky Hugging Face fetch must never fail the
+    whole image build or block startup.
+    """
+    model_id = getattr(settings, "ai_image_detector_model", "Organika/sdxl-detector")
+    hf_dir = CACHE_DIRS["HF"]
+    model_slug = f"models--{model_id.replace('/', '--')}"
+    model_dirs = [
+        Path(hf_dir) / "hub" / model_slug,
+        Path(hf_dir) / "transformers" / model_slug,
+    ]
+    cached = [p for model_dir in model_dirs for p in _large_cached_files(model_dir, 10_000_000)]
+    if cached and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  AI-generation detector ({model_id}) - already cached")
+        return True
+
+    print(f"  {CYAN}[DOWN]{RESET}  AI-generation detector {model_id} -> {hf_dir}")
+    try:
+        from transformers import AutoImageProcessor, AutoModelForImageClassification
+
+        AutoImageProcessor.from_pretrained(model_id)
+        AutoModelForImageClassification.from_pretrained(model_id)
+        print(f"  {GREEN}[OK  ]{RESET}  AI-generation detector downloaded.")
+        return True
+    except Exception as exc:
+        print(
+            f"  {YELLOW}[WARN]{RESET}  AI-generation detector ({model_id}) download failed: {exc}. "
+            f"Runtime will degrade to the spectral heuristic (non-fatal)."
+        )
+        return True  # non-fatal by design
+
+
 def _validate_lock_file() -> None:
     """Validate models.lock.json syntax and required metadata."""
     lock_path = Path(__file__).parent.parent / "config" / "models.lock.json"
@@ -567,6 +603,7 @@ def main() -> None:
         ("OpenCLIP ViT-B-32", download_open_clip),
         ("ResNet-50", download_resnet50),
         ("Florence-2", download_florence),
+        ("AI-generation detector", download_ai_generation),
     ]
 
     # Audio models are gated — skipped unless explicitly enabled.

@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-import json
 import mimetypes
 from typing import Any
 from uuid import uuid4
@@ -167,60 +166,6 @@ class VisionRouter:
             is_screen_capture_like=is_screen_capture_like,
         )
 
-    async def _run_groq_vision(self, file_path: str) -> VisualEvidenceFinding:
-        import base64
-
-        import httpx
-
-        api_key = self.config.groq_vision_api_key or (
-            self.config.llm_api_key if self.config.llm_provider == "groq" else None
-        )
-        if not api_key:
-            raise RuntimeError("Groq Vision API key is not configured")
-
-        model = self.config.groq_vision_model
-        mime_type = mimetypes.guess_type(file_path)[0] or "image/jpeg"
-        with open(file_path, "rb") as fh:
-            encoded = base64.b64encode(fh.read()).decode("ascii")
-
-        async with httpx.AsyncClient(timeout=self.config.groq_vision_timeout) as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "Return JSON forensic visual profile."},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:{mime_type};base64,{encoded}"},
-                                },
-                            ],
-                        }
-                    ],
-                    "temperature": 0,
-                },
-            )
-        if response.status_code >= 400:
-            raise RuntimeError(f"Groq Vision returned HTTP {response.status_code}")
-        content = response.json()["choices"][0]["message"]["content"]
-        profile = json.loads(content)
-        return VisualEvidenceFinding(
-            analysis_type="visual_evidence_profile",
-            model_used=model,
-            content_description=profile.get("scene_description")
-            or profile.get("content_description")
-            or "",
-            provider_used="groq_vision",
-            detected_objects=list(profile.get("detected_objects") or []),
-            confidence=float(profile.get("confidence") or 0.0),
-            court_defensible=True,
-            _authenticity_verdict=str(profile.get("authenticity_verdict") or "INCONCLUSIVE"),
-        )
-
     async def deep_forensic_analysis(
         self,
         artifact: EvidenceArtifact,
@@ -230,16 +175,19 @@ class VisionRouter:
         persona: str | None = None,
         is_screen_capture_like: bool = False,
         agent_id: str = "",
+        session_id: str | None = None,
     ) -> VisualEvidenceFinding:
         """
         Execute a single visual-profile analysis that always returns a
         VisualEvidenceFinding.
 
-        Strict hybrid contract:
-          1. local_only mode → always local ensemble.
-          2. agent_id != "Agent1" → always local ensemble (Gemini is reserved).
-          3. Agent1 + Gemini enabled → attempt Gemini; on any failure → local ensemble.
-          4. Gemini not enabled → local ensemble.
+        Routing priority (highest to lowest):
+          1. Pre-computed preflight VisualContext in Redis (session_id provided)
+             → zero extra Gemini calls; agents share the single preflight result.
+          2. local_only mode → always local ensemble.
+          3. agent_id != "Agent1" → always local ensemble (Gemini reserved for Agent1).
+          4. Agent1 + Gemini enabled → attempt Gemini; on any failure → local ensemble.
+          5. Gemini not enabled → local ensemble.
 
         The fallback_applied / fallback_reason / provider_attempts fields are
         populated on the result so every report discloses the actual provenance.
@@ -248,6 +196,80 @@ class VisionRouter:
         file_path = artifact.file_path
         provider_attempts: list[dict] = []
         errors: list[str] = []
+
+        # ── Priority 1: preflight context already in Redis ─────────────────
+        # The /investigate route fires create_visual_context_preflight() as a
+        # background task before any agent starts. When that task completes, the
+        # VisualContext is in Redis under visual_context:{session_id}. Agents
+        # that call deep_forensic_analysis with session_id can reuse it without
+        # consuming any additional Gemini RPM/RPD quota.
+        if session_id:
+            try:
+                from core.visual_context_store import (
+                    wait_for_visual_context,
+                    visual_context_to_profile_dict,
+                )
+
+                # Bounded wait, not a one-shot read: the preflight is fired as a
+                # background task and may still be in-flight when the first agents
+                # reach this point (Gemini latency / rate-limit). Waiting briefly
+                # lets every agent share the single preflight result instead of
+                # each firing its own Gemini call and racing — which previously
+                # left the arbiter with no shared context to corroborate against.
+                # Returns immediately once the context lands (the common case).
+                preflight_ctx = await wait_for_visual_context(
+                    session_id=session_id, timeout=20.0
+                )
+                if preflight_ctx:
+                    logger.info(
+                        "VisionRouter: preflight context hit — no Gemini call needed",
+                        session_id=session_id,
+                        agent_id=agent_id,
+                        source=preflight_ctx.source,
+                        file_type=preflight_ctx.file_type_assessment,
+                    )
+                    profile = visual_context_to_profile_dict(preflight_ctx)
+                    iface = (
+                        preflight_ctx.interface_elements[0]
+                        if preflight_ctx.interface_elements
+                        else ""
+                    )
+                    meta_notes = "; ".join(
+                        preflight_ctx.metadata_visual_context.metadata_consistency_notes or []
+                    )
+                    return VisualEvidenceFinding(
+                        analysis_type="visual_evidence_profile",
+                        model_used=preflight_ctx.provider_name or "preflight",
+                        content_description=profile.get("content_description", ""),
+                        provider_used=preflight_ctx.provider_name or "preflight",
+                        manipulation_signals=list(
+                            preflight_ctx.image_integrity_context.visible_manipulation_signals or []
+                        ),
+                        detected_objects=[
+                            obj.label for obj in (preflight_ctx.detected_objects or [])
+                        ],
+                        contextual_anomalies=list(
+                            preflight_ctx.image_integrity_context.ai_generation_signals or []
+                        ),
+                        file_type_assessment=preflight_ctx.file_type_assessment,
+                        confidence=preflight_ctx.confidence,
+                        court_defensible=True,
+                        from_cache=True,
+                        _extracted_text=list(preflight_ctx.extracted_text or []),
+                        _interface_identification=iface,
+                        _authenticity_verdict=preflight_ctx.authenticity_verdict,
+                        _metadata_visual_consistency=meta_notes,
+                        provider_attempts=list(preflight_ctx.provider_attempts or []),
+                        fallback_applied=preflight_ctx.source != "llm_assisted",
+                        fallback_reason="" if preflight_ctx.source == "llm_assisted" else "preflight used local ensemble",
+                        tool_coverage=dict(preflight_ctx.tool_coverage or {}),
+                    )
+            except Exception as _pf_exc:
+                logger.debug(
+                    "VisionRouter: preflight context lookup failed — proceeding with normal path",
+                    session_id=session_id,
+                    error=str(_pf_exc),
+                )
 
         # ── short-circuit: local_only or non-Agent1 ────────────────────────
         if self.local_only:
@@ -313,25 +335,10 @@ class VisionRouter:
             logger.info("Gemini not enabled — skipping for Agent1")
             provider_attempts.append({"provider": "gemini", "success": False, "reason": "not_enabled"})
 
-        allow_groq_vision = (
-            "groq_vision" in (getattr(self.config, "vision_provider_chain", "") or "")
-            and getattr(self.config, "allow_groq_vision_visual_profile", False)
-            and agent_id == "Agent1"
-        )
-
-        if allow_groq_vision:
-            try:
-                result = await self._run_groq_vision(file_path)
-                result.provider_attempts = provider_attempts + [
-                    {"provider": "groq_vision", "success": True}
-                ]
-                return result
-            except Exception as e:
-                logger.warning("Groq Vision visual profile failed", error=str(e))
-                errors.append(f"Groq Vision exception: {str(e)}")
-                provider_attempts.append(
-                    {"provider": "groq_vision", "success": False, "error": str(e)}
-                )
+        # Vision fallback chain is intentionally Gemini → local ensemble only.
+        # Groq is reserved exclusively for text synthesis (per-agent narratives +
+        # final report) and must NOT be spent on vision profiling, where its
+        # quota competes with the synthesis path.
 
         # ── Fallback: local ensemble ───────────────────────────────────────
         logger.info("Falling back to local visual ensemble")

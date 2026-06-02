@@ -220,14 +220,38 @@ def _get_exif_data(image: Image.Image, file_path: str | None = None) -> dict[str
     }
     try:
         raw = image.getexif()
+        # IFD0 base tags (Make, Model, Software, DateTime, Orientation, ...)
         for tag_id, value in raw.items():
             tag = ExifTags.TAGS.get(tag_id, str(tag_id))
-            if tag == "GPSInfo" and isinstance(value, dict):
-                for gps_id, gps_value in value.items():
-                    gps_tag = ExifTags.GPSTAGS.get(gps_id, str(gps_id))
-                    data[gps_tag] = gps_value
-            else:
-                data[tag] = value
+            # GPSInfo (0x8825) and ExifOffset (0x8769) are sub-IFD pointers,
+            # not values — expanded below. Never store the raw integer offset.
+            if tag in ("GPSInfo", "ExifOffset", "ExifIFD"):
+                continue
+            data[tag] = value
+
+        # Exif sub-IFD (0x8769) — this is where the forensically critical fields
+        # live: DateTimeOriginal, DateTimeDigitized, FNumber, ExposureTime,
+        # ISOSpeedRatings, FocalLength, LensModel, etc. PIL's base getexif()
+        # does NOT descend into this block, which is why timestamp / capture
+        # parameters appeared "missing" before this fix.
+        try:
+            exif_ifd = raw.get_ifd(0x8769)
+            for tag_id, value in (exif_ifd or {}).items():
+                tag = ExifTags.TAGS.get(tag_id, str(tag_id))
+                data.setdefault(tag, value)
+        except Exception as sub_exc:
+            logger.debug("Failed to read Exif sub-IFD", error=str(sub_exc))
+
+        # GPS sub-IFD (0x8825) — getexif() returns GPSInfo as an integer offset,
+        # never as a dict, so the prior isinstance(value, dict) check never fired.
+        # get_ifd() is the only correct way to read GPS tags.
+        try:
+            gps_ifd = raw.get_ifd(0x8825)
+            for gps_id, gps_value in (gps_ifd or {}).items():
+                gps_tag = ExifTags.GPSTAGS.get(gps_id, str(gps_id))
+                data[gps_tag] = gps_value
+        except Exception as gps_exc:
+            logger.debug("Failed to read GPS sub-IFD", error=str(gps_exc))
     except Exception as exc:
         data["exif_error"] = str(exc)
 
@@ -265,6 +289,70 @@ def _get_exif_data(image: Image.Image, file_path: str | None = None) -> dict[str
     return data
 
 
+def _normalize_exif_aliases(exif: dict[str, Any]) -> dict[str, Any]:
+    """Emit the lowercase / snake_case field names that all downstream consumers
+    read (handlers, synthesis, reactive rules, visual grounding).
+
+    The raw EXIF tags use canonical PIL names (Make, Model, DateTimeOriginal).
+    Every consumer reads camera_make / datetime_original / gps_coordinates / etc.
+    Without these aliases the data is extracted but never reaches the consumers.
+    """
+    aliases: dict[str, Any] = {}
+
+    make = exif.get("Make")
+    model = exif.get("Model")
+    if make:
+        aliases["camera_make"] = str(make).strip()
+        aliases["make"] = str(make).strip()
+    if model:
+        aliases["camera_model"] = str(model).strip()
+        aliases["model"] = str(model).strip()
+
+    # Timestamp — prefer original capture time, fall back through the chain
+    dt = (
+        exif.get("DateTimeOriginal")
+        or exif.get("DateTimeDigitized")
+        or exif.get("DateTime")
+    )
+    if dt:
+        aliases["datetime_original"] = str(dt).strip()
+
+    if exif.get("Software"):
+        aliases["software"] = str(exif["Software"]).strip()
+    if exif.get("LensModel"):
+        aliases["lens_model"] = str(exif["LensModel"]).strip()
+
+    # Capture parameters — convert IFDRational to float so they serialise cleanly
+    fnum = _ratio(exif.get("FNumber"))
+    if fnum is not None:
+        aliases["aperture"] = round(fnum, 2)
+    focal = _ratio(exif.get("FocalLength"))
+    if focal is not None:
+        aliases["focal_length"] = round(focal, 2)
+    iso = exif.get("ISOSpeedRatings") or exif.get("PhotographicSensitivity")
+    if iso is not None:
+        try:
+            aliases["iso"] = int(iso if not isinstance(iso, (tuple, list)) else iso[0])
+        except (ValueError, TypeError):
+            pass
+
+    # GPS → decimal degrees + a single "lat, lon" string consumers can display
+    lat = _convert_to_degrees(exif.get("GPSLatitude"))
+    lon = _convert_to_degrees(exif.get("GPSLongitude"))
+    if lat is not None and lon is not None:
+        if str(exif.get("GPSLatitudeRef") or "").strip().upper() == "S":
+            lat = -lat
+        if str(exif.get("GPSLongitudeRef") or "").strip().upper() == "W":
+            lon = -lon
+        aliases["gps_latitude"] = round(lat, 6)
+        aliases["gps_longitude"] = round(lon, 6)
+        coord_str = f"{round(lat, 6)}, {round(lon, 6)}"
+        aliases["gps_coordinates"] = coord_str
+        aliases["gps_location"] = coord_str
+
+    return aliases
+
+
 async def exif_extract(*, artifact: Any = None, file_path: str | None = None, **_: Any) -> dict[str, Any]:
     path = _artifact_path(artifact, file_path)
     if not path or not Path(path).exists():
@@ -279,8 +367,12 @@ async def exif_extract(*, artifact: Any = None, file_path: str | None = None, **
             if k not in _structural and not k.startswith("png_chunk_") and v is not None
         )
         png_text_count = sum(1 for k in exif if k.startswith("png_chunk_"))
+        # Normalized aliases so consumers find device/timestamp/GPS by the
+        # snake_case names they actually read.
+        aliases = _normalize_exif_aliases(exif)
         return {
             **exif,
+            **aliases,
             "has_exif": bool(present),
             "has_png_text_metadata": png_text_count > 0,
             "present_fields": present,

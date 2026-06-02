@@ -41,6 +41,24 @@ logger = get_logger(__name__)
 DEFAULT_CONFIDENCE_FALLBACK = 0.5
 MAX_CHALLENGE_ATTEMPTS = 2
 
+
+def _manipulation_probability(mapped_verdict: str, confidence: float) -> float:
+    """Graduated P(manipulated) by verdict band × confidence.
+
+    Replaces the prior binary rule (confidence if MANIPULATED else 0.0), which
+    reported 0.0 manipulation probability for SUSPICIOUS / LIKELY_MANIPULATED
+    files — misrepresenting genuinely suspicious evidence on the report gauge.
+    """
+    v = (mapped_verdict or "").upper()
+    c = max(0.0, min(1.0, confidence))
+    if v == "MANIPULATED":
+        return round(max(0.75, c), 3)          # strong, floored at 0.75
+    if v == "SUSPICIOUS":
+        return round(0.50 + 0.25 * c, 3)        # 0.50–0.75 band
+    if v == "AUTHENTIC":
+        return round(0.15 * (1.0 - c), 3)       # high confidence → near 0
+    return 0.5                                   # INCONCLUSIVE — genuine uncertainty
+
 # Re-exporting for backward compatibility
 __all__ = [
     "FindingVerdict",
@@ -260,12 +278,17 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 status = f.get("status")
                 evidence_verdict = f.get("evidence_verdict")
                 
-                if status == "SUCCESS" and evidence_verdict not in ("ERROR", "NOT_APPLICABLE"):
-                    completed_tools.append(tool)
-                elif status in ("FAILED", "ERROR", "TIMEOUT") or evidence_verdict == "ERROR":
+                # A tool "completed" if it produced a verdict and did not fail or
+                # opt out. Finding status is CONFIRMED/INCONCLUSIVE/etc. (never the
+                # literal "SUCCESS"), so classify by failure/NA first, then treat
+                # everything else as completed — otherwise completed_tools is always
+                # empty and the deliberation wrongly reads INCONCLUSIVE_LIMITED_COVERAGE.
+                if status in ("FAILED", "ERROR", "TIMEOUT", "INCOMPLETE") or evidence_verdict == "ERROR":
                     failed_tools.append(tool)
                 elif status == "NOT_APPLICABLE" or evidence_verdict == "NOT_APPLICABLE":
                     not_applicable_tools.append(tool)
+                else:
+                    completed_tools.append(tool)
                     
         completed_tools = list(set(completed_tools))
         failed_tools = list(set(failed_tools))
@@ -279,9 +302,78 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # ── 4. Retrieve Visual Context & Per-Agent Synthesis ──
         from core.visual_context_store import get_visual_context
         visual_context = await get_visual_context(session_id=str(self.session_id))
-        
-        from core.per_agent_synthesis import split_visual_context, AgentSynthesisInput, refine_synthesis_batch
+
+        # ── Corroboration grounding (applied to the FINDINGS, before both the
+        #    per-agent card verdict and the arbiter overall verdict, so they agree) ──
+        # A lone integrity POSITIVE the holistic visual model (Gemini) does not
+        # corroborate is, in practice, a false positive on a processed/recompressed
+        # real photo. Downgrade such uncorroborated integrity positives to
+        # INCONCLUSIVE. Requires Gemini available & clean and fewer than 2 strong,
+        # court-defensible agreeing integrity signals. Provenance/content-risk
+        # signals and hard evidence (hash mismatch) are not touched.
+        try:
+            _vc_clean = False
+            if visual_context is not None:
+                _vi = getattr(visual_context, "image_integrity_context", None)
+                _ass = str(getattr(_vi, "integrity_assessment", "") or "").lower() if _vi else ""
+                _vc_clean = _ass not in ("likely_manipulated", "ai_generated_suspect")
+            _non_integrity = {
+                # Provenance/metadata
+                "exif_extract", "timestamp_analysis", "gps_timezone_validate",
+                "file_structure_analysis", "file_hash_verify", "metadata_anomaly_score",
+                "provenance_chain_verify", "hex_signature_scan", "compression_risk_audit",
+                # Content/context
+                "object_detection", "vector_contraband_search", "scene_incongruence",
+                # Descriptive / non-manipulation tools — never a manipulation claim,
+                # so must not be tagged as an "uncorroborated integrity signal".
+                "visual_evidence_profile", "analyze_image_content",
+                "extract_text_from_image", "read_shared_image_context",
+                "scale_validation",
+            }
+            # Screening-tier heuristics that co-fire on JPEG recompression — they are
+            # correlated, not independent, so they do not corroborate one another or
+            # the ML detectors. Excluded from the strong-corroborator count (but still
+            # downgraded along with the rest when the cluster is uncorroborated).
+            _screening = {
+                "neural_copy_move", "copy_move_detector", "neural_splicing",
+                "splicing_detector", "neural_ela", "error_level_analysis",
+                "frequency_domain_analysis",
+            }
+            _int_pos = []
+            for _res in active_results.values():
+                for _f in _res.get("findings", []):
+                    _m = _f.get("metadata") or {}
+                    _tool = _m.get("tool_name") or _f.get("finding_type") or ""
+                    if str(_f.get("evidence_verdict")).upper() == "POSITIVE" and _tool not in _non_integrity:
+                        _int_pos.append((_tool, _f))
+            _strong = sum(
+                1 for _tool, _f in _int_pos
+                if _tool not in _screening
+                and (_f.get("confidence_raw") or (_f.get("metadata") or {}).get("confidence") or 0) >= 0.7
+                and (_f.get("metadata") or {}).get("court_defensible", True)
+            )
+            if visual_context is not None and _vc_clean and _int_pos and _strong < 2:
+                for _tool, _f in _int_pos:
+                    _f["evidence_verdict"] = "INCONCLUSIVE"
+                    (_f.setdefault("metadata", {}))["corroboration_downgrade"] = True
+                    _f["reasoning_summary"] = (
+                        str(_f.get("reasoning_summary") or "").rstrip(".")
+                        + " — uncorroborated by the visual model; held inconclusive (likely a processing/recompression artifact, not manipulation)."
+                    ).strip()
+                logger.info(f"Corroboration grounding downgraded {len(_int_pos)} uncorroborated integrity positive(s)")
+        except Exception as _corr_err:
+            logger.debug("Corroboration grounding skipped", error=str(_corr_err))
+
+        from core.per_agent_synthesis import (
+            split_visual_context,
+            AgentSynthesisInput,
+            refine_synthesis_batch,
+            compose_evidence_identity,
+        )
         splits = split_visual_context(str(self.session_id), visual_context)
+        # Compose the shared "what the evidence appears to be" fragment once so
+        # all three agent briefs open with consistent observed context.
+        evidence_identity = compose_evidence_identity(visual_context)
         
         inputs = {}
         for aid in ("Agent1", "Agent3", "Agent5"):
@@ -313,25 +405,27 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     elif status in ("FAILED", "ERROR", "TIMEOUT"):
                         a_failed.append(tool)
                         
-                # Deterministic agent verdict / confidence
-                a_pos = [f for f in findings if f.get("evidence_verdict") == "POSITIVE"]
-                a_verdict = "SUSPICIOUS" if a_pos else "AUTHENTIC"
-                if len(a_pos) >= 2:
-                    a_verdict = "MANIPULATED"
-                a_conf = 0.8 if a_pos else 0.9
-                
+                # Deterministic, severity-aware per-agent verdict / confidence.
+                # Replaces the prior crude POSITIVE-count rule: only MEDIUM+
+                # POSITIVE signals move the verdict, NOT_APPLICABLE/ERROR/failed
+                # findings are excluded, and confidence is graduated by signal
+                # strength and coverage rather than hardcoded.
+                from core.severity import compute_agent_verdict
+                a_verdict, a_conf, a_reason = compute_agent_verdict(findings)
+
                 inputs[aid] = AgentSynthesisInput(
                     agent_id=aid,
                     persona_name=aid,
                     persona_rules={},
                     visual_context_available=vc_avail,
                     visual_context_section=vc_sec,
+                    evidence_identity=evidence_identity,
                     completed_tools=list(set(a_completed)),
                     failed_tools=list(set(a_failed)),
                     findings=findings,
                     agent_verdict=a_verdict,
                     agent_confidence=a_conf,
-                    confidence_reason=f"Based on {len(a_completed)} completed tools."
+                    confidence_reason=a_reason,
                 )
                 
         agent_syntheses = await refine_synthesis_batch(inputs, self.config)
@@ -364,7 +458,37 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             "analysis_mode": self.config.analysis_routing_mode if hasattr(self.config, "analysis_routing_mode") else "hybrid",
             "visual_context_source": getattr(visual_context, "source", "none") if visual_context else "none",
         }
-        
+
+        # ── Verdict mapping + derived metrics (computed BEFORE the report build
+        #    so the narrative label and the verdict field can never disagree) ──
+        mapped_verdict = "INCONCLUSIVE"
+        v_upper = deliberation_result.final_verdict.upper()
+        if "LIKELY_MANIPULATED" in v_upper:
+            mapped_verdict = "MANIPULATED"
+        elif "SUSPICIOUS" in v_upper or "PROVENANCE" in v_upper or "CONTENT_RISK" in v_upper:
+            mapped_verdict = "SUSPICIOUS"
+        elif "NO_REPORTABLE_MANIPULATION_DETECTED" in v_upper:
+            mapped_verdict = "AUTHENTIC"
+
+        _final_conf = deliberation_result.final_confidence
+        manipulation_probability = _manipulation_probability(mapped_verdict, _final_conf)
+
+        # Real confidence spread from the per-agent confidences (was hardcoded 0.0),
+        # giving the report a genuine cross-agent discord/spread metric.
+        _agent_confs = [
+            float(m.get("confidence_score") or 0.0)
+            for m in active_metrics
+            if m.get("confidence_score") is not None and not m.get("skipped")
+        ]
+        if _agent_confs:
+            import statistics as _stats
+            confidence_min = round(min(_agent_confs), 3)
+            confidence_max = round(max(_agent_confs), 3)
+            confidence_std_dev = round(_stats.pstdev(_agent_confs), 3) if len(_agent_confs) > 1 else 0.0
+        else:
+            confidence_min = confidence_max = round(_final_conf, 3)
+            confidence_std_dev = 0.0
+
         det_report_dict = build_deterministic_report(
             case_data=case_data,
             visual_context=visual_context,
@@ -372,7 +496,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             arbiter_deliberation=deliberation_result,
             tool_coverage=tool_coverage,
             execution_metadata=execution_metadata,
-            groq_used=False
+            groq_used=False,
+            display_verdict=mapped_verdict,
         )
 
         # ── 7. Optional Groq Polish ──
@@ -386,26 +511,31 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 groq_used = True
 
         # ── 8. Mapping Back to ForensicReport Pydantic Model ──
-        mapped_verdict = "INCONCLUSIVE"
-        v_upper = deliberation_result.final_verdict.upper()
-        if "LIKELY_MANIPULATED" in v_upper:
-            mapped_verdict = "MANIPULATED"
-        elif "SUSPICIOUS" in v_upper or "PROVENANCE" in v_upper or "CONTENT_RISK" in v_upper:
-            mapped_verdict = "SUSPICIOUS"
-        elif "NO_REPORTABLE_MANIPULATION_DETECTED" in v_upper:
-            mapped_verdict = "AUTHENTIC"
-
+        # (mapped_verdict + derived metrics computed above, before report build)
         p_anal = {}
         p_anal_structured = {}
         for aid, syn in agent_syntheses.items():
             p_anal[aid] = syn.agent_brief
-            p_anal_structured[aid] = {
+            entry = {
                 "agent_brief": syn.agent_brief,
                 "visual_description": syn.visual_context_summary,
                 "key_findings": "\n".join(syn.key_findings),
                 "opinion": syn.confidence_reason,
-                "synthesis_source": syn.synthesis_source
+                "synthesis_source": syn.synthesis_source,
             }
+            # Surface the deep-vs-initial delta the agent already computed in its
+            # deep synthesis (phase_delta/delta_reason). Without this it was shown
+            # on the live card but dropped from the final report — so a deep report
+            # read identically to an initial one with no "what deep added" framing.
+            _agent_syn = (active_results.get(aid) or {}).get("synthesis") or {}
+            if isinstance(_agent_syn, dict):
+                _phase_delta = str(_agent_syn.get("phase_delta") or "").strip().upper()
+                _delta_reason = str(_agent_syn.get("delta_reason") or "").strip()
+                if _phase_delta and _phase_delta not in ("", "N/A"):
+                    entry["phase_delta"] = _phase_delta
+                    if _delta_reason:
+                        entry["delta_reason"] = _delta_reason
+            p_anal_structured[aid] = entry
 
         degradation_flags = self._get_degradation_flags(
             llm_ok=groq_used,
@@ -465,10 +595,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             verdict_sentence=final_report_dict["final_conclusion"],
             key_findings=final_report_dict["key_findings"],
             reliability_note=final_report_dict["reliability_notes"][0] if final_report_dict["reliability_notes"] else "",
-            manipulation_probability=deliberation_result.final_confidence if mapped_verdict == "MANIPULATED" else 0.0,
-            confidence_min=deliberation_result.final_confidence,
-            confidence_max=deliberation_result.final_confidence,
-            confidence_std_dev=0.0,
+            manipulation_probability=manipulation_probability,
+            confidence_min=confidence_min,
+            confidence_max=confidence_max,
+            confidence_std_dev=confidence_std_dev,
             per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
             degradation_flags=degradation_flags,
             applicable_agent_count=len(active_results),
@@ -888,41 +1018,21 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return "; ".join(parts) if parts else f"All {total} tools ran successfully"
 
     def _get_agent_summary(self, metrics, findings) -> dict:
+        # Use the single severity-aware compute_agent_verdict so the per-agent card
+        # verdict matches the rest of the pipeline. The prior logic gated AUTHENTIC
+        # on a high metrics confidence_score and fell through to INCONCLUSIVE for
+        # clean evidence whose tool confidences were merely moderate — wrongly
+        # reading a fully-clean, zero-error agent as INCONCLUSIVE.
+        from core.severity import compute_agent_verdict
+
         summary = {}
         for aid, m in metrics.items():
-            conf = m.get("confidence_score", 0)
             err = m.get("error_rate", 0)
-
             agent_findings = findings.get(aid, [])
-            positive = sum(
-                1
-                for f in agent_findings
-                if evidence_verdict_of(f) == "POSITIVE"
-                and (confidence_of(f) or 0) >= MIN_CONFIDENCE_THRESHOLD
-                and f.get("court_defensible", True)
-            )
-            inconclusive = sum(
-                1 for f in agent_findings if evidence_verdict_of(f) == "INCONCLUSIVE"
-            )
-
             if m.get("skipped"):
-                v = "NOT_APPLICABLE"
-            elif positive > 0:
-                v = "SUSPICIOUS"
-            elif inconclusive > 0:
-                v = "INCONCLUSIVE"
-            elif ForensicPolicy.is_authentic(conf, err):
-                v = "AUTHENTIC"
-            elif ForensicPolicy.is_suspicious(conf, err):
-                v = "SUSPICIOUS"
-            elif (
-                conf >= ForensicPolicy.AUTHENTIC_CONF_THRESHOLD
-                and err <= ForensicPolicy.AUTHENTIC_ERROR_MAX
-            ):
-                v = "AUTHENTIC"
+                v, conf = "NOT_APPLICABLE", 0.0
             else:
-                v = "INCONCLUSIVE"
-
+                v, conf, _reason = compute_agent_verdict(agent_findings)
             summary[aid] = {
                 "agent_name": AGENT_NAMES.get(aid, aid),
                 "verdict": v,

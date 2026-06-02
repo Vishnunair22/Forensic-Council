@@ -211,12 +211,12 @@ class Agent1Image(ForensicAgent):
             "Run diffusion_artifact_detector for AI-generation signatures",
             "Run synthid_watermark_detect for SynthID and AI watermark detection",
             "Run f3_net_frequency for AI-GAN artifact detection",
-            "Run neural_splicing for ViT-based region composition analysis",
-            "Run neural_copy_move for dual-branch copy-move detection",
+            "Run neural_splicing for SRM-residual region composition screening",
+            "Run neural_copy_move for ORB+RANSAC copy-move screening",
         ]
         # anomaly_tracer relies heavily on JPEG noise/ghosts — skip for lossless
         if not self._is_lossless:
-            tasks.append("Run anomaly_tracer for ManTra-Net universal anomaly tracing")
+            tasks.append("Run anomaly_tracer for statistical anomaly screening")
         # adversarial_robustness_check removed from base — injected reactively in
         # _reason_step when neural_splicing or neural_copy_move returns POSITIVE.
         # Gemini removed from Phase 2 — Phase 1 result in shared context.
@@ -417,7 +417,7 @@ class Agent1Image(ForensicAgent):
                 result = await run_ml_script_subprocess(
                     script_name="synthid_watermark_detector",
                     input_path=file_path,
-                    timeout=30,
+                    timeout=75,
                 )
                 return result
             except Exception:

@@ -204,6 +204,56 @@ class AgentInvestigationMixin:
 
 
 
+    async def _prune_unregistered_tasks(self, agent_id: str | None = None) -> None:
+        """Skip PENDING tasks that reference a known forensic tool this agent did
+        not register (plan/registry drift).
+
+        Without this, a planned tool with no handler (e.g. file_hash_verify routed
+        to Agent1, which is Agent5-exclusive) burns a ReAct iteration and produces
+        a spurious 'unavailable / degraded' finding — making clean evidence look
+        degraded and inflating tool counts. This is the single systemic guard that
+        keeps every agent running only the tools it can actually execute.
+        """
+        registry = getattr(self, "_tool_registry", None)
+        if registry is None:
+            return
+        target_agent_id = agent_id or self.agent_id
+        try:
+            from core.image_evidence_routing import _TOOL_TO_TASK_DESC
+            from core.working_memory import TaskStatus
+
+            known_tools = set(_TOOL_TO_TASK_DESC.keys())
+            registered = set(registry.handlers.keys())
+            state = await self.working_memory.get_state(self.session_id, target_agent_id)
+            if not state:
+                return
+            for task in state.tasks:
+                if task.status != TaskStatus.PENDING:
+                    continue
+                desc = (task.description or "").lower()
+                # Match the longest known tool name present so e.g. "neural_ela"
+                # is preferred over a shorter coincidental substring.
+                referenced = None
+                for tool in sorted(known_tools, key=len, reverse=True):
+                    if tool in desc:
+                        referenced = tool
+                        break
+                if referenced and referenced not in registered:
+                    await self.working_memory.update_task(
+                        session_id=self.session_id,
+                        agent_id=target_agent_id,
+                        task_id=task.task_id,
+                        status=TaskStatus.COMPLETE,
+                        result_ref="skipped_unregistered_tool",
+                    )
+                    logger.info(
+                        "Pruned task referencing tool not registered for this agent",
+                        agent_id=target_agent_id,
+                        tool=referenced,
+                    )
+        except Exception as exc:
+            logger.debug("Task prune skipped", agent_id=target_agent_id, error=str(exc))
+
     async def _publish_tool_registry_snapshot(self, agent_id: str | None = None) -> None:
         """Expose the live tool catalogue to working memory for LLM ReAct mode.
 
@@ -880,7 +930,7 @@ class AgentInvestigationMixin:
                     if ev == "POSITIVE" or tool_ctx.get("splicing_detected"):
                         opinion = f"Splicing boundary detection found composited region edges with {conf:.2f} confidence, indicating content was inserted from an external source."
                     else:
-                        opinion = "TruFor splicing analysis showed high structural continuity across the image, with no evidence of region compositing."
+                        opinion = "SRM-residual splicing screening showed high structural continuity across the image, with no evidence of region compositing."
 
                 # 5. Neural Copy-Move
                 elif tool_name in ("neural_copy_move", "copy_move_detect"):
@@ -1002,15 +1052,28 @@ class AgentInvestigationMixin:
 
             # Fallback if no specific opinion was formed
             if not opinion:
-                if ev == "POSITIVE":
+                status = str(f.status or "").upper()
+                if ev == "ERROR" or status in {"INCOMPLETE", "TIMEOUT", "FAILED"}:
+                    # Honesty: a tool that did not complete is a coverage gap, never
+                    # a clean or inconclusive result. State the failure plainly.
+                    detail = str(f.metadata.get("error") or summary or "execution did not complete").strip()
+                    if status == "TIMEOUT":
+                        opinion = f"{_tool_name(f)} timed out before completing — this leaves a coverage gap; the absence of a result is not evidence of authenticity."
+                    else:
+                        opinion = f"{_tool_name(f)} did not complete ({detail[:200]}) — this leaves a coverage gap; no conclusion can be drawn from it."
+                elif ev == "POSITIVE":
                     opinion = f"{_tool_name(f)} returned a positive signal." + (f" {summary[:300]}" if summary else "")
                 elif ev in {"NEGATIVE", "CLEAN"}:
-                    opinion = f"{_tool_name(f)} completed and found no supported anomaly signal." + (f" {summary[:300]}" if summary else "")
+                    # Lead with the tool's own specific result; only fall back to a
+                    # concise honest clean statement when the tool gave no detail.
+                    # (Avoids the canned "completed and found no supported anomaly
+                    # signal" prefix that read as boilerplate/fallback in findings.)
+                    opinion = summary[:300] if summary else f"{_tool_name(f)} ran its check and found no anomaly."
                 elif ev == "NOT_APPLICABLE":
                     reason = f.metadata.get("reason") or f.metadata.get("skipped_reason") or "not applicable"
                     opinion = f"{_tool_name(f)} was bypassed — {reason}."
                 else:
-                    opinion = summary[:300] if summary else f"{_tool_name(f)} returned an inconclusive result."
+                    opinion = summary[:300] if summary else f"{_tool_name(f)} ran but produced no determinate signal; the result is inconclusive."
 
             if degraded:
                 fallback = str(f.metadata.get("fallback_reason") or "heuristic fallback")
@@ -1071,7 +1134,7 @@ class AgentInvestigationMixin:
                 prefix = f"Visual profile context: {_visual_desc[:180]}. "
             elif _visual_category:
                 prefix = f"Visual profile category: {_visual_category}. "
-            narrative = f"{prefix}{self.agent_name} analysis complete. " + sections[0]["opinion"][:220]
+            narrative = f"{prefix}" + sections[0]["opinion"][:240]
         elif top_findings:
             primary = top_findings[0]
             primary_summary = primary.reasoning_summary.strip()
@@ -1085,14 +1148,43 @@ class AgentInvestigationMixin:
                 f"during {phase} analysis."
             )
 
-        clean_tool_findings = []
+        # Curate key findings: surface meaningful signals, but never list one
+        # generic "completed and found no supported anomaly signal" line per
+        # clean tool — that repetitive boilerplate is exactly the fallback text
+        # users see flood the card on clean evidence. Clean results collapse
+        # into a single coverage statement instead.
+        def _is_boilerplate_clean(text: str) -> bool:
+            t = text.lower()
+            return (
+                "found no supported anomaly signal" in t
+                or "completed with no" in t
+                or "no anomaly" in t
+                or "returned an inconclusive result" in t
+                or "was bypassed" in t
+            )
+
+        meaningful_findings: list[str] = []
+        clean_labels: list[str] = []
         for section in sections:
             opinion = str(section.get("opinion") or "").strip()
             if not opinion:
                 continue
-            clean_tool_findings.append(opinion.rstrip(" .") + ".")
-        if not clean_tool_findings and narrative:
-            clean_tool_findings = [narrative.rstrip(" .") + "."]
+            flag = str(section.get("flag") or "")
+            if flag in ("bad", "warn") or not _is_boilerplate_clean(opinion):
+                meaningful_findings.append(opinion.rstrip(" .") + ".")
+            else:
+                clean_labels.append(str(section.get("label") or "").strip())
+
+        clean_tool_findings = list(meaningful_findings)
+        if not clean_tool_findings:
+            # Fully clean — one substantive coverage statement, not N boilerplate lines.
+            checks = ", ".join(label for label in clean_labels[:5] if label)
+            if checks:
+                clean_tool_findings = [
+                    f"No manipulation indicators detected across {len(clean_labels)} forensic check(s): {checks}."
+                ]
+            elif narrative:
+                clean_tool_findings = [narrative.rstrip(" .") + "."]
 
         verdict_text = verdict.replace("_", " ").title()
         if positive_count:
@@ -1176,10 +1268,14 @@ class AgentInvestigationMixin:
                         _top_metric = f" ({_top_tool}: {_mk}={_mv})"
                         break
 
+        # Conclusion-focused brief. The role opening already states what was
+        # examined; lead the second sentence with the forensic conclusion rather
+        # than a mechanical "Ran N tool(s)" counter (which read as fallback text).
+        _conclusion_clause = f"{tool_conclusion[0].upper()}{tool_conclusion[1:]}" if tool_conclusion else "Analysis completed"
         agent_brief = (
             f"{_role_opening} "
-            f"Ran {len(actionable)} tool(s); {tool_conclusion}{_top_metric}. "
-            f"Assessment: {verdict_text}, {round(confidence * 100)}% confidence."
+            f"{_conclusion_clause}{_top_metric}. "
+            f"Assessment: {verdict_text} ({round(confidence * 100)}% confidence)."
         )
         return {
             "agent_confidence": confidence,
@@ -1225,6 +1321,7 @@ class AgentInvestigationMixin:
 
         self._tool_registry = await self.build_tool_registry()
         await self._publish_tool_registry_snapshot()
+        await self._prune_unregistered_tasks()
         await self._check_tool_availability()
         self._episodic_context = await self._retrieve_episodic_context()
         initial_thought = await self.build_initial_thought()
@@ -1334,6 +1431,7 @@ class AgentInvestigationMixin:
             self.session_id, deep_agent_id, deep_tasks, len(deep_tasks) + 3
         )
         await self._publish_tool_registry_snapshot(deep_agent_id)
+        await self._prune_unregistered_tasks(deep_agent_id)
 
         loop_engine = ReActLoopEngine(
             agent_id=deep_agent_id,

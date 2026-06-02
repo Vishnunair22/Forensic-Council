@@ -16,7 +16,7 @@ import { clsx } from "clsx";
 import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
-import { isAgentSupportedForMime, supportedAgentIdsForMime } from "@/lib/agentSupport";
+import { isAgentSupportedForMime, supportedAgentIdsForMime, type ServerCapabilities } from "@/lib/agentSupport";
 import { accentFor } from "@/lib/agentTheme";
 import { getLiveProgressDescriptor } from "@/lib/tool-progress";
 import { AgentStatusCard, AGENT_ICONS } from "./AgentStatusCard";
@@ -47,6 +47,7 @@ interface AgentProgressDisplayProps {
   onRunDeepAnalysis?: () => void;
   isNavigating?: boolean;
   mimeType?: string;
+  capabilities?: ServerCapabilities | null;
   playSound?: (type: SoundType) => void;
   revealQueue?: AgentUpdate[];
   arbiterDeliberating?: boolean;
@@ -292,6 +293,7 @@ export function AgentProgressDisplay({
   onRunDeepAnalysis,
   isNavigating = false,
   mimeType,
+  capabilities,
   revealQueue = [],
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
@@ -322,10 +324,10 @@ export function AgentProgressDisplay({
           .filter((id): id is string => typeof id === "string");
       }
     }
-    const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined));
+    const fromMime = Array.from(supportedAgentIdsForMime(mimeType || undefined, capabilities));
     if (fromMime.length) return fromMime;
     return allValidAgents.map(a => a.id);
-  }, [phase, mimeType]);
+  }, [phase, mimeType, capabilities]);
 
   const visibleAgents = useMemo((): Agent[] => {
       return allValidAgents
@@ -337,9 +339,9 @@ export function AgentProgressDisplay({
         if (agentVerdict === "NOT_APPLICABLE") return false;
         if (phase === "deep") return initialAgentIds.includes(a.id);
         if (!mimeType) return true;
-        return isAgentSupportedForMime(a.id, mimeType);
+        return isAgentSupportedForMime(a.id, mimeType, capabilities);
       });
-  }, [phase, initialAgentIds, mimeType, completedAgents, agentUpdates]);
+  }, [phase, initialAgentIds, mimeType, capabilities, completedAgents, agentUpdates]);
 
   const skippedAgents = useMemo(() => {
     if (!mimeType) return [];
@@ -347,9 +349,9 @@ export function AgentProgressDisplay({
       const completed = completedAgents.find((c) => c.agent_id === a.id);
       const liveStatus = agentUpdates[a.id]?.status;
       const isSkippedOrUnsupported = completed?.status === "skipped" || liveStatus === "skipped" || liveStatus === "unsupported";
-      return !isAgentSupportedForMime(a.id, mimeType) || isSkippedOrUnsupported;
+      return !isAgentSupportedForMime(a.id, mimeType, capabilities) || isSkippedOrUnsupported;
     });
-  }, [mimeType, completedAgents, agentUpdates]);
+  }, [mimeType, capabilities, completedAgents, agentUpdates]);
 
   const isQueuePending = /queue|queued|enqueued|awaiting available forensic worker|waiting for an available forensic worker/i.test(
     `${pipelineMessage || ""} ${progressText || ""}`
@@ -431,7 +433,7 @@ export function AgentProgressDisplay({
               ? "Initial Analysis"
               : phase === "deep"
               ? "Deep Analysis"
-              : "Forensic Analysis"}
+              : "Analysis Pipeline"}
           </h1>
           <span className={clsx(
             "fc-badge",
@@ -594,10 +596,10 @@ export function AgentProgressDisplay({
       <AnimatePresence>
         {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && (pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.16 }}
+            initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">

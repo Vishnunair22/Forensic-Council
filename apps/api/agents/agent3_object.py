@@ -148,11 +148,70 @@ class Agent3Object(ForensicAgent):
         except Exception as e:
             logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
 
+    def _visual_profile(self) -> dict:
+        """Return the shared visual context dict from _tool_context or inter_agent_bus."""
+        ctx = getattr(self, "_tool_context", {}) or {}
+        profile = ctx.get("visual_evidence_profile") or ctx.get("read_shared_image_context") or {}
+        if not profile and self.inter_agent_bus:
+            try:
+                profile = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
+            except Exception:
+                pass
+        if hasattr(profile, "to_finding_dict"):
+            profile = profile.to_finding_dict()
+        return profile if isinstance(profile, dict) else {}
+
     async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
         """Implementation of reactive task expansion for object detection."""
         tool_name = finding.metadata.get("tool_name")
+        is_screenshot = self._is_screen_capture_context()
 
-        # 1. If weapon/contraband detected, escalate to secondary classification
+        # 1. Visual context arrival — route tools based on what the image IS
+        if tool_name == "read_shared_image_context":
+            profile = self._visual_profile()
+            file_type = str(profile.get("file_type_assessment") or "").lower()
+            content_desc = str(profile.get("content_description") or "").lower()
+            is_ss = any(t in file_type or t in content_desc for t in (
+                "screenshot", "screen capture", "digital ui", "web page", "app interface",
+            ))
+            if is_ss:
+                logger.info(
+                    "Visual context confirms screenshot — routing to UI forensics",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run screenshot_scene_applicability to assess screenshot analysis scope",
+                    priority=16,
+                )
+                await self.inject_task(
+                    description="Run screenshot_layout_forensics for UI element consistency check",
+                    priority=15,
+                )
+            # Gemini flagged weapons or dangerous items → prioritise contraband scan
+            weapons = list(profile.get("weapons_or_dangerous_items") or [])
+            if weapons:
+                logger.info(
+                    f"Visual context flagged dangerous items: {weapons}; routing to contraband scan",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run vector_contraband_search for dangerous item risk screening",
+                    priority=20,
+                )
+            # Gemini flagged scene inconsistencies → run incongruence check immediately
+            inconsistencies = list(profile.get("scene_inconsistencies") or [])
+            if inconsistencies and not is_ss:
+                logger.info(
+                    f"Visual context flagged {len(inconsistencies)} scene inconsistencies — "
+                    "injecting scene_incongruence for corroboration",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run scene_incongruence to validate visual context anomaly signals",
+                    priority=18,
+                )
+
+        # 2. Weapon/contraband confirmed → secondary classification + physics checks
         if tool_name == "vector_contraband_search":
             if finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.6:
                 logger.info(
@@ -166,14 +225,15 @@ class Agent3Object(ForensicAgent):
                     description="Run scale_validation for weapon size plausibility check",
                     priority=18,
                 )
-                await self.inject_task(
-                    description="Run lighting_consistency for shadow validation on held objects",
-                    priority=17,
-                )
+                if not is_screenshot:
+                    await self.inject_task(
+                        description="Run lighting_consistency for shadow validation on held objects",
+                        priority=17,
+                    )
 
-        # 2. If lighting inconsistency in initial check, escalate to deep analysis
+        # 3. Lighting inconsistency initial → deep shadow audit (photos only)
         if tool_name == "lighting_correlation_initial":
-            if finding.evidence_verdict == "POSITIVE":
+            if finding.evidence_verdict == "POSITIVE" and not is_screenshot:
                 logger.info(
                     "Lighting inconsistency detected; escalating to deep analysis",
                     agent_id=self.agent_id,
@@ -183,39 +243,55 @@ class Agent3Object(ForensicAgent):
                     priority=15,
                 )
 
-        # 3. If scene incongruence found, inject adversarial robustness check
+        # 4. Scene incongruence confirmed
         if tool_name == "scene_incongruence":
-            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get(
-                "incongruence_detected"
-            ):
-                logger.info(
-                    "Scene incongruence detected; injecting adversarial check",
-                    agent_id=self.agent_id,
-                )
-                await self.inject_task(
-                    description="Run adversarial_robustness_check against object detection evasion",
-                    priority=12,
-                )
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("incongruence_detected"):
+                if is_screenshot:
+                    # For screenshots, UI layout audit is more meaningful than adversarial check
+                    logger.info(
+                        "Scene incongruence in screenshot context — routing to UI layout forensics",
+                        agent_id=self.agent_id,
+                    )
+                    await self.inject_task(
+                        description="Run screenshot_layout_forensics for UI element consistency validation",
+                        priority=14,
+                    )
+                else:
+                    logger.info(
+                        "Scene incongruence in photo context — injecting adversarial check",
+                        agent_id=self.agent_id,
+                    )
+                    await self.inject_task(
+                        description="Run adversarial_robustness_check against object detection evasion",
+                        priority=12,
+                    )
 
-        # 4. Signal to inter-agent bus
+        # 5. Object detection — signal bus + check for Gemini/YOLO mismatch
         if tool_name == "object_detection":
+            obj_count = finding.metadata.get("detection_count", 0)
             if self.inter_agent_bus:
                 try:
-                    obj_count = finding.metadata.get("detection_count", 0)
                     self.inter_agent_bus.signal_event(
                         self.session_id,
                         "agent3_object_signal",
-                        {
-                            "progress": f"Detected {obj_count} objects",
-                            "verdict": finding.evidence_verdict,
-                        },
+                        {"progress": f"Detected {obj_count} objects", "verdict": finding.evidence_verdict},
                     )
                 except Exception as signal_error:
-                    logger.debug(
-                        "Failed to publish object agent signal",
-                        session_id=self.session_id,
-                        error=str(signal_error),
-                    )
+                    logger.debug("Failed to publish object agent signal", error=str(signal_error))
+
+            # If YOLO finds many objects but visual context lists few → inject incongruence check
+            profile = self._visual_profile()
+            gemini_objects = list(profile.get("detected_objects") or [])
+            if obj_count > 0 and len(gemini_objects) == 0 and not is_screenshot:
+                logger.info(
+                    f"YOLO detected {obj_count} objects but visual context lists none — "
+                    "possible misclassification; injecting scene_incongruence",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run scene_incongruence for YOLO vs visual context object mismatch",
+                    priority=13,
+                )
 
     async def build_tool_registry(self) -> ToolRegistry:
         registry = ToolRegistry()

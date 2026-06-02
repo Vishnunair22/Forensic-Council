@@ -3,15 +3,14 @@
 import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 import { ResultLayout } from "@/components/result/ResultLayout";
-import { useSound } from "@/hooks/useSound";
 
 export function DynamicResultClient({ sessionId }: { sessionId: string }) {
-  const { playSound } = useSound();
-
   useEffect(() => {
     document.body.style.overflow = "";
-    playSound("stamp");
-  }, [playSound]);
+    // The report-reveal sound is fired by useResult at the exact moment the
+    // report content becomes visible — not here on mount, where it would play
+    // during the loading overlay before any content exists.
+  }, []);
 
   return (
     <motion.div

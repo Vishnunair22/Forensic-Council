@@ -3,7 +3,7 @@
 // ROLE: Agent analysis in-progress display shown during arbiter deliberation.
 // Used by ArbiterNarrativeMixin to show "Arbiter Active" progress state.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
 interface ForensicProgressOverlayProps {
@@ -23,6 +23,7 @@ export function ForensicProgressOverlay({
 }: ForensicProgressOverlayProps) {
   const [elapsed, setElapsed] = useState(0);
   const [dynamicText, setDynamicText] = useState(liveText);
+  const phaseIndexRef = useRef(0);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -51,12 +52,9 @@ export function ForensicProgressOverlay({
       "Finalizing cryptographic signature..."
     ];
 
-    let phaseIndex = 0;
-    setDynamicText(arbiterPhases[0]);
-
     const textInterval = setInterval(() => {
-      phaseIndex = (phaseIndex + 1) % arbiterPhases.length;
-      setDynamicText(arbiterPhases[phaseIndex]);
+      phaseIndexRef.current = (phaseIndexRef.current + 1) % arbiterPhases.length;
+      setDynamicText(arbiterPhases[phaseIndexRef.current]);
     }, 4000);
 
     return () => clearInterval(textInterval);

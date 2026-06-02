@@ -384,7 +384,7 @@ _TOOL_INTERPRETERS: dict[str, Any] = {
         f"Visual profile error: {o.get('error')}."
         if o.get("error")
         else (
-            lambda ctype=(o.get("file_type_assessment", "") or "unidentified content"), narrative=(str(o.get("content_description", "")) or "Visual analysis complete."), objects=o.get("detected_objects", []), texts=o.get("extracted_text", []), verdict=o.get("authenticity_verdict", ""), meta_consistency=str(o.get("metadata_visual_consistency", "")), iface=o.get("interface_identification", ""), signals=list(o.get("manipulation_signals") or []): (
+            lambda ctype=(o.get("file_type_assessment", "") or "unidentified content"), narrative=str(o.get("content_description", "") or ""), objects=o.get("detected_objects", []), texts=o.get("extracted_text", []), verdict=o.get("authenticity_verdict", ""), meta_consistency=str(o.get("metadata_visual_consistency", "")), iface=o.get("interface_identification", ""), signals=list(o.get("manipulation_signals") or []): (
                 "Visual evidence profile complete. "
                 + f"Content: {ctype}. "
                 + (f"Interface/UI: {iface}. " if iface else "")

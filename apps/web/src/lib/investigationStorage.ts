@@ -34,7 +34,15 @@ export function clearAgentSnapshots() {
       keysToRemove.push(key);
     }
   }
-  keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+  // Remove from window.localStorage directly — these keys were discovered by
+  // scanning it, so removing them there guarantees they are actually gone
+  // (the storage wrapper is also invoked for its change-event dispatch). Using
+  // only the wrapper left session-scoped snapshots behind, leaking stale agent
+  // findings into the next investigation.
+  keysToRemove.forEach((key) => {
+    window.localStorage.removeItem(key);
+    storage.removeItem(key);
+  });
 }
 
 export function expireSessionCookie() {

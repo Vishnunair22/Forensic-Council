@@ -104,11 +104,15 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   return (
     <div className="min-h-screen pb-24 pt-20 sm:pt-12 relative">
       {/* ── Arbiter/Loading overlay ── */}
+      {/* Cover the whole "no report yet" window with a single continuous overlay.
+          When "Accept Baseline" set FC_REPORT_READY, useResult optimistically
+          starts in state="ready" while the report is still being fetched — without
+          this the page would render nothing (blank) until the fetch resolves. */}
       <AnimatePresence>
-        {rs.state === "arbiter" && (
+        {(rs.state === "arbiter" || (rs.state === "ready" && !rs.report)) && (
           <ForensicProgressOverlay
             title="Consensus Synthesis"
-            liveText={rs.arbiterMsg || "Preparing final forensic report..."}
+            liveText={rs.arbiterMsg || "Decrypting forensic ledger…"}
             telemetryLabel="Compiling agent findings"
             showElapsed
             variant="arbiter"
@@ -595,8 +599,14 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     findings.push(cleaned);
   };
 
-  // ── TIER 1: Statistical & Narrative Synthesis (Highest Impact) ───────────────
+  // ── Backend key_findings are the canonical source of truth ───────────────────
+  // The arbiter already synthesized and deduped these. Only when the backend
+  // provides too few do we fall through to local re-derivation from tool
+  // findings + statistical narrative (the fallback path below).
   (report.key_findings ?? []).forEach((f) => push(f));
+  if (findings.length >= 3) {
+    return findings.slice(0, 6);
+  }
 
   const toolFindings = Object.values(report.per_agent_findings ?? {})
     .flat()
@@ -690,10 +700,7 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     push(`A ${Math.round(errRate * 100)}% tool error rate was recorded during this analysis. Reduced coverage in affected domains may limit the completeness of the determination, and results should be interpreted accordingly.`);
   }
 
-  // ── TIER 2: LLM key_findings ─────────────────────────────────────────────────
-  (report.key_findings ?? []).forEach((f) => push(f));
-
-  // ── TIER 3: High-confidence tool findings ────────────────────────────────────
+  // ── TIER 2: High-confidence tool findings ────────────────────────────────────
   if (findings.length < 5) {
     const toolFindings = Object.values(report.per_agent_findings ?? {})
       .flat()

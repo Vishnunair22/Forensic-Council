@@ -124,8 +124,7 @@ class AgentReasoningService:
             
             # Save the updated state
             try:
-                key = working_memory._get_key(UUID(session_id), agent_id)
-                await working_memory._client.set(key, state.model_dump_json(), ex=working_memory._ttl)
+                await working_memory.save_state(UUID(session_id), agent_id, state)
             except Exception as e:
                 logger.warning("Failed to save working memory state in pre_tool_reasoning", error=str(e))
 
@@ -190,7 +189,7 @@ class AgentReasoningService:
             # If weapon or contraband detected, verify against visual context
             detected_weapons_or_contraband = []
             for r in regions:
-                label = str(r.get("label", "")).lower()
+                label = str(r.get("label") or r.get("class_name") or r.get("name") or "").lower()
                 if any(w in label for w in ["weapon", "gun", "knife", "pistol", "rifle", "firearm", "contraband", "bomb"]):
                     detected_weapons_or_contraband.append(label)
             
@@ -199,25 +198,63 @@ class AgentReasoningService:
                 vc_weapons = [w.lower() for w in vis_ctx.object_scene_context.weapons_or_dangerous_items]
                 vc_objects = [obj.lower() for obj in vis_ctx.object_scene_context.objects]
                 vc_desc = vis_ctx.object_scene_context.scene_description.lower()
-                
-                corroborated = False
-                for item in detected_weapons_or_contraband:
-                    # Check if any token or synonym has a match
-                    if any(w_ctx in item or item in w_ctx for w_ctx in vc_weapons):
-                        corroborated = True
-                        break
-                    if any(obj_ctx in item or item in obj_ctx for obj_ctx in vc_objects):
-                        corroborated = True
-                        break
-                    if item in vc_desc:
-                        corroborated = True
-                        break
 
-                if not corroborated:
+                # Match an item against text/labels, tolerating singular/plural and
+                # the irregular f→ves plural ("knife" ↔ "knives") so a benign mention
+                # is not misread as absence.
+                def _variants(w: str) -> set[str]:
+                    v = {w, w + "s", w + "es"}
+                    if w.endswith("fe"):
+                        v.add(w[:-2] + "ves")   # knife → knives
+                    elif w.endswith("f"):
+                        v.add(w[:-1] + "ves")   # leaf → leaves
+                    if w.endswith("ves"):
+                        v.add(w[:-3] + "fe")
+                    return v
+
+                def _mentioned(item: str, haystack: str) -> bool:
+                    return any(var in haystack for var in _variants(item))
+
+                # A dual-use object (knife, etc.) is a reportable THREAT only if the
+                # holistic visual model independently classifies it as dangerous. Mere
+                # presence in the scene is NOT threat corroboration: if Gemini saw the
+                # object and did not flag it (e.g. "artist's palette knives"), that
+                # contradicts the threat rather than confirming it.
+                flagged_dangerous = any(
+                    (w_ctx in item or item in w_ctx)
+                    for item in detected_weapons_or_contraband
+                    for w_ctx in vc_weapons
+                )
+                seen_but_benign = (not flagged_dangerous) and any(
+                    _mentioned(item, vc_desc) or any(_mentioned(item, obj_ctx) for obj_ctx in vc_objects)
+                    for item in detected_weapons_or_contraband
+                )
+
+                if flagged_dangerous:
+                    pass  # corroborated threat — keep the verdict as reported
+                elif seen_but_benign:
+                    # Gemini observed the object and judged it benign → not a threat.
+                    is_uncorroborated_visual_claim = True
+                    court_defensible = False
+                    if verdict == "POSITIVE":
+                        verdict = "NEGATIVE"
+                    if confidence is not None:
+                        confidence = min(confidence, 0.3)
+                    msg = (
+                        f"YOLO flagged a potential weapon/contraband "
+                        f"({', '.join(detected_weapons_or_contraband)}), but the visual model "
+                        f"identifies it as a benign object in context — not a threat."
+                    )
+                    limitations.append(msg)
+                    logger.info(msg)
+                else:
+                    # Not present in the visual context at all — possible misdetection.
                     is_uncorroborated_visual_claim = True
                     court_defensible = False
                     if confidence is not None:
                         confidence *= 0.5  # scaling penalty
+                    if verdict == "POSITIVE":
+                        verdict = "INCONCLUSIVE"
                     msg = (
                         f"Warning: YOLO/contraband tool detected potential weapon/contraband "
                         f"({', '.join(detected_weapons_or_contraband)}), but it is completely "
@@ -303,6 +340,20 @@ class AgentReasoningService:
 
         # Save updates to working memory
         if state:
+            # Descriptive text from the tool's own output — carried so downstream
+            # synthesis/report rendering uses the REAL tool result instead of being
+            # forced into template fallback text (the prior root cause: digests
+            # stored only verdict/scoring fields with no summary).
+            _raw = envelope.raw if isinstance(getattr(envelope, "raw", None), dict) else {}
+            _summary_text = str(getattr(envelope, "summary", "") or "").strip()
+            _key_signal = str(
+                _raw.get("key_signal")
+                or _raw.get("key_finding")
+                or _raw.get("anomaly_description")
+                or _raw.get("match_description")
+                or ""
+            ).strip()
+
             # Update tool result summaries
             state.tool_result_summaries[tool_name] = {
                 "status": status_val,
@@ -311,6 +362,8 @@ class AgentReasoningService:
                 "court_defensible": court_defensible,
                 "report_safe": report_safe,
                 "arbiter_weight": arbiter_weight,
+                "summary": _summary_text,
+                "key_signal": _key_signal,
                 "timestamp": datetime.datetime.utcnow().isoformat()
             }
 
@@ -318,38 +371,54 @@ class AgentReasoningService:
             if contradiction_notes:
                 state.contradiction_register.extend(contradiction_notes)
 
-            # Record grounded finding
+            # Record grounded finding — now carries the descriptive text + metadata
+            # so synthesis/report rendering has the real tool result, not a template.
             finding_digest = {
                 "tool_name": tool_name,
                 "evidence_verdict": verdict,
+                "status": status_val,
                 "confidence": confidence,
                 "court_defensible": court_defensible,
                 "report_safe": report_safe,
                 "arbiter_weight": arbiter_weight,
                 "uncorroborated": is_uncorroborated_visual_claim,
                 "forbidden_breach": is_forbidden_claim_breach,
-                "visual_inference_only": visual_inference_only
+                "visual_inference_only": visual_inference_only,
+                "reasoning_summary": _summary_text,
+                "metadata": {
+                    "tool_name": tool_name,
+                    "summary": _summary_text,
+                    "key_signal": _key_signal,
+                    "degraded": bool(_raw.get("degraded")),
+                    "fallback_reason": _raw.get("fallback_reason"),
+                },
             }
             state.grounded_findings.append(finding_digest)
 
             # Save the updated state
             try:
-                key = working_memory._get_key(UUID(session_id), agent_id)
-                await working_memory._client.set(key, state.model_dump_json(), ex=working_memory._ttl)
+                await working_memory.save_state(UUID(session_id), agent_id, state)
             except Exception as e:
                 logger.warning("Failed to save working memory state in post_tool_reasoning", error=str(e))
 
         # 5. Build and return the AgentFinding
-        # Check finding status
+        # finding_status reflects COMPLETION, not court-defensibility. A heuristic
+        # screening tool (court_defensible=False) that ran and produced a valid
+        # verdict is COMPLETE — it must NOT be marked INCOMPLETE just because it is
+        # not court-defensible. Only genuine non-completion (error / timeout /
+        # unavailable) is INCOMPLETE. (report_safe stays a separate flag used for
+        # arbiter weighting; it no longer forces an INCOMPLETE status.)
         finding_status = "CONFIRMED"
-        if not report_safe:
+        if (
+            verdict == "ERROR"
+            or str(status_val).upper() in {"ERROR", "TIMEOUT", "INCOMPLETE", "FAILED"}
+            or getattr(envelope, "available", True) is False
+        ):
             finding_status = "INCOMPLETE"
-        if verdict == "NOT_APPLICABLE":
+        elif verdict == "NOT_APPLICABLE":
             finding_status = "NOT_APPLICABLE"
         elif verdict == "INCONCLUSIVE":
             finding_status = "INCONCLUSIVE"
-        elif verdict == "ERROR":
-            finding_status = "INCOMPLETE"
 
         # Build readable summary integrating pre-tool thought and post-tool grounding details
         grounding_notes = []

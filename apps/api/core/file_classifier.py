@@ -26,8 +26,15 @@ class FileClassification:
 
 CATEGORY_TO_RECOMMENDED_TOOLS: dict[str, list[str]] = {
     "screenshot": [
+        # Integrity (Agent1)
         "visual_evidence_profile",
         "detect_ui_overlay_forgery",
+        "frequency_domain_analysis",
+        # Content / "what's in the image" (Agent3)
+        "extract_text_from_image",
+        "analyze_image_content",
+        # Metadata (Agent5)
+        "file_hash_verify",
     ],
     "document": [
         "file_hash_verify",
@@ -74,6 +81,10 @@ CATEGORY_TO_RECOMMENDED_TOOLS: dict[str, list[str]] = {
 
 CATEGORY_TO_SKIP_TOOLS: dict[str, list[str]] = {
     "screenshot": [
+        # Genuinely inapplicable to lossless screen captures in the initial pass
+        # (JPEG-compression / camera-sensor / deep-neural tools). OCR, image-content
+        # and frequency analysis are NOT skipped — they are core to reading a
+        # screenshot's content and detecting AI-generated screen captures.
         "neural_ela",
         "ela_full_image",
         "jpeg_ghost_detect",
@@ -81,9 +92,6 @@ CATEGORY_TO_SKIP_TOOLS: dict[str, list[str]] = {
         "noise_fingerprint",
         "neural_splicing",
         "neural_copy_move",
-        "extract_text_from_image",
-        "analyze_image_content",
-        "frequency_domain_analysis",
         "detect_font_inconsistency",
     ],
     "document": [
@@ -112,7 +120,15 @@ CATEGORY_TO_SKIP_TOOLS: dict[str, list[str]] = {
 }
 
 
-async def classify_evidence_file(artifact: Any) -> FileClassification:
+def classify_evidence_file_sync(artifact: Any) -> FileClassification:
+    """Canonical, synchronous image categorizer — the SINGLE source of truth for
+    file-type categorization across the system.
+
+    Both the agent tool-registry registration path (agent1.build_tool_registry)
+    and the deterministic tool plan (image_evidence_routing.build_image_evidence_profile)
+    derive their category from this one function, so registry and plan can never
+    disagree on screenshot-vs-camera (the prior root cause of tool/plan drift).
+    """
     signals = {
         "has_camera_exif": _check_camera_exif(artifact),
         "has_screenshot_dimensions": _check_screenshot_dimensions(artifact),
@@ -142,6 +158,12 @@ async def classify_evidence_file(artifact: Any) -> FileClassification:
         recommended_tools=recommended,
         skip_tools=skip,
     )
+
+
+async def classify_evidence_file(artifact: Any) -> FileClassification:
+    """Async wrapper around the canonical sync categorizer (kept for existing
+    `await classify_evidence_file(...)` call sites)."""
+    return classify_evidence_file_sync(artifact)
 
 
 def _check_camera_exif(artifact: Any) -> bool:

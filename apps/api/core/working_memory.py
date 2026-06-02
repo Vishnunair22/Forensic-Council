@@ -318,6 +318,21 @@ class WorkingMemory:
         """Get Redis key for session/agent."""
         return f"wm:{session_id}:{agent_id}"
 
+    async def save_state(
+        self, session_id: UUID, agent_id: str, state: "WorkingMemoryState"
+    ) -> None:
+        """Persist a full working-memory state (local cache + Redis when connected).
+
+        Centralizes the canonical save pattern so callers never reach into
+        internals. Safe when Redis is unavailable — the local cache is always
+        updated and the Redis write is skipped rather than raising.
+        """
+        key = self._get_key(session_id, agent_id)
+        state_json = state.model_dump_json()
+        self._local_cache[key] = state_json
+        if self._redis is not None:
+            await self._redis.set(key, state_json, ex=86400)
+
     def _get_context_key(self, session_id: UUID, agent_id: str) -> str:
         """Get Redis key for compact cross-agent context."""
         return f"wm_context:{session_id}:{agent_id}"

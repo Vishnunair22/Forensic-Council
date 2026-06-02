@@ -8,6 +8,7 @@ from core.llm_client import LLMClient
 from core.visual_context_models import VisualContext
 from core.finding_formatter import TOOL_LABELS
 from core.structured_logging import get_logger
+from core.agent_personas import get_agent_narrative_persona
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,7 @@ class AgentSynthesisInput(BaseModel):
     persona_rules: dict = Field(default_factory=dict)
     visual_context_section: Optional[dict] = None
     visual_context_available: bool = False
+    evidence_identity: str = ""
     completed_tools: list[str] = Field(default_factory=list)
     failed_tools: list[str] = Field(default_factory=list)
     not_applicable_tools: list[str] = Field(default_factory=list)
@@ -122,13 +124,25 @@ def format_finding_first(finding: dict) -> str:
     tool_id = meta.get("tool_name") or finding.get("finding_type") or "forensic_tool"
     tool_label = TOOL_LABELS.get(tool_id, tool_id.replace("_", " ").title())
 
+    verdict = str(finding.get("evidence_verdict") or "INCONCLUSIVE").upper()
+    status = str(finding.get("status") or "").upper()
+
+    # Honest default when a tool carries no narratable text: a failed/incomplete
+    # tool is a coverage gap, never a fabricated "anomaly signature" line.
+    if verdict == "ERROR" or status in ("INCOMPLETE", "TIMEOUT", "FAILED"):
+        _default_text = f"{tool_label} did not complete — coverage gap"
+    elif verdict in ("NEGATIVE", "CLEAN"):
+        _default_text = "No supported anomaly signal"
+    else:
+        _default_text = "No determinate signal"
+
     # Extract finding text/signal
     finding_text = (
         meta.get("key_signal")
         or finding.get("reasoning_summary")
         or meta.get("summary")
         or finding.get("finding_type")
-        or "Anomaly signature check"
+        or _default_text
     )
 
     finding_text = str(finding_text).strip()
@@ -139,7 +153,6 @@ def format_finding_first(finding: dict) -> str:
                 finding_text = finding_text[len(prefix):].strip()
                 break
 
-    verdict = str(finding.get("evidence_verdict") or "INCONCLUSIVE").upper()
     conf = finding.get("confidence_raw") or meta.get("confidence") or finding.get("raw_confidence_score")
 
     if verdict in ("NOT_APPLICABLE", "ERROR") or conf is None:
@@ -149,12 +162,86 @@ def format_finding_first(finding: dict) -> str:
         return f"{finding_text} — {tool_label} ({conf_pct}%)"
 
 
+_FILE_TYPE_ARTICLE = {
+    "screenshot": "a screenshot",
+    "photograph": "a photograph",
+    "document_scan": "a scanned document",
+    "ai_generated": "an AI-generated image",
+    "composite": "a composite image",
+}
+
+
+def compose_evidence_identity(visual_context: Any) -> str:
+    """Compose a short 'what the evidence appears to be' fragment from the
+    visual context, for use after 'The evidence presents as ...'.
+
+    This is INFERENCE (vision-derived), not a forensic finding — the brief
+    frames it as observed context, never as a conclusion.
+    Returns "" when no usable context exists.
+    """
+    if visual_context is None:
+        return ""
+    ft = str(getattr(visual_context, "file_type_assessment", "") or "").strip().lower()
+    scene = str(getattr(visual_context, "scene_description", "") or "").strip()
+
+    lead = _FILE_TYPE_ARTICLE.get(ft, ft if ft and ft not in ("unknown", "") else "")
+    if lead and scene:
+        scene_frag = scene.rstrip(".")
+        # Avoid "a screenshot depicting a screenshot of ..."
+        if ft and ft in scene_frag.lower()[:20]:
+            return scene_frag
+        return f"{lead} depicting {scene_frag[0].lower()}{scene_frag[1:]}"
+    if lead:
+        return lead
+    if scene:
+        return scene.rstrip(".")
+    return ""
+
+
+_BOILERPLATE_FINDING_MARKERS = (
+    "found no supported anomaly signal",
+    "completed with no",
+    "no anomaly",
+    "returned an inconclusive result",
+    "was bypassed",
+    "completed and found no",
+    "no manipulation indicators",
+    "no significant findings",
+)
+
+
+def _is_boilerplate_finding(text: str) -> bool:
+    t = (text or "").lower()
+    return any(marker in t for marker in _BOILERPLATE_FINDING_MARKERS)
+
+
 def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> AgentSynthesisOutput:
     """Generates structured agent findings and summary deterministically based on tool results."""
-    # Build list of key findings using the standard formatting
-    key_findings = []
-    for f in input_data.grounded_findings or input_data.findings:
-        key_findings.append(format_finding_first(f))
+    # Build key findings — surface real signals, but collapse clean results into
+    # one coverage statement rather than emitting a generic boilerplate line per
+    # clean tool (which floods the report with fallback-looking text).
+    _source_findings = input_data.grounded_findings or input_data.findings
+    _meaningful: list[str] = []
+    _clean_tools: list[str] = []
+    for f in _source_findings:
+        verdict = str(f.get("evidence_verdict") or "").upper()
+        formatted = format_finding_first(f)
+        meta = f.get("metadata") or {}
+        tool_label = TOOL_LABELS.get(
+            meta.get("tool_name") or f.get("finding_type") or "",
+            str(meta.get("tool_name") or f.get("finding_type") or "").replace("_", " ").title(),
+        )
+        if verdict == "POSITIVE" or not _is_boilerplate_finding(formatted):
+            _meaningful.append(formatted)
+        elif verdict not in ("NOT_APPLICABLE", "ERROR") and tool_label:
+            _clean_tools.append(tool_label)
+
+    key_findings = list(_meaningful)
+    if not key_findings and _clean_tools:
+        _checks = ", ".join(dict.fromkeys(t for t in _clean_tools if t))  # dedup, keep order
+        key_findings = [
+            f"No manipulation indicators detected across {len(set(_clean_tools))} forensic check(s): {_checks}."
+        ]
 
     # Formulate visual context summary if available
     vis_summary = ""
@@ -182,12 +269,25 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     else:
         vis_summary = "Shared visual context was unavailable for this agent."
 
-    # Build agent brief
-    if key_findings:
-        findings_joined = "; ".join(key_findings[:3])
-        agent_brief = f"{input_data.agent_id} completed analysis with findings: {findings_joined}."
+    # Build agent brief — lead with the evidence identity (observed context),
+    # then the deterministic findings. The identity is vision-derived inference
+    # and is framed as "presents as", never as a forensic conclusion.
+    identity_lead = ""
+    if input_data.evidence_identity:
+        identity_lead = f"The evidence presents as {input_data.evidence_identity}. "
+
+    if _meaningful:
+        # Real signals present — lead with them.
+        findings_joined = "; ".join(_meaningful[:3])
+        agent_brief = f"{identity_lead}Examination identified: {findings_joined}."
+    elif _clean_tools:
+        # Clean — state the conclusion naturally, not "identified: no indicators".
+        agent_brief = (
+            f"{identity_lead}Examination across {len(set(_clean_tools))} forensic check(s) "
+            f"found no supported manipulation indicators."
+        )
     else:
-        agent_brief = f"{input_data.agent_id} completed analysis. No specific anomalies were confirmed."
+        agent_brief = f"{identity_lead}Examination found no supported anomalies across the applicable checks."
 
     source_mode = "deterministic_with_visual_context" if input_data.visual_context_available else "deterministic_tool_only"
 
@@ -209,43 +309,143 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     )
 
 
+def _build_persona_system_prompt(agent_ids: list[str]) -> str:
+    """
+    Build the Groq system prompt with per-agent expert voice instructions.
+    The persona voice definitions are the single source of truth — they live
+    in agent_personas.py and are injected here at call time so a change to
+    a persona definition automatically propagates to the synthesis prompt.
+    """
+    voice_blocks: list[str] = []
+    for aid in agent_ids:
+        persona = get_agent_narrative_persona(aid)
+        if persona:
+            vocab = ", ".join(persona.vocabulary_signature[:8])
+            forbidden = ", ".join(f'"{p}"' for p in persona.forbidden_phrases[:5])
+            voice_blocks.append(
+                f"**{aid} — {persona.expert_name}, {persona.title}**\n"
+                f"Voice: {persona.voice_style}\n"
+                f"Emphasis: {persona.emphasis}\n"
+                f"Finding lead: {persona.finding_lead}\n"
+                f"Domain vocabulary to use naturally: {vocab}.\n"
+                f"Never use these phrases: {forbidden}."
+            )
+
+    persona_section = "\n\n".join(voice_blocks)
+
+    return (
+        "You are a forensic narrative specialist writing expert testimony for a multi-agent "
+        "digital evidence analysis system. Each agent has a distinct expert identity. "
+        "Write ONLY in their assigned voice — not in generic template language.\n\n"
+        + persona_section
+        + "\n\n"
+        "INVIOLABLE CONSTRAINTS — these override everything else:\n"
+        "1. NEVER change 'agent_verdict' or 'agent_confidence' — these are deterministic forensic "
+        "measurements. They are facts, not opinions.\n"
+        "2. NEVER mention any tool vendor, AI provider, or model name "
+        "(Gemini, Groq, Cerebras, OpenAI, Llama, Google, CLIP, YOLO, etc.).\n"
+        "3. NEVER treat a missing API key or unavailable model as a degradation. "
+        "Only actual tool execution failures may appear as limitations.\n"
+        "4. Every key finding MUST follow this format: "
+        "[Finding statement] — [Tool name] ([Confidence]%)\n"
+        "5. Write in the present tense. The analysis has been completed; report its findings.\n"
+        "6. Return ONLY valid JSON — no markdown, no prose outside the JSON.\n"
+        "7. OPEN each agent_brief by grounding the reader in what the evidence appears to be, "
+        "using the supplied 'evidence_identity' value: begin with 'The evidence presents as "
+        "<evidence_identity>.' This is OBSERVED CONTEXT (what the evidence looks like), NOT a "
+        "forensic finding — never state it as a conclusion or let it imply a verdict. After this "
+        "one grounding sentence, state the deterministic findings in the expert's voice. "
+        "If evidence_identity is empty, open directly with the findings.\n\n"
+        "Schema:\n"
+        "{\n"
+        "  \"Agent1\": {\n"
+        "    \"agent_brief\": \"<opens with 'The evidence presents as ...' then 2-3 sentence expert summary in Agent1 voice>\",\n"
+        "    \"visual_context_summary\": \"<1-2 sentences on what the image context revealed>\",\n"
+        "    \"key_findings\": [\"<Finding> — <Tool> (<Conf>%)\", ...],\n"
+        "    \"confidence_reason\": \"<1 sentence on why the confidence level is justified>\",\n"
+        "    \"limitations\": [\"<only real tool failures>\"]\n"
+        "  },\n"
+        "  \"Agent3\": { ... },\n"
+        "  \"Agent5\": { ... }\n"
+        "}"
+    )
+
+
+def _has_narratable_signal(inp: AgentSynthesisInput) -> bool:
+    """True if this agent has anything worth a Groq-polished narrative.
+
+    Clean evidence (no positive/alert findings, no visual anomalies) produces
+    a perfectly adequate deterministic synthesis — calling Groq for it only
+    burns quota. We narrate only when there is a real signal to articulate.
+    """
+    _ALERT_VERDICTS = {"POSITIVE", "SUSPICIOUS", "TAMPERED", "MANIPULATED", "LIKELY_MANIPULATED"}
+    for f in (inp.grounded_findings or inp.findings):
+        verdict = str(f.get("evidence_verdict") or "").upper()
+        if verdict in _ALERT_VERDICTS:
+            return True
+        meta = f.get("metadata") or {}
+        severity = str(meta.get("severity_tier") or meta.get("severity") or "").upper()
+        if severity in ("CRITICAL", "HIGH", "MEDIUM"):
+            return True
+    # Visual-context anomalies are narratable even when tools are clean
+    section = inp.visual_context_section or {}
+    if isinstance(section, dict):
+        for key in ("visible_manipulation_signals", "ai_generation_signals", "scene_inconsistencies", "metadata_contradictions"):
+            if section.get(key):
+                return True
+        if str(section.get("integrity_assessment") or "").lower() not in ("", "no_visible_issue", "cannot_determine"):
+            return True
+    # Tool failures are worth narrating as limitations
+    return bool(inp.failed_tools)
+
+
 async def refine_synthesis_batch(
-    inputs: dict[str, AgentSynthesisInput], 
-    config: Settings
+    inputs: dict[str, AgentSynthesisInput],
+    config: Settings,
 ) -> dict[str, AgentSynthesisOutput]:
-    """Single batched synthesis refiner. 
-    Constructs a single prompt for Groq/Cerebras containing all three agent inputs,
-    makes one single LLM call, and falls back to deterministic if fails.
+    """Single batched synthesis refiner.
+
+    Constructs one Groq prompt covering all three agents with per-agent expert
+    persona voices, makes one LLM call, and falls back to deterministic output
+    on any failure. The deterministic fallback is always pre-built first so the
+    function never blocks.
     """
     outputs = {}
-    
-    # 1. First, build deterministic syntheses as the fallback and foundation
+
+    # 1. Build deterministic syntheses first — these are the fallback AND the
+    #    foundation: numeric values (verdict, confidence) come from here and the
+    #    LLM is only allowed to touch the narrative fields.
     for aid, inp in inputs.items():
         outputs[aid] = generate_deterministic_agent_synthesis(inp)
 
-    # 2. Check if LLM is enabled and configured
+    # 2. Guard: skip LLM refinement if not configured
     llm_client = LLMClient(config=config)
     if not (config.llm_enable_post_synthesis and config.llm_api_key and llm_client.is_available):
         logger.info("Groq batched synthesis skipped (LLM disabled/unavailable).")
         return outputs
 
-    # 3. Construct the prompt
+    # 2b. Clean-evidence early-exit: if NO agent has a narratable signal, the
+    #     deterministic synthesis is already optimal. Skip the Groq call to
+    #     preserve free-tier quota — this is the common clean-screenshot case.
+    if not any(_has_narratable_signal(inp) for inp in inputs.values()):
+        logger.info("Groq synthesis skipped — all agents clean, deterministic output is sufficient.")
+        return outputs
+
+    # 3. Build the per-agent payload
     batch_prompt_data = {}
     for aid, inp in inputs.items():
-        # Convert findings/grounded_findings to clean dicts without excess payload
-        clean_findings = []
-        for f in (inp.grounded_findings or inp.findings):
-            clean_findings.append({
+        clean_findings = [
+            {
                 "tool": f.get("metadata", {}).get("tool_name") or f.get("finding_type"),
                 "summary": f.get("reasoning_summary") or f.get("metadata", {}).get("summary"),
                 "verdict": f.get("evidence_verdict"),
-                "confidence": f.get("confidence_raw") or f.get("metadata", {}).get("confidence")
-            })
-
+                "confidence": f.get("confidence_raw") or f.get("metadata", {}).get("confidence"),
+            }
+            for f in (inp.grounded_findings or inp.findings)
+        ]
         batch_prompt_data[aid] = {
             "agent_id": inp.agent_id,
-            "persona_name": inp.persona_name,
-            "persona_rules": inp.persona_rules,
+            "evidence_identity": inp.evidence_identity,
             "visual_context_available": inp.visual_context_available,
             "visual_context_section": inp.visual_context_section,
             "completed_tools": inp.completed_tools,
@@ -253,116 +453,27 @@ async def refine_synthesis_batch(
             "findings": clean_findings,
             "agent_verdict": inp.agent_verdict,
             "agent_confidence": inp.agent_confidence,
-            "confidence_reason": inp.confidence_reason
+            "confidence_reason": inp.confidence_reason,
         }
 
-    system_prompt = (
-        "You are a forensic report narrative refiner. You are given the raw tool results, verdicts, "
-        "and visual contexts for Agent1 (Image Integrity), Agent3 (Object/Scene/Contraband), and Agent5 (Metadata/Provenance).\n"
-        "Your task is to refine and polish the 'agent_brief', 'visual_context_summary', 'confidence_reason', "
-        "and 'key_findings' lists into professional, cohesive, provider-neutral forensic language.\n"
-        "STRICT CONSTRAINTS:\n"
-        "1. DO NOT change the 'agent_verdict' or 'agent_confidence' values. They are strictly computed by local validators.\n"
-        "2. DO NOT mention any provider or model names (e.g. Gemini, Groq, Cerebras, OpenAI, Llama, Google, NCFI, NCFTA).\n"
-        "3. DO NOT treat missing API access or LLM unavailable as a degradation. Only tool execution failures may appear as limitations.\n"
-        "4. Enforce a finding-first format for each refined key finding: `[Finding] — [Tool(s)] ([Confidence]%)`.\n"
-        "5. Output a single valid JSON object mapping agent IDs ('Agent1', 'Agent3', 'Agent5') to their polished outputs.\n"
-        "Do not include any chat formatting, markdown, or explainers. Just return the raw JSON matching this schema:\n"
-        "{\n"
-        "  \"Agent1\": {\n"
-        "    \"agent_brief\": \"Polished summary description...\",\n"
-        "    \"visual_context_summary\": \"Polished visual context summary...\",\n"
-        "    \"key_findings\": [\"Finding A — Tool Name (80%)\", \"Finding B — Tool Name (95%)\"],\n"
-        "    \"confidence_reason\": \"Polished explanation...\",\n"
-        "    \"limitations\": []\n"
-        "  },\n"
-        "  \"Agent3\": { ... },\n"
-        "  \"Agent5\": { ... }\n"
-        "}"
-    )
-
-    user_payload = json.dumps(batch_prompt_data, indent=2, default=str)
-
-async def refine_synthesis_batch(
-    inputs: dict[str, AgentSynthesisInput], 
-    config: Settings
-) -> dict[str, AgentSynthesisOutput]:
-    """Single batched synthesis refiner. 
-    Constructs a single prompt for Groq/Cerebras containing all three agent inputs,
-    makes one single LLM call, and falls back to deterministic if fails.
-    """
-    outputs = {}
-    
-    # 1. First, build deterministic syntheses as the fallback and foundation
-    for aid, inp in inputs.items():
-        outputs[aid] = generate_deterministic_agent_synthesis(inp)
-
-    # 2. Check if LLM is enabled and configured
-    llm_client = LLMClient(config=config)
-    if not (config.llm_enable_post_synthesis and config.llm_api_key and llm_client.is_available):
-        logger.info("Groq batched synthesis skipped (LLM disabled/unavailable).")
-        return outputs
-
-    # 3. Construct the prompt
-    batch_prompt_data = {}
-    for aid, inp in inputs.items():
-        # Convert findings/grounded_findings to clean dicts without excess payload
-        clean_findings = []
-        for f in (inp.grounded_findings or inp.findings):
-            clean_findings.append({
-                "tool": f.get("metadata", {}).get("tool_name") or f.get("finding_type"),
-                "summary": f.get("reasoning_summary") or f.get("metadata", {}).get("summary"),
-                "verdict": f.get("evidence_verdict"),
-                "confidence": f.get("confidence_raw") or f.get("metadata", {}).get("confidence")
-            })
-
-        batch_prompt_data[aid] = {
-            "agent_id": inp.agent_id,
-            "persona_name": inp.persona_name,
-            "persona_rules": inp.persona_rules,
-            "visual_context_available": inp.visual_context_available,
-            "visual_context_section": inp.visual_context_section,
-            "completed_tools": inp.completed_tools,
-            "failed_tools": inp.failed_tools,
-            "findings": clean_findings,
-            "agent_verdict": inp.agent_verdict,
-            "agent_confidence": inp.agent_confidence,
-            "confidence_reason": inp.confidence_reason
-        }
-
-    system_prompt = (
-        "You are a forensic report narrative refiner. You are given the raw tool results, verdicts, "
-        "and visual contexts for Agent1 (Image Integrity), Agent3 (Object/Scene/Contraband), and Agent5 (Metadata/Provenance).\n"
-        "Your task is to refine and polish the 'agent_brief', 'visual_context_summary', 'confidence_reason', "
-        "and 'key_findings' lists into professional, cohesive, provider-neutral forensic language.\n"
-        "STRICT CONSTRAINTS:\n"
-        "1. DO NOT change the 'agent_verdict' or 'agent_confidence' values. They are strictly computed by local validators.\n"
-        "2. DO NOT mention any provider or model names (e.g. Gemini, Groq, Cerebras, OpenAI, Llama, Google, NCFI, NCFTA).\n"
-        "3. DO NOT treat missing API access or LLM unavailable as a degradation. Only tool execution failures may appear as limitations.\n"
-        "4. Enforce a finding-first format for each refined key finding: `[Finding] — [Tool(s)] ([Confidence]%)`.\n"
-        "5. Output a single valid JSON object mapping agent IDs ('Agent1', 'Agent3', 'Agent5') to their polished outputs.\n"
-        "Do not include any chat formatting, markdown, or explainers. Just return the raw JSON matching this schema:\n"
-        "{\n"
-        "  \"Agent1\": {\n"
-        "    \"agent_brief\": \"Polished summary description...\",\n"
-        "    \"visual_context_summary\": \"Polished visual context summary...\",\n"
-        "    \"key_findings\": [\"Finding A — Tool Name (80%)\", \"Finding B — Tool Name (95%)\"],\n"
-        "    \"confidence_reason\": \"Polished explanation...\",\n"
-        "    \"limitations\": []\n"
-        "  },\n"
-        "  \"Agent3\": { ... },\n"
-        "  \"Agent5\": { ... }\n"
-        "}"
-    )
-
+    system_prompt = _build_persona_system_prompt(list(inputs.keys()))
     user_payload = json.dumps(batch_prompt_data, indent=2, default=str)
 
     try:
-        raw_response = await llm_client.generate_synthesis(
-            system_prompt=system_prompt,
-            user_content=user_payload,
-            json_mode=True,
-            priority="medium"
+        # Hard ceiling on the Groq refinement so a rate-limited/slow run can never
+        # block the arbiter deliberation — the deterministic outputs are already
+        # built above and used as-is on timeout.
+        raw_response = await asyncio.wait_for(
+            llm_client.generate_synthesis(
+                system_prompt=system_prompt,
+                user_content=user_payload,
+                json_mode=True,
+                priority="medium",
+                # Three short expert briefs — 1200 tokens is ample and keeps the
+                # call well within free-tier TPM limits.
+                max_tokens=1200,
+            ),
+            timeout=40.0,
         )
         if raw_response:
             cleaned_resp = raw_response.strip()

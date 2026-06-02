@@ -30,6 +30,10 @@ class VisualEvidenceFinding:
     _metadata_visual_consistency: str = ""
     _forensic_routing: dict[str, Any] = field(default_factory=dict)
     _forensic_specifics: str = ""
+    # Structured provenance clues visible IN the image (timestamps, device/platform,
+    # app, location). Populated by the local ensemble so Agent5's metadata
+    # provenance section is filled even on the no-Gemini path.
+    _visible_metadata_clues: dict[str, Any] = field(default_factory=dict)
     provider_attempts: list[dict] = field(default_factory=list)
     fallback_applied: bool = False
     fallback_reason: str = ""
@@ -117,6 +121,7 @@ class VisualEvidenceFinding:
                 "authenticity_verdict": verdict or self._authenticity_verdict,
                 "raw_authenticity_verdict": raw_verdict,
                 "metadata_visual_consistency": self._metadata_visual_consistency,
+                "visible_metadata_clues": self._visible_metadata_clues,
                 "forensic_routing": self._forensic_routing,
                 "forensic_specifics": self._forensic_specifics,
                 "latency_ms": round(self.latency_ms, 1),

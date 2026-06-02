@@ -109,20 +109,29 @@ def build_image_evidence_profile(
     is_doc = is_document_like(artifact)
     is_web = not is_cam and not is_screenshot and not is_doc
 
+    # Derive route_classes from the SINGLE canonical categorizer so the tool
+    # plan and the agent tool-registry registration can never disagree on the
+    # screenshot-vs-camera decision (the prior root cause of tool/plan drift).
+    # The canonical category already applies screenshot-first precedence.
+    from core.file_classifier import classify_evidence_file_sync
+
+    category = classify_evidence_file_sync(artifact).primary_category
+
     route_classes = []
-    if is_cam:
+    if category == "screenshot":
+        route_classes.append(ImageEvidenceClass.SCREENSHOT)
+        if is_doc:
+            route_classes.append(ImageEvidenceClass.DOCUMENT_OR_PAPER)
+    elif category == "document":
+        route_classes.append(ImageEvidenceClass.DOCUMENT_OR_PAPER)
+    elif category == "live_photograph":
         route_classes.append(ImageEvidenceClass.CAMERA_PHOTO)
         route_classes.append(ImageEvidenceClass.PHYSICAL_SCENE)
         route_classes.append(ImageEvidenceClass.PEOPLE_OBJECT_WEAPON)
         if is_doc:
             route_classes.append(ImageEvidenceClass.DOCUMENT_OR_PAPER)
-    elif is_screenshot:
-        route_classes.append(ImageEvidenceClass.SCREENSHOT)
-        if is_doc:
-            route_classes.append(ImageEvidenceClass.DOCUMENT_OR_PAPER)
-    elif is_doc:
-        route_classes.append(ImageEvidenceClass.DOCUMENT_OR_PAPER)
     else:
+        # web_image, object_scene, ai_generated_suspect → digital-image route
         route_classes.append(ImageEvidenceClass.WEB_OR_DIGITAL_IMAGE)
         route_classes.append(ImageEvidenceClass.PHYSICAL_SCENE)
         route_classes.append(ImageEvidenceClass.PEOPLE_OBJECT_WEAPON)
@@ -168,7 +177,6 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
     if ImageEvidenceClass.SCREENSHOT in profile.route_classes:
         # Agent 1
         plan["Agent1"]["initial"] = [
-            "file_hash_verify",
             "visual_evidence_profile",
             "extract_text_from_image",
             "analyze_image_content",
@@ -218,7 +226,6 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
         # Agent 1
         is_doc_route = ImageEvidenceClass.DOCUMENT_OR_PAPER in profile.route_classes
         plan["Agent1"]["initial"] = [
-            "file_hash_verify",
             "visual_evidence_profile",
             "neural_ela",
             "neural_fingerprint",
@@ -272,16 +279,16 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
     elif ImageEvidenceClass.DOCUMENT_OR_PAPER in profile.route_classes:
         # Agent 1
         plan["Agent1"]["initial"] = [
-            "file_hash_verify",
             "visual_evidence_profile",
             "extract_text_from_image",
             "analyze_image_content",
             "frequency_domain_analysis",
         ]
+        # ELA only applies to JPEG (compression-history) sources. Lossless
+        # documents rely on OCR + content + frequency + visual profile — no ELA,
+        # and no noiseprint_cluster (Agent1 never registers it; it was always pruned).
         if not profile.is_lossless:
             plan["Agent1"]["initial"].append("neural_ela")
-        else:
-            plan["Agent1"]["initial"].append("noiseprint_cluster")
 
         plan["Agent1"]["deep"] = [
             "neural_splicing",
@@ -321,17 +328,16 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
         # Web or digital image (or animated GIF)
         # Agent 1
         plan["Agent1"]["initial"] = [
-            "file_hash_verify",
             "visual_evidence_profile",
             "analyze_image_content",
             "frequency_domain_analysis",
         ]
         if not is_gif:
             plan["Agent1"]["initial"].append("neural_fingerprint")
+            # ELA only for JPEG sources; lossless web images skip it (and skip
+            # noiseprint_cluster, which Agent1 never registers → always pruned).
             if not profile.is_lossless:
                 plan["Agent1"]["initial"].append("neural_ela")
-            else:
-                plan["Agent1"]["initial"].append("noiseprint_cluster")
 
         plan["Agent1"]["deep"] = [
             "diffusion_artifact_detector",
@@ -383,14 +389,14 @@ _TOOL_TO_TASK_DESC = {
     "detect_font_inconsistency": "run detect_font_inconsistency for document/font inconsistency",
     "detect_ui_overlay_forgery": "run detect_ui_overlay_forgery for ui overlay forgery detection",
     "synthid_watermark_detect": "run synthid_watermark_detect for synthid and ai watermark detection",
-    "neural_ela": "run neural_ela for high-confidence manipulation detection",
-    "noiseprint_cluster": "run noiseprint_cluster for sensor-region source inconsistency",
-    "neural_fingerprint": "run neural_fingerprint for conceptual similarity detection",
-    "anomaly_tracer": "run anomaly_tracer for mantra-net universal anomaly tracing",
-    "f3_net_frequency": "run f3_net_frequency for ai-gan artifact detection",
-    "neural_splicing": "run neural_splicing for vit-based region composition analysis",
-    "neural_copy_move": "run neural_copy_move for dual-branch copy-move detection",
-    "diffusion_artifact_detector": "run diffusion_artifact_detector for ai-generation signatures",
+    "neural_ela": "run neural_ela for multi-quality ELA manipulation screening",
+    "noiseprint_cluster": "run noiseprint_cluster for sensor noise residual clustering",
+    "neural_fingerprint": "run neural_fingerprint for perceptual similarity detection",
+    "anomaly_tracer": "run anomaly_tracer for statistical anomaly screening",
+    "f3_net_frequency": "run f3_net_frequency for frequency-domain AI-artifact screening",
+    "neural_splicing": "run neural_splicing for SRM-residual splicing screening",
+    "neural_copy_move": "run neural_copy_move for ORB+RANSAC copy-move screening",
+    "diffusion_artifact_detector": "run diffusion_artifact_detector for AI-generation detection",
     "deepfake_frequency_check": "run deepfake_frequency_check for gan/diffusion artifacts",
     "jpeg_ghost_detect": "run jpeg_ghost_detect for double compression analysis",
     "roi_extract": "run roi_extract for localized forensic region analysis",

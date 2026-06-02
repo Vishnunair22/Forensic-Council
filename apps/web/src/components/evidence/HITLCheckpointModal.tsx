@@ -78,14 +78,10 @@ export function HITLCheckpointModal({
    setDecisionError("Please select a valid protocol decision.");
    return;
   }
-  try {
-   setDecisionError(null);
-   await onDecision(selectedDecision, note);
-   setSelectedDecision(null);
-   setNote("");
-  } catch (error) {
-   setDecisionError(error instanceof Error ? error.message : "Protocol submission failed.");
-  }
+  setDecisionError(null);
+  await onDecision(selectedDecision, note);
+  setSelectedDecision(null);
+  setNote("");
  };
 
  return (
@@ -205,7 +201,7 @@ export function HITLCheckpointModal({
       <DialogFooter className="sm:justify-between border-t border-white/5 p-8 pt-6 gap-4">
         <button
          type="button"
-         onClick={onDismiss}
+         onClick={handleDismiss}
          disabled={isSubmitting}
          className="fc-btn-secondary"
         >

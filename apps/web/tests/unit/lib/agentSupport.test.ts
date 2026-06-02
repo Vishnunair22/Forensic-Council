@@ -20,19 +20,22 @@ describe("supportedAgentIdsForMime (image-only contract)", () => {
     expect(ids).toEqual(new Set(["Agent1", "Agent3", "Agent5"]));
   });
 
-  it("routes audio/ types to Agent5 only (no Agent2)", () => {
+  // Image-only contract: every active agent (Agent1/Agent3/Agent5) is image/
+  // only per the backend AGENT_FILE_CAPABILITIES. Non-image types resolve to no
+  // supported agent (the upload layer rejects them before analysis).
+  it("routes audio/ types to no agent (image-only contract)", () => {
     const ids = supportedAgentIdsForMime("audio/wav");
-    expect(ids).toEqual(new Set(["Agent5"]));
+    expect(ids).toEqual(new Set());
   });
 
-  it("routes video/ types to Agent5 only (no Agent2, Agent3, Agent4)", () => {
+  it("routes video/ types to no agent (image-only contract)", () => {
     const ids = supportedAgentIdsForMime("video/mp4");
-    expect(ids).toEqual(new Set(["Agent5"]));
+    expect(ids).toEqual(new Set());
   });
 
-  it("routes unknown types to Agent5 only", () => {
+  it("routes unknown types to no agent (image-only contract)", () => {
     const ids = supportedAgentIdsForMime("application/pdf");
-    expect(ids).toEqual(new Set(["Agent5"]));
+    expect(ids).toEqual(new Set());
   });
 });
 

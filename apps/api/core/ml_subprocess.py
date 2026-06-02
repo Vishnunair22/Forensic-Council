@@ -54,6 +54,7 @@ _WARMUP_SCRIPTS = {
     "busternet_v2.py",  # BusterNet dual-branch copy-move detector
     "mantra_net_tracer.py",  # ManTra-Net universal anomaly tracer
     "f3net_freq.py",  # F3-Net frequency GAN/AI artifact detector
+    "ai_generation_detector.py",  # real ViT AI-generation classifier (primary)
     "diffusion_artifact_detector.py",
     "synthid_watermark_detector.py",
     # ── Audio / video tools ───────────────────────────────────────────────

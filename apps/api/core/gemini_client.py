@@ -127,6 +127,188 @@ def _parse_retry_after(resp: httpx.Response) -> float | None:
     return None
 
 
+def _build_preflight_prompt(is_screen_capture_like: bool = False) -> str:
+    """Three-section structured prompt for the pre-pipeline visual context preflight.
+
+    Returns ONLY a JSON object with sections mapped 1:1 to the three image agents:
+      image_integrity      → Agent1 (manipulation / authenticity)
+      object_scene_context → Agent3 (objects, UI, scene)
+      metadata_provenance  → Agent5 (visible timestamps, platform, location)
+
+    A single call covers all agents. Gemini quota is consumed exactly once per
+    investigation regardless of how many agents need visual context.
+    """
+    focus = (
+        "FOCUS: This is a digital screenshot or UI capture. "
+        "Note the platform (iOS/Android/Web/Desktop), check for status-bar timestamp "
+        "consistency, and flag any overlaid or pasted elements that do not match "
+        "native UI rendering."
+    ) if is_screen_capture_like else (
+        "FOCUS: This appears to be a photograph. "
+        "Assess lighting direction, shadow angles, and whether any objects appear "
+        "composited or have inconsistent perspective or depth-of-field."
+    )
+
+    _track_preamble_usage()
+
+    return (
+        _SAFETY_PREAMBLE
+        + "You are a forensic image analyst. Analyze this image and return ONLY a JSON "
+        "object with exactly these three top-level keys — no explanation, no markdown, "
+        "no preamble.\n\n"
+        + focus + "\n\n"
+        "{\n"
+        '  "image_integrity": {\n'
+        '    "description": "<2-3 sentence factual description of what this image shows>",\n'
+        '    "file_type_assessment": "<one of: screenshot|photograph|document_scan|ai_generated|composite|unknown>",\n'
+        '    "manipulation_signals": ["<visible cloning edges, splice boundaries, inpainting halos, inconsistent shadows>"],\n'
+        '    "ai_generation_signals": ["<GAN artifacts, unnatural textures, impossible geometry, synthetic skin patterns>"],\n'
+        '    "compression_signals": ["<JPEG blocking, double-compression rings, reupload artifacts>"],\n'
+        '    "integrity_assessment": "<one of: no_visible_issue|suspicious|likely_manipulated|ai_generated_suspect|cannot_determine>"\n'
+        "  },\n"
+        '  "object_scene_context": {\n'
+        '    "scene_type": "<one of: indoor|outdoor|screenshot|document|aerial|synthetic|unknown>",\n'
+        '    "scene_description": "<one sentence describing the scene>",\n'
+        '    "objects": ["<significant objects present>"],\n'
+        '    "ui_elements": ["<if screenshot: status bar text, nav bar, app name, buttons, icons, on-screen timestamps>"],\n'
+        '    "visible_text": ["<any readable text strings>"],\n'
+        '    "people": ["<description of any people or faces — count, position>"],\n'
+        '    "scene_inconsistencies": ["<lighting mismatches, scale errors, physics violations>"],\n'
+        '    "platform": "<platform or app name if identifiable from UI, else empty string>"\n'
+        "  },\n"
+        '  "metadata_provenance": {\n'
+        '    "visible_timestamps": ["<dates or times VISIBLE in the image — clocks, overlays, watermarks, status bar time>"],\n'
+        '    "visible_location_clues": ["<landmarks, street signs, GPS overlays, recognizable geography>"],\n'
+        '    "device_platform_clues": ["<device type or OS inferred from visible UI — e.g. iOS status bar, Android nav bar>"],\n'
+        '    "app_software_clues": ["<app name, software watermarks, platform UI signatures visible in image>"],\n'
+        '    "format_compression_clues": ["<observable encoding artifacts that suggest format or processing history>"],\n'
+        '    "provenance_anomalies": ["<visible inconsistencies — e.g. timestamp contradicts scene lighting or season>"]\n'
+        "  },\n"
+        '  "confidence": 0.0\n'
+        "}"
+    )
+
+
+def _parse_preflight_gemini_response(
+    raw_text: str,
+    session_id: str,
+    sha256: str,
+    model_used: str,
+) -> "VisualContext":
+    """Parse the three-section preflight JSON response into a VisualContext model."""
+    import datetime
+    import json as _json
+    import re as _re
+
+    from core.visual_context_models import (
+        DetectedObject,
+        ImageIntegrityContext,
+        MetadataVisualContext,
+        ObjectSceneContext,
+        VisualContext,
+    )
+
+    # Normalize: strip markdown fences and extract first JSON object
+    cleaned = raw_text.strip()
+    if "```" in cleaned:
+        fence_match = _re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+        if fence_match:
+            cleaned = fence_match.group(1).strip()
+    if not cleaned.startswith("{"):
+        obj_match = _re.search(r"\{[\s\S]*\}", cleaned)
+        if obj_match:
+            cleaned = obj_match.group(0)
+
+    try:
+        data = _json.loads(cleaned)
+    except _json.JSONDecodeError:
+        data = {}
+
+    ii = data.get("image_integrity") or {}
+    osc = data.get("object_scene_context") or {}
+    mp = data.get("metadata_provenance") or {}
+    confidence = float(data.get("confidence") or 0.75)
+
+    # Map integrity_assessment string to the VisualContext verdict literals
+    _integrity_to_verdict: dict[str, str] = {
+        "no_visible_issue":    "AUTHENTIC",
+        "suspicious":          "SUSPICIOUS",
+        "likely_manipulated":  "LIKELY_MANIPULATED",
+        "ai_generated_suspect":"AI_GENERATED",
+        "cannot_determine":    "CANNOT_DETERMINE",
+    }
+    raw_assessment = str(ii.get("integrity_assessment") or "cannot_determine").lower()
+    verdict = _integrity_to_verdict.get(raw_assessment, "CANNOT_DETERMINE")
+
+    # integrity_assessment must be one of the Pydantic literals
+    _valid_assessments = frozenset(_integrity_to_verdict.keys())
+    integrity_assessment_val = raw_assessment if raw_assessment in _valid_assessments else "cannot_determine"
+
+    image_integrity = ImageIntegrityContext(
+        visible_manipulation_signals=[s for s in (ii.get("manipulation_signals") or []) if s],
+        ai_generation_signals=[s for s in (ii.get("ai_generation_signals") or []) if s],
+        compression_or_reupload_signals=[s for s in (ii.get("compression_signals") or []) if s],
+        integrity_assessment=integrity_assessment_val,
+        confidence=confidence,
+    )
+
+    # Platform clue: may come from osc.platform or mp.device_platform_clues
+    platform = str(osc.get("platform") or "").strip()
+    device_clues = [c for c in (mp.get("device_platform_clues") or []) if c]
+    if platform and platform not in device_clues:
+        device_clues.insert(0, platform)
+
+    object_scene = ObjectSceneContext(
+        scene_description=str(osc.get("scene_description") or ""),
+        people=[p for p in (osc.get("people") or []) if p],
+        objects=[o for o in (osc.get("objects") or []) if o],
+        ui_elements=[e for e in (osc.get("ui_elements") or []) if e],
+        visible_text=[t for t in (osc.get("visible_text") or []) if t],
+        scene_inconsistencies=[i for i in (osc.get("scene_inconsistencies") or []) if i],
+        confidence=confidence,
+    )
+
+    meta_context = MetadataVisualContext(
+        visible_timestamps=[t for t in (mp.get("visible_timestamps") or []) if t],
+        visible_location_clues=[l for l in (mp.get("visible_location_clues") or []) if l],
+        device_or_platform_clues=device_clues,
+        software_or_app_clues=[a for a in (mp.get("app_software_clues") or []) if a],
+        lighting_weather_season_clues=[],
+        metadata_consistency_notes=[],
+        metadata_contradictions=[n for n in (mp.get("provenance_anomalies") or []) if n],
+        confidence=confidence,
+    )
+
+    detected_objs = [
+        DetectedObject(label=obj, confidence=confidence)
+        for obj in (osc.get("objects") or [])[:20]
+        if isinstance(obj, str) and obj.strip()
+    ]
+
+    return VisualContext(
+        session_id=session_id,
+        evidence_sha256=sha256,
+        source="llm_assisted",
+        provider_name=model_used,
+        external_llm_used=True,
+        image_integrity_context=image_integrity,
+        object_scene_context=object_scene,
+        metadata_visual_context=meta_context,
+        extracted_text=[t for t in (osc.get("visible_text") or []) if t],
+        detected_objects=detected_objs,
+        interface_elements=[e for e in (osc.get("ui_elements") or []) if e],
+        visible_timestamps=[t for t in (mp.get("visible_timestamps") or []) if t],
+        scene_description=str(osc.get("scene_description") or ""),
+        file_type_assessment=str(ii.get("file_type_assessment") or ""),
+        authenticity_verdict=verdict,
+        confidence=confidence,
+        tool_coverage={"gemini_preflight": True},
+        provider_attempts=[{"provider": model_used, "success": True, "phase": "preflight"}],
+        limitations=[],
+        created_at=datetime.datetime.utcnow().isoformat(),
+    )
+
+
 def _build_deep_forensic_prompt(
     exif_summary: dict[str, Any] | None,
     persona: str | None,
@@ -588,6 +770,59 @@ class GeminiVisionClient:
     # ------------------------------------------------------------------ #
     #  Public high-level methods used by each agent                        #
     # ------------------------------------------------------------------ #
+
+    async def analyze_visual_context_preflight(
+        self,
+        file_path: str,
+        session_id: str,
+        sha256: str,
+        is_screen_capture_like: bool = False,
+    ) -> "VisualContext":
+        """
+        Pre-pipeline visual context creation — single call, three-section output.
+
+        Called once immediately after file upload validation, before any agent
+        executes. All three image agents benefit from the result:
+          - image_integrity      → Agent1
+          - object_scene_context → Agent3
+          - metadata_provenance  → Agent5
+
+        Raises RuntimeError if Gemini is not enabled or the call fails, so the
+        caller can fall back to the local ensemble.
+        """
+        from core.visual_context_models import VisualContext as _VisualContext
+
+        if not self._enabled:
+            raise RuntimeError("Gemini client is not configured (GEMINI_API_KEY missing or policy not accepted)")
+
+        # In-process cache: same file hash across two investigations in the same
+        # process lifetime avoids a redundant API call.
+        cache_key = _deep_forensic_cache_key(file_path, agent_id="preflight")
+        if cache_key and cache_key in _DEEP_FORENSIC_CACHE:
+            cached_gf = _DEEP_FORENSIC_CACHE[cache_key]
+            logger.info("Gemini preflight in-process cache hit", file_path=file_path)
+            return _parse_preflight_gemini_response(
+                cached_gf.raw_response, session_id, sha256, cached_gf.model_used
+            )
+
+        prompt = _build_preflight_prompt(is_screen_capture_like=is_screen_capture_like)
+
+        gf = await self._run_vision_analysis(
+            file_path=file_path,
+            prompt=prompt,
+            analysis_type="visual_context_preflight",
+        )
+
+        if gf.error:
+            raise RuntimeError(f"Gemini preflight returned error: {gf.error}")
+
+        # Cache the raw response for same-file reuse within this process lifetime
+        if cache_key and not gf.error:
+            _deep_forensic_cache_put(cache_key, gf)
+
+        return _parse_preflight_gemini_response(
+            gf.raw_response, session_id, sha256, gf.model_used
+        )
 
     async def identify_file_content(
         self,
@@ -1175,7 +1410,7 @@ class GeminiVisionClient:
             elif detected_objects:
                 content_description = f"Visible elements include {', '.join(str(o) for o in detected_objects[:5])}."
             else:
-                content_description = "Visual analysis complete."
+                content_description = "No visual description could be extracted from the evidence."
 
         # origin: new field maps to file_type_assessment
         origin = data.get("origin", "")

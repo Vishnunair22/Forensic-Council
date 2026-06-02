@@ -27,6 +27,7 @@ export function ArbiterDeliberationOverlay({
   }, [liveText]);
 
   const [dynamicText, setDynamicText] = React.useState(cleanLiveText || "Compiling agent findings into the final report.");
+  const phaseIndexRef = React.useRef(0);
 
   React.useEffect(() => {
     if (cleanLiveText && cleanLiveText.length > 5 && !cleanLiveText.toLowerCase().includes("waiting for the council")) {
@@ -43,12 +44,9 @@ export function ArbiterDeliberationOverlay({
       "Finalizing cryptographic signature..."
     ];
 
-    let phaseIndex = 0;
-    setDynamicText(arbiterPhases[0]);
-
     const textInterval = setInterval(() => {
-      phaseIndex = (phaseIndex + 1) % arbiterPhases.length;
-      setDynamicText(arbiterPhases[phaseIndex]);
+      phaseIndexRef.current = (phaseIndexRef.current + 1) % arbiterPhases.length;
+      setDynamicText(arbiterPhases[phaseIndexRef.current]);
     }, 4000);
 
     return () => clearInterval(textInterval);

@@ -188,13 +188,15 @@ describe("useInvestigation Hook", () => {
     expect(mockConnectWebSocket).toHaveBeenCalledWith("retry-sid");
   }, 60000);
 
-  test("reconnect not_found clears stale session and returns home with upload prompt", async () => {
+  test("reconnect not_found clears stale session and routes to the upload page", async () => {
     storage.setItem("forensic_session_id", "missing-sid");
     (api.getArbiterStatus as jest.Mock).mockResolvedValueOnce({ status: "not_found" });
 
     renderHook(() => useInvestigation(mockPlaySound));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/?upload=1"));
+    // Lands on the evidence/upload page (with the open-upload-once flag) rather
+    // than the landing hero, to avoid a home-page flash before the upload UI.
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/evidence"));
     expect(storage.getItem("forensic_session_id")).toBeNull();
     expect(sessionOnlyStorage.getItem("fc_open_upload_once")).toBe("1");
     expect(sessionOnlyStorage.getItem("fc_no_reconnect")).toBe("1");

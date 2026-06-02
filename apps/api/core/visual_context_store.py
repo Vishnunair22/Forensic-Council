@@ -116,7 +116,15 @@ def build_visual_context_from_finding(
         confidence=finding.confidence
     )
 
+    # Visible provenance clues extracted from the image (timestamps, device/
+    # platform, app). Populated by the local ensemble so the metadata-provenance
+    # section is filled even on the no-Gemini path.
+    _clues = getattr(finding, "_visible_metadata_clues", {}) or {}
     metadata_visual_context = MetadataVisualContext(
+        visible_timestamps=list(_clues.get("visible_timestamps", []) or []),
+        visible_location_clues=list(_clues.get("location_clues", []) or []),
+        device_or_platform_clues=list(_clues.get("device_platform_clues", []) or []),
+        software_or_app_clues=list(_clues.get("software_clues", []) or []),
         metadata_consistency_notes=[finding._metadata_visual_consistency] if finding._metadata_visual_consistency else [],
         confidence=finding.confidence
     )
@@ -135,6 +143,7 @@ def build_visual_context_from_finding(
         extracted_text=list(finding._extracted_text or []),
         detected_objects=detected_objs,
         interface_elements=[finding._interface_identification] if finding._interface_identification else [],
+        visible_timestamps=list(_clues.get("visible_timestamps", []) or []),
         scene_description=finding.content_description or "",
         file_type_assessment=finding.file_type_assessment or "",
         authenticity_verdict=verdict,
@@ -187,6 +196,124 @@ async def save_visual_context(
     except Exception as e:
         logger.warning("Failed saving visual context to Redis", error=str(e))
 
+async def create_visual_context_preflight(
+    session_id: str,
+    file_path: str,
+    sha256: str,
+    config: Any,
+    working_memory: Any = None,
+    inter_agent_bus: Any = None,
+) -> "VisualContext | None":
+    """
+    Create rich visual context before any agent executes.
+
+    Fires a single Gemini call with a three-section structured prompt that covers
+    Agent1 (image integrity), Agent3 (object/scene), and Agent5 (metadata provenance).
+    The result is stored in Redis keyed by both session_id and sha256 so:
+      - All agents start warm on their first access via get_visual_context()
+      - The same file uploaded again hits the 24-hour hash-keyed cache, costing
+        zero additional Gemini RPM/RPD
+
+    Falls back to the local CLIP/YOLO ensemble if Gemini is unavailable or fails.
+    Returns None only if both Gemini and the local ensemble fail.
+    """
+    # Fast path: context already exists (same session re-queried, or same file
+    # previously uploaded and still within the 24-hour hash-TTL).
+    existing = await get_visual_context(
+        session_id=session_id,
+        sha256=sha256,
+        working_memory=working_memory,
+        inter_agent_bus=inter_agent_bus,
+    )
+    if existing:
+        logger.info(
+            "Preflight visual context cache hit — skipping Gemini call",
+            session_id=session_id,
+            source=existing.source,
+        )
+        # A hit may have come from the 24h hash-keyed cache (same file, new
+        # session). Consumers look up by session_id only (no sha256), so re-save
+        # under the current session/layers — otherwise agents see "Visual context
+        # not found" and ground on empty context despite a valid cache hit.
+        await save_visual_context(
+            session_id=session_id,
+            sha256=sha256,
+            context=existing,
+            working_memory=working_memory,
+            inter_agent_bus=inter_agent_bus,
+        )
+        return existing
+
+    context: VisualContext | None = None
+
+    # ── Attempt Gemini ────────────────────────────────────────────────────
+    try:
+        from core.gemini_client import GeminiVisionClient
+
+        client = GeminiVisionClient(config)
+        if client._enabled:
+            context = await client.analyze_visual_context_preflight(
+                file_path=file_path,
+                session_id=session_id,
+                sha256=sha256,
+            )
+            logger.info(
+                "Gemini preflight visual context created",
+                session_id=session_id,
+                file_type=context.file_type_assessment,
+                verdict=context.authenticity_verdict,
+                model=context.provider_name,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Gemini preflight failed — falling back to local ensemble",
+            session_id=session_id,
+            error=str(exc),
+        )
+
+    # ── Local ensemble fallback ───────────────────────────────────────────
+    if context is None:
+        try:
+            import mimetypes
+            from uuid import UUID
+            from core.evidence import ArtifactType, EvidenceArtifact
+            from core.vision_local_ensemble import analyze_local_visual_profile
+
+            artifact = EvidenceArtifact.create_root(
+                artifact_type=ArtifactType.ORIGINAL,
+                file_path=file_path,
+                content_hash=sha256,
+                action="preflight_visual_context",
+                agent_id="system",
+                session_id=UUID(session_id),
+                metadata={"mime_type": mimetypes.guess_type(file_path)[0] or ""},
+            )
+            local_finding = await analyze_local_visual_profile(artifact=artifact)
+            context = build_visual_context_from_finding(session_id, sha256, local_finding)
+            logger.info(
+                "Local ensemble preflight visual context created",
+                session_id=session_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Local ensemble preflight also failed — visual context unavailable",
+                session_id=session_id,
+                error=str(exc),
+            )
+            return None
+
+    # ── Persist to all three storage layers ──────────────────────────────
+    await save_visual_context(
+        session_id=session_id,
+        sha256=sha256,
+        context=context,
+        working_memory=working_memory,
+        inter_agent_bus=inter_agent_bus,
+    )
+
+    return context
+
+
 async def wait_for_visual_context(
     session_id: str,
     sha256: str | None = None,
@@ -212,17 +339,46 @@ async def wait_for_visual_context(
 
 
 def visual_context_to_profile_dict(context: VisualContext) -> dict:
-    """Convert VisualContext back into the dictionary format expected by the agents."""
+    """Convert VisualContext back into the dictionary format expected by the agents.
+
+    Includes file_type_assessment, scene_inconsistencies, and device_platform_clues
+    so that visual_grounding.py can apply calibration without a separate Redis lookup.
+    """
+    evidence_verdict = (
+        "POSITIVE"
+        if context.authenticity_verdict in ("LIKELY_MANIPULATED", "AI_GENERATED", "SUSPICIOUS")
+        else ("NEGATIVE" if context.authenticity_verdict == "AUTHENTIC" else "INCONCLUSIVE")
+    )
+    # The visual profile is court-defensible ONLY when it came from the real
+    # remote vision model (Gemini). When it fell back to the local heuristic
+    # ensemble it is a screening signal — same tier as the classical tools — so
+    # it must not drive a court-defensible POSITIVE on its own. This makes Gemini
+    # authoritative for the verdict while honestly downgrading the fallback.
+    is_remote_gemini = bool(context.external_llm_used) and context.source != "local_ensemble"
     return {
         "content_description": context.scene_description,
         "confidence_raw": context.confidence,
         "status": "CONFIRMED",
-        "evidence_verdict": "POSITIVE" if context.authenticity_verdict in ("LIKELY_MANIPULATED", "AI_GENERATED", "SUSPICIOUS") else ("NEGATIVE" if context.authenticity_verdict == "AUTHENTIC" else "INCONCLUSIVE"),
+        "evidence_verdict": evidence_verdict,
         "verdict": context.authenticity_verdict,
+        "court_defensible": is_remote_gemini,
+        # Grounding fields — used by core/visual_grounding.py
+        "file_type_assessment": context.file_type_assessment,
+        "scene_inconsistencies": list(
+            context.object_scene_context.scene_inconsistencies or []
+        ),
+        "device_platform_clues": list(
+            context.metadata_visual_context.device_or_platform_clues or []
+        ),
+        # Standard agent-facing fields
         "detected_objects": [obj.label for obj in context.detected_objects],
-        "manipulation_signals": context.image_integrity_context.visible_manipulation_signals,
+        "manipulation_signals": list(
+            context.image_integrity_context.visible_manipulation_signals or []
+        ),
         "extracted_text": context.extracted_text,
-        "interface_identification": context.interface_elements[0] if context.interface_elements else "",
+        "interface_identification": (
+            context.interface_elements[0] if context.interface_elements else ""
+        ),
         "metadata": {
             "tool_name": "shared_visual_evidence_profile",
             "analysis_source": context.provider_name or "visual_context_store",
@@ -231,6 +387,6 @@ def visual_context_to_profile_dict(context: VisualContext) -> dict:
             "fallback_applied": context.source == "local_ensemble",
             "provider_attempts": context.provider_attempts,
             "tool_coverage": context.tool_coverage,
-        }
+        },
     }
 

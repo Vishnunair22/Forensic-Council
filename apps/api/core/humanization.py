@@ -242,11 +242,23 @@ class FindingHumanizer:
     def _humanize_generic(finding: dict) -> str:
         tool = _tool_name(finding)
         verdict = _evidence_verdict_of(finding)
+        status = str(finding.get("status") or "").upper()
         reasoning = finding.get("reasoning_summary", "")
+        label = tool.replace("_", " ").title()
 
         if verdict == "POSITIVE":
-            return f"{tool.replace('_', ' ').title()} analysis detected anomalies: {reasoning}"
-        return f"{tool.replace('_', ' ').title()} analysis completed with no anomalies detected."
+            return f"{label} analysis detected anomalies: {reasoning}"
+        if verdict == "ERROR" or status in ("INCOMPLETE", "TIMEOUT", "FAILED"):
+            detail = str(reasoning).strip()
+            return (
+                f"{label} did not complete{f' ({detail})' if detail else ''} — "
+                "this is a coverage gap, not evidence of authenticity."
+            )
+        if verdict == "NOT_APPLICABLE":
+            return f"{label} was not applicable to this evidence and did not run."
+        if verdict in ("NEGATIVE", "CLEAN"):
+            return f"{label} found no supported anomaly signal for its specific test."
+        return f"{label} ran but produced no determinate signal; the result is inconclusive."
 
     @staticmethod
     def _confidence_text(conf: float) -> str:

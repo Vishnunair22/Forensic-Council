@@ -43,10 +43,10 @@ export function RouteExperience() {
 
     // Skip forced scroll-to-top on browser back/forward so the previous scroll
     // position is preserved (e.g. returning from a History entry).
-    if (isPopRef.current) {
-      isPopRef.current = false;
-      return;
-    }
+    // Always reset the flag so a same-path popstate doesn't leave it stuck true.
+    const wasPop = isPopRef.current;
+    isPopRef.current = false;
+    if (wasPop) return;
 
     const behavior =
       pathname === "/evidence" || pathname.startsWith("/result")

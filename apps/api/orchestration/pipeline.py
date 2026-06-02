@@ -857,7 +857,7 @@ class ForensicCouncilPipeline:
             )
             report = await asyncio.wait_for(
                 self.arbiter.finalise_from_cache(use_llm=use_llm, artifact_mime=artifact_mime),
-                timeout=90.0,
+                timeout=120.0,
             )
         except TimeoutError:
             logger.warning("arbiter.finalise_from_cache() timed out — falling back to template")
@@ -865,9 +865,11 @@ class ForensicCouncilPipeline:
                 self._degradation_flags.append(
                     "Arbiter LLM synthesis timed out — report generated from templates."
                 )
+            # Deterministic fallback must always finish; give it real headroom so a
+            # CPU-contended deterministic build can't also time out and abort the run.
             report = await asyncio.wait_for(
                 self.arbiter.finalise_from_cache(use_llm=False, artifact_mime=artifact_mime),
-                timeout=30.0,
+                timeout=90.0,
             )
         await self._broadcast_final_arbiter_status(
             session_id,

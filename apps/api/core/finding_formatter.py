@@ -61,14 +61,14 @@ TOOL_LABELS: dict[str, str] = {
     "timestamp_analysis": "Timestamp Consistency Analysis",
     "device_fingerprint_db": "Device Fingerprint Analysis",
     "adversarial_robustness_check": "Adversarial Robustness Check",
-    "neural_ela": "Neural ELA — ViT Manipulation Detection",
-    "noiseprint_cluster": "Noiseprint++ Sensor Clustering",
-    "neural_fingerprint": "SigLIP2 Neural Perceptual Fingerprint",
-    "neural_splicing": "TruFor ViT Splicing Detection",
-    "neural_copy_move": "BusterNet Dual-Branch Copy-Move",
-    "anomaly_tracer": "ManTra-Net Universal Anomaly Tracer",
-    "f3_net_frequency": "F3-Net Frequency Artifact Analysis",
-    "diffusion_artifact_detector": "Diffusion/AI-Generation Artifact Detection",
+    "neural_ela": "Multi-Quality ELA Screen (Isolation Forest)",
+    "noiseprint_cluster": "Sensor Noise Residual Clustering (K-means)",
+    "neural_fingerprint": "OpenCLIP Perceptual Fingerprint (ViT-B-32)",
+    "neural_splicing": "SRM Residual Splicing Screen (Isolation Forest)",
+    "neural_copy_move": "ORB+RANSAC Copy-Move Screen",
+    "anomaly_tracer": "Statistical Anomaly Screen (One-Class SVM)",
+    "f3_net_frequency": "Frequency-Domain AI-Artifact Screen (DWT/FFT)",
+    "diffusion_artifact_detector": "AI-Generation Detection (ViT Classifier)",
     "synthid_watermark_detect": "SynthID / AI Watermark Detection",
     "visual_evidence_profile": "Visual Evidence Profile",
     "gemini_deep_forensic": "Visual Evidence Profile",
@@ -502,7 +502,15 @@ def build_readable_summary(
             output=output if isinstance(output, dict) else {},
         )
     else:
-        return f"{tool_label}: analysis complete — no anomalies detected."
+        # No measurable output values. Route through the verdict-aware shaper so a
+        # failed/incomplete tool is reported as a coverage gap, never as "clean".
+        return shape_analyst_finding(
+            tool_label=tool_label,
+            message="no measurable output values were returned",
+            evidence_verdict=evidence_verdict,
+            status=status,
+            output=output if isinstance(output, dict) else {},
+        )
 
 
 def format_tool_result(result: Any) -> str:

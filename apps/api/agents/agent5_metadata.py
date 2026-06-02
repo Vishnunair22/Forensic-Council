@@ -354,57 +354,149 @@ class Agent5Metadata(ForensicAgent):
 
         return registry
 
+    def _visual_profile(self) -> dict:
+        """Return the shared visual context dict from _tool_context or inter_agent_bus."""
+        ctx = getattr(self, "_tool_context", {}) or {}
+        profile = ctx.get("visual_evidence_profile") or ctx.get("read_shared_image_context") or {}
+        if not profile and self.inter_agent_bus:
+            try:
+                profile = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
+            except Exception:
+                pass
+        if hasattr(profile, "to_finding_dict"):
+            profile = profile.to_finding_dict()
+        return profile if isinstance(profile, dict) else {}
+
     async def on_tool_result(self, finding: AgentFinding) -> None:
         """Reactive task expansion based on metadata signals."""
-        from core.working_memory import TaskStatus
+        try:
+            await self._on_tool_result_impl(finding)
+        except Exception as e:
+            logger.warning("on_tool_result failed", agent_id=self.agent_id, error=str(e))
 
-        # 1. If EXIF detects editing software, escalate to deep file structure audit
-        if finding.metadata.get("tool_name") == "exif_extract":
+    async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
+        """Pure Python adaptive rules — zero LLM calls."""
+        tool_name = finding.metadata.get("tool_name")
+
+        # ── Rule 1: EXIF extraction results ───────────────────────────────
+        if tool_name == "exif_extract":
             software = str(finding.metadata.get("software", "")).lower()
-            editing_tools = {
-                "photoshop",
-                "gimp",
-                "lightroom",
-                "picsart",
-                "snapseed",
-                "canva",
-                "capcut",
-            }
+            has_gps = bool(
+                finding.metadata.get("gps_coordinates")
+                or finding.metadata.get("gps_location")
+                or finding.metadata.get("latitude")
+            )
+            has_timestamp = bool(
+                finding.metadata.get("datetime_original")
+                or finding.metadata.get("date_time")
+                or finding.metadata.get("capture_time")
+            )
+            exif_empty = finding.evidence_verdict == "NOT_APPLICABLE" or (
+                not finding.metadata.get("fields_extracted")
+                and not has_gps
+                and not has_timestamp
+                and not software
+            )
 
-            if any(tool in software for tool in editing_tools):
+            # 1a. Editing software signature → hex-level structure audit
+            editing_tools = {"photoshop", "gimp", "lightroom", "picsart", "snapseed", "canva", "capcut"}
+            if any(t in software for t in editing_tools):
                 logger.info(
-                    f"Editing software signature detected: {software}; injecting hex audit",
+                    f"Editing software detected: {software}; injecting structure audit",
                     agent_id=self.agent_id,
                 )
-                _wm_agent_id = getattr(self, "_reactive_expansion_agent_id", None) or self.agent_id
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=_wm_agent_id,
+                await self.inject_task(
                     description="Run file_structure_analysis for hidden hex-level manipulation artifacts",
-                    status=TaskStatus.PENDING,
                     priority=15,
                 )
 
-        # 2. If metadata anomaly score is high, trigger manual provenance chain verification
-        if finding.metadata.get("tool_name") == "metadata_anomaly_score":
-            if finding.evidence_verdict == "POSITIVE" and finding.confidence_raw > 0.7:
+            # 1b. GPS coordinates present → validate against timezone and sun position
+            if has_gps:
+                logger.info("GPS coordinates in EXIF — injecting timezone and astronomical validation",
+                    agent_id=self.agent_id)
+                await self.inject_task(
+                    description="Run gps_timezone_validate to cross-check GPS location against EXIF timezone",
+                    priority=14,
+                )
+                if has_timestamp:
+                    await self.inject_task(
+                        description="Run astro_grounding to validate sun position against GPS and timestamp",
+                        priority=12,
+                    )
+
+            # 1c. Cross-modal conflict: EXIF claims camera origin but visual context says screenshot
+            profile = self._visual_profile()
+            file_type = str(profile.get("file_type_assessment") or "").lower()
+            content_desc = str(profile.get("content_description") or "").lower()
+            visual_is_screenshot = any(
+                t in file_type or t in content_desc
+                for t in ("screenshot", "screen capture", "digital ui", "web page")
+            )
+            camera_exif_keys = {"camera_make", "camera_model", "focal_length", "aperture", "iso"}
+            has_camera_exif = any(finding.metadata.get(k) for k in camera_exif_keys)
+
+            if visual_is_screenshot and has_camera_exif:
                 logger.info(
-                    "High metadata anomaly score; injecting provenance chain audit",
+                    "Cross-modal conflict: EXIF claims camera origin but visual context confirms screenshot "
+                    "— injecting isolation forest at critical priority",
                     agent_id=self.agent_id,
                 )
-                _wm_agent_id = getattr(self, "_reactive_expansion_agent_id", None) or self.agent_id
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=_wm_agent_id,
+                await self.inject_task(
+                    description="Run exif_isolation_forest for metadata fabrication pattern detection",
+                    priority=20,
+                )
+
+            # 1d. Completely stripped EXIF on image that should have metadata → hex scan
+            if exif_empty and not visual_is_screenshot:
+                logger.info(
+                    "EXIF absent on non-screenshot image — possible metadata stripping; injecting hex scan",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run hex_signature_scan to detect stripped or overwritten metadata signatures",
+                    priority=16,
+                )
+
+        # ── Rule 2: Metadata anomaly score ────────────────────────────────
+        if tool_name == "metadata_anomaly_score":
+            if finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.7:
+                logger.info(
+                    "High metadata anomaly score — injecting provenance and timestamp audits",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
                     description="Run provenance_chain_verify for C2PA/JUMBF integrity check",
-                    status=TaskStatus.PENDING,
                     priority=10,
                 )
-                # Also reuse Agent 1's visual profile for deep provenance verification.
-                await self.working_memory.create_task(
-                    session_id=self.session_id,
-                    agent_id=_wm_agent_id,
+                await self.inject_task(
+                    description="Run timestamp_analysis for chronology consistency cross-check",
+                    priority=11,
+                )
+                await self.inject_task(
                     description="Read shared image context for Hardware-Grounded Provenance Verification",
-                    status=TaskStatus.PENDING,
                     priority=8,
+                )
+
+        # ── Rule 3: GPS timezone mismatch → escalate to astronomical check ─
+        if tool_name == "gps_timezone_validate":
+            if finding.evidence_verdict == "POSITIVE" or finding.metadata.get("timezone_mismatch"):
+                logger.info(
+                    "GPS/timezone mismatch confirmed — injecting astronomical sun-position check",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run astro_grounding to validate sun position against claimed GPS and timestamp",
+                    priority=14,
+                )
+
+        # ── Rule 4: EXIF isolation forest POSITIVE → C2PA verification ────
+        if tool_name == "exif_isolation_forest":
+            if finding.evidence_verdict == "POSITIVE" and (finding.confidence_raw or 0.0) > 0.65:
+                logger.info(
+                    "EXIF isolation forest flagged fabrication patterns — injecting C2PA check",
+                    agent_id=self.agent_id,
+                )
+                await self.inject_task(
+                    description="Run c2pa_verify for cryptographic content authenticity verification",
+                    priority=18,
                 )

@@ -297,7 +297,7 @@ def _human_tool_finding(finding: dict[str, Any]) -> str:
     statement = statement or ""
     if not statement:
         tool_display = tool.replace("_", " ")
-        return f"{tool_display} completed with no supported anomaly signal detected."
+        return f"{tool_display} ran and found no anomaly in its specific test."
     return statement
 
 
@@ -663,6 +663,8 @@ class ArbiterNarrativeMixin:
                 line = f"{tool_name}: FAILED to complete"
             elif verdict == "POSITIVE":
                 line = f"{tool_name}: FLAGGED — {statement if statement else 'Anomaly detected'}"
+            elif verdict in ("INCONCLUSIVE", "UNCERTAIN"):
+                line = f"{tool_name}: INCONCLUSIVE — {statement if statement else 'no determinate signal'}"
             else:
                 line = f"{tool_name}: CLEAN — {statement if statement else 'No anomalies detected'}"
 
@@ -792,6 +794,8 @@ class ArbiterNarrativeMixin:
                         line = f"{tool_name}: FAILED to complete"
                     elif verdict == "POSITIVE":
                         line = f"{tool_name}: FLAGGED — {statement if statement else 'Anomaly detected'}"
+                    elif verdict in ("INCONCLUSIVE", "UNCERTAIN"):
+                        line = f"{tool_name}: INCONCLUSIVE — {statement if statement else 'no determinate signal'}"
                     else:
                         line = f"{tool_name}: CLEAN — {statement if statement else 'No anomalies detected'}"
                     key_findings_list.append(line)
@@ -2321,7 +2325,7 @@ Rules:
             "verdict_line": f"{verdict} at {confidence}% confidence.",
             "integrity_lines": integrity_lines,
             "context_lines": context_lines,
-            "coverage_line": analysis_coverage_note or "Full coverage completed successfully."
+            "coverage_line": analysis_coverage_note or "Coverage detail unavailable for this analysis."
         }
 
         # Hallucination cross-check: validate LLM synthesis against actual findings

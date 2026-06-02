@@ -31,11 +31,15 @@ export function supportedAgentIdsForMime(
   serverCapabilities?: ServerCapabilities | null,
 ): Set<string> {
   const caps = serverCapabilities ?? _cachedCapabilities;
-  if (caps) {
+  // Only trust server capabilities when the agent_capabilities map is actually
+  // present and well-formed; a partial/malformed capabilities object (missing
+  // agent_capabilities) must fall through to the static mapping rather than
+  // throw on Object.entries(undefined).
+  if (caps && caps.agent_capabilities && typeof caps.agent_capabilities === "object") {
     const result = new Set<string>();
     const normalized = (mimeType ?? "").toLowerCase();
     for (const [agentId, prefixes] of Object.entries(caps.agent_capabilities)) {
-      if (prefixes.some((p) => normalized.startsWith(p))) {
+      if (Array.isArray(prefixes) && prefixes.some((p) => normalized.startsWith(p))) {
         result.add(agentId);
       }
     }

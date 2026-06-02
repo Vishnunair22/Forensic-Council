@@ -15,9 +15,16 @@ def build_deterministic_report(
     arbiter_deliberation: ArbiterDeliberationResult,
     tool_coverage: dict[str, Any],
     execution_metadata: dict[str, Any],
-    groq_used: bool = False
+    groq_used: bool = False,
+    display_verdict: str | None = None,
 ) -> dict[str, Any]:
-    """Generates all final report sections deterministically from actual investigation data and deliberation results."""
+    """Generates all final report sections deterministically from actual investigation data and deliberation results.
+
+    `display_verdict` is the mapped, user-facing verdict (AUTHENTIC / SUSPICIOUS /
+    MANIPULATED / INCONCLUSIVE). When provided it is used for the narrative labels
+    so the report prose matches ForensicReport.overall_verdict exactly — they are
+    no longer derived from two different strings.
+    """
     
     # Extract file/case facts
     filename = str(case_data.get("filename") or "evidence_file")
@@ -50,7 +57,12 @@ def build_deterministic_report(
         vis_ext_llm = getattr(visual_context, "external_llm_used", False)
         
     # --- 1. Executive Summary ---
-    verdict_label = arbiter_deliberation.final_verdict.replace("_", " ").title()
+    # Prefer the mapped/user-facing verdict so narrative prose == overall_verdict.
+    verdict_label = (
+        display_verdict.replace("_", " ").title()
+        if display_verdict
+        else arbiter_deliberation.final_verdict.replace("_", " ").title()
+    )
     confidence_pct = int(round(arbiter_deliberation.final_confidence * 100))
     
     agent_list = [f"Agent {aid[-1]}" for aid in norm_syn.keys()]

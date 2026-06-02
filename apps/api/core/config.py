@@ -338,9 +338,28 @@ class Settings(BaseSettings):
             "Set clovaai/AASIST for research-grade accuracy (research-only license)."
         ),
     )
+    ai_image_detector_model: str = Field(
+        default=os.getenv("AI_IMAGE_DETECTOR_MODEL", "Organika/sdxl-detector"),
+        description=(
+            "Hugging Face image-classification model used as the PRIMARY AI-generation "
+            "detector (real trained ViT, replaces the spectral heuristic as lead signal). "
+            "CPU-feasible (~340MB). Loads via AutoModelForImageClassification and degrades "
+            "gracefully to the spectral heuristic if weights are unavailable. NOTE: verify the "
+            "checkpoint's license for your deployment before commercial use."
+        ),
+    )
     easyocr_model_dir: str = Field(
         default=os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr"),
         description="EasyOCR model storage",
+    )
+    perceptual_hash_index_path: str = Field(
+        default=os.getenv("PERCEPTUAL_HASH_INDEX_PATH", "/app/data/known_image_hashes.json"),
+        description=(
+            "Path to an operator-curated JSON index of known-image perceptual hashes "
+            "(stock, known-AI, prior evidence) for the offline provenance screen in "
+            "core.perceptual_provenance. Optional — when absent, the ensemble still records "
+            "a reproducible perceptual fingerprint. Matches are OSINT leads (screening tier)."
+        ),
     )
     numba_cache_dir: str = Field(
         default=os.getenv("NUMBA_CACHE_DIR", "/app/cache/numba_cache"),
@@ -876,6 +895,28 @@ class Settings(BaseSettings):
             "before being forcibly killed. A subprocess that OOMs or deadlocks would otherwise "
             "block the agent thread indefinitely. The circuit breaker opens after "
             "CIRCUIT_BREAKER_FAILURE_THRESHOLD consecutive timeouts."
+        ),
+    )
+    model_load_min_free_mb: float = Field(
+        default=768.0,
+        ge=128,
+        le=8192,
+        description=(
+            "Safety headroom (MB) required beyond a model's estimated footprint before an "
+            "in-process heavy model (EasyOCR, Florence-2, DETR, CLIP, audio classifier) is "
+            "permitted to load. When the container has less free memory than footprint + this "
+            "value, the load is refused gracefully instead of risking an OOM SIGKILL that would "
+            "crash the whole worker. See core.model_guard."
+        ),
+    )
+    model_max_inference_dim: int = Field(
+        default=2560,
+        ge=512,
+        le=8192,
+        description=(
+            "Maximum longest-side resolution (px) an image is downscaled to before in-process "
+            "heavy model inference. Caps per-call memory so a single oversized image cannot OOM "
+            "CPU inference. OCR/captioning quality is unaffected at this resolution."
         ),
     )
 

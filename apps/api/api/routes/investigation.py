@@ -80,6 +80,10 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 # can't collect them mid-sleep and silently skip the file unlink.
 _deferred_cleanup_tasks: set[asyncio.Task[Any]] = set()
 
+# Strong references to preflight visual-context tasks so the GC can't
+# collect them before Gemini responds (typical latency 2–5s).
+_preflight_tasks: set[asyncio.Task[Any]] = set()
+
 
 async def _detect_mime_from_head(head: bytes) -> str:
     try:
@@ -556,6 +560,32 @@ async def start_investigation(
                 )
 
         validated_extension = Path(file.filename or "").suffix.lower()
+
+        # ── Preflight: visual context creation ────────────────────────────
+        # Fire a single Gemini call (three-section structured prompt covering
+        # Agent1/Agent3/Agent5) immediately after validation, in parallel with
+        # pipeline setup. By the time the first agent executes, the VisualContext
+        # is already waiting in Redis — zero extra Gemini quota consumed per agent.
+        # Restricted to image MIME types; audio/video agents don't use this context.
+        if actual_mime.startswith("image/"):
+            # Best-effort optimization only — must never break the investigation
+            # route. If it fails, agents fall back to their own visual profile.
+            try:
+                from core.visual_context_store import create_visual_context_preflight as _pf
+
+                _pf_task = asyncio.create_task(
+                    _pf(
+                        session_id=session_id,
+                        file_path=str(tmp_path),
+                        sha256=content_hash,
+                        config=settings,
+                    )
+                )
+                _preflight_tasks.add(_pf_task)
+                _pf_task.add_done_callback(_preflight_tasks.discard)
+            except Exception as _pf_err:
+                logger.debug("Visual context preflight dispatch skipped", error=str(_pf_err))
+
         session_metadata = {
             "status": "queued",
             "brief": "Initializing forensic pipeline...",

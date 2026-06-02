@@ -84,7 +84,6 @@ export const useSimulation = ({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
-  const [_reconnectStatusMessage, setReconnectStatusMessage] = useState<string | null>(null);
   const [streamStalled, setStreamStalled] = useState(false);
   const [pipelineMessage, setPipelineMessage] = useState<string>("");
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
@@ -106,6 +105,8 @@ export const useSimulation = ({
   const lastSessionIdRef = useRef<string | null>(null);
   /** True after POST /resume succeeds — PIPELINE_COMPLETE must not be dropped while still `awaiting_decision` from React's stale batch. */
   const expectingPipelineCompleteRef = useRef(false);
+  /** Guards against firing the complete sound/callback more than once per session (stale-closure-safe). */
+  const hasFiredCompleteRef = useRef(false);
   /** Tracks pending reconnect delay timer so it can be cancelled on unmount. */
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -157,7 +158,6 @@ export const useSimulation = ({
         completedAgentsRef.current = [];
         setAgentUpdates({});
         setErrorMessage(null);
-        setReconnectStatusMessage(null);
       }
 
       return new Promise((resolve, reject) => {
@@ -323,8 +323,14 @@ export const useSimulation = ({
 
                 case "HITL_CHECKPOINT":
                   if (update.data) {
+                    // Backend nests the id under data.checkpoint.id; fall back to
+                    // flat data.checkpoint_id for forward-compatibility.
+                    const _hitlData = update.data as {
+                      checkpoint?: { id?: string };
+                      checkpoint_id?: string;
+                    };
                     const checkpoint: HITLCheckpoint = {
-                      checkpoint_id: update.data.checkpoint_id as string,
+                      checkpoint_id: _hitlData.checkpoint?.id ?? _hitlData.checkpoint_id ?? "",
                       session_id: update.session_id,
                       agent_id: update.agent_id ?? "",
                       agent_name: update.agent_name || "",
@@ -496,7 +502,10 @@ export const useSimulation = ({
                     (update.data as Record<string, unknown> | undefined)
                       ?.status === "awaiting_deep_report",
                   );
-                  playSoundRef.current?.("think");
+                  // No sound here: the "analysis_done" arpeggio is fired by the
+                  // awaitingDecision effect in useInvestigation, synced to the
+                  // decision gate actually appearing. Firing "think" here too
+                  // produced a double sound for the same transition.
                   break;
 
                 case "PIPELINE_COMPLETE":
@@ -512,7 +521,8 @@ export const useSimulation = ({
                     clearInterval(arbiterPollRef.current);
                     arbiterPollRef.current = null;
                   }
-                  if (status !== "complete") {
+                  if (!hasFiredCompleteRef.current) {
+                    hasFiredCompleteRef.current = true;
                     playSoundRef.current?.("complete");
                     onCompleteRef.current?.();
                   }
@@ -621,12 +631,13 @@ export const useSimulation = ({
 
             dbg.log("[WebSocket] Received update, adding to queue:", update);
 
-            const isCritical = [
+            // Only true terminal/error events jump to the front of the queue.
+            // PIPELINE_PAUSED and HITL_CHECKPOINT must NOT skip ahead of
+            // already-queued AGENT_COMPLETE events — doing so causes the UI to
+            // transition to awaiting_decision before any agent cards are populated.
+            const shouldJumpQueue = [
               "PIPELINE_COMPLETE",
               "ERROR",
-              "PIPELINE_PAUSED",
-              "HITL_CHECKPOINT",
-              "HITL_EXPIRED",
               "PIPELINE_QUARANTINED",
             ].includes(update.type);
             // Proactive trim: keep queue under limit BEFORE pushing so
@@ -650,7 +661,7 @@ export const useSimulation = ({
                 messageQueue.shift();
               }
             }
-            if (isCritical) {
+            if (shouldJumpQueue) {
               messageQueue.unshift(update);
             } else {
               messageQueue.push(update);
@@ -715,7 +726,6 @@ export const useSimulation = ({
               authRetryAttemptsRef.current[targetSessionId] = retries + 1;
               dbg.log("[WebSocket] Auth failed (4001). Refreshing token and retrying connection once...");
               setIsReconnecting(true);
-              setReconnectStatusMessage("Authentication expired. Re-authenticating...");
               (async () => {
                 try {
                   const refreshSuccess = await refreshAuthToken();
@@ -733,7 +743,6 @@ export const useSimulation = ({
                 } catch (reauthErr) {
                   dbg.warn("[WebSocket] Re-auth failed during 4001 recovery:", reauthErr);
                   setIsReconnecting(false);
-                  setReconnectStatusMessage(null);
                   setSessionId(null);
                   clearInvestigationPersistence();
                   if (wsConnectionReady) {
@@ -753,7 +762,6 @@ export const useSimulation = ({
           if (terminalCodes.includes(event.code)) {
             dbg.warn("[WebSocket] Terminal close code received. Clearing session state.");
             setIsReconnecting(false);
-            setReconnectStatusMessage(null);
             setSessionId(null);
             clearInvestigationPersistence();
 
@@ -795,9 +803,6 @@ export const useSimulation = ({
                 const delay = Math.round(rawDelay * (0.5 + Math.random() * 0.5));
                 reconnectAttemptsRef.current++;
                 setIsReconnecting(true);
-                setReconnectStatusMessage(
-                  `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttemptsRef.current}/${reconnectConfig.current.maxRetries})...`,
-                );
                 if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
                 reconnectTimerRef.current = setTimeout(() => {
                   reconnectTimerRef.current = null;
@@ -809,7 +814,6 @@ export const useSimulation = ({
                 return prev;
               } else {
                 setIsReconnecting(false);
-                setReconnectStatusMessage(null);
                 setErrorMessage("Connection lost. Please refresh the page.");
                 return "error";
               }
@@ -830,7 +834,6 @@ export const useSimulation = ({
             wsConnectionReady = true;
             reconnectAttemptsRef.current = 0; // Reset backoff on successful connect
             setIsReconnecting(false);
-            setReconnectStatusMessage(null);
             resolve();
             // Rehydrate: if the arbiter reached a terminal state while the socket
             // was down, catch up immediately. The arbiter-status endpoint returns
@@ -892,13 +895,11 @@ export const useSimulation = ({
                   },
                   (sseErr) => {
                     dbg.warn("[SSE] Reconnection error:", sseErr.message);
-                    setReconnectStatusMessage(sseErr.message);
                   }
                 );
                 sseRef.current = sseConnection;
                 wsConnectionReady = true;
                 setIsReconnecting(false);
-                setReconnectStatusMessage(null);
                 resolve();
               } catch {
                 const msg = err instanceof Error ? err.message : "WebSocket connection failed";
@@ -912,7 +913,6 @@ export const useSimulation = ({
     // All state is accessed via refs (completedAgentsRef, playSoundRef, etc.)
     // to avoid re-creating the socket on every state change.
     // DO NOT add state dependencies here without thinking carefully.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -1033,6 +1033,7 @@ export const useSimulation = ({
   const resetSimulation = useCallback(() => {
     activePhaseRef.current = "initial";
     expectingPipelineCompleteRef.current = false;
+    hasFiredCompleteRef.current = false;
     setSessionId(null);
     setStatus("idle");
     setCompletedAgents([]);
@@ -1043,7 +1044,6 @@ export const useSimulation = ({
     try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
     try { storage.removeItem(STORAGE_KEYS.SESSION_ID); } catch { /* ignore */ }
     setErrorMessage(null);
-    setReconnectStatusMessage(null);
     setPipelineMessage("");
     setPipelineThinking("");
     setArbiterStatus(null);
@@ -1062,9 +1062,9 @@ export const useSimulation = ({
   const startSimulation = useCallback(() => {
     activePhaseRef.current = "initial";
     expectingPipelineCompleteRef.current = false;
+    hasFiredCompleteRef.current = false;
     reconnectAttemptsRef.current = 0;
     setIsReconnecting(false);
-    setReconnectStatusMessage(null);
     setStatus("initiating");
     setCompletedAgents([]);
     completedAgentsRef.current = [];

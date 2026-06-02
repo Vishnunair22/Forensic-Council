@@ -308,6 +308,11 @@ class NeuralSynthesisMixin:
                 persona=agent_persona,
                 is_screen_capture_like=is_screen_cap,
                 agent_id=self.agent_id,
+                # Pass session_id so the router reuses the pre-flight VisualContext
+                # already created in Redis by /investigate. Without this, Agent1
+                # makes a redundant Gemini call (quota burn + ~120s latency) that
+                # duplicates work the pre-flight already completed.
+                session_id=str(self.session_id),
             )
 
             if finding.error:
@@ -414,7 +419,7 @@ class NeuralSynthesisMixin:
     async def generate_agent_synthesis(self, findings: list, react_chain: list) -> str:
         """Generate synthesis with guaranteed fallback."""
         if not findings:
-            return f"{self.agent_id}: Classical forensic analysis complete. No anomalies detected."
+            return f"{self.agent_id}: No forensic findings were recorded for this evidence — this is a coverage gap, not a clean result."
 
         llm_available = getattr(self, "_llm_available", False) or getattr(self, "llm_available", False)
         if not llm_available:
