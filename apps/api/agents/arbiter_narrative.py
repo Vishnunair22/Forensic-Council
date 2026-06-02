@@ -343,6 +343,141 @@ def _clean_key_findings(items: list[str], limit: int = 8) -> list[str]:
     return cleaned
 
 
+# ── Per-agent narrative shaping ──────────────────────────────────────────────
+# Each agent owns one visual-context axis: Agent1 = image integrity,
+# Agent3 = object/scene/element, Agent5 = visual metadata/provenance. These
+# helpers produce the concise, consistent per-agent card content regardless of
+# which upstream path (LLM pass-through or template) generated the raw text.
+
+def _tool_label(tool: str) -> str:
+    try:
+        from core.finding_formatter import TOOL_LABELS
+        return TOOL_LABELS.get(tool, tool.replace("_", " ").title())
+    except Exception:
+        return tool.replace("_", " ").title()
+
+
+def _object_labels(vmeta: dict[str, Any], limit: int = 4) -> list[str]:
+    out: list[str] = []
+    for o in (vmeta.get("detected_objects") or []):
+        label = o.get("label") if isinstance(o, dict) else o
+        label = str(label or "").strip()
+        if label and label not in out:
+            out.append(label)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _agent_visual_slice(agent_id: str, vmeta: dict[str, Any]) -> str:
+    """One-line visual-context lead for an agent, drawn from the shared visual
+    evidence profile. Returns "" when the profile carries nothing for this axis."""
+    if not vmeta:
+        return ""
+    desc = str(vmeta.get("content_description") or "").strip()
+
+    if agent_id == "Agent1":
+        tampering = [str(s) for s in (vmeta.get("tampering_signals") or []) if s]
+        ai_gen = [str(s) for s in (vmeta.get("ai_generation_signals") or []) if s]
+        processing = [str(s) for s in (vmeta.get("processing_observations") or []) if s]
+        verdict = str(vmeta.get("authenticity_verdict") or vmeta.get("raw_authenticity_verdict") or "").upper()
+        if tampering:
+            return f"Image integrity: visual model flags possible tampering — {', '.join(tampering[:2])}."
+        if ai_gen:
+            return f"Image integrity: visual model flags AI-generation indicators — {', '.join(ai_gen[:2])}."
+        if verdict and verdict not in ("AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"):
+            base = f"Image integrity: visual model assessed the image as {verdict.replace('_', ' ').lower()}"
+        else:
+            base = "Image integrity: visual model found no manipulation indicators"
+        if processing:
+            return f"{base}; benign editing observed ({', '.join(processing[:2])}, not tampering)."
+        return base + "."
+
+    if agent_id == "Agent3":
+        objs = _object_labels(vmeta)
+        anomalies = [str(a) for a in (vmeta.get("contextual_anomalies") or []) if a]
+        parts: list[str] = []
+        if desc:
+            parts.append(f"Scene & objects: {desc.rstrip('.')}")
+            if objs:
+                parts.append(f"detected: {', '.join(objs)}")
+        elif objs:
+            parts.append(f"Scene & objects: detected {', '.join(objs)}")
+        else:
+            return ""
+        if anomalies:
+            parts.append(f"scene anomalies: {', '.join(anomalies[:2])}")
+        return "; ".join(parts).rstrip(".") + "."
+
+    if agent_id == "Agent5":
+        ftype = str(vmeta.get("file_type_assessment") or "").strip()
+        consistency = str(vmeta.get("metadata_visual_consistency") or "").strip()
+        extracted = vmeta.get("extracted_text") or []
+        parts = []
+        if ftype:
+            parts.append(f"Visual metadata: evidence presents as a {ftype.replace('_', ' ')}")
+        if consistency:
+            parts.append(consistency.rstrip("."))
+        if extracted:
+            parts.append(f"{len(extracted)} on-image text element(s) observed")
+        if not parts:
+            return ""
+        return "; ".join(parts).rstrip(".") + "."
+
+    return ""
+
+
+def _concise_findings_line(findings: list[dict[str, Any]]) -> str:
+    """A single high-impact summary line over an agent's tool results."""
+    active = [f for f in findings if evidence_verdict_of(f) != "NOT_APPLICABLE"]
+    if not active:
+        return ""
+    pos = [f for f in active if evidence_verdict_of(f) == "POSITIVE"]
+    inconclusive = [f for f in active if evidence_verdict_of(f) in ("INCONCLUSIVE", "UNCERTAIN")]
+    errors = [f for f in active if evidence_verdict_of(f) == "ERROR"]
+    clean = [f for f in active if evidence_verdict_of(f) in ("NEGATIVE", "CLEAN", "")]
+
+    def _names(fs: list[dict[str, Any]], n: int = 3) -> str:
+        return ", ".join(dict.fromkeys(_tool_label(_tool_name(f)) for f in fs[:n]))
+
+    if pos:
+        return f"{len(pos)} check(s) flagged a signal ({_names(pos)}) — weighed against {len(clean)} clean result(s)."
+    parts: list[str] = []
+    if clean:
+        parts.append(f"No tampering artifacts across {len(clean)} forensic check(s)")
+    if inconclusive:
+        parts.append(f"{len(inconclusive)} weak signal(s) held inconclusive ({_names(inconclusive, 2)})")
+    if errors:
+        parts.append(f"{len(errors)} check(s) did not complete (coverage gap)")
+    return ("; ".join(parts).rstrip(".") + ".") if parts else ""
+
+
+def _agent_key_findings(agent_id: str, findings: list[dict[str, Any]], vmeta: dict[str, Any]) -> list[str]:
+    """Meaningful per-agent key findings: real signals first, clean checks
+    collapsed into one informative line (never a bare 'no signal detected')."""
+    active = [f for f in findings if evidence_verdict_of(f) != "NOT_APPLICABLE"]
+    pos = [f for f in active if evidence_verdict_of(f) == "POSITIVE"]
+    inc = [f for f in active if evidence_verdict_of(f) in ("INCONCLUSIVE", "UNCERTAIN")]
+    clean = [f for f in active if evidence_verdict_of(f) in ("NEGATIVE", "CLEAN", "")]
+
+    lines: list[str] = []
+    for f in pos:
+        lines.append(_human_tool_finding(f) or f"{_tool_label(_tool_name(f))} flagged a manipulation signal.")
+    for f in inc:
+        lines.append(_human_tool_finding(f) or f"{_tool_label(_tool_name(f))} returned an inconclusive signal.")
+
+    if clean:
+        names = ", ".join(dict.fromkeys(_tool_label(_tool_name(f)) for f in clean))
+        domain = {
+            "Agent1": "pixel-level tampering artifacts",
+            "Agent3": "scene or object inconsistencies",
+            "Agent5": "metadata or structural anomalies",
+        }.get(agent_id, "anomalies")
+        lines.append(f"No {domain} across {len(clean)} check(s): {names}.")
+
+    return _clean_key_findings(lines, limit=6)
+
+
 def _validate_synthesis(raw: dict) -> dict:
     """Validate and coerce a narrative dict against ArbiterSynthesis, returning a safe dict.
 
@@ -2223,6 +2358,34 @@ Rules:
                     "opinion": "",
                     "synthesis_source": "template_fallback",
                 }
+
+        # ── Deterministic per-agent shaping ─────────────────────────────────
+        # Normalise every agent card to the same concise structure regardless of
+        # the upstream path: agent_brief = the agent's own visual-context axis
+        # (1 line) + a high-impact tool-findings line; visual_description = that
+        # same per-agent axis (so Agent3/Agent5 show their object/metadata views,
+        # not just Agent1's integrity view); key_findings surfaces real signals
+        # and collapses clean checks into one informative line.
+        vprofile = _first_by_tool(all_findings, "visual_evidence_profile", "shared_visual_evidence_profile")
+        vmeta = _tool_meta(vprofile) if vprofile else {}
+        _agent_find_map: dict[str, list[dict[str, Any]]] = {}
+        for _f in all_findings:
+            _agent_find_map.setdefault(str(_f.get("agent_id") or ""), []).append(_f)
+        for aid, struct in p_anal_structured.items():
+            a_findings = _agent_find_map.get(aid, [])
+            slice_line = _agent_visual_slice(aid, vmeta)
+            findings_line = _concise_findings_line(a_findings)
+            brief_parts = [p for p in (slice_line, findings_line) if p]
+            if brief_parts:
+                struct["agent_brief"] = "\n".join(brief_parts)
+            if slice_line:
+                struct["visual_description"] = slice_line
+            kfs = _agent_key_findings(aid, a_findings, vmeta)
+            if kfs:
+                struct["key_findings"] = "\n".join(kfs)
+            p_anal_flat[aid] = " ".join(
+                p for p in (struct.get("agent_brief", ""), struct.get("opinion", "")) if p
+            ).strip() or p_anal_flat.get(aid, "")
 
         confidence_values = [
             float(m.get("confidence_score") or 0.0)

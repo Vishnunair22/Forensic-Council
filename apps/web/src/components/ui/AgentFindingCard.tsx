@@ -645,7 +645,7 @@ export function AgentFindingCard({
                       <ShieldCheck className="w-4.5 h-4.5 shrink-0 text-primary" />
                       <h4 className="text-xs font-black tracking-wider font-mono text-primary">Agent Brief</h4>
                     </div>
-                    <p className="text-sm text-white/90 leading-relaxed font-medium italic">{parsedNarrative.agent_brief}</p>
+                    <p className="text-sm text-white/90 leading-relaxed font-medium italic whitespace-pre-line">{parsedNarrative.agent_brief}</p>
                   </div>
                 )}
 

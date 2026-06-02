@@ -49,6 +49,10 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "gemini_deep_forensic": 180.0,
     "provenance_chain_verify": 20.0,
     "c2pa_validator": 20.0,
+    # PRNU spawns the noiseprint clustering ML subprocess (warms in ~3s). The
+    # handler budgets 30s for the worker call; cap the outer registry timeout
+    # just above that so a single slow PRNU call can never burn the full 60s.
+    "prnu_sensor_verification": 35.0,
     # No-API fallback tools
     "reverse_image_search": 25.0,
     "lens_style_multimodal_scan": 40.0,
@@ -93,6 +97,10 @@ HEAVY_TOOLS: set[str] = {
     "hex_signature_scan",
     "astro_grounding",
     "lens_style_multimodal_scan",
+    # Spawns the noiseprint_clustering ML subprocess (CPU-heavy K-means over
+    # sensor-noise residuals). Without gating it contended with the other heavy
+    # tools and got CPU-starved into a 60s timeout during the initial phase.
+    "prnu_sensor_verification",
 }
 
 

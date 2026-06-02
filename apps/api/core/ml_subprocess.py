@@ -154,6 +154,7 @@ class _MLWorker:
                 return {
                     "error": f"Worker timed out after {timeout:.1f}s",
                     "available": False,
+                    "timed_out": True,
                     "tool_name": self.tool_name,
                 }
             except Exception as e:
@@ -409,6 +410,13 @@ async def run_ml_tool(
                 return result
             # Worker returned error — normalize and fall through to subprocess fallback
             _normalize_result(result)
+            # A timeout means the tool is genuinely too slow right now (model hang
+            # or CPU starvation). Re-running a fresh full-length subprocess would
+            # just hit the same timeout again, doubling the agent's wait (the 30s
+            # worker timeout + 30s subprocess timeout = the 60s registry ceiling
+            # we keep seeing). Return the timeout result now.
+            if result.get("timed_out"):
+                return result
             logger.debug(
                 f"Worker {tool_name} returned error, falling back to subprocess: {result.get('error', '')[:100]}"
             )

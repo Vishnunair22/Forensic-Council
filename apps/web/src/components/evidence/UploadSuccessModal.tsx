@@ -131,7 +131,7 @@ export function UploadSuccessModal({
       <div className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden mb-6">
         <div className="relative overflow-hidden bg-black/30 border-b border-white/5 min-h-[180px] max-h-[260px] flex items-center justify-center">
           <motion.div
-            className="w-full h-full flex flex-col items-center justify-center relative"
+            className="absolute inset-0 flex flex-col items-center justify-center"
             initial={{ scale: 0.9, opacity: 0, filter: "blur(4px)" }}
             animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
             transition={{ type: "spring", stiffness: 300, damping: 25, duration: 0.35 }}

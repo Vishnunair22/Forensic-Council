@@ -13,15 +13,12 @@ export function DynamicResultClient({ sessionId }: { sessionId: string }) {
   }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.98, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{
-        duration: 0.8,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-      className="relative"
-    >
+    // No opacity/transform on this wrapper: an opacity<1 or transformed ancestor
+    // re-scopes the ForensicProgressOverlay's `position: fixed` to this element
+    // (instead of the viewport) and would hide the overlay during the entrance,
+    // leaving the page blank until the fade completed. The reveal is provided by
+    // the flash sweep below (a sibling) and the report's own staggered variants.
+    <div className="relative">
       <motion.div
         className="absolute inset-0 bg-white/10 z-50 pointer-events-none"
         initial={{ opacity: 1 }}
@@ -29,6 +26,6 @@ export function DynamicResultClient({ sessionId }: { sessionId: string }) {
         transition={{ duration: 0.8, ease: "circOut" }}
       />
       <ResultLayout initialSessionId={sessionId} />
-    </motion.div>
+    </div>
   );
 }

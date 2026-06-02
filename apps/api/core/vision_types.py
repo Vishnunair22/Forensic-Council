@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.manipulation_signal_taxonomy import partition_manipulation_signals
 from core.tool_names import TOOL_VISUAL_PROFILE
 
 
@@ -46,23 +47,53 @@ class VisualEvidenceFinding:
         *,
         tool_name: str = TOOL_VISUAL_PROFILE,
     ) -> dict[str, Any]:
+        # Separate the three axes a "manipulation_signals" list conflates:
+        # benign processing/editing (background removal, crop, re-save) must NOT
+        # be read as deceptive tampering. See core.manipulation_signal_taxonomy.
+        buckets = partition_manipulation_signals(self.manipulation_signals)
+        tampering_signals = buckets["tampering"]
+        processing_observations = buckets["processing"]
+        ai_generation_signals = buckets["ai_generation"]
+        unknown_signals = buckets["unknown"]
+
         raw_verdict = self._authenticity_verdict.upper()
-        verdict = raw_verdict
-        if self.manipulation_signals and verdict in {"", "AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"}:
+        # A provider that returns its OWN holistic authenticity verdict (Gemini)
+        # has already weighed its observations — trust that verdict and do not let
+        # a benign editing observation (e.g. "background removed") override an
+        # AUTHENTIC call. The local ensemble has no separate holistic verdict (its
+        # signals ARE the verdict), so any ensemble signal still escalates.
+        is_holistic_provider = (self.provider_used or "").lower().startswith("gemini")
+        holistic_manip_verdicts = {"SUSPICIOUS", "LIKELY_MANIPULATED", "TAMPERED", "MANIPULATED"}
+
+        deepfake_detected = raw_verdict == "AI_GENERATED" or bool(ai_generation_signals)
+        if raw_verdict in holistic_manip_verdicts:
+            verdict = raw_verdict
+            manipulation_detected = True
+        elif tampering_signals:
             verdict = "SUSPICIOUS"
-        manipulation_detected = verdict in {
-            "SUSPICIOUS",
-            "LIKELY_MANIPULATED",
-            "TAMPERED",
-            "MANIPULATED",
-        } or bool(self.manipulation_signals)
-        deepfake_detected = verdict == "AI_GENERATED"
+            manipulation_detected = True
+        elif deepfake_detected:
+            verdict = "AI_GENERATED"
+            manipulation_detected = False
+        elif not is_holistic_provider and (unknown_signals or processing_observations):
+            # Local forensic ensemble: an unrecognised artifact signal is still a
+            # real detection — preserve sensitivity rather than silently dropping it.
+            verdict = "SUSPICIOUS"
+            manipulation_detected = True
+        else:
+            verdict = raw_verdict
+            manipulation_detected = False
+
         if manipulation_detected or deepfake_detected:
             evidence_verdict = "POSITIVE"
         elif verdict in {"AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"} and self.confidence >= 0.5:
             evidence_verdict = "NEGATIVE"
         else:
             evidence_verdict = "INCONCLUSIVE"
+
+        # "edited" is a separate, descriptive axis from "tampered": a file can be
+        # edited (cropped, background removed) yet authentic / not deceptive.
+        edited = bool(processing_observations or tampering_signals)
         status = (
             "CONFIRMED"
             if self.confidence >= 0.6
@@ -87,6 +118,10 @@ class VisualEvidenceFinding:
             "file_type_assessment": self.file_type_assessment,
             "detected_objects": self.detected_objects,
             "manipulation_signals": self.manipulation_signals,
+            "tampering_signals": tampering_signals,
+            "processing_observations": processing_observations,
+            "ai_generation_signals": ai_generation_signals,
+            "edited": edited,
             "contextual_anomalies": self.contextual_anomalies,
             "extracted_text": self._extracted_text,
             "interface_identification": self._interface_identification,
@@ -114,6 +149,10 @@ class VisualEvidenceFinding:
                 "file_type_assessment": self.file_type_assessment,
                 "detected_objects": self.detected_objects,
                 "manipulation_signals": self.manipulation_signals,
+                "tampering_signals": tampering_signals,
+                "processing_observations": processing_observations,
+                "ai_generation_signals": ai_generation_signals,
+                "edited": edited,
                 "contextual_anomalies": self.contextual_anomalies,
                 "extracted_text": self._extracted_text,
                 "interface_identification": self._interface_identification,

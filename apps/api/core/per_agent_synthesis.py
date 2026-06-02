@@ -255,7 +255,15 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
             signals = section.get("visible_manipulation_signals") or []
             vis_summary = f"Visual assessment: {ass}."
             if signals:
-                vis_summary += f" Detected signals: {', '.join(signals)}."
+                from core.manipulation_signal_taxonomy import partition_manipulation_signals
+                b = partition_manipulation_signals(signals)
+                concerning = b["tampering"] + b["ai_generation"]
+                if concerning:
+                    vis_summary += f" Potential manipulation indicators: {', '.join(concerning)}."
+                if b["processing"]:
+                    vis_summary += f" Editing observed (benign processing, not tampering): {', '.join(b['processing'])}."
+                if b["unknown"]:
+                    vis_summary += f" Other visual observations: {', '.join(b['unknown'])}."
         elif input_data.agent_id == "Agent3":
             desc = section.get("scene_description") or ""
             objs = section.get("objects") or []
