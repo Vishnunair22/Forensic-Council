@@ -1111,6 +1111,10 @@ const resumeInvestigation = useCallback(
       });
       const resultPhase = storage.getItem(`${STORAGE_KEYS.RESULT_PHASE}:${targetId}`);
       const expectedPhase = deep ? "initial" : resultPhase === "deep" ? "deep" : "initial";
+      // Bound the resume request: without a timeout a briefly-unavailable
+      // backend leaves the accept/deep flow on an infinite "synthesizing"
+      // spinner with no recovery. On timeout the fetch throws and the caller's
+      // catch surfaces a retryable error toast instead of hanging forever.
       const response = await fetch(
         `${API_BASE}/api/v1/sessions/${targetId}/resume`,
         {
@@ -1118,6 +1122,7 @@ const resumeInvestigation = useCallback(
           headers,
           credentials: "include",
           body: JSON.stringify({ deep_analysis: deep, expected_phase: expectedPhase }),
+          signal: AbortSignal.timeout(30000),
         },
       );
 

@@ -158,17 +158,28 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const router = useRouter();
   const { capabilities } = useCapabilities();
 
-  const _initInvestigatorId = () => {
+  // Resolve the investigator id WITHOUT writing storage — a render-phase
+  // storage.setItem dispatches `fc_storage_update`, which makes GlobalNavbar
+  // setState while EvidenceUploadClient is still rendering (React "Cannot update
+  // a component while rendering a different component" warning). The freshly
+  // generated id is persisted in an effect below instead.
+  const _resolveInvestigatorId = () => {
     if (typeof window === "undefined") return "REQ-000000";
     const stored = storage.getItem(STORAGE_KEYS.INVESTIGATOR_ID);
     const validIdPattern = /^REQ-\d{5,10}$/;
     if (stored && validIdPattern.test(stored)) return stored;
-    const fresh = "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
-    storage.setItem(STORAGE_KEYS.INVESTIGATOR_ID, fresh);
-    return fresh;
+    return "REQ-" + (Math.floor(Math.random() * 900000) + 100000);
   };
 
-  const investigatorIdRef = useRef<string>(_initInvestigatorId());
+  const investigatorIdRef = useRef<string>(_resolveInvestigatorId());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = storage.getItem(STORAGE_KEYS.INVESTIGATOR_ID);
+    if (stored !== investigatorIdRef.current) {
+      storage.setItem(STORAGE_KEYS.INVESTIGATOR_ID, investigatorIdRef.current);
+    }
+  }, []);
   const warmupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);

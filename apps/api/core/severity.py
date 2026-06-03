@@ -133,6 +133,10 @@ def assign_severity_tier(f: Any) -> str:
 
 _SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
 
+# Minimum confidence for a high-severity POSITIVE finding to count as a STRONG
+# (manipulation-confirming) signal. Below this it is treated as a medium alert.
+_STRONG_SIGNAL_CONF_FLOOR = 0.6
+
 
 def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
     """Compute a per-agent verdict + confidence from its findings, severity-aware.
@@ -184,7 +188,20 @@ def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
         if not sev:
             sev = assign_severity_tier(f)
         rank = _SEVERITY_RANK.get(str(sev).upper(), 1)
-        if rank >= 3:
+        # A POSITIVE finding only counts as a STRONG signal when it is BOTH
+        # high-severity AND backed by sufficient confidence. A high-severity
+        # tier with weak confidence (e.g. a 0.50 hex/metadata hit) is a genuine
+        # but soft signal — it should register as a medium alert, not help push
+        # the agent to MANIPULATED. This stops a cluster of low-confidence
+        # positives from over-calling manipulation.
+        conf_f = _get_confidence(f)
+        if not conf_f:
+            conf_f = float(
+                meta.get("confidence")
+                or (f.get("raw_confidence_score") if isinstance(f, dict) else 0.0)
+                or 0.0
+            )
+        if rank >= 3 and conf_f >= _STRONG_SIGNAL_CONF_FLOOR:
             strong_signals += 1
             alert_signals += 1
         elif rank >= 2:
@@ -204,10 +221,31 @@ def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
         # Clean: confidence scales modestly with coverage breadth, capped.
         verdict, conf = "AUTHENTIC", min(0.92, 0.74 + 0.03 * completed)
 
-    reason = (
-        f"{completed} tool(s) completed"
-        + (f", {strong_signals} strong + {alert_signals - strong_signals} moderate signal(s)" if alert_signals else ", no alert signals")
-        + (f", {failed} failed" if failed else "")
-        + "."
-    )
+    moderate_signals = alert_signals - strong_signals
+    failed_note = f" {failed} check(s) did not complete and are treated as coverage gaps." if failed else ""
+    if verdict == "MANIPULATED":
+        reason = (
+            f"{strong_signals} high-severity manipulation signal(s) were confirmed across "
+            f"{completed} completed check(s), corroborating a manipulated finding.{failed_note}"
+        )
+    elif verdict == "SUSPICIOUS":
+        reason = (
+            f"One high-severity manipulation signal was confirmed across {completed} completed "
+            f"check(s); the evidence is flagged suspicious pending corroboration.{failed_note}"
+        )
+    elif alert_signals >= 1:
+        reason = (
+            f"{moderate_signals} medium-strength signal(s) across {completed} completed check(s) "
+            f"were ambiguous and do not support a definitive manipulation call.{failed_note}"
+        )
+    elif completed == 0:
+        reason = (
+            "No usable tool output was available for this agent, so authenticity cannot be "
+            f"asserted.{failed_note}"
+        )
+    else:
+        reason = (
+            f"All {completed} completed check(s) returned clean results with no manipulation "
+            f"signal.{failed_note}"
+        )
     return verdict, round(conf, 2), reason

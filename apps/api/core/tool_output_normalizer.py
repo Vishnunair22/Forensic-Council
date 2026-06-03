@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from core.finding_humanizer import humanize_finding_summary
 from core.structured_logging import get_logger
 from core.tool_output_classifier import ToolOutputClassifier
 
@@ -168,18 +169,24 @@ def normalize_tool_output(
         if wkey in raw_dict and raw_dict[wkey]:
             limitations.append(str(raw_dict[wkey]))
 
-    # Construct clean summary
+    # Construct clean summary. When the tool itself supplies no human summary,
+    # derive a plain-English, examiner-voice description of what the result
+    # means — grounded in the tool's real measurements — rather than a
+    # contentless "Forensic signal identified by <tool>" line. This is the text
+    # users see on the deterministic path (the common case under LLM quota caps).
     summary = str(raw_dict.get("summary", ""))
     if not summary:
-        if env_status == "POSITIVE":
-            summary = f"Forensic signal identified by {tool_name} with confidence {final_conf}."
-        elif env_status == "NEGATIVE":
-            # Finding-first, tool kept as a quiet trailing attribution.
-            summary = f"No anomaly detected ({tool_name.replace('_', ' ').title()})."
-        elif env_status == "NOT_APPLICABLE":
+        if env_status == "NOT_APPLICABLE":
             summary = f"Not applicable to this evidence ({tool_name.replace('_', ' ').title()})."
         else:
-            summary = f"No determinate signal ({tool_name.replace('_', ' ').title()})."
+            summary = humanize_finding_summary(
+                tool_name=tool_name,
+                status=env_status,
+                measurements=measurements,
+                regions=regions,
+                confidence=final_conf,
+                signal_category=signal_cat,
+            )
 
     return ToolOutputEnvelope(
         tool_name=tool_name,

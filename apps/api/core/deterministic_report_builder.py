@@ -68,12 +68,20 @@ def build_deterministic_report(
     agent_list = [f"Agent {aid[-1]}" for aid in norm_syn.keys()]
     agents_str = ", ".join(agent_list) if agent_list else "analytical agents"
 
+    # The deliberation reason frequently already begins with "computed based on:"
+    # / "based on:"; strip it so the sentence does not read "based on: computed
+    # based on: ...".
+    _reason = str(arbiter_deliberation.confidence_reason or "").strip().lower()
+    for _pfx in ("computed based on:", "computed based on", "based on:", "based on"):
+        if _reason.startswith(_pfx):
+            _reason = _reason[len(_pfx):].strip(" :")
+            break
+    _basis = f" This determination is based on {_reason}." if _reason else ""
     exc_summary = (
         f"This forensic investigation examined the submitted file `{filename}` ({mime_type}) "
         f"with SHA-256 integrity hash `{sha256}`. Forensic pipelines executed checks via {agents_str}. "
         f"Following deliberation, the final verdict is determined as '{verdict_label}' "
-        f"with a confidence score of {confidence_pct}%. "
-        f"This determination is based on: {arbiter_deliberation.confidence_reason.lower()}."
+        f"with a confidence score of {confidence_pct}%.{_basis}"
     )
     if not vis_available:
         exc_summary += " Shared visual context was unavailable, so the conclusion relies on completed tool findings only."

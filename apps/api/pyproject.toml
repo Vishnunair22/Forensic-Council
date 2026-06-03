@@ -71,6 +71,8 @@ dependencies = [
     "pymediainfo>=6.1.0",               # Deep container analysis: codec, fps mode, writing app
     # PDF report generation (pure Python — no system libraries required)
     "fpdf2>=2.7",
+    # DOCX report generation (pure Python — court-ready Word export)
+    "python-docx>=1.1",
 ]
 
 [project.optional-dependencies]

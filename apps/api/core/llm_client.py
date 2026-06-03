@@ -819,6 +819,18 @@ class LLMClient:
             tokens = max_tokens or min(self.max_tokens, 1500)
             candidates = list(self._get_model_candidates())
 
+            # High-TPM Groq escape hatch (synthesis only). On the free tier the
+            # primary/low-TPM Groq models (llama-3.3-70b = 12k, llama-3.1-8b = 6k)
+            # are easily exhausted within a single deep investigation, which would
+            # otherwise drop every narrative to the deterministic fallback. These
+            # models sit in separate, much larger TPM buckets (scout = 30k,
+            # compound-mini = 70k), so cascading to them keeps synthesis on the
+            # LLM. Text/JSON generation only — never added to the tool-calling loop.
+            if self.provider == "groq" and self.api_key and not is_placeholder_secret(self.api_key):
+                hi_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+                if hi_model not in candidates:
+                    candidates.append(hi_model)
+
             # Expand Gemini fallback candidates: lighter models use a different
             # quota bucket and have higher RPD on the free tier.
             if (

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from core.agent_personas import get_agent_narrative_persona
 from core.config import Settings
 from core.finding_formatter import TOOL_LABELS
+from core.finding_humanizer import CONTEXT_ONLY_TOOLS
 from core.llm_client import LLMClient
 from core.structured_logging import get_logger
 from core.visual_context_models import VisualContext
@@ -82,6 +84,14 @@ def split_visual_context(session_id: str, context_obj: VisualContext | None) -> 
         if hasattr(context_obj.image_integrity_context, "model_dump")
         else dict(context_obj.image_integrity_context or {})
     )
+    # Carry the top-level identity/verdict fields onto Agent 1's axis so its brief
+    # can render the complete integrity picture (file type, holistic verdict, what
+    # the evidence is) without reaching outside its section.
+    img_integrity.update({
+        "file_type_assessment": context_obj.file_type_assessment or "",
+        "authenticity_verdict": context_obj.authenticity_verdict or "",
+        "scene_description": context_obj.scene_description or "",
+    })
 
     # Object scene
     obj_scene = (
@@ -170,7 +180,10 @@ _FILE_TYPE_ARTICLE = {
     "photograph": "a photograph",
     "document_scan": "a scanned document",
     "ai_generated": "an AI-generated image",
+    "synthetic": "a synthetic image",
     "composite": "a composite image",
+    "digital_art": "a piece of digital art",
+    "rendered": "a rendered image",
 }
 
 
@@ -193,6 +206,27 @@ def compose_evidence_identity(visual_context: Any) -> str:
         # Avoid "a screenshot depicting a screenshot of ..."
         if ft and ft in scene_frag.lower()[:20]:
             return scene_frag
+        # The scene description from the vision model is frequently a full clause
+        # ("A minimalist outdoor scene features a building...", "The image captures
+        # a computer screen..."), not a noun phrase. Splicing it after "depicting a"
+        # yields broken grammar ("depicting the image captures a computer screen").
+        # Detect a finite verb or a sentence-style opener and, if present, attach
+        # the scene as its own sentence instead.
+        _scene_low = scene_frag.lower()
+        _is_clause = bool(
+            re.search(
+                r"\b(is|are|was|were|be|features?|shows?|showing|depicts?|depicting|"
+                r"captures?|capturing|contains?|containing|appears?|displays?|displaying|"
+                r"includes?|including|presents?|reveals?|portrays?|illustrates?|"
+                r"shows|has|have)\b",
+                _scene_low,
+            )
+        ) or _scene_low.startswith(
+            ("the image", "this image", "the photo", "this photo", "the screenshot",
+             "the scene", "it ", "an image", "a view", "image of", "screenshot of", "photo of")
+        )
+        if _is_clause:
+            return f"{lead}. {scene_frag[0].upper()}{scene_frag[1:]}"
         return f"{lead} depicting {scene_frag[0].lower()}{scene_frag[1:]}"
     if lead:
         return lead
@@ -218,87 +252,316 @@ def _is_boilerplate_finding(text: str) -> bool:
     return any(marker in t for marker in _BOILERPLATE_FINDING_MARKERS)
 
 
+def _present_label(text: str) -> str:
+    """Render an internal enum/label (e.g. 'ai_generated', 'ai_generated_suspect')
+    as presentable prose, keeping the 'AI' acronym uppercase."""
+    t = str(text or "").replace("_", " ").strip().lower()
+    if not t:
+        return t
+    overrides = {
+        "ai generated": "AI-generated",
+        "ai generated suspect": "AI-generated (suspect)",
+        "cannot determine": "indeterminate",
+    }
+    if t in overrides:
+        return overrides[t]
+    return " ".join("AI" if w == "ai" else w for w in t.split())
+
+
 def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> AgentSynthesisOutput:
     """Generates structured agent findings and summary deterministically based on tool results."""
     # Build key findings — surface real signals, but collapse clean results into
     # one coverage statement rather than emitting a generic boilerplate line per
     # clean tool (which floods the report with fallback-looking text).
+    # Split findings by VERDICT, not by text heuristics. POSITIVE results are the
+    # material signals that drive the verdict and must headline the key findings
+    # and the brief. NEGATIVE/clean results are real (and now richly described) but
+    # are subordinate under an alert verdict — listing them as "key findings" next
+    # to a Manipulated verdict reads as a self-contradiction. They become the
+    # headline only when the evidence itself is clean (no positives).
     _source_findings = input_data.grounded_findings or input_data.findings
-    _meaningful: list[str] = []
+    _positive: list[str] = []
+    _clean: list[str] = []
     _clean_tools: list[str] = []
     for f in _source_findings:
         verdict = str(f.get("evidence_verdict") or "").upper()
-        formatted = format_finding_first(f)
         meta = f.get("metadata") or {}
-        tool_label = TOOL_LABELS.get(
-            meta.get("tool_name") or f.get("finding_type") or "",
-            str(meta.get("tool_name") or f.get("finding_type") or "").replace("_", " ").title(),
-        )
-        if verdict == "POSITIVE" or not _is_boilerplate_finding(formatted):
-            _meaningful.append(formatted)
-        elif verdict not in ("NOT_APPLICABLE", "ERROR") and tool_label:
-            _clean_tools.append(tool_label)
+        tool_id = str(meta.get("tool_name") or f.get("finding_type") or "")
+        # Context/plumbing tools (shared visual profile reads, ROI/frame
+        # extraction) are inputs to other checks, not independent forensic
+        # signals — they must never surface as a "Key Finding".
+        if tool_id in CONTEXT_ONLY_TOOLS:
+            continue
+        if verdict in ("NOT_APPLICABLE", "ERROR"):
+            continue
+        formatted = format_finding_first(f)
+        tool_label = TOOL_LABELS.get(tool_id, tool_id.replace("_", " ").title())
+        if verdict == "POSITIVE":
+            _positive.append(formatted)
+        else:  # NEGATIVE / INCONCLUSIVE — clean or ambiguous, not a manipulation signal
+            _clean.append(formatted)
+            if tool_label:
+                _clean_tools.append(tool_label)
 
-    key_findings = list(_meaningful)
-    if not key_findings and _clean_tools:
-        _checks = ", ".join(dict.fromkeys(t for t in _clean_tools if t))  # dedup, keep order
+    _alert_verdict = str(input_data.agent_verdict or "").upper() in (
+        "SUSPICIOUS", "MANIPULATED", "TAMPERED", "LIKELY_MANIPULATED",
+    )
+    if _positive:
+        # Alert path: lead with the confirmed signals; fold the clean checks into
+        # one trailing coverage line so they don't masquerade as key findings.
+        key_findings = list(_positive)
+        if _clean:
+            _nc = len(_clean)
+            key_findings.append(
+                f"The remaining {_nc} completed check{'s' if _nc != 1 else ''} returned clean "
+                f"results with no manipulation signal."
+            )
+    elif _alert_verdict:
+        # Alert verdict driven by the holistic visual read, not a discrete tool
+        # POSITIVE. Lead with the holistic signal so the key findings do not read
+        # as all-clean beside a SUSPICIOUS/MANIPULATED verdict.
         key_findings = [
-            f"No manipulation indicators detected across {len(set(_clean_tools))} forensic check(s): {_checks}."
-        ]
-
-    # Formulate visual context summary if available
-    vis_summary = ""
-    if input_data.visual_context_available and input_data.visual_context_section:
-        section = input_data.visual_context_section
-        if input_data.agent_id == "Agent1":
-            ass = section.get("integrity_assessment") or "cannot_determine"
-            signals = section.get("visible_manipulation_signals") or []
-            vis_summary = f"Visual assessment: {ass}."
-            if signals:
-                from core.manipulation_signal_taxonomy import partition_manipulation_signals
-                b = partition_manipulation_signals(signals)
-                concerning = b["tampering"] + b["ai_generation"]
-                if concerning:
-                    vis_summary += f" Potential manipulation indicators: {', '.join(concerning)}."
-                if b["processing"]:
-                    vis_summary += f" Editing observed (benign processing, not tampering): {', '.join(b['processing'])}."
-                if b["unknown"]:
-                    vis_summary += f" Other visual observations: {', '.join(b['unknown'])}."
-        elif input_data.agent_id == "Agent3":
-            desc = section.get("scene_description") or ""
-            objs = section.get("objects") or []
-            vis_summary = f"Visual scene: {desc}."
-            if objs:
-                vis_summary += f" Objects: {', '.join(objs[:5])}."
-        elif input_data.agent_id == "Agent5":
-            clues = section.get("device_or_platform_clues") or []
-            vis_summary = "Visual metadata: "
-            if clues:
-                vis_summary += f"Device/Platform clues: {', '.join(clues)}."
-            else:
-                vis_summary += "No visual metadata clues identified."
+            "The holistic visual assessment flagged this evidence as anomalous; see Visual "
+            "Context for the contributing read."
+        ] + _clean[:4]
+    elif _clean:
+        # Clean path: the evidence is benign — surface the substantive clean
+        # findings themselves (now richly described) so the section is informative
+        # rather than a bare "nothing found" line.
+        key_findings = _clean[:5]
     else:
-        vis_summary = "Shared visual context was unavailable for this agent."
+        _n = len(set(_clean_tools))
+        key_findings = [
+            f"No manipulation indicators were found across {_n} forensic check{'s' if _n != 1 else ''}."
+        ] if _n else []
 
-    # Build agent brief — lead with the evidence identity (observed context),
-    # then the deterministic findings. The identity is vision-derived inference
-    # and is framed as "presents as", never as a forensic conclusion.
+    # ── Visual Context summary (the "Visual Context" field) ──────────────────
+    # Lead with the observed evidence identity, then this agent's specific visual
+    # axis (Agent1 integrity, Agent3 object/scene, Agent5 metadata). Always
+    # non-empty so the Visual Context block renders for every agent — the identity
+    # lead lives HERE, not in the agent_brief (which prevents the duplication).
     identity_lead = ""
     if input_data.evidence_identity:
-        identity_lead = f"The evidence presents as {input_data.evidence_identity}. "
+        identity_lead = f"The evidence presents as {str(input_data.evidence_identity).rstrip('. ')}."
 
-    if _meaningful:
-        # Real signals present — lead with them.
-        findings_joined = "; ".join(_meaningful[:3])
-        agent_brief = f"{identity_lead}Examination identified: {findings_joined}."
-    elif _clean_tools:
-        # Clean — state the conclusion naturally, not "identified: no indicators".
+    # Render the agent's COMPLETE visual-context axis as refined prose — every
+    # field from the shared visual context for this agent's dimension, nothing
+    # trimmed or capped. Each non-empty field becomes one clean sentence.
+    def _items(*keys: str) -> list[str]:
+        for k in keys:
+            raw = section.get(k)
+            if raw:
+                out = [
+                    str(x.get("label") if isinstance(x, dict) else x).strip()
+                    for x in raw
+                ]
+                out = [x for x in out if x]
+                if out:
+                    return out
+        return []
+
+    axis_sentences: list[str] = []
+    section = input_data.visual_context_section or {}
+    if input_data.visual_context_available and section:
+        if input_data.agent_id == "Agent1":
+            ftype = str(section.get("file_type_assessment") or "").strip()
+            ass = str(section.get("integrity_assessment") or "").strip()
+            verdict = str(section.get("authenticity_verdict") or "").strip()
+            manip = _items("visible_manipulation_signals")
+            aigen = _items("ai_generation_signals")
+            edit = _items("editing_or_compositing_signals")
+            comp = _items("compression_or_reupload_signals")
+            regions = _items("regions_for_followup")
+            if ftype:
+                axis_sentences.append(f"The visual model assessed the file type as {_present_label(ftype)}.")
+            if ass and ass != "cannot_determine":
+                axis_sentences.append(f"Its image-integrity assessment is '{_present_label(ass)}'.")
+            if manip:
+                axis_sentences.append(f"Visible manipulation indicators: {', '.join(manip)}.")
+            if aigen:
+                axis_sentences.append(f"AI-generation indicators: {', '.join(aigen)}.")
+            if edit:
+                axis_sentences.append(f"Editing or compositing indicators: {', '.join(edit)}.")
+            if comp:
+                axis_sentences.append(f"Compression or re-upload indicators: {', '.join(comp)}.")
+            if regions:
+                axis_sentences.append(f"Regions flagged for follow-up: {', '.join(regions)}.")
+            # Only assert a clean visual read when the holistic verdict agrees.
+            # Asserting "no AI-generation observed" while the holistic read is
+            # "ai generated" is a self-contradiction (the model flagged it at the
+            # whole-image level even with no localized region).
+            _verdict_is_alert = verdict.upper() in (
+                "AI_GENERATED", "MANIPULATED", "SUSPECT", "AI_GENERATED_SUSPECT", "LIKELY_MANIPULATED",
+            )
+            if not (manip or aigen or edit or comp) and not _verdict_is_alert:
+                axis_sentences.append("No visible manipulation, AI-generation, editing, or compression anomalies were observed.")
+            elif not (manip or aigen or edit or comp) and _verdict_is_alert:
+                axis_sentences.append(
+                    "No single localized region was isolated, but the holistic visual read is anomalous (see below)."
+                )
+            if verdict and verdict != "CANNOT_DETERMINE":
+                axis_sentences.append(f"Holistic visual authenticity read: {_present_label(verdict)}.")
+        elif input_data.agent_id == "Agent3":
+            desc = str(section.get("scene_description") or "").strip()
+            objs = _items("objects", "detected_objects")
+            people = _items("people")
+            weapons = _items("weapons_or_dangerous_items")
+            docs = _items("documents_or_ids")
+            ui = _items("ui_elements", "interface_elements")
+            text = _items("visible_text", "extracted_text")
+            anomalies = _items("scene_inconsistencies")
+            # Skip the scene restatement when the identity lead already carries it
+            # (it is composed from the same scene description) to avoid the
+            # "presents as <scene>. The scene shows <scene>." duplication.
+            _ident = str(input_data.evidence_identity or "").lower()
+            _desc_norm = desc.rstrip(".").lower()
+            if desc and _desc_norm[:40] not in _ident:
+                axis_sentences.append(f"The scene shows {desc.rstrip('.')}.")
+            if objs:
+                axis_sentences.append(f"Objects present: {', '.join(objs)}.")
+            if people:
+                axis_sentences.append(f"People observed: {', '.join(people)}.")
+            if weapons:
+                axis_sentences.append(f"Weapons or dangerous items: {', '.join(weapons)}.")
+            if docs:
+                axis_sentences.append(f"Documents or IDs: {', '.join(docs)}.")
+            if ui:
+                axis_sentences.append(f"UI elements: {', '.join(ui)}.")
+            if text:
+                axis_sentences.append(f"Visible text: {', '.join(text)}.")
+            if anomalies:
+                axis_sentences.append(f"Scene inconsistencies flagged: {', '.join(anomalies)}.")
+            else:
+                axis_sentences.append("No scene inconsistencies were flagged.")
+        elif input_data.agent_id == "Agent5":
+            ftype = str(section.get("file_type_assessment") or "").strip()
+            ts = _items("visible_timestamps")
+            loc = _items("visible_location_clues")
+            dev = _items("device_or_platform_clues")
+            app = _items("software_or_app_clues")
+            lws = _items("lighting_weather_season_clues")
+            notes = _items("metadata_consistency_notes")
+            contra = _items("metadata_contradictions")
+            if ftype:
+                axis_sentences.append(f"The file type appears to be {_present_label(ftype)}.")
+            if ts:
+                axis_sentences.append(f"Visible timestamps: {', '.join(ts)}.")
+            if loc:
+                axis_sentences.append(f"Location clues: {', '.join(loc)}.")
+            if dev:
+                axis_sentences.append(f"Device or platform clues: {', '.join(dev)}.")
+            if app:
+                axis_sentences.append(f"App or software clues: {', '.join(app)}.")
+            if lws:
+                axis_sentences.append(f"Lighting, weather, or season clues: {', '.join(lws)}.")
+            if contra:
+                axis_sentences.append(f"Provenance contradictions: {', '.join(contra)}.")
+            if notes:
+                axis_sentences.append(f"Metadata consistency notes: {', '.join(notes)}.")
+            if not (ts or loc or dev or app or lws or contra or notes):
+                axis_sentences.append("No visible timestamps, location, device, app, or provenance clues were observed.")
+
+    axis_detail = " ".join(axis_sentences).strip()
+
+    _axis_fallback = {
+        "Agent1": "no distinct image-integrity signals were observed",
+        "Agent3": "no distinct object or scene context was observed",
+        "Agent5": "no distinct visual metadata or provenance clues were observed",
+    }.get(input_data.agent_id, "no distinct visual context was observed")
+
+    if identity_lead and axis_detail:
+        vis_summary = f"{identity_lead} {axis_detail}"
+    elif identity_lead:
+        vis_summary = f"{identity_lead} For this dimension, {_axis_fallback}."
+    elif axis_detail:
+        vis_summary = axis_detail
+    else:
+        vis_summary = f"The shared visual context shows {_axis_fallback}."
+
+    # ── Agent Overview (the "agent_brief" field) — tools that ran + verdict ──
+    # No visual identity here; the Visual Context field above carries that, so the
+    # two blocks never duplicate each other.
+    _axis_label = {
+        "Agent1": "image-integrity",
+        "Agent3": "scene and object",
+        "Agent5": "metadata and provenance",
+    }.get(input_data.agent_id, "forensic")
+    _n_checks = len(input_data.completed_tools) or len(_source_findings)
+    # An alert verdict (_alert_verdict, computed above) can be driven by the
+    # holistic visual read (e.g. an AI-generation determination) rather than a
+    # discrete tool POSITIVE. In that case the brief must NOT claim "no
+    # manipulation indicators" — that contradicts the verdict badge.
+    if _positive:
+        findings_joined = "; ".join(_positive[:3])
+        _n_sig = len(_positive)
         agent_brief = (
-            f"{identity_lead}Examination across {len(set(_clean_tools))} forensic check(s) "
-            f"found no supported manipulation indicators."
+            f"The {_axis_label} examination completed {_n_checks} check(s) and confirmed "
+            f"{_n_sig} manipulation signal(s). {findings_joined}."
+        )
+    elif _alert_verdict:
+        agent_brief = (
+            f"The {_axis_label} examination completed {_n_checks} check(s). No individual "
+            f"tool isolated a discrete manipulation signal, but the holistic assessment is "
+            f"anomalous (see Visual Context for the contributing read)."
+        )
+    elif _clean:
+        # Lead with the strongest clean finding — the head of the overview should
+        # not be a 3%-confidence line. Rank by the trailing "(NN%)" confidence and
+        # de-prioritise any residual generic "no anomaly signal" phrasing.
+        def _lead_rank(line: str) -> float:
+            m = re.search(r"\((\d+)%\)\s*$", line.strip())
+            conf = int(m.group(1)) if m else 0
+            if "found no anomaly signal" in line.lower():
+                conf -= 1000  # push generic phrasing to the back
+            return conf
+        _clean_lead = max(_clean, key=_lead_rank)
+        agent_brief = (
+            f"The {_axis_label} examination completed {_n_checks} check(s) and found no "
+            f"supported manipulation indicators. {_clean_lead}"
         )
     else:
-        agent_brief = f"{identity_lead}Examination found no supported anomalies across the applicable checks."
+        agent_brief = (
+            f"The {_axis_label} examination found no supported anomalies across the "
+            f"applicable checks."
+        )
+
+    # Append the deterministic verdict so the overview states the outcome arrived.
+    if input_data.agent_verdict:
+        _vv = str(input_data.agent_verdict).replace("_", " ").title()
+        _cc = int(round(float(input_data.agent_confidence or 0.0) * 100))
+        agent_brief += f" Verdict: {_vv} ({_cc}% confidence)."
+
+    # Derive the opinion / confidence reason from the SAME positive/clean split
+    # that drives the brief, so the "Your Opinion" block can never state a
+    # different signal count than the Agent Overview (e.g. brief "confirmed 6"
+    # vs opinion "7 confirmed"). The verdict word stays consistent with the badge.
+    _verdict_word = str(input_data.agent_verdict or "").replace("_", " ").lower().strip()
+    _failed_note = (
+        f" {len(input_data.failed_tools)} check(s) did not complete and are treated as coverage gaps."
+        if input_data.failed_tools else ""
+    )
+    _n_pos = len(_positive)
+    if _positive:
+        confidence_reason = (
+            f"{_n_pos} manipulation signal(s) were confirmed across {_n_checks} completed "
+            f"check(s), supporting a {_verdict_word or 'manipulated'} finding.{_failed_note}"
+        )
+    elif _alert_verdict:
+        confidence_reason = (
+            f"No discrete tool isolated a manipulation signal, but the holistic visual "
+            f"assessment supports a {_verdict_word or 'suspicious'} finding across "
+            f"{_n_checks} completed check(s).{_failed_note}"
+        )
+    elif _clean:
+        confidence_reason = (
+            f"All {_n_checks} completed check(s) returned clean results with no manipulation "
+            f"signal.{_failed_note}"
+        )
+    else:
+        confidence_reason = (
+            input_data.confidence_reason
+            or f"{_n_checks} check(s) completed; the results were inconclusive.{_failed_note}"
+        )
 
     source_mode = "deterministic_with_visual_context" if input_data.visual_context_available else "deterministic_tool_only"
 
@@ -314,10 +577,32 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
         key_findings=key_findings,
         agent_verdict=input_data.agent_verdict,
         confidence_score=input_data.agent_confidence,
-        confidence_reason=input_data.confidence_reason or f"Determined by {len(input_data.completed_tools)} completed tools.",
+        confidence_reason=confidence_reason,
         limitations=limitations,
         synthesis_source=source_mode
     )
+
+
+# Assertive manipulation language that must NOT appear when the deterministic
+# verdict is clean/inconclusive (item 7 — verdict is the single source of truth).
+_MANIPULATION_TERMS = (
+    "manipulat", "tamper", "forged", "forgery", "fabricat", "doctored", "spliced",
+    "splicing", "deepfake", "ai-generated", "ai generated", "synthetic", "falsified",
+    "altered", "edited to deceive", "not authentic", "inauthentic",
+)
+_CLEAN_VERDICTS = {"AUTHENTIC", "INCONCLUSIVE", "NEGATIVE", "NOT_APPLICABLE", "CLEAN", ""}
+
+
+def _text_contradicts_verdict(text: str, verdict: str) -> bool:
+    """True if narrative text asserts manipulation while the deterministic verdict
+    is clean/inconclusive. Used to reject contradictory LLM narrative and keep the
+    deterministic text, so findings never disagree with the verdict."""
+    if not text:
+        return False
+    if str(verdict or "").upper() not in _CLEAN_VERDICTS:
+        return False  # alert verdicts may legitimately use manipulation language
+    low = text.lower()
+    return any(term in low for term in _MANIPULATION_TERMS)
 
 
 def _build_persona_system_prompt(agent_ids: list[str]) -> str:
@@ -361,17 +646,24 @@ def _build_persona_system_prompt(agent_ids: list[str]) -> str:
         "[Finding statement] — [Tool name] ([Confidence]%)\n"
         "5. Write in the present tense. The analysis has been completed; report its findings.\n"
         "6. Return ONLY valid JSON — no markdown, no prose outside the JSON.\n"
-        "7. OPEN each agent_brief by grounding the reader in what the evidence appears to be, "
-        "using the supplied 'evidence_identity' value: begin with 'The evidence presents as "
-        "<evidence_identity>.' This is OBSERVED CONTEXT (what the evidence looks like), NOT a "
-        "forensic finding — never state it as a conclusion or let it imply a verdict. After this "
-        "one grounding sentence, state the deterministic findings in the expert's voice. "
-        "If evidence_identity is empty, open directly with the findings.\n\n"
+        "7. SEPARATE the two fields cleanly — they must NOT repeat each other:\n"
+        "   - 'visual_context_summary' carries the OBSERVED visual context: open it with "
+        "'The evidence presents as <evidence_identity>.' (observed context, never a verdict), then "
+        "1-2 sentences on THIS agent's visual axis (Agent1 image integrity, Agent3 object/scene, "
+        "Agent5 metadata/provenance).\n"
+        "   - 'agent_brief' is the ANALYTICAL OVERVIEW: summarize the tools/checks that ran and the "
+        "verdict reached, in the expert's voice. Do NOT restate the evidence identity or the "
+        "'presents as' phrase here — that belongs only in visual_context_summary.\n"
+        "8. CONSISTENCY WITH VERDICT IS MANDATORY. The narrative MUST agree with 'agent_verdict'. "
+        "If agent_verdict is AUTHENTIC or INCONCLUSIVE, do NOT assert or imply the evidence is "
+        "manipulated, tampered, forged, fabricated, doctored, spliced, deepfaked, AI-generated, or "
+        "fake — describe results as clean, benign, or inconclusive. If agent_verdict is SUSPICIOUS or "
+        "MANIPULATED, do NOT claim the evidence is authentic or unaltered. Never contradict the verdict.\n\n"
         "Schema:\n"
         "{\n"
         "  \"Agent1\": {\n"
-        "    \"agent_brief\": \"<opens with 'The evidence presents as ...' then 2-3 sentence expert summary in Agent1 voice>\",\n"
-        "    \"visual_context_summary\": \"<1-2 sentences on what the image context revealed>\",\n"
+        "    \"agent_brief\": \"<2-3 sentence expert overview of the checks that ran and the verdict, in Agent1 voice; do NOT restate the evidence identity>\",\n"
+        "    \"visual_context_summary\": \"<opens with 'The evidence presents as ...' then 1-2 sentences on this agent's visual axis>\",\n"
         "    \"key_findings\": [\"<Finding> — <Tool> (<Conf>%)\", ...],\n"
         "    \"confidence_reason\": \"<1 sentence on why the confidence level is justified>\",\n"
         "    \"limitations\": [\"<only real tool failures>\"]\n"
@@ -432,15 +724,30 @@ async def refine_synthesis_batch(
     # 2. Guard: skip LLM refinement if not configured
     llm_client = LLMClient(config=config)
     if not (config.llm_enable_post_synthesis and config.llm_api_key and llm_client.is_available):
-        logger.info("Groq batched synthesis skipped (LLM disabled/unavailable).")
+        logger.info(
+            "Groq per-agent synthesis skipped (LLM disabled/unavailable).",
+            post_synthesis_enabled=bool(config.llm_enable_post_synthesis),
+            has_api_key=bool(config.llm_api_key),
+            provider=getattr(config, "llm_provider", None),
+            client_available=llm_client.is_available,
+        )
         return outputs
 
     # 2b. Clean-evidence early-exit: if NO agent has a narratable signal, the
     #     deterministic synthesis is already optimal. Skip the Groq call to
     #     preserve free-tier quota — this is the common clean-screenshot case.
     if not any(_has_narratable_signal(inp) for inp in inputs.values()):
-        logger.info("Groq synthesis skipped — all agents clean, deterministic output is sufficient.")
+        logger.info(
+            "Groq per-agent synthesis skipped — all agents clean (no narratable signal); "
+            "deterministic output is sufficient.",
+            agents=list(inputs.keys()),
+        )
         return outputs
+
+    logger.info(
+        "Groq per-agent synthesis invoked.",
+        agents=[aid for aid, inp in inputs.items() if _has_narratable_signal(inp)],
+    )
 
     # 3. Build the per-agent payload
     batch_prompt_data = {}
@@ -500,12 +807,20 @@ async def refine_synthesis_batch(
             for aid in ("Agent1", "Agent3", "Agent5"):
                 if aid in parsed and aid in outputs:
                     polished_data = parsed[aid]
+                    _verdict = outputs[aid].agent_verdict
                     brief = polished_data.get("agent_brief")
                     if brief and isinstance(brief, str):
-                        outputs[aid].agent_brief = brief
+                        # Verdict is the single source of truth: reject a refined brief
+                        # that asserts manipulation while the verdict is clean/inconclusive.
+                        if _text_contradicts_verdict(brief, _verdict):
+                            logger.warning(
+                                f"{aid}: LLM brief contradicts verdict '{_verdict}'; keeping deterministic brief."
+                            )
+                        else:
+                            outputs[aid].agent_brief = brief
 
                     vc_sum = polished_data.get("visual_context_summary")
-                    if vc_sum and isinstance(vc_sum, str):
+                    if vc_sum and isinstance(vc_sum, str) and not _text_contradicts_verdict(vc_sum, _verdict):
                         outputs[aid].visual_context_summary = vc_sum
 
                     reason = polished_data.get("confidence_reason")
@@ -514,18 +829,19 @@ async def refine_synthesis_batch(
 
                     kfs = polished_data.get("key_findings")
                     if kfs and isinstance(kfs, list):
-                        validated_kfs = []
-                        for kf in kfs:
-                            kf_str = str(kf).strip()
-                            if " — " in kf_str:
-                                validated_kfs.append(kf_str)
-                            else:
-                                validated_kfs.append(kf_str)
+                        validated_kfs = [
+                            kf_str
+                            for kf in kfs
+                            if (kf_str := str(kf).strip())
+                            and not _text_contradicts_verdict(kf_str, _verdict)
+                        ]
                         if validated_kfs:
                             outputs[aid].key_findings = validated_kfs
 
                     outputs[aid].synthesis_source = "groq_refined"
                     logger.info(f"Refined synthesis for {aid} using LLM.")
+    except TimeoutError:
+        logger.warning("Groq per-agent synthesis timed out (40s) — using deterministic fallbacks.")
     except Exception as e:
         logger.warning(f"Batched synthesis refinement failed or rejected: {e}. Using deterministic fallbacks.")
         # Fallbacks are already populated in outputs

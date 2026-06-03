@@ -132,11 +132,54 @@ async def run_agents_concurrent(
                 clip_result = tool_ctx.get("analyze_image_content") or {}
                 content_type = str(visual_profile.get("content_type") or "").strip()
                 clip_image_type = str(clip_result.get("image_type") or clip_result.get("semantic_context") or "").strip()
+                base = ""
                 if content_type and content_type.lower() not in ("", "unknown", "none"):
-                    return content_type
-                if clip_image_type and clip_image_type.lower() not in ("", "unknown", "none"):
-                    return clip_image_type
-                return None
+                    base = content_type
+                elif clip_image_type and clip_image_type.lower() not in ("", "unknown", "none"):
+                    base = clip_image_type
+
+                # Fall back to the shared visual context threaded onto every agent
+                # so Agent3 (object/scene) and Agent5 (metadata) show their own
+                # visual axis live — not just Agent1's content type. This is the
+                # live-page counterpart to the report's per-agent Visual Context.
+                vctx = getattr(agent_inst, "visual_context", None)
+                aid = str(getattr(agent_inst, "agent_id", "") or "")
+                if vctx is not None:
+                    try:
+                        if aid == "Agent3":
+                            objs = []
+                            for o in (getattr(vctx, "detected_objects", None) or []):
+                                lbl = getattr(o, "label", None) if not isinstance(o, dict) else o.get("label")
+                                if lbl:
+                                    objs.append(str(lbl))
+                            scene = str(getattr(vctx, "scene_description", "") or "").strip()
+                            parts = []
+                            if scene:
+                                parts.append(scene.rstrip("."))
+                            if objs:
+                                parts.append("objects: " + ", ".join(objs[:4]))
+                            if parts:
+                                return "; ".join(parts)
+                        elif aid == "Agent5":
+                            ftype = str(getattr(vctx, "file_type_assessment", "") or "").strip()
+                            meta = getattr(vctx, "metadata_visual_context", None)
+                            clues = [str(c) for c in (getattr(meta, "device_or_platform_clues", None) or []) if c]
+                            parts = []
+                            if ftype:
+                                parts.append(ftype.replace("_", " "))
+                            if clues:
+                                parts.append("clues: " + ", ".join(clues[:3]))
+                            if parts:
+                                return "; ".join(parts)
+                        if not base:
+                            base = str(
+                                getattr(vctx, "file_type_assessment", "")
+                                or getattr(vctx, "scene_description", "")
+                                or ""
+                            ).strip()
+                    except Exception:
+                        pass
+                return base or None
 
             synthesis = (
                 getattr(agent_inst, "_agent_synthesis", None) if agent_inst is not None else None
@@ -415,6 +458,28 @@ async def run_agents_concurrent(
                     )
 
 
+            # Align the streamed (live-card) verdict with the SAME
+            # compute_agent_verdict the final report uses, so the card verdict
+            # does not flip after deliberation (e.g. a preliminary self-assessed
+            # "Suspicious" settling to "Authentic" on the result page). Falls back
+            # to the agent's self-synthesis verdict on any error.
+            _live_verdict = synthesis.get("verdict") if isinstance(synthesis, dict) else None
+            _live_conf = agent_confidence
+            if status == "complete" and isinstance(synthesis, dict):
+                try:
+                    _af = (
+                        list(getattr(agent_inst, "_findings", []) or [])
+                        if agent_inst is not None else []
+                    )
+                    if _af:
+                        from core.severity import compute_agent_verdict
+                        _cv, _cc, _ = compute_agent_verdict(_af)
+                        if _cv:
+                            _live_verdict = _cv
+                            _live_conf = _cc
+                except Exception:
+                    pass
+
             await broadcast_update(
                 str(session_id),
                 BriefUpdate(
@@ -444,16 +509,12 @@ async def run_agents_concurrent(
                         "confidence": 0
                         if status == "skipped"
                         else (
-                            agent_confidence
+                            _live_conf
                         ),
                         "error": error,
                         "findings_preview": preview,
-                        "agent_verdict": synthesis.get("verdict")
-                        if isinstance(synthesis, dict)
-                        else None,
-                        "verdict_score": _verdict_score(
-                            synthesis.get("verdict") if isinstance(synthesis, dict) else None
-                        ),
+                        "agent_verdict": _live_verdict,
+                        "verdict_score": _verdict_score(_live_verdict),
                         # Suppress initial-phase narrative from deep-phase card summary
                         "summary": (
                             None if initial_tool_names
@@ -516,6 +577,10 @@ async def run_agents_concurrent(
                 **extra,
             }
             inst = cls(**kwargs)
+            # Thread the shared visual context onto every agent so it can read it
+            # directly (no Agent-1 gate, no bus-timing race). Resolved up-front in
+            # pipeline._run_investigation_core; may be None when unavailable.
+            inst.visual_context = getattr(pipeline, "_visual_context", None)
             if pipeline.inter_agent_bus is not None:
                 pipeline.inter_agent_bus.register_agent(aid, inst)
 
