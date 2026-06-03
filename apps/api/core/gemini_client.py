@@ -244,9 +244,42 @@ def _parse_preflight_gemini_response(
     _valid_assessments = frozenset(_integrity_to_verdict.keys())
     integrity_assessment_val = raw_assessment if raw_assessment in _valid_assessments else "cannot_determine"
 
+    integrity_description = str(ii.get("description") or "").strip()
+    _manip_signals = [s for s in (ii.get("manipulation_signals") or []) if s]
+    _ai_signals = [s for s in (ii.get("ai_generation_signals") or []) if s]
+    _scene_inc = [i for i in (osc.get("scene_inconsistencies") or []) if i]
+    _editing_signals: list[str] = []
+
+    # Benign cutout grounding: a transparent / removed-background cutout (e.g. a PNG
+    # product image) is benign editing, not deceptive manipulation. When the only
+    # alarming holistic signals are background-removal / transparency — and there is
+    # no AI-generation read — do not let the cutout assert manipulation on its own.
+    # Reframe it as benign editing and clear the alert verdict so a transparent-PNG
+    # product shot does not flip between AUTHENTIC and LIKELY_MANIPULATED on re-runs.
+    _BENIGN_CUTOUT_MARKERS = (
+        "background has been removed", "background removed", "removed background",
+        "removed the background", "transparent background", "transparent checkerboard",
+        "checkerboard", "cut out", "cut-out", "cutout", "cutting out", "masking",
+        "masked out", "isolated against", "isolated on", "no background", "alpha channel",
+    )
+    _alarming = _manip_signals + _scene_inc
+    if (
+        verdict in ("LIKELY_MANIPULATED", "SUSPICIOUS", "MANIPULATED")
+        and _alarming
+        and not _ai_signals
+        and all(any(m in str(s).lower() for m in _BENIGN_CUTOUT_MARKERS) for s in _alarming)
+    ):
+        verdict = "AUTHENTIC"
+        integrity_assessment_val = "no_visible_issue"
+        _editing_signals = _manip_signals  # retained as benign editing context
+        _manip_signals = []
+        _scene_inc = []
+
     image_integrity = ImageIntegrityContext(
-        visible_manipulation_signals=[s for s in (ii.get("manipulation_signals") or []) if s],
-        ai_generation_signals=[s for s in (ii.get("ai_generation_signals") or []) if s],
+        description=integrity_description,
+        visible_manipulation_signals=_manip_signals,
+        ai_generation_signals=_ai_signals,
+        editing_or_compositing_signals=_editing_signals,
         compression_or_reupload_signals=[s for s in (ii.get("compression_signals") or []) if s],
         integrity_assessment=integrity_assessment_val,
         confidence=confidence,
@@ -258,13 +291,18 @@ def _parse_preflight_gemini_response(
     if platform and platform not in device_clues:
         device_clues.insert(0, platform)
 
+    # Fall back to the integrity section's factual description when the object/scene
+    # pass returned no scene sentence, so the evidence identity never degrades to a
+    # bare file-type word.
+    scene_desc = str(osc.get("scene_description") or "").strip() or integrity_description
+
     object_scene = ObjectSceneContext(
-        scene_description=str(osc.get("scene_description") or ""),
+        scene_description=scene_desc,
         people=[p for p in (osc.get("people") or []) if p],
         objects=[o for o in (osc.get("objects") or []) if o],
         ui_elements=[e for e in (osc.get("ui_elements") or []) if e],
         visible_text=[t for t in (osc.get("visible_text") or []) if t],
-        scene_inconsistencies=[i for i in (osc.get("scene_inconsistencies") or []) if i],
+        scene_inconsistencies=_scene_inc,
         confidence=confidence,
     )
 
@@ -298,7 +336,7 @@ def _parse_preflight_gemini_response(
         detected_objects=detected_objs,
         interface_elements=[e for e in (osc.get("ui_elements") or []) if e],
         visible_timestamps=[t for t in (mp.get("visible_timestamps") or []) if t],
-        scene_description=str(osc.get("scene_description") or ""),
+        scene_description=scene_desc,
         file_type_assessment=str(ii.get("file_type_assessment") or ""),
         authenticity_verdict=verdict,
         confidence=confidence,

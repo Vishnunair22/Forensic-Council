@@ -67,7 +67,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
         {/* FC mark — decorative icon text, hidden from AT */}
         <span
           aria-hidden="true"
-          className="relative z-10 font-mono font-black select-none"
+          className="relative z-10 font-mono font-bold select-none"
           style={{
             fontSize: size === "lg" ? "11px" : "9px",
             color: isHovered ? "rgba(220,235,255,1)" : "rgba(165,200,255,0.85)",

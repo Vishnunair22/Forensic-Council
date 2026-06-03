@@ -353,7 +353,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if visual_context is not None and _vc_clean and _int_pos and _strong < 2:
                 for _tool, _f in _int_pos:
                     _f["evidence_verdict"] = "INCONCLUSIVE"
+                    # A signal held inconclusive as a benign, uncorroborated artifact
+                    # is no longer a HIGH-severity manipulation indicator — drop the
+                    # tier so it stops reading as a strong alert in the verdict math,
+                    # section flags, and finding ordering.
+                    _f["severity_tier"] = "LOW"
                     _meta = _f.setdefault("metadata", {})
+                    _meta["severity_tier"] = "LOW"
                     _meta["corroboration_downgrade"] = True
                     # Preserve the original alarming text for audit, but REWRITE the
                     # narrative so it matches the new INCONCLUSIVE verdict — appending
@@ -383,7 +389,32 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # all three agent briefs open with consistent observed context.
         evidence_identity = compose_evidence_identity(visual_context)
 
+        from core.severity import assign_severity_tier, compute_agent_verdict
+        from core.visual_context_store import visual_context_to_profile_dict
+        from core.visual_grounding import apply_visual_grounding
+
+        # Build the grounding profile + holistic read once. A remote-vision
+        # (Gemini) read is court-defensible and authoritative; a local-ensemble
+        # read is screening-tier (mirrors visual_context_to_profile_dict).
+        _vc_profile = (
+            visual_context_to_profile_dict(visual_context) if visual_context is not None else None
+        )
+        _is_remote_vision = bool(
+            visual_context is not None
+            and getattr(visual_context, "external_llm_used", False)
+            and getattr(visual_context, "source", "") != "local_ensemble"
+        )
+        _holistic_verdict = (
+            str(getattr(visual_context, "authenticity_verdict", "") or "").upper()
+            if visual_context is not None
+            else ""
+        )
+
         inputs = {}
+        # Capture the grounded, visual-context-aware per-agent verdicts so the card
+        # badge (per_agent_summary) reuses the SAME value as the synthesis brief —
+        # otherwise the badge recomputes tool-only/ungrounded and silently drifts.
+        grounded_agent_verdicts: dict[str, tuple[str, float]] = {}
         for aid in ("Agent1", "Agent3", "Agent5"):
             if aid in active_results:
                 res = active_results[aid]
@@ -413,13 +444,58 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     elif status in ("FAILED", "ERROR", "TIMEOUT"):
                         a_failed.append(tool)
 
-                # Deterministic, severity-aware per-agent verdict / confidence.
-                # Replaces the prior crude POSITIVE-count rule: only MEDIUM+
-                # POSITIVE signals move the verdict, NOT_APPLICABLE/ERROR/failed
-                # findings are excluded, and confidence is graduated by signal
-                # strength and coverage rather than hardcoded.
-                from core.severity import compute_agent_verdict
-                a_verdict, a_conf, a_reason = compute_agent_verdict(findings)
+                # Ground each finding's severity against the visual context so the
+                # verdict math and the key findings read the SAME calibrated tiers
+                # (camera-physics noise on screenshots capped, cross-modal conflicts
+                # annotated). grounded_findings is what synthesis and the verdict
+                # both consume — previously declared but never populated.
+                grounded_findings = []
+                for f in findings:
+                    gf = dict(f)
+                    meta = gf.get("metadata") or {}
+                    tool = str(meta.get("tool_name") or gf.get("finding_type") or "")
+                    base_sev = str(gf.get("severity_tier") or assign_severity_tier(gf))
+                    if _vc_profile is not None:
+                        gr = apply_visual_grounding(tool, aid, base_sev, _vc_profile, meta)
+                        gf["severity_tier"] = gr.adjusted_severity
+                        if gr.context_note:
+                            gf["metadata"] = {**meta, "grounding_note": gr.context_note}
+                    else:
+                        gf["severity_tier"] = base_sev
+                    grounded_findings.append(gf)
+
+                # Per-agent visual signal for verdict grounding. Agent1 carries the
+                # holistic authenticity read; Agent3 inherits it only when the whole
+                # image is synthetic/manipulated (scene relevance); Agent5 stays on
+                # provenance and only weighs metadata contradictions.
+                _sec = vc_sec or {}
+                if aid == "Agent1":
+                    _vsig = {
+                        "verdict": _holistic_verdict,
+                        "court_defensible": _is_remote_vision,
+                        "anomalies": list(_sec.get("ai_generation_signals") or []),
+                    }
+                elif aid == "Agent3":
+                    _vsig = {
+                        "verdict": _holistic_verdict
+                        if _holistic_verdict in ("AI_GENERATED", "LIKELY_MANIPULATED")
+                        else "",
+                        "court_defensible": _is_remote_vision,
+                        "anomalies": list(_sec.get("scene_inconsistencies") or []),
+                    }
+                else:  # Agent5
+                    _vsig = {
+                        "verdict": "",
+                        "court_defensible": _is_remote_vision,
+                        "anomalies": list(_sec.get("metadata_contradictions") or []),
+                    }
+
+                # Deterministic, severity-aware, visual-context-grounded per-agent
+                # verdict / confidence.
+                a_verdict, a_conf, a_reason = compute_agent_verdict(
+                    grounded_findings, visual_signal=_vsig
+                )
+                grounded_agent_verdicts[aid] = (a_verdict, a_conf)
 
                 inputs[aid] = AgentSynthesisInput(
                     agent_id=aid,
@@ -431,6 +507,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     completed_tools=list(set(a_completed)),
                     failed_tools=list(set(a_failed)),
                     findings=findings,
+                    grounded_findings=grounded_findings,
                     agent_verdict=a_verdict,
                     agent_confidence=a_conf,
                     confidence_reason=a_reason,
@@ -607,7 +684,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             confidence_min=confidence_min,
             confidence_max=confidence_max,
             confidence_std_dev=confidence_std_dev,
-            per_agent_summary=self._get_agent_summary(per_agent_metrics, per_agent_findings),
+            per_agent_summary=self._get_agent_summary(
+                per_agent_metrics, per_agent_findings, precomputed=grounded_agent_verdicts
+            ),
             degradation_flags=degradation_flags,
             applicable_agent_count=len(active_results),
             skipped_agents=skipped_agents,
@@ -1025,20 +1104,24 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             parts.append(f"{fallback} tools used simplified fallbacks")
         return "; ".join(parts) if parts else f"All {total} tools ran successfully"
 
-    def _get_agent_summary(self, metrics, findings) -> dict:
+    def _get_agent_summary(self, metrics, findings, precomputed: dict | None = None) -> dict:
         # Use the single severity-aware compute_agent_verdict so the per-agent card
-        # verdict matches the rest of the pipeline. The prior logic gated AUTHENTIC
-        # on a high metrics confidence_score and fell through to INCONCLUSIVE for
-        # clean evidence whose tool confidences were merely moderate — wrongly
-        # reading a fully-clean, zero-error agent as INCONCLUSIVE.
+        # verdict matches the rest of the pipeline. When the caller already computed
+        # the grounded, visual-context-aware verdict (Agent1/3/5 in deliberate), reuse
+        # it verbatim so the badge can never drift from the synthesis brief. Agents
+        # without a precomputed value (Agent2/Agent4, empty-report path) fall back to
+        # a fresh tool-only computation.
         from core.severity import compute_agent_verdict
 
+        precomputed = precomputed or {}
         summary = {}
         for aid, m in metrics.items():
             err = m.get("error_rate", 0)
             agent_findings = findings.get(aid, [])
             if m.get("skipped"):
                 v, conf = "NOT_APPLICABLE", 0.0
+            elif aid in precomputed:
+                v, conf = precomputed[aid]
             else:
                 v, conf, _reason = compute_agent_verdict(agent_findings)
             summary[aid] = {

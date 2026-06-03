@@ -82,7 +82,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                       {TOOL_LABELS[model] || model.replace(/_/g, " ").toUpperCase()}
                     </span>
                   </div>
-                  <span className="text-sm font-mono font-black text-primary drop-shadow-[0_0_5px_rgba(var(--color-primary-rgb),0.5)]">
+                  <span className="text-sm font-mono font-bold text-primary drop-shadow-[0_0_5px_rgba(var(--color-primary-rgb),0.5)]">
                     {avgConf}%
                   </span>
                 </div>

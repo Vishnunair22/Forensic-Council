@@ -9,6 +9,7 @@ class DetectedObject(BaseModel):
     box: list[float] | None = None
 
 class ImageIntegrityContext(BaseModel):
+    description: str = ""
     visible_manipulation_signals: list[str] = Field(default_factory=list)
     ai_generation_signals: list[str] = Field(default_factory=list)
     editing_or_compositing_signals: list[str] = Field(default_factory=list)

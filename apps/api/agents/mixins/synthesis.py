@@ -373,27 +373,64 @@ class NeuralSynthesisMixin:
 
             await self._record_visual_profile_result(result)
 
-            # Persist visual context to the durable store (Redis + inter_agent_bus + working memory)
+            # Persist visual context to the durable store — but NEVER clobber a
+            # richer pre-flight context. The pre-flight 3-section VisualContext
+            # (created at upload) carries the per-agent axes — manipulation vs
+            # AI-generation vs compression signals, people/UI/scene inconsistencies,
+            # visible timestamps/location/device clues — that a flat deep finding
+            # cannot reconstruct. build_visual_context_from_finding() can only
+            # populate a thin subset, so overwriting collapsed the deep report to a
+            # bare file-type lead (e.g. "composite") and an empty Agent 5 metadata
+            # axis. Save only when no richer context exists yet, or when upgrading a
+            # local-ensemble context with a genuine remote-vision result.
             if self.agent_id == "Agent1" and not finding.error:
                 try:
                     from core.visual_context_store import (
                         build_visual_context_from_finding,
+                        get_visual_context,
                         save_visual_context,
                     )
                     sha256 = getattr(artifact, "content_hash", "") or ""
-                    context_obj = build_visual_context_from_finding(
-                        session_id=str(self.session_id),
-                        evidence_sha256=sha256,
-                        finding=finding
-                    )
-                    await save_visual_context(
+                    existing = await get_visual_context(
                         session_id=str(self.session_id),
                         sha256=sha256,
-                        context=context_obj,
                         working_memory=getattr(self, "working_memory", None),
-                        inter_agent_bus=self.inter_agent_bus
+                        inter_agent_bus=self.inter_agent_bus,
                     )
-                    logger.info("Durable visual context persisted successfully", session_id=self.session_id)
+                    existing_is_rich = existing is not None and (
+                        existing.source == "llm_assisted"
+                        or bool(
+                            existing.metadata_visual_context.visible_timestamps
+                            or existing.metadata_visual_context.device_or_platform_clues
+                            or existing.image_integrity_context.ai_generation_signals
+                            or existing.object_scene_context.scene_inconsistencies
+                        )
+                    )
+                    is_upgrade = (
+                        existing is not None
+                        and existing.source == "local_ensemble"
+                        and finding.provider_used == "gemini"
+                        and not finding.from_cache
+                    )
+                    if existing_is_rich and not is_upgrade:
+                        logger.info(
+                            "Preserving richer pre-flight visual context; skipping deep overwrite",
+                            session_id=self.session_id,
+                        )
+                    else:
+                        context_obj = build_visual_context_from_finding(
+                            session_id=str(self.session_id),
+                            evidence_sha256=sha256,
+                            finding=finding,
+                        )
+                        await save_visual_context(
+                            session_id=str(self.session_id),
+                            sha256=sha256,
+                            context=context_obj,
+                            working_memory=getattr(self, "working_memory", None),
+                            inter_agent_bus=self.inter_agent_bus,
+                        )
+                        logger.info("Durable visual context persisted", session_id=self.session_id)
                 except Exception as save_exc:
                     logger.warning("Failed to save durable visual context", error=str(save_exc))
 

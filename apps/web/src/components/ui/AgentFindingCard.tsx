@@ -334,7 +334,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
         <span className={clsx("w-8 h-8 rounded-lg flex items-center justify-center border", flagCfg.bg, flagCfg.border)}>
           <FlagIcon className={clsx("w-4 h-4", flagCfg.color)} />
         </span>
-        <span className={clsx("flex-1 text-sm font-black tracking-wide", flagCfg.color)}>
+        <span className={clsx("flex-1 text-sm font-bold tracking-tight", flagCfg.color)}>
           {section.label}
         </span>
         {section.keySignal && (
@@ -342,11 +342,11 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
             {section.keySignal}
           </span>
         )}
-        <span className="text-xs font-mono font-black fc-text-muted shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
+        <span className="text-xs font-mono font-semibold fc-text-muted shrink-0 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]">
           {section.findings.length} {section.findings.length === 1 ? "tool" : "tools"}
         </span>
         <span
-          className="flex items-center gap-1.5 text-xs font-black tracking-wide fc-text-muted group-hover/section:text-white transition-colors"
+          className="flex items-center gap-1.5 text-xs font-semibold tracking-wide fc-text-muted group-hover/section:text-white transition-colors"
           aria-hidden="true"
         >
           {open ? "Hide" : "Show"}
@@ -374,7 +374,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="w-full px-5 py-3.5 text-xs font-black tracking-wide text-primary/90 hover:text-primary hover:bg-primary/[0.06] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+              className="w-full px-5 py-3.5 text-xs font-semibold tracking-wide text-primary/90 hover:text-primary hover:bg-primary/[0.06] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
             >
               Show {hiddenCount} more tool finding{hiddenCount === 1 ? "" : "s"}
               <ChevronDown className="w-3.5 h-3.5" />
@@ -385,7 +385,7 @@ function SectionGroup({ section, defaultExpanded }: { section: Section; defaultE
             <button
               type="button"
               onClick={() => setShowAll(false)}
-              className="w-full px-5 py-3 text-xs font-black tracking-wide fc-text-muted hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
+              className="w-full px-5 py-3 text-xs font-semibold tracking-wide fc-text-muted hover:text-white/75 hover:bg-white/[0.03] transition-colors border-t border-white/[0.06] flex items-center justify-center gap-2"
             >
               Collapse to top {INITIAL_TOOLS_PER_SECTION}
               <ChevronDown className="w-3.5 h-3.5 rotate-180" />
@@ -500,29 +500,38 @@ export function AgentFindingCard({
     return buildAgentOverview(realFindings, metrics, narrative);
   }, [realFindings, metrics, narrative, parsedNarrative]);
 
+  // Count only GENUINELY-OPEN anomalies. A finding the backend grounded away
+  // (corroboration_downgrade — e.g. a weak screening signal not corroborated by
+  // the holistic visual model) is resolved, not an open alert, so it must not be
+  // counted here. section_flag is a section-grouping artifact that does not track
+  // grounding, so it is no longer an independent trigger — POSITIVE / CONTESTED /
+  // HIGH / CRITICAL cover real alerts.
   const anomalyCount = useMemo(
     () => realFindings.filter(f =>
-      f.evidence_verdict === "POSITIVE" ||
-      f.status === "CONTESTED" ||
-      (f.metadata?.section_flag as string) === "bad" ||
-      f.severity_tier === "HIGH" ||
-      f.severity_tier === "CRITICAL"
+      !(f.metadata?.corroboration_downgrade) && (
+        f.evidence_verdict === "POSITIVE" ||
+        f.status === "CONTESTED" ||
+        f.severity_tier === "HIGH" ||
+        f.severity_tier === "CRITICAL"
+      )
     ).length,
     [realFindings]
   );
   const displayVerdict = useMemo(() => {
     const fromSummary = normalizeVerdict(agentSummary?.verdict);
     const isAuthenticLike = !fromSummary || ["AUTHENTIC", "LIKELY_AUTHENTIC", "VERIFIED"].includes(fromSummary);
-    if (anomalyCount > 0) return fromSummary && !isAuthenticLike ? fromSummary : "SUSPICIOUS";
+    // The agent verdict (grounded + visual-context-aware) is the single source of
+    // truth. Surface an alert verdict directly; NEVER override an authentic verdict
+    // to SUSPICIOUS from raw finding flags — the backend already weighed and
+    // grounded those, and contradicting it here showed a "SUSPICIOUS" chip on an
+    // agent whose own verdict reads Authentic.
+    if (!isAuthenticLike) return fromSummary;
     if ((metrics?.error_rate ?? 0) > 0.2) return "INCONCLUSIVE";
-    // Replace authentic verdicts with a confidence tier
-    if (isAuthenticLike) {
-      if (confidence >= 0.75) return "HIGH";
-      if (confidence >= 0.5) return "MEDIUM";
-      return "LOW";
-    }
-    return fromSummary;
-  }, [agentSummary?.verdict, anomalyCount, metrics?.error_rate, confidence]);
+    // Authentic-like → show a confidence tier rather than a bare verdict word.
+    if (confidence >= 0.75) return "HIGH";
+    if (confidence >= 0.5) return "MEDIUM";
+    return "LOW";
+  }, [agentSummary?.verdict, metrics?.error_rate, confidence]);
 
   if (isSkipped) {
     return (
@@ -533,7 +542,7 @@ export function AgentFindingCard({
           </div>
           <div>
             <h3 className="text-sm font-bold fc-text-muted tracking-wide">{meta.name}</h3>
-            <p className="text-xs font-mono font-bold fc-text-muted mt-0.5">{meta.role} · Protocol Skip</p>
+            <p className="text-xs fc-text-muted mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
         <span className="text-xs font-bold tracking-wide fc-text-muted px-3 py-1.5 rounded-full border border-white/10">Not Applicable</span>
@@ -574,7 +583,7 @@ export function AgentFindingCard({
               role, timing and badges are revealed on expand. */}
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-               <h3 className="text-lg font-black text-white tracking-tight">{meta.name}</h3>
+               <h3 className="text-lg font-extrabold text-white tracking-tight">{meta.name}</h3>
               {open && metrics && (
                 <span className={verdictClasses(displayVerdict)}>
                   {displayVerdict === "HIGH" ? "High Confidence"
@@ -590,7 +599,7 @@ export function AgentFindingCard({
               )}
             </div>
             {open && (
-              <div className="flex items-center gap-2.5 text-sm font-mono font-bold fc-text-muted flex-wrap">
+              <div className="flex items-center gap-2.5 text-sm font-mono font-medium fc-text-muted flex-wrap">
                 <span>{meta.role}</span>
                 <span className="fc-text-faint">·</span>
                 <span>{realFindings.length} checks</span>
@@ -609,13 +618,13 @@ export function AgentFindingCard({
           <div className="flex items-center gap-3 shrink-0">
             {open && <ConfidenceBar value={confidence} />}
             {open && (
-              <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-black tracking-wide fc-text-muted">
+              <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-semibold tracking-wide fc-text-muted">
                 {phase === 'deep' ? 'Deep' : 'Initial'}
               </div>
             )}
             <span
               className={clsx(
-                "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-black tracking-wide border transition-colors",
+                "flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold tracking-wide border transition-colors",
                 open
                   ? "border-white/20 bg-white/[0.06] text-white/85"
                   : "border-white/10 bg-transparent fc-text-muted group-hover:border-white/20 group-hover:text-white"
@@ -656,7 +665,7 @@ export function AgentFindingCard({
                   <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                     <div className="flex items-center gap-2 text-blue-300">
                       <Info className="w-4 h-4 shrink-0" />
-                      <h4 className="text-xs font-black tracking-wider font-mono">Visual Context</h4>
+                      <h4 className="text-xs font-bold tracking-wider font-mono">Visual Context</h4>
                     </div>
                     <div className="text-xs fc-text-secondary leading-relaxed font-medium">
                       <BulletedText text={parsedNarrative.visual_description} colorClass="bg-blue-500/40" />
@@ -669,7 +678,7 @@ export function AgentFindingCard({
                   <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                     <div className="flex items-center gap-2 text-primary">
                       <ShieldCheck className="w-4.5 h-4.5 shrink-0 text-primary" />
-                      <h4 className="text-xs font-black tracking-wider font-mono text-primary">Agent Overview</h4>
+                      <h4 className="text-xs font-bold tracking-wider font-mono text-primary">Agent Overview</h4>
                     </div>
                     <p className="text-sm text-white/90 leading-relaxed font-medium whitespace-pre-line">{parsedNarrative.agent_brief}</p>
                   </div>
@@ -680,7 +689,7 @@ export function AgentFindingCard({
                   <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                     <div className="flex items-center gap-2 text-success">
                       <Shield className="w-4 h-4 shrink-0 text-success" />
-                      <h4 className="text-xs font-black tracking-wider font-mono">Your Opinion</h4>
+                      <h4 className="text-xs font-bold tracking-wider font-mono">Your Opinion</h4>
                     </div>
                     <div className="text-xs fc-text-secondary leading-relaxed font-medium">
                       <BulletedText text={parsedNarrative.opinion} colorClass="bg-success/40" />
@@ -700,11 +709,11 @@ export function AgentFindingCard({
                     <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-3">
                       <div className="flex items-center gap-2 text-amber-300">
                         <Activity className="w-4 h-4 shrink-0" />
-                        <h4 className="text-xs font-black tracking-wider font-mono">Key Findings</h4>
+                        <h4 className="text-xs font-bold tracking-wider font-mono">Key Findings</h4>
                       </div>
                       <div className="space-y-2">
                         {kfLines.map((line, idx) => (
-                          <div key={idx} className="flex items-start gap-2.5 text-xs fc-text-secondary font-mono">
+                          <div key={idx} className="flex items-start gap-2.5 text-xs fc-text-secondary">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
                             <span>{line.replace(/^-\s*/, "").trim()}</span>
                           </div>
@@ -741,7 +750,7 @@ export function AgentFindingCard({
               <div className="rounded-2xl border border-white/[0.06] bg-transparent px-5 py-4">
                 <div className="flex items-center gap-2 mb-2.5">
                   <Info className="w-4 h-4 fc-text-muted" />
-                  <span className="text-xs font-black tracking-wide fc-text-faint">
+                  <span className="text-xs font-semibold tracking-wide fc-text-faint">
                     Bypassed Tools ({bypassedFindings.length})
                   </span>
                 </div>

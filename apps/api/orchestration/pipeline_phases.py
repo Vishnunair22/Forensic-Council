@@ -146,6 +146,22 @@ async def run_agents_concurrent(
                 aid = str(getattr(agent_inst, "agent_id", "") or "")
                 if vctx is not None:
                     try:
+                        # The integrity pass carries a factual "what the image shows"
+                        # description. It is the live counterpart to the report's
+                        # per-agent Visual Context and is far more useful for the
+                        # integrity (Agent1) and metadata (Agent5) axes than a bare
+                        # content-type token ("photograph").
+                        _integ = getattr(vctx, "image_integrity_context", None)
+                        _desc = " ".join(str(getattr(_integ, "description", "") or "").split())
+                        if len(_desc) <= 240:
+                            identity = _desc
+                        else:
+                            _cut = _desc.rfind(". ", 0, 240)
+                            identity = (
+                                _desc[: _cut + 1]
+                                if _cut > 80
+                                else _desc[:240].rsplit(" ", 1)[0].rstrip(",;") + "…"
+                            )
                         if aid == "Agent3":
                             objs = []
                             for o in (getattr(vctx, "detected_objects", None) or []):
@@ -164,13 +180,21 @@ async def run_agents_concurrent(
                             ftype = str(getattr(vctx, "file_type_assessment", "") or "").strip()
                             meta = getattr(vctx, "metadata_visual_context", None)
                             clues = [str(c) for c in (getattr(meta, "device_or_platform_clues", None) or []) if c]
-                            parts = []
-                            if ftype:
-                                parts.append(ftype.replace("_", " "))
                             if clues:
+                                parts = []
+                                if ftype:
+                                    parts.append(ftype.replace("_", " "))
                                 parts.append("clues: " + ", ".join(clues[:3]))
-                            if parts:
                                 return "; ".join(parts)
+                            # No live provenance clues: a bare file-type word is not a
+                            # useful identity — fall back to the shared scene read.
+                            if identity:
+                                return identity
+                        else:
+                            # Agent1 / default: lead with the integrity description
+                            # rather than a bare content-type token.
+                            if identity:
+                                return identity
                         if not base:
                             base = str(
                                 getattr(vctx, "file_type_assessment", "")
@@ -509,8 +533,27 @@ async def run_agents_concurrent(
                                 and str(_g(f, "severity_tier", "")).upper() in ("HIGH", "CRITICAL")
                             )
                             if _holistic_clean and not _hash_mm and _strong_cd < 2:
-                                _live_verdict = "INCONCLUSIVE"
-                                _live_conf = min(float(_live_conf or 0.6), 0.6)
+                                # Mirror the arbiter's corroboration grounding at the
+                                # live stage: integrity screening positives the clean
+                                # holistic read does not corroborate are benign (tool
+                                # false positives on real texture / studio lighting).
+                                # Clear them and recompute so the card reaches the SAME
+                                # verdict deliberation will (AUTHENTIC) instead of
+                                # stalling at an INCONCLUSIVE the final report flips.
+                                _grounded = []
+                                for f in _af:
+                                    _is_pos = str(_g(f, "evidence_verdict", "")).upper() == "POSITIVE"
+                                    _is_strong = (
+                                        bool(_g(f, "court_defensible", False))
+                                        and str(_g(f, "severity_tier", "")).upper() in ("HIGH", "CRITICAL")
+                                    )
+                                    if _is_pos and not _is_strong and isinstance(f, dict):
+                                        _grounded.append({**f, "evidence_verdict": "INCONCLUSIVE"})
+                                    else:
+                                        _grounded.append(f)
+                                _gv, _gc, _ = compute_agent_verdict(_grounded)
+                                if _gv:
+                                    _live_verdict, _live_conf = _gv, _gc
                 except Exception:
                     pass
 

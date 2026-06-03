@@ -268,6 +268,66 @@ def _present_label(text: str) -> str:
     return " ".join("AI" if w == "ai" else w for w in t.split())
 
 
+def _metadata_provenance_facts(findings: list[dict]) -> list[str]:
+    """Surface concrete file/EXIF provenance facts as examiner-voice sentences.
+
+    Agent 5's value is the provenance record itself — capture time, device,
+    format, size, GPS — yet the anomaly-centric humanizer collapses a clean EXIF
+    read to "an internally consistent metadata record" and drops every value.
+    This pulls the real facts straight off the finding metadata so they headline
+    Agent 5's Visual Context and key findings regardless of the anomaly verdict.
+    """
+    facts: list[str] = []
+    seen: set[str] = set()
+
+    def _add(text: str) -> None:
+        key = text.lower()
+        if text and key not in seen:
+            seen.add(key)
+            facts.append(text)
+
+    for f in findings or []:
+        meta = f.get("metadata") or {}
+        tool = str(meta.get("tool_name") or f.get("finding_type") or "")
+        if tool not in ("exif_extract", "file_hash_verify", "compression_risk_audit"):
+            continue
+
+        fmt = str(meta.get("mime_type") or "").strip()
+        size = str(meta.get("file_size_human") or "").strip()
+        if fmt or size:
+            bits = [b for b in (fmt, size) if b]
+            _add(f"File format and size: {', '.join(bits)}.")
+
+        dt = str(
+            meta.get("datetime_original")
+            or meta.get("DateTimeOriginal")
+            or meta.get("CreationDate")
+            or ""
+        ).strip()
+        if dt:
+            _add(f"Embedded capture timestamp: {dt}.")
+
+        make = str(meta.get("camera_make") or meta.get("make") or meta.get("Make") or "").strip()
+        model = str(meta.get("camera_model") or meta.get("model") or meta.get("Model") or "").strip()
+        device = " ".join(p for p in (make, model) if p).strip()
+        if device:
+            _add(f"Capture device recorded in metadata: {device}.")
+
+        total = meta.get("total_fields_extracted")
+        if isinstance(total, (int, float)) and not isinstance(total, bool):
+            n = int(total)
+            _add(
+                f"{n} metadata field(s) extracted."
+                if n
+                else "No embedded EXIF metadata fields were present."
+            )
+
+        if meta.get("gps_location") or meta.get("gps_coordinates") or meta.get("GPSLatitude"):
+            _add("GPS coordinates are embedded in the metadata.")
+
+    return facts
+
+
 def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> AgentSynthesisOutput:
     """Generates structured agent findings and summary deterministically based on tool results."""
     # Build key findings — surface real signals, but collapse clean results into
@@ -340,9 +400,33 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     # axis (Agent1 integrity, Agent3 object/scene, Agent5 metadata). Always
     # non-empty so the Visual Context block renders for every agent — the identity
     # lead lives HERE, not in the agent_brief (which prevents the duplication).
+    # The identity lead ("The evidence presents as ...") is Agent 3's domain only.
+    # Agent 1 leads with its integrity axis and Agent 5 with provenance facts, so
+    # the shared scene description never bleeds in as their visual context.
     identity_lead = ""
-    if input_data.evidence_identity:
+    if input_data.evidence_identity and input_data.agent_id == "Agent3":
         identity_lead = f"The evidence presents as {str(input_data.evidence_identity).rstrip('. ')}."
+
+    # Agent 5: concrete file/EXIF provenance facts pulled straight off the tool
+    # findings, so its Visual Context leads with real provenance instead of a bare
+    # file-type lead (e.g. "a composite image") when the visual axis is sparse.
+    meta_facts = (
+        _metadata_provenance_facts(input_data.findings)
+        if input_data.agent_id == "Agent5"
+        else []
+    )
+    # Provenance facts strengthen Agent 5's key findings — they are the record
+    # itself, not anomaly signals, so they surface even on a clean verdict. Lead
+    # with them when there is no positive anomaly, otherwise append as support.
+    if meta_facts:
+        _existing_kf = "\n".join(key_findings).lower()
+        _prov_lines = [
+            f"{fact.rstrip('.')} — Metadata extraction"
+            for fact in meta_facts
+            if fact.rstrip(".").lower() not in _existing_kf
+        ]
+        if _prov_lines:
+            key_findings = (key_findings + _prov_lines) if _positive else (_prov_lines + key_findings)
 
     # Render the agent's COMPLETE visual-context axis as refined prose — every
     # field from the shared visual context for this agent's dimension, nothing
@@ -442,7 +526,11 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
             else:
                 axis_sentences.append("No scene inconsistencies were flagged.")
         elif input_data.agent_id == "Agent5":
-            ftype = str(section.get("file_type_assessment") or "").strip()
+            # Lead with the concrete provenance facts from the file/EXIF tools, then
+            # layer on any visible-in-image metadata clues. The file-type assessment
+            # is intentionally NOT restated here — it is not provenance, and as a
+            # bare lead it produced the "composite" leak.
+            axis_sentences.extend(meta_facts)
             ts = _items("visible_timestamps")
             loc = _items("visible_location_clues")
             dev = _items("device_or_platform_clues")
@@ -450,8 +538,6 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
             lws = _items("lighting_weather_season_clues")
             notes = _items("metadata_consistency_notes")
             contra = _items("metadata_contradictions")
-            if ftype:
-                axis_sentences.append(f"The file type appears to be {_present_label(ftype)}.")
             if ts:
                 axis_sentences.append(f"Visible timestamps: {', '.join(ts)}.")
             if loc:
@@ -466,8 +552,11 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
                 axis_sentences.append(f"Provenance contradictions: {', '.join(contra)}.")
             if notes:
                 axis_sentences.append(f"Metadata consistency notes: {', '.join(notes)}.")
-            if not (ts or loc or dev or app or lws or contra or notes):
-                axis_sentences.append("No visible timestamps, location, device, app, or provenance clues were observed.")
+            if not axis_sentences:
+                axis_sentences.append(
+                    "No embedded provenance metadata (timestamp, device, location, or format "
+                    "record) was recovered from the file."
+                )
 
     axis_detail = " ".join(axis_sentences).strip()
 
@@ -484,7 +573,7 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     elif axis_detail:
         vis_summary = axis_detail
     else:
-        vis_summary = f"The shared visual context shows {_axis_fallback}."
+        vis_summary = f"For this dimension, {_axis_fallback}."
 
     # ── Agent Overview (the "agent_brief" field) — tools that ran + verdict ──
     # No visual identity here; the Visual Context field above carries that, so the
@@ -634,6 +723,39 @@ def _text_contradicts_verdict(text: str, verdict: str) -> bool:
     return any(term in low for term in _MANIPULATION_TERMS)
 
 
+# Bare file-type / identity labels the vision pass may echo. On their own these
+# are not a visual-context summary — they carry none of the per-agent axis detail
+# the deterministic builder already rendered.
+_BARE_IDENTITY_VC = frozenset({
+    "photograph", "photo", "picture", "image", "screenshot", "screen capture",
+    "document", "document scan", "scanned document", "composite", "composite image",
+    "digital art", "rendered image", "synthetic image", "ai-generated image", "unknown",
+})
+
+
+def _is_degenerate_visual_summary(text: str, baseline: str = "") -> bool:
+    """True when a refined ``visual_context_summary`` carries less information than
+    the deterministic axis prose and must not overwrite it.
+
+    The LLM polish occasionally collapses an agent's visual axis to a bare
+    file-type label ("Photograph.") or a sentence fragment. Accepting that silently
+    replaces several sentences of real axis detail with a useless word.
+    """
+    t = (text or "").strip().rstrip(".").strip().lower()
+    if not t:
+        return True
+    if t in _BARE_IDENTITY_VC:
+        return True
+    if len(t.split()) < 4:
+        return True
+    # A refined summary far shorter than substantive deterministic prose has dropped
+    # the axis detail the deterministic builder already rendered.
+    base = (baseline or "").strip()
+    if len(base) >= 60 and len(text.strip()) < 0.35 * len(base):
+        return True
+    return False
+
+
 def _build_persona_system_prompt(agent_ids: list[str]) -> str:
     """
     Build the Groq system prompt with per-agent expert voice instructions.
@@ -675,14 +797,19 @@ def _build_persona_system_prompt(agent_ids: list[str]) -> str:
         "[Finding statement] — [Tool name] ([Confidence]%)\n"
         "5. Write in the present tense. The analysis has been completed; report its findings.\n"
         "6. Return ONLY valid JSON — no markdown, no prose outside the JSON.\n"
-        "7. SEPARATE the two fields cleanly — they must NOT repeat each other:\n"
-        "   - 'visual_context_summary' carries the OBSERVED visual context: open it with "
-        "'The evidence presents as <evidence_identity>.' (observed context, never a verdict), then "
-        "1-2 sentences on THIS agent's visual axis (Agent1 image integrity, Agent3 object/scene, "
-        "Agent5 metadata/provenance).\n"
+        "7. SEPARATE the two fields cleanly — they must NOT repeat each other. Each agent's "
+        "'visual_context_summary' is written from ITS OWN visual axis in 'visual_context_section' — "
+        "NEVER from a generic image/scene description:\n"
+        "   - Agent1 (image integrity): lead with the integrity read — file type as a forensic "
+        "attribute, the holistic authenticity assessment, and any visible manipulation / AI-generation "
+        "/ compression signals. Do NOT describe the scene; that is Agent3's axis.\n"
+        "   - Agent3 (object/scene): lead with the scene and object inventory — what is depicted, "
+        "objects, people, UI elements, and any scene inconsistencies.\n"
+        "   - Agent5 (metadata/provenance): lead with the concrete provenance facts — capture "
+        "timestamp, device, file format and size, field count, GPS — then any provenance "
+        "contradictions. NEVER lead with a bare file-type word (e.g. 'a composite image').\n"
         "   - 'agent_brief' is the ANALYTICAL OVERVIEW: summarize the tools/checks that ran and the "
-        "verdict reached, in the expert's voice. Do NOT restate the evidence identity or the "
-        "'presents as' phrase here — that belongs only in visual_context_summary.\n"
+        "verdict reached, in the expert's voice. Do NOT restate the visual axis here.\n"
         "8. CONSISTENCY WITH VERDICT IS MANDATORY. The narrative MUST agree with 'agent_verdict'. "
         "If agent_verdict is AUTHENTIC or INCONCLUSIVE, do NOT assert or imply the evidence is "
         "manipulated, tampered, forged, fabricated, doctored, spliced, deepfaked, AI-generated, or "
@@ -691,14 +818,14 @@ def _build_persona_system_prompt(agent_ids: list[str]) -> str:
         "Schema:\n"
         "{\n"
         "  \"Agent1\": {\n"
-        "    \"agent_brief\": \"<2-3 sentence expert overview of the checks that ran and the verdict, in Agent1 voice; do NOT restate the evidence identity>\",\n"
-        "    \"visual_context_summary\": \"<opens with 'The evidence presents as ...' then 1-2 sentences on this agent's visual axis>\",\n"
+        "    \"agent_brief\": \"<2-3 sentence expert overview of the checks that ran and the verdict, in Agent1 voice>\",\n"
+        "    \"visual_context_summary\": \"<1-2 sentences on the IMAGE-INTEGRITY axis: file type, authenticity read, manipulation/AI/compression signals — never a scene description>\",\n"
         "    \"key_findings\": [\"<Finding> — <Tool> (<Conf>%)\", ...],\n"
         "    \"confidence_reason\": \"<1 sentence on why the confidence level is justified>\",\n"
         "    \"limitations\": [\"<only real tool failures>\"]\n"
         "  },\n"
-        "  \"Agent3\": { ... },\n"
-        "  \"Agent5\": { ... }\n"
+        "  \"Agent3\": { \"visual_context_summary\": \"<scene + object inventory + inconsistencies>\", ... },\n"
+        "  \"Agent5\": { \"visual_context_summary\": \"<provenance facts: timestamp, device, format, size, GPS; never a bare file-type word>\", ... }\n"
         "}"
     )
 
@@ -849,8 +976,20 @@ async def refine_synthesis_batch(
                             outputs[aid].agent_brief = brief
 
                     vc_sum = polished_data.get("visual_context_summary")
-                    if vc_sum and isinstance(vc_sum, str) and not _text_contradicts_verdict(vc_sum, _verdict):
-                        outputs[aid].visual_context_summary = vc_sum
+                    _det_vc = outputs[aid].visual_context_summary
+                    if vc_sum and isinstance(vc_sum, str):
+                        if _text_contradicts_verdict(vc_sum, _verdict):
+                            logger.warning(
+                                f"{aid}: LLM visual_context_summary contradicts verdict "
+                                f"'{_verdict}'; keeping deterministic."
+                            )
+                        elif _is_degenerate_visual_summary(vc_sum, _det_vc):
+                            logger.warning(
+                                f"{aid}: LLM visual_context_summary collapsed to "
+                                f"{vc_sum!r}; keeping deterministic axis prose."
+                            )
+                        else:
+                            outputs[aid].visual_context_summary = vc_sum
 
                     reason = polished_data.get("confidence_reason")
                     if reason and isinstance(reason, str):

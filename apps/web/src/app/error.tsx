@@ -33,7 +33,7 @@ export default function RouteError({
           <AlertTriangle className="w-10 h-10 text-danger" />
         </div>
 
-        <h1 className="text-3xl font-black mb-4 text-white tracking-tighter">
+        <h1 className="text-3xl font-extrabold mb-4 text-white tracking-tighter">
           System <span className="text-danger">Interrupted</span>
         </h1>
 

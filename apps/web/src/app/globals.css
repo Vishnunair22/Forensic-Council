@@ -52,12 +52,16 @@
   --glass-highlight: rgba(255, 255, 255, 0.12);
   --glass-blur:      24px;
 
-  /* ── Radii ── */
+  /* ── Radii ──
+     A single ramp the surface system actually consumes (2xl=card, 3xl=elevated,
+     4xl=overlay). Keep new surfaces on these tokens rather than hardcoding rem. */
   --radius-sm:   8px;
   --radius-md:   12px;
   --radius-lg:   16px;
   --radius-xl:   20px;
-  --radius-2xl:  26px;
+  --radius-2xl:  24px;
+  --radius-3xl:  28px;
+  --radius-4xl:  32px;
   --radius-full: 9999px;
 
   /* ── Typography ── */
@@ -82,12 +86,15 @@
   --duration-fast:    140ms;
   --duration-ambient: 1.6s;
 
-  /* ── Agent accent tokens ── */
-  --color-agent-image:    #60A5FA;
-  --color-agent-audio:    #38BDF8;
-  --color-agent-scene:    #818CF8;
-  --color-agent-video:    #22D3EE;
-  --color-agent-metadata: #93C5FD;
+  /* ── Agent accent tokens ──
+     Five genuinely distinct hues spread across the cool→magenta arc, kept clear
+     of the semantic green/amber/red so an accent never reads as a status.
+     Consumed via CSS vars in agentTheme.ts — change here, propagates app-wide. */
+  --color-agent-image:    #3B82F6;  /* blue   */
+  --color-agent-audio:    #2DD4BF;  /* teal   */
+  --color-agent-scene:    #A78BFA;  /* violet */
+  --color-agent-video:    #F472B6;  /* pink   */
+  --color-agent-metadata: #38BDF8;  /* sky    */
   --color-agent-arbiter:  var(--color-success);
 
   /* ── Calibration ── */
@@ -301,11 +308,14 @@
     border: 1px solid rgba(165,200,255,0.10);
   }
 
-  /* ── Canonical Text System ── */
+  /* ── Canonical Text System ──
+     Alpha floors are tuned so each tier clears WCAG AA (4.5:1) on the glass
+     surfaces it actually lands on (down to fc-surface-quiet over #02040A).
+     'faint' is the floor for non-essential text only — never body copy. */
   .fc-text-primary   { color: rgba(237, 242, 248, 1.0); }
-  .fc-text-secondary { color: rgba(237, 242, 248, 0.78); }
-  .fc-text-muted     { color: rgba(237, 242, 248, 0.68); }
-  .fc-text-faint     { color: rgba(237, 242, 248, 0.55); }
+  .fc-text-secondary { color: rgba(237, 242, 248, 0.82); }
+  .fc-text-muted     { color: rgba(237, 242, 248, 0.74); }
+  .fc-text-faint     { color: rgba(237, 242, 248, 0.64); }
 
   /* ── Semantic Text Helpers ── */
   .fc-text-danger    { color: var(--color-danger); }
@@ -313,18 +323,34 @@
   .fc-text-success   { color: var(--color-success); }
   .fc-text-primary-accent { color: var(--color-primary); }
 
-  /* ── Eyebrow / micro-label scale ── */
+  /* ── Weight scale (discipline) ──
+     800 = display peak (hero headline, verdict word) — the ONLY place 900 was
+     faked before. 700 = headings. 600 = labels / buttons / emphasis. 500/400 =
+     body. Reserve mono for data (metrics, hashes, IDs, timings), not prose. */
+
+  /* ── Eyebrow / micro-label scale ──
+     'eyebrow' is the mono variant for data-adjacent kickers; 'label' is the
+     sans variant for UI micro-labels (section titles, chip text, toggles) —
+     prefer 'label' over the old `text-xs font-black tracking-wide font-mono`. */
   .fc-eyebrow {
     font-family: var(--font-mono);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: 0.04em;
   }
   .fc-eyebrow-strong {
     font-family: var(--font-mono);
     font-size: 13px;
-    font-weight: 900;
+    font-weight: 700;
     letter-spacing: 0.04em;
+  }
+  .fc-label {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;          /* 11px */
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(237, 242, 248, 0.74);
   }
 
   /* ── Agent State Borders (§10) ── */
@@ -358,7 +384,7 @@
 /* Solid anchor — one non-glass surface to prevent the "everything is glass" collapse */
 .fc-surface-solid {
   position: relative;
-  border-radius: 1.5rem;
+  border-radius: var(--radius-2xl);
   border: 1px solid rgba(255,255,255,0.12);
   background: #060D18;
   box-shadow: 0 8px 28px rgba(0,0,0,0.45);
@@ -366,7 +392,7 @@
 
 .fc-surface-quiet {
   position: relative;
-  border-radius: 1.5rem;
+  border-radius: var(--radius-2xl);
   border: 1px solid rgba(255,255,255,0.13);
   background:
     linear-gradient(180deg, rgba(255,255,255,0.072), rgba(255,255,255,0.038)),
@@ -380,7 +406,7 @@
 
 .fc-surface {
   position: relative;
-  border-radius: 1.5rem;
+  border-radius: var(--radius-2xl);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background:
     linear-gradient(180deg, rgba(255,255,255,0.088), rgba(255,255,255,0.046)),
@@ -394,7 +420,7 @@
 
 .fc-surface-elevated {
   position: relative;
-  border-radius: 1.75rem;
+  border-radius: var(--radius-3xl);
   border: 1px solid rgba(255, 255, 255, 0.17);
   background:
     linear-gradient(180deg, rgba(255,255,255,0.095), rgba(255,255,255,0.050)),
@@ -408,7 +434,7 @@
 }
 
 .fc-surface-overlay {
-  border-radius: 2rem;
+  border-radius: var(--radius-4xl);
   border: 1px solid rgba(255, 255, 255, 0.18);
   background:
     linear-gradient(180deg, rgba(255,255,255,0.105), rgba(255,255,255,0.050)),
@@ -668,7 +694,7 @@
 }
 
 .fc-upload-zone {
-  border-radius: 2rem;
+  border-radius: var(--radius-4xl);
   border: 1px dashed rgba(147, 197, 253, 0.34);
   background:
     linear-gradient(180deg, rgba(var(--color-primary-rgb),0.08), rgba(255,255,255,0.035)),

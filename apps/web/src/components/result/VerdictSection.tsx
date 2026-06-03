@@ -71,7 +71,7 @@ export function VerdictSection({
               </div>
 
               <h2
-                className="text-4xl md:text-5xl font-heading font-black leading-none tracking-tight text-white drop-shadow-md"
+                className="text-4xl md:text-5xl font-heading font-extrabold leading-none tracking-tight text-white drop-shadow-md"
                 role="alert"
               >
                 {vc.label}
@@ -80,7 +80,7 @@ export function VerdictSection({
           </div>
 
           <div className="text-right shrink-0 hidden sm:flex flex-col items-end justify-center">
-            <div className="text-6xl font-mono font-black leading-none tabular-nums" style={{ color: theme.color }}>
+            <div className="text-6xl font-mono font-extrabold leading-none tabular-nums" style={{ color: theme.color }}>
               {confPct}%
             </div>
             <div className="text-xs fc-text-muted mt-2 border-t border-white/10 pt-1">

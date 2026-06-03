@@ -138,8 +138,12 @@ _SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
 _STRONG_SIGNAL_CONF_FLOOR = 0.6
 
 
-def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
-    """Compute a per-agent verdict + confidence from its findings, severity-aware.
+def compute_agent_verdict(
+    findings: list[Any],
+    visual_signal: dict[str, Any] | None = None,
+) -> tuple[str, float, str]:
+    """Compute a per-agent verdict + confidence from its findings, severity-aware
+    and grounded in the shared visual context.
 
     Replaces the previous crude rule (1 POSITIVE → SUSPICIOUS, 2 → MANIPULATED,
     hardcoded 0.8/0.9 confidence) which ignored severity tiers and counted
@@ -151,8 +155,22 @@ def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
         HIGH/CRITICAL count as strong signals. This means a camera-physics
         tool that was grounded to LOW (or returned NOT_APPLICABLE) on a
         screenshot does not inflate the verdict.
+      - The holistic visual read is folded in as a grounding signal so the
+        verdict can never contradict it (the prior tool-only computation let
+        the badge say AUTHENTIC while the Visual Context said "AI-generated").
+        A court-defensible (remote vision) AI_GENERATED / LIKELY_MANIPULATED
+        read counts as a STRONG signal; SUSPICIOUS or court-defensible scene/
+        metadata anomalies count as a MEDIUM alert. A local-ensemble read is
+        screening-tier — it can raise ambiguity but never asserts manipulation
+        on its own.
       - Confidence is graduated by signal strength and tool coverage, not
         hardcoded.
+
+    ``visual_signal`` (per agent, built by the arbiter) carries:
+      ``verdict``           – holistic authenticity read (Agent1) or "" otherwise
+      ``court_defensible``  – True when from the remote vision model, not local
+      ``anomalies``         – scene inconsistencies (Agent3) / metadata
+                              contradictions (Agent5) / AI-gen signals (Agent1)
 
     Returns (verdict, confidence, reason) where verdict is one of
     AUTHENTIC / INCONCLUSIVE / SUSPICIOUS / MANIPULATED.
@@ -161,6 +179,7 @@ def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
     failed = 0
     alert_signals = 0          # POSITIVE, MEDIUM+
     strong_signals = 0         # POSITIVE, HIGH/CRITICAL
+    alert_conf_max = 0.0       # strongest alert-signal confidence (graduates INCONCLUSIVE)
 
     for f in findings or []:
         meta = _get_metadata(f)
@@ -204,16 +223,43 @@ def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
         if rank >= 3 and conf_f >= _STRONG_SIGNAL_CONF_FLOOR:
             strong_signals += 1
             alert_signals += 1
+            alert_conf_max = max(alert_conf_max, conf_f)
         elif rank >= 2:
             alert_signals += 1
+            alert_conf_max = max(alert_conf_max, conf_f)
+
+    # ── Fold in the holistic visual read as a grounding signal ──────────────
+    tool_strong = strong_signals  # tool-only counts, for honest reason phrasing
+    vs = visual_signal or {}
+    v_verdict = str(vs.get("verdict") or "").upper()
+    v_court = bool(vs.get("court_defensible"))
+    v_anomalies = [a for a in (vs.get("anomalies") or []) if a]
+    visual_contributed = False
+    if v_verdict in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED"):
+        visual_contributed = True
+        if v_court:
+            strong_signals += 1
+            alert_signals += 1
+        else:
+            alert_signals += 1
+    elif v_verdict == "SUSPICIOUS":
+        visual_contributed = True
+        alert_signals += 1
+    if v_anomalies and v_court:
+        visual_contributed = True
+        alert_signals += 1
 
     if strong_signals >= 2:
         verdict, conf = "MANIPULATED", 0.85
     elif strong_signals == 1:
         verdict, conf = "SUSPICIOUS", 0.72
     elif alert_signals >= 1:
-        # Only medium-strength signals — genuinely ambiguous, not a manipulation call.
-        verdict, conf = "INCONCLUSIVE", 0.6
+        # Only medium-strength signals — genuinely ambiguous, not a manipulation
+        # call. Confidence is graduated by how strong/numerous the ambiguous signals
+        # are (bounded to the inconclusive band) rather than a flat placeholder, so
+        # two different inconclusive reads don't both render an identical 60%.
+        verdict = "INCONCLUSIVE"
+        conf = round(min(0.70, 0.50 + 0.18 * alert_conf_max + 0.03 * (alert_signals - 1)), 2)
     elif completed == 0:
         # No usable tool output — cannot assert authenticity.
         verdict, conf = "INCONCLUSIVE", 0.4
@@ -223,20 +269,42 @@ def compute_agent_verdict(findings: list[Any]) -> tuple[str, float, str]:
 
     moderate_signals = alert_signals - strong_signals
     failed_note = f" {failed} check(s) did not complete and are treated as coverage gaps." if failed else ""
+    visual_note = ""
+    if visual_contributed:
+        if v_verdict in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED"):
+            _read = "AI-generated" if v_verdict == "AI_GENERATED" else v_verdict.replace("_", " ").lower()
+            visual_note = (
+                f" The holistic visual analysis independently read the evidence as {_read}"
+                f"{' (corroborating vision model)' if v_court else ' (screening-tier)'}."
+            )
+        elif v_verdict == "SUSPICIOUS":
+            visual_note = " The holistic visual analysis flagged the evidence as suspicious."
+        elif v_anomalies:
+            visual_note = (
+                f" The visual analysis flagged {len(v_anomalies)} corroborating "
+                f"context anomal{'y' if len(v_anomalies) == 1 else 'ies'}."
+            )
     if verdict == "MANIPULATED":
         reason = (
-            f"{strong_signals} high-severity manipulation signal(s) were confirmed across "
-            f"{completed} completed check(s), corroborating a manipulated finding.{failed_note}"
+            f"{tool_strong} high-severity manipulation signal(s) were confirmed across "
+            f"{completed} completed check(s), corroborating a manipulated finding.{failed_note}{visual_note}"
         )
     elif verdict == "SUSPICIOUS":
-        reason = (
-            f"One high-severity manipulation signal was confirmed across {completed} completed "
-            f"check(s); the evidence is flagged suspicious pending corroboration.{failed_note}"
-        )
+        if tool_strong >= 1:
+            reason = (
+                f"One high-severity manipulation signal was confirmed across {completed} completed "
+                f"check(s); the evidence is flagged suspicious pending corroboration.{failed_note}{visual_note}"
+            )
+        else:
+            reason = (
+                f"No discrete tool isolated a high-severity signal across {completed} completed "
+                f"check(s), but the holistic visual read flags the evidence suspicious pending "
+                f"corroboration.{failed_note}{visual_note}"
+            )
     elif alert_signals >= 1:
         reason = (
             f"{moderate_signals} medium-strength signal(s) across {completed} completed check(s) "
-            f"were ambiguous and do not support a definitive manipulation call.{failed_note}"
+            f"were ambiguous and do not support a definitive manipulation call.{failed_note}{visual_note}"
         )
     elif completed == 0:
         reason = (

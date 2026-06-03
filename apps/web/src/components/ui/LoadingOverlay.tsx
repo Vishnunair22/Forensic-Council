@@ -115,7 +115,7 @@ export function LoadingOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl lg:text-4xl font-heading font-black fc-text-primary text-hero-gradient tracking-tight leading-tight"
+            className="text-3xl lg:text-4xl font-heading font-extrabold fc-text-primary text-hero-gradient tracking-tight leading-tight"
           >
             Forensic Analysis
           </motion.h1>

@@ -359,7 +359,7 @@ export function ConfidenceBar({ value }: { value: number }) {
      />
     ))}
    </div>
-   <span className={clsx("text-sm font-black font-mono tabular-nums", textColor)}>
+   <span className={clsx("text-sm font-bold font-mono tabular-nums", textColor)}>
     {Math.round(value * 100)}%
    </span>
   </div>
@@ -429,7 +429,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
      </span>
      {status !== "na" && (
       <span className={clsx(
-       "text-sm font-black font-mono w-11 text-right tabular-nums",
+       "text-sm font-bold font-mono w-11 text-right tabular-nums",
        confidence >= 0.75 ? "text-primary" : confidence >= 0.5 ? "text-warning" : "text-danger"
       )}>
        {Math.round(confidence * 100)}%

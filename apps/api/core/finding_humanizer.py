@@ -212,6 +212,96 @@ _TOOL_PHRASES: dict[str, dict[str, str]] = {
         "positive": "Compression/provenance audit found re-compression or platform-normalization patterns that weaken provenance reliability",
         "negative": "Compression/provenance audit found no manipulation-related compression anomalies",
     },
+    # ── Agent 2 — audio integrity ─────────────────────────────────────────────
+    "speaker_diarize": {
+        "positive": "Speaker diarization isolated overlapping or inconsistent speaker turns suggestive of spliced audio",
+        "negative": "Speaker diarization resolved a coherent speaker structure with no spliced-turn anomalies",
+    },
+    "anti_spoofing_detect": {
+        "positive": "Anti-spoofing analysis flagged synthetic or replayed-speech characteristics in the voice signal",
+        "negative": "Anti-spoofing analysis found the voice signal consistent with a genuine live capture",
+    },
+    "prosody_analyze": {
+        "positive": "Prosody analysis flagged intonation or rhythm patterns atypical of natural speech",
+        "negative": "Prosody analysis found natural intonation and rhythm across the speech",
+    },
+    "neural_prosody": {
+        "positive": "Neural prosody modelling flagged pitch/timing distributions associated with synthesized speech",
+        "negative": "Neural prosody modelling found pitch and timing within the natural-speech range",
+    },
+    "audio_splice_detect": {
+        "positive": "Splice analysis localized spectral discontinuities consistent with an edited or concatenated recording",
+        "negative": "Splice analysis found continuous spectral structure with no edit discontinuity",
+    },
+    "background_noise_analysis": {
+        "positive": "Background-noise analysis found the noise floor inconsistent across the recording, suggesting joined segments",
+        "negative": "Background-noise analysis found a consistent noise floor across the recording",
+    },
+    "codec_fingerprinting": {
+        "positive": "Codec fingerprinting found an encoding chain inconsistent with a single-origin capture",
+        "negative": "Codec fingerprinting found an encoding profile consistent with a single capture",
+    },
+    "audio_visual_sync": {
+        "positive": "Audio-video synchronization analysis found lip/sound drift inconsistent with an unedited capture",
+        "negative": "Audio-video synchronization analysis found audio and video aligned within natural tolerance",
+    },
+    "voice_clone_detect": {
+        "positive": "Voice-clone analysis flagged spectral signatures associated with cloned or synthesized speech",
+        "negative": "Voice-clone analysis found no synthesized-voice signature",
+    },
+    "enf_analysis": {
+        "positive": "Electrical-network-frequency analysis found the mains hum pattern inconsistent with a continuous recording",
+        "negative": "Electrical-network-frequency analysis found a continuous mains-hum signature with no edit break",
+    },
+    "audio_gen_signature": {
+        "positive": "Generative-audio signature scan detected artifacts associated with AI speech synthesis",
+        "negative": "Generative-audio signature scan found no AI-synthesis artifacts",
+    },
+    # ── Agent 4 — video / temporal integrity ──────────────────────────────────
+    "optical_flow_analysis": {
+        "positive": "Optical-flow analysis localized motion discontinuities inconsistent with a continuously filmed scene",
+        "negative": "Optical-flow analysis found continuous, physically consistent motion across frames",
+    },
+    "frame_consistency_analysis": {
+        "positive": "Frame-consistency analysis flagged inter-frame discontinuities consistent with inserted or removed frames",
+        "negative": "Frame-consistency analysis found consistent inter-frame structure",
+    },
+    "face_swap_detection": {
+        "positive": "Face-swap analysis flagged facial blending or boundary artifacts characteristic of a swapped face",
+        "negative": "Face-swap analysis found no facial-blending or boundary artifacts",
+    },
+    "video_metadata": {
+        "positive": "Video-metadata analysis found container/stream fields inconsistent with an unedited capture",
+        "negative": "Video-metadata analysis found internally consistent container and stream metadata",
+    },
+    "interframe_forgery_detector": {
+        "positive": "Inter-frame forgery analysis localized temporal tampering consistent with frame insertion or deletion",
+        "negative": "Inter-frame forgery analysis found no temporal-tampering signature",
+    },
+    "compression_artifact_analysis": {
+        "positive": "Compression-artifact analysis flagged double-encoding patterns consistent with a re-rendered video",
+        "negative": "Compression-artifact analysis found a single consistent encoding signature",
+    },
+    "rolling_shutter_validation": {
+        "positive": "Rolling-shutter validation found temporal/geometric distortion inconsistent with a genuine sensor capture",
+        "negative": "Rolling-shutter validation found distortion consistent with a genuine rolling-shutter sensor",
+    },
+    "mediainfo_profile": {
+        "positive": "Container profiling found stream attributes inconsistent with the claimed capture pipeline",
+        "negative": "Container profiling found a stream profile consistent with a coherent capture pipeline",
+    },
+    "av_file_identity": {
+        "positive": "AV file-identity analysis found container signatures inconsistent with the declared format",
+        "negative": "AV file-identity analysis found container signatures consistent with the declared format",
+    },
+    "vfi_error_map": {
+        "positive": "Frame-interpolation error mapping localized synthesized intermediate frames",
+        "negative": "Frame-interpolation error mapping found no synthesized intermediate frames",
+    },
+    "thumbnail_coherence": {
+        "positive": "Thumbnail-coherence analysis found the embedded thumbnail inconsistent with the current frames",
+        "negative": "Thumbnail-coherence analysis found the embedded thumbnail consistent with the current frames",
+    },
 }
 
 # Category-level fallback when a specific tool has no entry — still far better
@@ -296,6 +386,49 @@ def _measurement_detail(measurements: dict[str, Any], regions: list[Any]) -> str
     return "; ".join(bits[:2])
 
 
+def _descriptive_detail(raw: dict[str, Any] | None) -> str:
+    """Render salient descriptive facts the score-oriented _measurement_detail
+    does not capture — detected objects, OCR volume, and audio/video stream
+    facts — so a clean finding still reports WHAT the tool actually observed."""
+    if not raw:
+        return ""
+    bits: list[str] = []
+
+    labels = raw.get("detected_labels") or raw.get("labels") or raw.get("detected_objects")
+    if isinstance(labels, list) and labels:
+        names = [str(x.get("label") if isinstance(x, dict) else x).strip() for x in labels]
+        names = [n for n in names if n]
+        if names:
+            extra = f" +{len(names) - 5} more" if len(names) > 5 else ""
+            bits.append(", ".join(names[:5]) + extra)
+
+    wc = _num(raw.get("word_count"))
+    if wc and wc > 0:
+        bits.append(f"{int(wc)} word(s) of text")
+
+    codec = raw.get("codec") or (raw.get("codec_chain") or [None])[0]
+    if isinstance(codec, str) and codec.strip():
+        bits.append(f"codec {codec.strip()}")
+    dur = _num(raw.get("duration_seconds") or raw.get("duration"))
+    if dur and dur > 0:
+        bits.append(f"{dur:.0f}s")
+    sr = _num(raw.get("sample_rate"))
+    if sr and sr > 0:
+        bits.append(f"{int(sr)} Hz")
+    nspk = _num(raw.get("num_speakers") or raw.get("speaker_count"))
+    if nspk and nspk > 0:
+        bits.append(f"{int(nspk)} speaker(s)")
+
+    fc = _num(raw.get("frame_count") or raw.get("total_frames"))
+    if fc and fc > 0:
+        bits.append(f"{int(fc)} frame(s)")
+    fps = _num(raw.get("fps") or raw.get("frame_rate"))
+    if fps and fps > 0:
+        bits.append(f"{fps:.0f} fps")
+
+    return "; ".join(bits[:3])
+
+
 def humanize_finding_summary(
     tool_name: str,
     status: str,
@@ -303,23 +436,34 @@ def humanize_finding_summary(
     regions: list[Any] | None = None,
     confidence: float | None = None,
     signal_category: str = "general",
+    raw: dict[str, Any] | None = None,
 ) -> str:
     """Return a plain-English, examiner-voice summary of a tool finding.
 
     Falls back from tool-specific → category-specific phrasing, then appends the
-    most salient measurement. Never emits the raw tool name or a vendor/model.
+    salient measurements AND descriptive facts (objects, codec, duration, frame
+    count). Detail is appended for clean (NEGATIVE/SUCCESS) results too, not just
+    POSITIVE ones, so a clean check still reports what it measured. Never emits
+    the raw tool name or a vendor/model.
     """
     status = (status or "").upper()
     phrases = _TOOL_PHRASES.get(tool_name) or _CATEGORY_PHRASES.get(
         signal_category, _CATEGORY_PHRASES["general"]
     )
 
+    detail = "; ".join(
+        b for b in (
+            _measurement_detail(measurements or {}, regions or []),
+            _descriptive_detail(raw),
+        ) if b
+    )
+
     if status == "POSITIVE":
         base = phrases.get("positive") or _CATEGORY_PHRASES["general"]["positive"]
-        detail = _measurement_detail(measurements or {}, regions or [])
         return f"{base} ({detail})." if detail else f"{base}."
     if status in ("NEGATIVE", "SUCCESS"):
-        return (phrases.get("negative") or _CATEGORY_PHRASES["general"]["negative"]) + "."
+        base = phrases.get("negative") or _CATEGORY_PHRASES["general"]["negative"]
+        return f"{base} ({detail})." if detail else f"{base}."
     if status == "NOT_APPLICABLE":
         return ""  # handled by callers as a bypass, not a finding
     # INCONCLUSIVE / unknown

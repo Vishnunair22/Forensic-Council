@@ -99,7 +99,7 @@ export function ForensicProgressOverlay({
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="text-3xl md:text-5xl lg:text-6xl font-heading font-black fc-text-primary tracking-tight leading-tight"
+            className="text-3xl md:text-5xl lg:text-6xl font-heading font-extrabold fc-text-primary tracking-tight leading-tight"
           >
             {title}
           </motion.h1>

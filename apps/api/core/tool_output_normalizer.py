@@ -186,6 +186,7 @@ def normalize_tool_output(
                 regions=regions,
                 confidence=final_conf,
                 signal_category=signal_cat,
+                raw=raw_dict,
             )
 
     return ToolOutputEnvelope(

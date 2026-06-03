@@ -225,7 +225,7 @@ export function EvidenceUploadClient() {
                     Intake Protocol
                   </span>
                 </div>
-                <h1 className="text-4xl font-heading font-black tracking-tight fc-text-primary">
+                <h1 className="text-4xl font-heading font-extrabold tracking-tight fc-text-primary">
                   No Evidence Queued
                 </h1>
                 <p className="fc-text-secondary text-base max-w-sm mx-auto leading-relaxed">
