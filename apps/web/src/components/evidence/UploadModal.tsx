@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { X, CloudUpload } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
-import { TRANSITION_FAST } from "@/lib/animations";
+import { TRANSITION_FAST, SPRING_STIFF } from "@/lib/animations";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -21,9 +21,18 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
   const prefersReducedMotion = useReducedMotion();
   const { playSound } = useSound();
   const isSubmittingRef = useRef(false);
+  const dropzoneRef = useRef<HTMLDivElement>(null);
+
+  // Land focus on the dropzone (the primary action) when this view mounts —
+  // both on first open and when returning here via "Reselect". Deferred a frame
+  // so it wins against Radix's default focus-first-element behaviour on open.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => dropzoneRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const closeModal = useCallback(() => {
-    playSound("click");
+    playSound("envelope-close");
     onClose();
   }, [playSound, onClose]);
 
@@ -52,7 +61,6 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
     isSubmittingRef.current = true;
     setError(null);
     setIsSecuring(true);
-    playSound("success-chime");
 
     try {
       await onFileSelected(file);
@@ -112,6 +120,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
       )}
 
       <motion.div
+        ref={dropzoneRef}
         data-testid="upload-dropzone"
         role="button"
         tabIndex={0}
@@ -129,20 +138,20 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         variants={{
           idle: {
             scale: 1,
-            borderColor: "rgba(59,130,246,0.2)",
-            backgroundColor: "rgba(59,130,246,0.02)",
+            borderColor: "rgba(var(--color-primary-rgb),0.2)",
+            backgroundColor: "rgba(var(--color-primary-rgb),0.02)",
           },
           active: {
-            scale: 1.02,
-            borderColor: "rgba(59,130,246,0.8)",
-            backgroundColor: "rgba(59,130,246,0.08)",
+            scale: prefersReducedMotion ? 1 : 1.02,
+            borderColor: "rgba(var(--color-primary-rgb),0.8)",
+            backgroundColor: "rgba(var(--color-primary-rgb),0.08)",
           },
         }}
-        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-        className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
+        transition={SPRING_STIFF}
+        className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed fc-focus-ring cursor-pointer"
       >
         <AnimatePresence>
-          {isDragging && (
+          {isDragging && !prefersReducedMotion && (
             <motion.div
               initial={{ top: "0%", opacity: 0 }}
               animate={{ top: ["0%", "100%", "0%"], opacity: 1 }}

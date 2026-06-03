@@ -140,12 +140,16 @@ export function HeroAuthActions() {
     try {
       const result = await computeFileSha256(file);
       setSelectedFileHash(result.hex);
+      // Chime only once the evidence is truly sealed (validated + hashed),
+      // so the success cue can never precede a hash failure.
+      playSound("success-chime");
     } catch (err) {
       setHashError(err instanceof Error ? err.message : "Could not compute SHA-256.");
+      playSound("error");
     } finally {
       setIsHashComputing(false);
     }
-  }, []);
+  }, [playSound]);
 
   const handleCTAClick = useCallback(async () => {
     setShowUpload(true);
@@ -201,14 +205,14 @@ export function HeroAuthActions() {
           onFocusOutside={(e) => e.preventDefault()}
         >
           <DialogTitle className="sr-only">
-            {!selectedFile ? "Upload Evidence" : "Evidence Ready"}
+            {!selectedFile ? "Upload Evidence" : "Evidence Sealed"}
           </DialogTitle>
           <DialogDescription className="sr-only">
             {!selectedFile
               ? "Drag and drop or browse to select an evidence file for forensic analysis."
               : "Evidence file has been received. Proceed to analysis or cancel."}
           </DialogDescription>
-          <AnimatePresence mode="popLayout" initial={false}>
+          <AnimatePresence mode="wait" initial={false}>
             {!selectedFile ? (
               <UploadModal
                 key="upload-modal"

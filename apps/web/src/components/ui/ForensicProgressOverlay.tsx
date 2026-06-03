@@ -1,10 +1,12 @@
 "use client";
 
-// ROLE: Agent analysis in-progress display shown during arbiter deliberation.
-// Used by ArbiterNarrativeMixin to show "Arbiter Active" progress state.
+// ROLE: Generic full-screen progress overlay. On the result page it bridges the
+// gap while the report loads (variant="loading"); the variant="arbiter" path
+// shares the rotating phrases used by ArbiterDeliberationOverlay.
 
 import { useState, useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { ARBITER_PHASES } from "@/lib/arbiterPhases";
 
 interface ForensicProgressOverlayProps {
   title: string;
@@ -43,18 +45,9 @@ export function ForensicProgressOverlay({
       return;
     }
 
-    const arbiterPhases = [
-      "Reviewing forensic agent telemetry...",
-      "Evaluating confidence intervals...",
-      "Cross-referencing anomaly signatures...",
-      "Synthesizing executive summary...",
-      "Drafting final Council verdict...",
-      "Finalizing cryptographic signature..."
-    ];
-
     const textInterval = setInterval(() => {
-      phaseIndexRef.current = (phaseIndexRef.current + 1) % arbiterPhases.length;
-      setDynamicText(arbiterPhases[phaseIndexRef.current]);
+      phaseIndexRef.current = (phaseIndexRef.current + 1) % ARBITER_PHASES.length;
+      setDynamicText(ARBITER_PHASES[phaseIndexRef.current]);
     }, 4000);
 
     return () => clearInterval(textInterval);
@@ -79,7 +72,7 @@ export function ForensicProgressOverlay({
     <motion.div
       aria-busy="true"
       aria-label={`${title} in progress, please wait`}
-      className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90"
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-6 select-none bg-background/90"
       initial={prefersReducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.4, ease: "easeIn" } }}

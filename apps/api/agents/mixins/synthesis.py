@@ -35,6 +35,16 @@ class NeuralSynthesisMixin:
         Wait for Agent 1 (Image Integrity) visual profile if applicable.
         Used by downstream agents to ground their findings in pixel-level data.
         """
+        # Fast path: the shared visual context was resolved up-front and threaded
+        # onto this agent — use it directly, no bus/Agent-1 wait.
+        threaded = getattr(self, "visual_context", None)
+        if threaded is not None:
+            try:
+                from core.visual_context_store import visual_context_to_profile_dict
+                return visual_context_to_profile_dict(threaded)
+            except Exception as e:
+                logger.debug("Failed converting threaded visual context to profile", error=str(e))
+
         if self.inter_agent_bus:
             shared = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
             if shared:
@@ -419,46 +429,6 @@ class NeuralSynthesisMixin:
                 await self._record_tool_error(TOOL_VISUAL_PROFILE, f"Error: {err_msg}")
             return err_result
 
-    async def generate_agent_synthesis(self, findings: list, react_chain: list) -> str:
-        """Generate synthesis with guaranteed fallback."""
-        if not findings:
-            return f"{self.agent_id}: No forensic findings were recorded for this evidence — this is a coverage gap, not a clean result."
-
-        llm_available = getattr(self, "_llm_available", False) or getattr(self, "llm_available", False)
-        if not llm_available:
-            logger.info(f"{self.agent_id}: Generating template synthesis (no LLM)")
-            return self._template_synthesis(findings)
-
-        try:
-            from core.llm_client import LLMClient
-            llm_client = LLMClient(config=self.config)
-            llm_synthesis = await asyncio.wait_for(
-                llm_client.generate_synthesis(
-                    system_prompt=f"Forensic synthesis for {self.agent_id}.",
-                    user_content=json.dumps([
-                        f.model_dump() if hasattr(f, 'model_dump') else f
-                        for f in findings
-                    ], default=str),
-                    max_tokens=1024,
-                    json_mode=False,
-                ),
-                timeout=30.0,
-            )
-            if llm_synthesis and len(llm_synthesis.strip()) > 30:
-                template_markers = ['template', 'placeholder', 'example', 'TODO', 'lorem ipsum']
-                if any(marker in llm_synthesis.lower() for marker in template_markers):
-                    logger.warning(f"{self.agent_id}: LLM returned template text, using deterministic")
-                    return self._template_synthesis(findings)
-                return llm_synthesis
-            logger.info(f"{self.agent_id}: LLM synthesis too short, using template")
-            return self._template_synthesis(findings)
-        except TimeoutError:
-            logger.warning(f"{self.agent_id}: LLM synthesis timeout, using template")
-            return self._template_synthesis(findings)
-        except Exception as e:
-            logger.warning(f"{self.agent_id}: LLM synthesis failed: {e}, using template")
-            return self._template_synthesis(findings)
-
     async def _gemini_deep_forensic_handler(
         self,
         input_data: dict,
@@ -472,31 +442,3 @@ class NeuralSynthesisMixin:
             signal_callback=signal_callback,
         )
 
-    def _template_synthesis(self, findings: list) -> str:
-        """Pure deterministic synthesis from findings."""
-        tools_executed = set()
-        positive_findings = []
-        high_confidence = []
-        for f in findings:
-            meta = f.metadata if hasattr(f, 'metadata') else f.get('metadata', {})
-            tool_name = meta.get('tool_name', '')
-            if tool_name:
-                tools_executed.add(tool_name)
-            verdict = (f.evidence_verdict if hasattr(f, 'evidence_verdict')
-                      else f.get('evidence_verdict', ''))
-            confidence = (f.confidence_raw if hasattr(f, 'confidence_raw')
-                         else f.get('confidence_raw', 0))
-            if verdict == 'POSITIVE':
-                finding_type = (f.finding_type if hasattr(f, 'finding_type')
-                              else f.get('finding_type', tool_name))
-                positive_findings.append(finding_type)
-                if confidence and confidence > 0.7:
-                    high_confidence.append(finding_type)
-        parts = [f"Executed {len(tools_executed)} specialized forensic tools"]
-        if positive_findings:
-            parts.append(f"Detected {len(positive_findings)} positive indicators")
-            if high_confidence:
-                parts.append(f"High confidence: {', '.join(high_confidence[:2])}")
-        else:
-            parts.append("No manipulation indicators detected")
-        return ". ".join(parts) + "."

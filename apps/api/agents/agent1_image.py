@@ -251,23 +251,17 @@ class Agent1Image(ForensicAgent):
         registry.register("f3_net_frequency", image_h.f3_net_frequency_handler, "F3-Net frequency artifact analysis")
         registry.register("diffusion_artifact_detector", image_h.diffusion_artifact_detector_handler, "Diffusion/AI-generation artifact detection")
         if classification.primary_category == "screenshot":
-            registry.register("extract_text_from_image", image_h.extract_text_from_image_handler, "Gemini Multimodal OCR")
-            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
             registry.register("detect_font_inconsistency", image_h.detect_font_inconsistency_handler, "Font consistency analysis")
             registry.register("detect_ui_overlay_forgery", image_h.detect_ui_overlay_forgery_handler, "UI overlay forgery detection")
             registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
         elif classification.primary_category in ("live_photograph", "object_scene", "web_image"):
             registry.register("neural_ela", image_h.neural_ela_handler, "Neural ELA manipulation detection")
-            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
             registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
             registry.register("neural_fingerprint", image_h.neural_fingerprint_handler, "SigLIP2 neural fingerprint")
         elif classification.primary_category == "document":
-            registry.register("extract_text_from_image", image_h.extract_text_from_image_handler, "Gemini Multimodal OCR")
-            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
             registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
             registry.register("neural_ela", image_h.neural_ela_handler, "Neural ELA manipulation detection")
         elif classification.primary_category == "ai_generated_suspect":
-            registry.register("analyze_image_content", image_h.analyze_image_content_handler, "CLIP semantic classification")
             registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
             registry.register("diffusion_artifact_detector", image_h.diffusion_artifact_detector_handler, "Diffusion artifact detection")
             registry.register("deepfake_frequency_check", image_h.deepfake_frequency_check_handler, "GAN/Deepfake frequency check")
@@ -642,177 +636,101 @@ class Agent1Image(ForensicAgent):
                     await self.inject_task(description="Run adversarial_robustness_check for anti-forensics perturbation stability check", priority=16)
 
 
+    async def _escalate_from_visual_profile(self, profile_meta: dict) -> None:
+        """Content-driven integrity routing, sourced from the shared visual context.
+
+        Agent 1 no longer runs content tools (analyze_image_content / OCR) — those
+        belong to Agent 3. Instead it reads what the evidence IS from the shared
+        preflight visual context (threaded as self.visual_context, with the visual
+        profile finding metadata as a fallback) and pre-injects the integrity tools
+        that content warrants: deepfake/diffusion for people or AI markers, font/UI
+        forgery for screenshots, and ROI-guided ELA for salient objects.
+        """
+        vc = getattr(self, "visual_context", None)
+
+        def _vc_str(attr: str) -> str:
+            return str(getattr(vc, attr, "") or "").lower() if vc is not None else ""
+
+        desc = _vc_str("scene_description") or str(profile_meta.get("content_description") or "").lower()
+        ftype = _vc_str("file_type_assessment") or str(
+            profile_meta.get("file_type_assessment") or profile_meta.get("content_type") or ""
+        ).lower()
+
+        labels: list[str] = []
+        if vc is not None:
+            for o in (getattr(vc, "detected_objects", None) or []):
+                lbl = getattr(o, "label", None) if not isinstance(o, dict) else o.get("label")
+                if lbl:
+                    labels.append(str(lbl).lower())
+        for o in (profile_meta.get("detected_objects") or []):
+            lbl = o.get("label") if isinstance(o, dict) else o
+            if lbl:
+                labels.append(str(lbl).lower())
+
+        signals: list[str] = []
+        if vc is not None:
+            integ = getattr(vc, "image_integrity_context", None)
+            signals += [str(s).lower() for s in (getattr(integ, "visible_manipulation_signals", None) or [])]
+            signals += [str(s).lower() for s in (getattr(integ, "ai_generation_signals", None) or [])]
+        signals += [str(s).lower() for s in (profile_meta.get("manipulation_signals") or [])]
+
+        combined = " ".join([desc, ftype, " ".join(labels), " ".join(signals)])
+
+        person_kw = ("person", "people", "man", "woman", "face", "portrait", "selfie", "human")
+        ai_kw = ("ai image", "ai-generated", "digitally generated", "synthetic", "diffusion", "gan", "artificial")
+        object_kw = ("vehicle", "weapon", "building", "product", "object", "scene")
+        handwritten_kw = ("handwritten", "handwriting", "manuscript", "cursive", "written note")
+        crime_kw = ("crime scene", "blood", "injury", "weapon", "knife", "firearm", "gun", "violence")
+
+        has_person = any(k in combined for k in person_kw)
+        has_ai = any(k in combined for k in ai_kw)
+        has_object = any(k in combined for k in object_kw)
+        has_handwritten = any(k in combined for k in handwritten_kw)
+        has_crime = any(k in combined for k in crime_kw)
+        is_screenshot = "screenshot" in combined or "screen capture" in combined or ftype == "screenshot"
+
+        if has_person or has_ai:
+            logger.info("Visual-context content trigger; injecting deepfake frequency audit", agent_id=self.agent_id)
+            await self.inject_task(
+                description="Run deepfake_frequency_check for GAN/Diffusion artifacts", priority=15
+            )
+        if has_ai:
+            await self.inject_task(
+                description="Run diffusion_artifact_detector to confirm AI generation", priority=20
+            )
+        if is_screenshot:
+            await self.inject_task(
+                description="Run detect_font_inconsistency for screenshot text font analysis", priority=13
+            )
+            await self.inject_task(
+                description="Run detect_ui_overlay_forgery for screenshot UI overlay analysis", priority=13
+            )
+        if has_object:
+            await self.inject_task(
+                description="Run roi_extract guided by object detection for targeted ELA on subject", priority=12
+            )
+        # Content-domain signals (handwriting / crime-scene) are routed to Agent 3
+        # via the bus — Agent 1 no longer runs OCR/content tools itself.
+        if has_handwritten and self.inter_agent_bus:
+            self.inter_agent_bus.signal_event(
+                self.session_id, "handwriting_detected", {"agent_id": self.agent_id, "source": "visual_context"}
+            )
+        if has_crime and self.inter_agent_bus:
+            self.inter_agent_bus.signal_event(
+                self.session_id, "crime_scene_detected", {"agent_id": self.agent_id, "source": "visual_context"}
+            )
+
     async def _on_tool_result_impl(self, finding: AgentFinding) -> None:
         """Implementation of reactive task expansion."""
         tool_name = finding.metadata.get("tool_name")
 
-        # 1. [REACTIVE] analyze_image_content: Update sub-task with semantic context
-        if tool_name == "analyze_image_content":
-            image_type = (finding.metadata.get("image_type") or "unknown").lower()
-            all_classifications = finding.metadata.get("all_classifications", [])
-
-            # [RESTORED] Check for person, face, or AI markers for deepfake escalation
-            # Robust keyword matching for forensic semantic triggers
-            person_keywords = {
-                "person",
-                "people",
-                "man",
-                "woman",
-                "face",
-                "portrait",
-                "selfie",
-                "human",
-            }
-            has_person = any(k in image_type for k in person_keywords) or any(
-                any(k in str(c.get("category", "")).lower() for k in person_keywords)
-                and (c.get("score") or 0.0) > 0.4
-                for c in all_classifications
-            )
-
-            ai_keywords = {"ai image", "digitally generated", "synthetic", "diffusion", "gan"}
-            has_ai_marker = any(k in image_type for k in ai_keywords) or any(
-                any(k in str(c.get("category", "")).lower() for k in ai_keywords)
-                and (c.get("score") or 0.0) > 0.4
-                for c in all_classifications
-            )
-
-            if has_person or has_ai_marker:
-                logger.info(
-                    f"Semantic trigger: {image_type}; injecting deepfake frequency audit",
-                    agent_id=self.agent_id,
-                )
-                await self.inject_task(
-                    description="Run deepfake_frequency_check for GAN/Diffusion artifacts",
-                    priority=15,
-                )
-
-            if "screenshot" in image_type or "screen capture" in image_type:
-                logger.info(
-                    f"Screenshot detected: {image_type}; injecting font/UI forensics",
-                    agent_id=self.agent_id,
-                )
-                await self.inject_task(
-                    description="Run detect_font_inconsistency for screenshot text font analysis",
-                    priority=13,
-                )
-                await self.inject_task(
-                    description="Run detect_ui_overlay_forgery for screenshot UI overlay analysis",
-                    priority=13,
-                )
-
-            object_keywords = {"vehicle", "weapon", "building", "product", "object", "scene"}
-            has_object = any(k in image_type for k in object_keywords) or any(
-                any(k in str(c.get("category", "")).lower() for k in object_keywords)
-                and (c.get("score") or 0.0) > 0.4
-                for c in all_classifications
-            )
-
-            if has_object:
-                logger.info(
-                    f"Object semantic trigger: {image_type}; injecting object ELA audit",
-                    agent_id=self.agent_id,
-                )
-                await self.inject_task(
-                    description="Run roi_extract guided by object detection for targeted ELA on subject",
-                    priority=12,
-                )
-
-            # AI generation suspicion
-            if has_ai_marker or "digitally generated" in image_type:
-                # Force immediate deep analysis for AI suspicion
-                await self.inject_task(
-                    description="Run diffusion_artifact_detector to confirm AI generation",
-                    priority=20,
-                )
-
-            # Reactive routing: handwritten content detection
-            handwritten_keywords = {"handwritten", "handwriting", "hand writing", "manuscript", "cursive", "written note"}
-            has_handwritten = any(k in image_type for k in handwritten_keywords) or any(
-                any(k in str(c.get("category", "")).lower() for k in handwritten_keywords)
-                and (c.get("score") or 0.0) > 0.35
-                for c in all_classifications
-            )
-            if has_handwritten:
-                logger.info(
-                    f"Handwritten content detected: {image_type}; routing to handwriting OCR",
-                    agent_id=self.agent_id,
-                )
-                await self.inject_task(
-                    description="Run extract_text_from_image for handwriting OCR with adaptive fallback",
-                    priority=12,
-                )
-                if self.inter_agent_bus:
-                    self.inter_agent_bus.signal_event(
-                        self.session_id,
-                        "handwriting_detected",
-                        {"agent_id": self.agent_id, "image_type": image_type},
-                    )
-
-            # Reactive routing: crime scene / weapon / document detection
-            crime_keywords = {"crime scene", "blood", "injury", "weapon", "knife", "firearm", "gun", "violence"}
-            has_crime_scene = any(k in image_type for k in crime_keywords) or any(
-                any(k in str(c.get("category", "")).lower() for k in crime_keywords)
-                and (c.get("score") or 0.0) > 0.35
-                for c in all_classifications
-            )
-            if has_crime_scene:
-                logger.info(
-                    f"Crime scene / weapon content detected: {image_type}; routing to Agent 3",
-                    agent_id=self.agent_id,
-                )
-                if self.inter_agent_bus:
-                    self.inter_agent_bus.signal_event(
-                        self.session_id,
-                        "crime_scene_detected",
-                        {"agent_id": self.agent_id, "image_type": image_type},
-                    )
-
-
-            await self.update_sub_task(f"Semantic Context: {image_type}")
-            return
-
-        # 1b. [REACTIVE] extract_text_from_image: Gemini content identification triggers deepfake escalation
-        if tool_name == "extract_text_from_image":
-            ocr_ctx = self._tool_context.get("extract_text_from_image", {})
-            content_type = str(ocr_ctx.get("content_type") or "").lower()
-            content_desc = str(ocr_ctx.get("content_description") or "").lower()
-            combined = content_type + " " + content_desc
-
-            person_keywords = {"person", "people", "man", "woman", "face", "portrait", "selfie", "human"}
-            ai_keywords = {"ai", "generated", "synthetic", "diffusion", "gan", "artificial"}
-
-            has_person = any(k in combined for k in person_keywords)
-            has_ai_marker = any(k in combined for k in ai_keywords)
-
-            if has_person or has_ai_marker:
-                logger.info(
-                    f"Gemini OCR content_type='{content_type}' triggered deepfake escalation",
-                    agent_id=self.agent_id,
-                )
-                await self.inject_task(
-                    description="Run deepfake_frequency_check for GAN/Diffusion artifacts",
-                    priority=14,
-                )
-            if has_ai_marker:
-                await self.inject_task(
-                    description="Run diffusion_artifact_detector to confirm AI generation",
-                    priority=19,
-                )
-
-            # Reactive routing: handwritten content from OCR context
-            handwriting_keywords = {"handwritten", "handwriting", "manuscript", "cursive", "ink", "pen"}
-            has_handwriting = any(k in combined for k in handwriting_keywords)
-            if has_handwriting:
-                logger.info(
-                    "OCR context suggests handwritten content; routing handwriting signal",
-                    agent_id=self.agent_id,
-                )
-                if self.inter_agent_bus:
-                    self.inter_agent_bus.signal_event(
-                        self.session_id,
-                        "handwriting_detected",
-                        {"agent_id": self.agent_id, "source": "extract_text_from_image", "content_type": content_type},
-                    )
+        # 1. [REACTIVE] Content-driven integrity routing — sourced from the shared
+        # visual profile. Content tools (analyze_image_content / extract_text) now
+        # belong to Agent 3 (object/content axis, canonical tool taxonomy). Agent 1
+        # reads what the evidence IS from the shared preflight visual context and
+        # pre-injects the integrity tools that content warrants.
+        if tool_name in ("visual_evidence_profile", "shared_visual_evidence_profile"):
+            await self._escalate_from_visual_profile(finding.metadata or {})
             return
 
         # 2. If neural forensic tools flag high-confidence manipulation, inject localized ROI extraction

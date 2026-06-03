@@ -173,7 +173,7 @@ export function EvidenceUploadClient() {
 
         {showAgentProgress || investigation.handoffRecovering ? (
           <motion.div
-              initial={{ opacity: 0, scale: 1.02 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
               className="w-full max-w-7xl mx-auto"

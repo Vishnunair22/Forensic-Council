@@ -477,6 +477,40 @@ async def run_agents_concurrent(
                         if _cv:
                             _live_verdict = _cv
                             _live_conf = _cc
+                        # Holistic corroboration gate (mirrors arbiter_deliberation):
+                        # a Suspicious/Manipulated live verdict driven only by
+                        # uncorroborated integrity-screening positives — while the
+                        # holistic visual model reads the image as clean and there is
+                        # no hard provenance signal (hash mismatch / 2+ strong
+                        # court-defensible positives) — is, in practice, a tool false
+                        # positive (e.g. copy-move matching repetitive real texture).
+                        # Hold it Inconclusive at the live stage so the card does not
+                        # assert manipulation that deliberation will then clear.
+                        if _live_verdict in ("SUSPICIOUS", "MANIPULATED"):
+                            _g = lambda f, k, d=None: (f.get(k, d) if isinstance(f, dict) else getattr(f, k, d))
+                            _vc = getattr(agent_inst, "visual_context", None)
+                            _av = str(getattr(_vc, "authenticity_verdict", "") or "").upper()
+                            _ii = getattr(_vc, "image_integrity_context", None)
+                            _ass = str(getattr(_ii, "integrity_assessment", "") or "").lower()
+                            _holistic_flags = (
+                                _av in ("AI_GENERATED", "MANIPULATED", "LIKELY_MANIPULATED", "SUSPECT")
+                                or _ass in ("likely_manipulated", "ai_generated_suspect")
+                            )
+                            _holistic_clean = (_vc is not None) and not _holistic_flags
+                            _hash_mm = any(
+                                str((_g(f, "metadata", {}) or {}).get("tool_name")) == "file_hash_verify"
+                                and str(_g(f, "evidence_verdict", "")).upper() == "POSITIVE"
+                                for f in _af
+                            )
+                            _strong_cd = sum(
+                                1 for f in _af
+                                if str(_g(f, "evidence_verdict", "")).upper() == "POSITIVE"
+                                and bool(_g(f, "court_defensible", False))
+                                and str(_g(f, "severity_tier", "")).upper() in ("HIGH", "CRITICAL")
+                            )
+                            if _holistic_clean and not _hash_mm and _strong_cd < 2:
+                                _live_verdict = "INCONCLUSIVE"
+                                _live_conf = min(float(_live_conf or 0.6), 0.6)
                 except Exception:
                     pass
 

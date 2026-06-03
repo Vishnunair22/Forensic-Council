@@ -1,12 +1,34 @@
 "use client";
 
+// ROLE: Result/evidence-page arbiter overlay. Visually mirrors LoadingOverlay
+// (same frosted surface, primary theme, progress treatment) but keeps
+// arbiter-specific copy. Driven by isVisible + liveText; owns its own
+// AnimatePresence keyed on isVisible.
+
 import React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ShieldCheck } from "lucide-react";
+import { ARBITER_PHASES } from "@/lib/arbiterPhases";
 
 interface ArbiterDeliberationOverlayProps {
   isVisible: boolean;
   liveText?: string;
+}
+
+// Generic placeholders that are NOT real backend step messages. While the
+// incoming text is one of these (or empty) we cycle the canned phases so the
+// overlay reads as "working"; the moment a real step message streams in we
+// pin it verbatim and stop cycling.
+const GENERIC_PLACEHOLDERS = new Set([
+  "council deliberating on evidence",
+  "council deliberating",
+  "decrypting forensic ledger",
+  "initializing investigation",
+  "compiling agent findings into the final report",
+]);
+
+function isMeaningful(text: string): boolean {
+  if (!text || text.length <= 5) return false;
+  return !GENERIC_PLACEHOLDERS.has(text.toLowerCase().replace(/[.\s]+$/, "").trim());
 }
 
 export function ArbiterDeliberationOverlay({
@@ -15,42 +37,41 @@ export function ArbiterDeliberationOverlay({
 }: ArbiterDeliberationOverlayProps) {
   const prefersReducedMotion = useReducedMotion();
 
+  // Only trim trailing ellipses/whitespace — never rewrite the backend's words.
   const cleanLiveText = React.useMemo(() => {
     if (!liveText) return "";
-    return liveText
-      .replace(/Speculative synthesis complete\.?\s*/gi, "Council evidence weights are ready. ")
-      .replace(/Initial analysis complete\. Awaiting analyst decision\.?/gi, "Final report synthesis requested. Waiting for the Council Arbiter to start.")
-      .replace(/Deep analysis complete\. Awaiting analyst request for arbiter synthesis\.?/gi, "Deep findings are ready. Starting final report synthesis.")
-      .replace(/\.\.\./g, ".")
-      .replace(/…/g, ".")
-      .trim();
+    return liveText.replace(/[.…]+$/g, "").replace(/\s+/g, " ").trim();
   }, [liveText]);
 
-  const [dynamicText, setDynamicText] = React.useState(cleanLiveText || "Compiling agent findings into the final report.");
+  // The arbiter emits real step messages sparsely (often a single one for the
+  // whole deliberation), so we never want the text to freeze. Strategy:
+  //  - an independent ticker cycles the canned phases continuously, and
+  //  - a real backend message takes priority and "holds" for a short window
+  //    when it arrives, after which cycling resumes.
+  // The ticker is deps-free so frequent poll updates can never reset it.
+  const [dynamicText, setDynamicText] = React.useState(
+    isMeaningful(cleanLiveText) ? cleanLiveText : ARBITER_PHASES[0].replace(/\.+$/, ""),
+  );
   const phaseIndexRef = React.useRef(0);
+  const lastRealRef = React.useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const REAL_MESSAGE_HOLD_MS = 7000;
 
   React.useEffect(() => {
-    if (cleanLiveText && cleanLiveText.length > 5 && !cleanLiveText.toLowerCase().includes("waiting for the council")) {
-       setDynamicText(cleanLiveText);
-       return;
+    if (isMeaningful(cleanLiveText)) {
+      lastRealRef.current = { text: cleanLiveText, at: Date.now() };
+      setDynamicText(cleanLiveText);
     }
-
-    const arbiterPhases = [
-      "Reviewing forensic agent telemetry...",
-      "Evaluating confidence intervals...",
-      "Cross-referencing anomaly signatures...",
-      "Synthesizing executive summary...",
-      "Drafting final Council verdict...",
-      "Finalizing cryptographic signature..."
-    ];
-
-    const textInterval = setInterval(() => {
-      phaseIndexRef.current = (phaseIndexRef.current + 1) % arbiterPhases.length;
-      setDynamicText(arbiterPhases[phaseIndexRef.current]);
-    }, 4000);
-
-    return () => clearInterval(textInterval);
   }, [cleanLiveText]);
+
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      // Keep a freshly-arrived real message on screen briefly before cycling.
+      if (Date.now() - lastRealRef.current.at < REAL_MESSAGE_HOLD_MS) return;
+      phaseIndexRef.current = (phaseIndexRef.current + 1) % ARBITER_PHASES.length;
+      setDynamicText(ARBITER_PHASES[phaseIndexRef.current].replace(/\.+$/, ""));
+    }, 3500);
+    return () => clearInterval(id);
+  }, []);
 
   const [elapsed, setElapsed] = React.useState(0);
   React.useEffect(() => {
@@ -70,79 +91,93 @@ export function ArbiterDeliberationOverlay({
         <motion.div
           key="arbiter-overlay"
           aria-busy="true"
-          aria-label="Consensus Synthesis in progress"
-          className="fixed inset-0 z-overlay flex flex-col items-center justify-center px-6 select-none bg-background/90 overflow-hidden"
+          aria-label="Consensus synthesis in progress, please wait"
+          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-6 select-none bg-background/96 overflow-hidden"
           initial={prefersReducedMotion ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.3, ease: "easeIn" } }}
+          exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.16, ease: "easeIn" } }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
         >
-          {/* --- Atmospheric Backgrounds --- */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] pointer-events-none z-0" />
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white,transparent)] opacity-40 z-0" />
+          {/* Background grids and flares for depth (mirrors LoadingOverlay) */}
+          <div className="absolute inset-0 bg-dot-grid opacity-[0.035] pointer-events-none" />
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full opacity-[0.06] pointer-events-none"
+            style={{
+              background: "radial-gradient(circle, var(--color-primary) 0%, transparent 70%)",
+              filter: "blur(80px)",
+            }}
+          />
 
-          <div className="relative z-10 w-full max-w-2xl mx-auto p-10 bg-white/[0.02] border border-success/20 rounded-3xl shadow-[0_0_50px_rgba(var(--color-success-rgb),0.1)]">
+          {/* Main frosted glass dialog surface */}
+          <div className="relative z-10 w-full max-w-lg mx-auto fc-surface-overlay p-8 sm:p-10 md:p-12">
+            {/* Subtle scan line sweep */}
+            <div
+              className="absolute inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent pointer-events-none"
+              style={{ top: 0, animation: "fc-marker-blink 2.5s ease-in-out infinite" }}
+            />
 
+            {/* Status indicator */}
             <div className="flex items-center gap-4 mb-8">
-              <div className="relative w-10 h-10 flex items-center justify-center border border-success/40 rounded-xl bg-success/10 shadow-[0_0_15px_rgba(var(--color-success-rgb),0.4)]">
-                <ShieldCheck className="w-5 h-5 text-success" aria-hidden="true" />
+              <div className="relative w-9 h-9 flex items-center justify-center border border-primary/30 rounded-xl bg-primary/5">
+                <motion.div
+                  animate={prefersReducedMotion ? {} : { scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute inset-0 rounded-xl border border-primary/40"
+                />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
               </div>
-              <span className="text-sm font-mono uppercase tracking-widest text-success/80">
-                Council Arbiter Online
+              <span className="fc-eyebrow fc-text-muted">
+                Council Arbiter
               </span>
             </div>
 
-            <div className="mb-12 space-y-4">
+            {/* Title and live text */}
+            <div className="mb-10 space-y-4">
               <motion.h1
-                initial={prefersReducedMotion ? false : { opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
-                className="text-3xl md:text-5xl font-heading font-black text-white tracking-tight"
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+                className="text-3xl lg:text-4xl font-heading font-black fc-text-primary text-hero-gradient tracking-tight leading-tight"
               >
                 Consensus Synthesis
               </motion.h1>
-
-              <div className="flex items-start gap-3 h-12">
-                <span className="text-success font-mono mt-0.5">&gt;</span>
+              <div className="flex items-center gap-3">
+                <motion.div
+                  className="w-1.5 h-1.5 bg-white/55 rounded-full flex-shrink-0"
+                  animate={prefersReducedMotion ? {} : { opacity: [0.65, 1, 0.65] }}
+                  transition={prefersReducedMotion ? {} : { duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                />
                 <motion.p
-                  id="arbiter-live-text"
-                  className="text-sm md:text-base font-mono text-success drop-shadow-[0_0_8px_rgba(var(--color-success-rgb),0.5)] leading-relaxed"
-                  role="status"
                   key={dynamicText}
-                  initial={{ opacity: 0 }}
+                  className="text-xs md:text-sm font-mono fc-text-muted truncate pr-2"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  initial={prefersReducedMotion ? false : { opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.2 }}
                 >
                   {dynamicText}
-                  <motion.span
-                    animate={{ opacity: [1, 0] }}
-                    transition={{ duration: 0.4, repeat: Infinity, repeatType: "reverse" }}
-                    className="inline-block w-2 h-4 bg-success align-middle ml-1"
-                  />
                 </motion.p>
               </div>
             </div>
 
-            {/* Cryptographic Progress Track */}
+            {/* Progress bar */}
             <div className="w-full" aria-hidden="true">
-              <div className="flex items-center justify-between mb-3 text-xs font-mono text-success/60 uppercase tracking-widest">
-                <span>Encryption Status</span>
+              <div className="flex items-center justify-between mb-3.5 fc-eyebrow fc-text-muted">
+                <span>Synthesizing Verdict</span>
                 <span className="tabular-nums">T+{formatTime(elapsed)}</span>
               </div>
-              <div className="h-2 w-full bg-white/[0.06] border border-success/20 rounded-full relative overflow-hidden">
+              <div className="h-2 w-full bg-white/10 rounded-full relative overflow-hidden">
                 <motion.div
-                  className="absolute inset-y-0 left-0 bg-success rounded-full"
-                  style={{ boxShadow: "none" }}
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/60 to-primary rounded-full flex items-center justify-end"
                   initial={{ width: "0%" }}
-                  animate={prefersReducedMotion ? {} : {
-                    width: ["0%", "25%", "35%", "65%", "70%", "90%", "95%", "100%"],
-                  }}
-                  transition={prefersReducedMotion ? {} : {
-                    duration: 4,
-                    times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 1],
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                />
+                  animate={prefersReducedMotion ? {} : { width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"] }}
+                  transition={prefersReducedMotion ? {} : { duration: 3.5, times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1], repeat: Infinity, ease: "linear" }}
+                >
+                  {/* Leader glow point */}
+                  <div className="h-full w-2 bg-white/60 blur-[1px]" />
+                </motion.div>
               </div>
             </div>
           </div>

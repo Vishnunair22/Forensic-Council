@@ -31,9 +31,14 @@ class AgentContextMixin:
     custody_logger: Any
     evidence_store: EvidenceStore
     inter_agent_bus: Any
+    # Shared visual context (VisualContext) resolved once at pipeline start and
+    # threaded onto every agent, so agents read it directly instead of waiting on
+    # Agent 1 or the inter-agent bus. May be None when unavailable.
+    visual_context: Any
 
     def _init_context(self) -> None:
         """Initialize context attributes."""
+        self.visual_context: Any = None
         self._tool_registry: Any = None
         self._findings: list[AgentFinding] = []
         self._react_chain: list = []

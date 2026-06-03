@@ -27,11 +27,11 @@ export function HomeClient() {
   const prefersReducedMotion = useReducedMotion();
   return (
     <div className="relative min-h-screen">
-      {/* Decorative Background Grids — LandingBackground (in layout.tsx) already provides the ambient glows */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
-        <div className="absolute inset-0 bg-dot-grid opacity-30" />
-        <div className="absolute inset-0 bg-grid-small opacity-15 [mask-image:radial-gradient(ellipse_at_center,white_50%,transparent_100%)]" />
-      </div>
+      {/* Single dot-grid texture — LandingBackground (layout.tsx) supplies the ambient glows */}
+      <div
+        className="absolute inset-0 overflow-hidden pointer-events-none -z-10 bg-dot-grid opacity-30 [mask-image:radial-gradient(ellipse_at_center,white_50%,transparent_100%)]"
+        aria-hidden="true"
+      />
 
       {/* ── Hero ── */}
       <section id="hero" aria-labelledby="hero-heading" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pb-20 px-5 sm:px-6">
@@ -47,16 +47,14 @@ export function HomeClient() {
             <motion.h1
               id="hero-heading"
               variants={itemVariants}
-              className="text-3xl lg:text-5xl xl:text-6xl font-bold leading-tight fc-text-primary text-hero-gradient tracking-tight"
+              className="text-3xl lg:text-5xl xl:text-6xl font-bold leading-tight text-hero-gradient text-balance"
             >
-              Multi-Agent Forensic
-              <br />
-              Evidence Analysis
+              Multi-Agent Forensic Evidence Analysis
             </motion.h1>
 
             <motion.p
               variants={itemVariants}
-              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed max-w-[68ch] mx-auto"
+              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed text-balance max-w-[54ch] mx-auto"
             >
               Forensic Council deploys specialized AI agents to analyze digital evidence,
               synthesizing cohesive, cryptographically-signed reports with chain-of-custody integrity.

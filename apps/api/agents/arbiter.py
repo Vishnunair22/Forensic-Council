@@ -353,11 +353,21 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if visual_context is not None and _vc_clean and _int_pos and _strong < 2:
                 for _tool, _f in _int_pos:
                     _f["evidence_verdict"] = "INCONCLUSIVE"
-                    (_f.setdefault("metadata", {}))["corroboration_downgrade"] = True
+                    _meta = _f.setdefault("metadata", {})
+                    _meta["corroboration_downgrade"] = True
+                    # Preserve the original alarming text for audit, but REWRITE the
+                    # narrative so it matches the new INCONCLUSIVE verdict — appending
+                    # left the original "manipulation detected" claim in place, which
+                    # contradicted the downgraded verdict (item 7: verdict is authority).
+                    _orig_summary = str(_f.get("reasoning_summary") or "").strip()
+                    if _orig_summary:
+                        _meta["pre_downgrade_summary"] = _orig_summary
+                    _tool_disp = str(_tool or "a screening check").replace("_", " ")
                     _f["reasoning_summary"] = (
-                        str(_f.get("reasoning_summary") or "").rstrip(".")
-                        + " — uncorroborated by the visual model; held inconclusive (likely a processing/recompression artifact, not manipulation)."
-                    ).strip()
+                        f"A weak screening signal from {_tool_disp} was not corroborated by the "
+                        "holistic visual model; held inconclusive — consistent with a benign "
+                        "processing/recompression artifact rather than manipulation."
+                    )
                 logger.info(f"Corroboration grounding downgraded {len(_int_pos)} uncorroborated integrity positive(s)")
         except Exception as _corr_err:
             logger.debug("Corroboration grounding skipped", error=str(_corr_err))

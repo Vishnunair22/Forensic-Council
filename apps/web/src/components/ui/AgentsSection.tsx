@@ -2,44 +2,20 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { AGENTS } from "@/lib/constants";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
 export function AgentsSection() {
   const prefersReducedMotion = useReducedMotion();
 
-  const fadeUp = prefersReducedMotion
-    ? {}
-    : { initial: { opacity: 0, y: 4 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true } };
-
-  const fade = prefersReducedMotion
-    ? {}
-    : { initial: { opacity: 0 }, whileInView: { opacity: 1 }, viewport: { once: true } };
-
   return (
     <section aria-labelledby="agents-heading" className="py-12 relative z-10">
-      <div className="mb-12 text-center">
-        <motion.p
-          {...fade}
-          className="fc-eyebrow fc-text-muted mb-4"
-        >
-          Agents
-        </motion.p>
-        <motion.h2
-          id="agents-heading"
-          {...fadeUp}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          className="text-xl lg:text-3xl font-bold fc-text-primary mb-4 tracking-tight"
-        >
-          Meet the{" "}
-          <span className="text-primary">Council</span>
-        </motion.h2>
-        <motion.p
-          {...fadeUp}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          className="text-sm sm:text-base fc-text-secondary max-w-[68ch] mx-auto leading-relaxed"
-        >
-          Autonomous investigative agents optimized for multi-modal evidence consensus.
-        </motion.p>
-      </div>
+      <SectionHeader
+        headingId="agents-heading"
+        eyebrow="Agents"
+        titleLead="Meet the"
+        titleAccent="Council"
+        subtitle="Autonomous investigative agents optimized for multi-modal evidence consensus."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5 xl:gap-6">
         {AGENTS.map((agent, i) => (
@@ -74,15 +50,10 @@ export function AgentsSection() {
               {agent.desc}
             </p>
 
-            {/* Status — static dot, not animate-pulse; these agents are not running on the landing page */}
+            {/* Status — static; these agents are not running on the landing page */}
             <div className="mt-auto pt-5 border-t border-white/10 w-full flex items-center justify-center gap-2">
-              <div
-                className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0 fc-transition group-hover:bg-success"
-                aria-hidden="true"
-              />
-              <span className="text-xs fc-text-muted fc-transition group-hover:text-primary">
-                {agent.name} · Operational
-              </span>
+              <div className="w-1.5 h-1.5 rounded-full bg-success/70 shrink-0" aria-hidden="true" />
+              <span className="text-xs fc-text-muted">Operational</span>
             </div>
           </motion.article>
         ))}

@@ -235,7 +235,7 @@ export function GlobalNavbar() {
               : "Forensic Council — scroll to top"
           }
           aria-current={pathname === "/" ? "page" : undefined}
-          className="flex items-center min-h-[44px] rounded-sm fc-transition fc-focus-ring outline-none shrink-0"
+          className="flex items-center min-h-[44px] rounded-sm fc-transition shrink-0"
         >
           <BrandLogo size="sm" isHovered={isHovered} />
         </button>

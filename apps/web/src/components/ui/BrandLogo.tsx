@@ -23,13 +23,13 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
         )}
         animate={{
           boxShadow: isHovered
-            ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 18px rgba(79,142,247,0.30), 0 2px 12px rgba(0,0,0,0.5)"
-            : "inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(79,142,247,0.12), 0 2px 12px rgba(0,0,0,0.4)",
+            ? "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 18px rgba(59,130,246,0.30), 0 2px 12px rgba(0,0,0,0.5)"
+            : "inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(59,130,246,0.12), 0 2px 12px rgba(0,0,0,0.4)",
         }}
         transition={{ duration: 0.16 }}
         style={{
           background: "linear-gradient(140deg, #0D1829 0%, #060E1A 100%)",
-          border: "1px solid rgba(79,142,247,0.30)",
+          border: "1px solid rgba(59,130,246,0.30)",
         }}
       >
         {/* Core glow */}
@@ -37,7 +37,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
           animate={{ opacity: isHovered ? 0.50 : 0.16 }}
           transition={{ duration: 0.16 }}
           className="absolute inset-0"
-          style={{ background: "radial-gradient(circle at 50% 40%, rgba(79,142,247,0.9), transparent 68%)" }}
+          style={{ background: "radial-gradient(circle at 50% 40%, rgba(59,130,246,0.9), transparent 68%)" }}
         />
 
         {/* Crosshair — horizontal */}
@@ -61,7 +61,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
           transition={{ duration: 0.2 }}
           className="absolute w-1 h-1 rounded-full"
           // eslint-disable-next-line no-restricted-syntax
-          style={{ background: "rgba(165,200,255,0.95)", boxShadow: "0 0 6px rgba(79,142,247,0.8)" }}
+          style={{ background: "rgba(165,200,255,0.95)", boxShadow: "0 0 6px rgba(59,130,246,0.8)" }}
         />
 
         {/* FC mark — decorative icon text, hidden from AT */}
@@ -72,7 +72,7 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
             fontSize: size === "lg" ? "11px" : "9px",
             color: isHovered ? "rgba(220,235,255,1)" : "rgba(165,200,255,0.85)",
             letterSpacing: "0.06em",
-            textShadow: "0 0 10px rgba(79,142,247,0.6)", // eslint-disable-line no-restricted-syntax
+            textShadow: "0 0 10px rgba(59,130,246,0.6)", // eslint-disable-line no-restricted-syntax
           }}
         >
           FC
@@ -93,8 +93,8 @@ export function BrandLogo({ className, size = "md", isHovered = false }: BrandLo
           <motion.span
             animate={{
               textShadow: isHovered
-                ? "0 0 22px rgba(79,142,247,0.7)"
-                : "0 0 14px rgba(79,142,247,0.35)",
+                ? "0 0 22px rgba(59,130,246,0.7)"
+                : "0 0 14px rgba(59,130,246,0.35)",
             }}
             transition={{ duration: 0.2 }}
             className={cn("font-heading font-bold tracking-tight", textSizes[size])}

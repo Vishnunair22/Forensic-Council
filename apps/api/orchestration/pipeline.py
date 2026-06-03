@@ -87,6 +87,10 @@ class ForensicCouncilPipeline:
         self.session_manager = None
         self.arbiter = None
         self.signal_bus: SignalBus | None = None
+        # Shared visual context (Gemini/local-ensemble preflight result), resolved
+        # once at pipeline start and threaded onto every agent so no agent has to
+        # generate it or wait on Agent 1. See _run_investigation_core.
+        self._visual_context: Any = None
 
         self.heavy_tool_semaphore = asyncio.Semaphore(
             max(1, (self.config.max_parallel_heavy_tools or 2))
@@ -544,6 +548,42 @@ class ForensicCouncilPipeline:
             self.agent_factory.set_evidence_artifact(evidence_artifact)
         if hasattr(self, "inter_agent_bus"):
             self.inter_agent_bus._evidence_artifact = evidence_artifact
+
+        # ── Shared visual context (awaited, up-front) ─────────────────────────
+        # Resolve the visual context BEFORE any agent runs so it is generated once
+        # — never by Agent 1 — and is present in this (worker) process's bus +
+        # working memory + Redis. The API route fires the same preflight, but that
+        # runs in the API process and only shares via Redis; awaiting here is
+        # idempotent (a Redis/hash cache hit is a cheap no-op) and guarantees every
+        # agent starts warm instead of racing Agent 1. Best-effort: never block the
+        # investigation if it fails — agents fall back to the store/local path.
+        if (self._evidence_mime or "").startswith("image/"):
+            try:
+                from core.visual_context_store import create_visual_context_preflight
+
+                self._visual_context = await create_visual_context_preflight(
+                    session_id=str(session_id),
+                    file_path=getattr(evidence_artifact, "file_path", None) or evidence_file_path,
+                    sha256=self._intake_hash
+                    or content_sha256
+                    or getattr(evidence_artifact, "content_hash", "")
+                    or "",
+                    config=self.config,
+                    working_memory=self.working_memory,
+                    inter_agent_bus=self.inter_agent_bus,
+                )
+                logger.info(
+                    "Shared visual context resolved up-front",
+                    session_id=str(session_id),
+                    available=self._visual_context is not None,
+                    source=getattr(self._visual_context, "source", None),
+                )
+            except Exception as _vc_err:
+                logger.warning(
+                    "Up-front visual context resolution failed — agents will use fallback path",
+                    session_id=str(session_id),
+                    error=str(_vc_err),
+                )
 
         all_agents = get_agent_registry().get_all_agent_ids()
         await self.session_manager.create_session(

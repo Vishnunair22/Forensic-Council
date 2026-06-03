@@ -1,5 +1,3 @@
-"use client";
-
 export const LandingBackground = () => {
   return (
     <div
@@ -7,18 +5,7 @@ export const LandingBackground = () => {
       style={{ zIndex: -10, background: "var(--color-background)" }}
       aria-hidden="true"
     >
-      {/* Micro-grid pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.015]"
-        style={{
-          backgroundImage: `
-            linear-gradient(to right, rgba(255,255,255,0.15) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255,255,255,0.15) 1px, transparent 1px)
-          `,
-          backgroundSize: "24px 24px",
-        }}
-      />
-      {/* Blue radial glow — top-left */}
+      {/* Ambient glow — top-left */}
       <div
         className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.04]"
         style={{
@@ -26,7 +13,7 @@ export const LandingBackground = () => {
           filter: "blur(120px)",
         }}
       />
-      {/* Muted blue radial glow — bottom-right */}
+      {/* Ambient glow — bottom-right */}
       <div
         className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full opacity-[0.03]"
         style={{

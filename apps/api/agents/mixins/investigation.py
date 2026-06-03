@@ -371,12 +371,23 @@ class AgentInvestigationMixin:
         phase: str,
         timeout_s: float = 35.0,
     ) -> dict[str, Any] | None:
-        """Run one bounded post-analysis synthesis call for card/report narration."""
-        if self.config.local_only_analysis:
-            return None
+        """Run one bounded per-agent synthesis for card/report narration.
 
-        if not (self.config.llm_enable_post_synthesis and self.config.llm_api_key):
-            return None
+        Single flow: SynthesisService always produces a deterministic synthesis
+        (verdict/confidence/sections/narrative); Groq is only an additive text
+        polish on top. Its availability is never a gate — when Groq is off or
+        fails, the deterministic fallback is returned. The Groq-specific overhead
+        (RPM stagger + keepalive broadcasts) is the only thing skipped when Groq
+        is not active.
+        """
+        # Groq is active only when a key is configured, post-synthesis is enabled,
+        # and we are not in local-only mode. This gates the RPM stagger/keepalive,
+        # NOT the synthesis itself.
+        _groq_active = bool(
+            self.config.llm_api_key
+            and self.config.llm_enable_post_synthesis
+            and not self.config.local_only_analysis
+        )
         try:
             synthesis_service = SynthesisService(self.config)
             agent_persona = getattr(self, "persona", "")
@@ -533,16 +544,20 @@ class AgentInvestigationMixin:
                     except Exception as _kp_err:  # noqa: S110
                         logger.debug("Keepalive broadcast failed", error=str(_kp_err))
 
-            keepalive_task = asyncio.create_task(_broadcast_keepalive())
+            # Keepalive + RPM stagger only matter when Groq is actually called.
+            # When Groq is inactive the deterministic synthesis returns promptly,
+            # so skip both to avoid needless delay/broadcast noise.
+            if _groq_active:
+                keepalive_task = asyncio.create_task(_broadcast_keepalive())
 
-            # Stagger synthesis calls across agents to avoid bursting the shared
-            # Groq RPM quota. Agent index (1-5) maps to a 0-10s spread.
-            import re as _re
-            _agent_num_match = _re.search(r'\d+', str(self.agent_id))
-            _agent_num = int(_agent_num_match.group(0) or 0) if _agent_num_match else 0
-            _stagger_s = _agent_num * 2.0  # 0s, 2s, 4s, 6s, 8s, 10s for agents 0-5
-            if _stagger_s > 0:
-                await asyncio.sleep(_stagger_s)
+                # Stagger synthesis calls across agents to avoid bursting the shared
+                # Groq RPM quota. Agent index (1-5) maps to a 0-10s spread.
+                import re as _re
+                _agent_num_match = _re.search(r'\d+', str(self.agent_id))
+                _agent_num = int(_agent_num_match.group(0) or 0) if _agent_num_match else 0
+                _stagger_s = _agent_num * 2.0  # 0s, 2s, 4s, 6s, 8s, 10s for agents 0-5
+                if _stagger_s > 0:
+                    await asyncio.sleep(_stagger_s)
 
             # Fix 3: Pass Phase 1 synthesis as frozen context for deep phase
             phase1_context = None

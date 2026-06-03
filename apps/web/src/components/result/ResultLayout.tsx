@@ -20,6 +20,7 @@ import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
 import { toast } from "@/hooks/use-toast";
 import { ForensicProgressOverlay } from "@/components/ui/ForensicProgressOverlay";
+import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
 import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
 import { EvidenceHeader } from "./EvidenceHeader";
@@ -50,10 +51,14 @@ interface ResultLayoutProps {
   initialSessionId?: string;
 }
 
-// Hoisted outside component to prevent new object allocation on each render
+// Hoisted outside component to prevent new object allocation on each render.
+// The container itself never fades (hidden is opacity:1) so the trace is present
+// the instant state becomes "ready" — only the individual sections do a gentle
+// staggered entrance. This lets the report crossfade *under* the exiting arbiter
+// overlay instead of appearing as a blank page after the overlay unmounts.
 const REPORT_CONTAINER_VARIANTS = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
+  hidden: { opacity: 1 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.04 } },
 } as const;
 
 const REPORT_ITEM_VARIANTS = {
@@ -108,26 +113,28 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           When "Accept Baseline" set FC_REPORT_READY, useResult optimistically
           starts in state="ready" while the report is still being fetched — without
           this the page would render nothing (blank) until the fetch resolves. */}
+      {/* Arbiter synthesis — the SAME overlay component as the evidence page, so
+          the hand-off into the result page reads as one continuous step (it owns
+          its own AnimatePresence, keyed on isVisible). */}
+      <ArbiterDeliberationOverlay
+        isVisible={rs.state === "arbiter" || (rs.state === "ready" && !rs.report)}
+        liveText={rs.arbiterMsg || "Decrypting forensic ledger…"}
+      />
       <AnimatePresence>
-        {(rs.state === "arbiter" || (rs.state === "ready" && !rs.report)) && (
-          <ForensicProgressOverlay
-            title="Consensus Synthesis"
-            liveText={rs.arbiterMsg || "Decrypting forensic ledger…"}
-            telemetryLabel="Compiling agent findings"
-            showElapsed
-            variant="arbiter"
-          />
-        )}
         {rs.state === "loading" && !rs.report && (
-          <div className="fixed inset-0 z-modal flex items-center justify-center fc-surface-overlay">
-            <AgentAnalysisTabSkeleton />
-          </div>
+          <ForensicProgressOverlay
+            title="Loading Report"
+            liveText="Accessing secure forensic ledger…"
+            telemetryLabel="Retrieving report"
+            showElapsed={false}
+            variant="loading"
+          />
         )}
       </AnimatePresence>
 
       {/* ── Tab Nav ── */}
       <nav
-        className="fixed top-16 left-0 right-0 z-modal border-b border-white/[0.06] bg-background/95"
+        className="fixed top-16 left-0 right-0 z-40 border-b border-white/[0.06] bg-background/95"
         aria-label="Report sections"
       >
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-2">
@@ -154,7 +161,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 className={clsx(
                   "px-4 py-1.5 text-xs font-mono font-bold tracking-wider flex items-center gap-1.5 rounded-full transition-all duration-[160ms] border",
                   rs.activeTab === tab
-                    ? "bg-white/[0.08] text-white border-white/20"
+                    ? "bg-white/[0.08] fc-text-primary border-white/20"
                     : "fc-text-muted hover:text-white hover:bg-white/[0.05] border-transparent"
                 )}
               >
@@ -219,7 +226,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
           {rs.state === "ready" && rs.report && (
             <motion.div
-              initial={prefersReduced ? false : "hidden"}
+              initial={false}
               animate="visible"
               variants={prefersReduced ? EMPTY_VARIANTS : REPORT_CONTAINER_VARIANTS}
               className="space-y-4"
@@ -533,7 +540,7 @@ function ExportDropdown({
             animate={{ opacity: 1, y: 0 }}
             exit={prefersReduced ? {} : { opacity: 0, y: -4 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute right-0 top-full mt-1.5 w-52 py-1.5 z-tooltip fc-surface-elevated overflow-hidden"
+            className="absolute right-0 top-full mt-1.5 w-52 py-1.5 z-30 fc-surface-elevated overflow-hidden"
           >
             <button
               type="button"

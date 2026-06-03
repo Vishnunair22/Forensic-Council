@@ -45,6 +45,33 @@ const decisionOptions: Array<{
   { value: "ESCALATE", label: "Escalate", description: "Flag for senior council", color: "red" },
 ];
 
+// Visual language for the option grid: green = constructive (approve/redirect),
+// blue = neutral (override), red = destructive (terminate/escalate). Previously
+// the `color` field was unused, so every option looked identical regardless of
+// how consequential it was.
+const OPTION_STYLES: Record<string, { selected: string; idle: string; ring: string }> = {
+  emerald: {
+    selected: "bg-success/10 border-success fc-text-primary",
+    idle: "border-white/10 bg-white/5 hover:bg-white/10 fc-text-secondary hover:fc-text-primary",
+    ring: "focus-visible:ring-success/50",
+  },
+  red: {
+    selected: "bg-danger/10 border-danger fc-text-danger",
+    idle: "border-danger/25 bg-danger/[0.04] fc-text-secondary hover:bg-danger/10 hover:fc-text-danger",
+    ring: "focus-visible:ring-danger/50",
+  },
+  slate: {
+    selected: "bg-primary/10 border-primary fc-text-primary",
+    idle: "border-white/10 bg-white/5 hover:bg-white/10 fc-text-secondary hover:fc-text-primary",
+    ring: "focus-visible:ring-primary/50",
+  },
+  default: {
+    selected: "bg-primary/10 border-primary fc-text-primary",
+    idle: "border-white/10 bg-white/5 hover:bg-white/10 fc-text-secondary hover:fc-text-primary",
+    ring: "focus-visible:ring-primary/50",
+  },
+};
+
 export function HITLCheckpointModal({
  checkpoint,
  isOpen,
@@ -143,7 +170,9 @@ export function HITLCheckpointModal({
             }
           }}
         >
-          {decisionOptions.map((option) => (
+          {decisionOptions.map((option) => {
+           const s = OPTION_STYLES[option.color] ?? OPTION_STYLES.default;
+           return (
            <button
             key={option.value}
             type="button"
@@ -152,10 +181,9 @@ export function HITLCheckpointModal({
             tabIndex={selectedDecision === option.value || (!selectedDecision && option.value === "APPROVE") ? 0 : -1}
             onClick={() => setSelectedDecision(option.value)}
             className={clsx(
-              "p-4 border text-left transition-colors duration-[160ms] rounded-2xl text-sm relative outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-              selectedDecision === option.value
-                ? "bg-primary/10 border-primary fc-text-primary"
-                : "border-white/10 bg-white/5 hover:bg-white/10 fc-text-secondary hover:fc-text-primary"
+              "p-4 border text-left transition-colors duration-[160ms] rounded-2xl text-sm relative outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+              s.ring,
+              selectedDecision === option.value ? s.selected : s.idle
             )}
           >
            <div className="flex flex-col gap-1 relative z-10">
@@ -173,7 +201,8 @@ export function HITLCheckpointModal({
             </span>
            </div>
           </button>
-         ))}
+           );
+          })}
         </div>
        </div>
 
@@ -211,7 +240,10 @@ export function HITLCheckpointModal({
          type="button"
          onClick={handleSubmit}
          disabled={!selectedDecision || isSubmitting}
-         className="fc-btn-primary flex items-center gap-2 disabled:opacity-[0.48]"
+         className={clsx(
+          "flex items-center gap-2 disabled:opacity-[0.48]",
+          selectedDecision === "TERMINATE" || selectedDecision === "ESCALATE" ? "fc-btn-danger" : "fc-btn-primary"
+         )}
         >
         {isSubmitting ? (
          <>

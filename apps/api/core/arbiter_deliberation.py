@@ -156,6 +156,22 @@ def deliberate_findings(
             if ass in ("likely_manipulated", "ai_generated_suspect"):
                 has_vc_integrity_issue = True
 
+    # ── Gemini as a bounded weighted voter ───────────────────────────────────
+    # The REMOTE (court-defensible) visual model is a strong weighted participant:
+    # a high-confidence manipulation/AI read can RAISE the verdict on its own
+    # (vision models lead on AI-generation and obvious composites), and a clean
+    # read can LOWER an uncorroborated tool signal (the corroboration gate below).
+    # It is bounded — it cannot override 2+ strong court-defensible deterministic
+    # signals — and the local-ensemble fallback stays screening-tier (never gets
+    # this elevated weight).
+    vc_remote = bool(
+        visual_context is not None
+        and getattr(visual_context, "external_llm_used", False)
+        and getattr(visual_context, "source", "") == "llm_assisted"
+    )
+    vc_conf = float(getattr(visual_context, "confidence", 0.0) or 0.0) if visual_context else 0.0
+    vc_strong_vote = vc_remote and has_vc_integrity_issue and vc_conf >= 0.7
+
     if positive_integrity_tools and not has_vc_integrity_issue and visual_context:
         msg = f"Conflict: Tool(s) {', '.join(positive_integrity_tools)} flag anomaly, but visual integrity assessment is clean/inconclusive."
         conflicts.append(msg)
@@ -186,7 +202,18 @@ def deliberate_findings(
         else:
             final_verdict = "SUSPICIOUS_INTEGRITY_SIGNALS"
     elif has_vc_integrity_issue:
-        final_verdict = "SUSPICIOUS_INTEGRITY_SIGNALS"
+        # Bounded weighted voter: a high-confidence remote-Gemini manipulation/AI
+        # read carries real weight on its own, so it can raise the verdict to
+        # LIKELY_MANIPULATED even with no positive integrity tool. A low-confidence
+        # or local-ensemble read only raises suspicion.
+        if vc_strong_vote:
+            final_verdict = "LIKELY_MANIPULATED"
+            agreements.append(
+                f"Visual model (remote) independently assessed manipulation/AI generation "
+                f"at {int(round(vc_conf * 100))}% confidence."
+            )
+        else:
+            final_verdict = "SUSPICIOUS_INTEGRITY_SIGNALS"
     elif provenance_anomalies:
         final_verdict = "PROVENANCE_CONCERN"
     elif content_risks:
@@ -264,7 +291,10 @@ def deliberate_findings(
         high_weight_evidence_score = 1.0
 
     # 4. visual_context_support_score
+    # Remote (court-defensible) Gemini is weighted more than the screening-tier
+    # local ensemble — the bounded weighted voter contributes more confidence.
     visual_context_support_score = 1.0 if visual_context else 0.0
+    _vc_coeff = 0.10 if vc_remote else 0.05
 
     # 5. critical_tool_failure_rate
     failed_critical = critical_tools.intersection(failed_tools)
@@ -283,7 +313,7 @@ def deliberate_findings(
         + 0.20 * important_tool_completion_rate
         + 0.15 * cross_agent_agreement_score
         + 0.15 * high_weight_evidence_score
-        + 0.05 * visual_context_support_score
+        + _vc_coeff * visual_context_support_score
         - 0.20 * critical_tool_failure_rate
         - 0.15 * unresolved_conflict_score
         - 0.10 * weak_single_signal_penalty

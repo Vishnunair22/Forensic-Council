@@ -21,6 +21,7 @@ import { AgentFindingDTO, AgentMetricsDTO, ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { cleanFindingText } from "@/lib/findingText";
 import { fmtTool } from "@/lib/fmtTool";
+import { accentFor } from "@/lib/agentTheme";
 import {
   BulletedText,
   ConfidenceBar,
@@ -41,27 +42,36 @@ export interface AgentFindingCardProps {
   defaultOpen?: boolean;
 }
 
-const AGENT_META: Record<string, { name: string; role: string; color: string; icon: LucideIcon }> = {
-  "Agent1": { name: "Image Forensics", role: "Pixel Integrity & AI Detection", color: "cyan", icon: ShieldCheck },
-  "Agent2": { name: "Audio Forensics", role: "Acoustic Integrity", color: "blue", icon: Activity },
-  "Agent3": { name: "Contextual Analysis", role: "Scene & Object Verification", color: "amber", icon: Shield },
-  "Agent4": { name: "Video Forensics", role: "Temporal Analysis", color: "teal", icon: ShieldAlert },
-  "Agent5": { name: "Metadata Expert", role: "Digital Provenance", color: "violet", icon: Cpu },
-};
+// Boundary guard for residual low-value key-finding lines. The backend now emits
+// clean, human key findings (no bare tool-name dumps), but this drops any leftover
+// noise — empty lines, bare tool names, or "no X detected: toolA, toolB" echoes —
+// so the card never shows a misleading/useless Key Finding.
+function isNoiseKeyFinding(line: string): boolean {
+  const t = line.replace(/^-\s*/, "").trim();
+  if (t.length < 12) return true;
+  const low = t.toLowerCase();
+  // Tool-name dump pattern: "... detected across N check(s): a, b, c."
+  if (/:\s*[a-z0-9 ]+(,\s*[a-z0-9 ]+)+\.?$/i.test(t) && /\b(check|forensic|tool)/i.test(low)) return true;
+  if (/^(n\/a|none|not applicable|not available|tool name|unknown)\.?$/i.test(low)) return true;
+  return false;
+}
 
-const COLOR_MAP: Record<string, { bg: string; border: string; text: string; ring: string }> = {
-  cyan:   { bg: "bg-transparent", border: "border-primary/30",     text: "text-primary",      ring: "ring-primary/25" },
-  blue:   { bg: "bg-transparent", border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
-  amber:  { bg: "bg-transparent", border: "border-amber-500/30",   text: "text-amber-300",    ring: "ring-amber-500/25" },
-  teal:   { bg: "bg-transparent", border: "border-blue-500/30",    text: "text-blue-300",     ring: "ring-blue-500/25" },
-  violet: { bg: "bg-transparent", border: "border-violet-500/30",  text: "text-violet-300",   ring: "ring-violet-500/25" },
+// Agent identity (name/role/icon). Accent color comes from the shared
+// agentTheme tokens via accentFor(agentId) so the same agent reads with the
+// same accent here as in AgentStatusCard / TimelineTab.
+const AGENT_META: Record<string, { name: string; role: string; icon: LucideIcon }> = {
+  "Agent1": { name: "Image Forensics", role: "Pixel Integrity & AI Detection", icon: ShieldCheck },
+  "Agent2": { name: "Audio Forensics", role: "Acoustic Integrity", icon: Activity },
+  "Agent3": { name: "Contextual Analysis", role: "Scene & Object Verification", icon: Shield },
+  "Agent4": { name: "Video Forensics", role: "Temporal Analysis", icon: ShieldAlert },
+  "Agent5": { name: "Metadata Expert", role: "Digital Provenance", icon: Cpu },
 };
 
 const FLAG_CONFIG = {
   bad:  { color: "text-danger",  bg: "bg-transparent", border: "border-danger/25",  icon: AlertTriangle, label: "Anomaly" },
   warn: { color: "text-warning", bg: "bg-transparent", border: "border-warning/25", icon: AlertTriangle, label: "Warning" },
   ok:   { color: "text-primary", bg: "bg-transparent", border: "border-primary/25", icon: CheckCircle2,  label: "Clean"   },
-  info: { color: "text-white/55",bg: "bg-transparent", border: "border-white/[0.08]",icon: Info,         label: "Info"    },
+  info: { color: "fc-text-faint",bg: "bg-transparent", border: "border-white/[0.08]",icon: Info,         label: "Info"    },
 };
 
 interface Section {
@@ -282,9 +292,11 @@ function normalizeVerdict(verdict?: string) {
 }
 
 function verdictClasses(verdict: string) {
+  // Confidence tiers describe a CLEAN verdict's strength — they must not borrow
+  // alert colors (warning/danger), which read as "something is wrong".
   if (verdict === "HIGH") return "fc-badge fc-badge-active";
-  if (verdict === "MEDIUM") return "fc-badge fc-badge-warning";
-  if (verdict === "LOW") return "fc-badge fc-badge-danger";
+  if (verdict === "MEDIUM") return "fc-badge";
+  if (verdict === "LOW") return "fc-badge";
   if (["SUSPICIOUS", "LIKELY_MANIPULATED", "INCONCLUSIVE", "ABSTAIN"].includes(verdict)) {
     return "fc-badge fc-badge-warning";
   }
@@ -406,8 +418,8 @@ export function AgentFindingCard({
   defaultOpen = false,
 }: AgentFindingCardProps) {
   const [open, setOpen] = useState(defaultOpen);
-  const meta = AGENT_META[agentId] || { name: agentId, role: "Unknown", color: "cyan", icon: ShieldX };
-  const theme = COLOR_MAP[meta.color];
+  const meta = AGENT_META[agentId] || { name: agentId, role: "Unknown", icon: ShieldX };
+  const accent = accentFor(agentId);
 
   const rawFindings = phase === "deep" ? [...initialFindings, ...deepFindings] : initialFindings;
   const SKIP_TYPES = new Set(["file type not applicable", "format not supported"]);
@@ -520,7 +532,7 @@ export function AgentFindingCard({
             <meta.icon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white/65 tracking-wide">{meta.name}</h3>
+            <h3 className="text-sm font-bold fc-text-muted tracking-wide">{meta.name}</h3>
             <p className="text-xs font-mono font-bold fc-text-muted mt-0.5">{meta.role} · Protocol Skip</p>
           </div>
         </div>
@@ -534,7 +546,7 @@ export function AgentFindingCard({
       className={clsx(
         "rounded-2xl overflow-hidden transition-all duration-[160ms] fc-surface-quiet",
         open
-          ? clsx(theme.border, "ring-1", theme.ring)
+          ? clsx(accent.borderClass, "ring-1", accent.ringClass)
           : "hover:border-white/15"
       )}
     >
@@ -552,8 +564,8 @@ export function AgentFindingCard({
         <div className="flex items-center gap-4 relative z-10">
           {/* Agent icon */}
           <div className={clsx(
-            "w-[52px] h-[52px] rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all duration-[160ms]",
-            theme.bg, theme.border, theme.text
+            "w-[52px] h-[52px] rounded-2xl flex items-center justify-center shrink-0 border-2 bg-transparent transition-all duration-[160ms]",
+            accent.borderClass, accent.textClass
           )}>
             <meta.icon className="w-6 h-6" />
           </div>
@@ -597,7 +609,7 @@ export function AgentFindingCard({
           <div className="flex items-center gap-3 shrink-0">
             {open && <ConfidenceBar value={confidence} />}
             {open && (
-              <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-black tracking-wide text-white/65">
+              <div className="hidden sm:block px-2.5 py-1 rounded-full border border-white/15 bg-white/[0.04] text-xs font-black tracking-wide fc-text-muted">
                 {phase === 'deep' ? 'Deep' : 'Initial'}
               </div>
             )}
@@ -638,65 +650,69 @@ export function AgentFindingCard({
             {/* Agent overview narrative — full text, no clamp */}
             {parsedNarrative ? (
               <div className="space-y-4 mb-4">
-                {/* Agent Brief hero box */}
+                {/* Visual Context — the agent's visual axis (image integrity for
+                    Agent1, object/scene for Agent3, metadata for Agent5). */}
+                {parsedNarrative.visual_description && (
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
+                    <div className="flex items-center gap-2 text-blue-300">
+                      <Info className="w-4 h-4 shrink-0" />
+                      <h4 className="text-xs font-black tracking-wider font-mono">Visual Context</h4>
+                    </div>
+                    <div className="text-xs fc-text-secondary leading-relaxed font-medium">
+                      <BulletedText text={parsedNarrative.visual_description} colorClass="bg-blue-500/40" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Agent Overview — the tools that ran and the verdict arrived. */}
                 {parsedNarrative.agent_brief && (
-                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-1.5">
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                     <div className="flex items-center gap-2 text-primary">
                       <ShieldCheck className="w-4.5 h-4.5 shrink-0 text-primary" />
-                      <h4 className="text-xs font-black tracking-wider font-mono text-primary">Agent Brief</h4>
+                      <h4 className="text-xs font-black tracking-wider font-mono text-primary">Agent Overview</h4>
                     </div>
-                    <p className="text-sm text-white/90 leading-relaxed font-medium italic whitespace-pre-line">{parsedNarrative.agent_brief}</p>
+                    <p className="text-sm text-white/90 leading-relaxed font-medium whitespace-pre-line">{parsedNarrative.agent_brief}</p>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Visual Description column */}
-                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 text-blue-300">
-                        <Info className="w-4 h-4 shrink-0" />
-                        <h4 className="text-xs font-black tracking-wider font-mono">Visual Description</h4>
-                      </div>
-                      <div className="mt-2 text-xs text-white/80 leading-relaxed font-medium">
-                        <BulletedText text={parsedNarrative.visual_description} colorClass="bg-blue-500/40" />
-                      </div>
+                {/* Your Opinion — the arbiter's verdict reasoning for this agent. */}
+                {parsedNarrative.opinion && (
+                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
+                    <div className="flex items-center gap-2 text-success">
+                      <Shield className="w-4 h-4 shrink-0 text-success" />
+                      <h4 className="text-xs font-black tracking-wider font-mono">Your Opinion</h4>
+                    </div>
+                    <div className="text-xs fc-text-secondary leading-relaxed font-medium">
+                      <BulletedText text={parsedNarrative.opinion} colorClass="bg-success/40" />
                     </div>
                   </div>
-
-                  {/* Your Opinion column */}
-                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 text-success">
-                        <Shield className="w-4 h-4 shrink-0 text-success" />
-                        <h4 className="text-xs font-black tracking-wider font-mono">Your Opinion</h4>
-                      </div>
-                      <div className="mt-2 text-xs text-white/80 leading-relaxed font-medium">
-                        <BulletedText text={parsedNarrative.opinion} colorClass="bg-success/40" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                )}
 
                 {/* Key Findings list */}
-                {parsedNarrative.key_findings && (
-                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-3">
-                    <div className="flex items-center gap-2 text-amber-300">
-                      <Activity className="w-4 h-4 shrink-0" />
-                      <h4 className="text-xs font-black tracking-wider font-mono">Key Findings</h4>
+                {(() => {
+                  if (!parsedNarrative.key_findings) return null;
+                  const kfLines = (parsedNarrative.key_findings.includes("\n")
+                    ? parsedNarrative.key_findings.split("\n")
+                    : parsedNarrative.key_findings.split(";")
+                  ).filter((line) => line && !isNoiseKeyFinding(line));
+                  if (kfLines.length === 0) return null;
+                  return (
+                    <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-3">
+                      <div className="flex items-center gap-2 text-amber-300">
+                        <Activity className="w-4 h-4 shrink-0" />
+                        <h4 className="text-xs font-black tracking-wider font-mono">Key Findings</h4>
+                      </div>
+                      <div className="space-y-2">
+                        {kfLines.map((line, idx) => (
+                          <div key={idx} className="flex items-start gap-2.5 text-xs fc-text-secondary font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                            <span>{line.replace(/^-\s*/, "").trim()}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {(parsedNarrative.key_findings.includes("\n")
-                        ? parsedNarrative.key_findings.split("\n")
-                        : parsedNarrative.key_findings.split(";")
-                      ).filter(Boolean).map((line, idx) => (
-                        <div key={idx} className="flex items-start gap-2.5 text-xs text-white/75 font-mono">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-                          <span>{line.replace(/^-\s*/, "").trim()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             ) : (
               overview && (
@@ -725,7 +741,7 @@ export function AgentFindingCard({
               <div className="rounded-2xl border border-white/[0.06] bg-transparent px-5 py-4">
                 <div className="flex items-center gap-2 mb-2.5">
                   <Info className="w-4 h-4 fc-text-muted" />
-                  <span className="text-xs font-black tracking-wide text-white/55">
+                  <span className="text-xs font-black tracking-wide fc-text-faint">
                     Bypassed Tools ({bypassedFindings.length})
                   </span>
                 </div>
@@ -735,7 +751,7 @@ export function AgentFindingCard({
                     return (
                       <span
                         key={`${toolName}-${i}`}
-                        className="text-xs font-mono text-white/55 px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.08]"
+                        className="text-xs font-mono fc-text-faint px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/[0.08]"
                         title="Not applicable to this file type"
                       >
                         {fmtTool(toolName)}

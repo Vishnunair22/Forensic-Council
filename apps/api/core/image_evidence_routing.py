@@ -377,7 +377,45 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
             "metadata_anomaly_score",
         ]
 
+    # ── Enforce the canonical tool→agent taxonomy ────────────────────────────
+    # Whatever the per-class branches scheduled above, every tool is moved to the
+    # agent that OWNS it (core.agent_tool_taxonomy). This keeps each agent's run
+    # aligned to its axis (Agent1=integrity, Agent3=object/content, Agent5=
+    # metadata) from one source of truth, so routing can never drift out of sync.
+    _enforce_tool_ownership(plan)
     return plan
+
+
+def _enforce_tool_ownership(plan: dict[str, dict[str, list[str]]]) -> None:
+    """Move each scheduled tool to its taxonomy owner's same phase, in place.
+
+    Shared/infrastructure tools and tools with no declared owner are left where
+    they are. Order is preserved and duplicates are collapsed. Reassignments are
+    logged so drift between the per-class plans and the taxonomy is visible.
+    """
+    from core.agent_tool_taxonomy import resolve_owner
+
+    for phase in ("initial", "deep"):
+        # Snapshot the current per-agent tool lists for this phase.
+        current = {aid: list(plan.get(aid, {}).get(phase, []) or []) for aid in plan}
+        rebuilt: dict[str, list[str]] = {aid: [] for aid in plan}
+        for aid, tools in current.items():
+            for tool in tools:
+                target = resolve_owner(aid, tool)
+                if target not in rebuilt:
+                    target = aid  # owner not participating in this route → keep
+                if tool not in rebuilt[target]:
+                    rebuilt[target].append(tool)
+                if target != aid:
+                    logger.info(
+                        "Tool ownership reassignment",
+                        tool=tool,
+                        phase=phase,
+                        from_agent=aid,
+                        to_agent=target,
+                    )
+        for aid in plan:
+            plan[aid][phase] = rebuilt[aid]
 
 
 _TOOL_TO_TASK_DESC = {

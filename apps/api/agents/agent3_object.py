@@ -307,6 +307,20 @@ class Agent3Object(ForensicAgent):
             image_h.adversarial_robustness_check_handler,
             "Adversarial robustness check",
         )
+        # Content-understanding tools — these answer "what is in the image", which
+        # is Agent 3's axis. Moved here from Agent 1 (image integrity) so each
+        # agent runs only the tools for its concern. Agent 1 now reads the content
+        # it needs from the shared visual context (canonical tool taxonomy).
+        registry.register(
+            "analyze_image_content",
+            image_h.analyze_image_content_handler,
+            "CLIP semantic classification",
+        )
+        registry.register(
+            "extract_text_from_image",
+            image_h.extract_text_from_image_handler,
+            "Gemini Multimodal OCR",
+        )
 
         # ── Shared Image Context Reader ───────────────────────────────────────
         # Agent 1's Phase 1 visual evidence profile is stored in the inter-agent bus.

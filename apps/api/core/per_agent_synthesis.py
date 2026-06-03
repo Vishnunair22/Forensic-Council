@@ -372,27 +372,35 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
             edit = _items("editing_or_compositing_signals")
             comp = _items("compression_or_reupload_signals")
             regions = _items("regions_for_followup")
+            # Whether the holistic visual read itself flags an issue. When it does
+            # NOT, "manipulation indicators" like 'background removed' are benign
+            # edits (e.g. a product cut-out), not deceptive manipulation — labelling
+            # them as "manipulation indicators" beside an AUTHENTIC verdict is a
+            # self-contradiction. Reframe them as observed editing in that case.
+            _verdict_is_alert = verdict.upper() in (
+                "AI_GENERATED", "MANIPULATED", "SUSPECT", "AI_GENERATED_SUSPECT", "LIKELY_MANIPULATED",
+            ) or ass.lower() in ("likely_manipulated", "ai_generated_suspect")
             if ftype:
                 axis_sentences.append(f"The visual model assessed the file type as {_present_label(ftype)}.")
             if ass and ass != "cannot_determine":
                 axis_sentences.append(f"Its image-integrity assessment is '{_present_label(ass)}'.")
             if manip:
-                axis_sentences.append(f"Visible manipulation indicators: {', '.join(manip)}.")
+                if _verdict_is_alert:
+                    axis_sentences.append(f"Visible manipulation indicators: {', '.join(manip)}.")
+                else:
+                    axis_sentences.append(
+                        f"Observed editing consistent with benign processing rather than deceptive "
+                        f"manipulation: {', '.join(manip)}."
+                    )
             if aigen:
                 axis_sentences.append(f"AI-generation indicators: {', '.join(aigen)}.")
             if edit:
-                axis_sentences.append(f"Editing or compositing indicators: {', '.join(edit)}.")
+                _edit_lbl = "Editing or compositing indicators" if _verdict_is_alert else "Observed editing or compositing"
+                axis_sentences.append(f"{_edit_lbl}: {', '.join(edit)}.")
             if comp:
                 axis_sentences.append(f"Compression or re-upload indicators: {', '.join(comp)}.")
             if regions:
                 axis_sentences.append(f"Regions flagged for follow-up: {', '.join(regions)}.")
-            # Only assert a clean visual read when the holistic verdict agrees.
-            # Asserting "no AI-generation observed" while the holistic read is
-            # "ai generated" is a self-contradiction (the model flagged it at the
-            # whole-image level even with no localized region).
-            _verdict_is_alert = verdict.upper() in (
-                "AI_GENERATED", "MANIPULATED", "SUSPECT", "AI_GENERATED_SUSPECT", "LIKELY_MANIPULATED",
-            )
             if not (manip or aigen or edit or comp) and not _verdict_is_alert:
                 axis_sentences.append("No visible manipulation, AI-generation, editing, or compression anomalies were observed.")
             elif not (manip or aigen or edit or comp) and _verdict_is_alert:
@@ -491,12 +499,24 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     # holistic visual read (e.g. an AI-generation determination) rather than a
     # discrete tool POSITIVE. In that case the brief must NOT claim "no
     # manipulation indicators" — that contradicts the verdict badge.
+    # Verdict-appropriate wording: a signal is only "confirmed" for a MANIPULATED
+    # verdict. For SUSPICIOUS/INCONCLUSIVE the signal is "flagged" — saying
+    # "confirmed N manipulation signals supporting an inconclusive finding" reads
+    # as a contradiction in terms.
+    _vw = str(input_data.agent_verdict or "").replace("_", " ").lower().strip()
+    _vu = str(input_data.agent_verdict or "").upper()
+    _art = "an" if _vw[:1] in "aeiou" else "a"
+    _is_manip_verdict = _vu in ("MANIPULATED", "TAMPERED", "LIKELY_MANIPULATED")
+    _sig_verb = "confirmed" if _is_manip_verdict else "flagged"
+    # "confirmed" pairs with a definite "manipulation signal"; "flagged" pairs with
+    # a hedged "potential manipulation signal" — avoid "confirmed N potential ...".
+    _sig_noun = "manipulation signal" if _is_manip_verdict else "potential manipulation signal"
     if _positive:
         findings_joined = "; ".join(_positive[:3])
         _n_sig = len(_positive)
         agent_brief = (
-            f"The {_axis_label} examination completed {_n_checks} check(s) and confirmed "
-            f"{_n_sig} manipulation signal(s). {findings_joined}."
+            f"The {_axis_label} examination completed {_n_checks} check(s) and {_sig_verb} "
+            f"{_n_sig} {_sig_noun}(s). {findings_joined}."
         )
     elif _alert_verdict:
         agent_brief = (
@@ -535,21 +555,30 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     # that drives the brief, so the "Your Opinion" block can never state a
     # different signal count than the Agent Overview (e.g. brief "confirmed 6"
     # vs opinion "7 confirmed"). The verdict word stays consistent with the badge.
-    _verdict_word = str(input_data.agent_verdict or "").replace("_", " ").lower().strip()
     _failed_note = (
         f" {len(input_data.failed_tools)} check(s) did not complete and are treated as coverage gaps."
         if input_data.failed_tools else ""
     )
     _n_pos = len(_positive)
-    if _positive:
+    if _positive and _is_manip_verdict:
         confidence_reason = (
             f"{_n_pos} manipulation signal(s) were confirmed across {_n_checks} completed "
-            f"check(s), supporting a {_verdict_word or 'manipulated'} finding.{_failed_note}"
+            f"check(s), supporting a manipulated finding.{_failed_note}"
+        )
+    elif _positive and "SUSPICIOUS" in _vu:
+        confidence_reason = (
+            f"{_n_pos} potential manipulation signal(s) were flagged across {_n_checks} "
+            f"completed check(s); the evidence is suspicious pending corroboration.{_failed_note}"
+        )
+    elif _positive:
+        confidence_reason = (
+            f"{_n_pos} signal(s) were flagged across {_n_checks} completed check(s), but the "
+            f"evidence remains inconclusive.{_failed_note}"
         )
     elif _alert_verdict:
         confidence_reason = (
             f"No discrete tool isolated a manipulation signal, but the holistic visual "
-            f"assessment supports a {_verdict_word or 'suspicious'} finding across "
+            f"assessment supports {_art} {_vw or 'suspicious'} finding across "
             f"{_n_checks} completed check(s).{_failed_note}"
         )
     elif _clean:

@@ -353,11 +353,11 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
   const failedCount = completedData.tools_failed ?? 0;
 
   const outcomeStyle = isAlert
-    ? "bg-danger/[0.04] border-danger/20 text-[#fca5a5]"
+    ? "bg-danger/[0.04] border-danger/20 text-danger-light"
     : isInconclusive
-    ? "bg-warning/[0.04] border-warning/20 text-[#fde68a]"
+    ? "bg-warning/[0.04] border-warning/20 text-warning-light"
     : isClean
-    ? "bg-success/[0.04] border-success/20 text-[#bbf7d0]"
+    ? "bg-success/[0.04] border-success/20 text-success-light"
     : "bg-white/[0.01] border-white/5 fc-text-primary";
 
   const iconColor = isAlert ? "text-danger"
@@ -371,18 +371,24 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
     : ListChecks;
 
   return (
-    <div className="border-t border-white/[0.07] pt-4 mt-3 space-y-2.5">
-      {/* Part A — file identity */}
+    <div className="border-t border-white/[0.07] pt-4 mt-3 space-y-3">
+      {/* Visual Context — the agent's visual axis (Agent1 integrity, Agent3
+          object/scene, Agent5 metadata), sourced from the shared visual context. */}
       {fileIdentityLine && (
-        <p className="text-xs fc-text-muted leading-relaxed">
-          {fileIdentityLine}
-        </p>
+        <div className="space-y-1">
+          <span className="fc-eyebrow fc-text-muted block">Visual Context</span>
+          <p className="text-xs fc-text-secondary leading-relaxed">
+            {fileIdentityLine}
+          </p>
+        </div>
       )}
 
-      {/* Part B — outcome */}
-      <div className="flex items-start gap-2">
-        <StatusIcon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${iconColor}`} />
-        <div className="flex-1 space-y-1">
+      {/* Agent Overview — the tools that ran and the verdict arrived. */}
+      <div className="space-y-1">
+        <span className="fc-eyebrow fc-text-muted block">Agent Overview</span>
+        <div className="flex items-start gap-2">
+          <StatusIcon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${iconColor}`} />
+          <div className="flex-1 space-y-1">
           <div className={`text-sm leading-relaxed border px-3 py-2.5 rounded-xl ${outcomeStyle}`}>
             {outcomeText}
           </div>
@@ -397,6 +403,7 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
@@ -623,8 +630,8 @@ export function AgentStatusCard({
                         : progressDescriptor.label
                       )}
                   <motion.span
-                    animate={{ opacity: [1, 0] }}
-                    transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+                    animate={prefersReduced ? undefined : { opacity: [1, 0] }}
+                    transition={prefersReduced ? undefined : { duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
                     className="ml-1 inline-block w-1.5 h-3 bg-primary"
                   />
                 </span>
@@ -642,12 +649,14 @@ export function AgentStatusCard({
                   }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                 >
-                  {/* Infinite Light Sweep effect */}
-                  <motion.div
-                    className="absolute top-0 bottom-0 left-0 w-full bg-gradient-to-r from-transparent via-white/40 to-transparent"
-                    animate={{ x: ["-100%", "200%"] }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                  />
+                  {/* Infinite Light Sweep effect — suppressed under reduced-motion */}
+                  {!prefersReduced && (
+                    <motion.div
+                      className="absolute top-0 bottom-0 left-0 w-full bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                      animate={{ x: ["-100%", "200%"] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                    />
+                  )}
                 </motion.div>
               </div>
             </motion.div>
@@ -689,7 +698,7 @@ export function AgentStatusCard({
       </div>
 
       {/* --- Findings Surface --- */}
-      <div className="px-5 pb-6 pt-0 relative z-10">
+      <div className="px-7 pb-6 pt-0 relative z-10">
         <AnimatePresence mode="wait">
           {status === "complete" && findings.length > 0 ? (
             <motion.div

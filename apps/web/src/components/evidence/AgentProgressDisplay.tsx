@@ -445,7 +445,7 @@ export function AgentProgressDisplay({
               ? "Initial Verification"
               : "Phase 2"}
           </span>
-          <p className="text-sm font-normal fc-text-secondary ml-auto hidden md:block" aria-hidden="true">
+          <p className="text-sm font-normal fc-text-secondary w-full md:w-auto md:ml-auto" aria-hidden="true">
             {statusText}
           </p>
           {/* Throttled SR announcement — updates at most once per 2 s to prevent read-every-frame */}

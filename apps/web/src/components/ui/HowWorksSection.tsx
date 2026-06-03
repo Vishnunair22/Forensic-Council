@@ -2,46 +2,20 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { HOW_IT_WORKS } from "@/lib/constants";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
 export function HowWorksSection() {
   const prefersReducedMotion = useReducedMotion();
 
-  const fadeUp = prefersReducedMotion
-    ? {}
-    : { initial: { opacity: 0, y: 4 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true } };
-
-  const fade = prefersReducedMotion
-    ? {}
-    : { initial: { opacity: 0 }, whileInView: { opacity: 1 }, viewport: { once: true } };
-
   return (
     <section aria-labelledby="how-it-works-heading" className="py-12 relative z-10">
-      {/* Header */}
-      <div className="mb-14 text-center">
-        <motion.p
-          {...fade}
-          className="fc-eyebrow fc-text-muted mb-4"
-        >
-          Process
-        </motion.p>
-        <motion.h2
-          id="how-it-works-heading"
-          {...fadeUp}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          className="text-xl lg:text-3xl font-bold fc-text-primary mb-4 tracking-tight"
-        >
-          How Forensic{" "}
-          <span className="text-primary">Council Works</span>
-        </motion.h2>
-        <motion.p
-          {...fadeUp}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          className="text-sm sm:text-base fc-text-secondary max-w-[68ch] mx-auto leading-relaxed"
-        >
-          A multi-stage verification pipeline ensuring cryptographic and semantic integrity
-          through specialized AI coordination.
-        </motion.p>
-      </div>
+      <SectionHeader
+        headingId="how-it-works-heading"
+        eyebrow="Process"
+        titleLead="How Forensic"
+        titleAccent="Council Works"
+        subtitle="A multi-stage verification pipeline ensuring cryptographic and semantic integrity through specialized AI coordination."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
         {HOW_IT_WORKS.map((item, i) => (
@@ -53,7 +27,7 @@ export function HowWorksSection() {
               viewport: { once: true, margin: "-40px" },
               transition: { duration: 0.16, delay: i * 0.04, ease: "easeOut" },
             })}
-            className="flex flex-col items-center"
+            className="group flex flex-col items-center"
           >
             {/* Step number + icon */}
             <div className="relative z-20 mb-5" aria-hidden="true">
@@ -69,7 +43,7 @@ export function HowWorksSection() {
             </div>
 
             {/* Card */}
-            <div className="w-full fc-surface-quiet rounded-2xl p-6 relative overflow-hidden h-full flex flex-col items-center group fc-transition hover:border-primary/40">
+            <div className="w-full fc-surface-quiet rounded-2xl p-6 relative overflow-hidden h-full flex flex-col items-center fc-transition group-hover:border-primary/40">
               <h3 className="text-lg font-bold fc-text-primary mb-3 text-center tracking-tight">
                 {item.title}
               </h3>

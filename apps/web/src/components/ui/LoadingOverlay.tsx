@@ -76,7 +76,7 @@ export function LoadingOverlay({
       {/* Background Grids and Flares for depth */}
       <div className="absolute inset-0 bg-dot-grid opacity-[0.035] pointer-events-none" />
       <div
-        className="absolute w-[500px] h-[500px] rounded-full opacity-[0.06] pointer-events-none"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full opacity-[0.06] pointer-events-none"
         style={{
           background: "radial-gradient(circle, var(--color-primary) 0%, transparent 70%)",
           filter: "blur(80px)",
