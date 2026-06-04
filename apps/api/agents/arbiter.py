@@ -254,7 +254,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     visual_profile_findings_by_agent[aid] = af_visual
 
         if not active_results:
-            return self._empty_report(case_id, per_agent_findings, per_agent_metrics)
+            # Sign even the empty report so the court-defensibility invariant holds:
+            # every ForensicReport that leaves the arbiter carries a valid signature.
+            empty = self._empty_report(case_id, per_agent_findings, per_agent_metrics)
+            return await self.sign_report(empty)
 
         # ── 2. Reliability & Scoring ─────────────────────────────────────
         active_metrics = [
@@ -415,6 +418,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             else ""
         )
 
+        # Determine whether this is a deep-analysis run before building synthesis inputs
+        # so we can pass is_deep + Phase-1 context to the synthesis and Groq prompt.
+        _has_deep = any(
+            str((f.get("metadata") or {}).get("analysis_phase") or "").lower() == "deep"
+            for f in all_findings
+        )
+
         inputs = {}
         # Capture the grounded, visual-context-aware per-agent verdicts so the card
         # badge (per_agent_summary) reuses the SAME value as the synthesis brief —
@@ -518,9 +528,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     }
 
                 # Deterministic, severity-aware, visual-context-grounded per-agent
-                # verdict / confidence.
+                # verdict / confidence. Pass is_deep so the holistic visual read
+                # carries elevated weight in the deep-analysis verdict.
                 a_verdict, a_conf, a_reason = compute_agent_verdict(
-                    grounded_findings, visual_signal=_vsig
+                    grounded_findings, visual_signal=_vsig, is_deep=_has_deep
                 )
                 grounded_agent_verdicts[aid] = (a_verdict, a_conf)
                 # Parity: _compute_agent_metrics ran BEFORE grounding (ungrounded,
@@ -529,6 +540,13 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 # exact same per-agent confidence.
                 if aid in per_agent_metrics and not per_agent_metrics[aid].get("skipped"):
                     per_agent_metrics[aid]["confidence_score"] = a_conf
+
+                # Pull Phase-1 verdict/confidence from the agent synthesis dict
+                # (written by run_deep_investigation) so the Groq prompt can frame
+                # the phase comparison sentence correctly.
+                _aid_syn = (res.get("synthesis") or {}) if isinstance(res.get("synthesis"), dict) else {}
+                _p1_v = str(_aid_syn.get("phase1_verdict") or "")
+                _p1_c = float(_aid_syn.get("phase1_confidence") or 0.0)
 
                 inputs[aid] = AgentSynthesisInput(
                     agent_id=aid,
@@ -544,6 +562,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     agent_verdict=a_verdict,
                     agent_confidence=a_conf,
                     confidence_reason=a_reason,
+                    is_deep_analysis=_has_deep,
+                    phase1_verdict=_p1_v,
+                    phase1_confidence=_p1_c,
                 )
 
         agent_syntheses = await refine_synthesis_batch(inputs, self.config)
@@ -582,7 +603,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # ── Verdict mapping + derived metrics (computed BEFORE the report build
         #    so the narrative label and the verdict field can never disagree) ──
         mapped_verdict = "INCONCLUSIVE"
-        v_upper = deliberation_result.final_verdict.upper()
+        v_upper = (deliberation_result.final_verdict or "INCONCLUSIVE").upper()
         if "LIKELY_MANIPULATED" in v_upper:
             mapped_verdict = "MANIPULATED"
         elif "SUSPICIOUS" in v_upper or "PROVENANCE" in v_upper or "CONTENT_RISK" in v_upper:
@@ -643,10 +664,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 "opinion": syn.confidence_reason,
                 "synthesis_source": syn.synthesis_source,
             }
-            # Surface the deep-vs-initial delta the agent already computed in its
-            # deep synthesis (phase_delta/delta_reason). Without this it was shown
-            # on the live card but dropped from the final report — so a deep report
-            # read identically to an initial one with no "what deep added" framing.
+            # Surface the deep-vs-initial delta the agent computed in its deep
+            # synthesis, plus the Groq-polished phase_comparison sentence when present.
             _agent_syn = (active_results.get(aid) or {}).get("synthesis") or {}
             if isinstance(_agent_syn, dict):
                 _phase_delta = str(_agent_syn.get("phase_delta") or "").strip().upper()
@@ -655,6 +674,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     entry["phase_delta"] = _phase_delta
                     if _delta_reason:
                         entry["delta_reason"] = _delta_reason
+            # Groq-polished phase comparison sentence (deep mode only)
+            _pc = str(getattr(syn, "phase_comparison", "") or "").strip()
+            if _pc:
+                entry["phase_comparison"] = _pc
             p_anal_structured[aid] = entry
 
         degradation_flags = self._get_degradation_flags(

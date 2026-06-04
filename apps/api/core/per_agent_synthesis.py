@@ -44,6 +44,10 @@ class AgentSynthesisInput(BaseModel):
     agent_verdict: str = "INCONCLUSIVE"
     agent_confidence: float = 0.0
     confidence_reason: str = ""
+    # Deep-analysis comparison fields — populated only when is_deep_analysis=True
+    is_deep_analysis: bool = False
+    phase1_verdict: str = ""
+    phase1_confidence: float = 0.0
 
 
 class AgentSynthesisOutput(BaseModel):
@@ -55,6 +59,7 @@ class AgentSynthesisOutput(BaseModel):
     confidence_score: float
     confidence_reason: str = ""
     limitations: list[str] = Field(default_factory=list)
+    phase_comparison: str = ""
     synthesis_source: Literal[
         "groq_refined",
         "deterministic_with_visual_context",
@@ -756,12 +761,13 @@ def _is_degenerate_visual_summary(text: str, baseline: str = "") -> bool:
     return False
 
 
-def _build_persona_system_prompt(agent_ids: list[str]) -> str:
+def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) -> str:
     """
     Build the Groq system prompt with per-agent expert voice instructions.
     The persona voice definitions are the single source of truth — they live
     in agent_personas.py and are injected here at call time so a change to
     a persona definition automatically propagates to the synthesis prompt.
+    When is_deep=True, adds a 4th field (phase_comparison) to the output schema.
     """
     voice_blocks: list[str] = []
     for aid in agent_ids:
@@ -780,62 +786,114 @@ def _build_persona_system_prompt(agent_ids: list[str]) -> str:
 
     persona_section = "\n\n".join(voice_blocks)
 
-    return (
+    prompt = (
         "You are a forensic narrative specialist writing expert testimony for a multi-agent "
         "digital evidence analysis system. Each agent has a distinct expert identity. "
         "Write ONLY in their assigned voice — not in generic template language.\n\n"
         + persona_section
         + "\n\n"
-        "INVIOLABLE CONSTRAINTS — these override everything else:\n"
-        "1. NEVER change 'agent_verdict' or 'agent_confidence' — these are deterministic forensic "
-        "measurements. They are facts, not opinions.\n"
-        "2. NEVER mention any tool vendor, AI provider, or model name "
-        "(Gemini, Groq, Cerebras, OpenAI, Llama, Google, CLIP, YOLO, etc.).\n"
-        "3. NEVER treat a missing API key or unavailable model as a degradation. "
-        "Only actual tool execution failures may appear as limitations.\n"
-        "4. Every key finding MUST follow this format: "
-        "[Finding statement] — [Tool name] ([Confidence]%)\n"
-        "5. Write in the present tense. The analysis has been completed; report its findings.\n"
-        "6. Return ONLY valid JSON — no markdown, no prose outside the JSON.\n"
-        "7. SEPARATE the two fields cleanly — they must NOT repeat each other. Each agent's "
-        "'visual_context_summary' is written from ITS OWN visual axis in 'visual_context_section' — "
-        "NEVER from a generic image/scene description:\n"
-        "   - Agent1 (image integrity): lead with the integrity read — file type as a forensic "
-        "attribute, the holistic authenticity assessment, and any visible manipulation / AI-generation "
-        "/ compression signals. Do NOT describe the scene; that is Agent3's axis.\n"
-        "   - Agent3 (object/scene): lead with the scene and object inventory — what is depicted, "
-        "objects, people, UI elements, and any scene inconsistencies.\n"
-        "   - Agent5 (metadata/provenance): lead with the concrete provenance facts — capture "
-        "timestamp, device, file format and size, field count, GPS — then any provenance "
-        "contradictions. NEVER lead with a bare file-type word (e.g. 'a composite image').\n"
-        "   - 'agent_brief' is the ANALYTICAL OVERVIEW: summarize the tools/checks that ran and the "
-        "verdict reached, in the expert's voice. Do NOT restate the visual axis here.\n"
-        "8. CONSISTENCY WITH VERDICT IS MANDATORY. The narrative MUST agree with 'agent_verdict'. "
-        "If agent_verdict is AUTHENTIC or INCONCLUSIVE, do NOT assert or imply the evidence is "
-        "manipulated, tampered, forged, fabricated, doctored, spliced, deepfaked, AI-generated, or "
-        "fake — describe results as clean, benign, or inconclusive. If agent_verdict is SUSPICIOUS or "
-        "MANIPULATED, do NOT claim the evidence is authentic or unaltered. Never contradict the verdict.\n\n"
-        "Schema:\n"
+        "━━━ INVIOLABLE CONSTRAINTS ━━━\n"
+        "1. NEVER alter 'agent_verdict' or 'agent_confidence'. These are deterministic forensic "
+        "measurements sealed before your call. Your job is to NARRATE, not to re-score.\n"
+        "2. NEVER name any AI provider, model, or tool vendor "
+        "(e.g. Gemini, CLIP, YOLO, Groq, Llama, Florence). Use forensic domain terms instead.\n"
+        "3. Write in the present tense. Analysis is complete; report findings as established facts.\n"
+        "4. Return ONLY valid JSON. No markdown fences, no commentary outside the JSON object.\n"
+        "5. The verdict MUST be echoed consistently across all three fields. "
+        "If agent_verdict is AUTHENTIC or INCONCLUSIVE: never imply manipulation, tampering, "
+        "forgery, deepfake, or AI generation — describe outcomes as clean, within normal parameters, "
+        "or inconclusive. If agent_verdict is SUSPICIOUS or MANIPULATED: never call the evidence "
+        "authentic or unaltered.\n\n"
+        "━━━ THREE FIELDS — RULES FOR EACH ━━━\n\n"
+        "FIELD 1 — visual_context_summary\n"
+        "Translate this agent's 'visual_context_section' into one precise, evidence-specific sentence.\n"
+        "Write from the agent's own forensic axis — do NOT describe what another agent covers:\n"
+        "  • Agent1 axis (image integrity): State the holistic authenticity read of the image — "
+        "file type as a forensic attribute (e.g. 'JPEG photograph', 'PNG screenshot', "
+        "'AI-diffusion composite'), any AI-generation or manipulation signals present, and the "
+        "compression profile. Do NOT describe scene content or objects.\n"
+        "  • Agent3 axis (object/scene): State what is depicted — subjects, objects, setting, UI "
+        "elements — and any scene-level inconsistencies (shadow direction, scale, lighting anomalies). "
+        "Do NOT describe pixel-level integrity or file metadata.\n"
+        "  • Agent5 axis (metadata/provenance): State the concrete provenance record — capture "
+        "timestamp, device make/model, software, GPS presence, field count — then any specific "
+        "provenance contradiction found. NEVER open with a bare file-type label. "
+        "Example: 'Captured 2024-03-14 07:32 UTC on a Pixel 7 (Android 14); "
+        "GPS coordinates present; 847 EXIF fields intact — no anomalies detected.'\n\n"
+        "FIELD 2 — agent_brief\n"
+        "Exactly 2 sentences in the expert's voice. Dense, specific, no filler.\n"
+        "  Sentence 1: Name the N checks that ran and their decisive outcomes, citing at least one "
+        "concrete metric (e.g. '0 anomaly regions', 'SHA-256 confirmed', '14 EXIF fields stripped'). "
+        "Do NOT restate the visual axis — that is Field 1's job.\n"
+        "  Sentence 2: State the verdict and confidence in plain expert language that a court "
+        "could read. Tie the confidence level to the specific signal pattern observed.\n"
+        "FORBIDDEN in agent_brief: 'analysis complete', 'consistent with authenticity', "
+        "'no anomalies detected', 'warrants further review' without specifying what.\n\n"
+        "FIELD 3 — key_findings\n"
+        "Exactly 3–5 items. Each item covers ONE tool and must carry a specific metric.\n"
+        "Format: [What the tool found, with the key metric] — [tool_name] ([confidence]%)\n"
+        "Rules:\n"
+        "  • Lead with the highest-impact finding (strongest positive signal first; if all clean, "
+        "lead with the most definitive clean result).\n"
+        "  • If a finding was grounded (severity adjusted because it is not applicable to this "
+        "image type), say so: append '(context-adjusted)' after the tool name.\n"
+        "  • Cite the ACTUAL metric number — e.g. '0 spliced blocks', 'hash matched', "
+        "'14 EXIF fields stripped', '3 scene-inconsistency flags'.\n"
+        "  • No two items may cover the same tool or the same forensic signal.\n"
+        "  • Do NOT include NOT_APPLICABLE or ERROR results — skip those tools entirely.\n"
+        "  • Do NOT write: 'flagged a manipulation indicator', 'returned a positive result', "
+        "'confirmed authenticity' — always state WHAT was measured and WHAT value it returned.\n\n"
+        "━━━ OUTPUT SCHEMA (return exactly this, nothing else) ━━━\n"
         "{\n"
         "  \"Agent1\": {\n"
-        "    \"agent_brief\": \"<2-3 sentence expert overview of the checks that ran and the verdict, in Agent1 voice>\",\n"
-        "    \"visual_context_summary\": \"<1-2 sentences on the IMAGE-INTEGRITY axis: file type, authenticity read, manipulation/AI/compression signals — never a scene description>\",\n"
-        "    \"key_findings\": [\"<Finding> — <Tool> (<Conf>%)\", ...],\n"
-        "    \"confidence_reason\": \"<1 sentence on why the confidence level is justified>\",\n"
-        "    \"limitations\": [\"<only real tool failures>\"]\n"
-        "  },\n"
-        "  \"Agent3\": { \"visual_context_summary\": \"<scene + object inventory + inconsistencies>\", ... },\n"
-        "  \"Agent5\": { \"visual_context_summary\": \"<provenance facts: timestamp, device, format, size, GPS; never a bare file-type word>\", ... }\n"
+        "    \"visual_context_summary\": \"<1 sentence: integrity axis — file type forensic attribute, "
+        "authenticity read, AI/manipulation signals, compression profile>\",\n"
+        "    \"agent_brief\": \"<2 sentences: sentence 1 = N checks + decisive metrics; "
+        "sentence 2 = verdict + confidence rationale>\",\n"
+        "    \"key_findings\": [\n"
+        "      \"<Metric-specific finding> — <tool_name> (<conf>%)\",\n"
+        "      ...\n"
+        "    ]"
+        + (",\n    \"phase_comparison\": \"<1 sentence starting with CONFIRMED/REFINED/ESCALATED/CONTRADICTED — what the deep pass changed or confirmed vs initial>\"" if is_deep else "")
+        + "\n  },\n"
+        "  \"Agent3\": {\n"
+        "    \"visual_context_summary\": \"<1 sentence: scene + object inventory + any inconsistencies>\",\n"
+        "    \"agent_brief\": \"<2 sentences: checks + metrics; verdict + rationale>\",\n"
+        "    \"key_findings\": [\"<metric finding> — <tool> (<conf>%)\", ...]"
+        + (",\n    \"phase_comparison\": \"<1 sentence: deep pass delta for this agent>\"" if is_deep else "")
+        + "\n  },\n"
+        "  \"Agent5\": {\n"
+        "    \"visual_context_summary\": \"<1 sentence: provenance record — timestamp, device, "
+        "field count, GPS — then any contradiction found>\",\n"
+        "    \"agent_brief\": \"<2 sentences: checks + metrics; verdict + rationale>\",\n"
+        "    \"key_findings\": [\"<metric finding> — <tool> (<conf>%)\", ...]"
+        + (",\n    \"phase_comparison\": \"<1 sentence: deep pass delta for this agent>\"" if is_deep else "")
+        + "\n  }\n"
         "}"
     )
+    if is_deep:
+        prompt += (
+            "\n\n━━━ DEEP ANALYSIS MODE ━━━\n"
+            "Each agent entry in the input includes 'phase1_verdict', 'phase1_confidence_pct', "
+            "'deep_verdict', and 'deep_confidence_pct'. Findings are tagged with 'phase': 'initial' or 'deep'.\n"
+            "Use this to populate the 'phase_comparison' field:\n"
+            "  • Start with the delta keyword: CONFIRMED, REFINED, ESCALATED, or CONTRADICTED.\n"
+            "  • CONFIRMED — same verdict, confidence within 10 pp.\n"
+            "  • REFINED — same verdict bucket but confidence changed ≥10 pp, or INCONCLUSIVE → anything.\n"
+            "  • ESCALATED — clean initial verdict, alert deep verdict.\n"
+            "  • CONTRADICTED — alert initial verdict, clean deep verdict.\n"
+            "  • State one concrete change or confirmation. No filler. Under 30 words."
+        )
+    return prompt
 
 
 def _has_narratable_signal(inp: AgentSynthesisInput) -> bool:
-    """True if this agent has anything worth a Groq-polished narrative.
+    """True if this agent has a signal strong enough to warrant Groq narration.
 
-    Clean evidence (no positive/alert findings, no visual anomalies) produces
-    a perfectly adequate deterministic synthesis — calling Groq for it only
-    burns quota. We narrate only when there is a real signal to articulate.
+    MEDIUM severity and below produces adequate deterministic synthesis — calling
+    Groq for those findings only burns free-tier quota. We narrate only when the
+    evidence is genuinely alarming (POSITIVE/alert verdicts, CRITICAL/HIGH severity,
+    or confirmed visual anomalies from the visual-context profile).
     """
     _ALERT_VERDICTS = {"POSITIVE", "SUSPICIOUS", "TAMPERED", "MANIPULATED", "LIKELY_MANIPULATED"}
     for f in (inp.grounded_findings or inp.findings):
@@ -844,18 +902,22 @@ def _has_narratable_signal(inp: AgentSynthesisInput) -> bool:
             return True
         meta = f.get("metadata") or {}
         severity = str(meta.get("severity_tier") or meta.get("severity") or "").upper()
-        if severity in ("CRITICAL", "HIGH", "MEDIUM"):
+        # MEDIUM and below: deterministic prose is sufficient — skip Groq.
+        if severity in ("CRITICAL", "HIGH"):
             return True
-    # Visual-context anomalies are narratable even when tools are clean
+    # Confirmed visual-context anomalies (not just "present" flags — require
+    # non-empty signal lists so empty lists don't trigger the call).
     section = inp.visual_context_section or {}
     if isinstance(section, dict):
-        for key in ("visible_manipulation_signals", "ai_generation_signals", "scene_inconsistencies", "metadata_contradictions"):
-            if section.get(key):
+        for key in ("visible_manipulation_signals", "ai_generation_signals",
+                    "scene_inconsistencies", "metadata_contradictions"):
+            val = section.get(key)
+            if val and (isinstance(val, list) and len(val) > 0 or isinstance(val, str) and val.strip()):
                 return True
-        if str(section.get("integrity_assessment") or "").lower() not in ("", "no_visible_issue", "cannot_determine"):
+        assessment = str(section.get("integrity_assessment") or "").lower().strip()
+        if assessment and assessment not in ("", "no_visible_issue", "cannot_determine", "authentic"):
             return True
-    # Tool failures are worth narrating as limitations
-    return bool(inp.failed_tools)
+    return False
 
 
 async def refine_synthesis_batch(
@@ -906,18 +968,26 @@ async def refine_synthesis_batch(
     )
 
     # 3. Build the per-agent payload
+    is_deep = any(inp.is_deep_analysis for inp in inputs.values())
+
     batch_prompt_data = {}
     for aid, inp in inputs.items():
+        # Strip reasoning_summary from the payload — it's verbose prose that
+        # duplicates information already present in verdict/confidence, and
+        # sending it inflates token usage without improving synthesis quality.
         clean_findings = [
             {
                 "tool": f.get("metadata", {}).get("tool_name") or f.get("finding_type"),
-                "summary": f.get("reasoning_summary") or f.get("metadata", {}).get("summary"),
                 "verdict": f.get("evidence_verdict"),
                 "confidence": f.get("confidence_raw") or f.get("metadata", {}).get("confidence"),
+                "severity": (f.get("metadata") or {}).get("severity_tier"),
+                "phase": (f.get("metadata") or {}).get("analysis_phase", "initial"),
             }
             for f in (inp.grounded_findings or inp.findings)
+            # Skip NOT_APPLICABLE and ERROR findings — they add no narrative value
+            if str(f.get("evidence_verdict") or "").upper() not in ("NOT_APPLICABLE", "ERROR")
         ]
-        batch_prompt_data[aid] = {
+        entry: dict = {
             "agent_id": inp.agent_id,
             "evidence_identity": inp.evidence_identity,
             "visual_context_available": inp.visual_context_available,
@@ -929,8 +999,14 @@ async def refine_synthesis_batch(
             "agent_confidence": inp.agent_confidence,
             "confidence_reason": inp.confidence_reason,
         }
+        if inp.is_deep_analysis and inp.phase1_verdict:
+            entry["phase1_verdict"] = inp.phase1_verdict
+            entry["phase1_confidence_pct"] = round(inp.phase1_confidence * 100)
+            entry["deep_verdict"] = inp.agent_verdict
+            entry["deep_confidence_pct"] = round(inp.agent_confidence * 100)
+        batch_prompt_data[aid] = entry
 
-    system_prompt = _build_persona_system_prompt(list(inputs.keys()))
+    system_prompt = _build_persona_system_prompt(list(inputs.keys()), is_deep=is_deep)
     user_payload = json.dumps(batch_prompt_data, indent=2, default=str)
 
     try:
@@ -943,9 +1019,10 @@ async def refine_synthesis_batch(
                 user_content=user_payload,
                 json_mode=True,
                 priority="medium",
-                # Three short expert briefs — 1200 tokens is ample and keeps the
-                # call well within free-tier TPM limits.
-                max_tokens=1200,
+                # Three short expert briefs (visual_context_summary + agent_brief +
+                # 3–5 key_findings per agent). 900 tokens is sufficient and saves
+                # ~25% of per-call quota vs the previous 1200 ceiling.
+                max_tokens=900,
             ),
             timeout=40.0,
         )
@@ -997,14 +1074,35 @@ async def refine_synthesis_batch(
 
                     kfs = polished_data.get("key_findings")
                     if kfs and isinstance(kfs, list):
-                        validated_kfs = [
-                            kf_str
-                            for kf in kfs
-                            if (kf_str := str(kf).strip())
-                            and not _text_contradicts_verdict(kf_str, _verdict)
-                        ]
+                        seen_kf_norms: set[str] = set()
+                        validated_kfs: list[str] = []
+                        for kf in kfs:
+                            kf_str = str(kf).strip()
+                            if not kf_str:
+                                continue
+                            if _text_contradicts_verdict(kf_str, _verdict):
+                                logger.warning(
+                                    f"{aid}: key_finding contradicts verdict '{_verdict}'; dropped."
+                                )
+                                continue
+                            # Deduplicate: strip trailing confidence percentage before
+                            # normalising so near-identical findings that only differ in
+                            # the reported % (e.g. "tool (97%)" vs "tool (98%)") are
+                            # caught. Then take the first 80 chars as the dedup key.
+                            norm = re.sub(r"\s*\(\d+\.?\d*%\)\s*$", "", kf_str.lower())
+                            norm = re.sub(r"\s+", " ", norm).strip()[:80]
+                            if norm in seen_kf_norms:
+                                continue
+                            seen_kf_norms.add(norm)
+                            validated_kfs.append(kf_str)
                         if validated_kfs:
                             outputs[aid].key_findings = validated_kfs
+
+                    # phase_comparison — deep-mode only; stored on the output for
+                    # the arbiter to surface in per_agent_narrative_structured.
+                    pc = polished_data.get("phase_comparison")
+                    if pc and isinstance(pc, str) and len(pc.strip()) > 10:
+                        outputs[aid].phase_comparison = pc.strip()
 
                     outputs[aid].synthesis_source = "groq_refined"
                     logger.info(f"Refined synthesis for {aid} using LLM.")

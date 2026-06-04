@@ -116,21 +116,20 @@ export function GlobalNavbar() {
   const handleLogoClick = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    if (!hasActiveSession && pathname === "/") {
-      playSound("hum");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-
     // If an active session exists, require confirmation before wiping state.
     if (hasActiveSession) {
       setConfirmResetOpen(true);
       return;
     }
 
-    playSound("reset");
-    executeReset();
-  }, [pathname, playSound, hasActiveSession, executeReset]);
+    // No active session — navigate home or scroll to top.
+    playSound("hum");
+    if (pathname === "/") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      router.push("/");
+    }
+  }, [pathname, playSound, hasActiveSession, router]);
 
   // Shown only when NEXT_PUBLIC_API_URL is set, meaning API calls go directly
   // to the backend port (bypassing Caddy's security headers and rate limiting).

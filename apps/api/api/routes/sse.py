@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["sse"])
 
 CRITICAL_TYPES = frozenset(
-    {"PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT", "PIPELINE_QUARANTINED"}
+    {"PIPELINE_COMPLETE", "ERROR", "PIPELINE_PAUSED", "HITL_CHECKPOINT", "PIPELINE_QUARANTINED", "STREAM_ERROR"}
 )
 
 
@@ -199,10 +199,17 @@ async def _event_generator(
                 except asyncio.CancelledError:
                     pass
                 except Exception as exc:
-                    logger.debug(
-                        "Redis pub/sub listener error",
+                    logger.error(
+                        "Redis pub/sub listener dropped — injecting STREAM_ERROR so client reconnects",
                         session_id=session_id,
                         error=str(exc),
+                    )
+                    await consumer.send_json(
+                        {
+                            "type": "STREAM_ERROR",
+                            "session_id": session_id,
+                            "message": "Live stream interrupted. Reconnect to resume.",
+                        }
                     )
 
             redis_task = asyncio.create_task(_redis_listener(pubsub, channel))

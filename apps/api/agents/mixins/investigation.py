@@ -31,6 +31,75 @@ _TAMPERING_INDICATOR_KEYWORDS = {
     "diffusion", "gan", "deepfake", "inconsistent",
 }
 
+def _compute_phase_delta(
+    p1_verdict: str,
+    p1_conf: float,
+    p2_verdict: str,
+    p2_conf: float,
+) -> tuple[str, str]:
+    """Compare Phase-1 vs Phase-2 agent verdict and produce a structured delta.
+
+    Returns (delta_enum, delta_reason) where delta_enum is one of:
+    CONFIRMED, REFINED, ESCALATED, CONTRADICTED.
+    """
+    _ALERT = {"SUSPICIOUS", "MANIPULATED", "LIKELY_MANIPULATED", "AI_GENERATED"}
+    _CLEAN = {"AUTHENTIC", "CLEAN", "NO_REPORTABLE_MANIPULATION_DETECTED"}
+
+    p1 = p1_verdict.strip().upper()
+    p2 = p2_verdict.strip().upper()
+    p1_pct = round(p1_conf * 100)
+    p2_pct = round(p2_conf * 100)
+
+    def _bucket(v: str) -> str:
+        if v in _ALERT:
+            return "alert"
+        if v in _CLEAN:
+            return "clean"
+        return "inconclusive"
+
+    b1, b2 = _bucket(p1), _bucket(p2)
+
+    if b1 == "clean" and b2 == "alert":
+        reason = (
+            f"Deep analysis escalated the verdict from {p1} ({p1_pct}%) to {p2} ({p2_pct}%). "
+            "Additional forensic tools identified signals not present in initial analysis."
+        )
+        return "ESCALATED", reason
+
+    if b1 == "alert" and b2 == "clean":
+        reason = (
+            f"Deep analysis contradicted the initial {p1} ({p1_pct}%) finding, "
+            f"returning {p2} at {p2_pct}% confidence. "
+            "Deeper tool coverage and visual grounding resolved the initial ambiguity."
+        )
+        return "CONTRADICTED", reason
+
+    if b1 == b2:
+        conf_delta = abs(p2_conf - p1_conf)
+        if conf_delta >= 0.12:
+            direction = "increased" if p2_conf > p1_conf else "decreased"
+            reason = (
+                f"Deep analysis refined the {p2} verdict — confidence {direction} "
+                f"from {p1_pct}% to {p2_pct}% as additional tools ran."
+            )
+            return "REFINED", reason
+        reason = (
+            f"Deep analysis confirmed the initial {p2} finding at {p2_pct}% confidence. "
+            "No material contradictions emerged across the extended tool set."
+        )
+        return "CONFIRMED", reason
+
+    if b1 == "inconclusive":
+        reason = (
+            f"Deep analysis resolved the initial ambiguity ({p1} at {p1_pct}%), "
+            f"returning {p2} at {p2_pct}% after broader tool coverage."
+        )
+        return "REFINED", reason
+
+    reason = f"Deep analysis shifted the assessment from {p1} ({p1_pct}%) to {p2} ({p2_pct}%)."
+    return "REFINED", reason
+
+
 _SCREENSHOT_INAPPLICABLE_TOOLS = {
     "noiseprint_cluster",
     "noise_fingerprint",
@@ -841,7 +910,7 @@ class AgentInvestigationMixin:
         return brief
 
     def _compute_grounded_agent_verdict(
-        self, findings: list[AgentFinding]
+        self, findings: list[AgentFinding], is_deep: bool = False
     ) -> tuple[str, float]:
         """Single source of truth for this agent's verdict + confidence.
 
@@ -869,9 +938,17 @@ class AgentInvestigationMixin:
             meta = f.metadata if isinstance(getattr(f, "metadata", None), dict) else {}
             tool = str(meta.get("tool_name") or getattr(f, "finding_type", "") or "")
             sev = assign_severity_tier(f)
+            conf_raw = getattr(f, "confidence_raw", None)
             if profile is not None:
                 try:
-                    sev = apply_visual_grounding(tool, self.agent_id, sev, profile, meta).adjusted_severity
+                    gr = apply_visual_grounding(tool, self.agent_id, sev, profile, meta)
+                    sev = gr.adjusted_severity
+                    # Apply the grounding confidence scale so camera-physics tools on
+                    # non-camera images (scale=0.3) don't count as strong signals despite
+                    # their raw confidence. Keeps the agent and arbiter verdict in parity —
+                    # the arbiter already applies this scaling; now the agent does too.
+                    if gr.confidence_scale < 1.0 and isinstance(conf_raw, (int, float)):
+                        conf_raw = round(float(conf_raw) * gr.confidence_scale, 4)
                 except Exception as g_err:
                     logger.debug("Severity grounding skipped for verdict", error=str(g_err))
             # Report-safety gate: a POSITIVE that grounding judged not report-safe /
@@ -884,11 +961,47 @@ class AgentInvestigationMixin:
             rows.append({
                 "evidence_verdict": str(getattr(f, "evidence_verdict", "") or ""),
                 "status": str(getattr(f, "status", "") or ""),
-                "confidence_raw": getattr(f, "confidence_raw", None),
+                "confidence_raw": conf_raw,
                 "severity_tier": sev,
                 "metadata": meta,
             })
-        verdict, confidence, _reason = compute_agent_verdict(rows)
+
+        # Build agent-specific visual signal from the shared VisualContext — the same
+        # pattern the arbiter uses (arbiter.py:502-521) so per-agent verdicts are
+        # computed with identical visual grounding at both call sites.
+        visual_signal = None
+        try:
+            vc = getattr(self, "visual_context", None)
+            if vc is not None:
+                _holistic = str(getattr(vc, "authenticity_verdict", "") or "").upper()
+                _is_remote = str(getattr(vc, "source", "") or "").startswith("llm")
+                if self.agent_id == "Agent1":
+                    _integ = getattr(vc, "image_integrity_context", None)
+                    visual_signal = {
+                        "verdict": _holistic,
+                        "court_defensible": _is_remote,
+                        "anomalies": list(getattr(_integ, "ai_generation_signals", None) or []),
+                    }
+                elif self.agent_id == "Agent3":
+                    _objsc = getattr(vc, "object_scene_context", None)
+                    visual_signal = {
+                        "verdict": _holistic if _holistic in ("AI_GENERATED", "LIKELY_MANIPULATED") else "",
+                        "court_defensible": _is_remote,
+                        "anomalies": list(getattr(_objsc, "scene_inconsistencies", None) or []),
+                    }
+                else:  # Agent5 — provenance axis, no holistic manipulation vote
+                    _meta_vc = getattr(vc, "metadata_visual_context", None)
+                    visual_signal = {
+                        "verdict": "",
+                        "court_defensible": _is_remote,
+                        "anomalies": list(getattr(_meta_vc, "metadata_contradictions", None) or []),
+                    }
+        except Exception:
+            pass
+
+        verdict, confidence, _reason = compute_agent_verdict(
+            rows, visual_signal=visual_signal, is_deep=is_deep
+        )
         return verdict, confidence
 
     def _build_deterministic_synthesis(
@@ -1528,6 +1641,12 @@ class AgentInvestigationMixin:
         for f in self._findings:
             f.metadata["analysis_phase"] = "initial"
 
+        # Snapshot Phase-1 verdict + confidence before they are overwritten by the
+        # deep synthesis. These are used to compute phase_delta at the end of deep.
+        _p1_syn = getattr(self, "_agent_synthesis", None) or {}
+        _phase1_verdict = str(_p1_syn.get("verdict") or "INCONCLUSIVE").upper()
+        _phase1_confidence = float(_p1_syn.get("agent_confidence") or 0.0)
+
         # Build initial findings summary for deep context enrichment (Fix 4)
         initial_summary = self._build_initial_findings_summary(phase="initial")
         self._initial_findings_summary = initial_summary
@@ -1584,25 +1703,33 @@ class AgentInvestigationMixin:
             f.agent_id = self.agent_id
             f.metadata["analysis_phase"] = "deep"
 
-        # Dedup deep findings by tool_name — both against existing initial
-        # findings AND within the deep batch itself. A tool re-run under a
-        # different reactive task phrasing yields multiple findings for the same
-        # tool; without the intra-batch guard those duplicates survive into the
-        # report and inflate tool counts. Keep the first occurrence per tool.
-        existing_tool_names = {
-            f.metadata.get("tool_name")
-            for f in self._findings
-            if hasattr(f, "metadata") and isinstance(f.metadata, dict)
-        }
-        deduped_deep = []
+        # Deep findings SUPERSEDE same-tool initial findings rather than being
+        # dropped. The deep run has more context (Phase-1 summary + visual
+        # grounding) and is the authoritative result for that tool. We still
+        # dedup within the deep batch itself so reactive-expansion re-runs of the
+        # same task don't inflate tool counts.
+        existing_by_tool: dict[str, int] = {}
+        for i, f in enumerate(self._findings):
+            if hasattr(f, "metadata") and isinstance(f.metadata, dict):
+                tname = f.metadata.get("tool_name")
+                if tname:
+                    existing_by_tool[tname] = i
+
+        deduped_deep: list = []
         seen_deep_tools: set = set()
+        superseded_indices: set = set()
         for f in deep_findings:
             tname = f.metadata.get("tool_name") if isinstance(getattr(f, "metadata", None), dict) else None
-            if tname in existing_tool_names or tname in seen_deep_tools:
-                continue
+            if tname in seen_deep_tools:
+                continue  # intra-batch dedup
             if tname:
                 seen_deep_tools.add(tname)
+                if tname in existing_by_tool:
+                    superseded_indices.add(existing_by_tool[tname])
             deduped_deep.append(f)
+
+        if superseded_indices:
+            self._findings = [f for i, f in enumerate(self._findings) if i not in superseded_indices]
         self._findings = self._findings + deduped_deep
 
         self._tool_success_count = sum(
@@ -1622,11 +1749,23 @@ class AgentInvestigationMixin:
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
             self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
         # Authoritative verdict + confidence from compute_agent_verdict (LLM narrates only).
-        _gv, _gc = self._compute_grounded_agent_verdict(self._findings)
+        # is_deep=True gives more weight to the holistic visual context in deep mode.
+        _gv, _gc = self._compute_grounded_agent_verdict(self._findings, is_deep=True)
         synthesis["verdict"] = _gv
         synthesis["agent_confidence"] = _gc
         self._agent_confidence = synthesis["agent_confidence"]
         self._agent_error_rate = synthesis["agent_error_rate"]
+
+        # Compute phase delta — compares Phase-1 vs Phase-2 to produce a
+        # structured annotation that the arbiter surfaces in per_agent_narrative_structured.
+        _phase_delta, _delta_reason = _compute_phase_delta(
+            _phase1_verdict, _phase1_confidence, _gv, _gc
+        )
+        synthesis["phase_delta"] = _phase_delta
+        synthesis["delta_reason"] = _delta_reason
+        synthesis["phase1_verdict"] = _phase1_verdict
+        synthesis["phase1_confidence"] = _phase1_confidence
+
         self._agent_synthesis = synthesis
 
         # Enrich synthesis with agent brief and initial context (Fix 5 + Fix 6)

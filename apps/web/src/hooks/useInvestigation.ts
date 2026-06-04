@@ -1098,7 +1098,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     if (showLoadingOverlay && !analysisStreamReady) {
-      loadingOverlayController.show(uploadPhaseText || pipelineMessage || "Initializing workspace");
+      const text = uploadPhaseText || pipelineMessage || "Initializing workspace";
+      // Use updateText() when the overlay is already visible so we don't reset
+      // showTime (which would re-arm the MIN_DISPLAY guard on every pipeline message).
+      // show() is only called when visibility is first established.
+      if (loadingOverlayController.getState().visible) {
+        loadingOverlayController.updateText(text);
+      } else {
+        loadingOverlayController.show(text);
+      }
       const dispatchedCount = Math.min(
         Object.keys(agentUpdates).filter((k) => k !== "Arbiter").length,
         5

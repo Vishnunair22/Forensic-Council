@@ -89,6 +89,9 @@ type ParsedAgentNarrative = {
   key_findings: string;
   opinion: string;
   synthesis_source?: string;
+  phase_delta?: string;
+  delta_reason?: string;
+  phase_comparison?: string;
 };
 
 const SCREENSHOT_CAMERA_TOOLS = new Set([
@@ -459,6 +462,9 @@ export function AgentFindingCard({
           key_findings: String(record.key_findings || record.deep_analysis || ""),
           opinion: String(record.opinion || record.reliability_verdict || ""),
           synthesis_source: String(record.synthesis_source || ""),
+          phase_delta: String(record.phase_delta || ""),
+          delta_reason: String(record.delta_reason || ""),
+          phase_comparison: String(record.phase_comparison || ""),
         };
       }
       if (record.evidence_assessment || record.deep_analysis || record.reliability_verdict) {
@@ -468,6 +474,9 @@ export function AgentFindingCard({
           key_findings: String(record.deep_analysis || ""),
           opinion: String(record.reliability_verdict || ""),
           synthesis_source: String(record.synthesis_source || ""),
+          phase_delta: String(record.phase_delta || ""),
+          delta_reason: String(record.delta_reason || ""),
+          phase_comparison: String(record.phase_comparison || ""),
         };
       }
       return null;
@@ -659,6 +668,15 @@ export function AgentFindingCard({
             {/* Agent overview narrative — full text, no clamp */}
             {parsedNarrative ? (
               <div className="space-y-4 mb-4">
+                {/* Phase delta — deep analysis only */}
+                {parsedNarrative.phase_delta && parsedNarrative.phase_delta !== "N/A" && (
+                  <PhaseDeltaBadge
+                    delta={parsedNarrative.phase_delta}
+                    reason={parsedNarrative.delta_reason || ""}
+                    comparison={parsedNarrative.phase_comparison || ""}
+                  />
+                )}
+
                 {/* What this means — the agent's plain-language conclusion. The
                     shared "what the image is" scene description now lives once at
                     the page level (EvidenceContextCard), so it is no longer
@@ -767,6 +785,43 @@ export function AgentFindingCard({
         </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Phase Delta Badge ─────────────────────────────────────────────────────────
+
+const DELTA_CFG = {
+  CONFIRMED:    { label: "Deep Confirmed",    cls: "border-success/30 bg-success/[0.08] text-success" },
+  REFINED:      { label: "Deep Refined",      cls: "border-primary/30 bg-primary/[0.08] text-primary" },
+  ESCALATED:    { label: "Deep Escalated",    cls: "border-danger/30  bg-danger/[0.08]  text-danger"  },
+  CONTRADICTED: { label: "Deep Contradicted", cls: "border-warning/30 bg-warning/[0.08] text-warning" },
+} as const;
+
+function PhaseDeltaBadge({
+  delta,
+  reason,
+  comparison,
+}: {
+  delta: string;
+  reason: string;
+  comparison: string;
+}) {
+  const key = delta.toUpperCase() as keyof typeof DELTA_CFG;
+  const cfg = DELTA_CFG[key] ?? DELTA_CFG.REFINED;
+  const text = comparison || reason;
+
+  return (
+    <div className={clsx("rounded-xl border px-4 py-3 space-y-1", cfg.cls)}>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold font-mono tracking-wider uppercase">
+          {cfg.label}
+        </span>
+        <span className="text-xs font-mono opacity-60">· Deep Analysis</span>
+      </div>
+      {text && (
+        <p className="text-xs leading-relaxed opacity-90">{text}</p>
+      )}
     </div>
   );
 }

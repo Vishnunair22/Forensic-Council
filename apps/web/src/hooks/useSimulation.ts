@@ -295,10 +295,12 @@ export const useSimulation = ({
                         ...prev,
                         [incomingId]: {
                           status: agentData.status || "running",
+                          // Preserve the last non-empty thinking so agent cards never
+                          // flip to the pipeline-level fallback between tool executions.
                           thinking:
-                            agentData.thinking ??
-                            prev[incomingId]?.thinking ??
-                            "",
+                            (agentData.thinking?.trim()
+                              ? agentData.thinking
+                              : prev[incomingId]?.thinking) ?? "",
                           tools_done:
                             typeof agentData.tools_done === "number"
                               ? agentData.tools_done

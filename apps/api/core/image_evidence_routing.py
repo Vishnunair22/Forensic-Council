@@ -201,7 +201,10 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
             "screenshot_scene_applicability",
             "screenshot_layout_forensics",
         ]
-        plan["Agent3"]["deep"] = ["read_shared_image_context"]
+        # Agent 3 has no meaningful deep tools for screenshots — initial layout
+        # forensics already covers the applicable surface. An empty deep list
+        # causes run_deep_investigation to return initial findings immediately.
+        plan["Agent3"]["deep"] = []
         plan["Agent3"]["forbidden"] = [
             "lighting_correlation_initial",
             "scale_validation",
@@ -219,7 +222,6 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
         plan["Agent5"]["deep"] = [
             "timestamp_analysis",
             "provenance_chain_verify",
-            "read_shared_image_context",
         ]
         plan["Agent5"]["forbidden"] = ["camera_profile_match", "astro_grounding"]
 
@@ -255,7 +257,6 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
         plan["Agent3"]["deep"] = [
             "scale_validation",
             "lighting_consistency",
-            "read_shared_image_context",
         ]
 
         # Agent 5
@@ -301,7 +302,9 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
 
         # Agent 3
         plan["Agent3"]["initial"] = ["screenshot_layout_forensics"]
-        plan["Agent3"]["deep"] = ["read_shared_image_context"]
+        # No meaningful deep tools for documents — initial layout forensics covers
+        # applicable checks. Empty deep list → returns initial findings immediately.
+        plan["Agent3"]["deep"] = []
         plan["Agent3"]["forbidden"] = [
             "lighting_correlation_initial",
             "scale_validation",
@@ -361,7 +364,6 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
             plan["Agent3"]["deep"] = [
                 "scale_validation",
                 "lighting_consistency",
-                "read_shared_image_context",
             ]
 
         # Agent 5

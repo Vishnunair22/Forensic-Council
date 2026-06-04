@@ -432,27 +432,35 @@ export function AgentStatusCard({
   };
 
   const [fallbackPhraseIndex, setFallbackPhraseIndex] = React.useState(0);
-  const lastThinkingRef = React.useRef<string>("");
-  const thinkingStaleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Debounced thinking text — prevents AnimatePresence from firing exit/enter
+  // on every rapid backend message. 80ms matches the LoadingOverlay debounce.
+  const [debouncedThinking, setDebouncedThinking] = React.useState(() =>
+    sanitizeThinking(liveUpdate?.thinking || thinking)
+  );
+  const thinkingDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    const raw = sanitizeThinking(liveUpdate?.thinking || thinking);
+    if (thinkingDebounceRef.current) clearTimeout(thinkingDebounceRef.current);
+    thinkingDebounceRef.current = setTimeout(() => setDebouncedThinking(raw), 80);
+    return () => {
+      if (thinkingDebounceRef.current) clearTimeout(thinkingDebounceRef.current);
+    };
+  }, [liveUpdate?.thinking, thinking]);
+
+  // Phrase interval: only resets when status or agentId changes, NOT on every
+  // thinking update. Previously liveUpdate?.thinking was in the dep array which
+  // restarted the 3.5s timer on every backend message — phrases never cycled.
   React.useEffect(() => {
     if (status !== "running") {
-      // Reset so the next run starts from the first phrase, not wherever the
-      // last run was when the interval cleared.
       setFallbackPhraseIndex(0);
       return;
     }
-    const currentThinking = liveUpdate?.thinking || "";
-    if (currentThinking !== lastThinkingRef.current) {
-      lastThinkingRef.current = currentThinking;
-      if (thinkingStaleTimerRef.current) clearTimeout(thinkingStaleTimerRef.current);
-    }
-    // Cycle fallback phrases every 3.5s
     const phraseInterval = setInterval(() => {
       setFallbackPhraseIndex(prev => (prev + 1) % (FALLBACK_PHRASES[agentId]?.length || 5));
     }, 3500);
     return () => clearInterval(phraseInterval);
-  }, [status, liveUpdate?.thinking, agentId]);
+  }, [status, agentId]);
 
   const cfg = statusConfig[status] || statusConfig.running;
   const [stageIndex, setStageIndex] = useState(0);
@@ -740,14 +748,14 @@ export function AgentStatusCard({
               </div>
               <AnimatePresence mode="wait">
                 <motion.p
-                  key={sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
+                  key={debouncedThinking || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                   initial={prefersReduced ? false : { opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={prefersReduced ? {} : { opacity: 0, transition: { duration: 0.1 } }}
                   transition={{ duration: 0.16 }}
                   className="max-w-[280px] text-sm fc-text-muted font-normal leading-relaxed"
                 >
-                  {sanitizeThinking(liveUpdate?.thinking || thinking) || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
+                  {debouncedThinking || FALLBACK_PHRASES[agentId]?.[fallbackPhraseIndex] || (status === "validating" ? "Verifying chain of custody..." : "Processing evidence...")}
                 </motion.p>
               </AnimatePresence>
             </div>

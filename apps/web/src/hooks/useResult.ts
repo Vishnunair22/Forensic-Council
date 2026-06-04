@@ -123,7 +123,13 @@ export function useResult(initialSessionId?: string) {
       : "arbiter";
   });
   const [report, setReport] = useState<ReportDTO | null>(null);
-  const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
+  const [arbiterMsg, setArbiterMsg] = useState(() => {
+    if (typeof window === "undefined") return "Council deliberating on evidence...";
+    const _sid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
+    return _sid && sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_sid}`) === "1"
+      ? UI_STRINGS.DECRYPTING_LEDGER
+      : "Council deliberating on evidence...";
+  });
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
   const [isDeepPhase, setIsDeepPhase] = useState(false);
@@ -175,10 +181,12 @@ export function useResult(initialSessionId?: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Transition smoothness: ensure overlay shows for at least 800ms.
-  // data-fc-loading CSS backstop is removed only AFTER the minimum overlay
-  // timer fires (or when reportAlreadyReady skips it), so the body::before
-  // bridge stays in place until result content is visible.
+  // Transition smoothness: ensure the arbiter overlay shows for at least 400ms
+  // on the result page before allowing state to flip to "ready". This prevents
+  // a perceptible flash when the report is already cached and arrives in <100ms.
+  // data-fc-loading CSS backstop is removed only AFTER this timer fires (or
+  // when reportAlreadyReady skips it), so the body::before bridge stays in
+  // place until result content is actually visible.
   useEffect(() => {
     if (!mounted) return;
     if (reportAlreadyReady || minOverlayDone) {
@@ -189,13 +197,13 @@ export function useResult(initialSessionId?: string) {
     const timer = setTimeout(() => {
       setMinOverlayDone(true);
       document.body.removeAttribute("data-fc-loading");
-      // If report data is already available, complete the transition
-      if (report) {
-        setState("ready");
-      }
-    }, 250);
+      // When minOverlayDone becomes true, the finalReportData effect re-runs
+      // (minOverlayDone is in its dep array) and calls setState("ready") if
+      // the report is already available — covering the race where the report
+      // arrived while this timer was running.
+    }, 400);
     return () => clearTimeout(timer);
-  }, [mounted, sessionId, reportAlreadyReady, minOverlayDone, report]);
+  }, [mounted, sessionId, reportAlreadyReady, minOverlayDone]);
 
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {

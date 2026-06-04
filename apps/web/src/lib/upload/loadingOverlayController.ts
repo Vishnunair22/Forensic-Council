@@ -20,6 +20,8 @@ export class LoadingOverlayController {
   }
 
   show(text?: string): void {
+    // Cancel any pending dismiss so a new show() call always wins.
+    this.clearTimer();
     this.visible = true;
     this.showTime = Date.now();
     this.text = text || "Initializing workspace";

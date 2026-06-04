@@ -25,11 +25,9 @@ import { ForensicErrorModal } from "@/components/ui/ForensicErrorModal";
 import { ResultStateView } from "./ResultStateView";
 import { EvidenceHeader } from "./EvidenceHeader";
 import { VerdictSection } from "./VerdictSection";
-import { AgentsStrip } from "./AgentsStrip";
 import { EvidenceContextCard } from "./EvidenceContextCard";
-import { IntelligenceBrief } from "./IntelligenceBrief";
-import { FindingsMetadata } from "./FindingsMetadata";
-import { ExecutionTimeline } from "./ExecutionTimeline";
+import { ExecutiveSummary } from "./ExecutiveSummary";
+import { KeyFindings } from "./KeyFindings";
 import { ReportIntegrity } from "./ReportIntegrity";
 import { PageNavigation } from "./PageNavigation";
 import { DegradationBanner } from "./DegradationBanner";
@@ -43,6 +41,7 @@ const AgentAnalysisTab = dynamic(
   () => import("./AgentAnalysisTab").then((m) => m.AgentAnalysisTab),
   { ssr: false, loading: () => <AgentAnalysisTabSkeleton /> },
 );
+
 const HistoryPanel = dynamic(
   () => import("./HistoryPanel").then((m) => m.HistoryPanel),
   { ssr: false },
@@ -105,6 +104,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   }, [rs.report]);
 
   const keyFindings = useMemo(() => buildKeyFindings(rs.report), [rs.report]);
+  const skippedCount = useMemo(
+    () => Object.keys(rs.report?.skipped_agents ?? {}).length,
+    [rs.report]
+  );
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
 
   return (
@@ -243,7 +246,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
-              {/* 2. Verdict + Metric Strip */}
+              {/* 2. Verdict + 4-Metric Strip */}
               <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <VerdictSection
                   vc={getVerdictConfig(rs.report.overall_verdict ?? "")}
@@ -253,6 +256,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                   discordPct={toPct(rs.report.confidence_std_dev)}
                   isDeepPhase={rs.isDeepPhase}
                   agentCount={activeAgentIds.length}
+                  skippedCount={skippedCount}
                 />
               </motion.div>
 
@@ -263,73 +267,50 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 </motion.div>
               )}
 
-              {/* 4. Intelligence Brief */}
-              {(keyFindings.length > 0 || rs.report.verdict_sentence || rs.report.executive_summary) && (
+              {/* 4. Executive Summary */}
+              {rs.report.executive_summary && (
                 <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                  <IntelligenceBrief
-                    verdictSentence={rs.report.verdict_sentence || rs.report.executive_summary}
-                    keyFindings={keyFindings}
+                  <ExecutiveSummary
+                    summary={rs.report.executive_summary}
                     reliabilityNote={rs.report.reliability_note}
-                    uncertaintyStatement={rs.report.uncertainty_statement}
-                    coverageNote={rs.report.analysis_coverage_note}
-                    skippedAgents={rs.report.skipped_agents}
                     isDeepPhase={rs.isDeepPhase}
                   />
                 </motion.div>
               )}
 
-              {/* 4.25. Evidence context — "what this shows", once, above the agents */}
+              {/* 5. Key Findings */}
+              {keyFindings.length > 0 && (
+                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
+                  <KeyFindings findings={keyFindings} />
+                </motion.div>
+              )}
+
+              {/* 6. Evidence context — "what this shows", once, above the agents */}
               {rs.report.evidence_summary && (
                 <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                   <EvidenceContextCard evidenceSummary={rs.report.evidence_summary} />
                 </motion.div>
               )}
 
-              {/* 4.5. Agents Strip — after narrative so verdict context is established */}
-              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                <AgentsStrip
-                  perAgentMetrics={rs.report.per_agent_metrics}
-                  perAgentSummary={rs.report.per_agent_summary}
-                  skippedAgents={rs.report.skipped_agents}
-                  activeAgentIds={activeAgentIds}
-                />
-              </motion.div>
-
-              {/* 5. Agent Findings */}
+              {/* 7. Agent Analysis (grid + skipped + tool log + timeline) */}
               <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <AgentAnalysisTab
                   report={rs.report}
                   activeAgentIds={activeAgentIds}
                   isDeepPhase={rs.isDeepPhase}
+                  agentTimeline={rs.agentTimeline}
+                  pipelineStartAt={rs.pipelineStartAt}
                 />
               </motion.div>
 
-              {/* 5.5. Deep Model Telemetry — only when cross-modal fusion actually ran */}
+              {/* 8. Deep Model Telemetry — only when cross-modal fusion actually ran */}
               {rs.report?.cross_modal_fusion && Object.keys(rs.report.cross_modal_fusion).length > 0 && (
                 <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                   <DeepModelTelemetry report={rs.report} />
                 </motion.div>
               )}
 
-              {/* 6. Analysis Metrics */}
-              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                <FindingsMetadata
-                  report={rs.report}
-                  activeAgentIds={activeAgentIds}
-                />
-              </motion.div>
-
-              {/* 7. Execution Timeline */}
-              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                <ExecutionTimeline
-                  report={rs.report}
-                  activeAgentIds={activeAgentIds}
-                  agentTimeline={rs.agentTimeline}
-                  pipelineStartAt={rs.pipelineStartAt}
-                />
-              </motion.div>
-
-              {/* 8. Report Integrity */}
+              {/* 9. Report Integrity */}
               <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <ReportIntegrity
                   report={rs.report}
@@ -338,7 +319,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
-              {/* 9. Navigation */}
+              {/* 10. Navigation */}
               <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
                 <PageNavigation onHome={rs.handleHome} onNew={rs.handleNew} />
               </motion.div>

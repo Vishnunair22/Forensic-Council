@@ -137,10 +137,27 @@ _SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
 # (manipulation-confirming) signal. Below this it is treated as a medium alert.
 _STRONG_SIGNAL_CONF_FLOOR = 0.6
 
+# Visual context (Gemini) weight constants.
+# A court-defensible remote-vision MANIPULATED/AI_GENERATED read is the strongest
+# holistic signal in the visual domain. It alone does not call MANIPULATED (which
+# requires corroboration with at least one tool strong signal), but when combined
+# with a tool strong signal the convergence adds a confidence premium because the
+# two independent pipelines (pixel-level tools + holistic vision) agree.
+#
+# In purely tool-only cases (Agent5 provenance, hash mismatch) the deterministic
+# findings are authoritative on their own and get the standard weight.
+_GEMINI_COURT_STRONG_WEIGHT = 1    # Gemini court-defensible → 1 strong signal vote
+_GEMINI_SCREEN_ALERT_WEIGHT = 1    # Screening / local-ensemble → 1 alert signal vote
+
+# Confidence boosts applied when independent pipelines converge.
+_CONV_VISUAL_TOOL_CONF_BOOST = 0.06  # Gemini court-defensible + ≥1 tool strong agree → +6 pp
+_GEMINI_SOLO_CONF_BOOST = 0.03       # Gemini court-defensible strong verdict alone → +3 pp on SUSPICIOUS
+
 
 def compute_agent_verdict(
     findings: list[Any],
     visual_signal: dict[str, Any] | None = None,
+    is_deep: bool = False,
 ) -> tuple[str, float, str]:
     """Compute a per-agent verdict + confidence from its findings, severity-aware
     and grounded in the shared visual context.
@@ -235,24 +252,52 @@ def compute_agent_verdict(
     v_court = bool(vs.get("court_defensible"))
     v_anomalies = [a for a in (vs.get("anomalies") or []) if a]
     visual_contributed = False
+    gemini_strong_vote = False  # True when court-defensible Gemini asserts manipulation
+
+    # In deep analysis, the holistic visual read carries more weight: it has
+    # already been cross-checked against Phase-1 tool findings, so a court-
+    # defensible manipulation verdict is treated as 2 strong signal votes instead
+    # of 1. This lets a confirmed Gemini read break ties in the deep verdict without
+    # requiring a second independent tool strong signal.
+    _court_strong_weight = (_GEMINI_COURT_STRONG_WEIGHT + 1) if is_deep else _GEMINI_COURT_STRONG_WEIGHT
+
     if v_verdict in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED"):
         visual_contributed = True
         if v_court:
-            strong_signals += 1
-            alert_signals += 1
+            strong_signals += _court_strong_weight
+            alert_signals += _court_strong_weight
+            gemini_strong_vote = True
         else:
-            alert_signals += 1
+            alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
     elif v_verdict == "SUSPICIOUS":
         visual_contributed = True
-        alert_signals += 1
+        alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
     if v_anomalies and v_court:
         visual_contributed = True
-        alert_signals += 1
+        alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
+
+    # Convergence flag: Gemini court-defensible + at least one deterministic tool
+    # strong signal agree — two independent pipelines pointing to the same conclusion
+    # is stronger evidence than either alone.
+    visual_tool_convergent = gemini_strong_vote and tool_strong >= 1
+
+    # Gemini-clean alignment: Gemini says AUTHENTIC/CLEAN and all tools NEGATIVE →
+    # higher confidence in the clean verdict because the holistic read corroborates.
+    gemini_clean_vote = v_court and v_verdict in ("AUTHENTIC", "CLEAN", "NO_REPORTABLE_MANIPULATION_DETECTED")
 
     if strong_signals >= 2:
-        verdict, conf = "MANIPULATED", 0.85
+        verdict = "MANIPULATED"
+        # Convergent pipelines are more reliable than a single channel.
+        conf = min(0.94, 0.85 + (_CONV_VISUAL_TOOL_CONF_BOOST if visual_tool_convergent else 0.0))
     elif strong_signals == 1:
-        verdict, conf = "SUSPICIOUS", 0.72
+        verdict = "SUSPICIOUS"
+        if gemini_strong_vote and tool_strong == 0:
+            # Gemini asserts manipulation but no deterministic tool corroborates yet —
+            # slight confidence premium over a purely tool-driven suspicious call because
+            # court-defensible holistic vision is a strong visual-domain signal.
+            conf = round(0.72 + _GEMINI_SOLO_CONF_BOOST, 2)
+        else:
+            conf = 0.72
     elif alert_signals >= 1:
         # Only medium-strength signals — genuinely ambiguous, not a manipulation
         # call. Confidence is graduated by how strong/numerous the ambiguous signals
@@ -264,8 +309,11 @@ def compute_agent_verdict(
         # No usable tool output — cannot assert authenticity.
         verdict, conf = "INCONCLUSIVE", 0.4
     else:
-        # Clean: confidence scales modestly with coverage breadth, capped.
-        verdict, conf = "AUTHENTIC", min(0.92, 0.74 + 0.03 * completed)
+        # Clean: confidence scales modestly with coverage breadth, with a small
+        # additional bump when Gemini's holistic read also says clean/authentic
+        # (two independent pipelines agreeing on authenticity is meaningful).
+        conf = min(0.92, 0.74 + 0.03 * completed + (0.04 if gemini_clean_vote else 0.0))
+        verdict = "AUTHENTIC"
 
     moderate_signals = alert_signals - strong_signals
     failed_note = f" {failed} check(s) did not complete and are treated as coverage gaps." if failed else ""

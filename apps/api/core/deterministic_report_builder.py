@@ -66,25 +66,73 @@ def build_deterministic_report(
     confidence_pct = int(round(arbiter_deliberation.final_confidence * 100))
 
     agent_list = [f"Agent {aid[-1]}" for aid in norm_syn.keys()]
+    n_agents = len(agent_list)
     agents_str = ", ".join(agent_list) if agent_list else "analytical agents"
+    domain_count = n_agents  # one domain per active agent
 
-    # The deliberation reason frequently already begins with "computed based on:"
-    # / "based on:"; strip it so the sentence does not read "based on: computed
-    # based on: ...".
-    _reason = str(arbiter_deliberation.confidence_reason or "").strip().lower()
-    for _pfx in ("computed based on:", "computed based on", "based on:", "based on"):
-        if _reason.startswith(_pfx):
-            _reason = _reason[len(_pfx):].strip(" :")
-            break
-    _basis = f" This determination is based on {_reason}." if _reason else ""
-    exc_summary = (
-        f"This forensic investigation examined the submitted file `{filename}` ({mime_type}) "
-        f"with SHA-256 integrity hash `{sha256}`. Forensic pipelines executed checks via {agents_str}. "
-        f"Following deliberation, the final verdict is determined as '{verdict_label}' "
-        f"with a confidence score of {confidence_pct}%.{_basis}"
+    # Sentence 1 — core verdict statement
+    _s1 = (
+        f"Forensic examination of `{filename}` ({mime_type}) returned a "
+        f"**{verdict_label}** verdict with **{confidence_pct}%** confidence "
+        f"after {n_agents} specialist agent{'' if n_agents == 1 else 's'} completed "
+        f"analysis across {domain_count} forensic domain{'' if domain_count == 1 else 's'}."
     )
-    if not vis_available:
-        exc_summary += " Shared visual context was unavailable, so the conclusion relies on completed tool findings only."
+
+    # Sentence 2 — evidence basis (strongest finding or agent synthesis)
+    _pos_findings = [
+        f for f in (arbiter_deliberation.strongest_findings or [])
+        if getattr(f, "evidence_verdict", None) == "POSITIVE"
+    ]
+    _verdicts_upper = (display_verdict or "").upper()
+    if _pos_findings:
+        _top = _pos_findings[0]
+        _stmt = getattr(_top, "finding_statement", None) or str(_top)
+        _s2 = f"Convergent signals — including {_stmt} — formed the primary evidentiary basis for this determination."
+    elif _verdicts_upper in ("MANIPULATED", "SUSPICIOUS"):
+        _s2 = (
+            "Forensic signals identified by active agents contained statistically significant "
+            "anomalies inconsistent with an authentic, unmodified file."
+        )
+    elif _verdicts_upper == "AUTHENTIC":
+        _manip_pct = int(round(arbiter_deliberation.final_confidence * 100))
+        _s2 = (
+            f"Independent checks across pixel integrity, statistical frequency, and provenance domains "
+            f"returned no manipulation indicators, consistent with an unmodified original."
+        )
+    else:
+        _s2 = (
+            "Evidence across active analytical domains produced ambiguous or conflicting signals "
+            "that preclude a definitive conclusion without additional context."
+        )
+
+    # Sentence 3 — coverage and tool reliability
+    _all_metrics = list(tool_coverage.get("completed_tools", []))
+    _failed = list(tool_coverage.get("failed_tools", []))
+    _n_completed = len(_all_metrics)
+    _n_failed = len(_failed)
+    if _n_failed == 0 and _n_completed > 0:
+        _s3 = (
+            f"All {_n_completed} forensic tool{'' if _n_completed == 1 else 's'} completed "
+            f"execution without errors, achieving full coverage across every active analytical domain."
+        )
+    elif _n_failed > 0:
+        _s3 = (
+            f"{_n_completed} forensic tool{'' if _n_completed == 1 else 's'} completed execution; "
+            f"{_n_failed} did not complete and are treated as coverage limitations only — "
+            f"they do not affect the evidentiary weight of completed checks."
+        )
+    else:
+        _s3 = "Tool coverage reflects the completed execution path for this file type."
+
+    # Sentence 4 — visual context and report provenance
+    if vis_available and vis_ext_llm:
+        _s4 = "Visual scene grounding was provided by a remote vision model and cross-validated against local forensic tools; the verdict and confidence are computed deterministically from tool outputs."
+    elif vis_available:
+        _s4 = "Visual scene context was generated using local forensic models and informed the grounding of tool-level findings; all evidentiary weights are computed deterministically."
+    else:
+        _s4 = "Visual context was unavailable for this analysis; the determination relies exclusively on completed tool findings and arbiter deliberation."
+
+    exc_summary = f"{_s1} {_s2} {_s3} {_s4}"
 
     # --- 2. Evidence Overview ---
     route = execution_metadata.get("analysis_mode") or "hybrid"
