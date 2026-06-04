@@ -159,6 +159,86 @@ def _extract_visible_metadata_clues(
     return clues
 
 
+_WEAPON_KEYWORDS = (
+    "gun", "pistol", "rifle", "firearm", "weapon", "knife", "blade", "sword",
+    "explosive", "grenade", "ammunition", "bomb", "handgun", "shotgun", "machete",
+)
+_DOCUMENT_KEYWORDS = (
+    "passport", "license", "licence", "id card", "identity card", "certificate",
+    "invoice", "form", "receipt", "contract", "ledger", "statement", "affidavit",
+)
+
+
+def _derive_rich_scene_signals(
+    file_path: str,
+    detected_objects: list[str],
+    ocr_lines: list[str],
+    clip_category: str,
+    final_category: str,
+    ela_res: dict,
+    noiseprint_res: dict,
+    opencv_res: dict,
+) -> dict[str, list[str]]:
+    """Derive richer object/integrity/provenance signals from already-collected
+    tool outputs — the local-ensemble analogue of the dedicated fields the
+    refined Gemini prompt now returns (weapons, documents, people, lighting,
+    follow-up regions, benign edits). Pure inference over existing results; adds
+    no new model calls. Empty lists when nothing is genuinely found.
+    """
+    objs = [str(o) for o in (detected_objects or []) if str(o).strip()]
+    text_l = " ".join(str(t).lower() for t in (ocr_lines or []))
+    cat_l = f"{clip_category} {final_category}".lower()
+
+    weapons = sorted({o for o in objs if any(k in o.lower() for k in _WEAPON_KEYWORDS)})
+    people = [o for o in objs if any(k in o.lower() for k in ("person", "people", "face", "man", "woman", "child"))]
+
+    documents: list[str] = []
+    if final_category == "document" or "document" in cat_l or "id card" in cat_l or "passport" in cat_l:
+        documents.append(f"document-like image ({clip_category})")
+    documents += [k for k in _DOCUMENT_KEYWORDS if k in text_l]
+
+    # Benign editing: alpha/transparency strongly implies a cutout / background removal.
+    editing: list[str] = []
+    try:
+        from PIL import Image as _PILImg
+        with _PILImg.open(file_path) as _im:
+            if _im.mode in ("RGBA", "LA", "PA") or "transparency" in _im.info:
+                editing.append("transparent/alpha channel present (background removal or cutout)")
+    except Exception as exc:
+        logger.debug("Alpha-channel edit probe failed", error=str(exc))
+
+    # Regions worth a pixel-level forensic zoom, from forensic hotspots.
+    regions: list[str] = []
+    if isinstance(ela_res, dict) and not ela_res.get("not_applicable"):
+        n = int(ela_res.get("num_anomaly_regions", 0) or 0)
+        if n > 0:
+            regions.append(f"{n} ELA hotspot region(s)")
+    if isinstance(noiseprint_res, dict) and not noiseprint_res.get("not_applicable") and noiseprint_res.get("sensor_inconsistency_detected"):
+        regions.append("sensor-noise inconsistent region(s)")
+
+    # Coarse lighting / scene clues usable by Agent5 time/geo cross-checks.
+    lighting: list[str] = []
+    if isinstance(opencv_res, dict) and opencv_res.get("available"):
+        b = float(opencv_res.get("brightness", 0) or 0)
+        if b < 55:
+            lighting.append("low average brightness — low-light, night, or indoor scene")
+        elif b > 205:
+            lighting.append("high average brightness — bright or high-key lighting")
+    if "outdoor" in cat_l:
+        lighting.append("outdoor scene")
+    elif "indoor" in cat_l:
+        lighting.append("indoor scene")
+
+    return {
+        "weapons": weapons,
+        "people": people[:5],
+        "documents": documents[:5],
+        "editing_signals": editing,
+        "regions_for_followup": regions,
+        "lighting_weather_season": lighting,
+    }
+
+
 def _clip_to_category(clip_top_match: str) -> str:
     t = clip_top_match.lower()
     if "screenshot" in t or "screen capture" in t:
@@ -277,17 +357,46 @@ def _cross_signal_synthesis(
         if tools_reported:
             signals.append(f"{'/'.join(tools_reported)}: no manipulation indicators detected")
 
-    # ── Verdict ──────────────────────────────────────────────────────────
-    if len(signals) >= 2 and any("corroborat" in s.lower() or "high confidence" in s.lower() for s in signals):
+    # ── Verdict (calibrated) ─────────────────────────────────────────────
+    # The local ensemble is a SCREENING tool and must not cry wolf. A single
+    # weak or uncorroborated signal yields INCONCLUSIVE (surfaced for review),
+    # NEVER SUSPICIOUS. SUSPICIOUS is reserved for corroborated multi-tool
+    # evidence or a strong AI-generation read. This stops clean evidence being
+    # flagged on noise-residual alone (matches the conservative uncertainty
+    # policy) — the raw tool metrics still reach each agent regardless.
+    def _is_clean_note(s: str) -> bool:
+        sl = s.lower()
+        return sl.endswith("indicators detected") or "no manipulation" in sl
+
+    weak_markers = (
+        "elevated noise residual",
+        "jpeg block artifacts",
+        "high_freq_ratio",
+        "frequency-domain anomaly",
+    )
+    substantive = [s for s in signals if not _is_clean_note(s)]
+    # "Strong" = a real manipulation signal, excluding weak screening artifacts
+    # (global noise level, blockiness, raw high-freq ratio) that fire on benign
+    # textured/recompressed images and are the main false-positive source.
+    strong_substantive = [
+        s for s in substantive if not any(w in s.lower() for w in weak_markers)
+    ]
+    corroborated = any(
+        ("corroborat" in s.lower() or "high confidence" in s.lower()
+         or "likely region tampering" in s.lower() or "overlap" in s.lower())
+        for s in substantive
+    )
+    strong_ai = diff_detected and diff_probability > 0.7
+
+    if corroborated or strong_ai:
         verdict = "SUSPICIOUS"
-    elif diff_detected and diff_probability > 0.7:
+    elif len(strong_substantive) >= 2:
+        # Two independent strong tools agree → escalate.
         verdict = "SUSPICIOUS"
-    elif len(signals) >= 2:
-        verdict = "SUSPICIOUS"
-    elif len(signals) == 1 and not signals[0].endswith("detected"):
-        verdict = "SUSPICIOUS"
-    elif len(signals) == 1 and ("elevated noise" in signals[0].lower() or "block artifacts" in signals[0].lower() or "ela hotspot" in signals[0].lower()):
-        verdict = "SUSPICIOUS"
+    elif substantive:
+        # A single tool (even strong) or weak-only screening signal: surface for
+        # review, do not alarm. Corroboration is required to call SUSPICIOUS.
+        verdict = "INCONCLUSIVE"
     else:
         verdict = "AUTHENTIC"
 
@@ -327,7 +436,75 @@ def _cross_signal_synthesis(
     return verdict, signals, narrative, conflict_detected
 
 
+def _minimal_degraded_finding(
+    artifact: EvidenceArtifact, error: Exception, latency_ms: float = 0.0
+) -> VisualEvidenceFinding:
+    """Last-resort finding when the entire local ensemble fails.
+
+    The local ensemble is the TERMINAL fallback after Gemini, so it must never
+    raise — a raise would strand the investigation with no visual context at all.
+    This returns an honest, low-confidence, court-indefensible placeholder so
+    every downstream agent still receives a well-formed VisualEvidenceFinding and
+    can proceed with its own deterministic tool runs.
+    """
+    return VisualEvidenceFinding(
+        analysis_type="visual_evidence_profile",
+        provider_used="local_visual_ensemble",
+        model_used="local_visual_ensemble",
+        content_description=(
+            "Local visual ensemble could not analyze this image; downstream agents "
+            "rely on their own deterministic tool runs for forensic coverage."
+        ),
+        manipulation_signals=[],
+        detected_objects=[],
+        file_type_assessment="unknown",
+        confidence=0.0,
+        court_defensible=False,
+        caveat=f"Local visual ensemble failed: {error}",
+        latency_ms=latency_ms,
+        error=str(error),
+        _authenticity_verdict="INCONCLUSIVE",
+        _contextual_narrative="Visual context unavailable — local ensemble failure.",
+        _metadata_visual_consistency="Not assessed (ensemble failure).",
+        provider_attempts=[
+            {"provider": "local_visual_ensemble", "success": False, "error": str(error)}
+        ],
+        fallback_applied=True,
+        fallback_reason=f"ensemble_exception: {error}",
+        tool_coverage={},
+        degradation_flags=["local_ensemble_total_failure"],
+    )
+
+
 async def analyze_local_visual_profile(
+    artifact: EvidenceArtifact,
+    exif_summary: dict[str, Any] | None = None,
+    is_screen_capture_like: bool = False,
+) -> VisualEvidenceFinding:
+    """Graceful public entrypoint for the local visual ensemble.
+
+    GUARANTEE: always returns a well-formed VisualEvidenceFinding and never
+    raises — this is the terminal fallback after Gemini, so any unexpected
+    failure degrades to a minimal honest finding instead of propagating an
+    exception that would leave the investigation with no visual context.
+    """
+    _t0 = time.perf_counter()
+    try:
+        return await _analyze_local_visual_profile_impl(
+            artifact,
+            exif_summary=exif_summary,
+            is_screen_capture_like=is_screen_capture_like,
+        )
+    except Exception as exc:
+        logger.error(
+            "Local visual ensemble crashed — returning minimal degraded finding",
+            file_path=getattr(artifact, "file_path", "?"),
+            error=str(exc),
+        )
+        return _minimal_degraded_finding(artifact, exc, (time.perf_counter() - _t0) * 1000.0)
+
+
+async def _analyze_local_visual_profile_impl(
     artifact: EvidenceArtifact,
     exif_summary: dict[str, Any] | None = None,
     is_screen_capture_like: bool = False,
@@ -709,6 +886,23 @@ async def analyze_local_visual_profile(
         interface_id=interface_id,
         exif_summary=exif_summary,
         is_screenshot=is_screenshot,
+    )
+
+    # Enrich with derived object/integrity/scene signals so the no-Gemini path
+    # carries the same rich fields the refined Gemini prompt returns (weapons,
+    # documents, people, lighting, follow-up regions, benign edits). These keys
+    # are mapped into the VisualContext sub-models by build_visual_context_from_finding.
+    visible_metadata_clues.update(
+        _derive_rich_scene_signals(
+            file_path=file_path,
+            detected_objects=detected,
+            ocr_lines=ocr_lines,
+            clip_category=clip_category,
+            final_category=final_category,
+            ela_res=ela_res,
+            noiseprint_res=noiseprint_res,
+            opencv_res=opencv_res,
+        )
     )
 
     # ── Offline provenance screen (perceptual hash + C2PA) ────────────────

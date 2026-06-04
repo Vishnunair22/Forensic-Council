@@ -57,6 +57,12 @@ export interface ReportDTO {
   verdict_sentence?: string;
   key_findings?: string[];
   reliability_note?: string;
+  evidence_summary?: {
+    scene_description?: string;
+    file_type_assessment?: string;
+    source?: string;
+    court_defensible?: boolean;
+  };
   manipulation_probability?: number;
   confidence_min?: number;
   confidence_max?: number;

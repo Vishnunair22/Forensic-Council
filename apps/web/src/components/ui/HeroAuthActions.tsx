@@ -126,7 +126,10 @@ export function HeroAuthActions() {
       clientSha256: selectedFileHash,
     });
 
-    setShowUpload(false);
+    // Do NOT close the dialog before navigating — closing reveals the landing
+    // page underneath while the loading overlay hasn't painted yet (React
+    // batches state), causing a visible flash.  The dialog unmounts naturally
+    // when the route changes to /evidence.
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
     router.push("/evidence", { scroll: true });
     return true;
@@ -175,6 +178,11 @@ export function HeroAuthActions() {
   const closeUpload = useCallback(() => {
     setShowUpload(false);
     setSelectedFile(null);
+    // Fully reset the modal's transient state on close so a re-open never
+    // carries over a prior selection's hash/computation state.
+    setSelectedFileHash(null);
+    setHashError(null);
+    setIsHashComputing(false);
     isHandingOffRef.current = false;
     setIsHandingOff(false);
     authService.reset();

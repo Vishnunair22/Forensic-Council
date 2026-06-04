@@ -541,7 +541,7 @@ export function AgentProgressDisplay({
 
       {/* ── Elevated Initial Analysis Decision Gate ──────────────────────────────── */}
       <AnimatePresence>
-        {(awaitingDecision || (allAgentsDone && phase === "initial" && !isNavigating && pipelineStatus !== "complete")) && revealQueue.length === 0 && !arbiterDeliberating && (
+        {awaitingDecision && revealQueue.length === 0 && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
@@ -594,7 +594,7 @@ export function AgentProgressDisplay({
 
       {/* ── Deep analysis decision gate ──────────────────────────────────── */}
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && (pipelineStatus === "awaiting_decision" || (allAgentsDone && !isNavigating)) && !arbiterDeliberating && (
+        {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && pipelineStatus === "awaiting_decision" && !isNavigating && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}

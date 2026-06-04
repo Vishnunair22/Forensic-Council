@@ -145,6 +145,8 @@ class ReportDTO(BaseModel):
     verdict_sentence: str = ""
     key_findings: list[str] = Field(default_factory=list)
     reliability_note: str = ""
+    # Page-level "what this shows" context (scene + file type + source).
+    evidence_summary: dict[str, Any] = Field(default_factory=dict)
     # Verdict enrichment
     manipulation_probability: float = 0.0
     compression_penalty: float = 1.0

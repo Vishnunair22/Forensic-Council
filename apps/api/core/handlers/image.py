@@ -495,6 +495,47 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             await self._store(tool_name, result, *aliases)
         return result
 
+    async def _lossless_not_applicable(
+        self,
+        tool_name: str,
+        *,
+        aliases: tuple[str, ...] = (),
+        record: bool = True,
+    ) -> dict[str, Any]:
+        """Standard NOT_APPLICABLE result for JPEG-compression-dependent tools
+        (ELA family, JPEG-ghost) run against a lossless format.
+
+        These tools measure JPEG re-compression residuals, which do not exist in
+        PNG/BMP/TIFF/GIF/lossless-WebP. Running them there yields speculative,
+        court-indefensible signals, so every such handler gates on
+        is_lossless_image() and returns this uniform result. Lossless-image
+        integrity is covered by noiseprint_cluster / splicing detection instead.
+        This is the single enforcement point — it sits downstream of task
+        routing / task_tool_overrides, so a task phrase can never bypass it.
+        """
+        result: dict[str, Any] = {
+            "available": True,
+            "not_applicable": True,
+            "skipped": True,
+            "status": "NOT_APPLICABLE",
+            "evidence_verdict": "NOT_APPLICABLE",
+            "reason": (
+                "JPEG re-compression analysis (ELA / JPEG-ghost) is not applicable "
+                "to lossless formats (PNG, BMP, TIFF, GIF, lossless WebP). Lossless "
+                "integrity is assessed via sensor noise (noiseprint_cluster) and "
+                "splicing/copy-move detection."
+            ),
+            "confidence": 0.0,
+            "court_defensible": False,
+            "num_anomaly_regions": 0,
+            "max_anomaly": 0.0,
+            "manipulation_detected": False,
+        }
+        result = self._attach_visual_grounding(result, tool_name=tool_name)
+        if record:
+            await self._store(tool_name, result, *aliases)
+        return result
+
     async def neural_ela_handler(self, input_data: dict, record: bool = True) -> dict:
         """ViT-based Neural ELA. Falls back to multi-quality classical ELA.
 
@@ -513,20 +554,9 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             )
 
         if is_lossless_image(artifact.file_path, getattr(artifact, "mime_type", None)):
-            not_applicable: dict = {
-                "available": True,
-                "not_applicable": True,
-                "reason": (
-                    "ELA measures JPEG re-compression residuals and is not applicable "
-                    "to lossless formats (PNG, BMP, TIFF, lossless WebP). "
-                    "Use noiseprint_cluster for sensor-noise analysis on lossless images."
-                ),
-                "confidence": 0.0,
-                "manipulation_detected": False,
-            }
-            if record:
-                await self._store("neural_ela", not_applicable, "ela_full_image")
-            return not_applicable
+            return await self._lossless_not_applicable(
+                "neural_ela", aliases=("ela_full_image",), record=record
+            )
 
         result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=15.0)
         result = self._attach_visual_grounding(result, tool_name="neural_ela")
@@ -628,6 +658,13 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             if record:
                 await self._store("ela_full_image", result, "neural_ela")
             return result
+
+        # ELA measures JPEG re-compression residuals — NOT_APPLICABLE on lossless
+        # formats (same policy as neural_ela; see JPEG_COMPRESSION_DEPENDENT_TOOLS).
+        if is_lossless_image(artifact.file_path, getattr(artifact, "mime_type", None)):
+            return await self._lossless_not_applicable(
+                "ela_full_image", aliases=("neural_ela",), record=record
+            )
 
         try:
             result = await asyncio.wait_for(
@@ -801,6 +838,12 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
     async def jpeg_ghost_detect_handler(self, input_data: dict) -> dict:
         """JPEG ghost / double-compression artifact detection."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        # JPEG-ghost detects double-JPEG-compression — meaningless on a lossless
+        # format. NOT_APPLICABLE here keeps it consistent with the ELA family
+        # (see JPEG_COMPRESSION_DEPENDENT_TOOLS) so the same file can never get a
+        # "NOT_APPLICABLE" ELA verdict alongside a speculative ghost finding.
+        if is_lossless_image(artifact.file_path, getattr(artifact, "mime_type", None)):
+            return await self._lossless_not_applicable("jpeg_ghost_detect")
         result = await real_jpeg_ghost_detect(artifact=artifact)
         await self.agent._record_tool_result("jpeg_ghost_detect", result)
         return result
@@ -920,6 +963,9 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
     async def ela_anomaly_classify_handler(self, input_data: dict) -> dict:
         """CNN-based ELA anomaly block classification."""
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        # ELA-derived — NOT_APPLICABLE on lossless (see JPEG_COMPRESSION_DEPENDENT_TOOLS).
+        if is_lossless_image(artifact.file_path, getattr(artifact, "mime_type", None)):
+            return await self._lossless_not_applicable("ela_anomaly_classify")
         result = await classify_ela_anomalies(artifact.file_path)
         await self.agent._record_tool_result("ela_anomaly_classify", result)
         return result

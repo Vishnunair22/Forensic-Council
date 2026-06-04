@@ -46,9 +46,27 @@ class ArbiterDeliberationResult(BaseModel):
 def deliberate_findings(
     findings_list: list[AgentFinding] | list[dict],
     visual_context: Any | None,
-    tool_coverage: dict[str, Any]
+    tool_coverage: dict[str, Any],
+    mime_type: str = "",
 ) -> ArbiterDeliberationResult:
-    """Deliberates agent findings, resolves conflicts, and determines the final verdict and confidence score."""
+    """Deliberates agent findings, resolves conflicts, and determines the final verdict and confidence score.
+
+    ``mime_type`` selects file-type-specific verdict thresholds (lossless formats
+    use higher bars to resist false positives from compression/ELA artifacts).
+    """
+    from core.forensic_policy import ForensicPolicy
+
+    thresholds = ForensicPolicy.get_verdict_thresholds(mime_type)
+    # Single court-defensible positive escalates to LIKELY_MANIPULATED only above
+    # this confidence. The mime thresholds only ever RAISE the bar (lossless →
+    # 0.85); clamped at the historical 0.8 floor so non-lossless behaviour is
+    # unchanged and no file type becomes more trigger-happy.
+    single_signal_bar = max(0.8, float(thresholds.get("manipulated", 0.8)))
+    # A corroborating integrity signal must clear this confidence to count as one
+    # of the "2 strong agreeing signals" that defeat the corroboration gate.
+    strong_corroborator_bar = 0.75 if mime_type in (
+        "image/png", "image/webp", "image/bmp", "image/gif"
+    ) else 0.70
     # Convert findings to clean dicts
     findings: list[dict] = []
     for f in findings_list:
@@ -129,8 +147,15 @@ def deliberate_findings(
             supports_final_verdict=False
         )
 
+        # Honour visual-context grounding: a POSITIVE that grounding capped to
+        # LOW/INFO severity (camera-physics noise on a non-camera-origin image, or
+        # a corroboration-downgrade) is expected noise, not a manipulation signal —
+        # it must not drive the verdict, mirroring compute_agent_verdict.
+        grounded_sev = str(meta.get("severity_tier") or f.get("severity_tier") or "").upper()
+        grounded_down = grounded_sev in ("LOW", "INFO")
+
         if report_safe:
-            if verdict == "POSITIVE":
+            if verdict == "POSITIVE" and not grounded_down:
                 if category == "integrity":
                     positive_integrity_tools.append(tool_name)
                     positive_integrity_findings.append(f)
@@ -197,7 +222,7 @@ def deliberate_findings(
         # Check if high confidence or supported by visual context
         finding = positive_integrity_findings[0]
         conf = finding.get("confidence_raw") or finding.get("metadata", {}).get("confidence") or 0.0
-        if conf >= 0.8 or has_vc_integrity_issue:
+        if conf >= single_signal_bar or has_vc_integrity_issue:
             final_verdict = "LIKELY_MANIPULATED"
         else:
             final_verdict = "SUSPICIOUS_INTEGRITY_SIGNALS"
@@ -232,7 +257,7 @@ def deliberate_findings(
         strong_corroborating = sum(
             1
             for f in positive_integrity_findings
-            if (f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or 0) >= 0.7
+            if (f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or 0) >= strong_corroborator_bar
             and (f.get("metadata") or {}).get("court_defensible", True)
         )
         if gemini_available_and_clean and strong_corroborating < 2:

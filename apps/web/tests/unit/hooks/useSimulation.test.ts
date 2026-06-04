@@ -19,6 +19,10 @@ describe("useSimulation Hook", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Hermetic storage per test — the hook restores HITL state from storage on
+    // mount, so leftover keys must not bleed across tests.
+    localStorage.clear();
+    sessionStorage.clear();
 
     const listeners: Record<string, Array<(e: any) => void>> = {};
     mockWs = {
@@ -175,6 +179,39 @@ describe("useSimulation Hook", () => {
 
     expect(result.current.hitlCheckpoint).not.toBeNull();
     expect(result.current.hitlCheckpoint?.checkpoint_id).toBe("cp-123");
+  });
+
+  test("does NOT restore a HITL checkpoint from a different session (stale guard)", () => {
+    localStorage.setItem(
+      "forensic_hitl_checkpoint",
+      JSON.stringify({
+        checkpoint_id: "cp-old", session_id: "sess-A", agent_id: "Agent1",
+        agent_name: "Image", brief_text: "x", decision_needed: "y", created_at: "z",
+      }),
+    );
+    localStorage.setItem("forensic_session_id", "sess-B");
+
+    const { result } = renderHook(() => useSimulation({}));
+
+    // Stale cross-session checkpoint must not surface (or be submittable), and
+    // the stale key is dropped so it can't be POSTed to the backend.
+    expect(result.current.hitlCheckpoint).toBeNull();
+    expect(localStorage.getItem("forensic_hitl_checkpoint")).toBeNull();
+  });
+
+  test("restores a HITL checkpoint that belongs to the active session", () => {
+    localStorage.setItem(
+      "forensic_hitl_checkpoint",
+      JSON.stringify({
+        checkpoint_id: "cp-cur", session_id: "sess-B", agent_id: "Agent1",
+        agent_name: "Image", brief_text: "x", decision_needed: "y", created_at: "z",
+      }),
+    );
+    localStorage.setItem("forensic_session_id", "sess-B");
+
+    const { result } = renderHook(() => useSimulation({}));
+
+    expect(result.current.hitlCheckpoint?.checkpoint_id).toBe("cp-cur");
   });
 
   test("handles errors and sets error status", async () => {

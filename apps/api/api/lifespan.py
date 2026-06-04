@@ -25,7 +25,7 @@ from core.persistence import (
     get_postgres_client,
     get_redis_client,
 )
-from core.structured_logging import get_logger
+from core.structured_logging import configure_root_logger, get_logger
 
 logger = get_logger(__name__)
 
@@ -41,6 +41,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "environment variables are set. Run: cp .env.example .env and fill all values."
         )
     app.state.settings = settings
+
+    # ── Logging (re)configuration — critical for uvicorn --reload ─────────────
+    # uvicorn's reloader spawns the server via multiprocessing `spawn`, which
+    # imports api.main directly and never runs the entrypoint (run_api.py) that
+    # configures structured logging. Without this, every reloaded backend process
+    # starts SILENT (no startup, request, or app logs). Configuring here runs in
+    # every server process — initial, each reload, and production workers — so
+    # logging is always consistent. configure_root_logger() is idempotent (it
+    # replaces the root handler), so this never duplicates output.
+    configure_root_logger(settings.log_level)
 
     # ── Settings-import failure marker ────────────────────────────────────────
     if getattr(app.state, "startup_failed", False):

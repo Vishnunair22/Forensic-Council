@@ -1091,9 +1091,16 @@ async def prnu_sensor_verification(*, artifact: Any = None, file_path: str | Non
         multi_source_suspected = cov > 0.80 or outlier_ratio > 0.08
 
         if multi_source_suspected:
-            verdict = "SUSPICIOUS"
+            # No reference camera fingerprint is available — this is a single-image
+            # noise-uniformity heuristic, and high block-variance CoV is far more
+            # often natural scene content (busy textures, edges) than splicing.
+            # Reporting SUSPICIOUS here produced false positives that drove the
+            # Arbiter challenge loop on ordinary photos. Without a reference set the
+            # signal is INCONCLUSIVE — a screening flag for corroboration, not a
+            # manipulation assertion. The metrics + flag remain for downstream use.
+            verdict = "INCONCLUSIVE"
             sensor_match = False
-            confidence = 0.65
+            confidence = 0.4
         else:
             verdict = "CLEAN"
             sensor_match = True

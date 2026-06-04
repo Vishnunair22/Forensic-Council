@@ -358,7 +358,7 @@ export async function getBrief(sessionId: string, agentId: string): Promise<stri
   return handleAuthError(async () => {
     const response = await fetch(
       `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/brief/${encodeURIComponent(agentId)}`,
-      { credentials: "include" },
+      { credentials: "include", cache: "no-store" },
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = (await response.json()) as { brief?: string };
@@ -370,7 +370,7 @@ export async function getCheckpoints(sessionId: string): Promise<HITLCheckpoint[
   return handleAuthError(async () => {
     const response = await fetch(
       `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/checkpoints`,
-      { credentials: "include" },
+      { credentials: "include", cache: "no-store" },
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
@@ -541,6 +541,10 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
   return handleAuthError(async () => {
     const response = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/report`, {
       credentials: "include",
+      // The report can change for the same session (initial → deep, or re-run),
+      // so it must never be served from the browser HTTP cache — that surfaced
+      // stale findings after deep analysis completed.
+      cache: "no-store",
     });
 
     if (response.status === 202) return { status: "in_progress" };

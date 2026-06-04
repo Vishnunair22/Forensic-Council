@@ -7,7 +7,7 @@ This folder contains the Docker Compose, Caddy, Prometheus, and deployment helpe
 | File | Purpose |
 | --- | --- |
 | `docker-compose.yml` | Development/base stack: API, worker, frontend, Postgres, Redis, Qdrant, Caddy, Jaeger, Prometheus |
-| `docker-compose.dev.yml` | Host-run development override that exposes Postgres, Redis, and Qdrant to localhost |
+| `docker-compose.dev.yml` | Development overlay (used by `scripts/dev.sh`): exposes direct host ports for the backend, frontend, Postgres, Redis, and Qdrant |
 | `docker-compose.prod.yml` | Production override with optimized build targets, log rotation, and reduced direct host ports |
 | `Caddyfile` | Reverse proxy, TLS, security headers, API routing, upload limits |
 | `prometheus.yml` | Prometheus scrape configuration |
@@ -144,21 +144,22 @@ CI and local tests use the same base compose file unless a test-specific overrid
 
 ## Ports
 
-Base/development stack (via Caddy only — no direct host ports):
+Base stack (app traffic via Caddy only — no direct host ports for backend/frontend):
 
 | Service | Host Port | Notes |
 | --- | --- | --- |
 | Caddy | 80, 443 | Public reverse proxy (recommended entry point) |
-| Frontend | 3000 | Direct local access (dev overlay not required) |
-| Backend | — | Not exposed directly in base stack; route through Caddy at port 80 |
+| Frontend | — | Not exposed directly in base stack; route through Caddy at port 80 (the dev overlay adds direct port 3000) |
+| Backend | — | Not exposed directly in base stack; route through Caddy at port 80 (the dev overlay adds direct port 8000) |
 | Jaeger | 16686 | Local tracing UI |
 | Prometheus | 9090 | Local metrics UI |
 
-Host-run development override (`-f infra/docker-compose.dev.yml`) adds direct host ports:
+Development overlay (`-f infra/docker-compose.dev.yml`) adds direct host ports:
 
 | Service | Host Port | Notes |
 | --- | --- | --- |
-| Backend | 8000 | Direct backend API access |
+| Frontend | 3000 | Direct Next.js dev server access |
+| Backend | 8000 | Direct backend API access (bypasses Caddy) |
 | Postgres | 5432 | Enables `uv run` API on host |
 | Redis | 6379 | Enables `uv run` API on host |
 | Qdrant | 6333, 6334 | Enables `uv run` API on host |

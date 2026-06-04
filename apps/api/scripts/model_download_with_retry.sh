@@ -22,8 +22,9 @@ for attempt in $(seq 1 "$RETRY_COUNT"); do
     exit 0
   fi
 
-  exit_code=$?
-  log "  Download failed with exit code $exit_code"
+  # NB: $? after the `if` reflects the compound, not python's exit code, so we
+  # report the attempt rather than a misleading code.
+  log "  Download attempt $attempt failed"
 
   if [ "$attempt" -lt "$RETRY_COUNT" ]; then
     log "Retrying in ${RETRY_DELAY}s..."

@@ -35,7 +35,12 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "python-multipart>=0.0.20",
     "websockets>=15.0",
-    "PyJWT[cryptography]>=2.8",
+    # PyJWT's crypto backend is provided by the top-level cryptography>=44 dep
+    # above. The extra is intentionally omitted: PyJWT's extra is named `crypto`
+    # (not `cryptography`), and pinning a non-existent extra broke `uv sync
+    # --locked` in the Docker build. cryptography is already a direct dependency,
+    # so RS/ES algorithm support is available without any PyJWT extra.
+    "PyJWT>=2.8",
     "passlib[bcrypt]>=1.7.4",
     "bcrypt>=3.2,<4.1",
     # Image processing tools

@@ -201,7 +201,24 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     OCR_OK=0;   [ "${EASYOCR_FILES:-0}"         -ge 2 ] && OCR_OK=1
     AI_GEN_OK=0;[ "${AI_GEN_READY:-0}"          -ge 1 ] && AI_GEN_OK=1
 
-    if [ "$CLIP_OK" -eq 0 ] || [ "$ECAPA_OK" -eq 0 ] || [ "$AASIST_OK" -eq 0 ] || [ "$OBJ_OK" -eq 0 ] || [ "$TORCH_OK" -eq 0 ] || [ "$OCR_OK" -eq 0 ] || [ "$AI_GEN_OK" -eq 0 ]; then
+    # Decide whether the seed cache is complete enough to skip the download
+    # fallback. Audio models (ECAPA, AASIST) are only baked when
+    # ENABLE_AUDIO_MODELS=true, so they are only required here when audio is
+    # enabled — otherwise this gate would be permanently unsatisfiable and the
+    # download fallback would re-run on every container start. The AI-generation
+    # detector is optional (degrades to a spectral heuristic) so its absence
+    # must not force a re-download attempt each boot.
+    NEED_DOWNLOAD=0
+    [ "$CLIP_OK"  -eq 0 ] && NEED_DOWNLOAD=1
+    [ "$OBJ_OK"   -eq 0 ] && NEED_DOWNLOAD=1
+    [ "$TORCH_OK" -eq 0 ] && NEED_DOWNLOAD=1
+    [ "$OCR_OK"   -eq 0 ] && NEED_DOWNLOAD=1
+    if [ "${ENABLE_AUDIO_MODELS:-false}" = "true" ]; then
+        [ "$ECAPA_OK"  -eq 0 ] && NEED_DOWNLOAD=1
+        [ "$AASIST_OK" -eq 0 ] && NEED_DOWNLOAD=1
+    fi
+
+    if [ "$NEED_DOWNLOAD" -eq 1 ]; then
         echo ""
         echo "============================================================"
         echo "  ML cache incomplete - downloading models before startup"

@@ -57,6 +57,31 @@ def _tool_from_task_description(description: str) -> str:
     return ""
 
 
+_KNOWN_TOOL_NAMES: list[str] | None = None
+
+
+def _resolve_task_tool(description: str) -> str:
+    """Resolve a task description to the canonical tool name it targets.
+
+    Matches the longest known tool name present in the text (so ``neural_ela``
+    wins over a coincidental ``ela`` substring), mirroring the loop engine's
+    task→tool resolution. Used for tool-level injection dedup.
+    """
+    global _KNOWN_TOOL_NAMES
+    if _KNOWN_TOOL_NAMES is None:
+        try:
+            from core.image_evidence_routing import _TOOL_TO_TASK_DESC
+
+            _KNOWN_TOOL_NAMES = sorted(_TOOL_TO_TASK_DESC.keys(), key=len, reverse=True)
+        except Exception:
+            _KNOWN_TOOL_NAMES = []
+    desc = str(description or "").lower()
+    for tool in _KNOWN_TOOL_NAMES:
+        if tool in desc:
+            return tool
+    return ""
+
+
 class AgentInvestigationMixin:
     """
     Mixin handling the ReAct investigation loop and various pass types.
@@ -102,14 +127,39 @@ class AgentInvestigationMixin:
                 )
                 return
 
-            # Check if task already exists to avoid duplication loops
+            # Resolve the forensic tool this task targets so dedup keys on the
+            # tool, not the prose. Reactive rules phrase the same tool differently
+            # (e.g. "ORB+RANSAC copy-move screening" vs "dual-branch copy-move
+            # detection"), so an exact-string check let the same tool be injected
+            # and re-executed several times, producing duplicate findings and
+            # inflating tool counts.
+            candidate_tool = _resolve_task_tool(description)
+
+            # Check if task already exists to avoid duplication loops.
             # Also block COMPLETE tasks — re-injecting an already-executed
             # tool re-runs it and appends a duplicate finding with no dedup.
             state = await self.working_memory.get_state(self.session_id, target_agent_id)
             for existing in state.tasks:
-                if existing.description.lower() == description.lower() and existing.status in ("PENDING", "IN_PROGRESS", "COMPLETE"):
+                if existing.status not in ("PENDING", "IN_PROGRESS", "COMPLETE"):
+                    continue
+                if existing.description.lower() == description.lower():
                     logger.debug(f"Task already exists, skipping injection: {description}", agent_id=self.agent_id)
                     return
+                if candidate_tool and _resolve_task_tool(existing.description) == candidate_tool:
+                    logger.debug(
+                        f"Tool '{candidate_tool}' already scheduled/executed, skipping duplicate injection",
+                        agent_id=self.agent_id,
+                    )
+                    return
+
+            # Skip tools that already produced a finding this run (reactive rules
+            # can fire after a task has completed and been pruned from the list).
+            if candidate_tool and candidate_tool in (getattr(self, "_tool_context", {}) or {}):
+                logger.debug(
+                    f"Tool '{candidate_tool}' already has a result, skipping duplicate injection",
+                    agent_id=self.agent_id,
+                )
+                return
 
             await self.working_memory.create_task(
                 session_id=self.session_id,
@@ -790,6 +840,57 @@ class AgentInvestigationMixin:
         self._agent_brief = brief
         return brief
 
+    def _compute_grounded_agent_verdict(
+        self, findings: list[AgentFinding]
+    ) -> tuple[str, float]:
+        """Single source of truth for this agent's verdict + confidence.
+
+        Grounds each finding's severity against the shared visual context (so
+        camera-physics noise on non-camera images is capped and the report-safety
+        gate is honoured), then defers to core.severity.compute_agent_verdict —
+        the SAME function the Arbiter uses for the per-agent badge. Used by the
+        deterministic synthesis AND to override the Groq synthesis verdict, so no
+        path can disagree with the Arbiter. The LLM only narrates.
+        """
+        from core.severity import assign_severity_tier, compute_agent_verdict
+        from core.visual_grounding import apply_visual_grounding
+
+        profile = None
+        try:
+            if getattr(self, "visual_context", None) is not None:
+                from core.visual_context_store import visual_context_to_profile_dict
+
+                profile = visual_context_to_profile_dict(self.visual_context)
+        except Exception as vc_err:
+            logger.debug("Visual profile unavailable for agent verdict", error=str(vc_err))
+
+        rows = []
+        for f in findings or []:
+            meta = f.metadata if isinstance(getattr(f, "metadata", None), dict) else {}
+            tool = str(meta.get("tool_name") or getattr(f, "finding_type", "") or "")
+            sev = assign_severity_tier(f)
+            if profile is not None:
+                try:
+                    sev = apply_visual_grounding(tool, self.agent_id, sev, profile, meta).adjusted_severity
+                except Exception as g_err:
+                    logger.debug("Severity grounding skipped for verdict", error=str(g_err))
+            # Report-safety gate: a POSITIVE that grounding judged not report-safe /
+            # not court-defensible must not drive the verdict → capped to LOW.
+            if (
+                str(getattr(f, "evidence_verdict", "") or "").upper() == "POSITIVE"
+                and not (meta.get("report_safe", True) and meta.get("court_defensible", True))
+            ):
+                sev = "LOW"
+            rows.append({
+                "evidence_verdict": str(getattr(f, "evidence_verdict", "") or ""),
+                "status": str(getattr(f, "status", "") or ""),
+                "confidence_raw": getattr(f, "confidence_raw", None),
+                "severity_tier": sev,
+                "metadata": meta,
+            })
+        verdict, confidence, _reason = compute_agent_verdict(rows)
+        return verdict, confidence
+
     def _build_deterministic_synthesis(
         self,
         findings: list[AgentFinding],
@@ -818,8 +919,15 @@ class AgentInvestigationMixin:
             1 for f in actionable if f.status == "INCOMPLETE" or f.evidence_verdict == "ERROR"
         )
         error_rate = round(error_count / len(actionable), 3) if actionable else 0.0
-        positive_count = sum(1 for f in actionable if f.evidence_verdict == "POSITIVE")
-        negative_count = sum(1 for f in actionable if f.evidence_verdict == "NEGATIVE")
+        # Report-safe POSITIVE count — drives narrative phrasing only (the verdict
+        # itself comes from compute_agent_verdict below). A POSITIVE that grounding
+        # marked not report-safe / not court-defensible does not count.
+        positive_count = sum(
+            1 for f in actionable
+            if str(f.evidence_verdict or "").upper() == "POSITIVE"
+            and bool((f.metadata or {}).get("report_safe", True))
+            and bool((f.metadata or {}).get("court_defensible", True))
+        )
 
         # Determine is_screenshot from evidence artifact if available
         _evidence_artifact = getattr(self, "evidence_artifact", None)
@@ -841,28 +949,11 @@ class AgentInvestigationMixin:
         _persona = str(getattr(self, "persona", "") or "")
         _persona_role = _persona.split(".")[0].strip() if _persona else self.agent_name
 
-        if positive_count >= 2:
-            verdict = "TAMPERED"
-        elif positive_count == 1:
-            verdict = "SUSPICIOUS"
-        elif error_rate > 0.4 and positive_count == 0:
-            # High tool failure rate with no positive signals: inconclusive coverage gap
-            # (never SUSPICIOUS — tool failures are not manipulation evidence).
-            verdict = "INCONCLUSIVE"
-        elif _is_screenshot and positive_count == 0:
-            # Screenshots: ELA/noise tools often fail or flag edge noise naturally.
-            # Without actual POSITIVE signals, the evidence is authentic from pixel perspective.
-            verdict = "AUTHENTIC"
-        elif (
-            error_rate == 0 and actionable and negative_count >= max(1, int(len(actionable) * 0.75))
-        ):
-            verdict = "AUTHENTIC"
-            if confidence < 0.7:
-                confidence = 0.7
-        elif confidence >= 0.7 and error_rate == 0:
-            verdict = "AUTHENTIC"
-        else:
-            verdict = "INCONCLUSIVE"
+        # Per-agent verdict + confidence come from the SINGLE severity- and
+        # visual-context-aware authority (compute_agent_verdict) via the shared
+        # helper, so the live card, the deterministic fallback, AND the Groq path
+        # all agree with the Arbiter's per-agent badge.
+        verdict, confidence = self._compute_grounded_agent_verdict(actionable)
 
         def _tool_name(f: AgentFinding) -> str:
             return str(f.metadata.get("tool_name") or f.finding_type).replace("_", " ").title()
@@ -1337,7 +1428,13 @@ class AgentInvestigationMixin:
         await self._publish_tool_registry_snapshot()
         await self._prune_unregistered_tasks()
         await self._check_tool_availability()
-        self._episodic_context = await self._retrieve_episodic_context()
+        # Episodic priors are only consumed by the LLM ReAct reasoner (they are
+        # prepended to the opening THOUGHT). The deterministic task driver ignores
+        # the thought, so the vector search is pure cost when LLM ReAct is off.
+        if getattr(self.config, "llm_enable_react_reasoning", False):
+            self._episodic_context = await self._retrieve_episodic_context()
+        else:
+            self._episodic_context = ""
         initial_thought = await self.build_initial_thought()
         if self._episodic_context:
             initial_thought = f"{initial_thought}\n\n{self._episodic_context}"
@@ -1396,6 +1493,12 @@ class AgentInvestigationMixin:
         if synthesis is None or not synthesis.get("sections"):
             synthesis = self._build_deterministic_synthesis(self._findings, phase="initial")
             self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
+        # Verdict + confidence are authoritative from compute_agent_verdict (the
+        # LLM only narrates), applied to BOTH the Groq and deterministic synthesis
+        # so neither can disagree with the Arbiter's per-agent badge.
+        _gv, _gc = self._compute_grounded_agent_verdict(self._findings)
+        synthesis["verdict"] = _gv
+        synthesis["agent_confidence"] = _gc
         self._agent_confidence = synthesis["agent_confidence"]
         self._agent_error_rate = synthesis["agent_error_rate"]
         self._agent_synthesis = synthesis
@@ -1481,17 +1584,25 @@ class AgentInvestigationMixin:
             f.agent_id = self.agent_id
             f.metadata["analysis_phase"] = "deep"
 
-        # Dedup deep findings against existing initial findings by tool_name
-        # to prevent the concatenation from duplicating findings.
+        # Dedup deep findings by tool_name — both against existing initial
+        # findings AND within the deep batch itself. A tool re-run under a
+        # different reactive task phrasing yields multiple findings for the same
+        # tool; without the intra-batch guard those duplicates survive into the
+        # report and inflate tool counts. Keep the first occurrence per tool.
         existing_tool_names = {
             f.metadata.get("tool_name")
             for f in self._findings
             if hasattr(f, "metadata") and isinstance(f.metadata, dict)
         }
-        deduped_deep = [
-            f for f in deep_findings
-            if f.metadata.get("tool_name") not in existing_tool_names
-        ]
+        deduped_deep = []
+        seen_deep_tools: set = set()
+        for f in deep_findings:
+            tname = f.metadata.get("tool_name") if isinstance(getattr(f, "metadata", None), dict) else None
+            if tname in existing_tool_names or tname in seen_deep_tools:
+                continue
+            if tname:
+                seen_deep_tools.add(tname)
+            deduped_deep.append(f)
         self._findings = self._findings + deduped_deep
 
         self._tool_success_count = sum(
@@ -1510,6 +1621,10 @@ class AgentInvestigationMixin:
         if synthesis is None or not synthesis.get("sections"):
             synthesis = self._build_deterministic_synthesis(self._findings, phase="deep")
             self._apply_synthesis_sections(self._findings, synthesis.get("sections", []))
+        # Authoritative verdict + confidence from compute_agent_verdict (LLM narrates only).
+        _gv, _gc = self._compute_grounded_agent_verdict(self._findings)
+        synthesis["verdict"] = _gv
+        synthesis["agent_confidence"] = _gc
         self._agent_confidence = synthesis["agent_confidence"]
         self._agent_error_rate = synthesis["agent_error_rate"]
         self._agent_synthesis = synthesis

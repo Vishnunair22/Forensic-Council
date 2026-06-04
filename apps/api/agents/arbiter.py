@@ -262,13 +262,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             for m in per_agent_metrics.values()
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
-        overall_confidence, overall_error_rate = self._calculate_weighted_stats(active_metrics)
+        # Only the error rate is consumed downstream — the final overall_confidence
+        # comes from deliberate_findings (and per-agent confidence spread from
+        # active_metrics directly), so the weighted-confidence return is discarded.
+        _, overall_error_rate = self._calculate_weighted_stats(active_metrics)
 
         # ── 3. Tool Coverage ──
         completed_tools = []
         failed_tools = []
         not_applicable_tools = []
-        for aid, res in active_results.items():
+        for _aid, res in active_results.items():
             findings = res.get("findings", [])
             for f in findings:
                 meta = f.get("metadata") or {}
@@ -299,7 +302,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         # ── 4. Retrieve Visual Context & Per-Agent Synthesis ──
         from core.visual_context_store import get_visual_context
-        visual_context = await get_visual_context(session_id=str(self.session_id))
+        visual_context = await get_visual_context(
+            session_id=str(self.session_id), inter_agent_bus=self.inter_agent_bus
+        )
 
         # ── Corroboration grounding (applied to the FINDINGS, before both the
         #    per-agent card verdict and the arbiter overall verdict, so they agree) ──
@@ -458,8 +463,30 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     if _vc_profile is not None:
                         gr = apply_visual_grounding(tool, aid, base_sev, _vc_profile, meta)
                         gf["severity_tier"] = gr.adjusted_severity
+                        # Persist the grounded severity onto the ORIGINAL finding
+                        # (shared with all_findings) so deliberate_findings honours
+                        # the same caps the badge does — single source of grounding.
+                        if gr.grounded:
+                            f["severity_tier"] = gr.adjusted_severity
+                            meta["severity_tier"] = gr.adjusted_severity
+                        _new_meta = dict(meta)
                         if gr.context_note:
-                            gf["metadata"] = {**meta, "grounding_note": gr.context_note}
+                            _new_meta["grounding_note"] = gr.context_note
+                        # Apply the grounding confidence scale (≤1.0) — de-weights
+                        # camera-physics noise on non-camera images so the verdict
+                        # math and report reflect the calibrated confidence, not the
+                        # raw tool score. Only ever reduces, never inflates.
+                        if gr.confidence_scale < 1.0:
+                            for _ck in ("confidence_raw", "confidence"):
+                                _cv = gf.get(_ck)
+                                if isinstance(_cv, (int, float)):
+                                    gf[_ck] = round(float(_cv) * gr.confidence_scale, 4)
+                                _mv = _new_meta.get(_ck)
+                                if isinstance(_mv, (int, float)):
+                                    _new_meta[_ck] = round(float(_mv) * gr.confidence_scale, 4)
+                            _new_meta["grounding_confidence_scale"] = gr.confidence_scale
+                        if _new_meta != meta:
+                            gf["metadata"] = _new_meta
                     else:
                         gf["severity_tier"] = base_sev
                     grounded_findings.append(gf)
@@ -496,6 +523,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     grounded_findings, visual_signal=_vsig
                 )
                 grounded_agent_verdicts[aid] = (a_verdict, a_conf)
+                # Parity: _compute_agent_metrics ran BEFORE grounding (ungrounded,
+                # no visual_signal). Overwrite its confidence_score with this
+                # grounded value so the metrics card and the verdict badge show the
+                # exact same per-agent confidence.
+                if aid in per_agent_metrics and not per_agent_metrics[aid].get("skipped"):
+                    per_agent_metrics[aid]["confidence_score"] = a_conf
 
                 inputs[aid] = AgentSynthesisInput(
                     agent_id=aid,
@@ -517,7 +550,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         # ── 5. Arbiter Deliberation ──
         from core.arbiter_deliberation import deliberate_findings
-        deliberation_result = deliberate_findings(all_findings, visual_context, tool_coverage)
+        deliberation_result = deliberate_findings(
+            all_findings, visual_context, tool_coverage, mime_type=artifact_mime
+        )
 
         # ── 6. Deterministic Report Builder ──
         from core.deterministic_report_builder import build_deterministic_report
@@ -654,6 +689,25 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             for f in all_findings
         )
 
+        # Page-level "what this shows" context — descriptive scene + file type +
+        # source provenance from the pre-flight VisualContext. Shown ONCE at the
+        # top of the evidence page; never a verdict.
+        evidence_summary: dict[str, Any] = {}
+        if visual_context is not None:
+            _scene = str(getattr(visual_context, "scene_description", "") or "").strip()
+            _ftype = str(getattr(visual_context, "file_type_assessment", "") or "").strip()
+            _remote = bool(
+                getattr(visual_context, "external_llm_used", False)
+                and getattr(visual_context, "source", "") == "llm_assisted"
+            )
+            if _scene or _ftype:
+                evidence_summary = {
+                    "scene_description": _scene,
+                    "file_type_assessment": _ftype,
+                    "source": "remote_vision" if _remote else "on_device",
+                    "court_defensible": _remote,
+                }
+
         report = ForensicReport(
             session_id=self.session_id,
             case_id=case_id or f"case_{self.session_id}",
@@ -679,6 +733,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             uncertainty_statement=final_report_dict["limitations"][0] if final_report_dict["limitations"] else "None",
             verdict_sentence=final_report_dict["final_conclusion"],
             key_findings=final_report_dict["key_findings"],
+            evidence_summary=evidence_summary,
             reliability_note=final_report_dict["reliability_notes"][0] if final_report_dict["reliability_notes"] else "",
             manipulation_probability=manipulation_probability,
             confidence_min=confidence_min,
@@ -864,13 +919,14 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             err = 1.0  # All tools failed - 100% error rate
         else:
             err = round(fail / app, 3) if app > 0 else 0.0
-        conf = [
-            c
-            for f in real
-            if not _is_na(f) and not _is_fail(f)
-            and (c := confidence_of(f)) is not None
-        ]
-        avg_conf = round(sum(conf) / len(conf), 3) if conf else 0.0
+        # Agent confidence comes from the single severity-aware authority
+        # (compute_agent_verdict), the SAME function that produces the per-agent
+        # summary badge — so the metrics confidence_score and the badge agree.
+        # The prior mean-of-raw-confidence averaged heterogeneous per-tool scores
+        # (e.g. ELA 0.23 + fingerprint 0.95) into a meaningless ~0.48 that
+        # contradicted the badge's graduated confidence.
+        from core.severity import compute_agent_verdict as _cav
+        _agent_verdict, avg_conf, _ = _cav(real)
         deep = sum(1 for f in real if (f.get("metadata") or {}).get("analysis_phase") == "deep")
         return AgentMetrics(
             agent_id=aid,
@@ -1163,47 +1219,3 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             analysis_coverage_note="Zero agents produced findings; verdict defaulted to INCONCLUSIVE.",
         )
 
-    @staticmethod
-    def _calculate_verdict_deterministic(findings: dict) -> tuple[str, float]:
-        """Calculate verdict using only tool outputs, no LLM."""
-        positive_counts = {}
-        total_tools = {}
-        for agent_id, agent_findings in findings.items():
-            positive = sum(1 for f in agent_findings
-                          if f.get('evidence_verdict') == 'POSITIVE')
-            total = len([f for f in agent_findings
-                        if f.get('status') != 'NOT_APPLICABLE'])
-            positive_counts[agent_id] = positive
-            total_tools[agent_id] = total
-        total_positive = sum(positive_counts.values())
-        total_executed = sum(total_tools.values())
-        if total_executed == 0:
-            return "INCONCLUSIVE", 0.0
-        manipulation_ratio = total_positive / total_executed
-        if manipulation_ratio >= 0.7:
-            return "HIGHLY_LIKELY_MANIPULATED", 0.85
-        elif manipulation_ratio >= 0.5:
-            return "LIKELY_MANIPULATED", 0.70
-        elif manipulation_ratio >= 0.3:
-            return "POSSIBLY_MANIPULATED", 0.50
-        elif manipulation_ratio >= 0.1:
-            return "LIKELY_AUTHENTIC", 0.75
-        else:
-            return "HIGHLY_LIKELY_AUTHENTIC", 0.90
-
-    @staticmethod
-    def _generate_template_narratives(agent_results: dict) -> dict[str, str]:
-        """Generate deterministic per-agent narratives without LLM."""
-        narratives = {}
-        for agent_id, result in agent_results.items():
-            findings = result.get('findings', [])
-            tool_count = len([f for f in findings if f.get('metadata', {}).get('tool_name')])
-            positive_count = sum(1 for f in findings if f.get('evidence_verdict') == 'POSITIVE')
-            if positive_count > 0:
-                narrative = (f"{agent_id} executed {tool_count} specialized forensic tools "
-                            f"and detected {positive_count} positive indicators of manipulation.")
-            else:
-                narrative = (f"{agent_id} executed {tool_count} specialized forensic tools "
-                            f"and found no significant anomalies.")
-            narratives[agent_id] = narrative
-        return narratives

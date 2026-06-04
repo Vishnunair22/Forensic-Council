@@ -114,10 +114,27 @@ class AgentReflectionMixin:
         file_path = getattr(self.evidence_artifact, "file_path", "")
         if file_path and "." in file_path:
             context["file_extension"] = file_path.lower().split(".")[-1]
-        metadata = getattr(self.evidence_artifact, "metadata", {}) or {}
-        if isinstance(metadata, dict):
-            context["has_exif"] = bool(metadata.get("exif"))
-            context["has_gps"] = bool(metadata.get("gps_latitude"))
+
+        # EXIF presence must come from the actual exif_extract tool result, not the
+        # artifact metadata — the latter is never populated with EXIF at ingest, so
+        # reading it made has_exif permanently False and RT3 reported a spurious
+        # MISSING_EXIF_DATA absence for every image that DID carry metadata.
+        tool_ctx = getattr(self, "_tool_context", {}) or {}
+        exif_result = tool_ctx.get("exif_extract") or {}
+        if isinstance(exif_result, dict):
+            verdict = str(exif_result.get("evidence_verdict") or exif_result.get("status") or "").upper()
+            has_real_exif = verdict != "NOT_APPLICABLE" and any(
+                exif_result.get(k)
+                for k in (
+                    "fields_extracted", "camera_make", "camera_model",
+                    "datetime_original", "software", "gps_coordinates",
+                )
+            )
+            context["has_exif"] = bool(has_real_exif)
+            context["has_gps"] = bool(
+                exif_result.get("gps_coordinates") or exif_result.get("latitude")
+            )
+
         mime = context["mime_type"].lower()
         context["has_audio"] = any(x in mime for x in ["audio", "wav", "mp3", "ogg"])
         context["has_video"] = any(x in mime for x in ["video", "mp4", "avi", "mov"])
@@ -133,11 +150,21 @@ class AgentReflectionMixin:
         ext = evidence_context.get("file_extension", "").lower()
         is_image = "image" in mime or ext in ["jpg", "jpeg", "png", "tiff"]
 
+        # Scope absence checks to the agent that owns the axis. The reflection
+        # pass runs per-agent, so flagging "MISSING_PRNU" on the metadata agent or
+        # "MISSING_EXIF" on the integrity agent produced cross-axis noise the agent
+        # is not responsible for (and cannot act on).
+        agent_id = str(getattr(self, "agent_id", "") or "")
+
         if is_image:
-            if any("exif" in ft for ft in finding_types) and not evidence_context.get("has_exif"):
-                absences.append("MISSING_EXIF_DATA: Image file lacks EXIF metadata.")
-            if not any("noise" in ft or "fingerprint" in ft for ft in finding_types):
-                absences.append("MISSING_PRNU_ANALYSIS: No sensor noise analysis performed.")
+            # EXIF/metadata absence is Agent 5's concern.
+            if agent_id.startswith("Agent5"):
+                if any("exif" in ft for ft in finding_types) and not evidence_context.get("has_exif"):
+                    absences.append("MISSING_EXIF_DATA: Image file lacks EXIF metadata.")
+            # Sensor-noise (PRNU) absence is Agent 1's concern.
+            if agent_id.startswith("Agent1"):
+                if not any("noise" in ft or "fingerprint" in ft for ft in finding_types):
+                    absences.append("MISSING_PRNU_ANALYSIS: No sensor noise analysis performed.")
         if evidence_context.get("has_video") or evidence_context.get("has_audio"):
             if not any("codec" in ft for ft in finding_types):
                 absences.append("MISSING_CODEC_FINGERPRINT: No codec analysis.")

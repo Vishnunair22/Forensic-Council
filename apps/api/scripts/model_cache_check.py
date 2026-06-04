@@ -65,9 +65,13 @@ def _open_clip_cache_dir(model_name: str) -> str:
 
 REQUIRED_HF_MODEL_DIRS = [
     _open_clip_cache_dir(settings.siglip_model_name),
-    "models--speechbrain--spkrec-ecapa-voxceleb",
-    "models--" + settings.aasist_model_name.replace("/", "--"),
 ]
+# Audio models (ECAPA, AASIST) are only baked into the seed cache when
+# ENABLE_AUDIO_MODELS=true (see model_pre_download.py). Requiring them
+# unconditionally would make `--strict` fail on a healthy audio-off deployment.
+if getattr(settings, "enable_audio_models", False):
+    REQUIRED_HF_MODEL_DIRS.append("models--speechbrain--spkrec-ecapa-voxceleb")
+    REQUIRED_HF_MODEL_DIRS.append("models--" + settings.aasist_model_name.replace("/", "--"))
 if DETR_OBJECT_DETECTOR_ACTIVE:
     REQUIRED_HF_MODEL_DIRS.append("models--facebook--detr-resnet-50")
 

@@ -1,5 +1,22 @@
 """Shared image utility functions."""
 
+# ── Canonical format-applicability policy (single source of truth) ───────────
+# Tools whose forensic signal is JPEG re-compression dependent (Error Level
+# Analysis family + JPEG ghost / double-compression). They measure residuals
+# that only exist in lossy JPEG pipelines, so they MUST return NOT_APPLICABLE on
+# lossless formats (PNG/BMP/TIFF/GIF/lossless-WebP) rather than emit speculative,
+# court-indefensible findings. Every handler for these tools must gate on
+# is_lossless_image(); see core/handlers/image.py._lossless_not_applicable.
+# Lossless integrity is instead covered by noiseprint_cluster / splicing tools.
+JPEG_COMPRESSION_DEPENDENT_TOOLS: frozenset[str] = frozenset(
+    {
+        "neural_ela",
+        "ela_full_image",
+        "ela_anomaly_classify",
+        "jpeg_ghost_detect",
+    }
+)
+
 _LOSSLESS_EXTS = frozenset(
     {
         ".png",

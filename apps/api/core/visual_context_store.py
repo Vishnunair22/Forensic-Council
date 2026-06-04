@@ -2,13 +2,17 @@ import asyncio
 import json
 import time
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from core.persistence.redis_client import get_redis_client
 from core.structured_logging import get_logger
 from core.visual_context_models import VisualContext
 
 logger = get_logger(__name__)
+
+# Single-flight preflight lock TTL (seconds). Must exceed the Gemini preflight
+# timeout; auto-expires so a crashed creator can never deadlock the flow.
+_PREFLIGHT_LOCK_TTL = 120
 
 async def get_visual_context(
     session_id: str,
@@ -23,11 +27,19 @@ async def get_visual_context(
       2. Working memory state
       3. Redis persistence (by session_id, then by sha256)
     """
-    # Layer 1: Check InterAgentBus
+    # Layer 1: Check InterAgentBus.
+    # The bus profile is often a FLAT finding dict (Agent 1 overwrites the
+    # preflight VisualContext dump with its visual_evidence_profile result), which
+    # is NOT VisualContext-shaped — blindly validating it raised on every call and
+    # fell through to Redis. Only validate when the payload carries the nested
+    # VisualContext structure; otherwise skip straight to the persisted layers.
     if inter_agent_bus:
         try:
             data = inter_agent_bus.get_visual_profile(session_id)
-            if data:
+            if isinstance(data, dict) and any(
+                k in data
+                for k in ("image_integrity_context", "object_scene_context", "metadata_visual_context")
+            ):
                 return VisualContext.model_validate(data)
         except Exception as e:
             logger.debug("Failed retrieving visual context from inter-agent bus", error=str(e))
@@ -104,8 +116,15 @@ def build_visual_context_from_finding(
     elif verdict == "AI_GENERATED":
         integrity_assessment = "ai_generated_suspect"
 
+    # Visible provenance + derived scene clues from the local ensemble (timestamps,
+    # device/platform, app, plus weapons/documents/people/lighting/regions/edits).
+    # Populated so the no-Gemini path reaches parity with the Gemini visual context.
+    _clues = getattr(finding, "_visible_metadata_clues", {}) or {}
+
     image_integrity_context = ImageIntegrityContext(
         visible_manipulation_signals=list(finding.manipulation_signals or []),
+        editing_or_compositing_signals=list(_clues.get("editing_signals", []) or []),
+        regions_for_followup=list(_clues.get("regions_for_followup", []) or []),
         integrity_assessment=integrity_assessment,
         confidence=finding.confidence
     )
@@ -113,19 +132,19 @@ def build_visual_context_from_finding(
     object_scene_context = ObjectSceneContext(
         scene_description=finding.content_description or "",
         objects=list(finding.detected_objects or []),
+        weapons_or_dangerous_items=list(_clues.get("weapons", []) or []),
+        documents_or_ids=list(_clues.get("documents", []) or []),
+        people=list(_clues.get("people", []) or []),
         visible_text=list(finding._extracted_text or []),
         confidence=finding.confidence
     )
 
-    # Visible provenance clues extracted from the image (timestamps, device/
-    # platform, app). Populated by the local ensemble so the metadata-provenance
-    # section is filled even on the no-Gemini path.
-    _clues = getattr(finding, "_visible_metadata_clues", {}) or {}
     metadata_visual_context = MetadataVisualContext(
         visible_timestamps=list(_clues.get("visible_timestamps", []) or []),
         visible_location_clues=list(_clues.get("location_clues", []) or []),
         device_or_platform_clues=list(_clues.get("device_platform_clues", []) or []),
         software_or_app_clues=list(_clues.get("software_clues", []) or []),
+        lighting_weather_season_clues=list(_clues.get("lighting_weather_season", []) or []),
         metadata_consistency_notes=[finding._metadata_visual_consistency] if finding._metadata_visual_consistency else [],
         confidence=finding.confidence
     )
@@ -197,6 +216,68 @@ async def save_visual_context(
     except Exception as e:
         logger.warning("Failed saving visual context to Redis", error=str(e))
 
+async def _acquire_preflight_lock(redis: Any, sha256: str, token: str) -> bool:
+    """Atomically elect a single preflight creator for `sha256` (Redis SET NX EX).
+
+    Returns True only for the elected creator. Any error (incl. Redis down)
+    returns False so the caller proceeds unlocked — degrading to prior behaviour
+    rather than failing.
+    """
+    if not sha256:
+        return False
+    try:
+        return bool(
+            await redis.set(f"visual_context_lock:{sha256}", token, nx=True, ex=_PREFLIGHT_LOCK_TTL)
+        )
+    except Exception:
+        return False
+
+
+async def _release_preflight_lock(redis: Any, sha256: str, token: str) -> None:
+    """Release the preflight lock iff this caller still owns it (token match)."""
+    try:
+        key = f"visual_context_lock:{sha256}"
+        cur = await redis.get(key)
+        if isinstance(cur, bytes | bytearray):
+            cur = cur.decode()
+        if cur == token:
+            await redis.delete(key)
+    except Exception as exc:
+        logger.debug("Failed releasing preflight lock", sha256=sha256, error=str(exc))
+
+
+async def _wait_for_concurrent_creator(
+    redis: Any,
+    session_id: str,
+    sha256: str,
+    working_memory: Any,
+    inter_agent_bus: Any,
+) -> "VisualContext | None":
+    """Wait for the elected creator's visual context.
+
+    Returns the context as soon as it lands. Returns None promptly if the
+    creator's lock disappears without producing a context (creator failed), so a
+    dead winner never stalls the loser for the full lock TTL.
+    """
+    deadline = time.monotonic() + _PREFLIGHT_LOCK_TTL
+    while time.monotonic() < deadline:
+        ctx = await get_visual_context(
+            session_id=session_id,
+            sha256=sha256,
+            working_memory=working_memory,
+            inter_agent_bus=inter_agent_bus,
+        )
+        if ctx is not None:
+            return ctx
+        try:
+            if not await redis.get(f"visual_context_lock:{sha256}"):
+                return None
+        except Exception:
+            return None
+        await asyncio.sleep(0.5)
+    return None
+
+
 async def create_visual_context_preflight(
     session_id: str,
     file_path: str,
@@ -245,75 +326,136 @@ async def create_visual_context_preflight(
         )
         return existing
 
-    context: VisualContext | None = None
-
-    # ── Attempt Gemini ────────────────────────────────────────────────────
+    # ── Single-flight guard ───────────────────────────────────────────────
+    # The API route (backend process) and the worker pipeline both call this for
+    # the same file; without coordination a cross-process race fires the Gemini
+    # preflight twice, doubling RPM/RPD. A short-lived Redis SETNX lock keyed by
+    # sha256 elects ONE creator; concurrent callers wait for that creator's
+    # result instead of spending quota. The lock auto-expires (TTL) so a crashed
+    # creator can never deadlock; if Redis is unavailable we degrade to the prior
+    # unlocked behaviour.
+    redis = None
+    lock_token = uuid4().hex
+    have_lock = False
     try:
-        from core.gemini_client import GeminiVisionClient
+        redis = await get_redis_client()
+        have_lock = await _acquire_preflight_lock(redis, sha256, lock_token)
+    except Exception:
+        redis = None
 
-        client = GeminiVisionClient(config)
-        if client._enabled:
-            context = await client.analyze_visual_context_preflight(
-                file_path=file_path,
+    if redis is not None and not have_lock:
+        shared = await _wait_for_concurrent_creator(
+            redis, session_id, sha256, working_memory, inter_agent_bus
+        )
+        if shared is not None:
+            logger.info(
+                "Preflight single-flight: reused concurrent creator's context (no Gemini call)",
+                session_id=session_id,
+                source=shared.source,
+            )
+            # Re-save under this session's layers so consumers (which look up by
+            # session_id) see it even if the creator keyed it differently.
+            await save_visual_context(
                 session_id=session_id,
                 sha256=sha256,
+                context=shared,
+                working_memory=working_memory,
+                inter_agent_bus=inter_agent_bus,
             )
-            logger.info(
-                "Gemini preflight visual context created",
-                session_id=session_id,
-                file_type=context.file_type_assessment,
-                verdict=context.authenticity_verdict,
-                model=context.provider_name,
-            )
-    except Exception as exc:
-        logger.warning(
-            "Gemini preflight failed — falling back to local ensemble",
-            session_id=session_id,
-            error=str(exc),
-        )
+            return shared
+        # Concurrent creator vanished without producing a context → create directly.
 
-    # ── Local ensemble fallback ───────────────────────────────────────────
-    if context is None:
+    try:
+        if have_lock:
+            # Double-checked locking: another creator may have finished between
+            # our cache miss and acquiring the lock.
+            existing2 = await get_visual_context(
+                session_id=session_id,
+                sha256=sha256,
+                working_memory=working_memory,
+                inter_agent_bus=inter_agent_bus,
+            )
+            if existing2:
+                await save_visual_context(
+                    session_id=session_id,
+                    sha256=sha256,
+                    context=existing2,
+                    working_memory=working_memory,
+                    inter_agent_bus=inter_agent_bus,
+                )
+                return existing2
+
+        context: VisualContext | None = None
+
+        # ── Attempt Gemini ────────────────────────────────────────────────────
         try:
-            import mimetypes
-            from uuid import UUID
+            from core.gemini_client import GeminiVisionClient
 
-            from core.evidence import ArtifactType, EvidenceArtifact
-            from core.vision_local_ensemble import analyze_local_visual_profile
-
-            artifact = EvidenceArtifact.create_root(
-                artifact_type=ArtifactType.ORIGINAL,
-                file_path=file_path,
-                content_hash=sha256,
-                action="preflight_visual_context",
-                agent_id="system",
-                session_id=UUID(session_id),
-                metadata={"mime_type": mimetypes.guess_type(file_path)[0] or ""},
-            )
-            local_finding = await analyze_local_visual_profile(artifact=artifact)
-            context = build_visual_context_from_finding(session_id, sha256, local_finding)
-            logger.info(
-                "Local ensemble preflight visual context created",
-                session_id=session_id,
-            )
+            client = GeminiVisionClient(config)
+            if client._enabled:
+                context = await client.analyze_visual_context_preflight(
+                    file_path=file_path,
+                    session_id=session_id,
+                    sha256=sha256,
+                )
+                logger.info(
+                    "Gemini preflight visual context created",
+                    session_id=session_id,
+                    file_type=context.file_type_assessment,
+                    verdict=context.authenticity_verdict,
+                    model=context.provider_name,
+                )
         except Exception as exc:
             logger.warning(
-                "Local ensemble preflight also failed — visual context unavailable",
+                "Gemini preflight failed — falling back to local ensemble",
                 session_id=session_id,
                 error=str(exc),
             )
-            return None
 
-    # ── Persist to all three storage layers ──────────────────────────────
-    await save_visual_context(
-        session_id=session_id,
-        sha256=sha256,
-        context=context,
-        working_memory=working_memory,
-        inter_agent_bus=inter_agent_bus,
-    )
+        # ── Local ensemble fallback ───────────────────────────────────────────
+        if context is None:
+            try:
+                import mimetypes
 
-    return context
+                from core.evidence import ArtifactType, EvidenceArtifact
+                from core.vision_local_ensemble import analyze_local_visual_profile
+
+                artifact = EvidenceArtifact.create_root(
+                    artifact_type=ArtifactType.ORIGINAL,
+                    file_path=file_path,
+                    content_hash=sha256,
+                    action="preflight_visual_context",
+                    agent_id="system",
+                    session_id=UUID(session_id),
+                    metadata={"mime_type": mimetypes.guess_type(file_path)[0] or ""},
+                )
+                local_finding = await analyze_local_visual_profile(artifact=artifact)
+                context = build_visual_context_from_finding(session_id, sha256, local_finding)
+                logger.info(
+                    "Local ensemble preflight visual context created",
+                    session_id=session_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Local ensemble preflight also failed — visual context unavailable",
+                    session_id=session_id,
+                    error=str(exc),
+                )
+                return None
+
+        # ── Persist to all three storage layers ──────────────────────────────
+        await save_visual_context(
+            session_id=session_id,
+            sha256=sha256,
+            context=context,
+            working_memory=working_memory,
+            inter_agent_bus=inter_agent_bus,
+        )
+
+        return context
+    finally:
+        if have_lock and redis is not None:
+            await _release_preflight_lock(redis, sha256, lock_token)
 
 
 async def wait_for_visual_context(
@@ -374,6 +516,9 @@ def visual_context_to_profile_dict(context: VisualContext) -> dict:
         ),
         # Standard agent-facing fields
         "detected_objects": [obj.label for obj in context.detected_objects],
+        "weapons_or_dangerous_items": list(
+            context.object_scene_context.weapons_or_dangerous_items or []
+        ),
         "manipulation_signals": list(
             context.image_integrity_context.visible_manipulation_signals or []
         ),

@@ -81,8 +81,30 @@ async def run_agents_concurrent(
 
             # Fetch the pre-flight visual context once per broadcast — used to
             # calibrate finding severity for all findings in this agent's batch.
+            # Normalise to the canonical profile shape (file_type_assessment +
+            # scene_inconsistencies + weapons_or_dangerous_items) that
+            # apply_visual_grounding expects — the SAME shape the Arbiter uses via
+            # visual_context_to_profile_dict. The raw bus profile is whatever the
+            # last writer stored (Agent 1 overwrites the preflight dump with its
+            # flat finding dict), so passing it directly left Rule 3 scene
+            # corroboration dead and screenshot detection relying on free text.
             _visual_profile: dict | None = None
-            if pipeline.inter_agent_bus is not None:
+            try:
+                from core.visual_context_store import (
+                    get_visual_context,
+                    visual_context_to_profile_dict,
+                )
+
+                _vc = await get_visual_context(
+                    session_id=str(session_id),
+                    working_memory=getattr(pipeline, "working_memory", None),
+                    inter_agent_bus=pipeline.inter_agent_bus,
+                )
+                if _vc is not None:
+                    _visual_profile = visual_context_to_profile_dict(_vc)
+            except Exception as _vc_err:
+                logger.debug("Canonical visual profile unavailable for grounding", error=str(_vc_err))
+            if _visual_profile is None and pipeline.inter_agent_bus is not None:
                 try:
                     _visual_profile = pipeline.inter_agent_bus.get_visual_profile(str(session_id)) or None
                 except Exception:

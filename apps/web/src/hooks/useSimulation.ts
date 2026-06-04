@@ -1033,7 +1033,18 @@ export const useSimulation = ({
         return;
       }
       const stored = storage.getItem<HITLCheckpoint>(STORAGE_KEYS.HITL_CHECKPOINT, true);
-      if (stored) setHitlCheckpoint(stored);
+      if (!stored) return;
+      // The checkpoint is stored under a single global key, so a checkpoint left
+      // over from a PRIOR investigation must never be restored against a
+      // different session — submitting it would POST a stale checkpoint_id /
+      // session_id to the backend. Only restore when it belongs to the active
+      // session; otherwise drop the stale key.
+      const activeSid = storage.getItem(STORAGE_KEYS.SESSION_ID);
+      if (stored.session_id && activeSid && stored.session_id !== activeSid) {
+        storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT);
+        return;
+      }
+      setHitlCheckpoint(stored);
     } catch (e) { dbg.warn("[Simulation] HITL checkpoint restore failed:", e); }
   }, []);
 

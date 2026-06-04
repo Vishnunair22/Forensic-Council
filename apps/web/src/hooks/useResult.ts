@@ -35,6 +35,41 @@ function readSessionContext(sid: string | null): SessionContext | null {
   return storage.getItem<SessionContext>(`${STORAGE_KEYS.INVESTIGATION_CTX}:${sid}`, true) ?? null;
 }
 
+function readHistoryItem(sid: string | null): HistoryItem | null {
+  if (!sid) return null;
+  const hist = storage.getItem<HistoryItem[]>(STORAGE_KEYS.HISTORY, true, []) ?? [];
+  return hist.find((h) => h.sessionId === sid) ?? null;
+}
+
+interface SessionDisplayContext {
+  fileName: string | null;
+  mimeType: string | null;
+  thumbnail: string | null;
+  pipelineStart: string | null;
+}
+
+// Resolve a session's file/display context from the most authoritative source
+// available, in order: per-session context blob → per-session scoped keys →
+// History item (survives full resets) → active-session base keys. This ensures
+// a revisited session always renders ITS OWN metadata and never inherits the
+// currently-active session's file name/thumbnail when its scoped keys were
+// pruned.
+function resolveSessionDisplayContext(sid: string | null): SessionDisplayContext {
+  const ctx = readSessionContext(sid);
+  const hist = readHistoryItem(sid);
+  const scoped = (base: string) => (sid ? storage.getItem(`${base}:${sid}`) : null);
+  return {
+    fileName:
+      ctx?.file_name ?? scoped(STORAGE_KEYS.FILE_NAME) ?? hist?.fileName ?? storage.getItem(STORAGE_KEYS.FILE_NAME),
+    mimeType:
+      ctx?.mime_type ?? scoped(STORAGE_KEYS.MIME_TYPE) ?? hist?.mime ?? storage.getItem(STORAGE_KEYS.MIME_TYPE),
+    thumbnail:
+      scoped(STORAGE_KEYS.THUMBNAIL) ?? hist?.thumbnail ?? storage.getItem(STORAGE_KEYS.THUMBNAIL),
+    pipelineStart:
+      ctx?.pipeline_start ?? scoped(STORAGE_KEYS.PIPELINE_START) ?? storage.getItem(STORAGE_KEYS.PIPELINE_START),
+  };
+}
+
 function readResultPhase(sid: string | null): "initial" | "deep" {
   if (!sid) return "initial";
   const phase = storage.getItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`);
@@ -118,20 +153,16 @@ export function useResult(initialSessionId?: string) {
   useEffect(() => {
     const sid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
     const ready = sid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`) === "1" : false;
-    const ctx = readSessionContext(sid);
     const deep = readResultPhase(sid) === "deep";
 
     setReportAlreadyReady(ready);
     if (sid) setSessionId(sid);
     setIsDeepPhase(deep);
-    if (sid) {
-      setThumbnail(storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${sid}`) ?? storage.getItem(STORAGE_KEYS.THUMBNAIL));
-    } else {
-      setThumbnail(storage.getItem(STORAGE_KEYS.THUMBNAIL));
-    }
-    setMimeType(ctx?.mime_type ?? storage.getItem(STORAGE_KEYS.MIME_TYPE));
-    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem(STORAGE_KEYS.PIPELINE_START));
-    setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
+    const dctx = resolveSessionDisplayContext(sid);
+    setThumbnail(dctx.thumbnail);
+    setMimeType(dctx.mimeType);
+    setPipelineStartAt(dctx.pipelineStart);
+    setFileName(dctx.fileName);
     setAgentTimeline(loadAgentTimelineForSession(sid, deep));
 
     if (ready && sid) {
@@ -170,7 +201,6 @@ export function useResult(initialSessionId?: string) {
   useEffect(() => {
     if (!mounted) return;
     if (initialSessionId && initialSessionId !== sessionId) {
-      const ctx = readSessionContext(initialSessionId);
       setSessionId(initialSessionId);
       setReport(null);
       setArbiterComplete(false);
@@ -180,20 +210,17 @@ export function useResult(initialSessionId?: string) {
       setState("arbiter");
       setArbiterMsg("Council deliberating on evidence...");
       setIsDeepPhase(readResultPhase(initialSessionId) === "deep");
-      setThumbnail(
-        storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${initialSessionId}`) ??
-        storage.getItem(STORAGE_KEYS.THUMBNAIL)
-      );
-      setMimeType(ctx?.mime_type ?? storage.getItem(STORAGE_KEYS.MIME_TYPE));
-      setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem(STORAGE_KEYS.PIPELINE_START));
-      setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
+      const dctx = resolveSessionDisplayContext(initialSessionId);
+      setThumbnail(dctx.thumbnail);
+      setMimeType(dctx.mimeType);
+      setPipelineStartAt(dctx.pipelineStart);
+      setFileName(dctx.fileName);
       setAgentTimeline(loadAgentTimelineForSession(initialSessionId, readResultPhase(initialSessionId) === "deep"));
     }
   }, [mounted, initialSessionId, sessionId]);
 
   const selectSession = useCallback((sid: string) => {
     storage.setItem(STORAGE_KEYS.SESSION_ID, sid);
-    const ctx = readSessionContext(sid);
     const nextIsDeep = readResultPhase(sid) === "deep";
     setSessionId(sid);
     setArbiterComplete(false);
@@ -204,10 +231,11 @@ export function useResult(initialSessionId?: string) {
     revealSoundedRef.current = false;
     setArbiterMsg("Council deliberating on evidence...");
     setIsDeepPhase(nextIsDeep);
-    setThumbnail(storage.getItem(`${STORAGE_KEYS.THUMBNAIL}:${sid}`) ?? storage.getItem(STORAGE_KEYS.THUMBNAIL));
-    setMimeType(ctx?.mime_type ?? storage.getItem(STORAGE_KEYS.MIME_TYPE));
-    setPipelineStartAt(ctx?.pipeline_start ?? storage.getItem(STORAGE_KEYS.PIPELINE_START));
-    setFileName(ctx?.file_name ?? storage.getItem(STORAGE_KEYS.FILE_NAME));
+    const dctx = resolveSessionDisplayContext(sid);
+    setThumbnail(dctx.thumbnail);
+    setMimeType(dctx.mimeType);
+    setPipelineStartAt(dctx.pipelineStart);
+    setFileName(dctx.fileName);
     setAgentTimeline(loadAgentTimelineForSession(sid, nextIsDeep));
   }, []);
 
@@ -225,7 +253,12 @@ export function useResult(initialSessionId?: string) {
       return getReport(sessionId);
     },
     enabled: !!sessionId && mounted,
-    staleTime: 60_000,
+    // The report is an authoritative, point-in-time backend artifact that can
+    // change for the same session (initial → deep analysis, or a re-run). Treat
+    // it as always stale and refetch on every result-page mount so revisiting a
+    // session (history, deep completion) never shows a cached older report.
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: 3,
     refetchInterval: (query) => {
       const data = query.state.data as ReportResponse | undefined;
@@ -254,12 +287,13 @@ export function useResult(initialSessionId?: string) {
     if (finalReportData.is_deep_analysis === true || finalReportData.is_deep_analysis === false) {
       setIsDeepPhase(finalReportData.is_deep_analysis);
     }
-    // Fallback: build agent timeline from report data when storage is empty
-    if (agentTimeline.length === 0) {
-      const fromReport = buildAgentTimelineFromReport(finalReportData);
-      if (fromReport.length > 0) {
-        setAgentTimeline(fromReport);
-      }
+    // The report's agent_summaries are the authoritative execution timeline.
+    // Prefer them over any locally-persisted streaming snapshot so a stale
+    // localStorage timeline can never override fresh backend data; the persisted
+    // snapshot remains only as a fallback when the report carries no summaries.
+    const fromReport = buildAgentTimelineFromReport(finalReportData);
+    if (fromReport.length > 0) {
+      setAgentTimeline(fromReport);
     }
     // Only transition to "ready" after the min overlay duration has elapsed
     // to prevent blank flash during overlay exit animation.
@@ -278,7 +312,6 @@ export function useResult(initialSessionId?: string) {
         return () => clearTimeout(id);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalReportData, minOverlayDone]);
 
   useEffect(() => {

@@ -659,41 +659,24 @@ export function AgentFindingCard({
             {/* Agent overview narrative — full text, no clamp */}
             {parsedNarrative ? (
               <div className="space-y-4 mb-4">
-                {/* Visual Context — the agent's visual axis (image integrity for
-                    Agent1, object/scene for Agent3, metadata for Agent5). */}
-                {parsedNarrative.visual_description && (
-                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                    <div className="flex items-center gap-2 text-blue-300">
-                      <Info className="w-4 h-4 shrink-0" />
-                      <h4 className="text-xs font-bold tracking-wider font-mono">Visual Context</h4>
-                    </div>
-                    <div className="text-xs fc-text-secondary leading-relaxed font-medium">
-                      <BulletedText text={parsedNarrative.visual_description} colorClass="bg-blue-500/40" />
-                    </div>
-                  </div>
-                )}
-
-                {/* Agent Overview — the tools that ran and the verdict arrived. */}
+                {/* What this means — the agent's plain-language conclusion. The
+                    shared "what the image is" scene description now lives once at
+                    the page level (EvidenceContextCard), so it is no longer
+                    repeated per agent. */}
                 {parsedNarrative.agent_brief && (
                   <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
                     <div className="flex items-center gap-2 text-primary">
                       <ShieldCheck className="w-4.5 h-4.5 shrink-0 text-primary" />
-                      <h4 className="text-xs font-bold tracking-wider font-mono text-primary">Agent Overview</h4>
+                      <h4 className="text-xs font-bold tracking-wider font-mono text-primary">What this means</h4>
                     </div>
                     <p className="text-sm text-white/90 leading-relaxed font-medium whitespace-pre-line">{parsedNarrative.agent_brief}</p>
-                  </div>
-                )}
-
-                {/* Your Opinion — the arbiter's verdict reasoning for this agent. */}
-                {parsedNarrative.opinion && (
-                  <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-2">
-                    <div className="flex items-center gap-2 text-success">
-                      <Shield className="w-4 h-4 shrink-0 text-success" />
-                      <h4 className="text-xs font-bold tracking-wider font-mono">Your Opinion</h4>
-                    </div>
-                    <div className="text-xs fc-text-secondary leading-relaxed font-medium">
-                      <BulletedText text={parsedNarrative.opinion} colorClass="bg-success/40" />
-                    </div>
+                    {/* Assessment basis folded inline (was a separate "Your Opinion"
+                        panel) so the agent reads as one statement, not three boxes. */}
+                    {parsedNarrative.opinion && (
+                      <div className="pt-1 text-xs fc-text-secondary leading-relaxed">
+                        <BulletedText text={parsedNarrative.opinion} colorClass="bg-success/40" />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -734,17 +717,26 @@ export function AgentFindingCard({
               )
             )}
 
-            {/* Section groups */}
-            <div className="space-y-3">
-              {sections.map((section, idx) => (
-                <SectionGroup
-                  key={section.id}
-                  section={section}
-                  // Open the first two sections; let users opt in to the rest.
-                  defaultExpanded={idx < 2 || section.flag === "bad" || section.flag === "warn"}
-                />
-              ))}
-            </div>
+            {/* Technical evidence (Tier 3) — collapsed by default so the plain-
+                language conclusion above is the primary read; only sections that
+                flag an anomaly auto-expand. Experts/court open the rest on demand. */}
+            {sections.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1 pt-1">
+                  <Cpu className="w-3.5 h-3.5 fc-text-faint" />
+                  <span className="text-xs font-bold tracking-wider font-mono fc-text-faint uppercase">
+                    Technical evidence
+                  </span>
+                </div>
+                {sections.map((section) => (
+                  <SectionGroup
+                    key={section.id}
+                    section={section}
+                    defaultExpanded={section.flag === "bad" || section.flag === "warn"}
+                  />
+                ))}
+              </div>
+            )}
 
             {bypassedFindings.length > 0 && (
               <div className="rounded-2xl border border-white/[0.06] bg-transparent px-5 py-4">

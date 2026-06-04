@@ -119,7 +119,7 @@ bash scripts/dev.sh
 ### Advanced: Manual Control
 If you need to control the build process or run containers interactively, use the manual commands below.
 
-#### Step 1 — Build and start (dev overlay provides direct host ports 8000, 5432, 6379, 6333)
+#### Step 1 — Build and start (dev overlay provides direct host ports 3000, 8000, 5432, 6379, 6333)
 
 ```bash
 docker compose \
@@ -201,7 +201,7 @@ bash scripts/_smoke.sh dev
 | URL | What |
 |-----|------|
 | `http://localhost` | Caddy proxy — recommended entry point (frontend + API) |
-| `http://localhost:3000` | Frontend direct |
+| `http://localhost:3000` | Frontend direct (only with dev overlay) |
 | `http://localhost:8000` | Backend API direct (only with dev overlay) |
 | `http://localhost:8000/docs` | FastAPI interactive docs (Swagger UI, only with dev overlay) |
 | `http://localhost:16686` | Jaeger distributed tracing UI |
@@ -690,7 +690,7 @@ docker compose \
 | File | Role | Use with |
 |------|------|---------|
 | `docker-compose.yml` | Base stack — always required | All modes |
-| `docker-compose.dev.yml` | Dev host-port overlay — exposes ports 8000, 5432, 6379, 6333/6334 to localhost | Development only |
+| `docker-compose.dev.yml` | Dev host-port overlay — exposes ports 3000, 8000, 5432, 6379, 6333/6334 to localhost | Development only |
 | `docker-compose.prod.yml` | Production targets, hardened restart, log rotation | Production |
 
 ### Build arguments
@@ -854,6 +854,23 @@ docker compose -f infra/docker-compose.yml --env-file .env logs --tail 30 redis
 ### `REDIS_PASSWORD must be set` on compose up
 
 The base compose file uses `:?` syntax for required variables. Ensure your `.env` file exists, is in the repo root (not inside `infra/`), and the `--env-file .env` flag is present in the command.
+
+### Frontend can't find a newly added npm dependency (dev)
+
+In dev mode `node_modules` is a named volume (`web_node_modules`) mounted over the
+image's install so the host's tree never shadows it. Docker only seeds a named
+volume from the image **the first time** it is created — a later image rebuild
+with new dependencies in `package.json` will **not** refresh the existing volume,
+so the new package appears missing at runtime. After changing `apps/web/package.json`,
+recreate the volume:
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env stop frontend
+docker volume rm forensic-council_web_node_modules
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file .env up -d --no-deps --build frontend
+```
+
+(The same applies to `web_next` if the Next.js build cache ever goes stale.)
 
 ### Backend hot-reload not picking up changes
 

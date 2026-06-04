@@ -121,6 +121,10 @@ class ForensicReport(BaseModel):
     verdict_sentence: str = ""
     key_findings: list[str] = Field(default_factory=list)
     reliability_note: str = ""
+    # Page-level "what this shows" context from the pre-flight VisualContext —
+    # scene description + file-type assessment + source provenance. Shown ONCE at
+    # the top of the evidence page (not repeated per agent). Descriptive, not a verdict.
+    evidence_summary: dict[str, Any] = Field(default_factory=dict)
     # New verdict/confidence fields
     manipulation_probability: float = 0.0
     compression_penalty: float = Field(

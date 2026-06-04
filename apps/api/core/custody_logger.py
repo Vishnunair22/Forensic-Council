@@ -40,10 +40,25 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (int, np.integer)):
         return int(value)
     if isinstance(value, dict):
-        return {str(k): _json_safe(v) for k, v in value.items()}
+        return {_json_safe_str(str(k)): _json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple, np.ndarray)):
         return [_json_safe(v) for v in value]
+    if isinstance(value, str):
+        return _json_safe_str(value)
     return value
+
+
+def _json_safe_str(text: str) -> str:
+    """Strip NUL bytes from strings.
+
+    PostgreSQL ``jsonb`` cannot store the ``\\u0000`` code point and rejects the
+    whole insert with "unsupported Unicode escape sequence". A single tool output
+    carrying a stray NUL byte would otherwise fail the direct insert, fall back to
+    the Redis WAL, and then fail every flush forever — a poison message that blocks
+    the queue and floods the logs. Stripping NUL here (before signing) keeps the
+    stored content and its hash/signature bound to the same sanitized value.
+    """
+    return text.replace("\x00", "") if "\x00" in text else text
 
 
 def _json_dumps_deterministic(obj: Any) -> str:
@@ -192,6 +207,7 @@ class CustodyLogger:
         self._owned_client = False  # Never own — always use singleton
         # WAL Key in Redis for persistent retries
         self._wal_key = "forensic:custody:wal"
+        self._wal_key_dead = "forensic:custody:wal:dead"
 
     async def _get_redis(self):
         """Lazy access to Redis client."""
@@ -435,7 +451,20 @@ class CustodyLogger:
                         item["prior_entry_ref"],
                     )
                 except Exception as e:
-                    # Push back to head and stop — caller retries later.
+                    # A SQLSTATE class "22" (data exception) means the payload can
+                    # never be inserted — re-queuing it would block the WAL forever
+                    # and flood the logs. Move it to a bounded dead-letter list and
+                    # continue draining. Transient errors (connection/operational)
+                    # are pushed back to the head and retried later.
+                    sqlstate = getattr(e, "sqlstate", "") or ""
+                    if sqlstate.startswith("22"):
+                        await redis.client.rpush(self._wal_key_dead, item_raw)
+                        await redis.client.ltrim(self._wal_key_dead, -1000, -1)
+                        logger.error(
+                            f"Custody WAL: dropping un-insertable item {item['entry_id']} "
+                            f"to dead-letter (sqlstate={sqlstate}): {e}"
+                        )
+                        continue
                     await redis.client.lpush(self._wal_key, item_raw)
                     logger.error(
                         f"Custody WAL: Flush failed for item {item['entry_id']}, put back in queue: {e}"

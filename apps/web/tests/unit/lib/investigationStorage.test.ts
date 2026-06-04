@@ -210,6 +210,46 @@ describe("investigationStorage", () => {
 
       expect(lsStore["forensic_investigation_ctx:sess-123"]).toBeUndefined();
     });
+
+    it("preserves session-scoped CONTEXT for a session still in history, prunes orphans", () => {
+      const storageModule = jest.requireMock("@/lib/storage");
+      storageModule.__mockStore["forensic_history"] = JSON.stringify([
+        { sessionId: "sess-keep", fileName: "keep.png", verdict: "AUTHENTIC", timestamp: 1, type: "Initial" },
+      ]);
+      storageModule.__mockStore["forensic_session_id"] = "sess-active";
+      lsStore["forensic_investigation_ctx:sess-keep"] = '{"session_id":"sess-keep","file_name":"keep.png"}';
+      lsStore["forensic_thumbnail:sess-keep"] = "data:image/jpeg;base64,xxx";
+      lsStore["forensic_mime_type:sess-keep"] = "image/png";
+      // Orphan (not in history, not active) — must be pruned.
+      lsStore["forensic_investigation_ctx:sess-orphan"] = '{"session_id":"sess-orphan"}';
+      lsStore["forensic_thumbnail:sess-orphan"] = "data:image/jpeg;base64,yyy";
+
+      clearInvestigationPersistence();
+
+      // History session keeps its context so a revisit renders correct metadata.
+      expect(lsStore["forensic_investigation_ctx:sess-keep"]).toBeDefined();
+      expect(lsStore["forensic_thumbnail:sess-keep"]).toBeDefined();
+      expect(lsStore["forensic_mime_type:sess-keep"]).toBeDefined();
+      // Orphaned session context is removed (bounded accumulation).
+      expect(lsStore["forensic_investigation_ctx:sess-orphan"]).toBeUndefined();
+      expect(lsStore["forensic_thumbnail:sess-orphan"]).toBeUndefined();
+    });
+
+    it("always sweeps streamed agent FINDINGS even for in-history sessions", () => {
+      const storageModule = jest.requireMock("@/lib/storage");
+      storageModule.__mockStore["forensic_history"] = JSON.stringify([
+        { sessionId: "sess-keep", fileName: "keep.png", verdict: "AUTHENTIC", timestamp: 1, type: "Initial" },
+      ]);
+      lsStore["forensic_initial_agents:sess-keep"] = JSON.stringify([{ agent_id: "agent-1" }]);
+      lsStore["forensic_deep_agents:sess-keep"] = JSON.stringify([{ agent_id: "agent-2" }]);
+
+      clearInvestigationPersistence();
+
+      // Findings are stale-prone — never retained, even for revisitable sessions
+      // (the result page rebuilds the timeline from the authoritative report).
+      expect(lsStore["forensic_initial_agents:sess-keep"]).toBeUndefined();
+      expect(lsStore["forensic_deep_agents:sess-keep"]).toBeUndefined();
+    });
   });
 
   describe("clearAgentSnapshots", () => {

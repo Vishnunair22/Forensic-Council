@@ -155,8 +155,8 @@ class Agent3Object(ForensicAgent):
         if not profile and self.inter_agent_bus:
             try:
                 profile = self.inter_agent_bus.get_visual_profile(str(self.session_id)) or {}
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Visual profile bus lookup failed", error=str(exc))
         if hasattr(profile, "to_finding_dict"):
             profile = profile.to_finding_dict()
         return profile if isinstance(profile, dict) else {}
@@ -329,15 +329,39 @@ class Agent3Object(ForensicAgent):
             """Read Agent 1's shared visual evidence profile from bus context."""
             result = {"shared_context_available": False, "source": "agent1_visual_profile"}
             try:
+                # Surface the rich VisualContext fields the reactive routing in
+                # _on_tool_result_impl consumes (weapons_or_dangerous_items,
+                # scene_inconsistencies, file_type_assessment). The flat bus profile
+                # omits them, so without this they only resolved via the bus
+                # fallback (which never fired once the profile was non-empty).
+                vc = getattr(self, "visual_context", None)
+                if vc is not None:
+                    from core.visual_context_store import visual_context_to_profile_dict
+                    prof = visual_context_to_profile_dict(vc)
+                    result["shared_context_available"] = True
+                    result["content_description"] = prof.get("content_description", "")
+                    result["detected_objects"] = prof.get("detected_objects", [])
+                    result["weapons_or_dangerous_items"] = prof.get("weapons_or_dangerous_items", [])
+                    result["scene_inconsistencies"] = prof.get("scene_inconsistencies", [])
+                    result["file_type_assessment"] = prof.get("file_type_assessment", "")
+                    result["authenticity_verdict"] = prof.get("verdict", "")
+                    result["reasoning_summary"] = prof.get("content_description", "")
+                    result["metadata"] = prof.get("metadata", {})
+
                 if self.inter_agent_bus:
                     ctx = self.inter_agent_bus.get_visual_profile(str(self.session_id))
                     if ctx:
                         result["shared_context_available"] = True
-                        result["metadata"] = ctx.get("metadata", {})
-                        result["content_description"] = ctx.get("content_description", "")
-                        result["detected_objects"] = ctx.get("detected_objects", [])
-                        result["authenticity_verdict"] = ctx.get("authenticity_verdict", "")
-                        result["reasoning_summary"] = ctx.get("reasoning_summary", "")
+                        # Bus profile fills any gaps the VisualContext didn't cover.
+                        result.setdefault("metadata", ctx.get("metadata", {}))
+                        if not result.get("content_description"):
+                            result["content_description"] = ctx.get("content_description", "")
+                        if not result.get("detected_objects"):
+                            result["detected_objects"] = ctx.get("detected_objects", [])
+                        if not result.get("authenticity_verdict"):
+                            result["authenticity_verdict"] = ctx.get("authenticity_verdict", "")
+                        if not result.get("reasoning_summary"):
+                            result["reasoning_summary"] = ctx.get("reasoning_summary", "")
                         self.inter_agent_bus.signal_event(
                             self.session_id,
                             "agent3_initial_signal",

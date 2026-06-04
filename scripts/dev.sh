@@ -48,7 +48,7 @@ check_port() {
   return 1
 }
 
-REQUIRED_PORTS=(80 443 3000 5432 6379 8000)
+REQUIRED_PORTS=(80 443 3000 5432 6379 6333 6334 8000)
 PORT_CONFLICTS=()
 for PORT in "${REQUIRED_PORTS[@]}"; do
   if ! check_port "$PORT"; then

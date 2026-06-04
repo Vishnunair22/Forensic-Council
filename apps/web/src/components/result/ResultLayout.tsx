@@ -26,6 +26,7 @@ import { ResultStateView } from "./ResultStateView";
 import { EvidenceHeader } from "./EvidenceHeader";
 import { VerdictSection } from "./VerdictSection";
 import { AgentsStrip } from "./AgentsStrip";
+import { EvidenceContextCard } from "./EvidenceContextCard";
 import { IntelligenceBrief } from "./IntelligenceBrief";
 import { FindingsMetadata } from "./FindingsMetadata";
 import { ExecutionTimeline } from "./ExecutionTimeline";
@@ -274,6 +275,13 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                     skippedAgents={rs.report.skipped_agents}
                     isDeepPhase={rs.isDeepPhase}
                   />
+                </motion.div>
+              )}
+
+              {/* 4.25. Evidence context — "what this shows", once, above the agents */}
+              {rs.report.evidence_summary && (
+                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
+                  <EvidenceContextCard evidenceSummary={rs.report.evidence_summary} />
                 </motion.div>
               )}
 

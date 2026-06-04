@@ -62,6 +62,9 @@ async function forward(req: NextRequest, ctx: { params: Promise<{ path: string[]
         headers,
         body,
         redirect: "manual",
+        // Never let Next's data cache sit between the browser and the live
+        // backend API — these are dynamic, per-session forensic reads.
+        cache: "no-store",
         signal: AbortSignal.timeout(isReportExport ? 60_000 : 30_000),
       });
       if (RETRYABLE_STATUSES.has(upstream.status)) {

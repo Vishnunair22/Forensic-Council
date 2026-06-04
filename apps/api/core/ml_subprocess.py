@@ -11,6 +11,7 @@ Improvements over original:
 
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -20,6 +21,29 @@ from core.structured_logging import get_logger
 logger = get_logger(__name__)
 
 ML_TOOLS_DIR = Path(__file__).parent.parent / "tools" / "ml_tools"
+
+# Cap BLAS / OpenMP thread pools in ML subprocesses. Libraries like OpenBLAS,
+# MKL and OpenMP default to one thread per CPU core; spawning one subprocess per
+# tool then multiplies that, exhausting the container's RLIMIT_NPROC and crashing
+# native threads with SIGSEGV (observed on anomaly_classifier: "OpenBLAS
+# blas_thread_init: pthread_create failed ... Resource temporarily unavailable").
+# These tools are already parallelised at the process level, so single-threaded
+# math is both safer and avoids thread-thrash slowdowns.
+_ML_THREAD_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "OMP_THREAD_LIMIT": "1",
+}
+
+
+def _ml_subprocess_env() -> dict[str, str]:
+    """Return the parent environment with BLAS/OpenMP thread pools capped to 1."""
+    env = os.environ.copy()
+    env.update(_ML_THREAD_ENV)
+    return env
 
 def _get_ml_subprocess_timeout() -> float:
     """Return the configured ML subprocess timeout, falling back to 120s default.
@@ -104,6 +128,7 @@ class _MLWorker:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_ml_subprocess_env(),
         )
         # Start background stderr consumer to prevent pipe deadlock
         self._stderr_task = asyncio.create_task(self._consume_stderr())
@@ -226,6 +251,7 @@ async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
             "--warmup",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_ml_subprocess_env(),
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -448,6 +474,7 @@ async def run_ml_tool(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             preexec_fn=_preexec,
+            env=_ml_subprocess_env(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=effective_timeout)
 

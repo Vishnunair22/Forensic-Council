@@ -16,6 +16,16 @@ Principles — hard constraints:
      changing severity — the Arbiter weighs those signals independently.
   4. Never let Gemini override a deterministic tool's hard positive signal.
      Grounding applies only when the finding would otherwise be noise.
+
+This is the SEVERITY-tier grounding layer. It is one of two grounding layers and
+both MUST source from the same canonical pre-flight VisualContext:
+  - core/agent_reasoning.py post_tool_reasoning  → grounds VERDICT/confidence
+    in-loop, consuming the VisualContext object directly.
+  - this module (apply_visual_grounding)          → grounds SEVERITY post-hoc,
+    consuming the flat dict from visual_context_store.visual_context_to_profile_dict.
+Callers (orchestration/pipeline_phases.py broadcast, agents/arbiter.py) must pass
+that canonical flat dict — never the raw inter-agent-bus profile, whose shape
+varies with whichever writer last touched it.
 """
 
 from __future__ import annotations
@@ -50,6 +60,40 @@ def _is_screenshot(profile: dict[str, Any]) -> bool:
         if any(token in val for token in _SCREENSHOT_TOKENS):
             return True
     return False
+
+
+# Non-camera origins where camera-sensor tools (ELA, PRNU, noiseprint, JPEG
+# ghost, frequency) produce expected/unreliable output rather than manipulation
+# evidence. EXCLUDES "photograph" (real camera capture — keep its signals) and
+# "composite" (a flagged manipulation — keep its signals).
+_NON_CAMERA_FILETYPE_TOKENS = frozenset({
+    "document_scan",
+    "scanned_doc",
+    "scanned document",
+    "ai_generated",
+    "ai-generated",
+    "synthetic",
+    "diffusion",
+    "web_image",
+    "web download",
+    "web_download",
+})
+
+
+def _is_non_camera_origin(profile: dict[str, Any]) -> bool:
+    """True when the image is not a primary camera capture, so camera-physics
+    tool output is expected noise rather than manipulation evidence.
+
+    Screenshots qualify; so do document scans, AI-generated, and recompressed
+    web images. A genuine ``photograph`` or a flagged ``composite`` does NOT —
+    those are exactly where camera-physics signals must be preserved.
+    """
+    file_type = str(profile.get("file_type_assessment") or "").lower()
+    if "photograph" in file_type or "composite" in file_type:
+        return False
+    if _is_screenshot(profile):
+        return True
+    return any(token in file_type for token in _NON_CAMERA_FILETYPE_TOKENS)
 
 
 # ── Camera-physics tools ───────────────────────────────────────────────────
@@ -144,24 +188,29 @@ def apply_visual_grounding(
         return GroundingResult(adjusted_severity=current_severity)
 
     is_screenshot = _is_screenshot(visual_context)
+    is_non_camera = _is_non_camera_origin(visual_context)
     file_type = str(visual_context.get("file_type_assessment") or "").lower()
 
-    # ── Rule 1: Camera-physics tools on screenshots ────────────────────────
-    # These tools measure sensor properties that don't exist in screen-rendered
-    # images. Their output is expected noise, not manipulation evidence.
-    # Cap severity at LOW and annotate the finding.
+    # ── Rule 1: Camera-physics tools on non-camera-origin images ───────────
+    # ELA/PRNU/noiseprint/JPEG-ghost/frequency measure sensor properties that
+    # don't exist (or are destroyed) in screen-rendered, scanned, AI-generated,
+    # or recompressed-web images. Their elevated output there is expected noise,
+    # not manipulation evidence. Cap severity at LOW and annotate. Genuine
+    # photographs and flagged composites are excluded by _is_non_camera_origin,
+    # so real splicing/tamper signals are never suppressed.
     if (
-        agent_id == "Agent1"
-        and is_screenshot
-        and tool_name in _CAMERA_PHYSICS_TOOLS
+        tool_name in _CAMERA_PHYSICS_TOOLS
+        and agent_id in ("Agent1", "Agent5")
+        and is_non_camera
         and current_severity in ("CRITICAL", "HIGH", "MEDIUM")
     ):
         adj = _cap_severity(current_severity, "LOW")
+        _origin = file_type or ("screenshot" if is_screenshot else "non-camera-origin")
         note = (
             f"Severity reduced from {current_severity} to {adj}: "
             f"{tool_name} measures camera-sensor properties that produce "
-            f"expected elevated output on screen-rendered images "
-            f"(file type confirmed: {file_type or 'screenshot'}). "
+            f"expected elevated output on {_origin} images "
+            "(not a primary camera capture). "
             "Signal is not indicative of manipulation for this file type."
         )
         return GroundingResult(

@@ -505,8 +505,10 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         INTERNAL_API_URL: "http://backend:8000"
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # Port 3000 intentionally NOT exposed at base level — the host binding lives
+    # in infra/docker-compose.dev.yml so the base/prod stacks route all frontend
+    # traffic through Caddy. This mirrors the backend (its 8000 binding is also
+    # dev-overlay-only) and avoids a duplicate port mapping when overlays merge.
     volumes:
       - ../apps/web:/app/apps/web:rw
       - web_next:/app/apps/web/.next
@@ -543,7 +545,9 @@ services:
       timeout: 60s
       retries: 5
       start_period: 60s
-    # SECURITY: Run with minimal privileges (already runs as 'nextjs' user in Dockerfile)
+    # SECURITY: no-new-privileges + drop all caps. NOTE: the `development` target
+    # runs as root (only the `runner`/prod target switches to the 'nextjs' user),
+    # which is acceptable for the local dev stack but never for production.
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -63,6 +63,11 @@ if __name__ == "__main__":
             "/app/tools", "/app/orchestration", "/app/scripts", "/app/config",
         ] if reload_enabled and not is_production else None,
         log_level=settings.log_level.lower(),
+        # Do NOT let uvicorn install its own dictConfig — it overrides the
+        # structured root logger configured in run_api / api.lifespan and, in
+        # reload subprocesses, leaves logging dead. With log_config=None,
+        # uvicorn's own loggers propagate to our root handler instead.
+        log_config=None,
         # In production: multiple workers are handled externally (e.g. gunicorn/k8s).
         # Single-worker uvicorn is correct here because the pipeline uses in-process
         # asyncio state (_active_pipelines, WebSocket registries) that cannot be

@@ -57,6 +57,14 @@ export const ReportDTOSchema = z.object({
   executive_summary: z.string().optional(),
   verdict_sentence: z.string().optional(),
   reliability_note: z.string().optional(),
+  evidence_summary: z
+    .object({
+      scene_description: z.string().optional(),
+      file_type_assessment: z.string().optional(),
+      source: z.string().optional(),
+      court_defensible: z.boolean().optional(),
+    })
+    .optional(),
   uncertainty_statement: z.string().optional(),
   degradation_flags: z.array(z.string()).optional(),
   applicable_agent_count: z.number().optional(),

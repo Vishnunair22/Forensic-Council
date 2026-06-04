@@ -139,52 +139,71 @@ def _build_preflight_prompt(is_screen_capture_like: bool = False) -> str:
     investigation regardless of how many agents need visual context.
     """
     focus = (
-        "FOCUS: This is a digital screenshot or UI capture. "
-        "Note the platform (iOS/Android/Web/Desktop), check for status-bar timestamp "
-        "consistency, and flag any overlaid or pasted elements that do not match "
-        "native UI rendering."
-    ) if is_screen_capture_like else (
-        "FOCUS: This appears to be a photograph. "
-        "Assess lighting direction, shadow angles, and whether any objects appear "
-        "composited or have inconsistent perspective or depth-of-field."
+        "PRIMARY HINT: this looks like a screenshot / UI capture — identify the platform "
+        "(iOS/Android/Web/Desktop/app), read the status-bar time, and flag overlaid or "
+        "pasted elements that break native UI rendering or pixel alignment."
+        if is_screen_capture_like else
+        "PRIMARY HINT: this looks like a photograph — judge lighting direction, shadow "
+        "angles, perspective, reflections, and depth-of-field for signs of compositing."
     )
 
     _track_preamble_usage()
 
     return (
         _SAFETY_PREAMBLE
-        + "You are a forensic image analyst. Analyze this image and return ONLY a JSON "
-        "object with exactly these three top-level keys — no explanation, no markdown, "
-        "no preamble.\n\n"
+        + "You are a senior forensic image analyst. A single examination must serve three "
+        "downstream specialists: image-integrity, object/scene, and metadata/provenance. "
+        "Examine the image as ANY of these evidence types — digital/web/social image, camera "
+        "photograph, screenshot or UI capture, document/ID/handwritten note, "
+        "object/person/weapon image, physical scene, or AI-generated/composited image — and "
+        "report every verifiable signal so no specialist is left blind.\n\n"
+        "RULES:\n"
+        "- Report ONLY what is visually verifiable in THIS image. Never guess, infer beyond "
+        "the pixels, or invent findings.\n"
+        "- Prefer specific, located observations (e.g. \"clone halo around the left hand\") "
+        "over generic ones (e.g. \"possible editing\").\n"
+        "- Use an empty array [] for any field with no genuine finding — do NOT pad.\n"
+        "- Transcribe ALL legible text verbatim (signs, captions, UI labels, handwriting, "
+        "watermarks).\n"
+        "- Flag any weapon/contraband, ID document, or document showing alteration.\n"
+        "- Distinguish BENIGN edits (crop, background removal/transparency, color/exposure, "
+        "resize) from DECEPTIVE manipulation (splice, clone, inpaint, AI generation).\n\n"
         + focus + "\n\n"
+        "Return ONLY this JSON object — no markdown, no preamble, no trailing text:\n"
         "{\n"
         '  "image_integrity": {\n'
         '    "description": "<2-3 sentence factual description of what this image shows>",\n'
-        '    "file_type_assessment": "<one of: screenshot|photograph|document_scan|ai_generated|composite|unknown>",\n'
-        '    "manipulation_signals": ["<visible cloning edges, splice boundaries, inpainting halos, inconsistent shadows>"],\n'
-        '    "ai_generation_signals": ["<GAN artifacts, unnatural textures, impossible geometry, synthetic skin patterns>"],\n'
-        '    "compression_signals": ["<JPEG blocking, double-compression rings, reupload artifacts>"],\n'
+        '    "file_type_assessment": "<one of: screenshot|photograph|document_scan|ai_generated|composite|web_image|unknown>",\n'
+        '    "manipulation_signals": ["<DECEPTIVE edits only: clone edges, splice boundaries, inpainting halos, inconsistent shadows/reflections>"],\n'
+        '    "ai_generation_signals": ["<GAN/diffusion artifacts, unnatural textures, impossible geometry, malformed hands or text, synthetic skin>"],\n'
+        '    "editing_signals": ["<BENIGN edits only: crop, background removal/transparency, color or exposure adjustment, resize>"],\n'
+        '    "compression_signals": ["<JPEG blocking, double-compression rings, re-upload/recapture artifacts, screenshot-of-screen moiré>"],\n'
+        '    "regions_for_followup": ["<specific regions deserving pixel-level forensic zoom, e.g. \\"face center\\", \\"signature line\\">"],\n'
         '    "integrity_assessment": "<one of: no_visible_issue|suspicious|likely_manipulated|ai_generated_suspect|cannot_determine>"\n'
         "  },\n"
         '  "object_scene_context": {\n'
         '    "scene_type": "<one of: indoor|outdoor|screenshot|document|aerial|synthetic|unknown>",\n'
         '    "scene_description": "<one sentence describing the scene>",\n'
         '    "objects": ["<significant objects present>"],\n'
+        '    "weapons_or_dangerous_items": ["<firearms, blades, explosives or other contraband — empty if none>"],\n'
+        '    "documents_or_ids": ["<IDs, passports, certificates, forms, handwritten notes — note any alteration signs>"],\n'
+        '    "people": ["<each person/face: count, position, notable detail; flag any deepfake-like or unnatural face>"],\n'
         '    "ui_elements": ["<if screenshot: status bar text, nav bar, app name, buttons, icons, on-screen timestamps>"],\n'
-        '    "visible_text": ["<any readable text strings>"],\n'
-        '    "people": ["<description of any people or faces — count, position>"],\n'
-        '    "scene_inconsistencies": ["<lighting mismatches, scale errors, physics violations>"],\n'
+        '    "visible_text": ["<every readable text string, verbatim, including handwriting and watermarks>"],\n'
+        '    "scene_inconsistencies": ["<lighting mismatches, scale errors, physics violations, reflection/shadow contradictions>"],\n'
         '    "platform": "<platform or app name if identifiable from UI, else empty string>"\n'
         "  },\n"
         '  "metadata_provenance": {\n'
         '    "visible_timestamps": ["<dates or times VISIBLE in the image — clocks, overlays, watermarks, status bar time>"],\n'
-        '    "visible_location_clues": ["<landmarks, street signs, GPS overlays, recognizable geography>"],\n'
+        '    "visible_location_clues": ["<landmarks, street signs, license plates, GPS overlays, recognizable geography>"],\n'
         '    "device_platform_clues": ["<device type or OS inferred from visible UI — e.g. iOS status bar, Android nav bar>"],\n'
-        '    "app_software_clues": ["<app name, software watermarks, platform UI signatures visible in image>"],\n'
+        '    "app_software_clues": ["<app name, editing-software watermarks, C2PA/SynthID/content-credential marks, platform UI signatures>"],\n'
+        '    "lighting_weather_season_clues": ["<sun position, shadow length, weather, vegetation/snow, season indicators usable for time/geo cross-check>"],\n'
         '    "format_compression_clues": ["<observable encoding artifacts that suggest format or processing history>"],\n'
-        '    "provenance_anomalies": ["<visible inconsistencies — e.g. timestamp contradicts scene lighting or season>"]\n'
+        '    "metadata_consistency_notes": ["<whether visible time/place/device clues are mutually consistent>"],\n'
+        '    "provenance_anomalies": ["<visible contradictions — e.g. timestamp contradicts scene lighting or season>"]\n'
         "  },\n"
-        '  "confidence": 0.0\n'
+        '  "confidence": <0.0-1.0 overall confidence in this analysis>\n'
         "}"
     )
 
@@ -248,7 +267,8 @@ def _parse_preflight_gemini_response(
     _manip_signals = [s for s in (ii.get("manipulation_signals") or []) if s]
     _ai_signals = [s for s in (ii.get("ai_generation_signals") or []) if s]
     _scene_inc = [i for i in (osc.get("scene_inconsistencies") or []) if i]
-    _editing_signals: list[str] = []
+    # Benign edits the model reported directly (crop, background removal, color/exposure).
+    _editing_signals: list[str] = [s for s in (ii.get("editing_signals") or []) if s]
 
     # Benign cutout grounding: a transparent / removed-background cutout (e.g. a PNG
     # product image) is benign editing, not deceptive manipulation. When the only
@@ -271,7 +291,9 @@ def _parse_preflight_gemini_response(
     ):
         verdict = "AUTHENTIC"
         integrity_assessment_val = "no_visible_issue"
-        _editing_signals = _manip_signals  # retained as benign editing context
+        # Retain the reframed signals as benign editing context (merged with any
+        # the model already classified as benign).
+        _editing_signals = _editing_signals + _manip_signals
         _manip_signals = []
         _scene_inc = []
 
@@ -281,6 +303,7 @@ def _parse_preflight_gemini_response(
         ai_generation_signals=_ai_signals,
         editing_or_compositing_signals=_editing_signals,
         compression_or_reupload_signals=[s for s in (ii.get("compression_signals") or []) if s],
+        regions_for_followup=[r for r in (ii.get("regions_for_followup") or []) if r],
         integrity_assessment=integrity_assessment_val,
         confidence=confidence,
     )
@@ -300,6 +323,8 @@ def _parse_preflight_gemini_response(
         scene_description=scene_desc,
         people=[p for p in (osc.get("people") or []) if p],
         objects=[o for o in (osc.get("objects") or []) if o],
+        weapons_or_dangerous_items=[w for w in (osc.get("weapons_or_dangerous_items") or []) if w],
+        documents_or_ids=[d for d in (osc.get("documents_or_ids") or []) if d],
         ui_elements=[e for e in (osc.get("ui_elements") or []) if e],
         visible_text=[t for t in (osc.get("visible_text") or []) if t],
         scene_inconsistencies=_scene_inc,
@@ -311,8 +336,8 @@ def _parse_preflight_gemini_response(
         visible_location_clues=[l for l in (mp.get("visible_location_clues") or []) if l],
         device_or_platform_clues=device_clues,
         software_or_app_clues=[a for a in (mp.get("app_software_clues") or []) if a],
-        lighting_weather_season_clues=[],
-        metadata_consistency_notes=[],
+        lighting_weather_season_clues=[c for c in (mp.get("lighting_weather_season_clues") or []) if c],
+        metadata_consistency_notes=[n for n in (mp.get("metadata_consistency_notes") or []) if n],
         metadata_contradictions=[n for n in (mp.get("provenance_anomalies") or []) if n],
         confidence=confidence,
     )

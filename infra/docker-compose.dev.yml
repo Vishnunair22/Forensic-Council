@@ -1,9 +1,13 @@
 # ============================================================================
-# Forensic Council - Docker Compose Override (Host-run development)
+# Forensic Council - Docker Compose Override (Development host ports)
 # ============================================================================
-# Use this only when Postgres/Redis/Qdrant run in Docker but the API/frontend
-# run directly on the host via uv/npm. The base compose file keeps infra
-# services internal by default; this override exposes development host ports.
+# The standard development overlay (used by scripts/dev.sh). The base compose
+# file keeps infra services internal and routes all app traffic through Caddy
+# (port 80); this overlay layers direct host port bindings on top so you can:
+#   • reach the backend at http://localhost:8000 (bypassing Caddy) for debugging
+#   • reach the frontend at http://localhost:3000
+#   • point external SQL / Redis / Qdrant clients at the containers, or run the
+#     API/frontend on the host (uv/npm) against Docker-managed infrastructure
 # ============================================================================
 
 services:

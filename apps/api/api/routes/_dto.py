@@ -242,6 +242,7 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         verdict_sentence=_get_val(report, "verdict_sentence", "") or "",
         key_findings=_clean_key_findings(list(_get_val(report, "key_findings", []) or [])),
         reliability_note=_get_val(report, "reliability_note", "") or "",
+        evidence_summary=dict(_get_val(report, "evidence_summary", {}) or {}),
         manipulation_probability=float(_get_val(report, "manipulation_probability", 0.0) or 0.0),
         compression_penalty=float(_get_val(report, "compression_penalty", 1.0) or 1.0),
         confidence_min=float(_get_val(report, "confidence_min", 0.0) or 0.0),

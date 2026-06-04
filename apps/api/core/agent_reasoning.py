@@ -74,6 +74,17 @@ class AgentReasoningService:
 
     def __init__(self, inter_agent_bus: Any = None) -> None:
         self.inter_agent_bus = inter_agent_bus
+        # Per-agent caches. The persona is static and the visual-context digest
+        # changes at most once (when the shared context resolves). Caching them
+        # avoids a working-memory read + context fetch + write on EVERY tool call
+        # — previously ~one extra round-trip per tool per agent for no new data.
+        self._persona_cache: dict[str, Any] = {}
+        self._primed_agents: set[str] = set()
+
+    def _persona_for(self, agent_id: str) -> Any:
+        if agent_id not in self._persona_cache:
+            self._persona_cache[agent_id] = get_agent_persona_profile(agent_id)
+        return self._persona_cache[agent_id]
 
     async def pre_tool_reasoning(
         self,
@@ -94,6 +105,11 @@ class AgentReasoningService:
             tool=tool_name
         )
 
+        # Once persona + visual digest are written to working memory there is
+        # nothing left to prime — skip the read/fetch/save on every later tool.
+        if agent_id in self._primed_agents:
+            return tool_input
+
         # Retrieve state from working memory
         try:
             state = await working_memory.get_state(UUID(session_id), agent_id)
@@ -101,31 +117,45 @@ class AgentReasoningService:
             logger.warning("Failed to retrieve state in pre_tool_reasoning", error=str(e))
             state = None
 
-        persona = get_agent_persona_profile(agent_id)
+        persona = self._persona_for(agent_id)
 
         # Update working memory state with persona profile if present
         if state and persona:
-            state.agent_persona_profile = persona.model_dump()
-            # Also read/cache visual context digest if available
+            mutated = False
+            if not getattr(state, "agent_persona_profile", None):
+                state.agent_persona_profile = persona.model_dump()
+                mutated = True
+
+            # Read/cache the visual context digest if available.
+            digest_written = bool(getattr(state, "shared_visual_context_digest", None))
             vis_ctx = await get_visual_context(
                 session_id=session_id,
                 working_memory=working_memory,
                 inter_agent_bus=self.inter_agent_bus
             )
             if vis_ctx:
-                state.shared_visual_context_digest = {
+                digest = {
                     "source": vis_ctx.source,
                     "authenticity_verdict": vis_ctx.authenticity_verdict,
                     "confidence": vis_ctx.confidence,
                     "objects_count": len(vis_ctx.object_scene_context.objects),
                     "weapons_count": len(vis_ctx.object_scene_context.weapons_or_dangerous_items)
                 }
+                if getattr(state, "shared_visual_context_digest", None) != digest:
+                    state.shared_visual_context_digest = digest
+                    mutated = True
+                digest_written = True
 
-            # Save the updated state
-            try:
-                await working_memory.save_state(UUID(session_id), agent_id, state)
-            except Exception as e:
-                logger.warning("Failed to save working memory state in pre_tool_reasoning", error=str(e))
+            if mutated:
+                try:
+                    await working_memory.save_state(UUID(session_id), agent_id, state)
+                except Exception as e:
+                    logger.warning("Failed to save working memory state in pre_tool_reasoning", error=str(e))
+
+            # Prime only once both are in place. A context that never resolves
+            # keeps retrying (cheaply) rather than caching an empty digest.
+            if getattr(state, "agent_persona_profile", None) and digest_written:
+                self._primed_agents.add(agent_id)
 
         return tool_input
 
