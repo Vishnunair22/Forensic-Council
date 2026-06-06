@@ -66,7 +66,14 @@ async def get_capabilities():
     max_size = getattr(settings, "max_upload_size_bytes", 50 * 1024 * 1024)
     agent_caps: dict[str, list[str]] = {}
     for agent_id, caps in AGENT_FILE_CAPABILITIES.items():
-        agent_caps[agent_id] = [p for p in caps["mime_prefixes"]]
+        # Include both prefix matches (e.g. "image/") and exact full-MIME types
+        # (e.g. "application/pdf"). The client matches with startsWith, for which
+        # an exact MIME is a prefix of itself — so PDF/MP4-container agents are
+        # not dropped from the client's agent filtering.
+        agent_caps[agent_id] = [
+            *caps.get("mime_prefixes", []),
+            *caps.get("full_mimes", []),
+        ]
 
     return CapabilitiesResponse(
         supported_mime_types=sorted(SUPPORTED_MIME_TYPES),
@@ -359,6 +366,9 @@ async def start_investigation(
             detail=f"File type '{actual_mime}' is not supported by any specialized forensic agent.",
         )
 
+    # Sanitize original filename: take only the basename to prevent path
+    # traversal, strip control chars that could corrupt log/report rendering.
+    _safe_original_filename = Path(file.filename or "").name if file.filename else None
     raw_suffix = Path(file.filename or "").suffix.lower()
     if raw_suffix not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
@@ -372,7 +382,10 @@ async def start_investigation(
             detail=f"Security violation: content '{actual_mime}' mismatch extension '{raw_suffix}'",
         )
 
-    if file.size and file.size > MAX_FILE_SIZE:
+    # Note: file.size can be None (no Content-Length header) or 0 — both are
+    # valid. The authoritative size check is the streaming counter below.
+    # This pre-read check is best-effort only for early rejection on large files.
+    if file.size is not None and file.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size exceeds limit.")
 
     await check_investigation_rate_limit(current_user.user_id)
@@ -594,7 +607,7 @@ async def start_investigation(
             "investigator_role": current_user.role.value,
             "case_investigator_label": investigator_id,
             "file_path": str(tmp_path),
-            "original_filename": file.filename,
+            "original_filename": _safe_original_filename,
             "content_hash": content_hash,
             "client_hash_verified": client_hash_verified,
             "detected_mime": actual_mime,
@@ -684,7 +697,7 @@ async def start_investigation(
                     case_id=case_id,
                     investigator_id=current_user.user_id,
                     evidence_file_path=str(tmp_path),
-                    original_filename=file.filename,
+                    original_filename=_safe_original_filename,
                     detected_mime=actual_mime,
                     validated_extension=validated_extension,
                     content_sha256=content_hash,
@@ -716,7 +729,7 @@ async def start_investigation(
                     evidence_file_path=str(tmp_path),
                     case_id=case_id,
                     investigator_id=current_user.user_id,
-                    original_filename=file.filename,
+                    original_filename=_safe_original_filename,
                     detected_mime=actual_mime,
                     validated_extension=validated_extension,
                     content_sha256=content_hash,
@@ -735,7 +748,7 @@ async def start_investigation(
             session_id=session_id,
             case_id=case_id,
             status=response_status,
-            message=f"Investigation {response_status} for {file.filename or 'evidence'}. Track status via WebSocket.",
+            message=f"Investigation {response_status} for {_safe_original_filename or 'evidence'}. Track status via WebSocket.",
             content_hash=content_hash,
             client_hash_verified=client_hash_verified,
             dispatch_mode=dispatch_mode,

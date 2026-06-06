@@ -25,7 +25,6 @@ services:
       RELOAD: "false"
       APP_ENV: production
       DEBUG: "false"
-      PYTHONDONTWRITEBYTECODE: "1"
     volumes: !override
       - evidence_data:/app/storage/evidence:rw
       - signing_keys:/app/storage/keys:rw
@@ -111,7 +110,7 @@ services:
         max-file: "5"
 
   migration:
-    restart: "no"
+    restart: on-failure
 
   redis:
     ports: !reset []

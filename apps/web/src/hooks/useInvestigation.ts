@@ -40,7 +40,7 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
 import { useCapabilities } from "@/hooks/useCapabilities";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
-import { validateEvidenceFile } from "@/lib/fileValidation";
+import { validateEvidenceFile, resolveMimeType } from "@/lib/fileValidation";
 import { clearPendingEvidenceFile } from "@/lib/pendingFilePersistence";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { authService } from "@/lib/upload/authService";
@@ -393,8 +393,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       analysisCompleteSoundedRef.current = false;
       sessionExistsRef.current = false;
 
-      setMimeType(targetFile.type);
-      storage.setItem(STORAGE_KEYS.MIME_TYPE, targetFile.type);
+      // Use the resolved MIME (extension fallback for empty/generic browser
+      // types) so client-side agent filtering matches the backend's libmagic
+      // detection — prevents audio/video files briefly showing agents as
+      // "not applicable" when the browser reports an empty file.type.
+      const resolvedMime = resolveMimeType(targetFile);
+      setMimeType(resolvedMime);
+      storage.setItem(STORAGE_KEYS.MIME_TYPE, resolvedMime);
 
       playSound("scan");
       setIsUploading(true);
@@ -425,6 +430,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         setIsUploading(false);
         setShowLoadingOverlay(false);
         sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        // Clear the handoff-fired flag so the auto-start effect can retry on a
+        // page refresh — otherwise a transient auth failure permanently
+        // short-circuits the effect and strands the pending file.
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
         resetSimulation();
         investigationInFlightRef.current = false;
         toast.destructive({ title: "Authentication failed", description: authErr instanceof Error ? authErr.message : "Could not establish session." });
@@ -464,6 +473,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       let sessionIdToUse: string | undefined;
       let isDuplicateSession = false;
       let contentHash: string | null = null;
+      // When a warmup retry is scheduled we deliberately keep the in-flight
+      // guard held across the 15s window — the finally must not clear it.
+      let warmupRetryScheduled = false;
       try {
         let pendingClientSha256 = fileHandoffManager.getPendingClientSha256();
 
@@ -506,9 +518,15 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
             title: "System Warmup",
             description: "The forensic worker is starting/warming up. Retrying automatically in 15 seconds...",
           });
-          investigationInFlightRef.current = false;
+          // Keep investigationInFlightRef = true for the entire warmup window so
+          // an external click cannot slip a concurrent submission through the
+          // top-of-function guard. The flag is released synchronously inside the
+          // timer callback immediately before the recursive retry re-acquires it
+          // (no await between the two, so the gap is zero async ticks).
+          warmupRetryScheduled = true;
           warmupTimeoutRef.current = setTimeout(() => {
             warmupTimeoutRef.current = null;
+            investigationInFlightRef.current = false;
             triggerAnalysis(targetFile);
           }, WARMUP_RETRY_DELAY_MS);
           return;
@@ -526,7 +544,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           return;
         }
       } finally {
-        if (!sessionIdToUse) {
+        if (!sessionIdToUse && !warmupRetryScheduled) {
           investigationInFlightRef.current = false;
         }
       }
@@ -798,7 +816,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
           // Land on the evidence/upload page (NOT the landing hero) so there is no
           // home-page flash before the analysis page.
-          router.push("/evidence");
+          router.push("/");
           return;
         }
         if (st.status === "complete") {
@@ -865,7 +883,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
     sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
     document.body.setAttribute("data-fc-loading", "1");
-    router.push(`/result/${encodeURIComponent(sid)}`);
+    router.push(`/result/${sid}`);
     return true;
   }, [router]);
 

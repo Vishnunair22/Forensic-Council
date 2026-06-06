@@ -2,13 +2,18 @@
 Alembic Environment — Forensic Council
 ========================================
 
-Replaces ad-hoc scripts/init_db.py with versioned database migrations.
+Versioned database migrations. The schema is hand-written DDL (raw asyncpg,
+no SQLAlchemy ORM), so `target_metadata=None` is intentional and correct.
 
 Usage:
-    alembic upgrade head          # Apply all migrations
+    alembic upgrade head          # Apply all pending migrations
     alembic downgrade -1          # Roll back one migration
-    alembic revision --autogenerate -m "add_webhooks_table"  # New migration
+    alembic revision -m "description"  # New manual migration (NOT --autogenerate)
     alembic history               # Show migration history
+
+NOTE: `--autogenerate` is NOT supported. target_metadata=None means alembic
+has no ORM model to diff against and will always produce an empty migration.
+Write DDL manually in every new migration file.
 """
 
 import asyncio
@@ -51,7 +56,7 @@ def run_migrations_offline() -> None:
     url = _get_database_url()
     context.configure(
         url=url,
-        target_metadata=None,
+        target_metadata=None,  # intentional: raw asyncpg, no ORM models
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -73,7 +78,7 @@ async def run_async_migrations() -> None:
 
 
 def do_run_migrations(connection) -> None:
-    context.configure(connection=connection, target_metadata=None)
+    context.configure(connection=connection, target_metadata=None)  # intentional: no ORM
     with context.begin_transaction():
         context.run_migrations()
 

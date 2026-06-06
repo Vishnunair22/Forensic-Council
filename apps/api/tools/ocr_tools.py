@@ -159,9 +159,10 @@ def _get_easyocr_reader():
             warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
             warnings.filterwarnings("ignore", message=".*Using CPU.*faster with a GPU.*", category=UserWarning, module="easyocr")
 
+            from core.config import get_settings  # noqa: PLC0415
+
             model_dir = os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr")
             os.makedirs(model_dir, exist_ok=True)
-            os.environ.setdefault("HOME", model_dir)
             # Memory-guard the load: if the container lacks headroom, refuse here
             # so the caller falls back to lightweight Tesseract instead of risking
             # an OOM SIGKILL that would crash the worker.
@@ -171,7 +172,7 @@ def _get_easyocr_reader():
                     gpu=False,
                     model_storage_directory=model_dir,
                     user_network_directory=model_dir,
-                    download_enabled=True,
+                    download_enabled=not get_settings().offline_mode,
                 )
         except (ImportError, Exception) as exc:
             logger.warning(f"EasyOCR initialization failed: {str(exc)}")

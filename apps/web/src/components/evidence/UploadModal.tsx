@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { X, CloudUpload } from "lucide-react";
+import { X, CloudUpload, Volume2, VolumeX } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
@@ -19,7 +19,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
   const [error, setError] = useState<string | null>(null);
   const [isSecuring, setIsSecuring] = useState(false);
   const prefersReducedMotion = useReducedMotion();
-  const { playSound } = useSound();
+  const { playSound, isMuted, toggleMute } = useSound();
   const isSubmittingRef = useRef(false);
   const dropzoneRef = useRef<HTMLDivElement>(null);
 
@@ -83,16 +83,29 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
 
   return (
     <motion.div
-      initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, y: 4 }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, y: 8 }}
       transition={TRANSITION_FAST}
       className="p-8 sm:p-10 flex flex-col text-left"
     >
+      {/* Sound mute toggle — top-left, unobtrusive */}
+      <button
+        type="button"
+        onClick={() => toggleMute()}
+        className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/8 fc-transition fc-focus-ring rounded-full cursor-pointer opacity-50 hover:opacity-100"
+        aria-label={isMuted ? "Unmute sounds" : "Mute sounds"}
+      >
+        {isMuted
+          ? <VolumeX className="w-4 h-4" aria-hidden="true" />
+          : <Volume2 className="w-4 h-4" aria-hidden="true" />
+        }
+      </button>
+
       <button
         type="button"
         onClick={closeModal}
-        className="absolute top-5 right-5 w-10 h-10 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer"
+        className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer"
         aria-label="Close upload dialog"
       >
         <X className="w-5 h-5" aria-hidden="true" />
@@ -112,7 +125,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
 
       {authError && (
         <div
-          className="mb-6 p-4 rounded-xl border border-red-500/20 bg-red-500/5 text-sm fc-text-danger"
+          className="mb-6 p-4 rounded-xl border border-danger/20 bg-danger/5 text-sm fc-text-danger"
           role="alert"
         >
           <strong>Authentication Warning:</strong> {authError}. You can still select files, but starting the analysis may fail.
@@ -125,6 +138,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         role="button"
         tabIndex={0}
         aria-label="Evidence dropzone. Drag and drop or press Enter to browse files."
+        aria-describedby="upload-file-help"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -172,14 +186,24 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         />
 
         <div className="flex flex-col items-center gap-2 pointer-events-none text-center relative z-20">
-          <span className={`text-lg font-bold tracking-widest uppercase transition-colors duration-300 ${
-              isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
-            }`}
-          >
-            {isSecuring ? "Establishing Secure Channel" : isDragging ? "Initiate Transfer" : "Select Evidence"}
-          </span>
+          {isSecuring ? (
+            <span className="flex items-center gap-2 text-lg font-bold tracking-widest uppercase text-primary">
+              <span
+                className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"
+                aria-hidden="true"
+              />
+              Establishing Secure Channel
+            </span>
+          ) : (
+            <span className={`text-lg font-bold tracking-widest uppercase transition-colors duration-300 ${
+                isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
+              }`}
+            >
+              {isDragging ? "Initiate Transfer" : "Select Evidence"}
+            </span>
+          )}
           <p id="upload-file-help" className="text-xs font-mono fc-text-muted opacity-70 uppercase tracking-wider">
-            Supported: JPG, PNG, TIFF, WEBP, GIF, BMP // Max 50MB
+            Images · Audio · Video · PDF &nbsp;·&nbsp; Max 50 MB
           </p>
         </div>
 

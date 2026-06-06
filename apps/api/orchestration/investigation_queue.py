@@ -210,16 +210,21 @@ class InvestigationWorker:
         self._handler = handler
 
     def _task_timeout_seconds(self) -> float:
-        raw = os.environ.get("WORKER_TASK_TIMEOUT_SECONDS", "660")
+        # Default to investigation_timeout + 120s buffer so workers are not
+        # killed before investigations can complete. WORKER_TASK_TIMEOUT_SECONDS
+        # env var overrides this for fine-grained control.
+        from core.config import get_settings as _gs
+        _default = float(getattr(_gs(), "investigation_timeout", 2400)) + 120.0
+        raw = os.environ.get("WORKER_TASK_TIMEOUT_SECONDS", str(int(_default)))
         try:
             timeout = float(raw)
         except (TypeError, ValueError):
             logger.warning(
                 "Invalid WORKER_TASK_TIMEOUT_SECONDS; using default",
                 value=raw,
-                default_seconds=660,
+                default_seconds=_default,
             )
-            return 660.0
+            return _default
         return max(30.0, timeout)
 
     def _concurrency(self) -> int:

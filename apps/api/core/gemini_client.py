@@ -297,6 +297,25 @@ def _parse_preflight_gemini_response(
         _manip_signals = []
         _scene_inc = []
 
+    # Unsupported-alert guard: the holistic verdict is alarming but NO concrete
+    # pixel signal (manipulation / AI-generation / scene-inconsistency) backs it.
+    # This happens when the model over-calls "likely_manipulated" on a transparent-
+    # background product cutout whose only signal is benign background removal. An
+    # alert with zero substantiating signal is not court-defensible: benign-edit-only
+    # cases are authentic; a truly empty alert is inconclusive.
+    if (
+        verdict in ("LIKELY_MANIPULATED", "SUSPICIOUS", "MANIPULATED")
+        and not _manip_signals
+        and not _ai_signals
+        and not _scene_inc
+    ):
+        if _editing_signals:
+            verdict = "AUTHENTIC"
+            integrity_assessment_val = "no_visible_issue"
+        else:
+            verdict = "CANNOT_DETERMINE"
+            integrity_assessment_val = "cannot_determine"
+
     image_integrity = ImageIntegrityContext(
         description=integrity_description,
         visible_manipulation_signals=_manip_signals,
@@ -1111,8 +1130,17 @@ class GeminiVisionClient:
                     _deep_forensic_cache_put(triage_key, result)
             return result
         except (GeminiQuotaBlocked, GeminiRateLimited) as e:
-            logger.error(f"Gemini quota/rate limit error: {e}")
-            raise
+            # Quota/rate errors are recoverable — degrade to local ensemble
+            # rather than re-raising. Re-raising propagates to the agent and
+            # crashes the deep-pass; local ensemble gives a weaker but valid result.
+            logger.warning(
+                "Gemini quota/rate limit in deep_forensic_analysis — "
+                "falling back to local visual ensemble",
+                error=str(e),
+            )
+            return await self._local_forensic_fallback(
+                file_path, exif_summary, is_screen_capture_like=is_screen_capture_like
+            )
         except Exception as e:
             logger.error(f"Gemini vision failed: {e}")
             return await self._local_forensic_fallback(

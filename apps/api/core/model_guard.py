@@ -171,16 +171,19 @@ def guarded_load(model_name: str, required_mb: float | None = None, *, lock_time
     """
     acquired = MODEL_LOAD_LOCK.acquire(timeout=lock_timeout)
     if not acquired:
-        logger.warning(
-            "model load lock not acquired within timeout; proceeding unserialised",
-            model=model_name,
+        # Do NOT proceed unserialised: two concurrent model loads can each pass
+        # the headroom check before either has allocated, then together exceed
+        # the container memory limit and trigger an OOM SIGKILL. Raising here
+        # lets the caller fall back to NOT_APPLICABLE, which is far safer.
+        raise ModelMemoryError(
+            f"Model load lock timed out after {lock_timeout:.0f}s for '{model_name}'. "
+            "Another model is loading — retry or increase MODEL_LOAD_LOCK timeout."
         )
     try:
         ensure_load_headroom(model_name, required_mb)
         yield
     finally:
-        if acquired:
-            MODEL_LOAD_LOCK.release()
+        MODEL_LOAD_LOCK.release()
 
 
 def cap_image_dimension(image: _PILImage.Image, max_dim: int | None = None) -> _PILImage.Image:

@@ -56,6 +56,23 @@ class VisualEvidenceFinding:
         ai_generation_signals = buckets["ai_generation"]
         unknown_signals = buckets["unknown"]
 
+        # Weak SCREENING markers fire on benign textured / high-noise / recompressed
+        # images (the main false-positive source) and must not, on their own, push
+        # the local-ensemble verdict to SUSPICIOUS — this mirrors the conservative
+        # calibration in vision_local_ensemble._assess_authenticity.
+        _WEAK_SCREENING_MARKERS = (
+            "elevated noise residual",
+            "jpeg block artifacts",
+            "high_freq_ratio",
+            "frequency-domain anomaly",
+        )
+
+        def _is_weak_marker(sig: str) -> bool:
+            sl = (sig or "").lower()
+            return any(m in sl for m in _WEAK_SCREENING_MARKERS)
+
+        unknown_signals = [s for s in unknown_signals if not _is_weak_marker(s)]
+
         raw_verdict = self._authenticity_verdict.upper()
         # A provider that returns its OWN holistic authenticity verdict (Gemini)
         # has already weighed its observations — trust that verdict and do not let

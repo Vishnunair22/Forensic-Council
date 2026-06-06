@@ -108,6 +108,45 @@ const TOOL_PROGRESS: Record<string, ProgressDescriptor> = {
   camera_profile_match: { label: "Comparing camera profile consistency", icon: Fingerprint },
   visual_evidence_profile: { label: "Running visual evidence profile", icon: ImageIcon },
 
+  // ── Image neural / pixel tools (Agent1) — real backend tool_names ──
+  neural_ela: { label: "Analyzing JPEG compression using neural ELA", icon: Scan },
+  neural_copy_move: { label: "Detecting cloned regions using neural copy-move", icon: Layers },
+  neural_splicing: { label: "Detecting splice boundaries using neural analysis", icon: Layers },
+  noiseprint_cluster: { label: "Clustering sensor-noise residuals", icon: Fingerprint },
+  anomaly_tracer: { label: "Tracing tampering anomalies (ManTra-Net)", icon: Scan },
+  f3_net_frequency: { label: "Detecting AI-generation frequency artifacts", icon: Brain },
+  neural_fingerprint: { label: "Computing perceptual neural fingerprint", icon: Fingerprint },
+  diffusion_artifact_detector: { label: "Detecting diffusion / AI-generation artifacts", icon: Brain },
+  lens_style_multimodal_scan: { label: "Scanning content with on-device multimodal model", icon: Search },
+  reverse_image_search: { label: "Checking web provenance via reverse image search", icon: Search },
+  synthid_watermark_detect: { label: "Checking for AI watermark (SynthID)", icon: Shield },
+  roi_extract: { label: "Extracting regions of interest", icon: Scan },
+  detect_font_inconsistency: { label: "Checking font consistency in screenshot", icon: FileSearch },
+  detect_ui_overlay_forgery: { label: "Checking UI overlay tampering", icon: Layers },
+  prnu_sensor_verification: { label: "Verifying camera sensor fingerprint (PRNU)", icon: Fingerprint },
+
+  // ── Scene / context (Agent3) ──
+  lighting_correlation_initial: { label: "Correlating lighting and shadow geometry", icon: Zap },
+  read_shared_image_context: { label: "Reading shared visual evidence profile", icon: ImageIcon },
+
+  // ── Metadata / provenance (Agent5) ──
+  compression_risk_audit: { label: "Auditing compression and re-save history", icon: Gauge },
+  device_fingerprint_db: { label: "Matching device against fingerprint database", icon: Database },
+  c2pa_validator: { label: "Validating C2PA content credentials", icon: Shield },
+
+  // ── Audio deep / neural (Agent2) ──
+  anti_spoofing_deep_ensemble: { label: "Running deep anti-spoofing ensemble", icon: Speaker },
+  audio_gen_signature: { label: "Scanning for generative-audio signatures", icon: AudioWaveform },
+  neural_prosody: { label: "Analyzing speech prosody with neural model", icon: AudioWaveform },
+  voice_clone_deep_ensemble: { label: "Running deep voice-clone ensemble", icon: Speaker },
+
+  // ── Video (Agent4) ──
+  compression_artifact_analysis: { label: "Analyzing video compression artifacts", icon: Video },
+  frame_extraction: { label: "Extracting representative frames", icon: Video },
+
+  // ── Cross-agent infrastructure ──
+  inter_agent_call: { label: "Consulting another specialist agent", icon: Activity },
+
   // Short-form aliases emitted by some backend tool_name values
   ocr:        { label: "Identifying image contents using OCR tools",  icon: Camera },
   ela:        { label: "Detecting compression anomalies (ELA)",       icon: Scan },

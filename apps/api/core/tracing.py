@@ -10,7 +10,6 @@ This is distinct from OpenTelemetry (observability.py) which is used for
 infrastructure monitoring. Pipeline tracing is part of the forensic record.
 """
 
-import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -59,7 +58,7 @@ class PipelineTrace:
                 self.agent_id,
                 self.operation,
                 self.status,
-                json.dumps(self.metadata),
+                self.metadata,
                 self.start_time,
             )
         except Exception as e:
@@ -89,7 +88,7 @@ class PipelineTrace:
                 """,
                 self.trace_id,
                 self.status,
-                json.dumps(self.metadata),
+                self.metadata,
                 self.end_time,
                 duration_ms,
             )
@@ -121,7 +120,7 @@ class PipelineTrace:
                 """,
                 self.trace_id,
                 self.status,
-                json.dumps(self.metadata),
+                self.metadata,
                 self.end_time,
                 duration_ms,
             )

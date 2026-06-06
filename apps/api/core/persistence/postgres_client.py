@@ -118,6 +118,10 @@ class PostgresClient:
                 init=self._init_connection,
                 timeout=connect_timeout,
                 command_timeout=command_timeout,
+                # Recycle idle connections after 5 minutes so stale connections
+                # from network devices with shorter idle timeouts don't surface
+                # as dead-connection errors on the next query.
+                max_inactive_connection_lifetime=300.0,
             )
 
             # Test connection
@@ -182,7 +186,7 @@ class PostgresClient:
         Returns:
             Status string from PostgreSQL
         """
-        async with self.pool.acquire() as conn:
+        async with self.pool.acquire(timeout=30.0) as conn:
             processed_args = self._process_args(args)
             result = await conn.execute(query, *processed_args)
             logger.debug("Executed query", query=query[:100], status=result)
@@ -206,7 +210,7 @@ class PostgresClient:
             query: SQL query with $1, $2, ... placeholders
             args_list: List of parameter tuples
         """
-        async with self.pool.acquire() as conn:
+        async with self.pool.acquire(timeout=30.0) as conn:
             processed_args_list = [tuple(self._process_args(args)) for args in args_list]
             try:
                 await conn.executemany(query, processed_args_list)
@@ -236,7 +240,7 @@ class PostgresClient:
         Returns:
             List of records
         """
-        async with self.pool.acquire() as conn:
+        async with self.pool.acquire(timeout=30.0) as conn:
             processed_args = self._process_args(args)
             results = await conn.fetch(query, *processed_args)
             logger.debug("Fetched rows", query=query[:100], count=len(results))
@@ -257,7 +261,7 @@ class PostgresClient:
         Returns:
             Single record or None
         """
-        async with self.pool.acquire() as conn:
+        async with self.pool.acquire(timeout=30.0) as conn:
             processed_args = self._process_args(args)
             result = await conn.fetchrow(query, *processed_args)
             logger.debug("Fetched single row", query=query[:100], found=result is not None)
@@ -278,7 +282,7 @@ class PostgresClient:
         Returns:
             Single value or None
         """
-        async with self.pool.acquire() as conn:
+        async with self.pool.acquire(timeout=30.0) as conn:
             processed_args = self._process_args(args)
             result = await conn.fetchval(query, *processed_args)
             logger.debug("Fetched single value", query=query[:100])

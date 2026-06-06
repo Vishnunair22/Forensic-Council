@@ -28,8 +28,17 @@ def main() -> int:
             print(f"Worker heartbeat missing ({key})", file=sys.stderr)
             return 1
 
+        # Heartbeat must be fresh — a dead/hung worker leaves a stale key until TTL expires.
+        # Threshold: 2× the heartbeat interval (workers write every ~30s by convention).
+        _STALE_THRESHOLD_S = 120
         try:
             age = max(0.0, time.time() - float(value))
+            if age > _STALE_THRESHOLD_S:
+                print(
+                    f"Worker heartbeat stale: {key}, age={age:.1f}s > {_STALE_THRESHOLD_S}s",
+                    file=sys.stderr,
+                )
+                return 1
             print(f"Worker heartbeat present: {key}, age={age:.1f}s")
         except ValueError:
             print(f"Worker heartbeat present: {key}, value={value!r}")

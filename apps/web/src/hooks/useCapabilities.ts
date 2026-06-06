@@ -12,8 +12,15 @@ export function useCapabilities(): { capabilities: ServerCapabilities | null; lo
     let cancelled = false;
 
     async function fetchCaps() {
+      // 10s timeout so a slow/dead backend can't leave agent filtering stuck
+      // on the loading branch indefinitely — it falls back to the static map.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
       try {
-        const resp = await fetch(`${API_BASE}/api/v1/capabilities`, { cache: "no-store" });
+        const resp = await fetch(`${API_BASE}/api/v1/capabilities`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (!resp.ok) return;
         const data: ServerCapabilities = await resp.json();
         if (!cancelled) {
@@ -21,8 +28,9 @@ export function useCapabilities(): { capabilities: ServerCapabilities | null; lo
           setServerCapabilities(data);
         }
       } catch {
-        // Non-critical — fall back to static mapping
+        // Non-critical (timeout or network) — fall back to static mapping
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     }

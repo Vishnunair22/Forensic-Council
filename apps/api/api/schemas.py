@@ -204,6 +204,7 @@ class BriefUpdate(BaseModel):
         "HITL_CHECKPOINT",
         "HITL_EXPIRED",
         "AGENT_COMPLETE",
+        "AGENT_GROUNDED",
         "PIPELINE_COMPLETE",
         "PIPELINE_PAUSED",
         "CONNECTED",
@@ -213,6 +214,9 @@ class BriefUpdate(BaseModel):
         "ARBITER_UPDATE",
         "INITIAL_ANALYSIS_COMPLETE",
         "BATCH",
+        "STREAM_ERROR",
+        "PING",
+        "DEGRADED",
     ]
     session_id: str
     agent_id: str | None = None

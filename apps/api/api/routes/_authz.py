@@ -17,7 +17,11 @@ logger = get_logger(__name__)
 
 # Unified safe-ID regex matching schemas.py _validate_safe_id
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
-_FC_TEST_SHORTCUTS = os.environ.get("FC_TEST_SHORTCUTS") == "1"
+def _fc_test_shortcuts_enabled() -> bool:
+    """Read FC_TEST_SHORTCUTS at call time so test fixtures that set it after
+    import are respected, and so the module-level cache cannot accidentally
+    carry a stale True across process forks."""
+    return os.environ.get("FC_TEST_SHORTCUTS") == "1"
 
 
 def validate_session_id(session_id: str) -> None:
@@ -76,7 +80,7 @@ async def assert_session_access(session_id: str, user: User) -> dict:
         metadata = None
 
     if metadata is not None and not isinstance(metadata, dict):
-        if _FC_TEST_SHORTCUTS:
+        if _fc_test_shortcuts_enabled():
             metadata = {"session_id": session_id, "investigator_id": getattr(user, "user_id", None)}
         else:
             metadata = None
@@ -87,7 +91,7 @@ async def assert_session_access(session_id: str, user: User) -> dict:
     if not metadata:
         from api.routes._session_state import get_active_pipeline
 
-        if _FC_TEST_SHORTCUTS and get_active_pipeline(session_id) is not None:
+        if _fc_test_shortcuts_enabled() and get_active_pipeline(session_id) is not None:
             return {"session_id": session_id, "investigator_id": getattr(user, "user_id", None)}
         raise HTTPException(status_code=404, detail="Session not found")
 

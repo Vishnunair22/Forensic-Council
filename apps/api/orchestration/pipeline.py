@@ -526,6 +526,13 @@ class ForensicCouncilPipeline:
             file_size_bytes=file_size_bytes,
         )
         self._evidence_mime = evidence_artifact.mime_type if evidence_artifact else ""
+        # Thread the original filename to the arbiter so the deterministic report
+        # narrates the real file (e.g. "Image.jpeg"), not the case_id or a generic
+        # placeholder.
+        if self.arbiter is not None:
+            self.arbiter.original_filename = original_filename or (
+                getattr(evidence_artifact, "original_filename", None) if evidence_artifact else None
+            )
 
         try:
             from api.routes._session_state import broadcast_update
@@ -642,8 +649,10 @@ class ForensicCouncilPipeline:
 
         arbiter_results = self._normalize_agent_results(agent_results)
 
-        # Check for majority agent failure — if 3+ agents failed, abort
-        failed_count = sum(1 for r in agent_results if r.error)
+        # Check for majority agent failure — abort only when agents failed
+        # WITHOUT producing any initial findings. Deep-pass timeouts produce
+        # valid initial findings and must not count as "failed" here.
+        failed_count = sum(1 for r in agent_results if r.error and not r.findings)
         active_count = sum(1 for r in agent_results if r.agent_active)
         if failed_count >= 3 and failed_count >= active_count // 2:
             error_msg = f"{failed_count} of {len(agent_results)} agents failed — investigation aborted"
@@ -788,6 +797,59 @@ class ForensicCouncilPipeline:
             self.arbiter._pre_warm_case_id = case_id
             self.arbiter._pre_warm_used_llm = use_llm
 
+            # Reconcile the live per-agent cards to the arbiter-grounded verdict the
+            # signed report will use (single source of truth). The card streams a
+            # preliminary per-agent self-assessment; once the pre-warm deliberation
+            # has produced the grounded, visual-context-aware verdicts, broadcast
+            # them so the evidence page never shows a verdict/confidence that the
+            # result page will contradict (e.g. a screening-tier signal the arbiter
+            # grounds to AUTHENTIC). Emitted unconditionally — this reconciliation
+            # must happen even when arbiter STEP broadcasts are suppressed.
+            try:
+                from api.routes._session_state import broadcast_update as _bcast
+                from api.schemas import BriefUpdate as _BUpd
+
+                # Tag the broadcast with the ACTUAL phase. The frontend drops
+                # cross-phase messages (a deep-phase card won't accept an
+                # "initial"-tagged update), so a hardcoded phase silently
+                # discarded the deep reconciliation — the deep card stayed on its
+                # ungrounded preliminary verdict. Derive deep vs initial from the
+                # findings the pre-warm deliberated over.
+                _pw_phase = (
+                    "deep"
+                    if any(
+                        str((f.get("metadata") or {}).get("analysis_phase") or "").lower() == "deep"
+                        for _r in (agent_results or {}).values()
+                        if isinstance(_r, dict)
+                        for f in (_r.get("findings") or [])
+                    )
+                    else "initial"
+                )
+                _pas = getattr(report, "per_agent_summary", {}) or {}
+                for _aid, _summ in _pas.items():
+                    if not isinstance(_summ, dict) or _summ.get("skipped"):
+                        continue
+                    _gv = _summ.get("verdict")
+                    _gc = _summ.get("confidence_pct")
+                    if _gv is None or _gc is None:
+                        continue
+                    await _bcast(
+                        str(self._session_id),
+                        _BUpd(
+                            type="AGENT_GROUNDED",
+                            session_id=str(self._session_id),
+                            agent_id=_aid,
+                            message="Grounded verdict reconciled.",
+                            data={
+                                "agent_verdict": _gv,
+                                "confidence": float(_gc) / 100.0,
+                                "analysis_phase": _pw_phase,
+                            },
+                        ),
+                    )
+            except Exception as _grounded_err:
+                logger.debug("Grounded per-agent reconciliation broadcast skipped", error=str(_grounded_err))
+
             if not suppress_broadcasts:
                 # Final pre-warm broadcast: metrics are ready for the user decision.
                 await broadcast_update(
@@ -835,12 +897,24 @@ class ForensicCouncilPipeline:
                 normalized_findings.append(error_finding.model_dump(mode="json"))
             else:
                 for f in result.findings:
-                    if hasattr(f, "model_dump"):
-                        normalized_findings.append(f.model_dump(mode="json"))
-                    elif isinstance(f, dict):
-                        normalized_findings.append(f)
-                    else:
-                        normalized_findings.append(vars(f))
+                    # Per-finding guard: a single malformed finding (e.g. a
+                    # primitive or slotted object with no __dict__) must not
+                    # abort normalization for ALL agents. Drop the bad one and
+                    # continue rather than raising out of the whole investigation.
+                    try:
+                        if hasattr(f, "model_dump"):
+                            normalized_findings.append(f.model_dump(mode="json"))
+                        elif isinstance(f, dict):
+                            normalized_findings.append(f)
+                        else:
+                            normalized_findings.append(vars(f))
+                    except Exception as norm_err:
+                        logger.warning(
+                            "Dropping un-normalizable finding",
+                            agent_id=result.agent_id,
+                            finding_type=type(f).__name__,
+                            error=str(norm_err),
+                        )
 
             arbiter_results[result.agent_id] = {
                 "findings": normalized_findings,

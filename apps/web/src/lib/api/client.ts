@@ -31,10 +31,9 @@ const LIVE_SOCKET_CONNECT_TIMEOUT_MS = 20_000;
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const response = await fetch(url, { credentials: "include", ...options });
   if (response.status === 401) {
-    if (typeof document !== "undefined") {
-      document.cookie = "access_token=; Max-Age=0; path=/";
-      document.cookie = "fc_session=; Max-Age=0; path=/";
-    }
+    // HttpOnly cookies cannot be cleared via document.cookie — the server-side
+    // logout endpoint sets Max-Age=0. We only dispatch the session-expired event
+    // so the UI can redirect; cookie cleanup happens on the next server-side logout.
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("fc:session-expired"));
     }

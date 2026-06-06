@@ -38,3 +38,15 @@ services:
       # flows (auth, demo login) must be tested through Caddy (http://localhost) not
       # the direct backend port.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+
+  # ⚠️  DEV ONLY: expose observability UIs directly to the host.
+  # These bindings bypass the container network security model — any process
+  # on the developer's machine can reach Jaeger and Prometheus directly.
+  # The prod overlay resets these to [] so they are never exposed in production.
+  jaeger:
+    ports:
+      - "16686:16686"
+
+  prometheus:
+    ports:
+      - "9090:9090"

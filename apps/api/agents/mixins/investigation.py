@@ -1059,8 +1059,16 @@ class AgentInvestigationMixin:
         _routing = _visual_meta.get("forensic_routing")
         _visual_category = str(_routing.get("image_category") or "") if isinstance(_routing, dict) else ""
         _visual_category = _visual_category or str(_visual_meta.get("file_type_assessment") or "")
-        _persona = str(getattr(self, "persona", "") or "")
-        _persona_role = _persona.split(".")[0].strip() if _persona else self.agent_name
+        # Derive a clean, presentable role from the structured persona registry.
+        # The old `persona.split(".")[0]` leaked broken text like "You are Dr"
+        # because the inline persona prose begins with "You are Dr. <Name>, ...".
+        from core.agent_personas import get_agent_narrative_persona
+
+        _np = get_agent_narrative_persona(self.agent_id)
+        if _np is not None:
+            _persona_role = f"{_np.expert_name}, {_np.title}"
+        else:
+            _persona_role = self.agent_name
 
         # Per-agent verdict + confidence come from the SINGLE severity- and
         # visual-context-aware authority (compute_agent_verdict) via the shared
@@ -1420,7 +1428,18 @@ class AgentInvestigationMixin:
             )
         elif "agent3" in _agent_id_lower or "object" in _agent_id_lower:
             _yolo_ctx = self._tool_context.get("object_detection") or self._tool_context.get("yolo_detection") or {}
-            _objects = _yolo_ctx.get("detected_objects") or _yolo_ctx.get("objects") or []
+            # The object-detection handler stores class names under "classes_found"
+            # and full boxes under "detections"; the older "detected_objects"/"objects"
+            # keys it never emitted made this brief always say "No objects flagged".
+            _objects = _yolo_ctx.get("classes_found") or _yolo_ctx.get("detected_objects") or _yolo_ctx.get("objects") or []
+            if not _objects:
+                _dets = _yolo_ctx.get("detections") or []
+                if isinstance(_dets, list):
+                    _objects = [
+                        d.get("class_name") or d.get("label") or d.get("class")
+                        for d in _dets
+                        if isinstance(d, dict) and (d.get("class_name") or d.get("label") or d.get("class"))
+                    ]
             _obj_summary = f"Detected objects/entities: {', '.join(str(o) for o in _objects[:5])}." if _objects else "No objects, UI elements, or contraband flagged."
             _role_opening = (
                 f"Agent3 (Object & Scene Analysis) examined scene content: "
@@ -1581,6 +1600,14 @@ class AgentInvestigationMixin:
                         "mime_type": getattr(self.evidence_artifact, "mime_type", "")
                     },
                 )
+
+        # Wire the engine's live findings list to the agent BEFORE running so a
+        # per-agent timeout inside loop_engine.run() (the common case — all tool
+        # execution happens there) leaves partial findings visible to the
+        # pipeline's timeout handler, which reads agent._findings. The engine
+        # appends in place and never reassigns this list, so the reference stays
+        # live throughout the run.
+        self._findings = loop_engine._findings
 
         loop_result = await loop_engine.run(
             initial_thought=initial_thought,

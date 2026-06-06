@@ -112,7 +112,7 @@ export function HITLCheckpointModal({
  };
 
  return (
-   <Dialog open={isOpen} onOpenChange={handleDismiss}>
+   <Dialog open={isOpen && !!checkpoint} onOpenChange={handleDismiss}>
     <DialogContent className="sm:max-w-xl p-0">
 
      {checkpoint ? (

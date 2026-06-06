@@ -316,9 +316,20 @@ def deliberate_findings(
         high_weight_evidence_score = 1.0
 
     # 4. visual_context_support_score
-    # Remote (court-defensible) Gemini is weighted more than the screening-tier
-    # local ensemble — the bounded weighted voter contributes more confidence.
-    visual_context_support_score = 1.0 if visual_context else 0.0
+    # Honesty fix: credit the visual context ONLY when it AGREES with the final
+    # verdict's direction. Previously the mere PRESENCE of a visual context added
+    # confidence even when it CONTRADICTED the verdict (verdict clean but the
+    # vision model flagged an integrity issue, or vice-versa) — inflating the score
+    # on exactly the cases where the evidence is most ambiguous. Corroboration =
+    # both read clean OR both flag a problem; disagreement (and ambiguous/
+    # uncorroborated verdicts) earns no visual-support credit. Remote (court-
+    # defensible) Gemini is weighted more than the screening-tier local ensemble.
+    if visual_context is None:
+        visual_context_support_score = 0.0
+    else:
+        _verdict_clean = final_verdict == "NO_REPORTABLE_MANIPULATION_DETECTED"
+        _vc_flags_issue = bool(has_vc_integrity_issue)
+        visual_context_support_score = 1.0 if (_verdict_clean != _vc_flags_issue) else 0.0
     _vc_coeff = 0.10 if vc_remote else 0.05
 
     # 5. critical_tool_failure_rate

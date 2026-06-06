@@ -67,13 +67,10 @@ export function SessionExpiredClient() {
               <button
                 type="button"
                 onClick={() => {
-                  // WORKFLOW_TRACE: session-expired -> Return to Hub MUST dispatch
-                  // fc:reset-home so HeroAuthActions clears modal/file state.
-                  if (window.location.pathname === "/") {
-                    window.dispatchEvent(new Event("fc:reset-home"));
-                  } else {
-                    router.push("/");
-                  }
+                  // SessionExpiredClient only renders at /session-expired, never at /.
+                  // Always navigate home; HeroAuthActions will handle fc:reset-home
+                  // when it mounts on the home page.
+                  router.push("/");
                 }}
                 className="w-full fc-btn-primary flex items-center justify-center gap-2"
                 data-testid="session-expired-home-cta"

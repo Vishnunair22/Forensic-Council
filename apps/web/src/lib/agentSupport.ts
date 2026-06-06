@@ -1,10 +1,10 @@
 /*
  * Must stay in sync with backend AGENT_FILE_CAPABILITIES (apps/api/core/file_type_policy.py):
  *   Agent1 → image/
- *   Agent2 → (none — empty capabilities, currently disabled)
+ *   Agent2 → audio/
  *   Agent3 → image/
- *   Agent4 → (none — empty capabilities, currently disabled)
- *   Agent5 → image/
+ *   Agent4 → video/ (+ application/mp4)
+ *   Agent5 → image/ audio/ video/ + application/pdf, application/mp4 (metadata — all types)
  *
  * When serverCapabilities are provided (fetched from GET /api/v1/capabilities),
  * those override the static mapping below.
@@ -46,11 +46,18 @@ export function supportedAgentIdsForMime(
     return result;
   }
 
-  // Fallback static mapping (image-only per backend policy)
+  // Fallback static mapping — mirrors backend AGENT_FILE_CAPABILITIES so agent
+  // filtering is correct even before server capabilities load (prevents the
+  // race where audio/video files briefly show zero applicable agents).
   if (!mimeType) return new Set(["Agent1", "Agent3", "Agent5"]);
 
   const normalized = mimeType.toLowerCase();
   if (normalized.startsWith("image/")) return new Set(["Agent1", "Agent3", "Agent5"]);
+  if (normalized.startsWith("audio/")) return new Set(["Agent2", "Agent5"]);
+  if (normalized.startsWith("video/") || normalized === "application/mp4") {
+    return new Set(["Agent4", "Agent5"]);
+  }
+  if (normalized === "application/pdf") return new Set(["Agent5"]);
   return new Set();
 }
 

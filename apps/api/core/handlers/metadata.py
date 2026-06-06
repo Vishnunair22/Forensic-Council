@@ -6,6 +6,7 @@ Domain-specific handlers for metadata and provenance forensic tools.
 Implements Fix 3 (Decentralization) and Initial Analysis Refinements.
 """
 
+import re
 from pathlib import Path
 
 from core.handlers.base import BaseToolHandler
@@ -24,6 +25,18 @@ from tools.metadata_tools import steganography_scan as real_steganography_scan
 from tools.metadata_tools import timestamp_analysis as real_timestamp_analysis
 
 logger = get_logger(__name__)
+
+# Precise date/time detector for visually-grounded timestamp corroboration.
+# The old substring test (":" / "202" / "am" / "pm") matched almost any text —
+# URLs, the word "camera", a street number "202 Main St" — and falsely reported
+# a corroborated timestamp. This requires an actual clock or calendar pattern.
+_VISUAL_TIMESTAMP_RE = re.compile(
+    r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?\b"          # 12:34, 12:34:56, 9:05 pm
+    r"|\b(?:19|20)\d{2}[-/.](?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])\b"  # 2024-01-31
+    r"|\b(?:0?[1-9]|[12]\d|3[01])[-/.](?:0?[1-9]|1[0-2])[-/.](?:19|20)\d{2}\b"  # 31/01/2024
+    r"|\b\d{1,2}\s*[ap]\.?m\.?\b",                              # 9 pm
+    re.IGNORECASE,
+)
 
 
 class MetadataHandlers(BaseToolHandler):
@@ -278,8 +291,9 @@ class MetadataHandlers(BaseToolHandler):
             has_time = bool(result.get("DateTimeOriginal") or result.get("datetime_original") or result.get("CreationDate"))
             if not has_time:
                 gemini_validation["note"] = "Primary metadata timestamp missing. "
-                # Very basic heuristic to see if Gemini spotted a timestamp in the image (e.g. screenshot clock)
-                if any(x in gemini_text.lower() for x in ["date", "time", "202", "am", "pm", ":"]):
+                # Detect a real clock/calendar pattern Gemini read from the image
+                # (e.g. a screenshot status-bar clock), not any text containing a colon.
+                if _VISUAL_TIMESTAMP_RE.search(gemini_text):
                     gemini_validation["note"] += "However, Gemini visual analysis extracted potential date/time text directly from the image content."
                     gemini_validation["corroborated_from_visuals"] = True
 
@@ -464,7 +478,16 @@ class MetadataHandlers(BaseToolHandler):
                     sha256.update(chunk)
             computed = sha256.hexdigest()
             stored = getattr(artifact, "content_hash", None)
-            match = stored is not None and computed == stored
+            # Distinguish "no reference hash on record" from "hash mismatch".
+            # When there is no stored hash, match must be None — not False — because
+            # the classifier reads hash_match==False as a POSITIVE tampering signal,
+            # which would falsely flag every file that lacks an ingestion reference.
+            if stored is None:
+                match: bool | None = None
+                verification_status = "NO_REFERENCE_HASH"
+            else:
+                match = computed == stored
+                verification_status = "MATCH" if match else "MISMATCH"
             result = {
                 "computed_hash": computed,
                 "current_hash": computed,
@@ -472,12 +495,18 @@ class MetadataHandlers(BaseToolHandler):
                 "original_hash": stored,
                 "hash_match": match,
                 "hash_matches": match,
+                "verification_status": verification_status,
                 "file_name": Path(artifact.file_path).name,
                 "file_size_bytes": Path(artifact.file_path).stat().st_size,
                 "available": True,
-                "confidence": 1.0,
+                "confidence": 1.0 if stored is not None else 0.0,
                 "court_defensible": True,
             }
+            if stored is None:
+                result["limitation"] = (
+                    "No ingestion reference hash on record; integrity could be computed "
+                    "but not verified against a prior state."
+                )
         except Exception as exc:
             result = {
                 "available": False,
@@ -498,6 +527,14 @@ class MetadataHandlers(BaseToolHandler):
         make = str(exif.get("make", "")).lower()
         model = str(exif.get("model", "")).lower()
         file_name = str(getattr(artifact, "file_name", "") or "").lower()
+
+        # EXIF-field-count reasoning only applies to images. Audio/video/PDF do not
+        # carry EXIF at all, so "few EXIF fields" is the normal case and must never
+        # be read as stripped/suspicious metadata for those media.
+        _amd = getattr(artifact, "metadata", None)
+        _mime = str(_amd.get("mime_type") if isinstance(_amd, dict) else "") or ""
+        _mime = _mime or str(getattr(artifact, "mime_type", "") or "")
+        _is_image = _mime.startswith("image/")
 
         # Social Media / Heavy Compression apps
         social_apps = {"instagram", "tiktok", "facebook", "snapchat", "twitter", "x.com"}
@@ -530,7 +567,7 @@ class MetadataHandlers(BaseToolHandler):
         # Require very few fields (< 3) before applying a penalty — a file with 3-4 EXIF
         # tags still has meaningful provenance signals and should not be penalised.
         total_fields = int(exif.get("total_fields_extracted", 0))
-        if penalty == 1.0 and total_fields < 3:
+        if _is_image and penalty == 1.0 and total_fields < 3:
             # Check if capture fields exist despite low tag count (partial metadata)
             fnumber = exif.get("FNumber")
             iso = exif.get("ISOSpeedRatings")
@@ -551,7 +588,7 @@ class MetadataHandlers(BaseToolHandler):
             "compression_risk": round(1.0 - penalty if penalty < 1.0 else 0.0, 3),
             "compression_penalty": penalty,
             "detected_platform": platform,
-            "metadata_stripped": total_fields < 5,
+            "metadata_stripped": bool(_is_image and total_fields < 5),
             "forensic_reliability_impact": "HIGH"
             if penalty < 0.5
             else ("MEDIUM" if penalty < 0.8 else "NONE"),

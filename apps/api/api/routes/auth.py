@@ -321,6 +321,19 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     )
 
     await _clear_failed_attempts(client_ip)
+
+    # Also clear the per-username attempt counter so a legitimate user who
+    # previously made failed attempts is not locked out after their next login.
+    try:
+        from core.persistence.redis_client import get_redis_client as _get_redis
+        _redis = await _get_redis()
+        if _redis:
+            import hashlib as _hashlib
+            _ukey = f"login_attempt_user:{_hashlib.sha256(form_data.username.encode()).hexdigest()[:16]}"
+            await _redis.delete(_ukey)
+    except Exception:
+        pass  # non-blocking, best-effort
+
     logger.info("User logged in successfully", user_id=user["user_id"], role=user["role"].value)
 
     csrf_token = _secrets.token_urlsafe(32)

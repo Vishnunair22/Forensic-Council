@@ -138,13 +138,13 @@ class QdrantClient:
         return self._client
 
     async def health_check(self) -> bool:
-        """Test Qdrant connection."""
+        """Test Qdrant connection. Returns False on failure (never raises)."""
         try:
             await self.client.get_collections()
             return True
         except Exception as e:
             logger.error("Qdrant health check failed", error=str(e))
-            raise QdrantConnectionError("Qdrant health check failed", details={"error": str(e)})
+            return False
 
     async def collection_exists(self, collection_name: str) -> bool:
         """
@@ -238,6 +238,7 @@ class QdrantClient:
         await self.client.upsert(
             collection_name=collection_name,
             points=[point],
+            wait=True,  # block until write is committed, not just acknowledged
         )
 
         logger.debug(

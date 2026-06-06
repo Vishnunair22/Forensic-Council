@@ -193,6 +193,7 @@ def compute_agent_verdict(
     AUTHENTIC / INCONCLUSIVE / SUSPICIOUS / MANIPULATED.
     """
     completed = 0
+    clean_confirmations = 0    # NEGATIVE verdicts — tools that affirmatively confirmed clean
     failed = 0
     alert_signals = 0          # POSITIVE, MEDIUM+
     strong_signals = 0         # POSITIVE, HIGH/CRITICAL
@@ -214,6 +215,8 @@ def compute_agent_verdict(
             continue
 
         completed += 1
+        if verdict == "NEGATIVE":
+            clean_confirmations += 1
         if verdict != "POSITIVE":
             continue
 
@@ -247,6 +250,7 @@ def compute_agent_verdict(
 
     # ── Fold in the holistic visual read as a grounding signal ──────────────
     tool_strong = strong_signals  # tool-only counts, for honest reason phrasing
+    tool_alert = alert_signals    # tool-only alert count, before visual folding
     vs = visual_signal or {}
     v_verdict = str(vs.get("verdict") or "").upper()
     v_court = bool(vs.get("court_defensible"))
@@ -274,7 +278,17 @@ def compute_agent_verdict(
         alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
     if v_anomalies and v_court:
         visual_contributed = True
-        alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
+        # An uncorroborated holistic ANOMALY (a visual observation no deterministic
+        # tool isolated) is screening-tier, not manipulation evidence — e.g. the
+        # vision model reading an on-screen clock as a "future date" while every
+        # metadata tool confirms the file is consistent (a model temporal-staleness
+        # false positive). Only let an anomaly raise an alert when a tool
+        # corroborates it; otherwise it is noted (visual_contributed) but must not
+        # flip an otherwise-clean agent to INCONCLUSIVE. A court-defensible
+        # manipulation VERDICT (handled above) still escalates regardless — this
+        # gate applies only to anomaly observations.
+        if (tool_alert + tool_strong) >= 1:
+            alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
 
     # Convergence flag: Gemini court-defensible + at least one deterministic tool
     # strong signal agree — two independent pipelines pointing to the same conclusion
@@ -308,11 +322,20 @@ def compute_agent_verdict(
     elif completed == 0:
         # No usable tool output — cannot assert authenticity.
         verdict, conf = "INCONCLUSIVE", 0.4
+    elif clean_confirmations == 0:
+        # Tools ran but NONE affirmatively confirmed clean (every usable result was
+        # inconclusive). Asserting AUTHENTIC here would be dishonest — this is
+        # genuine ambiguity, not a clean read. Confidence stays in the low band.
+        verdict = "INCONCLUSIVE"
+        conf = round(min(0.6, 0.45 + 0.03 * completed), 2)
     else:
-        # Clean: confidence scales modestly with coverage breadth, with a small
-        # additional bump when Gemini's holistic read also says clean/authentic
-        # (two independent pipelines agreeing on authenticity is meaningful).
-        conf = min(0.92, 0.74 + 0.03 * completed + (0.04 if gemini_clean_vote else 0.0))
+        # Clean: confidence scales with the number of tools that AFFIRMATIVELY
+        # confirmed clean (NEGATIVE verdicts), not with raw completed count — an
+        # INCONCLUSIVE "couldn't determine" result or a context-only tool is
+        # coverage, not confirmation, and must not inflate confidence in a clean
+        # verdict. A small additional bump when Gemini's holistic read also says
+        # clean/authentic (two independent pipelines agreeing is meaningful).
+        conf = min(0.92, 0.74 + 0.03 * clean_confirmations + (0.04 if gemini_clean_vote else 0.0))
         verdict = "AUTHENTIC"
 
     moderate_signals = alert_signals - strong_signals

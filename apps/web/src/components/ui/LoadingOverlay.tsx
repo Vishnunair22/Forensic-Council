@@ -6,6 +6,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
+import { sessionOnlyStorage } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storageKeys";
 import type { SoundType } from "@/hooks/useSound";
 
 export interface LoadingOverlayProps {
@@ -29,11 +31,20 @@ function toDisplayText(raw: string, dispatched: number): string {
   return "Initializing workspace";
 }
 
+/** Derive a human-readable label from MIME type for the eyebrow. */
+function mimeToLabel(mime: string): string {
+  if (mime.startsWith("image/")) return "Image Evidence";
+  if (mime.startsWith("audio/")) return "Audio Evidence";
+  if (mime.startsWith("video/")) return "Video Evidence";
+  if (mime === "application/pdf") return "Document Evidence";
+  return "Evidence";
+}
+
 export function LoadingOverlay({
   liveText,
   dispatchedCount = 0,
   playSound,
-  exitDuration = 0.16,
+  exitDuration = 0.22,
 }: LoadingOverlayProps) {
   const prefersReducedMotion = useReducedMotion();
   const raw = toDisplayText(liveText || "", dispatchedCount);
@@ -47,11 +58,33 @@ export function LoadingOverlay({
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [raw]);
 
-  // Sound on text change (skip initial mount)
+  // Read pending file meta from sessionStorage so we can show the filename
+  // and file type on the overlay — gives the user confidence their file was received.
+  const [fileMeta, setFileMeta] = useState<{ name: string; type: string } | null>(null);
+  useEffect(() => {
+    const raw = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_PENDING_FILE_META, true, null);
+    if (raw && typeof raw === "object") {
+      const meta = raw as { name?: string; type?: string };
+      if (typeof meta.name === "string" && typeof meta.type === "string") {
+        setFileMeta({ name: meta.name, type: meta.type });
+      }
+    }
+  }, []);
+
+  const eyebrowLabel = fileMeta ? mimeToLabel(fileMeta.type) : "Analysis";
+  const fileName = fileMeta?.name ?? null;
+
+  // Play `scan` sound on meaningful status changes — throttled to once per 5s
+  // to avoid firing on every rapid-fire backend message.
   const prevTextRef = useRef(displayText);
+  const soundThrottleRef = useRef<number>(0);
   useEffect(() => {
     if (displayText !== prevTextRef.current) {
-      playSound?.("scan");
+      const now = Date.now();
+      if (now - soundThrottleRef.current > 5000) {
+        playSound?.("scan");
+        soundThrottleRef.current = now;
+      }
       prevTextRef.current = displayText;
     }
   }, [displayText, playSound]);
@@ -104,21 +137,28 @@ export function LoadingOverlay({
             />
             <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
           </div>
-          <span className="fc-eyebrow fc-text-muted">
-            System Initialization
-          </span>
+          <span className="fc-eyebrow fc-text-muted">{eyebrowLabel}</span>
         </div>
 
-        {/* Title and live text */}
-        <div className="mb-10 space-y-4">
+        {/* Title + filename */}
+        <div className="mb-10 space-y-3">
           <motion.h1
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
             className="text-3xl lg:text-4xl font-heading font-extrabold fc-text-primary text-hero-gradient tracking-tight leading-tight"
           >
             Forensic Analysis
           </motion.h1>
+
+          {/* Filename — gives the user confidence their file was received */}
+          {fileName && (
+            <p className="text-xs font-mono fc-text-muted truncate max-w-full" title={fileName}>
+              {fileName}
+            </p>
+          )}
+
+          {/* Live status text */}
           <div className="flex items-center gap-3">
             <motion.div
               className="w-1.5 h-1.5 bg-white/55 rounded-full flex-shrink-0"
@@ -136,21 +176,25 @@ export function LoadingOverlay({
           </div>
         </div>
 
-        {/* Progress bar */}
+        {/* Indeterminate progress — honest signal that work is in progress,
+            not a fake percentage completion bar that loops through 100%. */}
         <div className="w-full" aria-hidden="true">
           <div className="flex items-center justify-between mb-3.5 fc-eyebrow fc-text-muted">
             <span>Workspace Setup</span>
           </div>
-          <div className="h-2 w-full bg-white/10 rounded-full relative overflow-hidden">
-            <motion.div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/60 to-primary rounded-full flex items-center justify-end"
-              initial={{ width: "0%" }}
-              animate={prefersReducedMotion ? {} : { width: ["0%", "18%", "18%", "45%", "45%", "82%", "82%", "100%", "100%"] }}
-              transition={prefersReducedMotion ? {} : { duration: 3.5, times: [0, 0.15, 0.25, 0.4, 0.55, 0.75, 0.85, 0.95, 1], repeat: Infinity, ease: "linear" }}
-            >
-              {/* Leader Glow Point */}
-              <div className="h-full w-2 bg-white/60 blur-[1px]" />
-            </motion.div>
+          <div className="h-1.5 w-full bg-white/8 rounded-full relative overflow-hidden">
+            {prefersReducedMotion ? (
+              /* Static bar for reduced-motion users */
+              <div className="absolute inset-y-0 left-0 w-1/2 bg-primary/40 rounded-full" />
+            ) : (
+              /* Bouncing indeterminate bar — honest "we're working on it" signal */
+              <motion.div
+                className="absolute inset-y-0 bg-gradient-to-r from-primary/50 via-primary to-primary/50 rounded-full"
+                style={{ width: "40%" }}
+                animate={{ x: ["0%", "150%", "0%"] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            )}
           </div>
         </div>
       </div>

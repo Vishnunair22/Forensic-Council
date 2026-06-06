@@ -88,6 +88,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Run infra/generate_production_keys.sh before production."
         )
 
+    if os.environ.get("FC_TEST_SHORTCUTS") == "1" and settings.app_env == "production":
+        raise RuntimeError(
+            "FC_TEST_SHORTCUTS=1 is set in production mode. "
+            "This bypasses authentication and CSRF protection. "
+            "Unset this variable and restart."
+        )
+
     if settings.enable_research_models and settings.app_env == "production":
         logger.error(
             "CRITICAL: RESEARCH_MODELS enabled in production. These models (BusterNet, F3-Net, "
@@ -146,6 +153,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Ensure libmagic is installed (e.g., apt install libmagic1).",
             error=str(_mime_err),
         )
+
+    # Mark infrastructure not ready until DB + Redis are confirmed healthy.
+    # StartupGateMiddleware checks this flag and rejects POST/PUT/PATCH/DELETE
+    # while the API is still warming up.
+    app.state.infrastructure_ready = False
 
     # ── Monitoring ───────────────────────────────────────────────────────────
     await start_monitoring(app.state)
@@ -225,6 +237,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("Migration validation skipped", error=str(e))
         app.state.migrations_ok = False
 
+    # Infrastructure is now confirmed healthy enough to accept requests.
+    app.state.infrastructure_ready = True
+    logger.info("Infrastructure ready — accepting requests")
+
     # ── Bootstrap users ──────────────────────────────────────────────────────
     try:
         from scripts.init_db import bootstrap_users
@@ -285,7 +301,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     _meta = json.loads(_raw)
                 except (ValueError, TypeError):
                     continue
-                if isinstance(_meta, dict) and _meta.get("status") == "running":
+                # Also interrupt sessions stuck in HITL-pause states: without a
+                # running pipeline coroutine to consume the decision key, these
+                # sessions would wait forever for a decision that can never arrive.
+                _STUCK_STATUSES = {"running", "awaiting_decision", "awaiting_deep_report", "deliberating"}
+                if isinstance(_meta, dict) and _meta.get("status") in _STUCK_STATUSES:
                     _meta["status"] = "interrupted"
                     _meta["interrupted_at"] = datetime.now(UTC).isoformat()
                     _ttl = await _redis.ttl(_key)
@@ -429,7 +449,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pending_cleanups = [t for t in list(_deferred_cleanup_tasks) if not t.done()]
         if pending_cleanups:
             logger.info("Awaiting deferred cleanup tasks", count=len(pending_cleanups))
-            await asyncio.gather(*pending_cleanups, return_exceptions=True)
+            # Cap at 30s — cleanup tasks contain a 600s sleep which would
+            # otherwise block graceful shutdown unboundedly.
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending_cleanups, return_exceptions=True),
+                    timeout=30.0,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "Deferred cleanup drain timed out after 30s — cancelling remaining tasks",
+                    count=len(pending_cleanups),
+                )
+                for t in pending_cleanups:
+                    t.cancel()
     except Exception as e:
         logger.warning("Deferred cleanup drain failed", error=str(e))
 

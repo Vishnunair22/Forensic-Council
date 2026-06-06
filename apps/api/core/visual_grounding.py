@@ -113,7 +113,12 @@ _CAMERA_PHYSICS_TOOLS = frozenset({
     "deepfake_frequency_check",
     "copy_move_detect",
     "neural_copy_move",
-    "neural_splicing",
+    # NOTE: "neural_splicing" intentionally NOT camera-physics. It is now the real
+    # TruFor learned model (SegFormer+Noiseprint++), which detects forgeries on any
+    # image (camera or not) and does not false-positive on clean images
+    # (validated). Capping its severity to LOW on "non-camera" images suppressed
+    # genuine splice/clone detections and left the verdict Authentic. (The SRM
+    # heuristic fallback only runs if the weights are absent.)
     "adversarial_robustness_check",
     "camera_profile_match",
     "roi_extract",

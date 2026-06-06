@@ -68,7 +68,7 @@ export function HeroAuthActions() {
     };
     const handleSessionExpired = () => {
       void resetActiveInvestigation(queryClient);
-      router.push("/?session_expired=true");
+      router.push("/session-expired");
     };
     window.addEventListener("fc:reset-home", handleReset);
     window.addEventListener("fc:open-upload", handleOpen);

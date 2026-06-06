@@ -135,6 +135,10 @@ USER appuser
 
 HEALTHCHECK NONE
 
+# Self-documenting default: migration runs alembic then seeds the DB.
+# docker-compose.yml overrides this; standalone `docker run` uses this default.
+CMD ["sh", "-c", "python -m alembic upgrade head && python scripts/init_db.py"]
+
 # -- Stage 4: app - shared source + dirs + bytecode (inherits deps-full) ------
 # This intermediate stage is the common ancestor of development and production.
 # It avoids duplicating COPY / mkdir / compileall / chmod across both targets.
@@ -157,7 +161,6 @@ RUN cp -rn /tmp/__storage_seed/calibration_models/. \
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
     CURL_HOME="/tmp" \
     MPLCONFIGDIR="/tmp/matplotlib" \
     XDG_CACHE_HOME="/tmp" \
@@ -218,15 +221,15 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
         echo "Skipping build-time model preload (PRELOAD_MODELS=$PRELOAD_MODELS)"; \
     fi
 
-# Pre-compile application bytecode for faster cold starts.
-# UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
-RUN python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/
-
-# Create a dedicated non-root user. All writable paths are chown'd here;
-# volume mounts in docker-compose inherit these permissions.
+# Create non-root user before compileall so the .pyc files are owned by appuser.
 RUN addgroup --system --gid 1001 appgroup \
  && adduser  --system --uid  1001 --ingroup appgroup --no-create-home appuser \
- && chown -R appuser:appgroup /app/cache /app/storage /opt/forensic-model-cache
+ && chown -R appuser:appgroup /app /opt/forensic-model-cache
+
+# Pre-compile application bytecode for faster cold starts.
+# UV_COMPILE_BYTECODE=1 compiled venv packages; this handles app source code.
+# Run as appuser so .pyc ownership matches the runtime user.
+RUN runuser -u appuser -- python -m compileall -q api/ core/ orchestration/ agents/ tools/ scripts/
 
 RUN chmod +x scripts/docker_entrypoint.sh
 
@@ -246,6 +249,11 @@ ENV RELOAD=true \
 
 EXPOSE 8000
 
+STOPSIGNAL SIGTERM
+
+# Starts as root so docker_entrypoint.sh can repair mounted volume ownership,
+# then drops privileges to appuser via `exec runuser -u appuser` before exec-ing
+# the API or worker.
 USER root
 ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]
 
@@ -255,9 +263,10 @@ FROM app AS production
 
 EXPOSE 8000
 
+STOPSIGNAL SIGTERM
 
-
-# Start as root so docker_entrypoint.sh can repair mounted volume ownership,
-# then it drops privileges to appuser before running the API or worker.
+# Starts as root so docker_entrypoint.sh can repair mounted volume ownership,
+# then drops privileges to appuser via `exec runuser -u appuser` before exec-ing
+# the API or worker.
 USER root
 ENTRYPOINT ["sh", "scripts/docker_entrypoint.sh"]

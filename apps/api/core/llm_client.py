@@ -1196,19 +1196,15 @@ class LLMClient:
 
         async with LLMClient._synthesis_semaphore:
             self._last_synthesis_blocked_reason = ""
-            # No fallback model cascade: restrict to primary model only for synthesis.
-            original_fallback_models = self.fallback_models
-            self.fallback_models = []
-            try:
-                result = await self._generate_synthesis_inner(
-                    system_prompt=system_prompt,
-                    user_content=user_content,
-                    max_tokens=max_tokens,
-                    timeout_override=timeout_override,
-                    json_mode=json_mode,
-                )
-            finally:
-                self.fallback_models = original_fallback_models
+            # Allow the full fallback cascade so quota-exhausted primary models
+            # can still produce a synthesis via the next provider in the chain.
+            result = await self._generate_synthesis_inner(
+                system_prompt=system_prompt,
+                user_content=user_content,
+                max_tokens=max_tokens,
+                timeout_override=timeout_override,
+                json_mode=json_mode,
+            )
             return result
 
 

@@ -85,6 +85,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         config: Settings | None = None,
     ):
         self.session_id = session_id
+        # Original uploaded filename for report narration. Set by the pipeline
+        # after evidence ingest; falls back to tool metadata / "evidence_file".
+        self.original_filename: str | None = None
         self.custody_logger = custody_logger
         self.inter_agent_bus = inter_agent_bus
         self.calibration_layer = calibration_layer
@@ -358,7 +361,24 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 and (_f.get("confidence_raw") or (_f.get("metadata") or {}).get("confidence") or 0) >= 0.7
                 and (_f.get("metadata") or {}).get("court_defensible", True)
             )
-            if visual_context is not None and _vc_clean and _int_pos and _strong < 2:
+            # A real, court-defensible TRAINED-MODEL detection (TruFor splicing
+            # localization) is authoritative on its own: it sees pixel-level
+            # forgeries that are invisible to the holistic vision model, so a clean
+            # Gemini read must NOT clear it. When TruFor confirms a forgery, skip
+            # the uncorroborated-positive downgrade entirely (the image is
+            # manipulated, so the co-firing signals are not false positives).
+            _trufor_detected = any(
+                str((_f.get("metadata") or {}).get("tool_name") or _f.get("finding_type") or "") == "neural_splicing"
+                and str(_f.get("evidence_verdict")).upper() == "POSITIVE"
+                and (_f.get("metadata") or {}).get("court_defensible", False)
+                and max(
+                    float(_f.get("confidence_raw") or 0.0),
+                    float((_f.get("metadata") or {}).get("confidence") or 0.0),
+                ) >= 0.5
+                for _res in active_results.values()
+                for _f in _res.get("findings", [])
+            )
+            if visual_context is not None and _vc_clean and _int_pos and _strong < 2 and not _trufor_detected:
                 for _tool, _f in _int_pos:
                     _f["evidence_verdict"] = "INCONCLUSIVE"
                     # A signal held inconclusive as a benign, uncorroborated artifact
@@ -577,16 +597,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         # ── 6. Deterministic Report Builder ──
         from core.deterministic_report_builder import build_deterministic_report
+        # Prefer the authoritative original filename threaded from the upload
+        # (the case_id is NOT a filename — using it rendered "Forensic
+        # examination of `CASE-…`"; an empty case_id fell back to the generic
+        # "the submitted file" via tool metadata). Tool metadata is only a
+        # fallback when the real filename was not provided.
+        _orig_name = getattr(self, "original_filename", None)
         case_data = {
             "case_id": case_id or f"case_{self.session_id}",
             "session_id": str(self.session_id),
-            "filename": case_id or "evidence_file",
+            "filename": _orig_name or "evidence_file",
             "sha256": "unknown_hash",
             "mime_type": artifact_mime or "image/png"
         }
         for f in all_findings:
             meta = f.get("metadata") or {}
-            if meta.get("file_name") or meta.get("filename"):
+            if not _orig_name and (meta.get("file_name") or meta.get("filename")):
                 case_data["filename"] = meta.get("file_name") or meta.get("filename")
             if meta.get("file_hash") or meta.get("sha256"):
                 case_data["sha256"] = meta.get("file_hash") or meta.get("sha256")
@@ -1234,11 +1260,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             per_agent_findings=findings,
             per_agent_metrics=metrics,
             uncertainty_statement="Analysis was skipped for all agents.",
-            overall_verdict="INCONCLUSIVE",
+            overall_verdict="ABSTAIN",
             per_agent_summary=self._get_agent_summary(metrics, findings),
             degradation_flags=[
-                "All agents failed or were skipped — report based on incomplete data."
+                "REPORT_SYNTHESIZED_TEMPLATE_ZERO_AGENTS",
+                "All agents failed or were skipped — no evidence was analyzed.",
             ],
-            analysis_coverage_note="Zero agents produced findings; verdict defaulted to INCONCLUSIVE.",
+            analysis_coverage_note="No applicable agents produced findings. ABSTAIN means no analysis was run, not that the evidence is authentic.",
         )
 

@@ -34,8 +34,17 @@ logger = get_logger(__name__)
 _CALL_TIMESTAMPS: dict[str, list[float]] = defaultdict(list)
 _TOKEN_TIMESTAMPS: dict[str, list[tuple[float, int]]] = defaultdict(list)
 
-# Global lock to prevent race conditions on concurrent call tracking.
-_TRACKING_LOCK = asyncio.Lock()
+# Lazy lock — created on first use inside a running event loop.
+# Module-level asyncio.Lock() is unsafe in Python 3.10+ when the module is
+# imported before an event loop is running (e.g. in subprocesses or tests).
+_TRACKING_LOCK: asyncio.Lock | None = None
+
+
+def _get_tracking_lock() -> asyncio.Lock:
+    global _TRACKING_LOCK
+    if _TRACKING_LOCK is None:
+        _TRACKING_LOCK = asyncio.Lock()
+    return _TRACKING_LOCK
 
 # Cleanup interval: remove stale timestamps older than 2 minutes.
 _CLEANUP_INTERVAL_SECONDS = 120.0
@@ -145,7 +154,7 @@ class ProviderQuotaGuard:
         if config is None or not config.enabled:
             return True, QuotaCheckResult(allowed=True, reason="provider not configured")
 
-        async with _TRACKING_LOCK:
+        async with _get_tracking_lock():
             key = _provider_model_key(provider, model)
             now = time.time()
 

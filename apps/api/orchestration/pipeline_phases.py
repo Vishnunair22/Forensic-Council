@@ -28,7 +28,68 @@ logger = get_logger(__name__)
 
 from core.findings_humanizer import _humanize_initial_finding, _is_discovery_finding, _verdict_score
 
-PREVIEW_EXCLUDED_TOOLS = {"hash_verify", "custody_check", "file_type_validation"}
+
+def _build_live_visual_signal(aid: str, agent_inst: Any, session_id: str) -> dict[str, Any] | None:
+    """Per-agent ``visual_signal`` mirroring ``arbiter.deliberate``.
+
+    The live agent card streams a per-agent verdict/confidence computed by
+    ``compute_agent_verdict``. The signed report computes the SAME function but
+    additionally feeds it this ``visual_signal`` (the holistic vision read +
+    per-agent anomalies). Without it the live card misses the holistic
+    corroboration term — e.g. a clean Agent1 streams 86% but the report shows
+    90% — so the number silently drifts between the evidence page and the
+    result page. Building it identically here makes the card equal the report
+    by construction. Only Agent1 carries the holistic verdict (Agent3 only when
+    the whole image is synthetic/manipulated; Agent5 stays on provenance),
+    matching the arbiter so Agent3/Agent5 never inherit an authenticity boost.
+    """
+    vc = getattr(agent_inst, "visual_context", None) if agent_inst is not None else None
+    if vc is None:
+        return None
+    is_remote = bool(
+        getattr(vc, "external_llm_used", False)
+        and getattr(vc, "source", "") != "local_ensemble"
+    )
+    holistic = str(getattr(vc, "authenticity_verdict", "") or "").upper()
+    splits = None
+    try:
+        from core.per_agent_synthesis import split_visual_context
+
+        splits = split_visual_context(session_id, vc)
+    except Exception:
+        splits = None
+
+    def _sec(name: str) -> dict[str, Any]:
+        return (getattr(splits, name, None) or {}) if splits is not None else {}
+
+    if aid == "Agent1":
+        return {
+            "verdict": holistic,
+            "court_defensible": is_remote,
+            "anomalies": list(_sec("agent1_image_integrity").get("ai_generation_signals") or []),
+        }
+    if aid == "Agent3":
+        return {
+            "verdict": holistic if holistic in ("AI_GENERATED", "LIKELY_MANIPULATED") else "",
+            "court_defensible": is_remote,
+            "anomalies": list(_sec("agent3_object_scene").get("scene_inconsistencies") or []),
+        }
+    if aid == "Agent5":
+        return {
+            "verdict": "",
+            "court_defensible": is_remote,
+            "anomalies": list(_sec("agent5_metadata_visual").get("metadata_contradictions") or []),
+        }
+    return None
+
+PREVIEW_EXCLUDED_TOOLS = {
+    "hash_verify", "custody_check", "file_type_validation",
+    # Context-only tools: their output IS the per-agent Visual Context box, not a
+    # forensic Key Finding. Surfacing the scene description as a "finding" made the
+    # key-findings list read like duplicated narration rather than tool results.
+    "visual_evidence_profile", "shared_visual_evidence_profile",
+    "read_shared_image_context", "frame_extraction",
+}
 SCREENSHOT_PREVIEW_EXCLUDED_TOOLS = {
     "lighting_consistency",
     "lighting_correlation_initial",
@@ -168,29 +229,20 @@ async def run_agents_concurrent(
                 aid = str(getattr(agent_inst, "agent_id", "") or "")
                 if vctx is not None:
                     try:
-                        # The integrity pass carries a factual "what the image shows"
-                        # description. It is the live counterpart to the report's
-                        # per-agent Visual Context and is far more useful for the
-                        # integrity (Agent1) and metadata (Agent5) axes than a bare
-                        # content-type token ("photograph").
+                        # Each agent shows its OWN slice of the shared Gemini visual
+                        # context so the three cards are DISTINCT (Agent1 integrity,
+                        # Agent3 object/scene, Agent5 metadata/provenance) — never the
+                        # same scene sentence echoed across all three.
                         _integ = getattr(vctx, "image_integrity_context", None)
-                        _desc = " ".join(str(getattr(_integ, "description", "") or "").split())
-                        if len(_desc) <= 240:
-                            identity = _desc
-                        else:
-                            _cut = _desc.rfind(". ", 0, 240)
-                            identity = (
-                                _desc[: _cut + 1]
-                                if _cut > 80
-                                else _desc[:240].rsplit(" ", 1)[0].rstrip(",;") + "…"
-                            )
+                        scene = str(getattr(vctx, "scene_description", "") or "").strip()
+
                         if aid == "Agent3":
+                            # Object/scene axis: what is depicted + detected objects.
                             objs = []
                             for o in (getattr(vctx, "detected_objects", None) or []):
                                 lbl = getattr(o, "label", None) if not isinstance(o, dict) else o.get("label")
                                 if lbl:
                                     objs.append(str(lbl))
-                            scene = str(getattr(vctx, "scene_description", "") or "").strip()
                             parts = []
                             if scene:
                                 parts.append(scene.rstrip("."))
@@ -199,24 +251,52 @@ async def run_agents_concurrent(
                             if parts:
                                 return "; ".join(parts)
                         elif aid == "Agent5":
-                            ftype = str(getattr(vctx, "file_type_assessment", "") or "").strip()
+                            # Metadata/provenance axis: visible provenance markers ONLY
+                            # (timestamps, device/platform, software, location). Never
+                            # falls back to the scene description — that is Agent3's axis.
+                            ftype = str(getattr(vctx, "file_type_assessment", "") or "").strip().replace("_", " ")
                             meta = getattr(vctx, "metadata_visual_context", None)
-                            clues = [str(c) for c in (getattr(meta, "device_or_platform_clues", None) or []) if c]
-                            if clues:
-                                parts = []
-                                if ftype:
-                                    parts.append(ftype.replace("_", " "))
-                                parts.append("clues: " + ", ".join(clues[:3]))
-                                return "; ".join(parts)
-                            # No live provenance clues: a bare file-type word is not a
-                            # useful identity — fall back to the shared scene read.
-                            if identity:
-                                return identity
+
+                            def _mc(attr: str) -> list[str]:
+                                return [str(c) for c in (getattr(meta, attr, None) or []) if c]
+
+                            groups = []
+                            if _mc("visible_timestamps"):
+                                groups.append("timestamps: " + ", ".join(_mc("visible_timestamps")[:2]))
+                            if _mc("device_or_platform_clues"):
+                                groups.append("device/platform: " + ", ".join(_mc("device_or_platform_clues")[:2]))
+                            if _mc("software_or_app_clues"):
+                                groups.append("software: " + ", ".join(_mc("software_or_app_clues")[:2]))
+                            if _mc("visible_location_clues"):
+                                groups.append("location: " + ", ".join(_mc("visible_location_clues")[:2]))
+                            lead = (ftype + " — ") if ftype else ""
+                            if groups:
+                                return lead + "; ".join(groups)
+                            return (
+                                lead
+                                + "no visible provenance markers (timestamps, device, or software signatures) in the image content"
+                            )
                         else:
-                            # Agent1 / default: lead with the integrity description
-                            # rather than a bare content-type token.
-                            if identity:
-                                return identity
+                            # Agent1 integrity axis: the holistic integrity read, not a
+                            # bare scene sentence (the scene is Agent3's axis).
+                            manip = [str(s) for s in (getattr(_integ, "visible_manipulation_signals", None) or []) if s]
+                            ai = [str(s) for s in (getattr(_integ, "ai_generation_signals", None) or []) if s]
+                            edits = [str(s) for s in (getattr(_integ, "editing_or_compositing_signals", None) or []) if s]
+                            assessment = str(getattr(_integ, "integrity_assessment", "") or "").replace("_", " ").strip()
+                            if manip or ai:
+                                return "Visual integrity signals: " + "; ".join((manip + ai)[:3]) + "."
+                            if assessment in ("suspicious", "likely manipulated", "ai generated", "ai generated suspect"):
+                                # Alert assessment with no discrete signal — state it
+                                # honestly rather than the contradictory "No visible
+                                # manipulation … (assessment: likely manipulated)".
+                                body = f"Holistic visual read: {assessment} (no discrete pixel-level signal isolated)"
+                            else:
+                                body = "No visible manipulation or AI-generation indicators"
+                                if assessment == "no visible issue":
+                                    body += " (assessment: no visible issue)"
+                            if edits:
+                                body += "; benign edits noted: " + ", ".join(edits[:2])
+                            return body + "."
                         if not base:
                             base = str(
                                 getattr(vctx, "file_type_assessment", "")
@@ -519,7 +599,14 @@ async def run_agents_concurrent(
                     )
                     if _af:
                         from core.severity import compute_agent_verdict
-                        _cv, _cc, _ = compute_agent_verdict(_af)
+
+                        # Feed the SAME per-agent visual_signal the arbiter uses
+                        # so the streamed card value equals the signed report's
+                        # grounded per-agent verdict/confidence (single source of
+                        # truth — no 86%→90% drift between evidence and result).
+                        _vsig = _build_live_visual_signal(aid, agent_inst, str(session_id))
+                        _is_deep = analysis_phase == "deep"
+                        _cv, _cc, _ = compute_agent_verdict(_af, visual_signal=_vsig, is_deep=_is_deep)
                         if _cv:
                             _live_verdict = _cv
                             _live_conf = _cc
@@ -573,7 +660,7 @@ async def run_agents_concurrent(
                                         _grounded.append({**f, "evidence_verdict": "INCONCLUSIVE"})
                                     else:
                                         _grounded.append(f)
-                                _gv, _gc, _ = compute_agent_verdict(_grounded)
+                                _gv, _gc, _ = compute_agent_verdict(_grounded, visual_signal=_vsig, is_deep=_is_deep)
                                 if _gv:
                                     _live_verdict, _live_conf = _gv, _gc
                 except Exception:
@@ -582,8 +669,11 @@ async def run_agents_concurrent(
             await broadcast_update(
                 str(session_id),
                 BriefUpdate(
+                    # "degraded" (per-agent timeout with partial findings) is a
+                    # TERMINAL state — it must ship as AGENT_COMPLETE so the card
+                    # resolves and partial findings render, not stay "running".
                     type="AGENT_COMPLETE"
-                    if status in ("complete", "error", "skipped")
+                    if status in ("complete", "error", "skipped", "degraded")
                     else "AGENT_UPDATE",
                     session_id=str(session_id),
                     agent_id=aid,
@@ -843,8 +933,12 @@ async def run_agents_concurrent(
                 else {}
             ),
             react_chain=_serialize_react_chain(getattr(agent, "_react_chain", [])),
-            agent_active=status != "unsupported",
+            # A crashed initialization (status="error") must not appear as an
+            # "active" agent with no findings — that misleads the arbiter into
+            # treating it as a legitimately-run agent that found nothing.
+            agent_active=status not in ("unsupported", "error"),
             supports_file_type=status != "unsupported",
+            error="Agent initialization failed" if status == "error" else None,
             synthesis=getattr(agent, "_agent_synthesis", None),
         )
         for aid, (agent, findings, status) in agent_map.items()
@@ -1494,6 +1588,16 @@ async def _await_deep_analysis_decision(
             session_id=str(session_id),
             timeout_seconds=timeout,
         )
+        # Record a provenance flag so the report distinguishes an auto-skipped
+        # deep pass (no analyst response) from a deliberate baseline acceptance.
+        # Matters for court-admissibility — the two look identical otherwise.
+        try:
+            existing_flags = list(getattr(pipeline, "_degradation_flags", []) or [])
+            if "DEEP_ANALYSIS_AUTO_SKIPPED_TIMEOUT" not in existing_flags:
+                existing_flags.append("DEEP_ANALYSIS_AUTO_SKIPPED_TIMEOUT")
+            pipeline._degradation_flags = existing_flags
+        except Exception:
+            pass
         return False
     finally:
         pipeline._awaiting_user_decision = False

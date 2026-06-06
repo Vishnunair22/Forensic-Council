@@ -544,6 +544,40 @@ def check_model_assets() -> bool:
     return ok
 
 
+def download_trufor(force: bool = False) -> bool:
+    """TruFor splicing-localization weights (GRIP-UNINA, non-commercial).
+
+    Only invoked when ENABLE_RESEARCH_MODELS=true. NON-FATAL: the tool falls back
+    to a heuristic if absent, so a flaky fetch must not fail the build.
+    """
+    import io
+    import urllib.request
+    import zipfile
+
+    dest_dir = Path("/app/cache/trufor")
+    target = dest_dir / "trufor.pth.tar"
+    if target.is_file() and not force:
+        print(f"  {GREEN}[SKIP]{RESET}  TruFor weights - already cached")
+        return True
+    url = "https://www.grip.unina.it/download/prog/TruFor/TruFor_weights.zip"
+    print(f"  {CYAN}[DOWN]{RESET}  TruFor weights (~261MB) -> {dest_dir}")
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        data = urllib.request.urlopen(url, timeout=600).read()
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            member = next((n for n in z.namelist() if n.endswith("trufor.pth.tar")), None)
+            if member is None:
+                raise RuntimeError("trufor.pth.tar not found in weights archive")
+            with z.open(member) as src, open(target, "wb") as dst:
+                dst.write(src.read())
+        print(f"  {GREEN}[OK  ]{RESET}  TruFor weights downloaded ({target.stat().st_size} bytes).")
+        return True
+    except Exception as exc:
+        print(f"  {YELLOW}[WARN]{RESET}  TruFor weights download failed: {exc}. "
+              f"Splicing falls back to heuristic.")
+        return True
+
+
 def main() -> None:
     _validate_lock_file()
 
@@ -615,6 +649,13 @@ def main() -> None:
     else:
         print(f"  {YELLOW}[SKIP]{RESET}  Audio models gated off "
               f"(set ENABLE_AUDIO_MODELS=true to pre-download).")
+
+    # Research models are gated (non-commercial license) — TruFor splicing weights.
+    if getattr(settings, "enable_research_models", False):
+        download_plan += [("TruFor splicing weights", download_trufor)]
+    else:
+        print(f"  {YELLOW}[SKIP]{RESET}  Research models gated off "
+              f"(set ENABLE_RESEARCH_MODELS=true to pre-download TruFor).")
 
     # (Video pre-download functions, if added later, gate on enable_video_models.)
     results = [(name, downloader(args.force)) for name, downloader in download_plan]

@@ -45,7 +45,7 @@ export const ReportDTOSchema = z.object({
   overall_confidence: z.number().min(0).max(1),
   overall_error_rate: z.number().min(0).max(1).optional(),
   manipulation_probability: z.number().min(0).max(1).optional(),
-  compression_penalty: z.number().min(0).max(1).optional(),
+  compression_penalty: z.number().min(0).optional(), // not logically bounded at 1.0
   signed_utc: z.string().datetime({ offset: true }).nullable().optional(),
   report_hash: z.string().optional(),
   cryptographic_signature: z.string().optional(),

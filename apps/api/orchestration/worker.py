@@ -81,6 +81,24 @@ async def main() -> None:
         except Exception as exc:
             logger.warning("EasyOCR pre-warm failed (non-fatal)", error=str(exc))
 
+        # Pre-warm in-process inference models (SigLIP/CLIP perceptual fingerprint
+        # + object detector). These are lazy-loaded on first use; if the FIRST
+        # investigation cold-loads them on the request path, the load can exceed
+        # the per-tool timeout (e.g. neural_fingerprint's 20s) under tool
+        # contention and fall back — making neural_fingerprint intermittently
+        # NOT_APPLICABLE and the per-agent confidence/check-count wobble between
+        # otherwise identical clean runs (87%/3 checks vs 90%/4). Warming them
+        # here keeps the applicable-tool set, confidence and counts deterministic.
+        try:
+            from core.inference_client import get_inference_client
+
+            _ic = await get_inference_client()
+            await _ic.get_siglip_analyzer()
+            await _ic.get_yolo_model()
+            logger.info("In-process inference models (SigLIP, object detector) pre-warmed")
+        except Exception as exc:
+            logger.warning("Inference-model pre-warm failed (non-fatal)", error=str(exc))
+
     _warmup_task = asyncio.create_task(_warmup_background())
 
     shutdown = asyncio.Event()
@@ -193,6 +211,24 @@ async def main() -> None:
                 original_filename=original_filename,
                 error=error_msg,
             )
+            # Clear the content-hash dedup key so the same file can be
+            # re-submitted after a failure. In in-process mode this is
+            # handled by investigation_runner.py; the worker must do it here.
+            try:
+                from core.persistence.redis_client import get_redis_client as _get_rc
+                _rc = await _get_rc()
+                _meta_raw = await _rc.get(f"forensic:session:metadata:{session_str}")
+                if _meta_raw:
+                    import json as _json
+                    _m = _json.loads(_meta_raw) if isinstance(_meta_raw, (str, bytes)) else {}
+                    # Route writes "content_hash"; worker writes "content_sha256".
+                    # Read both so dedup cleanup works regardless of which path set it.
+                    _hash = _m.get("content_sha256") or _m.get("content_hash") or ""
+                    _cid = _m.get("case_id") or case_id
+                    if _hash:
+                        await _rc.delete(f"dedup:{_cid}:{_hash}")
+            except Exception as _dedup_err:
+                logger.warning("Failed to clear dedup key on worker failure", error=str(_dedup_err))
             raise
         finally:
             try:
@@ -235,6 +271,18 @@ async def main() -> None:
             except Exception as exc:
                 logger.error("Periodic cleanup failed", error=str(exc))
 
+            # Prune expired investigation_state rows from Postgres so the
+            # table doesn't grow without bound. This is the only place where
+            # cleanup_expired_sessions is invoked.
+            try:
+                from core.session_persistence import get_session_persistence
+                _persistence = await get_session_persistence()
+                _pruned = await _persistence.cleanup_expired_sessions()
+                if _pruned:
+                    logger.info("Pruned expired investigation_state rows", count=_pruned)
+            except Exception as exc:
+                logger.warning("DB session cleanup failed (non-fatal)", error=str(exc))
+
             try:
                 await asyncio.wait_for(shutdown.wait(), timeout=24 * 3600)
             except TimeoutError:
@@ -270,10 +318,46 @@ async def main() -> None:
                         data = json.loads(message["data"])
                         session_id_val = data.get("session_id")
                         deep_analysis_val = data.get("deep_analysis")
-                        if session_id_val is not None and deep_analysis_val is not None:
-                            from uuid import UUID
+                        checkpoint_id_val = data.get("checkpoint_id")
+                        from uuid import UUID
 
+                        if session_id_val is not None and deep_analysis_val is not None:
+                            # Initial→deep / deep→report gate decision.
                             notify_decision(UUID(session_id_val), deep_analysis_val)
+                        elif session_id_val is not None and checkpoint_id_val is not None:
+                            # Per-agent HITL checkpoint decision. The pipeline runs
+                            # in THIS worker process, so look it up in the registry
+                            # and apply the decision directly. Without this branch
+                            # worker-mode HITL decisions were silently dropped.
+                            from orchestration.pipeline_registry import get_pipeline
+
+                            _pipeline = get_pipeline(UUID(session_id_val))
+                            if _pipeline is None:
+                                logger.warning(
+                                    "HITL decision received but no live pipeline in worker",
+                                    session_id=session_id_val,
+                                    checkpoint_id=checkpoint_id_val,
+                                )
+                            else:
+                                from core.react_loop import HumanDecision
+
+                                _human = HumanDecision(
+                                    decision_type=data.get("decision"),
+                                    investigator_id=data.get("investigator_id", "system"),
+                                    notes=data.get("note", "") or "",
+                                    override_finding=data.get("override_finding"),
+                                )
+                                await _pipeline.handle_hitl_decision(
+                                    session_id=UUID(session_id_val),
+                                    checkpoint_id=UUID(checkpoint_id_val),
+                                    decision=_human,
+                                )
+                                logger.info(
+                                    "Applied worker-mode HITL decision",
+                                    session_id=session_id_val,
+                                    checkpoint_id=checkpoint_id_val,
+                                    decision=data.get("decision"),
+                                )
                     except Exception as parse_err:
                         logger.error(
                             "Failed to parse notify_decision message", error=str(parse_err)

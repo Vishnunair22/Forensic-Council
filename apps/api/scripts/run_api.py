@@ -53,15 +53,20 @@ if __name__ == "__main__":
     is_production = settings.app_env == "production"
     reload_enabled = os.getenv("RELOAD", "false").lower() == "true"
 
+    # Resolve reload dirs relative to the project root so hot-reload works
+    # both inside Docker (mounted at /app) and on bare-metal (any CWD).
+    _project_root = Path(__file__).parent.parent
+    _reload_dirs = [
+        str(_project_root / d)
+        for d in ("core", "api", "agents", "tools", "orchestration", "scripts", "config")
+    ] if reload_enabled and not is_production else None
+
     uvicorn.run(
         "api.main:app",
         host=os.getenv("API_HOST", "0.0.0.0"),
         port=int(os.getenv("API_PORT", "8000")),
         reload=reload_enabled and not is_production,
-        reload_dirs=[
-            "/app/core", "/app/api", "/app/agents",
-            "/app/tools", "/app/orchestration", "/app/scripts", "/app/config",
-        ] if reload_enabled and not is_production else None,
+        reload_dirs=_reload_dirs,
         log_level=settings.log_level.lower(),
         # Do NOT let uvicorn install its own dictConfig — it overrides the
         # structured root logger configured in run_api / api.lifespan and, in

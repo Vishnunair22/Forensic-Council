@@ -249,6 +249,8 @@ class ToolRegistry:
         session_id: uuid.UUID,
         custody_logger: CustodyLogger | None = None,
         semaphore: asyncio.Semaphore | None = None,
+        evidence_file_path: str = "",
+        evidence_mime_type: str = "",
     ) -> ToolResult:
         """
         Execute a tool call with logging and graceful degradation.
@@ -314,6 +316,47 @@ class ToolRegistry:
                 )
             return result
 
+        # ── Content-aware gate ────────────────────────────────────────────
+        # Single enforcement point: the right tool only runs for the right
+        # file type, for every agent, unbypassable by task-routing or LLM
+        # hallucination. Returns a NOT_APPLICABLE result (success=True) the
+        # normalizer already understands, so the finding is recorded as an
+        # honest coverage note rather than a failure or a misleading verdict.
+        if evidence_file_path or evidence_mime_type:
+            from core.file_type_policy import content_aware_gate
+
+            gate_reason = content_aware_gate(tool_name, evidence_file_path, evidence_mime_type)
+            if gate_reason is not None:
+                result = ToolResult(
+                    tool_name=tool_name,
+                    success=True,
+                    output={
+                        "available": True,
+                        "not_applicable": True,
+                        "skipped": True,
+                        "status": "NOT_APPLICABLE",
+                        "evidence_verdict": "NOT_APPLICABLE",
+                        "reason": gate_reason,
+                        "confidence": None,
+                        "court_defensible": False,
+                        "content_gate": True,
+                    },
+                )
+                if custody_logger:
+                    await custody_logger.log_entry(
+                        agent_id=agent_id,
+                        session_id=session_id,
+                        entry_type=EntryType.TOOL_CALL,
+                        content={
+                            "tool_name": tool_name,
+                            "tool_input": input_data,
+                            "tool_output": result.model_dump(),
+                            "available": True,
+                            "not_applicable": True,
+                        },
+                    )
+                return result
+
         # Tool is available - execute it
         handler = self._handlers[tool_name]
         try:
@@ -334,7 +377,9 @@ class ToolRegistry:
                 output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
 
             result = ToolResult(tool_name=tool_name, success=True, output=output)
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
+            # asyncio.TimeoutError is a subclass of TimeoutError in Python 3.11+
+            # but not in 3.10 — catch both for cross-version compatibility.
             logger.warning(
                 f"Tool '{tool_name}' timed out",
                 tool_name=tool_name,
@@ -343,6 +388,7 @@ class ToolRegistry:
             result = ToolResult(
                 tool_name=tool_name,
                 success=False,
+                unavailable=True,
                 error=f"Tool '{tool_name}' timed out after {timeout_s:.0f}s",
             )
         except (OSError, ValueError, TypeError, RuntimeError) as e:

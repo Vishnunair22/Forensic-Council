@@ -221,8 +221,24 @@ def _boundary_sharpness_anomaly(gray: np.ndarray, threshold: float = 35.0) -> bo
 
 
 def analyze(image_path: str) -> dict[str, Any]:
-    from sklearn.ensemble import IsolationForest
-    from sklearn.preprocessing import StandardScaler
+    # Primary: the real TruFor model (SegFormer-B2 + Noiseprint++, trained for
+    # splicing localization). It discriminates clean vs spliced reliably, unlike
+    # the SRM/IsolationForest heuristic below (which fired on every image). The
+    # heuristic remains only as a graceful fallback when the weights are absent.
+    try:
+        import os as _os
+        import sys as _sys
+
+        _d = _os.path.dirname(_os.path.realpath(__file__))
+        if _d not in _sys.path:
+            _sys.path.insert(0, _d)
+        import trufor_infer
+
+        _real = trufor_infer.analyze(image_path)
+        if isinstance(_real, dict) and _real.get("available"):
+            return _real
+    except Exception:
+        pass
 
     img = cv2.imread(image_path)
     if img is None:
@@ -269,53 +285,87 @@ def analyze(image_path: str) -> dict[str, Any]:
             "model_version": "trufor_srm_v1",
         }
 
-    scaler = StandardScaler()
-    X = scaler.fit_transform(features)
+    # ── Splice detection via spatially-coherent residual-deviation clusters ──
+    # The previous build used IsolationForest(contamination=0.10), which
+    # unconditionally labels ~10% of blocks as "anomalies" on ANY image — so it
+    # reported splicing_detected=True at a near-constant confidence on clean
+    # photos and could not discriminate a real splice (validated: it returned
+    # 0.594 for clean, copy-move and splice alike). A genuine spliced region
+    # instead has SRM residual statistics that (a) deviate strongly from the rest
+    # of the image and (b) are SPATIALLY CONTIGUOUS (a pasted block, not scattered
+    # noise). Detect that directly: robust per-block deviation (median/MAD
+    # z-score) at an ABSOLUTE threshold, then require the flagged blocks to form a
+    # connected cluster. Clean-image outliers are scattered (no cluster); splices
+    # cluster — this is what actually separates the two.
+    feats = np.asarray(features, dtype=np.float64)
+    med = np.median(feats, axis=0)
+    mad = np.median(np.abs(feats - med), axis=0)
+    scale = 1.4826 * mad + (np.abs(med) * 1e-3 + 1e-6)
+    block_score = (np.abs(feats - med) / scale).max(axis=1)  # strongest per-feature deviation
+    _Z_THRESH = 4.0
+    flagged = block_score > _Z_THRESH
 
-    clf = IsolationForest(contamination=0.10, random_state=42, n_estimators=80)
-    clf.fit(X)
-    labels = clf.predict(X)
+    rows = sorted({cc[1] for cc in coords})
+    cols = sorted({cc[0] for cc in coords})
+    ridx = {v: i for i, v in enumerate(rows)}
+    cidx = {v: i for i, v in enumerate(cols)}
+    grid = np.zeros((len(rows), len(cols)), dtype=np.uint8)
+    for (c, r, _bw, _bh), fl in zip(coords, flagged, strict=False):
+        if fl:
+            grid[ridx[r], cidx[c]] = 255
+    n_comp, comp = cv2.connectedComponents(grid, connectivity=8)
 
-    anomaly_idx = [i for i, lbl in enumerate(labels) if lbl == -1]
-    anomaly_ratio = len(anomaly_idx) / max(len(labels), 1)
+    _MIN_CLUSTER = 4  # contiguous blocks required to call a spliced region
+    forgery_regions = []
+    largest_cluster = 0
+    for i in range(1, n_comp):
+        ys, xs = np.where(comp == i)
+        size = int(len(ys))
+        largest_cluster = max(largest_cluster, size)
+        if size >= _MIN_CLUSTER:
+            forgery_regions.append({
+                "x": int(cols[int(xs.min())]),
+                "y": int(rows[int(ys.min())]),
+                "w": int((int(xs.max()) - int(xs.min()) + 1) * block_size),
+                "h": int((int(ys.max()) - int(ys.min()) + 1) * block_size),
+            })
 
-    forgery_regions = [
-        {"x": coords[i][0], "y": coords[i][1], "w": coords[i][2], "h": coords[i][3]}
-        for i in anomaly_idx
-    ]
-
-    # Stage C: boundary sharpness
     boundary_anomaly = _boundary_sharpness_anomaly(gray)
-
-    # Stage D: calibrated confidence
-    integrity_score = 1.0 - anomaly_ratio
-    conf_anomaly = min(anomaly_ratio / 0.20, 1.0)
-    conf_var = min(srm_global_var / 10.0, 1.0)
-    conf_boundary = 0.2 if boundary_anomaly else 0.0
-    confidence = round(float(0.50 * conf_anomaly + 0.30 * conf_var + 0.20 * conf_boundary), 3)
-
-    splicing_detected = len(forgery_regions) >= 2 and confidence > 0.35
+    max_z = float(block_score.max()) if block_score.size else 0.0
+    splicing_detected = len(forgery_regions) >= 1
 
     if splicing_detected:
+        conf_cluster = min(largest_cluster / 12.0, 1.0)
+        conf_dev = min(max(0.0, max_z - _Z_THRESH) / 4.0, 1.0)
+        confidence = round(float(0.45 + 0.35 * conf_cluster + 0.20 * conf_dev), 3)
         verdict = "SPLICED"
-    elif confidence > 0.2:
+    elif largest_cluster >= 2 and max_z > _Z_THRESH + 2.0:
+        confidence = 0.30
         verdict = "SUSPICIOUS"
     else:
+        confidence = round(min(0.12, 0.02 * largest_cluster), 3)
         verdict = "AUTHENTIC"
+
+    integrity_score = round(1.0 - min(int(flagged.sum()) / max(len(flagged), 1) / 0.10, 1.0), 3)
+    # A clustered, high-deviation splice is a defensible localized signal; weaker
+    # reads stay screening-tier (so an uncorroborated heuristic can't assert).
+    court_defensible = bool(splicing_detected and largest_cluster >= 8 and max_z >= _Z_THRESH + 2.0)
 
     return {
         "splicing_detected": splicing_detected,
         "confidence": confidence,
         "forgery_regions": forgery_regions[:10],
-        "integrity_score": round(integrity_score, 3),
+        "integrity_score": integrity_score,
         "boundary_anomaly": boundary_anomaly,
         "srm_residual_variance": round(srm_global_var, 4),
-        "anomaly_block_count": len(anomaly_idx),
-        "total_block_count": len(labels),
+        "anomaly_block_count": int(flagged.sum()),
+        "total_block_count": int(len(features)),
+        "largest_cluster_blocks": int(largest_cluster),
+        "max_block_zscore": round(max_z, 2),
         "verdict": verdict,
         "available": True,
-        "court_defensible": True,
-        "model_version": "trufor_srm_v1",
+        "court_defensible": court_defensible,
+        "model_version": "trufor_srm_v2_cluster",
     }
 
 

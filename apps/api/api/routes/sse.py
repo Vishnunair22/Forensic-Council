@@ -87,23 +87,21 @@ async def _event_generator(
 
     consumer = SSEConsumer(queue)
 
-    if session_id not in _websocket_connections:
-        _websocket_connections[session_id] = []
-    _websocket_connections[session_id].append(consumer)
-
-    # When using the Redis worker topology the pipeline runs in a separate
-    # container. broadcast_update() in the worker finds no local SSE consumers
-    # and publishes to Redis pub/sub instead. Subscribe here to bridge those
-    # worker-published updates into this SSE stream.
-    redis_task: asyncio.Task | None = None
-    pubsub = None
-
+    # Register AFTER entering the try block so the finally cleanup always runs,
+    # even when the Redis setup phase raises before the try is entered.
     settings = get_settings()
     dedicated_redis = None
     pubsub = None
     # Tracks how many buffered events precede the client's reconnect point.
     # Set inside the Redis block if Last-Event-ID is provided; defaults to 0.
+    # Register consumer inside this try block so the finally cleanup runs
+    # even if Redis setup fails — prevents a permanent leak in _websocket_connections.
+    if session_id not in _websocket_connections:
+        _websocket_connections[session_id] = []
+    _websocket_connections[session_id].append(consumer)
+
     replay_start = 0
+    redis_task: asyncio.Task | None = None  # initialized here so finally block is always safe
     if settings.use_redis_worker:
         try:
             from redis.asyncio import Redis
@@ -310,23 +308,16 @@ async def sse_progress(
     try:
         from api.routes._authz import assert_session_access
         await assert_session_access(session_id, current_user)
-    except Exception as auth_exc:
-        status_code = auth_exc.status_code if isinstance(auth_exc, HTTPException) else 403
-        error_msg = str(auth_exc.detail) if hasattr(auth_exc, "detail") else str(auth_exc)
-        # If authentication or authorization fails, return a text/event-stream StreamingResponse
-        # that immediately emits the error event and terminates, preventing HTML/JSON fallback.
-        async def error_generator():
-            yield f"event: error\ndata: {json.dumps({'type': 'ERROR', 'message': error_msg})}\n\n"
-
-        return StreamingResponse(
-            error_generator(),
-            status_code=status_code,
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache, no-transform",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+    except HTTPException as auth_exc:
+        # Return a plain JSON error — not a StreamingResponse. The browser
+        # EventSource API fires onerror on any non-200 status without exposing
+        # the status code to JS; returning a StreamingResponse with a 403 body
+        # causes infinite reconnect loops. A JSON 4xx response is detectable
+        # by the client's fetch-based pre-check before opening EventSource.
+        from fastapi.responses import JSONResponse as _JSONResponse
+        return _JSONResponse(
+            status_code=auth_exc.status_code,
+            content={"detail": str(auth_exc.detail)},
         )
 
     return StreamingResponse(

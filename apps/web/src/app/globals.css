@@ -142,6 +142,12 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* When the dev-mode API banner is shown, the navbar moves to top-7 (28px).
+     Adjust main content padding without a server-component env var read. */
+  :has(nav[data-nav-offset="banner"]) #main-content {
+    padding-top: calc(64px + 28px);
+  }
+
   /* Loading bridge overlay — set by useInvestigation before route push */
   body[data-fc-loading="1"]::before {
     content: "";

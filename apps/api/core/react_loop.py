@@ -1027,6 +1027,7 @@ class ReActLoopEngine:
         await self._log_step(initial_step)
 
         self._current_iteration = 0
+        _consecutive_thoughts = 0  # guard: force tool call after N pure-THOUGHT iterations
 
         # Main loop — increment BEFORE the body so iteration_ceiling is respected exactly
         while not self._terminated and self._current_iteration < self.iteration_ceiling:
@@ -1132,6 +1133,25 @@ class ReActLoopEngine:
             self._react_chain.append(next_step)
             if next_step.step_type == "THOUGHT":
                 self._thought_buffer.append(next_step.content)  # M1: Accumulate reasoning
+                _consecutive_thoughts += 1
+                # After 3 consecutive THOUGHT-only iterations the LLM is looping
+                # without calling any tool. Force the task driver to pick a tool
+                # so the agent produces real findings before the ceiling is hit.
+                if _consecutive_thoughts >= 3 and llm_generator is not None:
+                    logger.warning(
+                        "ReAct loop: 3 consecutive THOUGHT steps — forcing task driver",
+                        agent_id=self.agent_id,
+                        iteration=self._current_iteration,
+                    )
+                    _forced = await self._default_step_generator(state, tool_registry)
+                    if _forced is not None:
+                        _forced.iteration = self._current_iteration
+                        self._react_chain.append(_forced)
+                        await self._log_step(_forced)
+                        next_step = _forced
+                    _consecutive_thoughts = 0
+            else:
+                _consecutive_thoughts = 0
             await self._log_step(next_step)
 
             # Handle ACTION steps
@@ -1174,6 +1194,12 @@ class ReActLoopEngine:
                     tool_timeout = TOOL_TIMEOUT_POLICY.get(next_step.tool_name, self.per_tool_timeout)
 
                     try:
+                        # Resolve the evidence file path + MIME so the registry's
+                        # content-aware gate can ensure the right tool only runs
+                        # for the right file type.
+                        _ev = getattr(self.agent, "evidence_artifact", None)
+                        _ev_path = str(getattr(_ev, "file_path", "") or "")
+                        _ev_mime = str(getattr(_ev, "mime_type", "") or "")
                         tool_result = await asyncio.wait_for(
                             tool_registry.call(
                                 tool_name=next_step.tool_name,
@@ -1182,6 +1208,8 @@ class ReActLoopEngine:
                                 session_id=self.session_id,
                                 custody_logger=self.custody_logger,
                                 semaphore=self.heavy_tool_semaphore,
+                                evidence_file_path=_ev_path,
+                                evidence_mime_type=_ev_mime,
                             ),
                             timeout=tool_timeout,
                         )
@@ -1901,19 +1929,24 @@ class ReActLoopEngine:
         }
         entry_type = step_type_to_entry_type.get(step.step_type, EntryType.THOUGHT)
         if self.custody_logger:
-            await self.custody_logger.log_entry(
-                agent_id=self.agent_id,
-                session_id=self.session_id,
-                entry_type=entry_type,
-                content={
-                    "step_type": step.step_type,
-                    "content": step.content,
-                    "iteration": step.iteration,
-                    "tool_name": step.tool_name,
-                    "tool_input": step.tool_input,
-                    "timestamp": step.timestamp_utc.isoformat(),
-                },
-            )
+            try:
+                await self.custody_logger.log_entry(
+                    agent_id=self.agent_id,
+                    session_id=self.session_id,
+                    entry_type=entry_type,
+                    content={
+                        "step_type": step.step_type,
+                        "content": step.content,
+                        "iteration": step.iteration,
+                        "tool_name": step.tool_name,
+                        "tool_input": step.tool_input,
+                        "timestamp": step.timestamp_utc.isoformat(),
+                    },
+                )
+            except Exception as _log_err:
+                # Custody log is an audit trail, not a functional dependency.
+                # A logging failure must never abort agent execution.
+                logger.warning("_log_step: custody write failed (non-fatal)", error=str(_log_err))
 
     @staticmethod
     def _build_detailed_reasoning(tool_name: str, output: dict) -> str:

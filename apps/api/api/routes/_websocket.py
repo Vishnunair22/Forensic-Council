@@ -60,6 +60,19 @@ async def live_updates(websocket: WebSocket, session_id: str):
         await websocket.close(code=4001, reason="Auth required")
         return
 
+    # CORS-equivalent origin check for WebSocket — CORSMiddleware does not
+    # apply to WS upgrade requests. Without this, any cross-origin page can
+    # open a WS connection using the victim's cookies (SameSite=Lax allows
+    # top-level navigations, and some browsers send cookies on WS upgrades).
+    _origin = websocket.headers.get("origin", "")
+    if _origin:
+        _allowed = getattr(settings, "cors_allowed_origins", [])
+        if isinstance(_allowed, str):
+            _allowed = [o.strip() for o in _allowed.split(",")]
+        if _allowed and _origin not in _allowed:
+            await websocket.close(code=4008, reason="Origin not allowed")
+            return
+
     async with _ws_lock:
         if _ACTIVE_WS_CONNECTIONS >= max_ws:
             await websocket.close(code=1013, reason="Server busy")

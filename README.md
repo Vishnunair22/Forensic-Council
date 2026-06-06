@@ -5,7 +5,7 @@ Forensic Council is a multi-agent forensic analysis platform for digital media v
 [![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](#)
 [![Status](https://img.shields.io/badge/status-production_hardening-yellow.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) Python 3.12 (tested/recommended); `pyproject.toml` supports 3.11–3.14
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) Python 3.12 strictly required (`pyproject.toml`: `>=3.12,<3.13`)
 [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 
 ## What this project is
@@ -99,6 +99,12 @@ Start backend:
 ```bash
 cd apps/api
 uv sync --locked --extra dev --extra security --extra observability --extra ml
+
+# Apply schema migrations first (required on first run and after any schema change)
+POSTGRES_HOST=localhost \
+REDIS_HOST=localhost \
+QDRANT_HOST=localhost \
+uv run python -m alembic upgrade head
 
 POSTGRES_HOST=localhost \
 REDIS_HOST=localhost \

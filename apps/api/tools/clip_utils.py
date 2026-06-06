@@ -434,19 +434,29 @@ class CLIPImageAnalyzer:
 
             top_match, top_confidence = scores[0]
 
-            # Check for concern flag if concern categories were included
+            # Concern flag — fire ONLY for genuine threat categories. CONCERN_
+            # CATEGORIES also contains benign anchors (person/vehicle/document/
+            # currency/safe-object) that sharpen CLIP discrimination but are not
+            # forensic threats; the previous "top concern != safe object" test
+            # flagged a plain portrait as contraband. Require a true-threat
+            # category to be a strong, dominant match in absolute (logit-scaled)
+            # terms so benign images can never trip the contraband flag.
             concern_flag = False
             if check_concerns:
-                concern_scores = [
-                    (cat, score) for cat, score in scores if cat in self.CONCERN_CATEGORIES
+                threat_categories = {
+                    "a firearm or gun",
+                    "a knife or bladed weapon",
+                    "an explosive device or bomb",
+                    "drug paraphernalia or controlled substances",
+                    "a crime scene",
+                    "blood or bodily injury",
+                }
+                threat_scores = [
+                    (cat, score) for cat, score in scores if cat in threat_categories
                 ]
-                if concern_scores:
-                    top_concern, concern_score = max(concern_scores, key=lambda x: x[1])
-                    concern_mean = sum(s for _, s in concern_scores) / len(concern_scores)
-                    if (
-                        top_concern != "a safe everyday object"
-                        and concern_score > concern_mean * 1.15
-                    ):
+                if threat_scores:
+                    top_threat, threat_score = max(threat_scores, key=lambda x: x[1])
+                    if threat_score >= 0.15 and threat_score >= top_confidence * 0.6:
                         concern_flag = True
 
             return CLIPAnalysisResult(

@@ -181,7 +181,7 @@ export function GlobalNavbar() {
           color: "rgba(253,224,71,0.9)",
         }}
       >
-        <span aria-hidden="true">⚠</span>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         <span>
           DEV MODE — API calls bypass Caddy (no rate-limit / security headers).{" "}
           <span style={{ opacity: 0.7 }}>NEXT_PUBLIC_API_URL={directApiUrl}</span>
@@ -197,6 +197,7 @@ export function GlobalNavbar() {
         }
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
+      data-nav-offset={directApiUrl ? "banner" : "default"}
       className={`fixed inset-x-0 z-50 h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${directApiUrl ? "top-7" : "top-0"} ${
         isVisible || isKeyboardUser
           ? "translate-y-0 opacity-100"

@@ -12,7 +12,10 @@ COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/dock
 
 check_docker_available || exit 1
 
-echo "  Force-killing and restarting the worker for development..."
-"${COMPOSE[@]}" kill -s SIGKILL worker
+echo "  Gracefully stopping worker (30s drain window)..."
+# Use docker compose stop rather than kill so the worker can drain
+# any in-flight investigation before terminating. Investigations running
+# at restart time will need to be resubmitted.
+"${COMPOSE[@]}" stop -t 30 worker
 "${COMPOSE[@]}" up -d worker
 echo "  Worker restarted."

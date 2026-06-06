@@ -59,13 +59,22 @@ export default function RootLayout({
 
         <RootErrorBoundary>
           <QueryProvider>
-            <GlobalLoadingOverlay />
-            <GlobalNavbar />
-            <main className={`flex-1 relative z-10 ${process.env.NEXT_PUBLIC_API_URL ? "pt-[92px]" : "pt-16"}`} id="main-content" tabIndex={-1}>
+            {/* GlobalLoadingOverlay and GlobalNavbar use usePathname —
+                wrap in Suspense so Next.js 15 streaming SSR doesn't
+                warn and the navigation shell degrades gracefully. */}
+            <Suspense fallback={null}>
+              <GlobalLoadingOverlay />
+            </Suspense>
+            <Suspense fallback={null}>
+              <GlobalNavbar />
+            </Suspense>
+            <main className="flex-1 relative z-10 pt-16" id="main-content" tabIndex={-1}>
               {children}
             </main>
 
-            <GlobalFooter />
+            <Suspense fallback={null}>
+              <GlobalFooter />
+            </Suspense>
             <Toaster />
           </QueryProvider>
         </RootErrorBoundary>

@@ -82,14 +82,23 @@ class Agent2Audio(ForensicAgent):
         return tasks
 
     def _has_audio_suspicious_signal(self) -> bool:
-        """Gate expensive Phase-2 ensemble tools on Phase-1 suspicious signals."""
+        """Gate expensive Phase-2 ensemble tools on Phase-1 suspicious signals.
+
+        Verdict strings must match what the tools actually emit:
+        voice_clone_detect -> LIKELY_SYNTHETIC / SUSPICIOUS;
+        anti_spoofing_detect -> LIKELY_SPOOFED (+ is_spoofed/spoof_detected flags).
+        Matching the old SYNTHETIC/SPOOF enums silently disabled every deep ensemble.
+        """
         ctx = self._tool_context
+        vc = ctx.get("voice_clone_detect", {})
+        asd = ctx.get("anti_spoofing_detect", {})
         return any(
             [
                 ctx.get("neural_prosody", {}).get("manipulation_detected", False),
-                ctx.get("voice_clone_detect", {}).get("verdict")
-                in ("CLONE", "SYNTHETIC", "SUSPICIOUS"),
-                ctx.get("anti_spoofing_detect", {}).get("verdict") in ("SPOOF", "SUSPICIOUS"),
+                vc.get("verdict") in ("LIKELY_SYNTHETIC", "CLONE", "SYNTHETIC", "SUSPICIOUS"),
+                bool(vc.get("suspicious")),
+                asd.get("verdict") in ("LIKELY_SPOOFED", "SPOOF", "SUSPICIOUS"),
+                bool(asd.get("is_spoofed") or asd.get("spoof_detected")),
                 ctx.get("audio_splice_detect", {}).get("splice_detected", False),
                 ctx.get("audio_gen_signature", {}).get("synthetic_detected", False),
                 ctx.get("codec_fingerprinting", {}).get("re_encoding_detected", False),
@@ -233,10 +242,13 @@ class Agent2Audio(ForensicAgent):
         """Implementation of reactive task expansion for audio signals."""
         tool_name = finding.metadata.get("tool_name")
 
-        # 1. If voice clone detected at high confidence, escalate to deep ensemble
+        # 1. If voice clone detected at high confidence, escalate to deep ensemble.
+        # evidence_verdict is the normalized POSITIVE/NEGATIVE/INCONCLUSIVE enum, not
+        # the tool's raw "LIKELY_SYNTHETIC" string — checking the raw strings disabled
+        # this escalation permanently.
         if tool_name == "voice_clone_detect":
             if (
-                finding.evidence_verdict in ("CLONE", "SYNTHETIC")
+                finding.evidence_verdict == "POSITIVE"
                 and (finding.confidence_raw or 0.0) > 0.7
             ):
                 logger.info(
@@ -247,10 +259,10 @@ class Agent2Audio(ForensicAgent):
                     priority=20,
                 )
 
-        # 2. If anti-spoofing flags spoofing, escalate
+        # 2. If anti-spoofing flags spoofing, escalate (POSITIVE = LIKELY_SPOOFED).
         if tool_name == "anti_spoofing_detect":
             if (
-                finding.evidence_verdict in ("SPOOF", "SUSPICIOUS")
+                finding.evidence_verdict == "POSITIVE"
                 and (finding.confidence_raw or 0.0) > 0.6
             ):
                 logger.info(

@@ -469,6 +469,12 @@ export const useSimulation = ({
                         completedAgentsRef.current.findIndex(
                           (a: AgentUpdate) => a.agent_id === newUpdate.agent_id,
                         );
+                      // Was this agent already marked complete? If so, this is a
+                      // replayed AGENT_COMPLETE (WS reconnect replays the whole
+                      // buffer with no Last-Event-ID cursor) — upsert the data but
+                      // suppress the one-shot side effects (sound + callback) so
+                      // they don't fire again per reconnect.
+                      const isReplayComplete = existingIndex >= 0;
                       if (existingIndex >= 0) {
                         completedAgentsRef.current[existingIndex] = newUpdate;
                       } else {
@@ -487,8 +493,10 @@ export const useSimulation = ({
                         }
                         return [...current, completedUpdate];
                       });
-                      playSoundRef.current?.("agent");
-                      onAgentCompleteRef.current?.(completedUpdate);
+                      if (!isReplayComplete) {
+                        playSoundRef.current?.("agent");
+                        onAgentCompleteRef.current?.(completedUpdate);
+                      }
 
                       // Also transition to analyzing if still idle or initiating
                       setStatus((prev: SimulationStatus) =>
@@ -497,6 +505,38 @@ export const useSimulation = ({
                     }
                   }
                   break;
+
+                case "AGENT_GROUNDED": {
+                  // Reconcile a completed card to the arbiter-grounded verdict the
+                  // signed report will use (single source of truth). PARTIAL merge:
+                  // update only verdict + confidence, preserving findings_preview,
+                  // tools and other per-agent data the AGENT_COMPLETE event carried.
+                  if (update.agent_id) {
+                    const groundedId = update.agent_id;
+                    const gData = (update.data || {}) as Record<string, unknown>;
+                    const gVerdict = gData.agent_verdict;
+                    const gConf = gData.confidence;
+                    const applyGrounding = (a: AgentUpdate): AgentUpdate => ({
+                      ...a,
+                      agent_verdict: typeof gVerdict === "string" ? gVerdict : a.agent_verdict,
+                      confidence: typeof gConf === "number" ? gConf : a.confidence,
+                    });
+                    const gIdx = completedAgentsRef.current.findIndex(
+                      (a: AgentUpdate) => a.agent_id === groundedId,
+                    );
+                    if (gIdx >= 0) {
+                      completedAgentsRef.current[gIdx] = applyGrounding(
+                        completedAgentsRef.current[gIdx],
+                      );
+                      setCompletedAgents((current) =>
+                        current.map((a) =>
+                          a.agent_id === groundedId ? applyGrounding(a) : a,
+                        ),
+                      );
+                    }
+                  }
+                  break;
+                }
 
                 case "INITIAL_ANALYSIS_COMPLETE":
                   // Informational marker emitted immediately before PIPELINE_PAUSED.

@@ -190,9 +190,9 @@ class VideoHandlers(BaseToolHandler):
         if result.get("error") or result.get("available") is False:
             result = await self._optical_flow_fallback(artifact.file_path)
         else:
-            result.setdefault("available", "true")
-            result.setdefault("court_defensible", "true")
-            result.setdefault("confidence", "0.80" if result.get("flagged_frames") else "0.90")
+            result.setdefault("available", True)
+            result.setdefault("court_defensible", True)
+            result.setdefault("confidence", 0.80 if result.get("flagged_frames") else 0.90)
 
         await self.agent._record_tool_result("optical_flow_analysis", result)
         return result
@@ -609,6 +609,15 @@ class VideoHandlers(BaseToolHandler):
         labels = cls._flag_labels(flags)
         result["forensic_flag_details"] = flags
         result["forensic_flags"] = labels
+        # Only medium/high-severity flags constitute a detected inconsistency.
+        # Low-severity informational flags (e.g. NO_CREATION_DATE, which is normal
+        # for ffmpeg/transcoder output) must NOT flip the evidence to POSITIVE —
+        # the classifier treats inconsistency_detected as a manipulation signal,
+        # so gating it on severity prevents a benign file scoring SUSPICIOUS/CRITICAL.
+        significant_flags = [
+            f for f in flags
+            if isinstance(f, dict) and str(f.get("severity", "")).lower() in ("medium", "high")
+        ]
         general = result.get("general") or {}
         video_tracks = result.get("video_tracks") or []
         audio_tracks = result.get("audio_tracks") or []
@@ -618,8 +627,8 @@ class VideoHandlers(BaseToolHandler):
         result.setdefault("video_codec", first_video.get("codec"))
         result.setdefault("audio_codec", first_audio.get("codec"))
         result["forensic_flag_labels"] = labels
-        result.setdefault("inconsistency_detected", bool(flags))
-        result.setdefault("confidence", 0.78 if flags else 0.82)
+        result.setdefault("inconsistency_detected", bool(significant_flags))
+        result.setdefault("confidence", 0.78 if significant_flags else 0.82)
         result.setdefault("court_defensible", bool(result.get("available", True)))
         return result
 

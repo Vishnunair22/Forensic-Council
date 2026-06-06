@@ -719,14 +719,18 @@ class SceneHandlers(BaseToolHandler):
                 obj_area_frac = (w * h) / max(img_area, 1.0)
                 label = det.get("class_name", "object")
                 conf = det.get("confidence", 0.0)
-                # Flag objects occupying > 80 % of the frame as scale anomalies
-                # (only meaningful if detection confidence is high)
-                if obj_area_frac > 0.80 and conf > 0.50:
+                # A single dominant subject filling the frame is NORMAL (close-up /
+                # portrait), not a scale anomaly — flagging >80% coverage produced a
+                # false positive on every close-up. A genuine bbox-area scale anomaly
+                # is essentially the whole frame resolving as one discrete object
+                # (>97%) at high confidence; true scale forensics needs an inter-object
+                # size-ratio reference, which this heuristic does not have.
+                if obj_area_frac > 0.97 and conf > 0.70:
                     anomalies.append(
                         {
                             "class_name": label,
                             "area_fraction": round(obj_area_frac, 3),
-                            "note": "Object occupies >80% of frame — scale implausible",
+                            "note": "Single object resolves as ~entire frame — atypical for a discrete object",
                         }
                     )
 
@@ -952,14 +956,21 @@ class SceneHandlers(BaseToolHandler):
                 correlations.append(corr)
 
         avg_corr = float(np.mean(correlations)) if correlations else 1.0
-        # High incongruence if average correlation is low
-        is_incongruent = avg_corr < 0.35
+        # Cross-grid colour-histogram correlation is naturally LOW for any normal
+        # photo with a distinct subject against a contrasting background (e.g. a
+        # bright subject on a dark field gives avg_corr ~0.25-0.30). Flagging at
+        # 0.35 therefore false-positives on ordinary high-contrast scenes. This
+        # is a crude screen, so only the most extreme global mismatch is treated
+        # as a (still weak, non-court-defensible) compositing signal; everything
+        # else is reported as no-anomaly rather than a speculative "pasted region".
+        is_incongruent = avg_corr < 0.12
         incongruence_score = round(max(0.0, min(1.0, 1.0 - avg_corr)), 4)
         anomalies = (
             [
                 (
-                    "Low cross-grid colour/texture correlation "
-                    f"({avg_corr:.3f}) suggests pasted or synthetic scene regions."
+                    "Severely low cross-grid colour/texture correlation "
+                    f"({avg_corr:.3f}) — screening-level indicator that may warrant "
+                    "review for compositing from disparate environments."
                 )
             ]
             if is_incongruent

@@ -115,21 +115,12 @@ export function useResult(initialSessionId?: string) {
   // avoid server/client mismatch on first paint.
   const [mounted, setMounted] = useState(false);
   const [reportAlreadyReady, setReportAlreadyReady] = useState(false);
-  const [state, setState] = useState<PageState>(() => {
-    if (typeof window === "undefined") return "arbiter";
-    const _initialSid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
-    return _initialSid && sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1"
-      ? "ready"
-      : "arbiter";
-  });
+  // Use SSR-safe defaults for all state — reading localStorage in useState
+  // initializers causes server/client hydration mismatches. Storage is read
+  // in the mount useEffect below, which is client-only.
+  const [state, setState] = useState<PageState>("arbiter");
   const [report, setReport] = useState<ReportDTO | null>(null);
-  const [arbiterMsg, setArbiterMsg] = useState(() => {
-    if (typeof window === "undefined") return "Council deliberating on evidence...";
-    const _sid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
-    return _sid && sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_sid}`) === "1"
-      ? UI_STRINGS.DECRYPTING_LEDGER
-      : "Council deliberating on evidence...";
-  });
+  const [arbiterMsg, setArbiterMsg] = useState("Council deliberating on evidence...");
   const [errorMsg, setErrorMsg] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("analysis");
   const [isDeepPhase, setIsDeepPhase] = useState(false);
@@ -139,16 +130,8 @@ export function useResult(initialSessionId?: string) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [agentTimeline, setAgentTimeline] = useState<AgentUpdate[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId ?? null);
-  const [minOverlayDone, setMinOverlayDone] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const _initialSid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
-    return _initialSid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1" : false;
-  });
-  const [arbiterComplete, setArbiterComplete] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const _initialSid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
-    return _initialSid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${_initialSid}`) === "1" : false;
-  });
+  const [minOverlayDone, setMinOverlayDone] = useState(false);
+  const [arbiterComplete, setArbiterComplete] = useState(false);
 
   const historySavedRef = useRef(false);
   const revealSoundedRef = useRef(false);
@@ -323,16 +306,17 @@ export function useResult(initialSessionId?: string) {
   }, [finalReportData, minOverlayDone]);
 
   useEffect(() => {
-    if (reportQueryError && arbiterComplete) {
-      const msg = reportQueryError instanceof Error ? reportQueryError.message : "";
-      if (msg.includes("404")) {
-        router.push("/session-expired");
-        return;
-      }
-      setErrorMsg("Failed to retrieve report. Please refresh.");
-      setState("error");
+    if (!reportQueryError) return;
+    // Handle errors regardless of arbiterComplete — silencing them when
+    // arbiterComplete=false left users stuck on the arbiter overlay indefinitely.
+    const msg = reportQueryError instanceof Error ? reportQueryError.message : "";
+    if (msg.includes("404")) {
+      router.push("/session-expired");
+      return;
     }
-  }, [reportQueryError, arbiterComplete, router]);
+    setErrorMsg("Failed to retrieve report. Please refresh.");
+    setState("error");
+  }, [reportQueryError, router]);
 
 // ── Arbiter status polling ───────────────────────────────────────────────────
    useEffect(() => {

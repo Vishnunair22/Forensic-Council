@@ -177,6 +177,14 @@ async def mark_investigation_failed(
     logger.error("Investigation task failed", error=error, exc_info=True)
     increment_investigations_failed()
 
+    # Write to DB first — clients polling after the ERROR broadcast need
+    # a consistent DB state, so persist before broadcasting.
+    try:
+        persistence = await get_session_persistence()
+        await persistence.update_session_status(session_id, "error", error)
+    except Exception as exc:
+        logger.error("Failed to persist failed investigation status", error=str(exc))
+
     await update_active_pipeline_metadata(
         session_id,
         {
@@ -200,9 +208,3 @@ async def mark_investigation_failed(
             data={"error": error},
         ),
     )
-
-    try:
-        persistence = await get_session_persistence()
-        await persistence.update_session_status(session_id, "error", error)
-    except Exception as exc:
-        logger.error("Failed to persist failed investigation status", error=str(exc))

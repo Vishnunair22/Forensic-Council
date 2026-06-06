@@ -127,9 +127,21 @@ async def ela_full_image(
                 anomaly_mask = combined_ela > anomaly_threshold
                 labeled_array, num_features = ndimage.label(anomaly_mask)
 
+                # Minimum contiguous area for a region to count as a real anomaly.
+                # Without this floor, ndimage.label counts every 1–2px compression
+                # speckle as a "region" — a clean re-saved JPEG produced 355 phantom
+                # regions (all <16px), making the fallback ELA fire false positives
+                # whenever the neural ELA timed out. A genuine splice/copy-paste
+                # boundary spans far more than this; the neural ELA's own floor is
+                # ~768px (3×16×16 blocks). 64px (8×8) kills speckle noise while
+                # preserving real localized manipulations.
+                _MIN_ANOMALY_REGION_AREA = 64
+
                 anomaly_regions: list[BoundingBox] = []
                 for i in range(1, num_features + 1):
                     region_mask = labeled_array == i
+                    if int(np.count_nonzero(region_mask)) < _MIN_ANOMALY_REGION_AREA:
+                        continue  # compression-noise speckle, not a manipulation region
                     rows = np.any(region_mask, axis=1)
                     cols = np.any(region_mask, axis=0)
                     if np.any(rows) and np.any(cols):
@@ -369,9 +381,16 @@ async def jpeg_ghost_detect(
                 # Label connected regions
                 labeled_array, num_features = ndimage.label(ghost_mask)
 
+                # Same speckle floor as ELA: without it a single high-variance
+                # pixel sets ghost_detected=True, a false double-compression call
+                # on clean images. A real ghost spans a coherent area.
+                _MIN_GHOST_REGION_AREA = 64
+
                 ghost_regions: list[BoundingBox] = []
                 for i in range(1, num_features + 1):
                     region_mask = labeled_array == i
+                    if int(np.count_nonzero(region_mask)) < _MIN_GHOST_REGION_AREA:
+                        continue  # variance speckle, not a double-compression ghost
                     rows = np.any(region_mask, axis=1)
                     cols = np.any(region_mask, axis=0)
 

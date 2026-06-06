@@ -298,7 +298,9 @@ export function AgentProgressDisplay({
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
-  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(false);
+  // Default expanded so the primary real-time agent rows are visible immediately
+  // without requiring the investigator to click to reveal them.
+  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
     (typeof process !== "undefined" && process.env.NODE_ENV === "test") || typeof jest !== "undefined" ? false : true
   );
@@ -361,13 +363,16 @@ export function AgentProgressDisplay({
     const completed = completedAgents.find((c) => c.agent_id === agentId);
     if (completed) {
       if (completed.status === "skipped") return "unsupported";
-      return (completed.status === "error" || completed.status === "failed" || completed.error) ? "error" : "complete";
+      // "degraded" = timed out with partial findings — a terminal "complete"
+      // state (the agent finished, just with reduced coverage), not an error.
+      if (completed.status === "error" || completed.status === "failed" || completed.error) return "error";
+      return "complete";
     }
 
     const liveStatus = agentUpdates[agentId]?.status;
     if (liveStatus === "error" || liveStatus === "failed") return "error";
     if (liveStatus === "skipped") return "unsupported";
-    if (liveStatus === "complete") return "complete";
+    if (liveStatus === "complete" || liveStatus === "degraded") return "complete";
     if (liveStatus === "validating") return "validating";
     if (liveStatus === "running") return "running";
 
@@ -386,15 +391,16 @@ export function AgentProgressDisplay({
 
   const containerVariants: import("framer-motion").Variants = {
     hidden: {},
-    show: { transition: { staggerChildren: 0.18, delayChildren: 0.1 } },
+    // Tightened stagger: 5 cards × 0.08s = 0.4s total — snappier than 0.18 (0.9s).
+    show: { transition: { staggerChildren: 0.08, delayChildren: 0.06 } },
   };
 
   const itemVariants: import("framer-motion").Variants = {
-    hidden: { opacity: 0, y: 4 },
+    hidden: { opacity: 0, y: 6 },
     show: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.16, ease: "easeOut" },
+      transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
     },
   };
 
@@ -425,16 +431,17 @@ export function AgentProgressDisplay({
         <motion.div
           initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.16, ease: "easeOut" }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-wrap items-center gap-3 mb-5"
         >
-          <h1 className="text-3xl md:text-5xl lg:text-6xl font-heading font-extrabold fc-text-primary text-hero-gradient tracking-tight leading-tight">
-            {allAgentsDone && phase === "initial"
-              ? "Initial Analysis"
-              : phase === "deep"
-              ? "Deep Analysis"
-              : "Analysis Pipeline"}
-          </h1>
+          <div className="w-full flex flex-wrap items-baseline gap-3">
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-heading font-extrabold fc-text-primary text-hero-gradient tracking-tight leading-tight">
+              {allAgentsDone && phase === "initial"
+                ? "Initial Analysis"
+                : phase === "deep"
+                ? "Deep Analysis"
+                : "Analysis Pipeline"}
+            </h1>
           <span className={clsx(
             "fc-badge",
             allAgentsDone && phase === "initial" ? "fc-badge-success" : "fc-badge-active"
@@ -448,6 +455,7 @@ export function AgentProgressDisplay({
           <p className="text-sm font-normal fc-text-secondary w-full md:w-auto md:ml-auto" aria-hidden="true">
             {statusText}
           </p>
+          </div>
           {/* Throttled SR announcement — updates at most once per 2 s to prevent read-every-frame */}
           <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
             {srText}
@@ -578,7 +586,7 @@ export function AgentProgressDisplay({
                   data-testid="deep-analysis-btn"
                   onClick={onRunDeepAnalysis}
                   disabled={isNavigating}
-                  className="w-full sm:flex-[1.5] relative fc-btn-primary flex items-center justify-center gap-2 h-12"
+                  className="group w-full sm:flex-[1.5] relative fc-btn-primary flex items-center justify-center gap-2 h-12"
                 >
                   <span className="flex items-center gap-2">
                     {isNavigating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cpu className="w-4 h-4" />}

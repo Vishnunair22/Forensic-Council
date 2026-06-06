@@ -69,12 +69,20 @@ class FlorenceAnalyzer:
             # Memory-guard + serialise the load. On a constrained container this
             # raises ModelMemoryError (caught below → unavailable) rather than
             # risking an OOM SIGKILL that would crash the whole process.
+            from core.config import get_settings
+            _offline = get_settings().offline_mode
+
             with guarded_load("florence2"):
                 self._processor = AutoProcessor.from_pretrained(
-                    self._model_name, trust_remote_code=True
+                    self._model_name,
+                    trust_remote_code=True,
+                    local_files_only=_offline,
                 )
                 self._model = AutoModelForCausalLM.from_pretrained(
-                    self._model_name, trust_remote_code=True, attn_implementation="eager"
+                    self._model_name,
+                    trust_remote_code=True,
+                    attn_implementation="eager",
+                    local_files_only=_offline,
                 ).to(self._device)
             self._model.eval()
             self._available = True

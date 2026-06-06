@@ -8,8 +8,33 @@ Replaces in-memory storage for production scalability.
 
 import asyncio
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
+
+
+def _nul_strip(obj):
+    """Recursively strip NUL bytes from all string values in a JSON-compatible structure.
+
+    Postgres rejects \\u0000 inside JSONB — tool outputs (OCR, metadata strings,
+    hex dumps) can contain NUL bytes, causing the entire INSERT to fail without this.
+    """
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, dict):
+        return {k: _nul_strip(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_nul_strip(v) for v in obj]
+    return obj
+
+
+def _to_jsonb_safe(data: dict) -> dict:
+    """Convert a dict to a JSON-safe dict suitable for JSONB insertion.
+
+    Handles non-serializable types via str() and strips NUL bytes that
+    Postgres rejects in JSONB columns.
+    """
+    return _nul_strip(json.loads(json.dumps(data, default=str)))
 
 from core.config import get_settings
 from core.persistence.postgres_client import PostgresClient
@@ -83,7 +108,7 @@ class SessionPersistence:
                 UUID(session_id),
                 case_id,
                 investigator_id,
-                json.dumps(pipeline_state, default=str),
+                _to_jsonb_safe(pipeline_state),
                 status,
                 expires_at,
             )
@@ -168,21 +193,23 @@ class SessionPersistence:
             return False
 
         try:
+            safe_report = _nul_strip(report_data) if isinstance(report_data, dict) else report_data
             await self.client.execute(
                 """
                 INSERT INTO session_reports
                     (session_id, case_id, investigator_id, status, completed_at, report_data)
                 VALUES ($1, $2, $3, $4, NOW(), $5)
                 ON CONFLICT (session_id) DO UPDATE SET
-                    report_data = $5,
-                    status = $4,
-                    completed_at = NOW()
+                    report_data = EXCLUDED.report_data,
+                    status = EXCLUDED.status,
+                    completed_at = EXCLUDED.completed_at
+                WHERE session_reports.status != 'completed'
                 """,
                 UUID(session_id),
                 case_id,
                 investigator_id,
                 "completed",
-                report_data,
+                safe_report,
             )
 
             logger.debug("Report saved", session_id=session_id)
@@ -229,11 +256,17 @@ class SessionPersistence:
                             session_id=session_id,
                         )
                         report_data = {}
+                # Surface report_id from the nested report_data so callers
+                # don't need to dig into the JSONB blob.
+                nested_report_id = None
+                if isinstance(report_data, dict):
+                    nested_report_id = str(report_data.get("report_id") or "")
                 return {
                     "session_id": str(result["session_id"]),
                     "case_id": result["case_id"],
                     "investigator_id": result["investigator_id"],
                     "status": result["status"],
+                    "report_id": nested_report_id or "",
                     "completed_at": result["completed_at"].isoformat()
                     if result["completed_at"]
                     else None,
@@ -272,15 +305,19 @@ class SessionPersistence:
                 return False
 
             if error_message:
+                # Use explicit values rather than a SELECT subquery so the error
+                # status is always persisted even when investigation_state has no
+                # row for this session (e.g. non-production path where the initial
+                # registration was skipped).
                 await self.client.execute(
                     """
-                    INSERT INTO session_reports (session_id, case_id, investigator_id, status, error_message)
-                    SELECT session_id, case_id, investigator_id, $2, $3
-                    FROM investigation_state
-                    WHERE session_id = $1
+                    INSERT INTO session_reports
+                        (session_id, case_id, investigator_id, status, error_message)
+                    VALUES ($1, 'unknown', 'system', $2, $3)
                     ON CONFLICT (session_id) DO UPDATE SET
                         status = EXCLUDED.status,
                         error_message = EXCLUDED.error_message
+                    WHERE session_reports.status != 'completed'
                     """,
                     UUID(session_id),
                     status,

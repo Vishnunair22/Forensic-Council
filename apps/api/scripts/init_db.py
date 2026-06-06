@@ -7,8 +7,8 @@ Delegates entirely to the versioned migration system to ensure the schema
 is always in sync with what the application expects.
 
 This script must NOT maintain its own SCHEMA_SQL — doing so causes drift
-whenever a new migration is added.  All schema definitions live in
-core/dev_seed.py.
+whenever a new migration is added. Schema DDL lives in alembic/versions/;
+core/dev_seed.py is a legacy fallback for local dev only.
 
 Usage:
     python scripts/init_db.py

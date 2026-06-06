@@ -611,7 +611,17 @@ export function AgentFindingCard({
               <div className="flex items-center gap-2.5 text-sm font-mono font-medium fc-text-muted flex-wrap">
                 <span>{meta.role}</span>
                 <span className="fc-text-faint">·</span>
-                <span>{realFindings.length} checks</span>
+                <span>{realFindings.filter((f) => {
+                  // Count APPLICABLE FORENSIC checks only — matches the evidence
+                  // card's "N tools ran" / "N applicable forensic checks". Exclude
+                  // NOT_APPLICABLE plus context-only and chain-of-custody/validation
+                  // tools (visual profile, hash/custody, file-type validation): they
+                  // are coverage/provenance, not manipulation checks, and the card
+                  // excludes them — so without this the badge read N+1 vs the card.
+                  if (f.evidence_verdict === "NOT_APPLICABLE") return false;
+                  const tn = String(f.metadata?.tool_name || f.finding_type || "").toLowerCase();
+                  return !/visual_evidence_profile|shared_visual_evidence_profile|read_shared_image_context|frame_extraction|file_hash_verify|hash_verify|custody_check|file_type_validation/.test(tn);
+                }).length} checks</span>
                 {totalTimingMs > 0 && (
                   <>
                     <span className="fc-text-faint">·</span>

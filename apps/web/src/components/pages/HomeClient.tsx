@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { HeroAuthActions } from "@/components/ui/HeroAuthActions";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/useReducedMotionSafe";
 
 const HowWorksSection = dynamic(
   () => import("@/components/ui/HowWorksSection").then((mod) => mod.HowWorksSection),
@@ -19,12 +20,12 @@ const containerVariants: Variants = {
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 4 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.16, ease: "easeOut" } },
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } },
 };
 
 export function HomeClient() {
-  const prefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = useReducedMotionSafe();
   return (
     <div className="relative min-h-screen">
       {/* Single dot-grid texture — LandingBackground (layout.tsx) supplies the ambient glows */}
@@ -34,7 +35,7 @@ export function HomeClient() {
       />
 
       {/* ── Hero ── */}
-      <section id="hero" aria-labelledby="hero-heading" className="relative w-full min-h-[90vh] flex flex-col items-center justify-center pb-20 px-5 sm:px-6">
+      <section id="hero" aria-labelledby="hero-heading" className="relative w-full min-h-screen flex flex-col items-center justify-center pb-24 px-5 sm:px-6">
 
         <motion.div
           variants={prefersReducedMotion ? undefined : containerVariants}
@@ -43,18 +44,18 @@ export function HomeClient() {
           className="flex flex-col items-center text-center w-full max-w-4xl mx-auto z-10"
         >
           {/* Headline */}
-          <div className="space-y-6 mb-12 w-full">
+          <div className="space-y-7 mb-14 w-full">
             <motion.h1
               id="hero-heading"
               variants={itemVariants}
-              className="text-3xl lg:text-5xl xl:text-6xl font-bold leading-tight text-hero-gradient text-balance"
+              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.08] tracking-[-0.03em] text-hero-gradient text-balance"
             >
               Multi-Agent Forensic Evidence Analysis
             </motion.h1>
 
             <motion.p
               variants={itemVariants}
-              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed text-balance max-w-[54ch] mx-auto"
+              className="text-lg md:text-xl fc-text-secondary font-medium leading-relaxed text-balance max-w-[52ch] mx-auto"
             >
               Forensic Council deploys specialized AI agents to analyze digital evidence,
               synthesizing cohesive, cryptographically-signed reports with chain-of-custody integrity.
@@ -62,7 +63,7 @@ export function HomeClient() {
           </div>
 
           {/* CTA */}
-          <motion.div variants={itemVariants} className="mt-4">
+          <motion.div variants={itemVariants} className="mt-2">
             <HeroAuthActions />
           </motion.div>
 

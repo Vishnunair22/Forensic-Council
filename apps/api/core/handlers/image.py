@@ -1169,8 +1169,13 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         client = await get_inference_client()
 
         try:
+            # 45s (not 20s): the SigLIP/CLIP model is pre-warmed at worker startup,
+            # but if a first investigation races that warmup the model cold-loads on
+            # this path (~10-30s) and a 20s budget spuriously times out → fallback →
+            # NOT_APPLICABLE, making the per-agent confidence/check-count wobble. A
+            # warm inference is ~1-2s, so 45s only ever absorbs a cold-load race.
             fingerprint = await asyncio.wait_for(
-                client.get_neural_fingerprint(artifact.file_path), timeout=20.0
+                client.get_neural_fingerprint(artifact.file_path), timeout=45.0
             )
             result = {
                 "fingerprint": fingerprint,

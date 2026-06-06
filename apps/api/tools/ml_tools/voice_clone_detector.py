@@ -230,9 +230,12 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
         import torch
         from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
+        from core.config import get_settings
+        _offline = get_settings().offline_mode
+
         model_name = kwargs.get("model", _DEFAULT_VOICE_CLONE_MODEL)
-        extractor = AutoFeatureExtractor.from_pretrained(model_name)
-        model = AutoModelForAudioClassification.from_pretrained(model_name)
+        extractor = AutoFeatureExtractor.from_pretrained(model_name, local_files_only=_offline)
+        model = AutoModelForAudioClassification.from_pretrained(model_name, local_files_only=_offline)
         model.eval()
 
         sr = int(getattr(extractor, "sampling_rate", 16000) or 16000)

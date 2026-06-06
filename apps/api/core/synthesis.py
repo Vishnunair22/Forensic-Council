@@ -14,6 +14,13 @@ from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+
+class _CleanSynthesisSkip(Exception):
+    """Sentinel: skip the Groq polish for clean evidence and use the deterministic
+    grounded synthesis (which is already optimal). Routed through the existing
+    deterministic fallback path so behaviour is identical to a Groq miss."""
+
+
 # S-H-5 / OWASP LLM01: every Groq synthesis prompt embeds attacker-controlled
 # strings (filename, OCR text, EXIF, tool reasoning summaries). The preamble
 # below and the [UNTRUSTED EVIDENCE …] markers around those strings tell the
@@ -656,6 +663,26 @@ Return ONLY a JSON object with this exact schema:
                     truncated_len=len(user_content),
                 )
 
+            # Clean-evidence cost guard — mirror per_agent_synthesis.refine_synthesis_batch:
+            # when no finding carries an alert verdict, the deterministic grounded
+            # synthesis is already optimal, so skip the Groq polish. This stops the
+            # per-agent and arbiter synthesis layers from competing for the same
+            # free-tier RPM (which was self-throttling Groq and forcing fallbacks).
+            _alert_verdicts = {"POSITIVE", "SUSPICIOUS", "TAMPERED", "MANIPULATED", "LIKELY_MANIPULATED"}
+            _narratable = any(
+                str(finding.get("evidence_verdict", "")).upper() in _alert_verdicts
+                and not finding.get("tool_limitation")
+                for group in grouped_sections_data
+                for finding in group.get("findings", [])
+            )
+            if not _narratable:
+                logger.info(
+                    "Per-agent Groq synthesis skipped — clean evidence; deterministic synthesis is sufficient.",
+                    agent=agent_name,
+                    phase=phase,
+                )
+                raise _CleanSynthesisSkip()
+
             raw = await llm_client.generate_synthesis(
                 system_prompt=system_prompt,
                 user_content=user_content,
@@ -754,12 +781,13 @@ Return ONLY a JSON object with this exact schema:
                 result["delta_reason"] = response.get("delta_reason", "")
             return result
         except Exception as e:
-            logger.warning(
-                "LLM synthesis unavailable; using deterministic grounded fallback",
-                error=str(e),
-                agent=agent_name,
-                phase=phase,
-            )
+            if not isinstance(e, _CleanSynthesisSkip):
+                logger.warning(
+                    "LLM synthesis unavailable; using deterministic grounded fallback",
+                    error=str(e),
+                    agent=agent_name,
+                    phase=phase,
+                )
             positive_count = sum(
                 1
                 for group in grouped_sections_data

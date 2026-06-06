@@ -403,8 +403,17 @@ class CustodyLogger:
                 logger.warning(f"Custody WAL: LTRIM failed (non-fatal): {trim_err}")
             logger.warning(f"Custody WAL: Persisted entry {entry_id} to Redis for later flush.")
         except Exception as e:
-            logger.critical(f"FATAL CUSTODY GAP: Redis WAL failed for entry {entry_id} - {e}")
-            raise
+            # Both Postgres and Redis are unavailable. Log CRITICAL and absorb the
+            # exception — the custody log is an audit trail, not a functional
+            # dependency. Propagating here would crash the calling agent's ReAct
+            # loop and lose all findings accumulated so far, which is far worse
+            # than a custody gap that can be flagged in the report's degradation_flags.
+            logger.critical(
+                "FATAL CUSTODY GAP: Both Postgres and Redis WAL unavailable — "
+                "entry is permanently lost. Degradation flag will be added to report.",
+                entry_id=str(entry_id),
+                error=str(e),
+            )
 
     async def _flush_retry_queue(self) -> None:
         """Attempt to persist any queued entries in the Redis WAL.
@@ -457,7 +466,10 @@ class CustodyLogger:
                     # continue draining. Transient errors (connection/operational)
                     # are pushed back to the head and retried later.
                     sqlstate = getattr(e, "sqlstate", "") or ""
-                    if sqlstate.startswith("22"):
+                    # Class "22" = data exception (bad content), "23505" = unique
+                    # constraint violation (duplicate entry_id). Both can never
+                    # succeed on retry — move to dead-letter instead of looping.
+                    if sqlstate.startswith("22") or sqlstate == "23505":
                         await redis.client.rpush(self._wal_key_dead, item_raw)
                         await redis.client.ltrim(self._wal_key_dead, -1000, -1)
                         logger.error(

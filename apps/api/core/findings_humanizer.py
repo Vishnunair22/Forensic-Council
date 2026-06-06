@@ -16,6 +16,11 @@ _TRAILING_ABSENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Internal grounding/annotation markers that must never reach user-facing text,
+# e.g. "[UNCORROBORATED VISUAL CLAIM]", "[WARNING]". The grounding effect is
+# already applied to verdict/confidence upstream; the bracketed tag is noise.
+_GROUNDING_TAG_RE = re.compile(r"\[[A-Z][A-Z /_-]{3,}\]\s*")
+
 
 def _metric_digest(metadata: dict[str, Any]) -> str:
     """Extract a compact, high-signal metric digest from raw tool output."""
@@ -77,6 +82,10 @@ def _humanize_initial_finding(
     """Turn raw tool text into a concise card-level investigator note."""
     tool = (tool_name or "").lower()
     text = " ".join(str(summary or "").replace("\n", " ").split())
+    # Strip leaked internal grounding markers like "[UNCORROBORATED VISUAL CLAIM]"
+    # — those are pipeline annotations, never user-facing key-finding text. The
+    # grounding effect (downgraded verdict/confidence) is already applied upstream.
+    text = _GROUNDING_TAG_RE.sub("", text).strip()
     text = _TRAILING_ABSENCE_RE.sub(".", text).strip()
 
     if not text:
@@ -84,6 +93,20 @@ def _humanize_initial_finding(
 
     if "no analysis possible due to lack of raw tool data" in text.lower():
         return None
+
+    # Scene-physics heuristics (lighting/shadow/scale/scene-incongruence) that were
+    # corroboration-downgraded to INCONCLUSIVE must NOT keep their alarming POSITIVE
+    # phrasing ("flagged shadows that do not share a common light source") on a clean
+    # card — render the honest downgraded state instead so text matches the verdict.
+    _SCENE_PHYSICS_TOOLS = (
+        "lighting_consistency", "lighting_correlation_initial",
+        "scene_incongruence", "scale_validation", "shadow_validation",
+    )
+    if tool in _SCENE_PHYSICS_TOOLS and str(evidence_verdict or "").upper() == "INCONCLUSIVE":
+        return (
+            "Scene-physics screening (lighting, shadow geometry, and scale) was ambiguous "
+            "and not corroborated by the holistic visual analysis — treated as inconclusive."
+        )
 
     if "screenshot scene applicability" in tool or "screenshot scene applicability" in text.lower():
         if "skipped" in text.lower() or evidence_verdict == "NOT_APPLICABLE":
@@ -165,7 +188,7 @@ def _humanize_initial_finding(
             return (
                 f"Metadata appears stripped or platform-normalized — no specific app fingerprint identified, "
                 f"which is consistent with social media re-processing, a privacy tool, or a system screenshot. "
-                f"Forensic reliability impact: {impact.lower()}."
+                f"This limits provenance strength ({impact.lower()} reliability impact) but is not a manipulation signal."
             )
         clean_platform = (
             platform.replace("(Stripped Metadata - High Compression Risk)", "")

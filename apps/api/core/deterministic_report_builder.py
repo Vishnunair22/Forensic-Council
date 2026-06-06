@@ -71,8 +71,9 @@ def build_deterministic_report(
     domain_count = n_agents  # one domain per active agent
 
     # Sentence 1 — core verdict statement
+    _article = "an" if verdict_label[:1].upper() in "AEIOU" else "a"
     _s1 = (
-        f"Forensic examination of `{filename}` ({mime_type}) returned a "
+        f"Forensic examination of `{filename}` ({mime_type}) returned {_article} "
         f"**{verdict_label}** verdict with **{confidence_pct}%** confidence "
         f"after {n_agents} specialist agent{'' if n_agents == 1 else 's'} completed "
         f"analysis across {domain_count} forensic domain{'' if domain_count == 1 else 's'}."

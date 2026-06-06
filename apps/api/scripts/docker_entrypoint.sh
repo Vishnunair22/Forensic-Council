@@ -21,7 +21,7 @@ unset TRANSFORMERS_CACHE
 # ── Guard: fail fast if required vars are missing or still placeholders ──────
 REQUIRED_VARS="SIGNING_KEY JWT_SECRET_KEY"
 if [ "${1:-}" != "worker" ]; then
-  REQUIRED_VARS="$REQUIRED_VARS BOOTSTRAP_INVESTIGATOR_PASSWORD"
+  REQUIRED_VARS="$REQUIRED_VARS BOOTSTRAP_INVESTIGATOR_PASSWORD BOOTSTRAP_ADMIN_PASSWORD"
 fi
 if [ "${LLM_PROVIDER:-groq}" != "none" ]; then
   REQUIRED_VARS="$REQUIRED_VARS LLM_API_KEY"
@@ -172,7 +172,9 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
     EASYOCR_FILES=$(find "$EASYOCR_DIR" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
     AASIST_SAFE_NAME=$(printf '%s' "${AASIST_MODEL_NAME:-Vansh180/deepfake-audio-wav2vec2}" | sed 's#/#--#g')
-    CLIP_READY=$(find "$HF_DIR/open_clip" "$HF_DIR/hub/models--timm--vit_base_patch32_clip_224.openai/blobs" -type f -size +100M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+    # OpenCLIP (ViT-B-32 default) stores weights under $HF_HOME/open_clip/ as flat files,
+    # not under a hub/models--* slug. Check only that directory.
+    CLIP_READY=$(find "$HF_DIR/open_clip" -type f -size +100M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     ECAPA_READY=$(find -L "$HF_DIR/hub/models--speechbrain--spkrec-ecapa-voxceleb" -type f \( -name "*.ckpt" -o -name "embedding_model.ckpt" -o -name "*.yaml" \) -size +5k 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     AASIST_READY=$(find "$HF_DIR/hub/models--$AASIST_SAFE_NAME/blobs" "$HF_DIR/transformers/models--$AASIST_SAFE_NAME/blobs" -type f -size +1M 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     AI_GEN_SAFE_NAME=$(printf '%s' "${AI_IMAGE_DETECTOR_MODEL:-Organika/sdxl-detector}" | sed 's#/#--#g')

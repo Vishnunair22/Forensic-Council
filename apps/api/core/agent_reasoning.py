@@ -342,7 +342,35 @@ class AgentReasoningService:
                 "message": note,
                 "timestamp": datetime.datetime.utcnow().isoformat()
             })
-            if confidence is not None:
+            # Scene-physics heuristics (lighting / shadow / scale / scene-incongruence)
+            # are FP-prone on studio, product, and diffuse-lit images: object edges and
+            # soft shadows read as "inconsistent light sources". When a court-defensible
+            # holistic visual read sees NO compositing, a lone uncorroborated physics
+            # flag must NOT drive a SUSPICIOUS verdict — downgrade it to INCONCLUSIVE
+            # (corroboration-gated), mirroring the arbiter's integrity-tool gate.
+            _FP_PRONE_SCENE_TOOLS = {
+                "lighting_consistency",
+                "lighting_correlation_initial",
+                "scene_incongruence",
+                "scale_validation",
+                "shadow_validation",
+            }
+            if tool_name in _FP_PRONE_SCENE_TOOLS:
+                verdict = "INCONCLUSIVE"
+                is_uncorroborated_visual_claim = True
+                court_defensible = False
+                if confidence is not None:
+                    confidence = min(confidence, 0.45)
+                contradiction_notes.append({
+                    "tool_name": tool_name,
+                    "message": (
+                        f"'{tool_name}' is a scene-physics heuristic prone to false positives on "
+                        f"studio/product images; downgraded to inconclusive because the holistic "
+                        f"visual read found no compositing."
+                    ),
+                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                })
+            elif confidence is not None:
                 confidence = max(0.1, confidence - 0.2)  # decrease confidence slightly due to contradiction
 
         # Calculate Report-Safe & Arbiter-Weight flags

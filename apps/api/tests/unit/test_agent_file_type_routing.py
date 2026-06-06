@@ -93,10 +93,13 @@ AGENTS = [
     [
         ("photo.jpg", "image/jpeg", {"Agent1", "Agent3", "Agent5"}),
         ("screenshot.png", "image/png", {"Agent1", "Agent3", "Agent5"}),
-        ("audio.wav", "audio/wav", set()),
-        ("video.mp4", "video/mp4", set()),
-        ("audio.mp3", "audio/mpeg", set()),
-        ("video.mov", "video/quicktime", set()),
+        # Audio/video/PDF support is now active (Agent2=audio, Agent4=video,
+        # Agent5=metadata for all). Mirrors AGENT_FILE_CAPABILITIES.
+        ("audio.wav", "audio/wav", {"Agent2", "Agent5"}),
+        ("video.mp4", "video/mp4", {"Agent4", "Agent5"}),
+        ("audio.mp3", "audio/mpeg", {"Agent2", "Agent5"}),
+        ("video.mov", "video/quicktime", {"Agent4", "Agent5"}),
+        ("document.pdf", "application/pdf", {"Agent5"}),
     ],
 )
 def test_agent_file_type_support_matrix(path: str, mime_type: str, expected_agents: set[str]):

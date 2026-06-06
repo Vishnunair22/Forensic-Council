@@ -588,7 +588,20 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
         "Agent3": "scene and object",
         "Agent5": "metadata and provenance",
     }.get(input_data.agent_id, "forensic")
-    _n_checks = len(input_data.completed_tools) or len(_source_findings)
+    # Count APPLICABLE checks only — a tool that returned NOT_APPLICABLE for this
+    # evidence (e.g. a JPEG-compression tool on a lossless image, or a neural
+    # fingerprint that does not apply) ran but performed no forensic check, so it
+    # must not inflate "completed N check(s)". This keeps the result-page count
+    # equal to the evidence-card's "N applicable forensic checks" (single source
+    # of truth — previously the card said 3 while the report said 4).
+    _applicable_tools = {
+        str((f.get("metadata") or {}).get("tool_name") or f.get("finding_type") or "")
+        for f in _source_findings
+        if str(f.get("evidence_verdict") or "").upper() != "NOT_APPLICABLE"
+        and str(f.get("status") or "").upper() != "NOT_APPLICABLE"
+    }
+    _applicable_tools.discard("")
+    _n_checks = len(_applicable_tools) or len(input_data.completed_tools) or len(_source_findings)
     # An alert verdict (_alert_verdict, computed above) can be driven by the
     # holistic visual read (e.g. an AI-generation determination) rather than a
     # discrete tool POSITIVE. In that case the brief must NOT claim "no

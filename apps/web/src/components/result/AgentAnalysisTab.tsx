@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ChevronDown,
@@ -340,6 +340,14 @@ export function AgentAnalysisTab({
     activeAgentIds[0] ?? null
   );
   const [openSkipped, setOpenSkipped] = useState<string | null>(null);
+
+  // Reset selected agent when the session changes (history navigation).
+  // Without this, switching from a 5-agent session to a 1-agent session
+  // leaves selectedAgentId pointing at an agent that doesn't exist in the
+  // new report, rendering empty findings.
+  useEffect(() => {
+    setSelectedAgentId(activeAgentIds[0] ?? null);
+  }, [activeAgentIds[0]]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTileClick = useCallback(
     (agentId: string) => {

@@ -122,6 +122,7 @@ export interface BriefUpdate {
     | "HITL_CHECKPOINT"
     | "HITL_EXPIRED"
     | "AGENT_COMPLETE"
+    | "AGENT_GROUNDED"
     | "PIPELINE_COMPLETE"
     | "ERROR"
     | "CONNECTED"
@@ -174,6 +175,9 @@ export interface InvestigationResponse {
   message: string;
   content_hash?: string;
   client_hash_verified?: boolean;
+  dispatch_mode?: string;
+  detected_mime?: string | null;
+  applicable_agents?: string[];
 }
 
 export interface ReportResponse {
@@ -196,7 +200,14 @@ export interface UserInfo {
 }
 
 export interface ArbiterStatusResponse {
-  status: "running" | "complete" | "error" | "not_found" | "unreachable";
+  status:
+    | "running"
+    | "complete"
+    | "error"
+    | "not_found"
+    | "unreachable"
+    | "awaiting_decision"
+    | "awaiting_deep_report";
   message?: string;
   report_id?: string;
 }

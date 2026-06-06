@@ -284,16 +284,24 @@ def analyze(image_path: str) -> dict[str, Any]:
     consistency_score = float(counts[dominant]) / float(len(cluster_labels))
     outlier_count = len(minority_idx)
 
+    # A genuine foreign-sensor (spliced) region is a MINORITY whose noise is
+    # WELL-SEPARATED from one clearly-dominant "native" sensor cluster. Natural
+    # images instead split into near-even clusters by brightness/texture (low
+    # dominance, moderate silhouette) — that is normal variation, NOT a splice.
+    # The previous rule called INCONSISTENT on any well-ish-separated split,
+    # which false-positived on clean photos (e.g. consistency 0.42 / 7 "outlier"
+    # regions = a near-even natural split). Require: strong separation, a clear
+    # native-dominant cluster, and a bounded minority. (TruFor's Noiseprint++
+    # branch is the authoritative sensor-noise analysis; this is screening-tier.)
+    outlier_ratio_v = outlier_count / max(len(fingerprints), 1)
     if outlier_count == 0 or best_k == 1:
         verdict = "CONSISTENT"
-    elif best_score < 0.35:
-        # Silhouette too low — clusters not well-separated; likely natural texture variation
-        verdict = "INCONCLUSIVE"
-    elif outlier_count <= 2 and best_k == 2 and consistency_score > 0.80:
-        # Only 1-2 outlier regions with dominant cluster holding >80% → inconclusive
-        verdict = "INCONCLUSIVE"
-    else:
+    elif best_score >= 0.55 and consistency_score >= 0.70 and 0 < outlier_ratio_v <= 0.35:
         verdict = "INCONSISTENT"
+    else:
+        # Not a clear minority-foreign-sensor pattern → natural texture/brightness
+        # variation; do not assert manipulation.
+        verdict = "INCONCLUSIVE"
 
     manipulation_detected = verdict == "INCONSISTENT"
 
@@ -317,8 +325,10 @@ def analyze(image_path: str) -> dict[str, Any]:
         "silhouette_score": round(float(best_score), 3),
         "verdict": verdict,
         "available": True,
-        "court_defensible": True,
-        "model_version": "noiseprint_clustering_v1",
+        # Screening-tier: a K-means noise heuristic, superseded by TruFor's
+        # learned Noiseprint++ branch. Not asserted as court-defensible on its own.
+        "court_defensible": False,
+        "model_version": "noiseprint_clustering_v2_conservative",
     }
 
 

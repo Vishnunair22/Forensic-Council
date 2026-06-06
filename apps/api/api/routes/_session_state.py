@@ -55,8 +55,8 @@ _REPORT_TTL_SECONDS = 604800  # 7 Days (Hot cache for review)
 
 # Replay Buffer (Race Condition Prevention)
 REPLAY_BUFFER_KEY_PREFIX = "forensic:replay:"
-REPLAY_BUFFER_MAX_LEN = 50
-REPLAY_BUFFER_TTL = 1800  # 30 minutes — long enough for any pipeline phase including HITL
+REPLAY_BUFFER_MAX_LEN = 200  # 5 agents × ~40 events each; keeps full investigation history
+REPLAY_BUFFER_TTL = 7200  # 2 hours — covers deep multi-agent passes + HITL wait window
 
 # ── In-process state stores ────────────────────────────────────────────────────
 # These must remain in-memory because they hold live Python objects (pipeline
@@ -217,21 +217,31 @@ async def update_active_pipeline_metadata(
             # Concurrent writer modified the key — retry.
             continue
         except Exception as exc:
-            # If the underlying client doesn't support WATCH (in-memory fake),
-            # fall back to a plain merge-and-set. Logged once per session.
+            # WATCH/MULTI/EXEC failed (unsupported client, ConnectionError, etc.)
+            # Fall back to a plain merge-and-set. Both the read and write below
+            # are individually resilient — if Redis is truly down they will also
+            # fail, but that's acceptable: we log and return the merge as a best-effort.
             from core.structured_logging import get_logger
 
             get_logger(__name__).debug(
-                "update_active_pipeline_metadata WATCH/MULTI/EXEC unsupported, using non-atomic fallback",
+                "update_active_pipeline_metadata WATCH/MULTI/EXEC failed, using non-atomic fallback",
                 session_id=session_id,
                 error=str(exc),
             )
-            existing = await get_active_pipeline_metadata(session_id) or {}
-            if not isinstance(existing, dict):
-                existing = {}
-            merged = {**existing, **fields}
-            await set_active_pipeline_metadata(session_id, merged)
-            return merged
+            try:
+                existing = await get_active_pipeline_metadata(session_id) or {}
+                if not isinstance(existing, dict):
+                    existing = {}
+                merged = {**existing, **fields}
+                await set_active_pipeline_metadata(session_id, merged)
+                return merged
+            except Exception as fallback_exc:
+                get_logger(__name__).warning(
+                    "update_active_pipeline_metadata fallback also failed — returning fields only",
+                    session_id=session_id,
+                    error=str(fallback_exc),
+                )
+                return fields
     # Exhausted retries — perform a last-writer-wins update with logging.
     from core.structured_logging import get_logger
 

@@ -35,7 +35,10 @@ _TAMPERING_KEYWORDS = (
     "inpaint", "in-paint", "warp", "ghost", "double exposure",
     "ela anomaly", "ela hotspot", "error level", "dct", "quantization",
     "noise inconsistency", "noise inconsist", "sensor noise inconsist",
-    "noise residual", "region tampering", "tamper", "forg", "fabricat",
+    # NB: only noise *inconsistency* is tampering. A high global "noise residual"
+    # LEVEL is normal for real (esp. lossless) photos — keying tampering on the
+    # bare phrase flagged every clean lossless image as SUSPICIOUS.
+    "region tampering", "tamper", "forg", "fabricat",
     "manipulat", "resampl", "seam", "splice boundary", "altered region",
     "edited region", "inconsistent shadow", "inconsistent light",
     "inconsistent reflection", "inconsistent perspective",

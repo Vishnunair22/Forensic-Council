@@ -554,7 +554,7 @@ async def get_session_report(
                     per_agent_narrative_structured=dict(rd.get("per_agent_narrative_structured") or {}),
                     summary_structured=dict(rd.get("summary_structured") or {}),
                     degradation_flags=list(rd.get("degradation_flags") or []),
-                    degraded_findings_summary=rd.get("degraded_findings_summary") or "",
+                    degraded_findings_summary=rd.get("degraded_findings_summary") or {},
                     is_deep_analysis=bool(rd.get("is_deep_analysis", False)),
                     cross_modal_fusion=dict(rd.get("cross_modal_fusion") or {}),
                 )
@@ -805,10 +805,10 @@ async def get_agent_brief(
     """
     await assert_session_access(session_id, current_user)
 
+    # assert_session_access already validated the session exists (raises 404 if not).
+    # Do not add a second in-process check — it always 404s for completed sessions
+    # in Redis-worker mode where _final_reports and pipeline are both empty.
     pipeline = get_active_pipeline(session_id)
-    if not pipeline and session_id not in _final_reports:
-        raise HTTPException(status_code=404, detail="Session not found")
-
     brief_text = ""
     if pipeline:
         try:
@@ -845,11 +845,11 @@ async def get_session_brief(
     current_user: User = Depends(get_current_user),
 ):
     """Return lightweight session metadata for tests and status panels."""
-    try:
-        await assert_session_access(session_id, current_user)
-    except HTTPException as exc:
-        if exc.status_code != 404:
-            raise
+    from api.routes._authz import validate_session_id
+    validate_session_id(session_id)
+    # Always propagate authz errors — never silently swallow 404 and fall
+    # through to a direct Redis read, which would bypass ownership checks.
+    await assert_session_access(session_id, current_user)
     metadata = await get_active_pipeline_metadata(session_id)
     if not metadata:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -873,10 +873,9 @@ async def get_session_checkpoints(
     """
     await assert_session_access(session_id, current_user)
 
-    pipeline = get_active_pipeline(session_id)
-    if not pipeline and session_id not in _final_reports:
-        raise HTTPException(status_code=404, detail="Session not found")
-
+    # assert_session_access validates the session exists. Do not add an
+    # in-process pipeline check — completed sessions in worker mode have
+    # neither an active pipeline nor an entry in _final_reports.
     checkpoints = []
     try:
         from core.session_persistence import get_session_persistence

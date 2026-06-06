@@ -169,8 +169,21 @@ def analyze_frequency_bands(file_path: str) -> dict:
         band_ratios = list(bands.values())
         ratio_variance = float(np.var(band_ratios))
 
-        is_anomalous = ratio_variance > 0.02 or high_freq_ratio < 0.05
-        anomaly_score = round(min(ratio_variance * 10, 1.0), 3)
+        # Natural captures follow a ~1/f spectrum: energy concentrates in the low
+        # bands, so a LOW high-frequency ratio and an UNEVEN (high-variance) band
+        # distribution are hallmarks of an ordinary photo — not synthesis. The
+        # prior rule (ratio_variance > 0.02 OR high_freq_ratio < 0.05) therefore
+        # fired on essentially every real image, scoring genuine photos ~0.95
+        # "GAN detected". GAN/diffusion upsampling instead injects ATYPICALLY
+        # ELEVATED high-frequency energy (checkerboard/grid artifacts), so screen
+        # on an elevated high-frequency ratio only. This is a coarse screening
+        # heuristic — the trained ViT (ai_generation_detector) is the primary
+        # AI-generation verdict — so it is explicitly NOT court-defensible.
+        _HF_ELEVATED = 0.20  # high_freq_ratio above this is atypical for a natural capture
+        is_anomalous = high_freq_ratio > _HF_ELEVATED
+        anomaly_score = round(
+            min(max(0.0, (high_freq_ratio - _HF_ELEVATED) / (1.0 - _HF_ELEVATED)), 1.0), 3
+        )
 
         return {
             "anomaly_score": anomaly_score,
@@ -180,7 +193,7 @@ def analyze_frequency_bands(file_path: str) -> dict:
             "ratio_variance": round(ratio_variance, 6),
             "gan_artifact_detected": is_anomalous,
             "backend": "core-fft-frequency-engine",
-            "court_defensible": True,
+            "court_defensible": False,
             "available": True,
         }
     except Exception as e:

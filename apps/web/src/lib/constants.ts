@@ -56,13 +56,35 @@ export const AGENTS = [
 ] as const;
 
 export const ALLOWED_MIME_TYPES = new Set([
-  // Images
+  // ── Images ──
   "image/jpeg",
   "image/png",
   "image/tiff",
   "image/webp",
   "image/gif",
   "image/bmp",
+
+  // ── Audio ──
+  "audio/mpeg",     // MP3
+  "audio/wav",      // WAV
+  "audio/x-wav",    // WAV (alternate)
+  "audio/flac",     // FLAC
+  "audio/x-flac",   // FLAC (alternate)
+  "audio/aac",      // AAC
+  "audio/ogg",      // OGG
+  "audio/mp4",      // M4A
+  "audio/x-m4a",    // M4A (alternate)
+
+  // ── Video ──
+  "video/mp4",
+  "video/mpeg",
+  "video/webm",
+  "video/quicktime",   // MOV
+  "video/x-msvideo",   // AVI
+  "video/x-matroska",  // MKV
+
+  // ── Documents ──
+  "application/pdf",
 ]);
 
 /** Maximum evidence file size — 50 MB. Must match backend MAX_EVIDENCE_SIZE_BYTES in config.py. */

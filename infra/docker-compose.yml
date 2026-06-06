@@ -106,6 +106,9 @@ x-backend-env: &backend-env
   FORENSIC_MAX_WORKERS: ${FORENSIC_MAX_WORKERS:-2}
   ENABLE_AUDIO_MODELS: ${ENABLE_AUDIO_MODELS:-false}
   ENABLE_VIDEO_MODELS: ${ENABLE_VIDEO_MODELS:-false}
+  # Non-commercial research models (TruFor splicing localization, etc.). Default
+  # off; enabled for this academic deployment via .env. Keep false in production.
+  ENABLE_RESEARCH_MODELS: ${ENABLE_RESEARCH_MODELS:-false}
 
 services:
   # --------------------------------------------------------------------------
@@ -214,8 +217,9 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:1.66.0
     restart: unless-stopped
-    ports:
-      - "16686:16686"
+    # Port 16686 (Jaeger UI) NOT exposed at base level — binding lives in
+    # docker-compose.dev.yml. Running base compose alone would otherwise expose
+    # the unauthenticated Jaeger UI publicly.
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     healthcheck:
@@ -311,6 +315,7 @@ services:
       retries: 10
       start_period: 120s
     mem_limit: 4g
+    mem_reservation: 2g
     cpus: 2.0
     # SECURITY: Run with minimal privileges, no new privileges, read-only filesystem
     security_opt:
@@ -349,6 +354,7 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/cache/calibration_models:rw
+      - trufor_cache:/app/cache/trufor:rw
     # SECURITY: infra_net for Redis/Postgres/Qdrant; external_net for Groq/Gemini outbound;
     # backend_net so Caddy and frontend can resolve and proxy to backend:8000
     networks:
@@ -431,7 +437,9 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/cache/calibration_models:rw
-    mem_limit: 12g
+      - trufor_cache:/app/cache/trufor:rw
+    mem_limit: 8g
+    mem_reservation: 4g
     cpus: 4.0
     networks:
       - infra_net
@@ -577,8 +585,7 @@ services:
     secrets:
       - source: metrics_scrape_token
         target: metrics_scrape_token
-    ports:
-      - "9090:9090"
+    # Port 9090 NOT exposed at base level — binding lives in docker-compose.dev.yml.
     depends_on:
       backend:
         condition: service_healthy
@@ -612,6 +619,7 @@ volumes:
   numba_cache:
   yolo_cache:
   calibration_models_cache:
+  trufor_cache:  # TruFor splicing model weights (~281MB), gated on ENABLE_RESEARCH_MODELS
   caddy_data:
   caddy_config:
   caddy_logs:

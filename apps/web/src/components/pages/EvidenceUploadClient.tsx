@@ -173,9 +173,9 @@ export function EvidenceUploadClient() {
 
         {showAgentProgress || investigation.handoffRecovering ? (
           <motion.div
-              initial={prefersReducedMotion ? false : { opacity: 0, scale: 1.02 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
               className="w-full max-w-7xl mx-auto"
             >
                <AgentProgressErrorBoundary>
@@ -210,13 +210,12 @@ export function EvidenceUploadClient() {
                 onDismiss={investigation.dismissCheckpoint}
               />
             </motion.div>
-        ) : (
-          isMounted && (
+        ) : isMounted ? (
             <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
               <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.16 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                 className="text-center space-y-6"
               >
                 <div className="flex items-center justify-center gap-2 mb-2">
@@ -243,7 +242,16 @@ export function EvidenceUploadClient() {
                 </button>
               </motion.div>
             </section>
-          )
+        ) : (
+          /* Skeleton shown during the requestAnimationFrame mount tick —
+             prevents the blank flash that isMounted && (...) previously caused */
+          <section className="relative flex min-h-[calc(100vh-16rem)] items-center justify-center">
+            <div className="text-center space-y-4 w-64" aria-hidden="true">
+              <div className="fc-skeleton h-10 w-48 mx-auto rounded-xl" />
+              <div className="fc-skeleton h-4 w-full rounded" />
+              <div className="fc-skeleton h-4 w-3/4 mx-auto rounded" />
+            </div>
+          </section>
         )}
       </div>
     </>

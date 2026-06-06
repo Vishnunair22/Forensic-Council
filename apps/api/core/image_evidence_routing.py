@@ -230,7 +230,11 @@ def build_image_agent_tool_plan(profile: ImageEvidenceProfile) -> dict[str, dict
         is_doc_route = ImageEvidenceClass.DOCUMENT_OR_PAPER in profile.route_classes
         plan["Agent1"]["initial"] = [
             "visual_evidence_profile",
-            "neural_ela",
+            # JPEG cameras: ELA (compression-history screen). Lossless cameras
+            # (PNG/TIFF/BMP): noiseprint sensor-residual clustering — ELA is
+            # NOT_APPLICABLE on lossless, so without this swap a lossless camera
+            # photo got NO Phase-1 pixel-integrity screen at all.
+            "noiseprint_cluster" if profile.is_lossless else "neural_ela",
             "neural_fingerprint",
             "analyze_image_content",
             "frequency_domain_analysis",

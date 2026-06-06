@@ -343,7 +343,14 @@ class InferenceClient:
             "mantra": "mantra_net_tracer.py",
             "f3net": "f3net_freq.py",
         }
-        return await run_ml_tool(script_map[model_id], image_path, timeout=30.0)
+        # TruFor runs a real 68M-param SegFormer+Noiseprint++ model on CPU
+        # (~10-25s/image + a one-time ~20s load on the first call per worker), so
+        # it needs a larger budget than the lightweight heuristics or it would
+        # spuriously time out and fall back.
+        timeouts = {"trufor": 120.0, "busternet": 60.0, "mantra": 60.0, "f3net": 30.0}
+        return await run_ml_tool(
+            script_map[model_id], image_path, timeout=timeouts.get(model_id, 30.0)
+        )
 
 
 async def get_inference_client() -> InferenceClient:

@@ -267,6 +267,8 @@ test_*.ps1
 
 # ── Scratch / temp directories ────────────────────────────────────────────────
 /scratch/
+/browser-shots/
+/test-images-broad/
 /apps/api/scratch/*
 !/apps/api/scratch/.gitkeep
 /apps/web/public/temp/*

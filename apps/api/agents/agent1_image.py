@@ -247,6 +247,12 @@ class Agent1Image(ForensicAgent):
         image_h = ImageHandlers(self)
         registry.register("neural_splicing", image_h.neural_splicing_handler, "TruFor ViT-based splicing detection")
         registry.register("neural_copy_move", image_h.neural_copy_move_handler, "BusterNet dual-branch copy-move detection")
+        # Sensor-noise residual clustering — the lossless-appropriate Phase-1
+        # integrity screen (ELA is NOT_APPLICABLE on lossless). Scheduled by the
+        # deterministic plan for lossless camera photos and keyed on by the
+        # _reason_step multi-cluster escalation rule. Registered unconditionally;
+        # it only runs when the plan/rules call for it (content gate keeps it to images).
+        registry.register("noiseprint_cluster", image_h.noiseprint_cluster_handler, "Sensor noise residual clustering (K-means)")
         registry.register("anomaly_tracer", image_h.anomaly_tracer_handler, "ManTra-Net universal anomaly tracing")
         registry.register("f3_net_frequency", image_h.f3_net_frequency_handler, "F3-Net frequency artifact analysis")
         registry.register("diffusion_artifact_detector", image_h.diffusion_artifact_detector_handler, "Diffusion/AI-generation artifact detection")
@@ -265,6 +271,28 @@ class Agent1Image(ForensicAgent):
             registry.register("frequency_domain_analysis", image_h.frequency_domain_analysis_handler, "FFT frequency-domain analysis")
             registry.register("diffusion_artifact_detector", image_h.diffusion_artifact_detector_handler, "Diffusion artifact detection")
             registry.register("deepfake_frequency_check", image_h.deepfake_frequency_check_handler, "GAN/Deepfake frequency check")
+
+        # ── Reactive follow-up integrity tools ─────────────────────────────────
+        # These are NOT in the initial task plan — they only execute when a
+        # reactive rule in _reason_step / _on_tool_result_impl / _escalate_from_
+        # visual_profile injects them (e.g. ROI extraction after a high-confidence
+        # ELA positive, adversarial check after confirmed splicing, jpeg_ghost on
+        # ELA/FFT disagreement, deepfake-frequency on person/AI content). They were
+        # previously unregistered, so every injected escalation task either mis-
+        # routed to a different tool or surfaced as an "Unmatched Task" — i.e. the
+        # agent's adaptive reasoning was inert. Registering them here activates it.
+        # All are pixel-integrity tools (Agent1's mandate) — NO content/OCR tools.
+        # Applicability is enforced downstream by the content-aware gate
+        # (jpeg_ghost_detect → NOT_APPLICABLE on lossless) and the screenshot guard
+        # in _reason_step, so registering them unconditionally is safe.
+        for _react_tool, _react_handler, _react_desc in (
+            ("roi_extract", image_h.roi_extract_handler, "Region-of-interest localized forensic extraction"),
+            ("adversarial_robustness_check", image_h.adversarial_robustness_check_handler, "Anti-forensics perturbation stability check"),
+            ("jpeg_ghost_detect", image_h.jpeg_ghost_detect_handler, "JPEG ghost / double-compression artifact detection"),
+            ("deepfake_frequency_check", image_h.deepfake_frequency_check_handler, "GAN/Deepfake frequency artifact check"),
+        ):
+            if _react_tool not in registry.handlers:
+                registry.register(_react_tool, _react_handler, _react_desc)
 
         # ── Shared Visual Evidence Profile Handler ─────────────────────────────
         async def visual_evidence_profile_handler(input_data: dict) -> dict:

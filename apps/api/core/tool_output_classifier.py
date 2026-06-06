@@ -133,12 +133,23 @@ class ToolOutputClassifier:
             "ANOMALOUS",
             "SPLICE_DETECTED",
             "SPLICE_SUSPECTED",
+            # Audio synthesis/spoof verdicts: voice_clone_detect and
+            # anti_spoofing_detect emit these on their neural paths with no
+            # accompanying positive flag, so without them here a confirmed
+            # synthetic voice or spoof was never classified POSITIVE.
+            "LIKELY_SYNTHETIC",
+            "SYNTHETIC",
+            "CLONE",
+            "LIKELY_SPOOFED",
+            "SPOOF",
         } or authenticity_verdict in {
             "SUSPICIOUS",
             "LIKELY_MANIPULATED",
             "AI_GENERATED",
             "TAMPERED",
             "MANIPULATED",
+            "LIKELY_SYNTHETIC",
+            "LIKELY_SPOOFED",
         }
         if verdict_is_positive and output.get("court_defensible") is False:
             return bool(output.get("manipulation_detected") or output.get("splicing_detected"))

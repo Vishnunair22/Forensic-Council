@@ -18,7 +18,7 @@ export interface AgentUpdate {
   agent_name: string;
   message: string;
   summary?: string;
-  status: "running" | "complete" | "skipped" | "error" | "failed";
+  status: "running" | "complete" | "skipped" | "error" | "failed" | "degraded";
   confidence: number;
   findings_count: number;
   error?: string;

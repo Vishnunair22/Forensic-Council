@@ -99,15 +99,15 @@ def _branch_similarity(gray: np.ndarray) -> dict[str, Any]:
             "confidence_a": 0.0,
         }
 
-    # Keep cross-image (spatially distant) pairs
-    min_spatial_dist = max(30, min(gray.shape) * 0.10)
+    # Keep feature-similar, spatially-distant candidate pairs
+    min_spatial_dist = max(40, min(gray.shape) * 0.08)
     candidate_pairs: list[dict] = []
 
     for m_list in matches:
         if len(m_list) < 2:
             continue
-        for m in m_list[1:]:  # skip self-match
-            if m.distance > 60:  # ORB Hamming threshold
+        for m in m_list[1:]:  # skip self-match (nearest neighbour is itself)
+            if m.distance > 50:  # ORB Hamming: require tight descriptor similarity
                 continue
             pt1 = np.array(kp[m.queryIdx].pt)
             pt2 = np.array(kp[m.trainIdx].pt)
@@ -117,39 +117,46 @@ def _branch_similarity(gray: np.ndarray) -> dict[str, Any]:
                     {
                         "from": [int(pt1[0]), int(pt1[1])],
                         "to": [int(pt2[0]), int(pt2[1])],
+                        "dx": int(pt2[0] - pt1[0]),
+                        "dy": int(pt2[1] - pt1[1]),
                         "distance": round(float(m.distance), 2),
                         "spatial_dist": round(spatial_dist, 1),
                     }
                 )
 
-    # RANSAC homography to weed out random matches
-    inlier_count = 0
-    if len(candidate_pairs) >= 4:
-        pts1 = np.float32([p["from"] for p in candidate_pairs])
-        pts2 = np.float32([p["to"] for p in candidate_pairs])
-        try:
-            _, mask = cv2.findHomography(pts1, pts2, cv2.RANSAC, 5.0)
-            if mask is not None:
-                inlier_count = int(mask.sum())
-                # Keep only RANSAC inliers
-                candidate_pairs = [
-                    p for p, m in zip(candidate_pairs, mask.flatten(), strict=False) if m
-                ]
-        except Exception:
-            pass
+    # Offset-vector clustering. A genuine copy-move is a CLUSTER of matched pairs
+    # that all share ONE translation offset (the clone displacement); random
+    # self-similar-texture matches scatter across many offsets. The previous
+    # method fit a single RANSAC homography to ALL candidate pairs, which fit
+    # texture noise on clean images (false positives) yet missed small clones
+    # (validated: it flagged a clean photo and missed an actual copy-move).
+    # Clustering offsets is the standard, discriminative copy-move test.
+    _OFFSET_BIN = 10  # px tolerance for treating two offsets as "the same"
+    offset_clusters: dict[tuple[int, int], list[dict]] = {}
+    for p in candidate_pairs:
+        key = (round(p["dx"] / _OFFSET_BIN), round(p["dy"] / _OFFSET_BIN))
+        offset_clusters.setdefault(key, []).append(p)
+    dominant = max(offset_clusters.values(), key=len) if offset_clusters else []
+    cluster_size = len(dominant)
 
-    # Sort by spatial distance (larger = more convincing copy-move)
-    candidate_pairs.sort(key=lambda x: -x["spatial_dist"])
-    top_pairs = [{k: v for k, v in p.items() if k != "spatial_dist"} for p in candidate_pairs[:8]]
-
-    detected = len(candidate_pairs) >= 5 and inlier_count >= 4
-    conf_a = min(1.0, len(candidate_pairs) / 30.0 * 0.7 + inlier_count / 20.0 * 0.3)
+    _MIN_OFFSET_CLUSTER = 8  # pairs sharing one offset to call a clone
+    detected = cluster_size >= _MIN_OFFSET_CLUSTER
+    dominant.sort(key=lambda x: -x["spatial_dist"])
+    top_pairs = [
+        {"from": p["from"], "to": p["to"], "distance": p["distance"]} for p in dominant[:8]
+    ]
+    conf_a = (
+        min(1.0, 0.45 + cluster_size / 30.0)
+        if detected
+        else min(0.2, cluster_size / 40.0)
+    )
 
     return {
         "copy_move_detected": detected,
         "matched_pairs": len(candidate_pairs),
+        "offset_cluster_size": cluster_size,
         "top_pairs": top_pairs,
-        "homography_inliers": inlier_count,
+        "homography_inliers": cluster_size,  # consistent-offset pairs (fusion compat)
         "confidence_a": round(float(conf_a), 3),
     }
 
@@ -247,41 +254,36 @@ def analyze(image_path: str) -> dict[str, Any]:
 
     a = _branch_similarity(gray)
     b = _branch_manipulation(gray)
-
-    # Fusion: both agree → BOTH, one agrees → PARTIAL
     det_a = a.get("copy_move_detected", False)
     det_b = b.get("copy_move_detected_b", False)
 
-    if det_a and det_b:
-        branch_agreement = "BOTH"
-        confidence = round(float(0.6 * a["confidence_a"] + 0.4 * b["confidence_b"]), 3)
-        copy_move_detected = True
-    elif det_a:
-        branch_agreement = "SIMILARITY_ONLY"
-        confidence = round(float(a["confidence_a"] * 0.75), 3)
-        copy_move_detected = (
-            a["homography_inliers"] >= 8
-        )  # require more evidence when single branch
-    elif det_b:
-        branch_agreement = "NOISE_ONLY"
-        confidence = round(float(b["confidence_b"] * 0.65), 3)
-        copy_move_detected = b["noise_correlation_signal"] > 0.80
-    else:
-        branch_agreement = "NEITHER"
-        confidence = 0.0
-        copy_move_detected = False
+    # SCREENING-TIER, NON-ASSERTING. Classical keypoint/noise copy-move heuristics
+    # provably cannot separate a clone from legitimate repeated content: validation
+    # showed clean images with repeated structure (evenly-spaced objects, room
+    # tiles) produce LARGER consistent-offset / self-correlation clusters than an
+    # actual copy-move, at every threshold — so any standalone "detected=True" bar
+    # false-positives on normal photos before it catches a real clone. Copy-move
+    # localization is therefore delegated to the trained TruFor model (run as
+    # neural_splicing, which localizes cloned regions too). This tool reports its
+    # raw branch signals for transparency but does NOT assert a manipulation
+    # verdict on its own and is not court-defensible.
+    branch_agreement = "BOTH" if (det_a and det_b) else ("SIMILARITY" if det_a else ("NOISE" if det_b else "NEITHER"))
+    copy_move_detected = False
+    confidence = 0.0
 
     return {
         "copy_move_detected": copy_move_detected,
         "confidence": confidence,
         "matched_pairs": a.get("matched_pairs", 0),
+        "offset_cluster_size": a.get("offset_cluster_size", 0),
         "top_pairs": a.get("top_pairs", []),
         "homography_inliers": a.get("homography_inliers", 0),
         "noise_correlation_signal": b.get("noise_correlation_signal", 0.0),
         "branch_agreement": branch_agreement,
+        "screening_note": "Copy-move localization is provided by the TruFor model (neural_splicing); this classical heuristic is screening-only and does not assert a standalone verdict.",
         "available": True,
-        "court_defensible": True,
-        "model_version": "busternet_v2",
+        "court_defensible": False,
+        "model_version": "busternet_v3_screening",
     }
 
 

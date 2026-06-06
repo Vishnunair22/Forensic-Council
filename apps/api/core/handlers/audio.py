@@ -410,7 +410,12 @@ class AudioHandlers(BaseToolHandler):
                 error=str(exc),
             )
             result = self._codec_fingerprint_fallback(artifact.file_path, str(exc))
-        events = result.get("reencoding_events") if isinstance(result, dict) else None
+        # real_codec_fingerprint returns "detected_artifacts" (a list of re-encoding
+        # artifact markers); older code looked for "reencoding_events" which the tool
+        # never emits, so re_encoding_detected was permanently False. Read both.
+        events = None
+        if isinstance(result, dict):
+            events = result.get("reencoding_events") or result.get("detected_artifacts")
         result.setdefault("re_encoding_detected", bool(events))
         result.setdefault("reencoding_event_count", len(events) if isinstance(events, list) else 0)
         format_info = result.get("format_info") if isinstance(result, dict) else {}
