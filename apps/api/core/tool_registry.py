@@ -377,7 +377,7 @@ class ToolRegistry:
                 output = await asyncio.wait_for(handler(input_data), timeout=timeout_s)
 
             result = ToolResult(tool_name=tool_name, success=True, output=output)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             # asyncio.TimeoutError is a subclass of TimeoutError in Python 3.11+
             # but not in 3.10 — catch both for cross-version compatibility.
             logger.warning(

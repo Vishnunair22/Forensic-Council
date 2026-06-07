@@ -114,8 +114,8 @@ def build_deterministic_report(
     elif _verdicts_upper == "AUTHENTIC":
         _manip_pct = int(round(arbiter_deliberation.final_confidence * 100))
         _s2 = (
-            f"Independent checks across pixel integrity, statistical frequency, and provenance domains "
-            f"returned no manipulation indicators, consistent with an unmodified original."
+            "Independent checks across pixel integrity, statistical frequency, and provenance domains "
+            "returned no manipulation indicators, consistent with an unmodified original."
         )
     else:
         _s2 = (

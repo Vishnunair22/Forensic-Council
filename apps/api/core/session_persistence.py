@@ -8,7 +8,6 @@ Replaces in-memory storage for production scalability.
 
 import asyncio
 import json
-import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 

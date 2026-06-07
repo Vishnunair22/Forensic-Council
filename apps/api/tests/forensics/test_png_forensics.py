@@ -152,9 +152,12 @@ async def test_agent1_screenshot_triggers_font_overlay_tasks(tmp_path):
         await agent._on_tool_result_impl(
             type("Finding", (), {
                 "metadata": {
-                    "tool_name": "analyze_image_content",
-                    "image_type": "screen capture / digital UI",
-                    "all_classifications": [],
+                    # Agent1 now sources content from the shared visual profile
+                    # (analyze_image_content moved to Agent3); screenshot integrity
+                    # tools are injected via _escalate_from_visual_profile.
+                    "tool_name": "visual_evidence_profile",
+                    "content_type": "screenshot",
+                    "content_description": "a screen capture / digital UI",
                 },
                 "evidence_verdict": "NEGATIVE",
                 "confidence_raw": 0.72,

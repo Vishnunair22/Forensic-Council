@@ -1214,7 +1214,7 @@ async def refine_synthesis_batch(
                             # float-precision noise ("(39.999996%)"). A cited tool
                             # confidence is never a genuine sub-1% value, so a value < 1
                             # is a fraction to scale up; everything is rounded to an int.
-                            def _norm_conf_pct(m: "re.Match[str]") -> str:
+                            def _norm_conf_pct(m: re.Match[str]) -> str:
                                 v = float(m.group(1))
                                 if v < 1:
                                     v *= 100

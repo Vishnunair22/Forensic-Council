@@ -73,9 +73,8 @@ def _config_trap_warnings() -> None:
 def _prewarm_and_test_librosa() -> None:
     """Exercise + JIT-compile the hot librosa paths the audio agent depends on."""
     try:
-        import numpy as np
-
         import librosa
+        import numpy as np
 
         buf = np.sin(2 * np.pi * 220 * np.arange(16000, dtype=np.float32) / 16000).astype("float32")
         librosa.feature.rms(y=buf)

@@ -241,7 +241,9 @@ class TestSynthesisSource:
                     ],
                 })
 
-        findings = [_finding("file_hash_verify")]
+        # An alert-verdict finding is required to exercise the LLM path: clean
+        # evidence intentionally skips Groq synthesis (deterministic is sufficient).
+        findings = [_finding("file_hash_verify", verdict="SUSPICIOUS")]
         ev = _evidence()
 
         with patch("core.synthesis.LLMClient", return_value=FakeLLMClient()):

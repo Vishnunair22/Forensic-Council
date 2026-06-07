@@ -121,12 +121,14 @@ async def test_agent1_weapon_content_triggers_crime_scene_signal(tmp_path):
         inter_agent_bus=inter_agent_bus,
     )
 
+    # Agent1 now sources content from the shared visual profile (CLIP/content
+    # classification belongs to Agent3); crime-scene content is routed via
+    # _escalate_from_visual_profile, which emits a crime_scene_detected bus signal.
     result = agent._on_tool_result_impl(
         type("Finding", (), {
             "metadata": {
-                "tool_name": "analyze_image_content",
-                "image_type": "a photograph of a weapon or knife",
-                "all_classifications": [],
+                "tool_name": "visual_evidence_profile",
+                "content_description": "a photograph of a weapon or knife at a crime scene",
             },
             "evidence_verdict": "POSITIVE",
             "confidence_raw": 0.85,
@@ -134,3 +136,6 @@ async def test_agent1_weapon_content_triggers_crime_scene_signal(tmp_path):
     )
     await result
     assert inter_agent_bus.signal_event.called
+    assert any(
+        "crime_scene_detected" in str(c) for c in inter_agent_bus.signal_event.call_args_list
+    )

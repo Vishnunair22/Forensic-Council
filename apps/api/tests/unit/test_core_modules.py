@@ -747,7 +747,9 @@ class TestSynthesisService:
             finding_type="hash",
             confidence_raw=0.98,
             status="CONFIRMED",
-            evidence_verdict="NEGATIVE",
+            # Alert verdict so the Groq synthesis (LLM) path runs — clean evidence
+            # intentionally skips it; this test exercises LLM-output grounding.
+            evidence_verdict="SUSPICIOUS",
             reasoning_summary="SHA-256 intake check passed.",
             metadata={
                 "tool_name": "file_hash_verify",
