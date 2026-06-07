@@ -223,20 +223,25 @@ class TestFinalReportModes:
 class TestFileTypePolicyContract:
     """Ensure the supported MIME types contract is image-only."""
 
-    def test_allowed_mime_types_are_images(self):
+    def test_allowed_mime_types_are_known_modalities(self):
+        # Multi-modal: every supported type must be a recognized modality, no junk.
         from core.file_type_policy import (
             SUPPORTED_MIME_TYPES,
         )
+        allowed_app = {"application/pdf", "application/mp4"}
         for mime in SUPPORTED_MIME_TYPES:
-            assert mime.startswith("image/"), f"{mime} is not an image type"
+            assert mime.startswith(("image/", "audio/", "video/")) or mime in allowed_app, (
+                f"{mime} is not a recognized supported modality"
+            )
 
-    def test_no_audio_or_video_in_supported(self):
+    def test_audio_video_document_supported(self):
+        # Multi-modal contract: audio, video, and PDF are supported (image-only era is over).
         from core.file_type_policy import (
             SUPPORTED_MIME_TYPES,
         )
-        for mime in SUPPORTED_MIME_TYPES:
-            assert not mime.startswith("audio/"), f"Audio type {mime} should not be supported"
-            assert not mime.startswith("video/"), f"Video type {mime} should not be supported"
+        assert any(m.startswith("audio/") for m in SUPPORTED_MIME_TYPES), "audio must be supported"
+        assert any(m.startswith("video/") for m in SUPPORTED_MIME_TYPES), "video must be supported"
+        assert "application/pdf" in SUPPORTED_MIME_TYPES, "PDF must be supported"
 
     def test_standard_image_types_present(self):
         from core.file_type_policy import (

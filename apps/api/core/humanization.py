@@ -229,7 +229,8 @@ class FindingHumanizer:
     @staticmethod
     def _humanize_visual_profile(meta: dict, verdict: str, conf: float) -> str:
         desc = str(meta.get("content_description") or meta.get("contextual_narrative") or "").strip()
-        signals = meta.get("manipulation_signals") if isinstance(meta.get("manipulation_signals"), list) else []
+        _raw_signals = meta.get("manipulation_signals")
+        signals = _raw_signals if isinstance(_raw_signals, list) else []
         if verdict == "POSITIVE" or signals:
             signal_text = "; ".join(str(s) for s in signals[:3]) or "visual manipulation indicators"
             return (

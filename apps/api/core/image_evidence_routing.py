@@ -497,7 +497,7 @@ def get_agent_plan(
     if not tools:
         return []
 
-    return [_TOOL_TO_TASK_DESC.get(t, t) for t in tools]
+    return [_TOOL_TO_TASK_DESC.get(t, t) for t in tools if t]
 
 
 def get_agent_forbidden_tools(

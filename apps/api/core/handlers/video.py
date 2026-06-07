@@ -10,6 +10,7 @@ import asyncio
 import os
 import tempfile
 from types import SimpleNamespace
+from typing import Any
 
 import cv2
 import numpy as np
@@ -178,6 +179,7 @@ class VideoHandlers(BaseToolHandler):
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         flow_threshold = input_data.get("flow_threshold", 5.0)
         await self.agent.update_sub_task("Establishing temporal motion baseline...")
+        result: dict[str, Any]
         try:
             result = await real_optical_flow_analyze(
                 artifact=artifact,
