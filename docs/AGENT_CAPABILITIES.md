@@ -1,6 +1,15 @@
 # Forensic Agent Capabilities (v1.0.0)
 
-This document provides a definitive list of the diagnostic tools available to each specialist agent in the Forensic Council. Every tool includes a "Court Defensible" seal when running in its primary (ML-backed) mode.
+This document lists the diagnostic tools available to each specialist agent in the Forensic Council.
+
+> **Court-defensibility is per-finding and tier-dependent — not a blanket guarantee.**
+> The ✅ below marks tools whose *primary* mode is court-defensible. At runtime each
+> finding carries its own `court_defensible` flag: **screening-tier** tools
+> (e.g. frequency/FFT GAN heuristics, `reverse_search` OSINT, classical
+> copy-move/noise screening) and **research-tier** non-commercial models
+> (BusterNet, F3-Net, ManTra-Net, TruFor, AASIST — gated behind
+> `ENABLE_RESEARCH_MODELS`, never enabled in production) report
+> `court_defensible: false` and are advisory only.
 
 ## 1. Image Forensic Agent (Agent 1)
 | Tool | Function | Court Defensible |
@@ -34,7 +43,7 @@ This document provides a definitive list of the diagnostic tools available to ea
 ## 3. Object-Scene Agent (Agent 3)
 | Tool | Function | Court Defensible |
 |------|----------|:----------------:|
-| `object_detection` | YOLOv11 primary scene object identification. | ✅ |
+| `object_detection` | DETR (facebook/detr-resnet-50, Apache-2.0) primary scene object identification; YOLO is an AGPL opt-in via `ENABLE_AGPL_MODELS`. | ✅ |
 | `secondary_classify` | CLIP-based refinement of low-confidence objects. | ✅ |
 | `scale_validation` | Perspective and vanishing point convergence check. | ✅ |
 | `lighting_check` | Inter-quadrant lighting/shadow consistency. | ✅ |
