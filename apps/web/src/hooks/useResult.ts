@@ -90,18 +90,45 @@ function loadAgentTimelineForSession(sid: string | null, isDeep: boolean): Agent
 }
 
 function buildAgentTimelineFromReport(report: ReportDTO): AgentUpdate[] {
-  if (!report.agent_summaries || !Array.isArray(report.agent_summaries)) return [];
-  return (report.agent_summaries as Array<Record<string, unknown>>)
-    .filter((s) => typeof s === "object" && s !== null && typeof s.agent_id === "string")
-    .map((s) => ({
-      agent_id: s.agent_id as string,
-      agent_name: (s.agent_name as string) ?? (s.agent_id as string),
-      status: ((s.status as string) ?? "complete") as AgentUpdate["status"],
-      completed_at: (s.completed_at as string) ?? null,
-      message: (s.message as string) ?? "",
-      confidence: (s.confidence as number) ?? 0,
-      findings_count: (s.findings_count as number) ?? 0,
-    }));
+  // Preferred: an explicit agent_summaries array, if the backend ever emits one.
+  if (Array.isArray(report.agent_summaries) && report.agent_summaries.length) {
+    return (report.agent_summaries as Array<Record<string, unknown>>)
+      .filter((s) => typeof s === "object" && s !== null && typeof s.agent_id === "string")
+      .map((s) => ({
+        agent_id: s.agent_id as string,
+        agent_name: (s.agent_name as string) ?? (s.agent_id as string),
+        status: ((s.status as string) ?? "complete") as AgentUpdate["status"],
+        message: (s.message as string) ?? "",
+        confidence: (s.confidence as number) ?? 0,
+        findings_count: (s.findings_count as number) ?? 0,
+      }));
+  }
+  // Authoritative fallback: derive from per_agent_metrics, which IS part of the
+  // signed ReportDTO contract. agent_summaries is NOT — relying on it alone left
+  // this timeline permanently empty, so a stale localStorage streaming snapshot
+  // always won. per_agent_metrics gives the real, completed-run execution state.
+  const metrics = report.per_agent_metrics;
+  if (metrics && typeof metrics === "object") {
+    const summary = (report.per_agent_summary ?? {}) as Record<
+      string,
+      { verdict?: string } | undefined
+    >;
+    return Object.values(metrics)
+      .filter((m) => m && typeof m.agent_id === "string")
+      .map((m) => {
+        const verdict = summary[m.agent_id]?.verdict;
+        return {
+          agent_id: m.agent_id,
+          agent_name: m.agent_name ?? m.agent_id,
+          status: (m.skipped ? "skipped" : "complete") as AgentUpdate["status"],
+          message: "",
+          confidence: m.confidence_score ?? 0,
+          findings_count: m.finding_count ?? 0,
+          ...(verdict ? { agent_verdict: verdict as AgentUpdate["agent_verdict"] } : {}),
+        };
+      });
+  }
+  return [];
 }
 
 export { buildAgentTimelineFromReport };
