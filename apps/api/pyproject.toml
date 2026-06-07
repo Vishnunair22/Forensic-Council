@@ -220,6 +220,11 @@ ignore = ["E501", "S101"]
 "orchestration/*.py" = ["E402", "E701", "S110"]
 "agents/arbiter_narrative.py" = ["N806"]
 "agents/mixins/reflection.py" = ["N806"]
+# Best-effort optional cross-agent context reads (graceful fallback) + UPPER_CASE
+# verdict/label constant tables declared as function locals.
+"agents/agent5_metadata.py" = ["S110"]
+"agents/mixins/investigation.py" = ["N806", "S110"]
+"agents/mixins/synthesis.py" = ["N806", "S110"]
 "api/main.py" = ["N806"]
 # lifespan declares in-function constant tables (REQUIRED_BINARIES, etc.) in UPPER_CASE.
 "api/lifespan.py" = ["N806"]

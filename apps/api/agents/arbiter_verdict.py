@@ -370,7 +370,7 @@ def calculate_manipulation_probability(
     """
     Core deterministic calculation of manipulation probability.
     Returns (probability, signals_count).
-    
+
     visual_assessment: The visual-profile manipulation.assessment from Gemini
     (e.g. "none_observed", "minor", "suspicious"). When suspicious, it raises
     the baseline probability even when pixel tools are clean.

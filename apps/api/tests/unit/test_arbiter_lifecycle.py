@@ -100,7 +100,7 @@ async def test_empty_report_has_cryptographic_signature():
         "ForensicReport must have a non-empty cryptographic_signature even when all agents skipped"
     )
     assert report.report_hash, "ForensicReport must have a non-empty report_hash"
-    assert report.overall_verdict == "INCONCLUSIVE"
+    assert report.overall_verdict == "ABSTAIN"  # all agents skipped → no analysis run
 
 
 @pytest.mark.asyncio

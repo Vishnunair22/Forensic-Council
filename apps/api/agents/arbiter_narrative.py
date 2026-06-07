@@ -435,7 +435,9 @@ def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]
         canonical = tool_aliases.get(tool, tool)
         if canonical in canonical_findings:
             existing = canonical_findings[canonical]
-            if confidence_of(finding, default=0.0) > confidence_of(existing, default=0.0):
+            if (confidence_of(finding, default=0.0) or 0.0) > (
+                confidence_of(existing, default=0.0) or 0.0
+            ):
                 canonical_findings[canonical] = finding
         else:
             canonical_findings[canonical] = finding
@@ -1533,7 +1535,7 @@ Rules:
         analysis_coverage_note: str,
         comparisons: list[Any] | None = None,
         has_deep_analysis: bool = False,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         """
         Build the layered prompt and call the LLM for arbiter-level narrative synthesis.
         """

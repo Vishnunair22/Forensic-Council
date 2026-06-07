@@ -351,10 +351,12 @@ class TestArbiterDeliberation:
             assert agent in report.per_agent_findings
 
     @pytest.mark.asyncio
-    async def test_empty_results_gives_inconclusive(self):
+    async def test_empty_results_gives_abstain(self):
+        # No applicable agents produced findings → ABSTAIN ("no analysis run"),
+        # which is distinct from INCONCLUSIVE (conflicting/uncertain evidence).
         arbiter = _arbiter()
         report = await arbiter.deliberate({})
-        assert report.overall_verdict == "INCONCLUSIVE"
+        assert report.overall_verdict == "ABSTAIN"
 
     @pytest.mark.asyncio
     async def test_overall_confidence_in_range(self):
@@ -416,6 +418,7 @@ class TestArbiterDeliberation:
             "INCONCLUSIVE",
             "LIKELY_MANIPULATED",
             "MANIPULATED",
+            "ABSTAIN",
         }
         arbiter = _arbiter()
         report = await arbiter.deliberate(_results("Agent1"))
@@ -458,11 +461,11 @@ class TestArbiterSmoke:
         assert report.overall_verdict in valid
 
     @pytest.mark.asyncio
-    async def test_empty_agent_results_returns_inconclusive(self):
-        """When agent_results is empty, the arbiter must return 'INCONCLUSIVE'."""
+    async def test_empty_agent_results_returns_abstain(self):
+        """When agent_results is empty, the arbiter returns 'ABSTAIN' (no analysis run)."""
         arbiter = _arbiter()
         report = await arbiter.deliberate({})
-        assert report.overall_verdict == "INCONCLUSIVE"
+        assert report.overall_verdict == "ABSTAIN"
 
     @pytest.mark.asyncio
     async def test_multiple_agents_all_appear_in_findings(self):
