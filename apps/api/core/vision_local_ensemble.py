@@ -321,17 +321,26 @@ def _cross_signal_synthesis(
         if noise_inconsistent and not noise_not_applicable:
             signals.append(f"Sensor noise inconsistency ({noise_clusters} clusters)")
 
-    # OpenCV signals
+    # OpenCV signals.
+    # Absolute noise level and JPEG blockiness are confounded by ISO/grain and
+    # compression quality — high values are normal for small or low-quality
+    # captures and are NOT manipulation evidence on their own. Manipulation
+    # shows as noise INCONSISTENCY across regions (handled via noiseprint
+    # clusters above). So only surface these as manipulation signals when
+    # corroborated by regional sensor-noise inconsistency; otherwise they are
+    # benign quality descriptors and would just create false positives on
+    # authentic compressed images.
     if opencv_res:
+        noise_corroborated = noise_inconsistent and not noise_not_applicable
         noise_threshold = 5.0 if is_screenshot else 10.0
         noise_val = opencv_res.get("noise", 0.0) or 0.0
-        if noise_val > noise_threshold:
-            signals.append(f"Elevated noise residual ({noise_val:.2f})")
+        if noise_val > noise_threshold and noise_corroborated:
+            signals.append(f"Elevated noise residual ({noise_val:.2f}) with regional inconsistency")
 
         block_threshold = 12.0 if is_screenshot else 8.0
         blockiness_val = opencv_res.get("blockiness", 0.0) or 0.0
-        if blockiness_val > block_threshold:
-            signals.append(f"JPEG block artifacts detected ({blockiness_val:.1f})")
+        if blockiness_val > block_threshold and noise_corroborated:
+            signals.append(f"JPEG block artifacts detected ({blockiness_val:.1f}) with regional inconsistency")
 
     # Rule 4: AI-generation spectral artifacts
     if diff_detected and diff_probability > 0.5:
