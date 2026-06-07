@@ -68,9 +68,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -107,9 +105,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update"),
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -142,9 +138,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update"),
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch(
                 "orchestration.session_finalization.increment_investigations_completed"
@@ -180,9 +174,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update"),
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -215,9 +207,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_failed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -253,9 +243,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update"),
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch(
                 "orchestration.session_finalization.increment_investigations_failed"
@@ -290,9 +278,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update"),
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_failed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -326,9 +312,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update"),
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -360,9 +344,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),
@@ -399,9 +381,7 @@ class TestRunInvestigationTask:
         with (
             patch("orchestration.session_finalization.get_session_persistence") as mock_persist,
             patch("orchestration.session_finalization.broadcast_update") as mock_broadcast,
-            patch("orchestration.session_finalization.set_final_report"),
-            patch("orchestration.session_finalization.set_active_pipeline_metadata"),
-            patch("orchestration.investigation_runner.clear_session_websockets"),
+            patch("orchestration.session_finalization.set_final_report"),            patch("orchestration.investigation_runner.clear_session_websockets"),
             patch("orchestration.investigation_runner.remove_active_pipeline"),
             patch("orchestration.session_finalization.increment_investigations_completed"),
             patch("orchestration.investigation_runner._active_tasks", {}),

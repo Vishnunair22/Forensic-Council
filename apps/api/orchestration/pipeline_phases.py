@@ -640,7 +640,8 @@ async def run_agents_concurrent(
                         # Hold it Inconclusive at the live stage so the card does not
                         # assert manipulation that deliberation will then clear.
                         if _live_verdict in ("SUSPICIOUS", "MANIPULATED"):
-                            _g = lambda f, k, d=None: (f.get(k, d) if isinstance(f, dict) else getattr(f, k, d))
+                            def _g(f, k, d=None):
+                                return f.get(k, d) if isinstance(f, dict) else getattr(f, k, d)
                             _vc = getattr(agent_inst, "visual_context", None)
                             _av = str(getattr(_vc, "authenticity_verdict", "") or "").upper()
                             _ii = getattr(_vc, "image_integrity_context", None)
@@ -988,7 +989,7 @@ async def run_agents_concurrent(
         if _a4_entry:
             _a4_agent, _a4_findings, _a4_status = _a4_entry
             if _a4_status == "unsupported" or not _a4_agent:
-                from orchestration.agent_factory import AgentLoopResult as _ALR
+                from orchestration.agent_factory import AgentLoopResult as _AgentLoopResult
                 _a4_cls = registry.get_agent_class(AgentID.AGENT4.value)
                 if _a4_cls:
                     _a4_instance = _a4_cls(
@@ -1007,7 +1008,7 @@ async def run_agents_concurrent(
                     _a4_result = await _run_one(_a4_instance, AgentID.AGENT4.value, True)
                     _a4_agent, _a4_new_findings, _a4_new_status = _a4_result
                     agent_map[AgentID.AGENT4.value] = (_a4_agent, _a4_new_findings, _a4_new_status)
-                    _a4_result_entry = _ALR(
+                    _a4_result_entry = _AgentLoopResult(
                         agent_id=AgentID.AGENT4.value,
                         findings=[
                             f.model_dump(mode="json") if hasattr(f, "model_dump") else f
