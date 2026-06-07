@@ -120,9 +120,6 @@ async def test_run_investigation_task_awaits_final_report_cache(monkeypatch):
         "orchestration.session_finalization.set_final_report", AsyncMock()
     )
     monkeypatch.setattr(
-        "orchestration.session_finalization.set_active_pipeline_metadata", AsyncMock()
-    )
-    monkeypatch.setattr(
         "orchestration.session_finalization.increment_investigations_completed", lambda: None
     )
     monkeypatch.setattr(

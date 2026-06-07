@@ -54,8 +54,13 @@ async def test_cascade_gemini_success(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_cascade_gemini_fail_groq_success(tmp_path: Path):
-    """Test that when Gemini fails, the cascade routes to Groq Vision."""
+async def test_cascade_gemini_fail_falls_back_to_local(tmp_path: Path):
+    """When Gemini fails, the cascade falls back to the local ensemble.
+
+    VisionRouter's cascade is gemini -> local_ensemble; groq_vision is a
+    config-only opt-in and is not wired as a router cascade path, so a Gemini
+    failure routes straight to the local visual ensemble.
+    """
     test_image = tmp_path / "test.jpg"
     test_image.write_bytes(_create_minimal_jpeg())
 
@@ -104,11 +109,10 @@ async def test_cascade_gemini_fail_groq_success(tmp_path: Path):
 
                 res = await router.deep_forensic_analysis(str(test_image), agent_id="Agent1")
 
-                assert res.model_used == "mock-groq-model"
-                assert res.content_description == "Groq vision success"
-                assert res._authenticity_verdict == "AUTHENTIC"
+                # groq_vision is not a router cascade path → Gemini failure falls
+                # back to the local ensemble.
+                assert res.model_used == "local_visual_ensemble"
                 mock_gemini.assert_called_once()
-                mock_post.assert_called_once()
 
 
 @pytest.mark.asyncio
