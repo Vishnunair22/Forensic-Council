@@ -84,7 +84,7 @@ class TorchVisionClassifier(ImageClassifierBase):
 
         try:
             import torchvision.models as tv_models
-            from torchvision import transforms
+            from torchvision import transforms  # noqa: F401  # availability probe
         except ImportError:
             return False
 
@@ -149,7 +149,7 @@ class TorchVisionClassifier(ImageClassifierBase):
                 top5_probs = probs.topk(5).values[0].tolist()
 
             scores = []
-            for idx, prob in zip(top5_idx, top5_probs):
+            for idx, prob in zip(top5_idx, top5_probs, strict=False):
                 label = self._imagenet_labels[idx] if self._imagenet_labels and idx < len(self._imagenet_labels) else f"class_{idx}"
                 scores.append((label, round(float(prob), 4)))
 

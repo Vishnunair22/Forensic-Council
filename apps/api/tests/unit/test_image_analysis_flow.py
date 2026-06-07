@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from uuid import uuid4
 
 import pytest
 
@@ -79,7 +78,7 @@ class TestComputeAgentVerdictVisualBoost:
 
     def test_gemini_court_strong_alone_confidence_boost(self):
         """Court-defensible Gemini alone gets +3pp confidence boost over baseline 0.72."""
-        from core.severity import compute_agent_verdict, _GEMINI_SOLO_CONF_BOOST
+        from core.severity import _GEMINI_SOLO_CONF_BOOST, compute_agent_verdict
 
         findings = [_finding(evidence_verdict="NEGATIVE")]
         vs = _visual_signal(verdict="AI_GENERATED", court_defensible=True)
@@ -95,7 +94,7 @@ class TestComputeAgentVerdictVisualBoost:
 
     def test_gemini_plus_tool_strong_convergent_boost(self):
         """Gemini court + 1 tool strong → MANIPULATED with convergent confidence boost."""
-        from core.severity import compute_agent_verdict, _CONV_VISUAL_TOOL_CONF_BOOST
+        from core.severity import _CONV_VISUAL_TOOL_CONF_BOOST, compute_agent_verdict
 
         strong_tool = _finding(evidence_verdict="POSITIVE", confidence_raw=0.80, severity_tier="HIGH")
         vs = _visual_signal(verdict="LIKELY_MANIPULATED", court_defensible=True)
@@ -161,7 +160,7 @@ class TestComputeAgentVerdictVisualBoost:
 
     def test_confidence_scale_reduces_strong_signal(self):
         """A finding that would be HIGH-severity gets rendered as LOW after 0.3 scaling."""
-        from core.severity import compute_agent_verdict, _STRONG_SIGNAL_CONF_FLOOR
+        from core.severity import compute_agent_verdict
 
         # confidence_raw=0.80 would normally be a strong HIGH signal
         # but after 0.3 scale it becomes 0.24 < _STRONG_SIGNAL_CONF_FLOOR → alert only
@@ -220,7 +219,7 @@ class TestComputeGroundedAgentVerdict:
 
     def test_scaled_confidence_prevents_strong_signal(self):
         """After confidence_scale=0.3, a 0.80-confidence HIGH finding is no longer strong."""
-        from core.severity import compute_agent_verdict, _STRONG_SIGNAL_CONF_FLOOR
+        from core.severity import _STRONG_SIGNAL_CONF_FLOOR, compute_agent_verdict
 
         scaled_conf = round(0.80 * 0.3, 4)  # 0.24
         assert scaled_conf < _STRONG_SIGNAL_CONF_FLOOR
@@ -251,7 +250,6 @@ class TestComputeGroundedAgentVerdict:
             metadata_visual_context = None
 
         vc = _MockVC()
-        agent_id = "Agent1"
         _holistic = str(getattr(vc, "authenticity_verdict", "") or "").upper()
         _is_remote = str(getattr(vc, "source", "") or "").startswith("llm")
         _integ = getattr(vc, "image_integrity_context", None)
@@ -299,6 +297,7 @@ class TestKeyFindingsDeduplication:
     def _dedup(self, kfs: list[str], verdict: str = "AUTHENTIC") -> list[str]:
         """Replicate the deduplication logic from refine_synthesis_batch."""
         import re
+
         from core.per_agent_synthesis import _text_contradicts_verdict
 
         seen_kf_norms: set[str] = set()

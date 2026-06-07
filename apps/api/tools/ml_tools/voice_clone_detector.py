@@ -248,6 +248,7 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
         audio = np.asarray(audio, dtype=np.float32)
         if int(sr_native) != sr:
             from math import gcd
+
             from scipy.signal import resample_poly
             _g = gcd(int(sr_native), int(sr)) or 1
             audio = resample_poly(audio, sr // _g, int(sr_native) // _g).astype(np.float32)

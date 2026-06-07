@@ -1,7 +1,6 @@
 import os
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 
 from core.gemini_client import GeminiVisionClient, GeminiVisionFinding
@@ -165,24 +164,10 @@ class TestGeminiGenerateSpectrogram:
         reason="scipy.signal.spectrogram import triggers scipy internal compat issue on Python 3.14+",
     )
     def test_generate_spectrogram_returns_png_bytes(self, tmp_path):
+        # Permanently skipped: scipy.signal.spectrogram triggers an internal scipy
+        # compat bug on Python 3.14+. The prior body referenced mock fixtures that
+        # no longer exist; rewrite with proper patches if re-enabling on 3.12.
         pytest.skip("scipy.signal.spectrogram triggers scipy internal bug on this Python version")
-        test_file = tmp_path / "test.wav"
-        test_file.write_bytes(b"RIFF" + b"\x00" * 36)
-
-        sr = 22050
-        mock_sf_read.return_value = (np.zeros(sr, dtype="float32"), sr)
-
-        freqs = np.linspace(0, sr / 2, 64)
-        times = np.linspace(0, 1.0, 50)
-        spec = np.abs(np.random.randn(64, 50)).astype("float32") + 1e-6
-        mock_spectrogram.return_value = (freqs, times, spec)
-
-        data, mime = GeminiVisionClient._generate_spectrogram(str(test_file))
-
-        assert mime == "image/png"
-        assert isinstance(data, bytes)
-        assert len(data) > 0
-        mock_sf_read.assert_called_once_with(str(test_file), dtype="float32", always_2d=False)
 
 
 class TestGeminiEncodeFile:

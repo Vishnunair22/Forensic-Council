@@ -1,7 +1,15 @@
 from core.per_agent_synthesis import (
-    AgentSynthesisInput, generate_deterministic_agent_synthesis, split_visual_context, compose_evidence_identity
+    AgentSynthesisInput,
+    compose_evidence_identity,
+    generate_deterministic_agent_synthesis,
+    split_visual_context,
 )
-from core.visual_context_models import VisualContext, ImageIntegrityContext, ObjectSceneContext, MetadataVisualContext
+from core.visual_context_models import (
+    ImageIntegrityContext,
+    MetadataVisualContext,
+    ObjectSceneContext,
+    VisualContext,
+)
 
 vc = VisualContext(
     session_id="s", evidence_sha256="h", source="local_ensemble", provider_name="local",

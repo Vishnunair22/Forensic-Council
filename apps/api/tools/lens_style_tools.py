@@ -44,7 +44,7 @@ async def lens_style_multimodal_scan(
             "error": "No local file path available",
         }
 
-    loop = asyncio.get_running_loop()
+    asyncio.get_running_loop()
     results: dict[str, Any] = {
         "tool": "lens_style_multimodal_scan",
         "status": "success",
@@ -158,8 +158,8 @@ async def _do_barcode_scan(path: str) -> dict[str, Any]:
 async def _do_visual_classification(path: str) -> dict[str, Any]:
     """Classify image content using a lightweight model (MobileNet or CLIP if available)."""
     try:
-        import numpy as np
-        from PIL import Image
+        import numpy as np  # noqa: F401  # availability probe
+        from PIL import Image  # noqa: F401  # availability probe
     except ImportError:
         return {"status": "unavailable", "modality": "classification", "reason": "Pillow not installed"}
 
@@ -251,7 +251,7 @@ async def _do_logo_detect(path: str) -> dict[str, Any]:
     """Detect logos using SIFT keypoint matching against known logo templates."""
     try:
         import cv2
-        import numpy as np
+        import numpy as np  # noqa: F401  # availability probe
     except ImportError:
         return {"status": "unavailable", "modality": "logo", "reason": "opencv not installed"}
 

@@ -28,20 +28,20 @@ os.environ.setdefault("LLM_MODEL", "test-model")
 def _make_config(**overrides):
     from core.config import Settings
 
-    base = dict(
-        app_env="testing",
-        signing_key="test-signing-key-" + "x" * 32,
-        postgres_user="test",
-        postgres_password="test",
-        postgres_db="test",
-        redis_password="test",
-        DEMO_PASSWORD="test",
-        llm_provider="none",
-        llm_api_key=None,
-        llm_model="test-model",
-        bootstrap_admin_password="Admin_123!",
-        bootstrap_investigator_password="Inv_123!",
-    )
+    base = {
+        "app_env": "testing",
+        "signing_key": "test-signing-key-" + "x" * 32,
+        "postgres_user": "test",
+        "postgres_password": "test",
+        "postgres_db": "test",
+        "redis_password": "test",
+        "DEMO_PASSWORD": "test",
+        "llm_provider": "none",
+        "llm_api_key": None,
+        "llm_model": "test-model",
+        "bootstrap_admin_password": "Admin_123!",
+        "bootstrap_investigator_password": "Inv_123!",
+    }
     base.update(overrides)
     return Settings(**base)
 
@@ -166,7 +166,7 @@ class TestFinalReportModes:
             "Agent3": {"findings": [{"type": "ela"}]},
         }
 
-        pre_warm_hash = hashlib.sha256(
+        hashlib.sha256(
             str(sorted(arbiter_results.items())).encode()
         ).hexdigest()[:16]
 

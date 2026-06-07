@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,9 +22,8 @@ import pytest
 
 def _make_consumer(maxsize: int = 100):
     """Return (queue, SSEConsumer) sourced directly from the sse module."""
-    from api.routes.sse import _event_generator  # noqa: F401 – triggers module load
-
     import api.routes.sse as sse_mod
+    from api.routes.sse import _event_generator  # noqa: F401 – triggers module load
 
     CRITICAL_TYPES = sse_mod.CRITICAL_TYPES
     queue: asyncio.Queue = asyncio.Queue(maxsize=maxsize)
@@ -74,7 +72,6 @@ async def test_redis_listener_crash_injects_stream_error():
     _redis_listener must inject a STREAM_ERROR event into the consumer queue
     so the SSE client gets notified and reconnects instead of silently stalling.
     """
-    import api.routes.sse as sse_mod
 
     session_id = str(uuid4())
     queue, consumer = _make_consumer()
@@ -97,7 +94,7 @@ async def test_redis_listener_crash_injects_stream_error():
                         pass
         except asyncio.CancelledError:
             pass
-        except Exception as exc:
+        except Exception:
             # This is the fixed behaviour: log + inject STREAM_ERROR
             await consumer.send_json(
                 {

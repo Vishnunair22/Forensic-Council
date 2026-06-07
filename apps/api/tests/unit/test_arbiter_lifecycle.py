@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -34,7 +33,6 @@ os.environ.setdefault("LLM_MODEL", "test-model")
 
 from agents.arbiter import CouncilArbiter, ForensicReport
 from core.config import Settings
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 

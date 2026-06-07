@@ -23,21 +23,21 @@ from core.config import Settings
 
 
 def _settings(**overrides) -> Settings:
-    defaults = dict(
-        app_env="testing",
-        signing_key="test-signing-key-" + "x" * 32,
-        postgres_user="test",
-        postgres_password="test",
-        postgres_db="test",
-        redis_password="test",
-        DEMO_PASSWORD="test",
-        llm_provider="none",
-        llm_api_key=None,
-        llm_model="test-model",
-        gemini_api_key=None,
-        bootstrap_admin_password="Admin_123!",
-        bootstrap_investigator_password="Inv_123!",
-    )
+    defaults = {
+        "app_env": "testing",
+        "signing_key": "test-signing-key-" + "x" * 32,
+        "postgres_user": "test",
+        "postgres_password": "test",
+        "postgres_db": "test",
+        "redis_password": "test",
+        "DEMO_PASSWORD": "test",
+        "llm_provider": "none",
+        "llm_api_key": None,
+        "llm_model": "test-model",
+        "gemini_api_key": None,
+        "bootstrap_admin_password": "Admin_123!",
+        "bootstrap_investigator_password": "Inv_123!",
+    }
     defaults.update(overrides)
     return Settings(**defaults)
 
@@ -75,7 +75,7 @@ async def test_degradation_flag_no_llm_config():
     arbiter = CouncilArbiter(session_id=uuid.uuid4(), config=settings)
     results = {"Agent1": {"findings": [_finding()], "synthesis": {}}}
     report = await arbiter.deliberate(results, use_llm=False)
-    llm_flags = [f for f in report.degradation_flags if "LLM" in f or "template" in f.lower()]
+    [f for f in report.degradation_flags if "LLM" in f or "template" in f.lower()]
     print(f"   Post-synthesis disabled: degradation={report.degradation_flags}")
 
 
