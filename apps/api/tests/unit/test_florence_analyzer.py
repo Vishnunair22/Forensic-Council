@@ -42,12 +42,14 @@ def test_florence_load_success():
     assert success is True
     assert analyzer.available is True
     assert analyzer._device == "cpu"
-    mock_transformers.AutoProcessor.from_pretrained.assert_called_once_with(
-        "microsoft/Florence-2-base", trust_remote_code=True
-    )
-    mock_transformers.AutoModelForCausalLM.from_pretrained.assert_called_once_with(
-        "microsoft/Florence-2-base", trust_remote_code=True, attn_implementation="eager"
-    )
+    # Tolerant of the local_files_only kwarg (set from settings.offline_mode).
+    proc_call = mock_transformers.AutoProcessor.from_pretrained.call_args
+    assert proc_call.args[0] == "microsoft/Florence-2-base"
+    assert proc_call.kwargs["trust_remote_code"] is True
+    model_call = mock_transformers.AutoModelForCausalLM.from_pretrained.call_args
+    assert model_call.args[0] == "microsoft/Florence-2-base"
+    assert model_call.kwargs["trust_remote_code"] is True
+    assert model_call.kwargs["attn_implementation"] == "eager"
 
 
 def test_florence_load_failure():
@@ -72,6 +74,11 @@ def test_florence_analyze_without_load(mock_image_open):
 def test_florence_analyze_success(mock_image_open):
     mock_image = MagicMock()
     mock_converted_image = MagicMock()
+    # Real dimensions so cap_image_dimension's width/height comparisons work
+    # (it would otherwise compare MagicMocks → "'>' not supported").
+    mock_converted_image.width = 800
+    mock_converted_image.height = 600
+    mock_converted_image.size = (800, 600)
     mock_image.convert.return_value = mock_converted_image
     mock_image_open.return_value = mock_image
 

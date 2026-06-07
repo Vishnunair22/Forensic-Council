@@ -83,8 +83,13 @@ class TestFullForensicPipeline:
             "phase": "initial",
         }
 
+        # assert_session_access does the session lookup/ownership check (and would
+        # 404 on this synthetic id); get_active_pipeline_metadata is awaited.
         with patch(
-            "api.routes.sessions.get_active_pipeline_metadata", return_value=mock_session_data
+            "api.routes.sessions.get_active_pipeline_metadata",
+            new=AsyncMock(return_value=mock_session_data),
+        ), patch(
+            "api.routes.sessions.assert_session_access", new=AsyncMock(return_value=None)
         ):
             response = client.get(
                 "/api/v1/sessions/test-session-123/brief",

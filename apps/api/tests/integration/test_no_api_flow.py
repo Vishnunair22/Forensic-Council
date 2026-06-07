@@ -93,7 +93,7 @@ async def test_google_reverse_search_returns_on_device_fallback():
         assert result["status"] == "success"
         assert "matches" in result
         assert "method" in result
-        assert "image_hash" in result
+        assert "perceptual_hash" in result
     finally:
         if os.path.exists(path):
             os.unlink(path)

@@ -89,8 +89,11 @@ class TestDockerCompose:
         """Web services exposed; database/infra restricted to internal network."""
         services = compose["services"]
         dev_services = dev_compose.get("services", {})
-        # Publicly accessible
-        assert "3000" in str(services["frontend"].get("ports", []))
+        # Publicly accessible (frontend host port lives in the dev overlay, like backend)
+        frontend_ports = str(services["frontend"].get("ports", [])) + str(
+            dev_services.get("frontend", {}).get("ports", [])
+        )
+        assert "3000" in frontend_ports
         backend_ports = str(services["backend"].get("ports", [])) + str(dev_services.get("backend", {}).get("ports", []))
         assert "8000" in backend_ports
         assert "80" in str(services["caddy"].get("ports", []))
