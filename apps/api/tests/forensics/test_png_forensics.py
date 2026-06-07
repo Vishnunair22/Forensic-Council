@@ -141,6 +141,13 @@ async def test_agent1_screenshot_triggers_font_overlay_tasks(tmp_path):
     import sys
     from types import ModuleType
 
+    # Stub api.routes._session_state.broadcast_update so inject_task's telemetry
+    # broadcast doesn't hit Redis. CRITICAL: snapshot and RESTORE the original
+    # sys.modules entries — deleting them leaves `api.routes` re-imported without
+    # its `auth` submodule bound, which poisons every later test that does
+    # `import api.routes.auth` (was the source of 44 test_api_routes setup errors).
+    _orig_routes = sys.modules.get("api.routes")
+    _orig_ss = sys.modules.get("api.routes._session_state")
     routes_mod = ModuleType("api.routes")
     routes_mod.__path__ = []
     ss_mod = ModuleType("api.routes._session_state")
@@ -164,10 +171,14 @@ async def test_agent1_screenshot_triggers_font_overlay_tasks(tmp_path):
             })()
         )
     finally:
-        if "api.routes" in sys.modules:
-            del sys.modules["api.routes"]
-        if "api.routes._session_state" in sys.modules:
-            del sys.modules["api.routes._session_state"]
+        if _orig_routes is not None:
+            sys.modules["api.routes"] = _orig_routes
+        else:
+            sys.modules.pop("api.routes", None)
+        if _orig_ss is not None:
+            sys.modules["api.routes._session_state"] = _orig_ss
+        else:
+            sys.modules.pop("api.routes._session_state", None)
 
     calls = [str(c) for c in working_memory.create_task.call_args_list]
     font_call = any("detect_font_inconsistency" in s for s in calls)

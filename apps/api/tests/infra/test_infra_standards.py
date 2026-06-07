@@ -43,7 +43,7 @@ def load_yaml(path: Path) -> dict:
             return loader.construct_mapping(node)
         return None
     yaml.SafeLoader.add_multi_constructor('!', default_constructor)
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
