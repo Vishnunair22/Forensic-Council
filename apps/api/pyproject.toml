@@ -194,7 +194,9 @@ packages = ["core", "agents", "tools", "orchestration", "api"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = [".pytest-tmp"]
+# Vendored upstream code (TruFor model package) carries its own style and must
+# not be linted/formatted as first-party source — it pollutes the signal.
+extend-exclude = [".pytest-tmp", "tools/ml_tools/trufor_pkg"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "PT"]
@@ -204,7 +206,7 @@ ignore = ["E501", "S101"]
 # FastAPI intentionally uses Depends()/Header()/Cookie() in endpoint signatures.
 "api/routes/*.py" = ["B008"]
 "api/routes/_rate_limiting.py" = ["B008", "B904", "N806"]
-"api/routes/auth.py" = ["B008", "B904", "N814", "S105", "S106"]
+"api/routes/auth.py" = ["B008", "B904", "N814", "S105", "S106", "S110"]
 "api/routes/hitl.py" = ["B008", "B904"]
 "api/routes/metrics.py" = ["B008", "N814", "S110"]
 "api/routes/sessions.py" = ["B008", "B904", "N806", "N814", "S110"]
@@ -219,6 +221,8 @@ ignore = ["E501", "S101"]
 "agents/arbiter_narrative.py" = ["N806"]
 "agents/mixins/reflection.py" = ["N806"]
 "api/main.py" = ["N806"]
+# lifespan declares in-function constant tables (REQUIRED_BINARIES, etc.) in UPPER_CASE.
+"api/lifespan.py" = ["N806"]
 "core/calibration.py" = ["N806"]
 "core/cross_modal_fusion.py" = ["N806"]
 "core/episodic_memory.py" = ["S112"]

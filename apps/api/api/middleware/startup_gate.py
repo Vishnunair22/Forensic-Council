@@ -6,7 +6,6 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-
 _GATE_EXEMPT_PATHS = {"/live", "/api/v1/live", "/health", "/api/v1/health", "/metrics"}
 
 

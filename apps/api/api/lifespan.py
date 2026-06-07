@@ -107,17 +107,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.jwt_algorithm.startswith("RS") and not settings.jwt_private_key:
         if settings.app_env == "production":
             logger.error(
-                "CRITICAL: JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is missing. "
-                "Refusing to start in production to prevent silent HS256 fallback.",
-                settings.jwt_algorithm,
+                f"CRITICAL: JWT_ALGORITHM={settings.jwt_algorithm} but JWT_PRIVATE_KEY is "
+                "missing. Refusing to start in production to prevent silent HS256 fallback."
             )
             raise RuntimeError("Missing JWT private key for RS256 in production")
         else:
             logger.warning(
-                "JWT_ALGORITHM=%s but JWT_PRIVATE_KEY is not set — "
+                f"JWT_ALGORITHM={settings.jwt_algorithm} but JWT_PRIVATE_KEY is not set — "
                 "falling back to HS256 (HMAC symmetric). "
-                "Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY before production deployment.",
-                settings.jwt_algorithm,
+                "Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY before production deployment."
             )
 
     demo_password = os.getenv("DEMO_PASSWORD", "")
@@ -363,8 +361,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("LLM provider: none — agent synthesis disabled (template fallback only)")
     elif not llm_key_ok:
         logger.warning(
-            "LLM provider set to '%s' but no API key configured — synthesis will fall back to templates",
-            llm_provider,
+            f"LLM provider set to '{llm_provider}' but no API key configured — "
+            "synthesis will fall back to templates"
         )
     if not gemini_key_ok:
         logger.info(

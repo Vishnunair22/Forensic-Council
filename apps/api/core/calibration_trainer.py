@@ -260,11 +260,8 @@ def train_from_csv(
     metrics = evaluate_calibration(eval_scores, eval_labels, platt_a, platt_b)
 
     logger.info(
-        "Calibration training complete: agent_id=%s, platt_a=%s, platt_b=%s, metrics=%s",
-        agent_id,
-        round(platt_a, 4),
-        round(platt_b, 4),
-        metrics,
+        f"Calibration training complete: agent_id={agent_id}, "
+        f"platt_a={round(platt_a, 4)}, platt_b={round(platt_b, 4)}, metrics={metrics}"
     )
 
     return CalibrationTrainingResult(
@@ -288,7 +285,7 @@ def save_trained_model(
     path = output_dir / f"{result.agent_id}_calibration.json"
     with open(path, "w") as f:
         json.dump(model_dict, f, indent=2)
-    logger.info("Calibration model saved: agent_id=%s, path=%s", result.agent_id, str(path))
+    logger.info(f"Calibration model saved: agent_id={result.agent_id}, path={path}")
     return path
 
 

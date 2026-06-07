@@ -6,8 +6,12 @@ Lightweight observers for monitoring event loop health and forensic tool perform
 """
 
 import asyncio
+from typing import TYPE_CHECKING, Any
 
 from core.structured_logging import get_logger
+
+if TYPE_CHECKING:
+    from starlette.datastructures import State
 
 logger = get_logger(__name__)
 
@@ -64,7 +68,7 @@ class HeartbeatMonitor:
         self._stop_event.set()
 
 
-async def start_monitoring(app_state: dict) -> None:
+async def start_monitoring(app_state: "State | dict[str, Any]") -> None:
     """Initialize health monitoring as a background task in the app lifespan."""
     monitor = HeartbeatMonitor()
     monitor_task = asyncio.create_task(monitor.start())
