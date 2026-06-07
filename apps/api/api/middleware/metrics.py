@@ -28,7 +28,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             from core.persistence.redis_client import get_redis_client as _get_rc
 
             _rc = await _get_rc()
-            _count = int(await _rc.client.scard("metrics:active_sessions") or 0)
+            # redis.asyncio scard is awaitable at runtime; the stub union with the
+            # in-memory fallback makes pyright see a sync int here.
+            _count = int(await _rc.client.scard("metrics:active_sessions") or 0)  # pyright: ignore[reportGeneralTypeIssues]
         except Exception:
             from api.routes.investigation import get_active_pipelines_count
 
