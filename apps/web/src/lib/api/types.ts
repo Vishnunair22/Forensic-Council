@@ -110,6 +110,8 @@ export interface ReportDTO {
     coverage_line?: string;
   };
   degradation_flags?: string[];
+  /** Per-agent list of tools that ran in a degraded/fallback mode (agent_id → tool names). */
+  degraded_findings_summary?: Record<string, string[]>;
   compression_penalty?: number;
   cross_modal_fusion?: Record<string, unknown>;
   calibrated_probability?: number;

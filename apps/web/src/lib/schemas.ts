@@ -67,6 +67,7 @@ export const ReportDTOSchema = z.object({
     .optional(),
   uncertainty_statement: z.string().optional(),
   degradation_flags: z.array(z.string()).optional(),
+  degraded_findings_summary: z.record(z.string(), z.array(z.string())).optional(),
   applicable_agent_count: z.number().optional(),
   confidence_min: z.number().optional(),
   confidence_max: z.number().optional(),

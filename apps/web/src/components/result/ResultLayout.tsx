@@ -260,10 +260,15 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 />
               </motion.div>
 
-              {/* 3. Degradation Banner — only when analysis was degraded */}
-              {(rs.report.degradation_flags ?? []).length > 0 && (
+              {/* 3. Degradation Banner — when analysis was degraded (report-level
+                  flags and/or per-agent fallback-tool detail) */}
+              {((rs.report.degradation_flags ?? []).length > 0 ||
+                Object.keys(rs.report.degraded_findings_summary ?? {}).length > 0) && (
                 <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                  <DegradationBanner flags={rs.report.degradation_flags ?? []} />
+                  <DegradationBanner
+                    flags={rs.report.degradation_flags ?? []}
+                    perAgent={rs.report.degraded_findings_summary}
+                  />
                 </motion.div>
               )}
 
