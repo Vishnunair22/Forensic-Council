@@ -19,7 +19,8 @@ Browser
   │       ├─ ForensicCouncilPipeline.run_investigation()
   │       │       │
   │       │       ├─ Phase 1: Initial pass (Sequential)
-  │       │       │   Agent 1 → Agent 2 → Agent 3 → Agent 4 → Agent 5
+  │       │       │   Only file-type-applicable agents run, in order
+  │       │       │   (image → 1,3,5 · audio → 2,5 · video → 4,5 · pdf → 5)
   │       │       │
   │       │       ├─ PIPELINE_PAUSED → WebSocket broadcast
   │       │       │   (wait for POST /api/v1/sessions/{id}/resume)
@@ -105,7 +106,7 @@ All 5 specialist agents extend `ForensicAgent` (abstract base class) and share:
 | Layer | Mechanism |
 |-------|-----------|
 | Transport | TLS via Caddy + Let's Encrypt (production) |
-| Authentication | JWT HS256, 60-min expiry, Redis blacklist |
+| Authentication | JWT (HS256 default; RS256 supported via JWT_PRIVATE_KEY), 60-min expiry, Redis blacklist |
 | Passwords | bcrypt (work factor ≥ 12), 72-byte truncation |
 | Authorization | Role-based (admin / investigator) per route |
 | Rate limiting | Redis INCR/EXPIRE; in-process dict fallback |
@@ -136,7 +137,7 @@ Heavy ML inference runs in isolated subprocesses (`apps/api/tools/ml_tools/`) vi
 | `noise_fingerprint.py` | PRNU camera noise | Agent 1 |
 | `copy_move_detector.py` | SIFT copy-move detection | Agent 1 |
 | `audio_splice_detector.py` | Spectral splice detection | Agent 2 |
-| `deepfake_frequency.py` | DCT frequency analysis | Agent 2, 4 |
+| `deepfake_frequency.py` | FFT/DCT GAN frequency analysis | Agent 1, 4 |
 | `anomaly_classifier.py` | IsolationForest scene | Agent 3 |
 | `lighting_analyzer.py` | Shadow/highlight consistency | Agent 3 |
 | `rolling_shutter_validator.py` | Temporal consistency | Agent 4 |
@@ -200,6 +201,6 @@ For a definitive list of diagnostic tools available to each specialist agent, se
 |-------|-----------------|-----------|
 | **Agent 1 (Image)** | Compression, splicing, GAN detection | ELA, JPEG Ghost, PRNU, Copy-Move, Deepfake |
 | **Agent 2 (Audio)** | Speaker verification, synthesis detection | Diarization, Anti-Spoofing, Prosody, ENF |
-| **Agent 3 (Object)** | Scene context, incongruence detection | YOLO, CLIP, Scale validation, Lighting check |
+| **Agent 3 (Object)** | Scene context, incongruence detection | DETR (default; YOLO opt-in), CLIP, Scale validation, Lighting check |
 | **Agent 4 (Video)** | Frame consistency, face swap detection | Optical Flow, Face Swap, Forgery, Liveness |
 | **Agent 5 (Metadata)** | Exif, GPS, steganography, C2PA | ExifTool, GPS validation, Steganography, C2PA |
