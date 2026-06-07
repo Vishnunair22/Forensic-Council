@@ -1122,7 +1122,8 @@ class LLMClient:
 
         estimated_tokens = (len(system_prompt) + len(user_content)) // 4 + (max_tokens or 2048)
         allowed, reason = await quota_mgr.can_make_call(
-            effective_priority, estimated_tokens=estimated_tokens
+            effective_priority,  # pyright: ignore[reportArgumentType]  # normalized priority string
+            estimated_tokens=estimated_tokens,
         )
 
         if not allowed:

@@ -192,9 +192,9 @@ def normalize_tool_output(
     return ToolOutputEnvelope(
         tool_name=tool_name,
         available=available,
-        status=env_status,
+        status=env_status,  # pyright: ignore[reportArgumentType]  # normalized to a valid status literal
         signal_category=signal_cat,
-        evidence_verdict=verdict_val,
+        evidence_verdict=verdict_val,  # pyright: ignore[reportArgumentType]  # normalized to a valid verdict literal
         confidence=final_conf,
         court_defensible=court_def,
         summary=summary,

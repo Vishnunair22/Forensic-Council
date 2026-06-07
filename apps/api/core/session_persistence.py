@@ -33,7 +33,8 @@ def _to_jsonb_safe(data: dict) -> dict:
     Handles non-serializable types via str() and strips NUL bytes that
     Postgres rejects in JSONB columns.
     """
-    return _nul_strip(json.loads(json.dumps(data, default=str)))
+    result = _nul_strip(json.loads(json.dumps(data, default=str)))
+    return result if isinstance(result, dict) else {}
 
 from core.config import get_settings
 from core.persistence.postgres_client import PostgresClient

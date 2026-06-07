@@ -448,7 +448,7 @@ def _parse_preflight_gemini_response(
         editing_or_compositing_signals=_editing_signals,
         compression_or_reupload_signals=[s for s in (ii.get("compression_signals") or []) if s],
         regions_for_followup=[r for r in (ii.get("regions_for_followup") or []) if r],
-        integrity_assessment=integrity_assessment_val,
+        integrity_assessment=integrity_assessment_val,  # pyright: ignore[reportArgumentType]  # validated against _valid_assessments
         confidence=confidence,
     )
 
@@ -507,7 +507,7 @@ def _parse_preflight_gemini_response(
         visible_timestamps=[t for t in (mp.get("visible_timestamps") or []) if t],
         scene_description=scene_desc,
         file_type_assessment=str(ii.get("file_type_assessment") or ""),
-        authenticity_verdict=verdict,
+        authenticity_verdict=verdict,  # pyright: ignore[reportArgumentType]  # mapped from _integrity_to_verdict
         confidence=confidence,
         tool_coverage={"gemini_preflight": True},
         provider_attempts=[{"provider": model_used, "success": True, "phase": "preflight"}],
@@ -781,7 +781,7 @@ class GeminiVisionFinding:
 # tests and imports. All new code should import VisualEvidenceFinding from core.vision_types.
 # NOTE: The @dataclass GeminiVisionFinding defined above is intentionally shadowed here so
 # that callers get the canonical VisualEvidenceFinding shape without a separate definition.
-GeminiVisionFinding = VisualEvidenceFinding  # noqa: F811
+GeminiVisionFinding = VisualEvidenceFinding  # noqa: F811  # pyright: ignore[reportAssignmentType]  # intentional back-compat alias
 
 
 class GeminiVisionClient:
@@ -2083,7 +2083,7 @@ class GeminiVisionClient:
             exif_summary=exif_summary,
             is_screen_capture_like=is_screen_capture_like,
         )
-        return finding
+        return finding  # pyright: ignore[reportReturnType]  # GeminiVisionFinding is an alias of VisualEvidenceFinding
 
     def _disabled_finding(self, analysis_type: str) -> GeminiVisionFinding:
         """Return a graceful no-op finding when Gemini is not configured."""
