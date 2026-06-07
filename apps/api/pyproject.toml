@@ -200,7 +200,10 @@ extend-exclude = [".pytest-tmp", "tools/ml_tools/trufor_pkg"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "PT"]
-ignore = ["E501", "S101"]
+# UP042: the explicit `class X(str, Enum)` idiom is used deliberately — switching
+# to StrEnum changes str(X) output (value vs "Class.member") and risks breaking
+# serialization/comparisons, so it is not a safe automated migration.
+ignore = ["E501", "S101", "UP042"]
 
 [tool.ruff.lint.per-file-ignores]
 # FastAPI intentionally uses Depends()/Header()/Cookie() in endpoint signatures.
@@ -233,13 +236,23 @@ ignore = ["E501", "S101"]
 "core/episodic_memory.py" = ["S112"]
 "core/exceptions.py" = ["N818"]
 "core/forensics.py" = ["N806"]
-"core/gemini_client.py" = ["N806"]
+"core/gemini_client.py" = ["N806", "N818", "S311"]
+# UPPER_CASE function-local constant tables (verdict/tool sets).
+"core/per_agent_synthesis.py" = ["N806"]
+"core/agent_reasoning.py" = ["N806"]
+"core/findings_humanizer.py" = ["N806"]
+"core/vision_types.py" = ["N806"]
+# Non-crypto random is retry/backoff jitter, not security-sensitive.
+"core/llm_client.py" = ["S311"]
+# Imports deliberately placed after a warnings filter / near first use.
+"core/vision_local_ensemble.py" = ["E402"]
+"core/file_type_policy.py" = ["E402"]
 "core/image_utils.py" = ["S110"]
-"core/persistence/*.py" = ["B904"]
+"core/persistence/*.py" = ["B904", "E402"]
 "core/retry.py" = ["S311"]
-"core/session_persistence.py" = ["B904"]
+"core/session_persistence.py" = ["B904", "E402"]
 "core/signing.py" = ["N806"]
-"core/synthesis.py" = ["B904", "E701", "N806"]
+"core/synthesis.py" = ["B904", "E701", "N806", "N818"]
 "core/tool_interpreters.py" = ["B008"]
 "scripts/run_api.py" = ["S104"]
 "scripts/train_calibration.py" = ["N806"]

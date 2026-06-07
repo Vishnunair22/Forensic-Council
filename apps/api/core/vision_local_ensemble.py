@@ -735,7 +735,7 @@ async def _analyze_local_visual_profile_impl(
     raw_results = await asyncio.gather(*(tasks[k] for k in keys), return_exceptions=True)
 
     results_map = {}
-    for k, r in zip(keys, raw_results):
+    for k, r in zip(keys, raw_results, strict=False):
         results_map[k] = r
 
     # ── Collect results ──────────────────────────────────────────────────

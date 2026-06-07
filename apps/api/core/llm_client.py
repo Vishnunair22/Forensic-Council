@@ -752,7 +752,7 @@ class LLMClient:
     ) -> str:
         """
         Smart chunking for large finding sets.
-        
+
         If user_content (findings JSON) exceeds 6000 characters, split by agent
         and generate per-agent micro-syntheses, then combine.
         """

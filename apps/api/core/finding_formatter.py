@@ -109,7 +109,7 @@ def build_detailed_reasoning(tool_name: str, output: dict) -> str:
 
     if lower_tool == "object_detection":
         detections = output.get("detections", [])
-        classes = set(d.get("class", "") for d in detections if isinstance(d, dict) and d.get("class"))
+        classes = {d.get("class", "") for d in detections if isinstance(d, dict) and d.get("class")}
         return (
             f"YOLO object detection: {len(detections)} objects detected "
             f"across {len(classes)} classes. "

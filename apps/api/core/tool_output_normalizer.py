@@ -164,7 +164,7 @@ def normalize_tool_output(
     # Extract limitations and warnings
     limitations = []
     if "limitations" in raw_dict and isinstance(raw_dict["limitations"], list):
-        limitations.extend([str(l) for l in raw_dict["limitations"]])
+        limitations.extend([str(item) for item in raw_dict["limitations"]])
     for wkey in ["warning", "note", "skipped_reason", "file_format_note", "limitation_note"]:
         if wkey in raw_dict and raw_dict[wkey]:
             limitations.append(str(raw_dict[wkey]))

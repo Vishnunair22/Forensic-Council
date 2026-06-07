@@ -1049,7 +1049,7 @@ Return ONLY a JSON object with this exact schema:
 
         # Sentence 2: top tool outcomes with metrics
         outcomes = []
-        for tool, row in tool_rows.items():
+        for _tool, row in tool_rows.items():
             grounded = self._tool_grounded_summary(row, screenshot_like=screenshot_like)
             if grounded:
                 outcomes.append(grounded.split(".")[0].strip())

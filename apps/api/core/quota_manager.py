@@ -32,7 +32,7 @@ class QuotaAllocation:
 class QuotaManager:
     """
     Intelligent quota distribution for free-tier API limits.
-    
+
     Priority Levels:
     - CRITICAL: Agent 1 vision (initial+deep), Arbiter final synthesis
     - HIGH: Agent 3 vision (object grounding), Agent 5 vision (metadata visual)
@@ -69,7 +69,7 @@ class QuotaManager:
     ) -> tuple[bool, str]:
         """
         Check if call is allowed based on priority and current quota.
-        
+
         Returns:
             (allowed: bool, reason: str)
         """
@@ -101,7 +101,7 @@ class QuotaManager:
     ) -> bool:
         """
         Block until a rate limit slot becomes available.
-        
+
         Polls every 0.5s up to `timeout` seconds. Returns True once a slot
         is free, False if the timeout was reached.
         """

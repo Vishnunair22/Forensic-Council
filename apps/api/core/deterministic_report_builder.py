@@ -84,7 +84,7 @@ def build_deterministic_report(
 
     agent_list = [f"Agent {aid[-1]}" for aid in norm_syn.keys()]
     n_agents = len(agent_list)
-    agents_str = ", ".join(agent_list) if agent_list else "analytical agents"
+    ", ".join(agent_list) if agent_list else "analytical agents"
     domain_count = n_agents  # one domain per active agent
 
     # Sentence 1 — core verdict statement
@@ -209,7 +209,7 @@ def build_deterministic_report(
     # --- 5. Key Findings ---
     key_findings = []
     # Collect key findings from agents first
-    for aid, syn in norm_syn.items():
+    for syn in norm_syn.values():
         key_findings.extend(syn.key_findings)
     # Deduplicate key findings
     seen_kfs = set()

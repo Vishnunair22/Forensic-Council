@@ -38,9 +38,12 @@ import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+if TYPE_CHECKING:
+    from core.visual_context_models import VisualContext
 
 from core.config import Settings
 from core.llm_client import is_placeholder_secret
@@ -474,7 +477,7 @@ def _parse_preflight_gemini_response(
 
     meta_context = MetadataVisualContext(
         visible_timestamps=[t for t in (mp.get("visible_timestamps") or []) if t],
-        visible_location_clues=[l for l in (mp.get("visible_location_clues") or []) if l],
+        visible_location_clues=[loc for loc in (mp.get("visible_location_clues") or []) if loc],
         device_or_platform_clues=device_clues,
         software_or_app_clues=[a for a in (mp.get("app_software_clues") or []) if a],
         lighting_weather_season_clues=[c for c in (mp.get("lighting_weather_season_clues") or []) if c],
@@ -1350,7 +1353,7 @@ class GeminiVisionClient:
             finding.analysis_type = analysis_type
             return finding
 
-        t0 = time.monotonic()
+        time.monotonic()
 
         # ── Media delivery: native File API for audio/video, inline for the rest ──
         # Audio/video are sent to Gemini natively (true multimodal perception)
