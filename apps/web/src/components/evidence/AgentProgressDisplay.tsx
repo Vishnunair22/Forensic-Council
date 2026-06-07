@@ -179,7 +179,7 @@ function ActiveAgentsPanel({
                         `${normalizeVerdict(completed.agent_verdict)} · ${Math.round((completed.confidence ?? 0) * 100)}%`
                       )}
                       {status === "queued" && "Queued — awaiting worker"}
-                      {status === "waiting" && "Standby"}
+                      {status === "waiting" && "Waiting"}
                       {status === "error" && "Analysis error"}
                     </p>
                   </div>
@@ -551,10 +551,10 @@ export function AgentProgressDisplay({
       <AnimatePresence>
         {awaitingDecision && revealQueue.length === 0 && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
-            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8 relative z-20"
           >
             <div className="fc-surface-elevated rounded-2xl p-6 md:p-8">
@@ -604,10 +604,10 @@ export function AgentProgressDisplay({
       <AnimatePresence>
         {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && pipelineStatus === "awaiting_decision" && !isNavigating && !arbiterDeliberating && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
-            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, scale: 1.05, filter: "blur(4px)" }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-2xl mx-auto px-4 sm:px-6 pb-8"
           >
             <div className="fc-surface-elevated rounded-2xl px-4 py-4">

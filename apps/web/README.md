@@ -15,6 +15,10 @@ The primary entry points for development are the root wrapper scripts:
 
 For detailed setup instructions, host-run options, and workflow commands, please refer to the root [README.md](../../README.md) and the [Docker Build & Lifecycle Guide](../../infra/DOCKER_BUILD.md).
 
+The UI follows a single, mechanically-enforced design system — see
+[FRONTEND_DESIGN_SYSTEM.md](./FRONTEND_DESIGN_SYSTEM.md) (Precision Frosted Glass:
+surfaces, motion, typography, a11y, and the ESLint rules that gate them).
+
 ## Subdirectory Structure
 - `src/app/`: Next.js App Router pages, layouts, and API proxy/auth routes.
 - `src/components/`: Modular UI, evidence workflow, and result report components.

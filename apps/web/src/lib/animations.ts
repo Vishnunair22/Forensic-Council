@@ -1,5 +1,8 @@
 import type { Variants } from "framer-motion";
 
+// Motion primitives — Design System §6: functional, rapid, no spring/bounce,
+// no scale entrances, max duration 200ms. Allowed: opacity fades + subtle Y.
+
 export const FADE_IN: Variants = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
@@ -12,16 +15,8 @@ export const FADE_IN_UP: Variants = {
   exit: { opacity: 0, y: 4 },
 };
 
-export const FADE_IN_SCALE: Variants = {
-  initial: { opacity: 0, scale: 0.95, filter: "blur(4px)" },
-  animate: { opacity: 1, scale: 1, filter: "blur(0px)" },
-  exit: { opacity: 0, scale: 1.05, filter: "blur(4px)" },
-};
-
-export const SPRING_STIFF = { type: "spring" as const, stiffness: 300, damping: 20 };
-
-export const SPRING_GENTLE = { type: "spring" as const, stiffness: 200, damping: 25 };
-
+// Canonical interaction tween — 160ms ease-out.
 export const TRANSITION_FAST = { duration: 0.16, ease: "easeOut" } as const;
 
-export const TRANSITION_SMOOTH = { duration: 0.4, ease: [0.16, 1, 0.3, 1] } as const;
+// Max-duration reveal tween (accordion / progress / modal enter) — 200ms.
+export const TRANSITION_ENTER = { duration: 0.2, ease: [0.16, 1, 0.3, 1] } as const;

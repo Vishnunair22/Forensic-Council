@@ -194,9 +194,9 @@ describe("useInvestigation Hook", () => {
 
     renderHook(() => useInvestigation(mockPlaySound));
 
-    // Lands on the evidence/upload page (with the open-upload-once flag) rather
-    // than the landing hero, to avoid a home-page flash before the upload UI.
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/evidence"));
+    // Routes home with the open-upload-once flag set, so HeroAuthActions opens the
+    // upload modal immediately (the user lands ready to re-upload).
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/"));
     expect(storage.getItem("forensic_session_id")).toBeNull();
     expect(sessionOnlyStorage.getItem("fc_open_upload_once")).toBe("1");
     expect(sessionOnlyStorage.getItem("fc_no_reconnect")).toBe("1");

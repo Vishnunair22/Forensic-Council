@@ -6,7 +6,7 @@ import { X, CloudUpload, Volume2, VolumeX } from "lucide-react";
 import { ALLOWED_MIME_TYPES } from "@/lib/constants";
 import { useSound } from "@/hooks/useSound";
 import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
-import { TRANSITION_FAST, SPRING_STIFF } from "@/lib/animations";
+import { TRANSITION_FAST } from "@/lib/animations";
 
 export interface UploadModalProps {
   onClose: () => void;
@@ -161,7 +161,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
             backgroundColor: "rgba(var(--color-primary-rgb),0.08)",
           },
         }}
-        transition={SPRING_STIFF}
+        transition={TRANSITION_FAST}
         className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed fc-focus-ring cursor-pointer"
       >
         <AnimatePresence>
@@ -187,19 +187,19 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
 
         <div className="flex flex-col items-center gap-2 pointer-events-none text-center relative z-20">
           {isSecuring ? (
-            <span className="flex items-center gap-2 text-lg font-bold tracking-widest uppercase text-primary">
+            <span className="flex items-center gap-2 text-lg font-bold text-primary">
               <span
                 className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"
                 aria-hidden="true"
               />
-              Establishing Secure Channel
+              Securing Evidence
             </span>
           ) : (
-            <span className={`text-lg font-bold tracking-widest uppercase transition-colors duration-300 ${
+            <span className={`text-lg font-bold transition-colors duration-300 ${
                 isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
               }`}
             >
-              {isDragging ? "Initiate Transfer" : "Select Evidence"}
+              {isDragging ? "Drop to Upload" : "Select Evidence"}
             </span>
           )}
           <p id="upload-file-help" className="text-xs font-mono fc-text-muted opacity-70 uppercase tracking-wider">

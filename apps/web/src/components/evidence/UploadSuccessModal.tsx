@@ -15,7 +15,7 @@ import {
 import { useSound } from "@/hooks/useSound";
 import { formatBytes } from "@/lib/utils";
 import { getFileCategory } from "@/lib/fileValidation";
-import { TRANSITION_SMOOTH, SPRING_GENTLE } from "@/lib/animations";
+import { TRANSITION_ENTER } from "@/lib/animations";
 
 export interface UploadSuccessModalProps {
   file: File;
@@ -74,7 +74,7 @@ export function UploadSuccessModal({
       initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 10, filter: "blur(4px)" }}
       animate={prefersReducedMotion ? false : { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
       exit={prefersReducedMotion ? {} : { opacity: 0, scale: 1.02, y: -6, filter: "blur(4px)" }}
-      transition={TRANSITION_SMOOTH}
+      transition={TRANSITION_ENTER}
       className="p-6 sm:p-8 flex flex-col text-left relative"
     >
       {/* Subtle dot texture */}
@@ -126,7 +126,7 @@ export function UploadSuccessModal({
             className="absolute inset-0 flex flex-col items-center justify-center"
             initial={prefersReducedMotion ? false : { scale: 0.9, opacity: 0, filter: "blur(4px)" }}
             animate={prefersReducedMotion ? false : { scale: 1, opacity: 1, filter: "blur(0px)" }}
-            transition={SPRING_GENTLE}
+            transition={TRANSITION_ENTER}
           >
             {fileCategory === "image" && objectUrl ? (
               <>

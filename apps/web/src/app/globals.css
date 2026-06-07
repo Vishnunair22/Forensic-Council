@@ -762,3 +762,81 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  PRINT / PDF EXPORT (Design System §8.2)                        */
+/*  Frosted glass + dark themes fail in PDF/print engines. Both     */
+/*  Ctrl+P and an explicit data-print-mode="true" on <html> flatten */
+/*  the UI to high-contrast ink-on-white for court-grade output.    */
+/* ─────────────────────────────────────────────────────────────── */
+@media print {
+  html, body {
+    background: #ffffff !important;
+    color: #0a0f1a !important;
+  }
+
+  /* Drop GPU glass everywhere — backdrop-filter renders black in print engines */
+  .fc-surface-solid,
+  .fc-surface-quiet,
+  .fc-surface,
+  .fc-surface-elevated,
+  .fc-surface-overlay,
+  .fc-upload-zone {
+    background: #ffffff !important;
+    border: 1px solid #c7ccd6 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Invert the canonical text tiers to dark ink (alpha floors are for dark glass) */
+  .fc-text-primary   { color: #0a0f1a !important; }
+  .fc-text-secondary { color: #1f2733 !important; }
+  .fc-text-muted     { color: #3a4452 !important; }
+  .fc-text-faint     { color: #55606e !important; }
+
+  /* Hero gradient text → solid dark; registry blue darkens for white paper */
+  .text-hero-gradient {
+    background: none !important;
+    -webkit-text-fill-color: #0a0f1a !important;
+    color: #0a0f1a !important;
+  }
+  .text-primary, .fc-text-primary-accent { color: #1d4ed8 !important; }
+
+  /* Flatten decorative chrome and suppress sound/nav controls from paper */
+  .text-glow, .noise-overlay::after, .fc-glass-highlight::before {
+    text-shadow: none !important;
+    background: none !important;
+    opacity: 0 !important;
+  }
+  nav[data-nav-offset], [data-print-hide="true"] {
+    display: none !important;
+  }
+}
+
+/* Explicit print-mode toggle (set on <html> before programmatic export) mirrors
+   the @media print rules so a PDF can be rendered without a browser print dialog. */
+html[data-print-mode="true"] {
+  background: #ffffff !important;
+  color: #0a0f1a !important;
+}
+html[data-print-mode="true"] :is(
+  .fc-surface-solid, .fc-surface-quiet, .fc-surface,
+  .fc-surface-elevated, .fc-surface-overlay, .fc-upload-zone
+) {
+  background: #ffffff !important;
+  border: 1px solid #c7ccd6 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-print-mode="true"] .fc-text-primary   { color: #0a0f1a !important; }
+html[data-print-mode="true"] .fc-text-secondary { color: #1f2733 !important; }
+html[data-print-mode="true"] .fc-text-muted     { color: #3a4452 !important; }
+html[data-print-mode="true"] .fc-text-faint     { color: #55606e !important; }
+html[data-print-mode="true"] .text-hero-gradient {
+  background: none !important;
+  -webkit-text-fill-color: #0a0f1a !important;
+  color: #0a0f1a !important;
+}
+html[data-print-mode="true"] [data-print-hide="true"] { display: none !important; }

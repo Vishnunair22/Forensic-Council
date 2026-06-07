@@ -24,7 +24,7 @@ describe("UploadModal", () => {
       },
     });
 
-    expect(screen.getByText(/establishing secure channel/i)).toBeInTheDocument();
+    expect(screen.getByText(/securing evidence/i)).toBeInTheDocument();
     await waitFor(() => expect(onFileSelected).toHaveBeenCalledTimes(1));
     expect(onFileSelected.mock.calls[0][0].name).toBe("evidence.png");
   });

@@ -1,6 +1,6 @@
 import { supportedAgentIdsForMime, isAgentSupportedForMime } from "@/lib/agentSupport";
 
-describe("supportedAgentIdsForMime (image-only contract)", () => {
+describe("supportedAgentIdsForMime (multi-modal contract)", () => {
   it("routes undefined mimeType to Agent1, Agent3, Agent5 only", () => {
     const ids = supportedAgentIdsForMime(undefined);
     expect(ids.has("Agent1")).toBe(true);
@@ -20,26 +20,30 @@ describe("supportedAgentIdsForMime (image-only contract)", () => {
     expect(ids).toEqual(new Set(["Agent1", "Agent3", "Agent5"]));
   });
 
-  // Image-only contract: every active agent (Agent1/Agent3/Agent5) is image/
-  // only per the backend AGENT_FILE_CAPABILITIES. Non-image types resolve to no
-  // supported agent (the upload layer rejects them before analysis).
-  it("routes audio/ types to no agent (image-only contract)", () => {
+  // Multi-modal contract — mirrors backend AGENT_FILE_CAPABILITIES:
+  // audio → Agent2 + Agent5, video → Agent4 + Agent5, pdf → Agent5 (metadata).
+  it("routes audio/ types to Agent2 + Agent5", () => {
     const ids = supportedAgentIdsForMime("audio/wav");
-    expect(ids).toEqual(new Set());
+    expect(ids).toEqual(new Set(["Agent2", "Agent5"]));
   });
 
-  it("routes video/ types to no agent (image-only contract)", () => {
+  it("routes video/ types to Agent4 + Agent5", () => {
     const ids = supportedAgentIdsForMime("video/mp4");
-    expect(ids).toEqual(new Set());
+    expect(ids).toEqual(new Set(["Agent4", "Agent5"]));
   });
 
-  it("routes unknown types to no agent (image-only contract)", () => {
+  it("routes application/pdf to Agent5 (metadata) only", () => {
     const ids = supportedAgentIdsForMime("application/pdf");
+    expect(ids).toEqual(new Set(["Agent5"]));
+  });
+
+  it("routes a genuinely unknown type to no agent", () => {
+    const ids = supportedAgentIdsForMime("application/x-tar");
     expect(ids).toEqual(new Set());
   });
 });
 
-describe("isAgentSupportedForMime (image-only contract)", () => {
+describe("isAgentSupportedForMime (per-agent modality)", () => {
   it("returns false for Agent3 with video/ (video not supported)", () => {
     expect(isAgentSupportedForMime("Agent3", "video/mp4")).toBe(false);
   });

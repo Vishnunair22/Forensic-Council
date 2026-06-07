@@ -73,7 +73,7 @@ export interface AgentStatusCardProps {
 }
 
 const statusConfig = {
-  waiting:     { color: "fc-text-muted",   label: "Standby"   },
+  waiting:     { color: "fc-text-muted",   label: "Waiting"   },
   queued:      { color: "fc-text-muted",   label: "Queued"    },
   checking:    { color: "text-primary",    label: "Syncing"   },
   running:     { color: "text-primary",    label: "Scanning"  },

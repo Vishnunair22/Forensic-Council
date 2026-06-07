@@ -814,8 +814,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           setShowLoadingOverlay(false);
           sessionOnlyStorage.setItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE, "1");
           sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
-          // Land on the evidence/upload page (NOT the landing hero) so there is no
-          // home-page flash before the analysis page.
+          // Route home; the FC_OPEN_UPLOAD_ONCE flag makes HeroAuthActions open the
+          // upload modal immediately, so the user lands ready to re-upload rather
+          // than seeing a stale/expired session view.
           router.push("/");
           return;
         }

@@ -122,7 +122,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
           its own AnimatePresence, keyed on isVisible). */}
       <ArbiterDeliberationOverlay
         isVisible={rs.state === "arbiter" || (rs.state === "ready" && !rs.report)}
-        liveText={rs.arbiterMsg || "Decrypting forensic ledger…"}
+        liveText={rs.arbiterMsg || "Compiling forensic report…"}
       />
       <AnimatePresence>
         {rs.state === "loading" && !rs.report && (

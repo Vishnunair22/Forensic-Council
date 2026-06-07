@@ -89,6 +89,7 @@ describe("AgentProgressDisplay", () => {
       ...progressDefaults,
       awaitingDecision: true,
       allAgentsDone: true,
+      pipelineStatus: "awaiting_decision",
       completedAgents: [
         {
           agent_id: "Agent1",

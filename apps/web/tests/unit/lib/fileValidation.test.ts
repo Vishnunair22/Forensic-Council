@@ -37,29 +37,30 @@ describe("validateEvidenceFile", () => {
     });
   });
 
-  describe("rejected file types", () => {
-    it("rejects audio files", () => {
-      const file = createMockFile("recording.mp3", "audio/mpeg", 1024);
-      const err = validateEvidenceFile(file);
-      expect(err).toContain("not currently supported");
+  describe("valid audio, video, and document files (multi-modal)", () => {
+    it("accepts MP3 audio", () => {
+      expect(validateEvidenceFile(createMockFile("recording.mp3", "audio/mpeg", 1024))).toBeNull();
     });
 
-    it("rejects video files", () => {
-      const file = createMockFile("video.mp4", "video/mp4", 1024);
-      const err = validateEvidenceFile(file);
-      expect(err).toContain("not currently supported");
+    it("accepts WAV audio", () => {
+      expect(validateEvidenceFile(createMockFile("audio.wav", "audio/wav", 1024))).toBeNull();
     });
 
-    it("rejects audio/wav files", () => {
-      const file = createMockFile("audio.wav", "audio/wav", 1024);
-      const err = validateEvidenceFile(file);
-      expect(err).toContain("not currently supported");
+    it("accepts MP4 video", () => {
+      expect(validateEvidenceFile(createMockFile("video.mp4", "video/mp4", 1024))).toBeNull();
     });
 
-    it("rejects video/webm files", () => {
-      const file = createMockFile("clip.webm", "video/webm", 1024);
-      const err = validateEvidenceFile(file);
-      expect(err).toContain("not currently supported");
+    it("accepts WEBM video", () => {
+      expect(validateEvidenceFile(createMockFile("clip.webm", "video/webm", 1024))).toBeNull();
+    });
+
+    it("accepts PDF documents", () => {
+      expect(validateEvidenceFile(createMockFile("report.pdf", "application/pdf", 1024))).toBeNull();
+    });
+
+    it("rejects a genuinely unsupported type", () => {
+      const err = validateEvidenceFile(createMockFile("archive.zip", "application/zip", 1024));
+      expect(err).toContain("not supported");
     });
   });
 
@@ -72,11 +73,11 @@ describe("validateEvidenceFile", () => {
     it("rejects oversized files", () => {
       const oversized = 55 * 1024 * 1024;
       const file = createMockFile("large.jpg", "image/jpeg", oversized);
-      expect(validateEvidenceFile(file)).toBe("File exceeds 50MB limit. Please select a smaller file.");
+      expect(validateEvidenceFile(file)).toBe("File exceeds 50 MB limit. Please select a smaller file.");
     });
 
     it("rejects unknown extensions without MIME", () => {
-      const file = createMockFile("document.pdf", "", 1024);
+      const file = createMockFile("document.xyz", "", 1024);
       expect(validateEvidenceFile(file)).toContain("not supported");
     });
 
@@ -87,19 +88,23 @@ describe("validateEvidenceFile", () => {
   });
 });
 
-describe("ALLOWED_EXTENSIONS", () => {
-  it("only includes image extensions", () => {
-    for (const ext of ALLOWED_EXTENSIONS) {
-      expect([".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".gif", ".bmp"]).toContain(ext);
+describe("ALLOWED_EXTENSIONS (multi-modal)", () => {
+  it("includes image, audio, video, and document extensions", () => {
+    for (const ext of [".jpg", ".png", ".tiff", ".webp", ".gif", ".bmp"]) {
+      expect(ALLOWED_EXTENSIONS.has(ext)).toBe(true);
     }
+    for (const ext of [".mp3", ".wav", ".flac", ".m4a"]) {
+      expect(ALLOWED_EXTENSIONS.has(ext)).toBe(true);
+    }
+    for (const ext of [".mp4", ".webm", ".mov", ".avi", ".mkv"]) {
+      expect(ALLOWED_EXTENSIONS.has(ext)).toBe(true);
+    }
+    expect(ALLOWED_EXTENSIONS.has(".pdf")).toBe(true);
   });
 
-  it("does NOT include audio or video extensions", () => {
-    expect(ALLOWED_EXTENSIONS.has(".mp3")).toBe(false);
-    expect(ALLOWED_EXTENSIONS.has(".wav")).toBe(false);
-    expect(ALLOWED_EXTENSIONS.has(".mp4")).toBe(false);
-    expect(ALLOWED_EXTENSIONS.has(".avi")).toBe(false);
-    expect(ALLOWED_EXTENSIONS.has(".mov")).toBe(false);
-    expect(ALLOWED_EXTENSIONS.has(".webm")).toBe(false);
+  it("excludes genuinely unsupported types", () => {
+    expect(ALLOWED_EXTENSIONS.has(".zip")).toBe(false);
+    expect(ALLOWED_EXTENSIONS.has(".exe")).toBe(false);
+    expect(ALLOWED_EXTENSIONS.has(".txt")).toBe(false);
   });
 });

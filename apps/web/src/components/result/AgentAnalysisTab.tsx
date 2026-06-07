@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
-import type { ReportDTO, AgentFindingDTO } from "@/lib/api";
+import type { ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { AgentFindingCard } from "@/components/ui/AgentFindingCard";
 import { ExecutionTimeline } from "./ExecutionTimeline";

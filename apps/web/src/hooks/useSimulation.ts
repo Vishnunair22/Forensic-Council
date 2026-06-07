@@ -518,7 +518,10 @@ export const useSimulation = ({
                     const gConf = gData.confidence;
                     const applyGrounding = (a: AgentUpdate): AgentUpdate => ({
                       ...a,
-                      agent_verdict: typeof gVerdict === "string" ? gVerdict : a.agent_verdict,
+                      agent_verdict:
+                        typeof gVerdict === "string"
+                          ? (gVerdict as AgentUpdate["agent_verdict"])
+                          : a.agent_verdict,
                       confidence: typeof gConf === "number" ? gConf : a.confidence,
                     });
                     const gIdx = completedAgentsRef.current.findIndex(
