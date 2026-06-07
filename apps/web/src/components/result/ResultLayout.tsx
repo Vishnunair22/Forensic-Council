@@ -281,7 +281,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               {/* 5. Key Findings */}
               {keyFindings.length > 0 && (
                 <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                  <KeyFindings findings={keyFindings} />
+                  <KeyFindings
+                    findings={keyFindings}
+                    verdictColor={getVerdictConfig(rs.report.overall_verdict ?? "").color}
+                  />
                 </motion.div>
               )}
 
@@ -587,7 +590,16 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
   const seen = new Set<string>();
 
   const push = (value: string | null | undefined) => {
-    const cleaned = cleanFindingText(value);
+    let cleaned = cleanFindingText(value);
+    // Normalise cited tool-confidence "(NN%)": a raw 0-1 fraction the model forgot
+    // to scale ("(0.297%)" → 30%) or float-precision noise ("(39.999996%)" → 40%).
+    if (cleaned) {
+      cleaned = cleaned.replace(/\((\d+(?:\.\d+)?)%\)/g, (_m, n) => {
+        let v = parseFloat(n);
+        if (v < 1) v *= 100;
+        return `(${Math.round(v)}%)`;
+      });
+    }
     if (!cleaned || isLowValueFinding(cleaned)) return;
     const key = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 80);
     if (seen.has(key)) return;

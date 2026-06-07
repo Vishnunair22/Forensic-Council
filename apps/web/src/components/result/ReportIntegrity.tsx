@@ -20,12 +20,16 @@ function formatSignedDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
+    // Render in UTC: deterministic across server/client (no hydration mismatch)
+    // and viewer-independent — the court-defensible standard for the signed
+    // timestamp (matches the report's signed_utc field).
     return d.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: "UTC",
       timeZoneName: "short",
     });
   } catch {

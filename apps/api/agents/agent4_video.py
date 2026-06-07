@@ -54,6 +54,10 @@ class Agent4Video(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS
         return [
+            # Holistic axis for video: the native Gemini video determination
+            # (deepfake / AI-generation / temporal-manipulation), mirroring Agent1's
+            # visual_evidence_profile for images and Agent2's for audio.
+            "Run read_shared_image_context to incorporate the holistic native video profile (deepfake / AI-generation / temporal-manipulation determination)",
             "Run optical_flow_analysis and generate temporal anomaly heatmap",
             "Run frame_consistency_analysis for temporal inter-frame jumps",
             "Run video_metadata for container timing validation",
@@ -69,7 +73,7 @@ class Agent4Video(ForensicAgent):
             "Run interframe_forgery_detector for motion ghosting and SSIM variance",
             "Run rolling_shutter_validation against claimed device metadata",
             "Run compression_artifact_analysis for P-frame/I-frame incongruence",
-            "Read shared image context for key-frame visual grounding",
+            "Run read_shared_image_context to incorporate the holistic native video profile (deepfake / AI-generation / temporal-manipulation determination)",
         ]
 
     @property

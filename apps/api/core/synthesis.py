@@ -1060,11 +1060,13 @@ Return ONLY a JSON object with this exact schema:
         else:
             s2 = f"{n} forensic tool(s) completed without significant indicators."
 
-        # Sentence 3: verdict + confidence
-        s3 = (
-            f"Based on the visual assessment and tool checks, "
-            f"this evidence is assessed as {verdict} with {conf_val:.0f}% confidence."
-        )
+        # Sentence 3: a finding-anchored conclusion. We deliberately do NOT restate
+        # an absolute "assessed as {verdict} with {conf}%" here: the card/report show
+        # the authoritative verdict + confidence prominently, and a later arbiter
+        # grounding pass can elevate the agent verdict after this brief is built —
+        # restating a now-stale verdict reads as a contradiction (e.g. brief
+        # "assessed as AUTHENTIC 85%" beside a card verdict of "Manipulated 91%").
+        s3 = "These checks form the evidentiary basis for this agent's determination."
 
         return f"{s1} {s2} {s3}"
 

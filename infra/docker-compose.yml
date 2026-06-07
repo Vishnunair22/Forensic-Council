@@ -78,7 +78,8 @@ x-backend-env: &backend-env
   DAILY_COST_QUOTA_ADMIN_USD: ${DAILY_COST_QUOTA_ADMIN_USD:-500.0}
   EVIDENCE_STORAGE_PATH: /app/storage/evidence
   CALIBRATION_MODELS_PATH: /app/cache/calibration_models
-  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-1}
+  # Must be 0 — disabling numba JIT breaks all of librosa (Agent 2 audio tools).
+  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-0}
   NUMBA_CACHE_DIR: /app/cache/numba_cache
   HOME: /tmp
   EASYOCR_MODEL_DIR: /app/cache/easyocr

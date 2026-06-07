@@ -594,13 +594,24 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
     # must not inflate "completed N check(s)". This keeps the result-page count
     # equal to the evidence-card's "N applicable forensic checks" (single source
     # of truth — previously the card said 3 while the report said 4).
-    _applicable_tools = {
-        str((f.get("metadata") or {}).get("tool_name") or f.get("finding_type") or "")
-        for f in _source_findings
-        if str(f.get("evidence_verdict") or "").upper() != "NOT_APPLICABLE"
-        and str(f.get("status") or "").upper() != "NOT_APPLICABLE"
+    # Exclude context/plumbing tools AND chain-of-custody / file-type validation
+    # tools — these are coverage/provenance inputs, not manipulation checks. This
+    # MUST match the result-page agent header's "N checks" filter
+    # (AgentFindingCard.tsx) so the brief's "completed N check(s)" never drifts
+    # from the header count.
+    _NON_FORENSIC_COUNT_TOOLS = {
+        "file_hash_verify", "hash_verify", "custody_check", "file_type_validation",
     }
-    _applicable_tools.discard("")
+    _applicable_tools = set()
+    for f in _source_findings:
+        if str(f.get("evidence_verdict") or "").upper() == "NOT_APPLICABLE":
+            continue
+        if str(f.get("status") or "").upper() == "NOT_APPLICABLE":
+            continue
+        _t = str((f.get("metadata") or {}).get("tool_name") or f.get("finding_type") or "")
+        if not _t or _t in CONTEXT_ONLY_TOOLS or _t in _NON_FORENSIC_COUNT_TOOLS:
+            continue
+        _applicable_tools.add(_t)
     _n_checks = len(_applicable_tools) or len(input_data.completed_tools) or len(_source_findings)
     # An alert verdict (_alert_verdict, computed above) can be driven by the
     # holistic visual read (e.g. an AI-generation determination) rather than a
@@ -739,6 +750,66 @@ def _text_contradicts_verdict(text: str, verdict: str) -> bool:
         return False  # alert verdicts may legitimately use manipulation language
     low = text.lower()
     return any(term in low for term in _MANIPULATION_TERMS)
+
+
+def _round_pcts(text: str) -> str:
+    """Round any fractional percentage in narrative text to a whole number.
+
+    A confidence/metric value formed as ``value * 100`` can carry float-precision
+    noise (e.g. ``0.4 * 100 == 39.999999999999996``). If that leaks into prose it
+    renders as ``39.999999999999996%`` — defensively normalise it to ``40%``."""
+    if not text:
+        return text
+    return re.sub(r"(\d+)\.\d+\s*%", lambda m: f"{round(float(m.group(0).rstrip('% ')))}%", text)
+
+
+_VERDICT_TIER = {
+    "authentic": 0, "clean": 0, "genuine": 0, "unmodified": 0, "pristine": 0,
+    "inconclusive": 1,
+    "suspicious": 2,
+    "manipulated": 3, "tampered": 3, "fabricated": 3, "fake": 3,
+    "synthetic": 3, "deepfake": 3, "forged": 3,
+}
+
+
+def _verdict_tier(verdict: str) -> int | None:
+    v = (verdict or "").lower()
+    for word, tier in _VERDICT_TIER.items():
+        if word in v:
+            return tier
+    return None
+
+
+def _brief_misstates_verdict(text: str, verdict: str) -> bool:
+    """True when an LLM brief states an assessment tier that disagrees with the
+    deterministic verdict — e.g. brief 'assessed as suspicious' while the verdict
+    is MANIPULATED. The grounded/arbiter verdict can elevate after the brief was
+    drafted; an understated brief reads as a contradiction on the card."""
+    actual = _verdict_tier(verdict)
+    if actual is None:
+        return False
+    # Only capture an explicit verdict word in an assessment phrase, so
+    # "evidence is assessed as suspicious" yields "suspicious" (not "assessed").
+    m = re.search(
+        r"(?:assessed as|evidence is|deemed|classified as|rated|appears)\s+"
+        r"(?:likely\s+|an?\s+|to be\s+)?"
+        r"(authentic|clean|genuine|unmodified|pristine|inconclusive|suspicious|"
+        r"manipulated|tampered|fabricated|fake|synthetic|deepfake|forged)",
+        (text or "").lower(),
+    )
+    if not m:
+        return False
+    claimed = _VERDICT_TIER.get(m.group(1))
+    return claimed is not None and claimed != actual
+
+
+def _is_echoed_instruction(text: str) -> bool:
+    """True when an LLM brief parrots the prompt's field instructions instead of
+    writing prose (seen under model degradation / overload). Such a brief reads as
+    ``"1 check ran with decisive metrics: tool (40%); verdict: X, confidence: Y%"``
+    — reject it and keep the deterministic brief."""
+    low = (text or "").lower()
+    return "decisive metric" in low or "verdict + confidence" in low or "<" in low
 
 
 # Bare file-type / identity labels the vision pass may echo. On their own these
@@ -1054,6 +1125,20 @@ async def refine_synthesis_batch(
                 if aid in parsed and aid in outputs:
                     polished_data = parsed[aid]
                     _verdict = outputs[aid].agent_verdict
+                    # Real tool set for THIS agent — used to reject LLM-fabricated
+                    # key findings that cite a tool which never ran (e.g. a vision
+                    # model inventing "scene_geometry_analysis" / "lighting_analysis"
+                    # on a screenshot). Court-defensibility: a signed finding must
+                    # trace to an executed tool.
+                    _inp = inputs.get(aid)
+                    _agent_tools: set[str] = set()
+                    if _inp is not None:
+                        for _t in (_inp.completed_tools or []):
+                            _agent_tools.add(str(_t).lower())
+                        for _f in (_inp.grounded_findings or _inp.findings or []):
+                            _tn = (_f.get("metadata") or {}).get("tool_name") or _f.get("finding_type")
+                            if _tn:
+                                _agent_tools.add(str(_tn).lower())
                     brief = polished_data.get("agent_brief")
                     if brief and isinstance(brief, str):
                         # Verdict is the single source of truth: reject a refined brief
@@ -1062,8 +1147,17 @@ async def refine_synthesis_batch(
                             logger.warning(
                                 f"{aid}: LLM brief contradicts verdict '{_verdict}'; keeping deterministic brief."
                             )
+                        elif _is_echoed_instruction(brief):
+                            logger.warning(
+                                f"{aid}: LLM brief echoed prompt instructions; keeping deterministic brief."
+                            )
+                        elif _brief_misstates_verdict(brief, _verdict):
+                            logger.warning(
+                                f"{aid}: LLM brief assessment tier disagrees with verdict "
+                                f"'{_verdict}'; keeping deterministic brief."
+                            )
                         else:
-                            outputs[aid].agent_brief = brief
+                            outputs[aid].agent_brief = _round_pcts(brief)
 
                     vc_sum = polished_data.get("visual_context_summary")
                     _det_vc = outputs[aid].visual_context_summary
@@ -1079,11 +1173,11 @@ async def refine_synthesis_batch(
                                 f"{vc_sum!r}; keeping deterministic axis prose."
                             )
                         else:
-                            outputs[aid].visual_context_summary = vc_sum
+                            outputs[aid].visual_context_summary = _round_pcts(vc_sum)
 
                     reason = polished_data.get("confidence_reason")
                     if reason and isinstance(reason, str):
-                        outputs[aid].confidence_reason = reason
+                        outputs[aid].confidence_reason = _round_pcts(reason)
 
                     kfs = polished_data.get("key_findings")
                     if kfs and isinstance(kfs, list):
@@ -1098,6 +1192,34 @@ async def refine_synthesis_batch(
                                     f"{aid}: key_finding contradicts verdict '{_verdict}'; dropped."
                                 )
                                 continue
+                            # Tool-grounding: a finding that attributes itself to a
+                            # specific tool slug must cite one this agent actually
+                            # ran. Drops hallucinated tools and context-only plumbing.
+                            _m = re.search(r"—\s*([a-z0-9]+(?:_[a-z0-9]+)+)\s*(?:\(\d+(?:\.\d+)?%\))?\s*$", kf_str)
+                            if _m:
+                                _cited = _m.group(1).lower()
+                                if _cited not in _agent_tools or _cited in CONTEXT_ONLY_TOOLS:
+                                    logger.warning(
+                                        f"{aid}: key_finding cites tool '{_cited}' that did not run; dropped (fabricated)."
+                                    )
+                                    continue
+                                # The synthesis prompt asks the model to name the exact
+                                # tool, so it emits the raw slug ("frequency_domain_
+                                # analysis"). Swap in the friendly label for a
+                                # court-readable report.
+                                _label = TOOL_LABELS.get(_cited) or _cited.replace("_", " ").title()
+                                kf_str = kf_str[:_m.start(1)] + _label + kf_str[_m.end(1):]
+                            # Normalise the cited confidence "(NN%)": the model sometimes
+                            # emits the raw 0-1 fraction ("(0.297%)" → meant 30%) or
+                            # float-precision noise ("(39.999996%)"). A cited tool
+                            # confidence is never a genuine sub-1% value, so a value < 1
+                            # is a fraction to scale up; everything is rounded to an int.
+                            def _norm_conf_pct(m: "re.Match[str]") -> str:
+                                v = float(m.group(1))
+                                if v < 1:
+                                    v *= 100
+                                return f"({round(v)}%)"
+                            kf_str = re.sub(r"\((\d+(?:\.\d+)?)%\)", _norm_conf_pct, kf_str)
                             # Deduplicate: strip trailing confidence percentage before
                             # normalising so near-identical findings that only differ in
                             # the reported % (e.g. "tool (97%)" vs "tool (98%)") are

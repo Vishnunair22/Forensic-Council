@@ -151,18 +151,58 @@ class NeuralSynthesisMixin:
         except (TypeError, ValueError):
             confidence = 0.68
 
+        # Derive a POSITIVE evidence_verdict when the native profile concluded the
+        # media is synthetic/manipulated (e.g. synthetic speech, deepfake video,
+        # AI-generated text). Without this the holistic determination is inert and
+        # the specialist agent's verdict ignores it (synthetic audio → "authentic").
+        _MANIP_PROFILE_VERDICTS = {
+            "AI_GENERATED", "LIKELY_AI_GENERATED", "MANIPULATED", "LIKELY_MANIPULATED",
+            "TAMPERED", "SUSPICIOUS", "DEEPFAKE",
+        }
+        _pv = str(profile.get("verdict") or "").upper()
+        _fta = str(profile.get("file_type_assessment") or "").lower()
+        # Only the NATIVE preflight profile (audio/video/document, where the Gemini
+        # determination IS the primary signal) is authoritative enough to FORCE a
+        # POSITIVE verdict. For IMAGE profile reuse the profile is one corroborating
+        # signal among many tools — forcing POSITIVE there overrode clean tool
+        # evidence and produced false "Manipulated" on clean isolated-object /
+        # benign-edited images. Restrict the escalation to the native non-image path.
+        _is_native = source == "native_preflight_visual_context"
+        _profile_is_manip = _is_native and (_pv in _MANIP_PROFILE_VERDICTS or _fta == "ai_generated")
+        _evidence_verdict = profile.get("evidence_verdict")
+        if _profile_is_manip and (not _evidence_verdict or _evidence_verdict in ("INCONCLUSIVE", "NEGATIVE")):
+            _evidence_verdict = "POSITIVE"
+        elif not _evidence_verdict:
+            _evidence_verdict = "INCONCLUSIVE"
+
+        # Non-image evidence consumes the native preflight profile (audio/video/doc),
+        # not an Agent-1 image profile — phrase the finding accordingly.
+        _profile_lead = (
+            "Holistic media analysis"
+            if source == "native_preflight_visual_context"
+            else "Reused Agent 1 visual evidence profile"
+        )
+        # When the profile flagged manipulation, surface the ACTUAL reason
+        # (synthetic-speech / deepfake / AI-text signals) rather than the neutral
+        # content description, so the visible finding explains the verdict.
+        _manip_signals = profile.get("manipulation_signals") or []
+        if _profile_is_manip and _manip_signals:
+            _summary_body = "; ".join(str(s) for s in _manip_signals[:2])
+        else:
+            _summary_body = str(content_description)
+
         result = {
             **profile,
             "agent_id": self.agent_id,
             "finding_type": "shared_visual_evidence_profile",
             "confidence_raw": max(0.0, min(1.0, confidence)),
-            "status": profile.get("status") or "CONFIRMED",
-            "evidence_verdict": profile.get("evidence_verdict") or "INCONCLUSIVE",
+            "status": "CONFIRMED" if _profile_is_manip else (profile.get("status") or "CONFIRMED"),
+            "evidence_verdict": _evidence_verdict,
             "reasoning_summary": (
-                f"Reused Agent 1 visual evidence profile: {str(content_description)[:200]}"
+                f"{_profile_lead}: {_summary_body[:200]}"
             ),
             "summary": (
-                f"Reused Agent 1 visual evidence profile: {str(content_description)[:240]}"
+                f"{_profile_lead}: {_summary_body[:240]}"
             ),
             "metadata": {
                 **metadata,
@@ -196,6 +236,48 @@ class NeuralSynthesisMixin:
         # All other agents consume Agent 1's shared visual evidence profile or
         # fall back to local tools without touching Gemini.
         if self.agent_id != "Agent1":
+            # For non-image evidence (audio/video/document) Agent1 never runs, so the
+            # session-wide NATIVE preflight VisualContext (Gemini File API analysis of
+            # the real media — transcription, synthetic-speech / deepfake / AI-text
+            # signals) is the source of truth, not an Agent1 profile that never exists.
+            _mime = (getattr(artifact, "mime_type", "") or "").lower()
+            if not _mime.startswith("image/"):
+                try:
+                    from core.visual_context_store import (
+                        create_visual_context_preflight,
+                        visual_context_to_profile_dict,
+                    )
+
+                    # Get-or-create the native preflight VisualContext (single-flight
+                    # locked + cached). This is race-safe: for audio/video the backend's
+                    # fire-and-forget preflight may not have finished (File API upload
+                    # latency), so we block here rather than fall back to the image
+                    # local-ensemble (which is meaningless on audio/video).
+                    _vc = await create_visual_context_preflight(
+                        session_id=str(self.session_id),
+                        file_path=getattr(artifact, "file_path", "") or "",
+                        sha256=getattr(artifact, "content_hash", "") or "",
+                        config=self.config,
+                        working_memory=getattr(self, "working_memory", None),
+                        inter_agent_bus=self.inter_agent_bus,
+                    )
+                    if _vc is not None:
+                        _prof = visual_context_to_profile_dict(_vc)
+                        if _prof:
+                            result = self._visual_profile_to_tool_result(
+                                _prof, source="native_preflight_visual_context"
+                            )
+                            result["agent_id"] = self.agent_id
+                            if hasattr(self, "_record_tool_result"):
+                                await self._record_tool_result(TOOL_VISUAL_PROFILE, result)
+                            return result
+                except Exception as _vc_err:
+                    logger.debug(
+                        "Native preflight VisualContext unavailable for non-image agent",
+                        agent_id=self.agent_id,
+                        error=str(_vc_err),
+                    )
+
             agent1_profile = await self._wait_for_agent1_visual_profile()
             if agent1_profile:
                 result = self._visual_profile_to_tool_result(agent1_profile)

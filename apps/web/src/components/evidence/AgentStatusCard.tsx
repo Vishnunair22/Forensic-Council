@@ -83,6 +83,41 @@ const statusConfig = {
   validating:  { color: "text-primary",    label: "Verifying" },
 };
 
+// Verdict tiers for cross-checking a brief's stated assessment against the card's
+// authoritative verdict. A later arbiter grounding pass can elevate the verdict
+// after the brief was written, leaving a stale claim ("assessed as suspicious")
+// beside a higher card verdict ("Manipulated"). Strip such contradicting sentences.
+const VERDICT_TIER: Record<string, number> = {
+  authentic: 0, clean: 0, genuine: 0, unmodified: 0, pristine: 0, negative: 0,
+  inconclusive: 1,
+  suspicious: 2,
+  manipulated: 3, tampered: 3, fabricated: 3, fake: 3, synthetic: 3,
+  deepfake: 3, forged: 3,
+};
+
+function verdictTier(verdict?: string | null): number | null {
+  const s = (verdict || "").toLowerCase();
+  for (const k of Object.keys(VERDICT_TIER)) {
+    if (s.includes(k)) return VERDICT_TIER[k];
+  }
+  return null;
+}
+
+function stripContradictingVerdictClaims(text: string, verdict?: string | null): string {
+  const actual = verdictTier(verdict);
+  if (actual == null || !text) return text;
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter((s) => {
+    const m = s.toLowerCase().match(
+      /(?:assessed as|deemed|classified as|rated|evidence is|appears to be)\s+(?:likely\s+|an?\s+|to be\s+)?(authentic|clean|genuine|unmodified|pristine|inconclusive|suspicious|manipulated|tampered|fabricated|fake|synthetic|deepfake|forged)/,
+    );
+    if (!m) return true;
+    const t = VERDICT_TIER[m[1]];
+    return t == null || t === actual;
+  });
+  return kept.join(" ").trim();
+}
+
 const ALERT_VERDICTS = new Set([
   "FLAGGED",
   "SUSPICIOUS",
@@ -302,6 +337,10 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
   }
 
   const verdict = (completedData.agent_verdict ?? "").toUpperCase();
+  // Drop any brief sentence whose stated assessment tier contradicts the card's
+  // authoritative verdict (e.g. a stale "assessed as suspicious" left by an
+  // earlier synthesis after grounding elevated the verdict to Manipulated).
+  synthSummary = stripContradictingVerdictClaims(synthSummary, verdict);
   const isAlert = ALERT_VERDICTS.has(verdict) || (completedData.verdict_score ?? 0) > 0.6;
   const isInconclusive = verdict === "INCONCLUSIVE";
   const isClean = verdict === "AUTHENTIC" || verdict === "CLEAN" || verdict === "NEGATIVE";
@@ -336,7 +375,13 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
     const alertCount = findings.filter(isAlertFinding).length;
 
     if (isAlert) {
-      return `${alertCount > 0 ? alertCount : "Critical"} anomal${alertCount === 1 ? "y" : "ies"} flagged across ${n} forensic check${n !== 1 ? "s" : ""} (${conf}% confidence).`;
+      if (alertCount > 0) {
+        return `${alertCount} anomal${alertCount === 1 ? "y" : "ies"} flagged across ${n} forensic check${n !== 1 ? "s" : ""} (${conf}% confidence).`;
+      }
+      // Alert verdict but no discrete tool-level alert in this phase's set — the
+      // signal is holistic or carried from an earlier phase, not from these
+      // checks. Don't claim anomalies the listed checks did not find.
+      return `Flagged for review on the holistic assessment; the ${n} tool-level check${n !== 1 ? "s" : ""} here isolated no new discrete signal (${conf}% confidence).`;
     }
     if (isClean) {
       if (isScreenshotContext(imageContext)) {

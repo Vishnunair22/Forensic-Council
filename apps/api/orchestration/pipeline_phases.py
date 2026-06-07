@@ -198,6 +198,18 @@ async def run_agents_concurrent(
             def _suppress_preview_tool(tool_name: Any) -> bool:
                 tool_text = str(tool_name or "")
                 if tool_text in PREVIEW_EXCLUDED_TOOLS:
+                    # For non-image evidence (audio/video/document) the shared native
+                    # profile IS the headline forensic signal — synthetic-speech,
+                    # deepfake, or AI-generated-text. It must be a VISIBLE key finding,
+                    # not hidden the way it is for images (where it's the scene box).
+                    if tool_text in (
+                        "read_shared_image_context",
+                        "visual_evidence_profile",
+                        "shared_visual_evidence_profile",
+                    ):
+                        _mime = (getattr(evidence_artifact, "mime_type", "") or "").lower()
+                        if not _mime.startswith("image/"):
+                            return False
                     return True
                 return (
                     tool_text in SCREENSHOT_PREVIEW_EXCLUDED_TOOLS
@@ -295,8 +307,16 @@ async def run_agents_concurrent(
                                 if assessment == "no visible issue":
                                     body += " (assessment: no visible issue)"
                             if edits:
-                                body += "; benign edits noted: " + ", ".join(edits[:2])
-                            return body + "."
+                                # Gemini's benign-edit phrases often already end with a
+                                # period; strip per-item trailing punctuation before
+                                # joining so we never emit "edit." + ", " or a trailing
+                                # "..".
+                                _edits = [e.strip().rstrip(".").strip() for e in edits[:2] if e.strip()]
+                                _edits = [e for e in _edits if e]
+                                if _edits:
+                                    body += "; benign edits noted: " + ", ".join(_edits)
+                            body = body.rstrip()
+                            return body if body.endswith(".") else body + "."
                         if not base:
                             base = str(
                                 getattr(vctx, "file_type_assessment", "")

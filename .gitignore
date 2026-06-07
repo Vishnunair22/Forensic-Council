@@ -322,7 +322,19 @@ docs/DOCUMENTATION_INVENTORY.md
 *.rej
 *.patch
 
-# ── Additional AI agent artifacts (belt-and-suspenders) ──────────────────────
+# ── Additional AI agent / IDE artifacts (belt-and-suspenders) ────────────────
 .gemini/
 .codeium/
 .sourcegraph/
+.cursor/
+.cursorignore
+.aider*
+.windsurf/
+.continue/
+.zed/
+.github/copilot-instructions.md
+*.code-workspace
+# Developer scratch / local test outputs (never part of the repo)
+/scratch/
+/browser-shots/
+/test-images-broad/

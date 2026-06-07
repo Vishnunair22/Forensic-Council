@@ -56,14 +56,17 @@ function EvidencePreview({
 function formatUploadDate(iso: string): string {
   try {
     const d = new Date(iso);
-    const day = d.getDate();
+    // Render in UTC: deterministic across server and client (no hydration
+    // mismatch from differing host timezones) and viewer-independent, which is
+    // the court-defensible standard for evidence timestamps.
+    const day = d.getUTCDate();
     const ordinals = ["th", "st", "nd", "rd"];
     const mod = day % 100;
     const suffix = ordinals[(mod - 20) % 10] ?? ordinals[mod] ?? "th";
-    const month = d.toLocaleDateString("en-US", { month: "long" });
-    const year = d.getFullYear();
-    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    return `${month} ${day}${suffix} ${year} · ${time}`;
+    const month = d.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+    const year = d.getUTCFullYear();
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+    return `${month} ${day}${suffix} ${year} · ${time} UTC`;
   } catch {
     return iso;
   }

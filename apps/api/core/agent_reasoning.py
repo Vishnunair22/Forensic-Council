@@ -334,6 +334,11 @@ class AgentReasoningService:
                     logger.warning(msg)
 
         # 4. Contradiction Checking
+        # When a finding is corroboration-downgraded below, this carries the honest
+        # replacement narrative so BOTH the live card AND the report (which render
+        # from the stored summary, not the card humanizer) show the grounded text
+        # instead of the original alarming POSITIVE wording.
+        _summary_override: str | None = None
         # If tool flags positive manipulation but visual context is clean, register contradiction
         if verdict == "POSITIVE" and vis_ctx.image_integrity_context.integrity_assessment == "no_visible_issue":
             note = f"Contradiction: Tool '{tool_name}' flags anomaly/manipulation, but shared visual context assessment is 'no_visible_issue'."
@@ -355,6 +360,17 @@ class AgentReasoningService:
                 "scale_validation",
                 "shadow_validation",
             }
+            # A single AI-generation model is FP-prone on heavily-processed REAL
+            # photos (phone computational photography — denoise/sharpen textures
+            # read as "diffusion-generated"). A lone diffusion flag must be
+            # corroborated: when the court-defensible holistic visual model reads the
+            # image as authentic ("no_visible_issue"), the flag is uncorroborated and
+            # is held inconclusive so it cannot assert AI-generation on a real photo.
+            # A genuine AI-generated image reads as ai_generated_suspect / suspicious
+            # (NOT no_visible_issue), so this branch never fires on a true positive.
+            _CORROBORATION_GATED_AI_TOOLS = {
+                "diffusion_artifact_detector",
+            }
             if tool_name in _FP_PRONE_SCENE_TOOLS:
                 verdict = "INCONCLUSIVE"
                 is_uncorroborated_visual_claim = True
@@ -367,6 +383,28 @@ class AgentReasoningService:
                         f"'{tool_name}' is a scene-physics heuristic prone to false positives on "
                         f"studio/product images; downgraded to inconclusive because the holistic "
                         f"visual read found no compositing."
+                    ),
+                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                })
+            elif tool_name in _CORROBORATION_GATED_AI_TOOLS:
+                verdict = "INCONCLUSIVE"
+                is_uncorroborated_visual_claim = True
+                court_defensible = False
+                if confidence is not None:
+                    confidence = min(confidence, 0.45)
+                _summary_override = (
+                    "Diffusion screening flagged a possible generative texture, but the "
+                    "holistic visual model found no corroborating evidence; held as a "
+                    "non-asserting screening signal (false-positive-prone on heavily-"
+                    "processed real photos)."
+                )
+                contradiction_notes.append({
+                    "tool_name": tool_name,
+                    "message": (
+                        f"'{tool_name}' flagged a possible AI-generation signature, but the "
+                        f"court-defensible holistic visual read found no visible issue; a lone, "
+                        f"uncorroborated diffusion signal is held inconclusive (FP-prone on "
+                        f"heavily-processed real photos)."
                     ),
                     "timestamp": datetime.datetime.utcnow().isoformat(),
                 })
@@ -402,8 +440,8 @@ class AgentReasoningService:
             # forced into template fallback text (the prior root cause: digests
             # stored only verdict/scoring fields with no summary).
             _raw = envelope.raw if isinstance(getattr(envelope, "raw", None), dict) else {}
-            _summary_text = str(getattr(envelope, "summary", "") or "").strip()
-            _key_signal = str(
+            _summary_text = _summary_override or str(getattr(envelope, "summary", "") or "").strip()
+            _key_signal = "" if _summary_override else str(
                 _raw.get("key_signal")
                 or _raw.get("key_finding")
                 or _raw.get("anomaly_description")
@@ -487,7 +525,9 @@ class AgentReasoningService:
             grounding_notes.append("[PERSONA CONTRACT BREACH]")
 
         prefix = " ".join(grounding_notes) + " " if grounding_notes else ""
-        readable_summary = f"{prefix}{envelope.summary}"
+        # A corroboration-downgraded finding uses its honest replacement narrative
+        # verbatim (no alarming original text, no internal grounding tag prefix).
+        readable_summary = _summary_override if _summary_override else f"{prefix}{envelope.summary}"
 
         finding = AgentFinding(
             agent_id=agent_id,

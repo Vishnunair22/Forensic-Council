@@ -67,6 +67,11 @@ _AI_SOFTWARE_SIGNATURES = [
     "imagen", "synthid",
     # Meta
     "emu", "meta ai",
+    # GAN families (StyleGAN/ProGAN/etc. embed a Software tag e.g.
+    # "StyleGAN2 Karras et al."; thispersondoesnotexist.com serves these)
+    "stylegan", "progan", "stargan", "biggan", "cyclegan",
+    "thispersondoesnotexist", "this person does not exist",
+    "generated.photos",
     # Other
     "leonardo.ai", "runway ml", "pika labs", "kling", "sora",
     "flux", "black forest labs", "ideogram",

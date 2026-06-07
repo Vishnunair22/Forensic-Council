@@ -519,8 +519,16 @@ def visual_context_to_profile_dict(context: VisualContext) -> dict:
         "weapons_or_dangerous_items": list(
             context.object_scene_context.weapons_or_dangerous_items or []
         ),
+        # Merge AI-generation signals (synthetic-speech / deepfake / AI-generated-text
+        # reasons) into the manipulation signals so the actual "why" reaches the
+        # agent finding — not just the neutral content description.
         "manipulation_signals": list(
             context.image_integrity_context.visible_manipulation_signals or []
+        ) + list(
+            getattr(context.image_integrity_context, "ai_generation_signals", []) or []
+        ),
+        "ai_generation_signals": list(
+            getattr(context.image_integrity_context, "ai_generation_signals", []) or []
         ),
         "extracted_text": context.extracted_text,
         "interface_identification": (

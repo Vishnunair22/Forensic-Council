@@ -114,7 +114,12 @@ function classifyMetric(key: string, raw: unknown): "danger" | "warn" | "ok" | "
  return "neutral";
 }
 
-function metricHighlights(metadata: Record<string, unknown> | null | undefined): Metric[] {
+const DETECTION_FLAG_RE = /detect|manipulation|spoof|splic|copy[_-]?move|gan|synthetic|ai[_-]?generat|re[_-]?encod|diffusion|fake|ghost/i;
+
+function metricHighlights(
+ metadata: Record<string, unknown> | null | undefined,
+ status?: "flagged" | "clean" | "error" | "na" | "inconclusive",
+): Metric[] {
  if (!metadata) return [];
  const items: Metric[] = [];
 
@@ -127,11 +132,23 @@ function metricHighlights(metadata: Record<string, unknown> | null | undefined):
   const label = METRIC_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   let text = "";
   let numeric: number | null = null;
+  // A 0%-confidence chip on a tool that asserts nothing (clean / inconclusive)
+  // is non-informative noise and renders as an alarming red "0%" — drop it. The
+  // row already shows the finding's headline confidence.
+  if (key.includes("confidence") && value === 0 && status && status !== "flagged") continue;
+
   if (typeof value === "boolean") {
+   // A raw "<X> detected: Yes" flag that contradicts the tool's own non-flagged
+   // conclusion (clean / inconclusive) is misleading noise — e.g. JPEG-ghost
+   // reporting ghost_detected=true while concluding "no spliced-region ghosting".
+   if (value === true && status && status !== "flagged" && DETECTION_FLAG_RE.test(key)) continue;
    text = value ? "Yes" : "No";
   } else if (typeof value === "number") {
    numeric = value;
-   if (key.includes("probability") || key.includes("confidence") || key.includes("score") || key === "max_anomaly") {
+   const pctKey = key.includes("probability") || key.includes("confidence") || key.includes("score") || key === "max_anomaly";
+   // Only render as a percentage when the value is an actual 0–1 fraction.
+   // Raw magnitudes (e.g. max ELA deviation 27.0) must not become "2700%".
+   if (pctKey && value >= 0 && value <= 1) {
     text = `${Math.round(value * 100)}%`;
    } else {
     text = Math.abs(value) < 1 ? value.toFixed(3) : String(Math.round(value * 100) / 100);
@@ -381,7 +398,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
  };
  const Icon = getToolIcon(toolName);
  const timingMs = (finding.metadata?.execution_time_ms as number) || null;
- const metrics = metricHighlights(finding.metadata);
+ const metrics = metricHighlights(finding.metadata, status);
  const summary = deriveSummary(finding);
  const isDegraded = !!(finding.metadata?.degraded || finding.metadata?.fallback_reason);
  const isIncomplete = finding.status === "INCOMPLETE";

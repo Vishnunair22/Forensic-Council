@@ -47,6 +47,17 @@ async def main() -> None:
     configure_provider_quota_guards(settings)
     logger.info("Starting Forensic Council Worker", pid=os.getpid())
 
+    # Fail-loud self-test + numba/librosa pre-warm. Catches the silent-degradation
+    # class (e.g. NUMBA_DISABLE_JIT breaking audio tools, model load failures) and
+    # warms the JIT so the first audio analysis isn't slow. Threaded so the compile
+    # doesn't block boot; never fatal.
+    try:
+        from core.startup_diagnostics import run_startup_diagnostics
+
+        await asyncio.to_thread(run_startup_diagnostics)
+    except Exception as _diag_exc:
+        logger.warning("Startup diagnostics failed (non-fatal)", error=str(_diag_exc))
+
     keystore = get_keystore()
     await keystore.initialize()
     logger.info("Signing key store initialized in worker")

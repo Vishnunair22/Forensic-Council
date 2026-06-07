@@ -198,6 +198,19 @@ class Agent5Metadata(ForensicAgent):
     @property
     def task_decomposition(self) -> list[str]:
         from core.image_evidence_routing import get_agent_plan
+        # Agent5 is the document content + provenance authority (no separate document
+        # agent). Documents get the native content analysis (AI-generated-text +
+        # tampering determination, via the shared preflight profile) plus text
+        # extraction, ahead of the structural/provenance checks.
+        if self._is_document_media:
+            return [
+                "Run read_shared_image_context to incorporate the native document content analysis (AI-generated-text and document-tampering determination)",
+                "Run extract_text_from_image for document text extraction",
+                "Run file_hash_verify against ingestion hash",
+                "Run file_structure_analysis for binary anomalies in headers and trailers",
+                "Run hex_signature_scan for raw-byte software signatures",
+                "Run timestamp_analysis for filesystem chronology consistency",
+            ]
         plan = get_agent_plan(self.evidence_artifact, self.agent_id, phase="initial")
         if plan:
             return plan
@@ -261,6 +274,14 @@ class Agent5Metadata(ForensicAgent):
                 "Run timestamp_analysis for cross-field date and time consistency",
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
                 "Read shared image context for screenshot timestamp and provenance cross-check",
+            ]
+        if self._is_document_media:
+            # Re-ground deep in the native document determination so the deep
+            # verdict can't regress below initial (keeps AI-text / tampering live).
+            return [
+                "Run read_shared_image_context to incorporate the native document content analysis (AI-generated-text and document-tampering determination)",
+                "Run metadata_anomaly_score for probabilistic fabrication detection",
+                "Run provenance_chain_verify for C2PA and digital provenance manifests",
             ]
         if self._is_av_media:
             return [

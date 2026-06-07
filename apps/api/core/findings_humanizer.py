@@ -108,6 +108,31 @@ def _humanize_initial_finding(
             "and not corroborated by the holistic visual analysis — treated as inconclusive."
         )
 
+    # Screening-tier sensor-noise / clone checks are non-asserting by design. When
+    # they return INCONCLUSIVE they must read as an honest "screening was
+    # indeterminate" note — never a raw metric dump ("tool confidence: 0.000;
+    # outlier regions: 7") that looks broken/alarming on a clean image. The trained
+    # splicing/copy-move models carry these domains.
+    if str(evidence_verdict or "").upper() == "INCONCLUSIVE":
+        if tool in ("noiseprint_cluster", "noiseprint_clustering"):
+            return (
+                "Sensor-noise clustering returned no determinate camera-source separation — "
+                "a screening-tier check treated as non-asserting; the learned splicing and "
+                "copy-move models carry this domain."
+            )
+        if tool in ("neural_copy_move", "copy_move_detector"):
+            return (
+                "Copy-move screening returned no determinate result — a screening-tier check "
+                "treated as non-asserting; the learned splicing model carries this domain."
+            )
+        if tool in ("diffusion_artifact_detector", "ai_generation_detector"):
+            return (
+                "Diffusion screening flagged a possible generative texture, but the holistic "
+                "visual model found no corroborating evidence — treated as a non-asserting "
+                "screening signal, not an AI-generation finding (FP-prone on heavily-processed "
+                "real photos)."
+            )
+
     if "screenshot scene applicability" in tool or "screenshot scene applicability" in text.lower():
         if "skipped" in text.lower() or evidence_verdict == "NOT_APPLICABLE":
             dims = (
@@ -309,6 +334,8 @@ def _humanize_initial_finding(
             "completed and found no supported anomaly signal",
             "completed; review detailed tool metrics",
             "analysis complete",
+            "found no anomaly signal",
+            "forensic analysis found no anomaly",
         )
 
         # dynamic measurement-backed narratives for NEGATIVE findings

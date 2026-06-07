@@ -47,6 +47,11 @@ class Agent2Audio(ForensicAgent):
     def task_decomposition(self) -> list[str]:
         # PHASE 1: INITIAL ANALYSIS (Neural Refined)
         tasks = [
+            # Ground the acoustic analysis in the native Gemini audio profile
+            # (transcription + synthetic-speech / voice-clone determination from the
+            # shared preflight VisualContext). This is the holistic axis for audio,
+            # mirroring Agent1's visual_evidence_profile for images.
+            "Run read_shared_image_context to incorporate the holistic native audio profile (synthetic-speech and voice-clone determination)",
             "Run speaker_diarize to establish voice count baseline",
             "Run neural_prosody across full audio track for acoustic artifact screening",
             "Run audio_gen_signature to identify spectral TTS fingerprints",
@@ -67,6 +72,11 @@ class Agent2Audio(ForensicAgent):
         # enf_analysis and background_noise_analysis removed from base — reactively
         # injected by _on_tool_result_impl when splice or re-encoding is detected.
         tasks = [
+            # Re-ground the deep pass in the native audio determination so the deep
+            # verdict can't regress below the initial (otherwise the strong
+            # synthetic-speech signal is lost and deep falls back to the weaker
+            # local ensembles). Explicit tool slug so the react loop maps it.
+            "Run read_shared_image_context to incorporate the holistic native audio profile (synthetic-speech and voice-clone determination)",
             "Run prosody_analyze for acoustic marker verification",
             "Run audio_splice_detect on audio segments",
             "Run voice_clone_deep_ensemble for cross-validated AI speech synthesis detection if Phase 1 flagged a suspicious voice signal",
@@ -75,10 +85,6 @@ class Agent2Audio(ForensicAgent):
         mime = getattr(self.evidence_artifact, "mime_type", "") or ""
         if mime.startswith("video/"):
             tasks.append("Run background_noise_analysis to identify shift points")
-        # Gemini is reserved for Agent 1's visual probe. Audio/video agents use
-        # local ensembles and inter-agent context instead of calling Gemini.
-        if mime.startswith("video/") or self._has_audio_suspicious_signal():
-            tasks.append("Read shared image context for Neural Audio Audit and Acoustic Provenance")
         return tasks
 
     def _has_audio_suspicious_signal(self) -> bool:

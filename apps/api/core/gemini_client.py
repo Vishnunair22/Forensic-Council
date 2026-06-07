@@ -55,6 +55,10 @@ _tracer = get_tracer("forensic-council.gemini")
 
 
 _GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+_GEMINI_FILE_UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files"
+# Native media (audio/video) cannot be delivered as inline base64 — they go
+# through the File API (resumable upload → poll ACTIVE → fileData part → delete).
+_NATIVE_MEDIA_PREFIXES = ("audio/", "video/")
 _MAX_RETRIES = 5
 _BASE_BACKOFF = 2.0
 
@@ -127,17 +131,137 @@ def _parse_retry_after(resp: httpx.Response) -> float | None:
     return None
 
 
-def _build_preflight_prompt(is_screen_capture_like: bool = False) -> str:
-    """Three-section structured prompt for the pre-pipeline visual context preflight.
+def _build_nonimage_preflight_prompt(media_class: str) -> str:
+    """Native audio/video/document preflight — reuses the 3-section JSON schema so
+    the parser and agents stay modality-agnostic. The file is delivered to Gemini
+    natively (File API), so transcription / temporal / document reading are real."""
+    if media_class == "audio":
+        framing = (
+            "You are a senior forensic AUDIO examiner. The attached file is AUDIO. "
+            "Listen to the FULL track. Transcribe all intelligible speech verbatim. "
+            "Judge whether speech is human or synthetic (TTS / voice-clone), and listen "
+            "for splice points, abrupt cuts, background-noise discontinuities, and codec "
+            "re-encoding seams."
+        )
+        field_help = (
+            "- description: 2-3 sentences on what the audio contains (speech, music, "
+            "environment, language, number of distinct voices).\n"
+            "- file_type_assessment: use 'ai_generated' if speech is synthetic/cloned, else "
+            "'photograph'->ignore; prefer 'unknown' when unsure.\n"
+            "- manipulation_signals: splice/edit/cut/discontinuity cues with timestamps.\n"
+            "- ai_generation_signals: TTS/voice-clone/synthetic-speech artifacts (flat "
+            "prosody, spectral regularity, absent breaths) with timestamps.\n"
+            "- visible_text (object_scene_context): the FULL verbatim transcription.\n"
+            "- people (object_scene_context): each distinct speaker/voice.\n"
+            "- metadata_provenance: codec/channel/sample-rate/format cues you can infer."
+        )
+        scene_type = "audio"
+    elif media_class == "video":
+        framing = (
+            "You are a senior forensic VIDEO examiner. The attached file is VIDEO. "
+            "Sample across the full timeline. Summarize the scene and the sequence of "
+            "events with timestamps. Look for deepfake/face-swap artifacts, frame edits, "
+            "abrupt cuts, temporal/lighting inconsistencies, and AV-sync mismatches. "
+            "Transcribe any on-screen text AND spoken dialogue."
+        )
+        field_help = (
+            "- description: 2-3 sentences on the video content + an event timeline.\n"
+            "- file_type_assessment: 'ai_generated' if synthetic/deepfake, else 'unknown'.\n"
+            "- manipulation_signals: frame edits, cuts, warping, face-swap seams, temporal "
+            "discontinuities — with time codes.\n"
+            "- ai_generation_signals: deepfake/AI-generation artifacts with time codes.\n"
+            "- people: each person/face; flag unnatural or deepfake-like faces.\n"
+            "- visible_text: on-screen text AND spoken dialogue (verbatim).\n"
+            "- scene_inconsistencies: lighting/shadow/physics/temporal contradictions.\n"
+            "- metadata_provenance: codec/fps/aspect/format cues you can infer."
+        )
+        scene_type = "video"
+    else:  # document
+        framing = (
+            "You are a senior forensic DOCUMENT examiner. The attached file is a DOCUMENT. "
+            "Read ALL text. Determine the document type and summarize its content. Assess "
+            "whether the TEXT reads as AI/LLM-generated (generic phrasing, hedging, uniform "
+            "cadence, hallucinated specifics) and look for tampering: inconsistent fonts, "
+            "misaligned text, edited figures, mismatched producers, or altered fields."
+        )
+        field_help = (
+            "- description: 2-3 sentences on the document type and content.\n"
+            "- file_type_assessment: 'document_scan'; use 'ai_generated' if the text reads "
+            "as machine-generated.\n"
+            "- manipulation_signals: tampering cues — font/alignment/figure/field edits.\n"
+            "- ai_generation_signals: AI/LLM-generated-text indicators.\n"
+            "- documents_or_ids (object_scene_context): document type(s)/forms/IDs present.\n"
+            "- visible_text: the extracted text (verbatim; truncate very long bodies).\n"
+            "- metadata_provenance: producer/author/software/format cues visible in content."
+        )
+        scene_type = "document"
 
-    Returns ONLY a JSON object with sections mapped 1:1 to the three image agents:
+    return (
+        _SAFETY_PREAMBLE
+        + framing + "\n\n"
+        "RULES:\n"
+        "- Report ONLY what is verifiable in THIS file. Never invent findings.\n"
+        "- Use an empty array [] for any field with no genuine finding.\n"
+        "- Distinguish BENIGN processing (re-encode, format conversion, normal compression) "
+        "from DECEPTIVE manipulation (splice, deepfake, synthetic generation, tampering).\n\n"
+        "FIELD GUIDANCE for this " + media_class + ":\n" + field_help + "\n\n"
+        "Return ONLY this JSON object — no markdown, no preamble:\n"
+        "{\n"
+        '  "image_integrity": {\n'
+        '    "description": "<factual description of what this file contains>",\n'
+        '    "file_type_assessment": "<screenshot|photograph|document_scan|ai_generated|composite|web_image|unknown>",\n'
+        '    "manipulation_signals": ["<deceptive edit/splice/tamper cues, with timestamps where applicable>"],\n'
+        '    "ai_generation_signals": ["<synthetic/AI-generation cues>"],\n'
+        '    "editing_signals": ["<benign processing only>"],\n'
+        '    "compression_signals": ["<encoding/format/re-encode cues>"],\n'
+        '    "regions_for_followup": ["<segments/timestamps/pages deserving deeper analysis>"],\n'
+        '    "integrity_assessment": "<no_visible_issue|suspicious|likely_manipulated|ai_generated_suspect|cannot_determine>"\n'
+        "  },\n"
+        '  "object_scene_context": {\n'
+        f'    "scene_type": "{scene_type}",\n'
+        '    "scene_description": "<one sentence describing the content/scene>",\n'
+        '    "objects": ["<significant objects/elements/segments present>"],\n'
+        '    "weapons_or_dangerous_items": ["<contraband if any — empty otherwise>"],\n'
+        '    "documents_or_ids": ["<documents/forms/IDs if any>"],\n'
+        '    "people": ["<speakers/persons; flag synthetic or deepfake-like>"],\n'
+        '    "ui_elements": ["<on-screen UI elements if any>"],\n'
+        '    "visible_text": ["<transcription / extracted text, verbatim>"],\n'
+        '    "scene_inconsistencies": ["<internal contradictions, temporal/acoustic/format>"],\n'
+        '    "platform": "<platform/app/producer if identifiable, else empty string>"\n'
+        "  },\n"
+        '  "metadata_provenance": {\n'
+        '    "visible_timestamps": ["<dates/times stated in the content>"],\n'
+        '    "visible_location_clues": ["<places/landmarks mentioned or shown>"],\n'
+        '    "device_platform_clues": ["<device/OS/source clues>"],\n'
+        '    "app_software_clues": ["<software/producer/codec/watermark/content-credential clues>"],\n'
+        '    "lighting_weather_season_clues": ["<environmental/time cues if any>"],\n'
+        '    "format_compression_clues": ["<format/codec/encoding history cues>"],\n'
+        '    "metadata_consistency_notes": ["<whether stated time/place/source clues are consistent>"],\n'
+        '    "provenance_anomalies": ["<visible contradictions in provenance>"]\n'
+        "  },\n"
+        '  "confidence": <0.0-1.0 overall confidence>\n'
+        "}"
+    )
+
+
+def _build_preflight_prompt(is_screen_capture_like: bool = False, media_class: str = "image") -> str:
+    """Three-section structured prompt for the pre-pipeline context preflight.
+
+    Returns ONLY a JSON object with sections mapped 1:1 to the agents:
       image_integrity      → Agent1 (manipulation / authenticity)
       object_scene_context → Agent3 (objects, UI, scene)
       metadata_provenance  → Agent5 (visible timestamps, platform, location)
 
-    A single call covers all agents. Gemini quota is consumed exactly once per
-    investigation regardless of how many agents need visual context.
+    The SAME JSON schema is reused across modalities so the parser and downstream
+    agents are modality-agnostic; only the analyst framing + per-field guidance
+    change for audio/video/document evidence (sent to Gemini natively via the File
+    API). A single call covers all applicable agents.
     """
+    _track_preamble_usage()
+
+    if media_class in ("audio", "video", "document"):
+        return _build_nonimage_preflight_prompt(media_class)
+
     focus = (
         "PRIMARY HINT: this looks like a screenshot / UI capture — identify the platform "
         "(iOS/Android/Web/Desktop/app), read the status-bar time, and flag overlaid or "
@@ -146,8 +270,6 @@ def _build_preflight_prompt(is_screen_capture_like: bool = False) -> str:
         "PRIMARY HINT: this looks like a photograph — judge lighting direction, shadow "
         "angles, perspective, reflections, and depth-of-field for signs of compositing."
     )
-
-    _track_preamble_usage()
 
     return (
         _SAFETY_PREAMBLE
@@ -886,7 +1008,19 @@ class GeminiVisionClient:
                 cached_gf.raw_response, session_id, sha256, cached_gf.model_used
             )
 
-        prompt = _build_preflight_prompt(is_screen_capture_like=is_screen_capture_like)
+        import mimetypes as _mt
+        _pf_mime = (_mt.guess_type(file_path)[0] or "").lower()
+        if _pf_mime.startswith("audio/"):
+            _media_class = "audio"
+        elif _pf_mime.startswith("video/") or _pf_mime == "application/mp4":
+            _media_class = "video"
+        elif _pf_mime == "application/pdf":
+            _media_class = "document"
+        else:
+            _media_class = "image"
+        prompt = _build_preflight_prompt(
+            is_screen_capture_like=is_screen_capture_like, media_class=_media_class
+        )
 
         gf = await self._run_vision_analysis(
             file_path=file_path,
@@ -1218,31 +1352,74 @@ class GeminiVisionClient:
 
         t0 = time.monotonic()
 
-        try:
-            encoded, mime_type = await asyncio.to_thread(self._encode_file, file_path)
-        except Exception as exc:
-            logger.warning(f"Gemini: failed to encode file {file_path}: {exc}")
-            return GeminiVisionFinding(
-                analysis_type=analysis_type,
-                model_used=self.model,
-                content_description="",
-                error=f"File encoding failed: {exc}",
-                confidence=0.0,
-                court_defensible=False,
-            )
+        # ── Media delivery: native File API for audio/video, inline for the rest ──
+        # Audio/video are sent to Gemini natively (true multimodal perception)
+        # instead of the spectrogram-image / frame-thumbnail workarounds.
+        uploaded_file_name = ""
+        import mimetypes as _mt
+        import os as _os
+        guessed_mime = (_mt.guess_type(file_path)[0] or "").lower()
+        if not guessed_mime:
+            _ext = _os.path.splitext(file_path)[1].lower()
+            guessed_mime = {
+                ".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac",
+                ".aac": "audio/aac", ".ogg": "audio/ogg", ".m4a": "audio/mp4",
+                ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
+                ".webm": "video/webm", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
+            }.get(_ext, "")
 
-        # Build Gemini request payload
-        if mime_type in _VISION_MIME_TYPES:
-            parts = [
-                {"inlineData": {"mimeType": mime_type, "data": encoded}},
-                {"text": prompt},
-            ]
-        else:
-            # Non-vision file type — text-only analysis
-            parts = [{"text": f"[Non-visual file, MIME: {mime_type}]\n\n{prompt}"}]
+        parts: list[dict] = []
+        if self._enabled and guessed_mime.startswith(_NATIVE_MEDIA_PREFIXES):
+            try:
+                name, uri = await self._upload_media_file_api(file_path, guessed_mime)
+                uploaded_file_name = name
+                max_wait = 180.0 if guessed_mime.startswith("video/") else 45.0
+                if not uri or not await self._poll_file_active(name, max_wait=max_wait):
+                    raise _ModelUnavailableError("File API media did not become ACTIVE")
+                parts = [
+                    {"fileData": {"mimeType": guessed_mime, "fileUri": uri}},
+                    {"text": prompt},
+                ]
+            except Exception as up_exc:
+                logger.warning(
+                    f"Gemini File API native upload failed for {file_path}: {up_exc}; "
+                    f"falling back to inline encoding"
+                )
+                if uploaded_file_name:
+                    await self._delete_file_api(uploaded_file_name)
+                    uploaded_file_name = ""
+                parts = []
+
+        if not parts:
+            try:
+                encoded, mime_type = await asyncio.to_thread(self._encode_file, file_path)
+            except Exception as exc:
+                logger.warning(f"Gemini: failed to encode file {file_path}: {exc}")
+                return GeminiVisionFinding(
+                    analysis_type=analysis_type,
+                    model_used=self.model,
+                    content_description="",
+                    error=f"File encoding failed: {exc}",
+                    confidence=0.0,
+                    court_defensible=False,
+                )
+
+            # Build Gemini request payload
+            if mime_type in _VISION_MIME_TYPES:
+                parts = [
+                    {"inlineData": {"mimeType": mime_type, "data": encoded}},
+                    {"text": prompt},
+                ]
+            else:
+                # Non-vision file type — text-only analysis
+                parts = [{"text": f"[Non-visual file, MIME: {mime_type}]\n\n{prompt}"}]
 
         generation_config: dict = {
-            "temperature": 0.1,
+            # temperature 0 for maximum determinism: with the sha256-keyed visual-
+            # context cache, the same evidence file then yields the same verdict
+            # (court-defensible reproducibility), eliminating run-to-run flip-flop
+            # on borderline inputs.
+            "temperature": 0.0,
             "maxOutputTokens": 2048,
             # NOTE: responseMimeType="application/json" is intentionally omitted.
             # When set alongside multimodal (image) input it causes Gemini 2.x to
@@ -1311,6 +1488,8 @@ class GeminiVisionClient:
                     finding = self._parse_response(raw_text, analysis_type, m_latency)
                     finding.model_used = active_model
                     self._circuit_breaker.record_success()
+                    if uploaded_file_name:
+                        await self._delete_file_api(uploaded_file_name)
                     return finding
 
                 except _ModelUnavailableError as exc:
@@ -1366,6 +1545,8 @@ class GeminiVisionClient:
 
         # All models in cascade exhausted.
         self._circuit_breaker.record_failure()
+        if uploaded_file_name:
+            await self._delete_file_api(uploaded_file_name)
 
         if last_error:
             raise last_error
@@ -1422,6 +1603,85 @@ class GeminiVisionClient:
     # The cascade-based approach in _run_vision_analysis tries fallback models
     # instead of retrying the same model, which is superior for quota/404 errors.
     # If retry-on-5xx is needed in the future, add it to _post_once.
+
+    async def _upload_media_file_api(self, file_path: str, mime_type: str) -> tuple[str, str]:
+        """Upload a media file via the Gemini File API (resumable) and return
+        (file_name, file_uri). Native audio/video — and large documents — cannot be
+        delivered as inline base64, so they go through the File API instead."""
+        import os as _os
+
+        size = _os.path.getsize(file_path)
+        api_key = self.api_key or ""
+        start_headers = {
+            "X-Goog-Upload-Protocol": "resumable",
+            "X-Goog-Upload-Command": "start",
+            "X-Goog-Upload-Header-Content-Length": str(size),
+            "X-Goog-Upload-Header-Content-Type": mime_type,
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        }
+        async with httpx.AsyncClient(timeout=self.timeout + 60) as client:
+            start = await client.post(
+                _GEMINI_FILE_UPLOAD_URL,
+                headers=start_headers,
+                json={"file": {"display_name": _os.path.basename(file_path)}},
+            )
+            start.raise_for_status()
+            upload_url = start.headers.get("X-Goog-Upload-URL")
+            if not upload_url:
+                raise _ModelUnavailableError("Gemini File API returned no upload URL")
+            with open(file_path, "rb") as f:
+                data = f.read()
+            up = await client.post(
+                upload_url,
+                headers={
+                    "X-Goog-Upload-Command": "upload, finalize",
+                    "X-Goog-Upload-Offset": "0",
+                    "Content-Length": str(size),
+                },
+                content=data,
+            )
+            up.raise_for_status()
+            info = up.json().get("file", {})
+        return info.get("name", ""), info.get("uri", "")
+
+    async def _poll_file_active(self, file_name: str, max_wait: float = 60.0) -> bool:
+        """Poll a File API file until ACTIVE. Video needs server-side processing,
+        so callers pass a longer max_wait for video evidence."""
+        if not file_name:
+            return False
+        short = file_name.split("/")[-1]
+        url = f"{_GEMINI_API_BASE}/files/{short}"
+        headers = {"x-goog-api-key": self.api_key or ""}
+        deadline = time.monotonic() + max_wait
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            while time.monotonic() < deadline:
+                try:
+                    r = await client.get(url, headers=headers)
+                    if r.status_code == 200:
+                        state = r.json().get("state", "")
+                        if state == "ACTIVE":
+                            return True
+                        if state == "FAILED":
+                            return False
+                except Exception as e:
+                    logger.debug("Gemini File API poll error (retrying)", error=str(e))
+                await asyncio.sleep(2.0)
+        return False
+
+    async def _delete_file_api(self, file_name: str) -> None:
+        """Best-effort delete of an uploaded File API file (quota hygiene)."""
+        if not file_name:
+            return
+        short = file_name.split("/")[-1]
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                await client.delete(
+                    f"{_GEMINI_API_BASE}/files/{short}",
+                    headers={"x-goog-api-key": self.api_key or ""},
+                )
+        except Exception as e:
+            logger.debug("Gemini File API delete failed (non-fatal)", error=str(e))
 
     def _parse_response(
         self, raw_text: str, analysis_type: str, latency_ms: float

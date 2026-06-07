@@ -8,13 +8,30 @@ import { cleanFindingText } from "@/lib/findingText";
 
 interface KeyFindingsProps {
   findings: string[];
+  // Verdict palette from getVerdictConfig (emerald = authentic, amber = uncertain,
+  // red = manipulated). When provided, the section badge follows the verdict so it
+  // can never contradict it (e.g. "No Anomalies Detected" on an Inconclusive image).
+  verdictColor?: string;
 }
 
 type Severity = "danger" | "warning" | "info" | "neutral";
 
 function classifySeverity(text: string): Severity {
-  const lower = text.toLowerCase();
-  if (/tamper|manipulat|fabricat|synthetic|forged|splic|confirmed anomaly|malware|payload|deepfake|ai.generat|artificially generated|generated image/.test(lower)) return "danger";
+  // Classify the finding STATEMENT only — strip the "— Tool (NN%)" attribution
+  // suffix. Tool names like "AI-Generation Detection" otherwise trip the
+  // manipulation keywords on a clean finding and turn the whole report's badge
+  // red ("Anomalies Detected") even when nothing was found.
+  const statement = text.split(/\s+—\s+/)[0];
+  const lower = statement.toLowerCase();
+  // "consistent with a composited/spliced/manipulated region" is a POSITIVE
+  // manipulation finding even though it contains the otherwise-clean phrase
+  // "consistent with" — catch it before the negation guard below.
+  if (/consistent with (?:a |an )?(?:composit|splic|manipulat|tamper|forg|generat|synthetic|cloned|fabricat)/.test(lower)) return "danger";
+  // A negated/absence statement ("found no splicing", "no residual evidence of
+  // compositing", "consistent with an unmodified capture") is clean regardless
+  // of which manipulation noun it names.
+  const negated = /\b(no|not|without|free of|negative for|consistent with|unmodified|authentic|coherent)\b|absen/.test(lower);
+  if (!negated && /tamper|manipulat|fabricat|synthetic|forged|splic|composit|confirmed anomaly|malware|payload|deepfake|ai.generat|artificially generated|generated image/.test(lower)) return "danger";
   if (/limited|missing|absent|risk|cannot|inconclusive|warning|uncertain|coverage/.test(lower)) return "warning";
   if (/bypassed|not applicable|no readable text|no visible text/.test(lower)) return "neutral";
   return "info";
@@ -51,7 +68,7 @@ const TONE_CFG = {
   },
 } as const;
 
-export function KeyFindings({ findings }: KeyFindingsProps) {
+export function KeyFindings({ findings, verdictColor }: KeyFindingsProps) {
   const prefersReduced = useReducedMotion();
 
   if (!Array.isArray(findings) || findings.length === 0) return null;
@@ -62,7 +79,13 @@ export function KeyFindings({ findings }: KeyFindingsProps) {
   const severities = clean.map(classifySeverity);
   const hasDanger  = severities.includes("danger");
   const hasWarning = severities.includes("warning");
-  const overallTone = hasDanger ? "danger" : hasWarning ? "warning" : "info";
+  // The verdict, when known, is the source of truth for the section badge — the
+  // per-line text heuristic only drives the individual dot colours below.
+  const verdictTone =
+    verdictColor === "red" ? "danger" :
+    verdictColor === "amber" ? "warning" :
+    verdictColor === "emerald" ? "info" : null;
+  const overallTone = verdictTone ?? (hasDanger ? "danger" : hasWarning ? "warning" : "info");
   const cfg = TONE_CFG[overallTone];
   const { Icon } = cfg;
 

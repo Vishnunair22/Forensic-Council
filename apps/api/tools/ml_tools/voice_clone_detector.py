@@ -226,7 +226,7 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
     feature-ensemble path.
     """
     try:
-        import librosa
+        import soundfile as sf
         import torch
         from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 
@@ -239,7 +239,18 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
         model.eval()
 
         sr = int(getattr(extractor, "sampling_rate", 16000) or 16000)
-        audio, _ = librosa.load(audio_path, sr=sr, mono=True)
+        # Numba-free audio load: librosa.load JITs through numba, which is broken
+        # under the current numpy build (numba 0.65 vs numpy 2.4). soundfile +
+        # polyphase resample matches the extractor's sample rate dependency-free.
+        audio, sr_native = sf.read(audio_path, dtype="float32", always_2d=False)
+        if getattr(audio, "ndim", 1) > 1:
+            audio = audio.mean(axis=1)
+        audio = np.asarray(audio, dtype=np.float32)
+        if int(sr_native) != sr:
+            from math import gcd
+            from scipy.signal import resample_poly
+            _g = gcd(int(sr_native), int(sr)) or 1
+            audio = resample_poly(audio, sr // _g, int(sr_native) // _g).astype(np.float32)
 
         # Stratified sampling — 5 regions for forensic coverage of long files.
         seg_len = sr * 4
@@ -298,7 +309,11 @@ def _speechbrain_detection(audio_path: str, **kwargs) -> dict[str, Any] | None:
             "court_defensible": True,
             "backend": "transformers-audio-deepfake",
         }
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug(
+            "neural audio-deepfake detection unavailable, falling back to feature ensemble: %r", exc
+        )
         return None
 
 

@@ -1,12 +1,29 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from core.arbiter_deliberation import ArbiterDeliberationResult
+from core.finding_humanizer import CONTEXT_ONLY_TOOLS
 from core.per_agent_synthesis import AgentSynthesisOutput
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+# A tool slug is lowercase tokens joined by underscores (e.g. "frequency_domain_
+# analysis"). Friendly labels ("Frequency Domain Analysis") and pure narrative
+# findings contain spaces / no attribution and are never matched by this.
+_TOOL_SLUG_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")
+_KF_PCT_RE = re.compile(r"\s*\(\d+(?:\.\d+)?%\)\s*$")
+
+
+def _cited_tool_slug(kf: str) -> str | None:
+    """Return the tool slug a `finding — tool (NN%)` key finding attributes itself
+    to, lowercased, or None when it cites no specific tool."""
+    if "—" not in kf:
+        return None
+    tail = _KF_PCT_RE.sub("", kf.rsplit("—", 1)[-1]).strip().lower()
+    return tail or None
 
 def build_deterministic_report(
     case_data: dict[str, Any],
@@ -202,6 +219,32 @@ def build_deterministic_report(
         if norm not in seen_kfs:
             seen_kfs.add(norm)
             deduped_kfs.append(kf)
+
+    # Court-defensibility guardrail: a key finding that attributes itself to a
+    # specific forensic TOOL must trace to a tool that actually ran for this
+    # evidence. LLM/vision synthesis can hallucinate plausible-sounding tools that
+    # never executed (e.g. "scene_geometry_analysis", "lighting_analysis" on a
+    # screenshot where physical-scene checks are N/A) with invented confidences —
+    # such fabricated findings must never reach a signed report. Only slug-form
+    # citations not backed by a real tool are dropped; friendly-label findings and
+    # pure statistical narratives are left untouched. Context-only plumbing tools
+    # (shared visual profile, etc.) are coverage inputs, never standalone findings.
+    _real_tools = {
+        str(t).lower()
+        for key in ("completed_tools", "failed_tools", "not_applicable_tools", "skipped_tools")
+        for t in (tool_coverage.get(key) or [])
+    }
+    _grounded_kfs = []
+    for kf in deduped_kfs:
+        _slug = _cited_tool_slug(kf)
+        if _slug and _TOOL_SLUG_RE.match(_slug) and (_slug not in _real_tools or _slug in CONTEXT_ONLY_TOOLS):
+            logger.warning(
+                "Dropped ungrounded key finding (cited tool did not run)",
+                extra={"cited_tool": _slug, "finding": kf[:160]},
+            )
+            continue
+        _grounded_kfs.append(kf)
+    deduped_kfs = _grounded_kfs
 
     if not deduped_kfs:
         deduped_kfs = ["No anomalous signatures or physical manipulation artifacts were identified."]
