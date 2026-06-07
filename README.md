@@ -51,9 +51,8 @@ These scripts validate `.env`, check system resources, build images in parallel,
 > The `.sh` scripts require a POSIX shell — on Windows run them from **Git Bash** or **WSL2**. The `docker compose` commands they wrap also work directly in PowerShell/`cmd`. See [scripts/README.md](scripts/README.md) for a full catalog of helper scripts.
 
 For detailed Docker commands, troubleshooting, and platform-specific instructions, see:
-- [infra/DOCKER_BUILD.md](infra/DOCKER_BUILD.md) — Complete Docker build/run reference
+- [infra/DOCKER_BUILD.md](infra/DOCKER_BUILD.md) — Single source of truth for the entire Docker build & lifecycle (dev + prod)
 - [docs/TROUBLESHOOTING_GUIDE.md](docs/TROUBLESHOOTING_GUIDE.md) — Diagnostic decision tree
-- [infra/README.md](infra/README.md) — Infrastructure overview
 
 ### Host app development with Docker infrastructure
 
@@ -159,7 +158,7 @@ See [docs/TESTING.md](docs/TESTING.md) for full test commands and coverage targe
 
 - [docs/OPERATIONAL_RUNBOOK.md](docs/OPERATIONAL_RUNBOOK.md) — incident triage, common failures, recovery commands
 - [infra/validate_production_readiness.sh](infra/validate_production_readiness.sh) — production readiness gate (run before deploying)
-- [infra/README.md](infra/README.md) — Docker/infra quickstart and commands
+- [infra/DOCKER_BUILD.md](infra/DOCKER_BUILD.md) — Docker build & lifecycle: setup, health, rebuild, restart, teardown, wipe
 
 ## Security
 

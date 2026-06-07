@@ -1,6 +1,9 @@
-# Forensic Council — Docker Build Guide
+# Forensic Council — Docker Build & Lifecycle Guide
 
-Complete reference for building, running, and verifying the Forensic Council stack in both **developer** and **production** modes.
+**Single source of truth** for the entire Docker workflow — setup, build, start,
+health checks, rebuild, restart, teardown, and wipe — across both **developer**
+and **production** modes. Every lifecycle action names the exact script or
+command to use.
 
 > **Shell syntax note:** All multi-line commands below use `\` (Unix/Git Bash/WSL2).
 > On **Windows PowerShell**, replace each `\` with a backtick `` ` ``.
@@ -22,6 +25,10 @@ Complete reference for building, running, and verifying the Forensic Council sta
 10. [Compose File Reference](#10-compose-file-reference)
 11. [Teardown](#11-teardown)
 12. [Troubleshooting](#12-troubleshooting)
+13. [Host-Run Development](#13-host-run-development-api--frontend-on-host-infra-in-docker)
+14. [Networking & Routing](#14-networking--routing)
+15. [Metrics & Observability](#15-metrics--observability)
+16. [Production Notes](#16-production-notes)
 
 ---
 
@@ -253,11 +260,35 @@ If you need to configure and start the production environment step by step, foll
 
 #### Step 1 — Generate strong secrets
 
-Run this once from the **repo root**. It prints all required secret values to stdout — copy them into your `.env` file:
+Run this once from the **repo root**. Use `--update` to rewrite the values
+directly into `.env`, or omit it to print them to stdout for manual copying:
 
 ```bash
+# Write strong secrets straight into .env (recommended)
+bash infra/generate_production_keys.sh --update
+
+# Or print to stdout and copy manually
 bash infra/generate_production_keys.sh
 ```
+
+The script sets these values (it does **not** generate `LLM_API_KEY` or
+`GEMINI_API_KEY` — obtain those from Groq and Google AI Studio):
+
+| Variable | Format | Used for |
+| --- | --- | --- |
+| `SIGNING_KEY` | 64-char hex | ECDSA P-256 report signing |
+| `JWT_SECRET_KEY` | 64-char hex | JWT token signing |
+| `POSTGRES_PASSWORD` | 32-char alphanumeric | Database authentication |
+| `REDIS_PASSWORD` | 32-char alphanumeric | Redis authentication |
+| `QDRANT_API_KEY` | generated | Qdrant authentication |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 32-char alphanumeric | Initial admin user seed |
+| `BOOTSTRAP_INVESTIGATOR_PASSWORD` | 32-char alphanumeric | Initial investigator user seed |
+| `DEMO_PASSWORD` | 32-char alphanumeric | Demo login (dev/staging only) |
+| `METRICS_SCRAPE_TOKEN` | 64-char hex | Prometheus bearer token |
+
+> **Warning:** `SIGNING_KEY` produces the ECDSA signatures on forensic reports.
+> If rotated or lost, previously signed reports fail signature verification.
+> Store it in a password manager or secret manager (Vault, AWS Secrets Manager).
 
 > On Windows without Git Bash/WSL2: run the script in Git Bash or WSL2, then paste the output values into your `.env` file manually.
 
@@ -964,3 +995,92 @@ npm run dev
 
 The frontend dev server runs at `http://localhost:3000` and the API at `http://localhost:8000`.
 Note: Caddy is not in the loop for this mode; `NEXT_PUBLIC_API_URL=http://localhost:8000` in `.env.host`.
+
+---
+
+## 14. Networking & Routing
+
+### Network segmentation
+
+The stack uses four bridge networks to enforce least-privilege service-to-service access.
+
+```
+              ┌─────────────┐
+              │    Caddy    │ (frontend_net + backend_net)
+              └──────┬──────┘
+         ┌───────────┼───────────┐
+         ▼           │           ▼
+  frontend_net   backend_net   backend_net
+         │           │           │
+    ┌────┴────┐  ┌───┴────┐     │
+    │Frontend │  │Backend │◄────┘ ← also on external_net
+    └─────────┘  │Worker  │   ← also on external_net
+                 └────┬───┘
+                      │ infra_net
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+       Redis       Postgres    Qdrant
+                  (+ jaeger, migration)
+```
+
+| Network | Members | Internal? | Purpose |
+| --- | --- | --- | --- |
+| `infra_net` | redis, postgres, qdrant, jaeger, migration, backend, worker | yes (no internet) | Backend ↔ infrastructure. `internal: true` so infra services have no outbound. |
+| `external_net` | backend, worker | no | Outbound internet for Groq, Gemini, and HuggingFace model downloads. |
+| `backend_net` | backend, caddy, frontend, prometheus | no | Caddy/frontend reach the backend API; Prometheus scrapes `backend:8000/api/v1/metrics/raw`. |
+| `frontend_net` | frontend, caddy | no | Caddy proxies to the Next.js server. |
+
+Do not attach new services to `infra_net` unless they genuinely need database access.
+New services that need outbound internet (e.g. additional LLM providers) must be
+attached to `external_net` — `infra_net` egress is disabled.
+
+### Caddy routing
+
+- `/api/v1/*` → FastAPI backend.
+- Everything else → Next.js frontend.
+
+Do not widen the backend matcher to `/api/*`; the frontend owns server-side routes such as `/api/auth/demo`.
+
+### Container naming & multiple instances
+
+Compose names containers `<project>-<service>-<replica>` — e.g. `forensic-council-backend-1`.
+To run isolated parallel stacks, override the project name (note: a different
+project name gives the stack its **own** model-cache volumes, which re-download):
+
+```bash
+docker compose -p forensic-test -f infra/docker-compose.yml up -d
+```
+
+---
+
+## 15. Metrics & Observability
+
+The backend exposes Prometheus metrics at `/api/v1/metrics/raw`, protected by a bearer token:
+
+```text
+Authorization: Bearer <METRICS_SCRAPE_TOKEN>
+```
+
+The compose stack wires this in two places:
+
+- **Backend** receives `METRICS_SCRAPE_TOKEN` as an environment variable.
+- **Prometheus** receives the same value as the `metrics_scrape_token` secret and reads it from `/run/secrets/metrics_scrape_token`.
+
+UIs (dev overlay only — both are internal in production):
+
+| URL | What |
+| --- | --- |
+| `http://localhost:9090` | Prometheus metrics UI |
+| `http://localhost:16686` | Jaeger distributed tracing UI |
+
+See the [Prometheus cannot scrape backend metrics](#prometheus-cannot-scrape-backend-metrics) troubleshooting entry if scrapes fail.
+
+---
+
+## 16. Production Notes
+
+- Set `DOMAIN` in `.env` to a real public hostname before public deployment; ensure ports 80 and 443 are open on the host.
+- Keep `SIGNING_KEY` and `JWT_SECRET_KEY` distinct, and store all secrets in a password/secret manager.
+- Rotate `METRICS_SCRAPE_TOKEN` if the Prometheus endpoint may have been exposed.
+- The production overlay enforces `read_only: true` + `tmpfs:/tmp`, non-root users, `restart: always`, log rotation, and removes all direct host ports (traffic flows through Caddy only). See [Section 10 → Security invariant](#security-invariant-read-only-filesystem).
+- Run `bash infra/validate_production_readiness.sh` before every production deploy; all `FAIL` lines must be resolved.
