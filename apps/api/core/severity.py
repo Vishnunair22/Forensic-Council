@@ -11,6 +11,110 @@ from __future__ import annotations
 
 from typing import Any
 
+# Tools that are NEVER an "integrity manipulation" positive: provenance/metadata,
+# content/object, hard-evidence (hash), and descriptive/non-manipulation tools.
+# The corroboration grounding (arbiter overall verdict AND the live per-agent card
+# in pipeline_phases) downgrades an uncorroborated INTEGRITY positive to
+# INCONCLUSIVE when the holistic visual read is clean; these tools are excluded so
+# provenance facts and hash mismatches are never silently cleared. Single source of
+# truth shared by the arbiter and the live-stream gate so the two cannot drift.
+NON_INTEGRITY_TOOLS: frozenset[str] = frozenset({
+    # Provenance / metadata
+    "exif_extract", "timestamp_analysis", "gps_timezone_validate",
+    "file_structure_analysis", "file_hash_verify", "metadata_anomaly_score",
+    "provenance_chain_verify", "hex_signature_scan", "compression_risk_audit",
+    # Content / context
+    "object_detection", "vector_contraband_search", "scene_incongruence",
+    # Descriptive / non-manipulation tools — never a manipulation claim
+    "visual_evidence_profile", "analyze_image_content",
+    "extract_text_from_image", "read_shared_image_context",
+    "scale_validation",
+})
+
+_HOLISTIC_FLAGGED_VERDICTS = frozenset({
+    "SUSPICIOUS", "AI_GENERATED", "MANIPULATED", "LIKELY_MANIPULATED", "SUSPECT", "TAMPERED",
+})
+_HOLISTIC_FLAGGED_ASSESSMENTS = frozenset({
+    "suspicious", "likely_manipulated", "ai_generated_suspect",
+})
+
+
+def holistic_read_flags_manipulation(
+    authenticity_verdict: str = "", integrity_assessment: str = ""
+) -> bool:
+    """True when the holistic visual read itself flagged the evidence.
+
+    The corroboration-grounding gate (arbiter overall verdict, live per-agent card,
+    and the agent's own verdict) only clears a lone uncorroborated integrity/AI
+    positive when the holistic read is CLEAN. A SUSPICIOUS read (e.g. the ensemble's
+    strong-AI determination on a synthetic image) CORROBORATES the tool positives —
+    it must NOT be treated as clean, or genuine AI/manipulation gets cleared down to
+    SUSPICIOUS/AUTHENTIC. Single source of truth so all three gates agree.
+    """
+    return (
+        str(authenticity_verdict or "").upper() in _HOLISTIC_FLAGGED_VERDICTS
+        or str(integrity_assessment or "").lower() in _HOLISTIC_FLAGGED_ASSESSMENTS
+    )
+
+
+# Screening-tier heuristics that co-fire on JPEG recompression — correlated, not
+# independent, so they do not corroborate one another or the ML detectors. Excluded
+# from the strong-corroborator COUNT (but still downgraded with the rest of the
+# cluster when uncorroborated). Mirrors the arbiter's inline `_screening` set.
+_SCREENING_TOOLS = frozenset({
+    "neural_copy_move", "copy_move_detector", "neural_splicing",
+    "splicing_detector", "neural_ela", "error_level_analysis",
+    "frequency_domain_analysis",
+})
+
+
+def should_clear_uncorroborated_integrity(
+    findings: list[dict[str, Any]], holistic_clean: bool
+) -> bool:
+    """Decide whether a cluster of integrity positives is UNCORROBORATED and should
+    be held inconclusive — the single source of truth for the corroboration-grounding
+    gate so the agent self-verdict, the live per-agent card, and the signed report
+    (arbiter) all reach the same conclusion (no AUTHENTIC↔SUSPICIOUS drift between
+    the evidence page and the result page).
+
+    ``findings`` is a normalized list of dicts with keys: ``tool_name``,
+    ``evidence_verdict``, ``court_defensible`` (bool), ``confidence`` (float),
+    ``severity_tier`` (str). Mirrors the arbiter's inline grounding EXACTLY:
+
+      - holistic visual read must be clean (a SUSPICIOUS/AI read corroborates), and
+      - no hard provenance signal (file-hash mismatch), and
+      - fewer than 2 STRONG court-defensible NON-screening positives, and
+      - no authoritative TruFor (neural_splicing) localization — a real trained
+        splicing model sees pixel forgeries the holistic read cannot, so it is
+        authoritative on its own and is never cleared.
+    """
+    if not holistic_clean:
+        return False
+    if any(
+        f.get("tool_name") == "file_hash_verify"
+        and str(f.get("evidence_verdict", "")).upper() == "POSITIVE"
+        for f in findings
+    ):
+        return False
+    strong = sum(
+        1 for f in findings
+        if str(f.get("evidence_verdict", "")).upper() == "POSITIVE"
+        and bool(f.get("court_defensible"))
+        and str(f.get("severity_tier", "")).upper() in ("HIGH", "CRITICAL")
+        and str(f.get("tool_name") or "") not in _SCREENING_TOOLS
+    )
+    if strong >= 2:
+        return False
+    trufor = any(
+        str(f.get("tool_name") or "") == "neural_splicing"
+        and str(f.get("evidence_verdict", "")).upper() == "POSITIVE"
+        and bool(f.get("court_defensible"))
+        and float(f.get("confidence") or 0.0) >= 0.5
+        for f in findings
+    )
+    return not trufor
+
+
 # Not-applicable metadata flags that indicate a tool doesn't apply to this file type
 _NA_FLAGS = (
     "ela_not_applicable",

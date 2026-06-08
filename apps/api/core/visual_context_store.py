@@ -121,8 +121,18 @@ def build_visual_context_from_finding(
     # Populated so the no-Gemini path reaches parity with the Gemini visual context.
     _clues = getattr(finding, "_visible_metadata_clues", {}) or {}
 
+    # Only surface signals as "manipulation indicators" when the holistic verdict
+    # actually supports manipulation. Under an AUTHENTIC / CANNOT_DETERMINE verdict
+    # the ensemble's screening signals are either clean notes or uncorroborated
+    # leads the ensemble itself declined to escalate — listing them here makes the
+    # visual context read "ELA anomaly detected (84 regions)" beside an authentic
+    # verdict (the natural-image false-positive narrative). Keep the raw tool
+    # metrics on the findings; the visual context must stay verdict-consistent.
+    _verdict_alert = verdict in ("SUSPICIOUS", "LIKELY_MANIPULATED", "AI_GENERATED")
+    _visible_manip = list(finding.manipulation_signals or []) if _verdict_alert else []
+
     image_integrity_context = ImageIntegrityContext(
-        visible_manipulation_signals=list(finding.manipulation_signals or []),
+        visible_manipulation_signals=_visible_manip,
         editing_or_compositing_signals=list(_clues.get("editing_signals", []) or []),
         regions_for_followup=list(_clues.get("regions_for_followup", []) or []),
         integrity_assessment=integrity_assessment,

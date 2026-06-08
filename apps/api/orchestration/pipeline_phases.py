@@ -642,42 +642,42 @@ async def run_agents_concurrent(
                         if _live_verdict in ("SUSPICIOUS", "MANIPULATED"):
                             def _g(f, k, d=None):
                                 return f.get(k, d) if isinstance(f, dict) else getattr(f, k, d)
+                            from core.severity import (
+                                NON_INTEGRITY_TOOLS,
+                                holistic_read_flags_manipulation,
+                                should_clear_uncorroborated_integrity,
+                            )
                             _vc = getattr(agent_inst, "visual_context", None)
-                            _av = str(getattr(_vc, "authenticity_verdict", "") or "").upper()
+                            _av = str(getattr(_vc, "authenticity_verdict", "") or "")
                             _ii = getattr(_vc, "image_integrity_context", None)
                             _ass = str(getattr(_ii, "integrity_assessment", "") or "").lower()
-                            _holistic_flags = (
-                                _av in ("AI_GENERATED", "MANIPULATED", "LIKELY_MANIPULATED", "SUSPECT")
-                                or _ass in ("likely_manipulated", "ai_generated_suspect")
-                            )
-                            _holistic_clean = (_vc is not None) and not _holistic_flags
-                            _hash_mm = any(
-                                str((_g(f, "metadata", {}) or {}).get("tool_name")) == "file_hash_verify"
-                                and str(_g(f, "evidence_verdict", "")).upper() == "POSITIVE"
+                            _holistic_clean = (_vc is not None) and not holistic_read_flags_manipulation(_av, _ass)
+                            _norm = [
+                                {
+                                    "tool_name": (_g(f, "metadata", {}) or {}).get("tool_name")
+                                    or _g(f, "finding_type", "") or "",
+                                    "evidence_verdict": _g(f, "evidence_verdict", ""),
+                                    "court_defensible": _g(f, "court_defensible", False),
+                                    "confidence": _g(f, "confidence_raw", 0.0),
+                                    "severity_tier": _g(f, "severity_tier", "")
+                                    or (_g(f, "metadata", {}) or {}).get("severity_tier", ""),
+                                }
                                 for f in _af
-                            )
-                            _strong_cd = sum(
-                                1 for f in _af
-                                if str(_g(f, "evidence_verdict", "")).upper() == "POSITIVE"
-                                and bool(_g(f, "court_defensible", False))
-                                and str(_g(f, "severity_tier", "")).upper() in ("HIGH", "CRITICAL")
-                            )
-                            if _holistic_clean and not _hash_mm and _strong_cd < 2:
-                                # Mirror the arbiter's corroboration grounding at the
-                                # live stage: integrity screening positives the clean
-                                # holistic read does not corroborate are benign (tool
-                                # false positives on real texture / studio lighting).
-                                # Clear them and recompute so the card reaches the SAME
-                                # verdict deliberation will (AUTHENTIC) instead of
-                                # stalling at an INCONCLUSIVE the final report flips.
+                            ]
+                            # Single shared decision (mirrors the arbiter EXACTLY): a
+                            # lone uncorroborated integrity/AI positive the clean holistic
+                            # read does not corroborate is a tool false positive. Clear it
+                            # so the live card reaches the SAME verdict the signed report
+                            # will, with no SUSPICIOUS/72%→AUTHENTIC flip.
+                            if should_clear_uncorroborated_integrity(_norm, _holistic_clean):
                                 _grounded = []
                                 for f in _af:
                                     _is_pos = str(_g(f, "evidence_verdict", "")).upper() == "POSITIVE"
-                                    _is_strong = (
-                                        bool(_g(f, "court_defensible", False))
-                                        and str(_g(f, "severity_tier", "")).upper() in ("HIGH", "CRITICAL")
+                                    _ftool = str(
+                                        (_g(f, "metadata", {}) or {}).get("tool_name")
+                                        or _g(f, "finding_type", "") or ""
                                     )
-                                    if _is_pos and not _is_strong and isinstance(f, dict):
+                                    if _is_pos and _ftool not in NON_INTEGRITY_TOOLS and isinstance(f, dict):
                                         _grounded.append({**f, "evidence_verdict": "INCONCLUSIVE"})
                                     else:
                                         _grounded.append(f)

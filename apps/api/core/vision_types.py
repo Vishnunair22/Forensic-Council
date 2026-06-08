@@ -54,59 +54,62 @@ class VisualEvidenceFinding:
         tampering_signals = buckets["tampering"]
         processing_observations = buckets["processing"]
         ai_generation_signals = buckets["ai_generation"]
-        unknown_signals = buckets["unknown"]
-
-        # Weak SCREENING markers fire on benign textured / high-noise / recompressed
-        # images (the main false-positive source) and must not, on their own, push
-        # the local-ensemble verdict to SUSPICIOUS — this mirrors the conservative
-        # calibration in vision_local_ensemble._assess_authenticity.
-        _WEAK_SCREENING_MARKERS = (
-            "elevated noise residual",
-            "jpeg block artifacts",
-            "high_freq_ratio",
-            "frequency-domain anomaly",
-        )
-
-        def _is_weak_marker(sig: str) -> bool:
-            sl = (sig or "").lower()
-            return any(m in sl for m in _WEAK_SCREENING_MARKERS)
-
-        unknown_signals = [s for s in unknown_signals if not _is_weak_marker(s)]
-
         raw_verdict = self._authenticity_verdict.upper()
-        # A provider that returns its OWN holistic authenticity verdict (Gemini)
-        # has already weighed its observations — trust that verdict and do not let
-        # a benign editing observation (e.g. "background removed") override an
-        # AUTHENTIC call. The local ensemble has no separate holistic verdict (its
-        # signals ARE the verdict), so any ensemble signal still escalates.
-        is_holistic_provider = (self.provider_used or "").lower().startswith("gemini")
+        # Both providers return their OWN holistic authenticity verdict and have
+        # already weighed their observations:
+        #   • Gemini decides authenticity holistically;
+        #   • the local ensemble's _assess_authenticity applies corroboration-aware
+        #     calibration (a single uncorroborated screening signal — e.g. one ELA
+        #     hotspot on a heavily recompressed JPEG — yields INCONCLUSIVE, never
+        #     SUSPICIOUS; see vision_local_ensemble).
+        # Trust that verdict. Re-deriving a louder verdict from the individual raw
+        # signal buckets double-counts one uncorroborated artifact into a false
+        # POSITIVE — the gin.jpeg false-positive class.
+        is_gemini = (self.provider_used or "").lower().startswith("gemini")
         holistic_manip_verdicts = {"SUSPICIOUS", "LIKELY_MANIPULATED", "TAMPERED", "MANIPULATED"}
+        clean_verdicts = {"AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"}
 
         deepfake_detected = raw_verdict == "AI_GENERATED" or bool(ai_generation_signals)
-        if raw_verdict in holistic_manip_verdicts:
-            verdict = raw_verdict
-            manipulation_detected = True
-        elif tampering_signals:
-            verdict = "SUSPICIOUS"
-            manipulation_detected = True
-        elif deepfake_detected:
-            verdict = "AI_GENERATED"
-            manipulation_detected = False
-        elif not is_holistic_provider and (unknown_signals or processing_observations):
-            # Local forensic ensemble: an unrecognised artifact signal is still a
-            # real detection — preserve sensitivity rather than silently dropping it.
-            verdict = "SUSPICIOUS"
-            manipulation_detected = True
-        else:
-            verdict = raw_verdict
-            manipulation_detected = False
 
-        if manipulation_detected or deepfake_detected:
-            evidence_verdict = "POSITIVE"
-        elif verdict in {"AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"} and self.confidence >= 0.5:
-            evidence_verdict = "NEGATIVE"
+        if not is_gemini:
+            # Local ensemble: its holistic verdict is authoritative. A weak AI or
+            # artifact signal that the ensemble itself declined to escalate stays
+            # INCONCLUSIVE here (surfaced for review, not alarmed).
+            if raw_verdict in holistic_manip_verdicts:
+                verdict = raw_verdict
+                manipulation_detected = True
+                evidence_verdict = "POSITIVE"
+            elif raw_verdict in clean_verdicts and self.confidence >= 0.5:
+                verdict = raw_verdict
+                manipulation_detected = False
+                evidence_verdict = "NEGATIVE"
+            else:
+                verdict = raw_verdict or "INCONCLUSIVE"
+                manipulation_detected = False
+                evidence_verdict = "INCONCLUSIVE"
         else:
-            evidence_verdict = "INCONCLUSIVE"
+            # Gemini holistic provider: trust its verdict, but a genuine tampering
+            # observation still escalates even when it called the image authentic,
+            # and a benign editing observation never overrides an AUTHENTIC call.
+            if raw_verdict in holistic_manip_verdicts:
+                verdict = raw_verdict
+                manipulation_detected = True
+            elif tampering_signals:
+                verdict = "SUSPICIOUS"
+                manipulation_detected = True
+            elif deepfake_detected:
+                verdict = "AI_GENERATED"
+                manipulation_detected = False
+            else:
+                verdict = raw_verdict
+                manipulation_detected = False
+
+            if manipulation_detected or deepfake_detected:
+                evidence_verdict = "POSITIVE"
+            elif verdict in clean_verdicts and self.confidence >= 0.5:
+                evidence_verdict = "NEGATIVE"
+            else:
+                evidence_verdict = "INCONCLUSIVE"
 
         # "edited" is a separate, descriptive axis from "tampered": a file can be
         # edited (cropped, background removed) yet authentic / not deceptive.

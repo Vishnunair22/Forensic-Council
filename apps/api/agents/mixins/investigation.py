@@ -963,6 +963,12 @@ class AgentInvestigationMixin:
                 "status": str(getattr(f, "status", "") or ""),
                 "confidence_raw": conf_raw,
                 "severity_tier": sev,
+                "tool_name": tool,
+                "court_defensible": bool(
+                    getattr(f, "court_defensible", None)
+                    if getattr(f, "court_defensible", None) is not None
+                    else meta.get("court_defensible", False)
+                ),
                 "metadata": meta,
             })
 
@@ -998,6 +1004,43 @@ class AgentInvestigationMixin:
                     }
         except Exception:
             pass
+
+        # Corroboration grounding — mirror the arbiter overall verdict and the
+        # live-stream card gate (all three share core.severity.NON_INTEGRITY_TOOLS)
+        # so this AGENT's own deep verdict (and the phase-delta narrative it feeds)
+        # equals the signed per-agent verdict. A lone uncorroborated integrity/AI
+        # positive (e.g. a diffusion 0.99 the other detectors and the clean holistic
+        # read do not corroborate) is a tool false positive: held INCONCLUSIVE when
+        # the holistic read is clean and fewer than 2 strong court-defensible
+        # positives agree. Without this, the evidence/result pages showed a phantom
+        # AUTHENTIC→SUSPICIOUS "deep escalated" the signed report then flipped back.
+        from core.severity import (
+            NON_INTEGRITY_TOOLS,
+            holistic_read_flags_manipulation,
+            should_clear_uncorroborated_integrity,
+        )
+        _vc_g = getattr(self, "visual_context", None)
+        _av_g = str(getattr(_vc_g, "authenticity_verdict", "") or "")
+        _ii_g = getattr(_vc_g, "image_integrity_context", None)
+        _ass_g = str(getattr(_ii_g, "integrity_assessment", "") or "").lower()
+        _holistic_clean = (_vc_g is not None) and not holistic_read_flags_manipulation(_av_g, _ass_g)
+        _norm = [
+            {
+                "tool_name": r.get("tool_name"),
+                "evidence_verdict": r.get("evidence_verdict"),
+                "court_defensible": r.get("court_defensible"),
+                "confidence": r.get("confidence_raw"),
+                "severity_tier": r.get("severity_tier"),
+            }
+            for r in rows
+        ]
+        if should_clear_uncorroborated_integrity(_norm, _holistic_clean):
+            for r in rows:
+                if (
+                    str(r.get("evidence_verdict", "")).upper() == "POSITIVE"
+                    and str(r.get("tool_name") or "") not in NON_INTEGRITY_TOOLS
+                ):
+                    r["evidence_verdict"] = "INCONCLUSIVE"
 
         verdict, confidence, _reason = compute_agent_verdict(
             rows, visual_signal=visual_signal, is_deep=is_deep

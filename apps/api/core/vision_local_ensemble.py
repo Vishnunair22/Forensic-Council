@@ -410,6 +410,14 @@ def _cross_signal_synthesis(
         verdict = "AUTHENTIC"
 
     # ── Narrative ────────────────────────────────────────────────────────
+    # Only assert a forensic finding in the narrative when the holistic verdict is
+    # an alert. Under AUTHENTIC/INCONCLUSIVE the substantive signals are
+    # uncorroborated screening leads the ensemble declined to escalate — surfacing
+    # them as "Forensic assessment: ELA anomaly detected" contradicts the verdict.
+    _narr_alert = verdict in ("SUSPICIOUS", "LIKELY_MANIPULATED", "TAMPERED", "MANIPULATED", "AI_GENERATED")
+    _narr_substantive = [s for s in signals if not _is_clean_note(s)]
+    _assert_signal = _narr_alert and bool(_narr_substantive)
+    _lead_signal = _narr_substantive[0] if _narr_substantive else (signals[0] if signals else "")
     if is_screenshot:
         app_hint = "an unidentified application"
         ocr_text_lower = " ".join(ocr_lines).lower()
@@ -425,8 +433,8 @@ def _cross_signal_synthesis(
             f"This is a {clip_category} capture, likely from {app_hint}. "
             f"Extracted {len(ocr_lines)} text elements for content verification. "
         )
-        if signals and not signals[0].endswith("detected"):
-            narrative += f"Forensic assessment: {signals[0]}. "
+        if _assert_signal:
+            narrative += f"Forensic assessment: {_lead_signal}. "
         else:
             narrative += "Screenshot integrity validated via hash and OCR consistency checks. "
     else:
@@ -436,10 +444,10 @@ def _cross_signal_synthesis(
             narrative_parts.append(florence_desc)
         else:
             narrative_parts.append(f"Local ensemble classified this as '{clip_category}' with {obj_summary} detected.")
-        if signals and not signals[0].endswith("detected"):
-            narrative_parts.append(f"Forensic assessment: {signals[0]}.")
+        if _assert_signal:
+            narrative_parts.append(f"Forensic assessment: {_lead_signal}.")
         else:
-            narrative_parts.append("Four+ independent forensic measures show no manipulation indicators.")
+            narrative_parts.append("Independent forensic measures show no corroborated manipulation indicator.")
         narrative = " ".join(narrative_parts)
 
     return verdict, signals, narrative, conflict_detected
@@ -827,8 +835,24 @@ async def _analyze_local_visual_profile_impl(
         desc_parts.append(f"Detected objects: {', '.join(detected)}.")
     if ocr_lines:
         desc_parts.append(f"Extracted text: {', '.join(ocr_lines[:5])}.")
-    if signals:
+    _alert_verdict = str(verdict).upper() in (
+        "SUSPICIOUS", "LIKELY_MANIPULATED", "TAMPERED", "MANIPULATED", "AI_GENERATED",
+    )
+    _substantive_sigs = [
+        s for s in signals
+        if not (s.lower().rstrip(". ").endswith("indicators detected") or "no manipulation" in s.lower())
+    ]
+    if signals and (_alert_verdict or not _substantive_sigs):
+        # Alert verdict → assert the signals; OR only clean notes present → show them.
         desc_parts.append(f"Forensic signals: {'; '.join(signals)}.")
+    elif _substantive_sigs:
+        # Uncorroborated screening leads under an authentic/inconclusive verdict: the
+        # holistic ensemble declined to escalate them, so the scene description must
+        # not read as a manipulation detection. Report screening as non-asserting.
+        desc_parts.append(
+            "Forensic screening surfaced only low-level uncorroborated signals, held "
+            "non-asserting — no corroborated manipulation indicator."
+        )
     else:
         desc_parts.append("No manipulation signals detected by local ensemble.")
     content_description = " ".join(desc_parts)

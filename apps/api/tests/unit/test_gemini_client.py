@@ -117,11 +117,16 @@ class TestGeminiVisionFindingSchema:
         assert d["evidence_verdict"] == "INCONCLUSIVE"
 
     def test_manipulation_signals_in_metadata(self):
+        # A real manipulation finding carries the holistic provider verdict that
+        # makes it POSITIVE — raw screening signals alone never assert manipulation
+        # without a corroborating verdict (see core.vision_types.to_finding_dict).
         finding = GeminiVisionFinding(
             analysis_type="file_content_identification",
             model_used="gemini-2.5-flash",
+            provider_used="gemini",
             content_description="Splicing detected.",
             manipulation_signals=["edge discontinuity", "frequency artifact"],
+            _authenticity_verdict="SUSPICIOUS",
         )
         d = finding.to_finding_dict(agent_id="Agent1")
         assert "edge discontinuity" in d["metadata"]["manipulation_signals"]

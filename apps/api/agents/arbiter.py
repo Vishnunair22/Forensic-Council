@@ -321,24 +321,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # court-defensible agreeing integrity signals. Provenance/content-risk
         # signals and hard evidence (hash mismatch) are not touched.
         try:
+            from core.severity import (
+                NON_INTEGRITY_TOOLS,
+                holistic_read_flags_manipulation,
+            )
             _vc_clean = False
             if visual_context is not None:
                 _vi = getattr(visual_context, "image_integrity_context", None)
                 _ass = str(getattr(_vi, "integrity_assessment", "") or "").lower() if _vi else ""
-                _vc_clean = _ass not in ("likely_manipulated", "ai_generated_suspect")
-            _non_integrity = {
-                # Provenance/metadata
-                "exif_extract", "timestamp_analysis", "gps_timezone_validate",
-                "file_structure_analysis", "file_hash_verify", "metadata_anomaly_score",
-                "provenance_chain_verify", "hex_signature_scan", "compression_risk_audit",
-                # Content/context
-                "object_detection", "vector_contraband_search", "scene_incongruence",
-                # Descriptive / non-manipulation tools — never a manipulation claim,
-                # so must not be tagged as an "uncorroborated integrity signal".
-                "visual_evidence_profile", "analyze_image_content",
-                "extract_text_from_image", "read_shared_image_context",
-                "scale_validation",
-            }
+                _av = str(getattr(visual_context, "authenticity_verdict", "") or "")
+                _vc_clean = not holistic_read_flags_manipulation(_av, _ass)
             # Screening-tier heuristics that co-fire on JPEG recompression — they are
             # correlated, not independent, so they do not corroborate one another or
             # the ML detectors. Excluded from the strong-corroborator count (but still
@@ -353,7 +345,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 for _f in _res.get("findings", []):
                     _m = _f.get("metadata") or {}
                     _tool = _m.get("tool_name") or _f.get("finding_type") or ""
-                    if str(_f.get("evidence_verdict")).upper() == "POSITIVE" and _tool not in _non_integrity:
+                    if str(_f.get("evidence_verdict")).upper() == "POSITIVE" and _tool not in NON_INTEGRITY_TOOLS:
                         _int_pos.append((_tool, _f))
             _strong = sum(
                 1 for _tool, _f in _int_pos
@@ -397,11 +389,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     if _orig_summary:
                         _meta["pre_downgrade_summary"] = _orig_summary
                     _tool_disp = str(_tool or "a screening check").replace("_", " ")
-                    _f["reasoning_summary"] = (
+                    _downgraded_text = (
                         f"A weak screening signal from {_tool_disp} was not corroborated by the "
                         "holistic visual model; held inconclusive — consistent with a benign "
                         "processing/recompression artifact rather than manipulation."
                     )
+                    # Rewrite EVERY narrative field, not just reasoning_summary. The
+                    # key-findings formatter (per_agent_synthesis.format_finding_first)
+                    # and the evidence-card outcome text prefer metadata.key_signal /
+                    # summary; leaving the original POSITIVE detection text there
+                    # surfaced an assertive "X detected (prob 0.99)" key finding and a
+                    # "N anomalies flagged" overview beneath an INCONCLUSIVE/AUTHENTIC
+                    # verdict (the natural-image false-positive narrative class).
+                    _f["reasoning_summary"] = _downgraded_text
+                    _f["summary"] = _downgraded_text
+                    _meta["summary"] = _downgraded_text
+                    _meta["key_signal"] = _downgraded_text
                 logger.info(f"Corroboration grounding downgraded {len(_int_pos)} uncorroborated integrity positive(s)")
         except Exception as _corr_err:
             logger.debug("Corroboration grounding skipped", error=str(_corr_err))
