@@ -298,9 +298,9 @@ export function AgentProgressDisplay({
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
-  // Default expanded so the primary real-time agent rows are visible immediately
-  // without requiring the investigator to click to reveal them.
-  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
+  // Collapsed by default — the investigator expands the Active Agents list on
+  // click; the per-agent cards below already surface live status at a glance.
+  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(() =>
     (typeof process !== "undefined" && process.env.NODE_ENV === "test") || typeof jest !== "undefined" ? false : true
   );

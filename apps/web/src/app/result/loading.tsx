@@ -1,27 +1,23 @@
+// Suspense fallback for /result (redirect shell). Solid dark full-viewport cover
+// — mirrors result/[sessionId]/loading.tsx — so the hand-off into the report
+// never flashes a blank/empty scaffold.
 export default function ResultLoading() {
   return (
     <div
-      className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4"
+      className="fixed inset-0 z-[10001] flex flex-col items-center justify-center bg-background px-6 select-none"
       aria-busy="true"
       aria-label="Loading forensic report"
     >
-      <div className="w-full max-w-2xl space-y-6">
-        {/* Verdict header skeleton */}
-        <div className="fc-skeleton h-10 w-48 rounded-lg mx-auto" />
-        {/* Confidence bar */}
-        <div className="fc-skeleton h-3 w-full rounded-full" />
-        {/* Agent cards row */}
-        <div className="grid grid-cols-5 gap-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="fc-skeleton h-24 rounded-[var(--radius-2xl)]" />
-          ))}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="relative w-9 h-9 flex items-center justify-center border border-primary/30 rounded-xl bg-primary/5">
+          <span className="absolute inset-0 rounded-xl border border-primary/40 animate-ping" />
+          <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
         </div>
-        {/* Report body */}
-        <div className="space-y-3">
-          <div className="fc-skeleton h-4 w-full rounded" />
-          <div className="fc-skeleton h-4 w-5/6 rounded" />
-          <div className="fc-skeleton h-4 w-4/6 rounded" />
-        </div>
+        <span className="fc-eyebrow fc-text-muted">Council Arbiter</span>
+      </div>
+      <p className="fc-eyebrow fc-text-muted mb-5">Decrypting Forensic Ledger</p>
+      <div className="h-2 w-56 max-w-[70vw] overflow-hidden rounded-full bg-white/10">
+        <div className="fc-skeleton h-full w-full rounded-full" />
       </div>
     </div>
   );

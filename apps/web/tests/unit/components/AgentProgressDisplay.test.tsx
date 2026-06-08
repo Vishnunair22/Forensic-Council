@@ -86,9 +86,9 @@ const defaultProps = {
 };
 
 describe("ActiveAgentsPanel default state", () => {
-  it("expands the ActiveAgentsPanel by default so live agent rows are visible immediately", () => {
+  it("collapses the ActiveAgentsPanel by default; per-agent cards remain visible", () => {
     render(React.createElement(AgentProgressDisplay, defaultProps));
-    expect(screen.getByRole("button", { name: /Active Agents/i })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /Active Agents/i })).toHaveAttribute("aria-expanded", "false");
     const cards = screen.queryAllByTestId(/^card-/);
     expect(cards.length).toBeGreaterThan(0);
   });

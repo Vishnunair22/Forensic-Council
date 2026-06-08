@@ -271,6 +271,7 @@ test_*.ps1
 /test-images-broad/
 /apps/api/scratch/*
 !/apps/api/scratch/.gitkeep
+/apps/web/scratch/
 /apps/web/public/temp/*
 !/apps/web/public/temp/.gitkeep
 /artifacts/

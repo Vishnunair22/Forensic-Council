@@ -191,29 +191,30 @@ export function useResult(initialSessionId?: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Transition smoothness: ensure the arbiter overlay shows for at least 400ms
-  // on the result page before allowing state to flip to "ready". This prevents
-  // a perceptible flash when the report is already cached and arrives in <100ms.
-  // data-fc-loading CSS backstop is removed only AFTER this timer fires (or
-  // when reportAlreadyReady skips it), so the body::before bridge stays in
-  // place until result content is actually visible.
+  // Transition smoothness: hold the arbiter overlay for at least 400ms before
+  // flipping to "ready" so a report that arrives in <100ms doesn't flash. When
+  // the report is ALREADY confirmed ready (Accept Baseline / View Results set
+  // FC_REPORT_READY and the evidence page already showed the overlay for its
+  // minimum), skip the artificial delay and reveal immediately — the
+  // finalReportData effect treats reportAlreadyReady as satisfying this gate.
   useEffect(() => {
-    if (!mounted) return;
-    if (reportAlreadyReady || minOverlayDone) {
-      document.body.removeAttribute("data-fc-loading");
-      if (reportAlreadyReady) return;
-    }
-    if (minOverlayDone) return;
-    const timer = setTimeout(() => {
-      setMinOverlayDone(true);
-      document.body.removeAttribute("data-fc-loading");
-      // When minOverlayDone becomes true, the finalReportData effect re-runs
-      // (minOverlayDone is in its dep array) and calls setState("ready") if
-      // the report is already available — covering the race where the report
-      // arrived while this timer was running.
-    }, 400);
+    if (!mounted || reportAlreadyReady || minOverlayDone) return;
+    const timer = setTimeout(() => setMinOverlayDone(true), 400);
     return () => clearTimeout(timer);
-  }, [mounted, sessionId, reportAlreadyReady, minOverlayDone]);
+  }, [mounted, reportAlreadyReady, minOverlayDone]);
+
+  // Remove the full-screen loading bridge (body[data-fc-loading]) ONLY once the
+  // report (or a terminal state) is actually on screen. Removing it earlier — on
+  // mount, as the previous code did for reportAlreadyReady — exposed the empty
+  // result scaffold for a frame ("blank before the report loads"). Keeping it up
+  // under the arbiter overlay until state="ready" makes the hand-off seamless:
+  // bridge + overlay cover continuously, then the overlay fades out to reveal the
+  // report in one fluid step.
+  useEffect(() => {
+    if (state === "ready" || state === "error" || state === "empty") {
+      document.body.removeAttribute("data-fc-loading");
+    }
+  }, [state]);
 
   // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
   useEffect(() => {
@@ -223,6 +224,9 @@ export function useResult(initialSessionId?: string) {
       setReport(null);
       setArbiterComplete(false);
       setMinOverlayDone(false);
+      setReportAlreadyReady(
+        sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${initialSessionId}`) === "1",
+      );
       historySavedRef.current = false;
       revealSoundedRef.current = false;
       setState("arbiter");
@@ -243,6 +247,9 @@ export function useResult(initialSessionId?: string) {
     setSessionId(sid);
     setArbiterComplete(false);
     setMinOverlayDone(false);
+    setReportAlreadyReady(
+      sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`) === "1",
+    );
     setReport(null);
     setState("arbiter");
     historySavedRef.current = false;
@@ -313,9 +320,12 @@ export function useResult(initialSessionId?: string) {
     if (fromReport.length > 0) {
       setAgentTimeline(fromReport);
     }
-    // Only transition to "ready" after the min overlay duration has elapsed
-    // to prevent blank flash during overlay exit animation.
-    if (minOverlayDone) {
+    // Reveal once the min-overlay window has elapsed OR the report was already
+    // confirmed ready before navigation (Accept Baseline / View Results). Without
+    // the reportAlreadyReady branch, minOverlayDone never becomes true on that
+    // path (the timer effect is skipped), so the page hung on the arbiter overlay
+    // and the report never appeared — the broken accept→arbiter→result flow.
+    if (minOverlayDone || reportAlreadyReady) {
       setState("ready");
       // ONE reveal sound, synced to the moment the report content actually
       // appears, fired at most once per session (guarded against React Query
@@ -330,7 +340,7 @@ export function useResult(initialSessionId?: string) {
         return () => clearTimeout(id);
       }
     }
-  }, [finalReportData, minOverlayDone]);
+  }, [finalReportData, minOverlayDone, reportAlreadyReady]);
 
   useEffect(() => {
     if (!reportQueryError) return;

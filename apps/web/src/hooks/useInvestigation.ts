@@ -883,7 +883,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
     sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
     sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
-    document.body.setAttribute("data-fc-loading", "1");
+    // No data-fc-loading bridge: the route's loading.tsx (a solid branded dark
+    // cover) is the Suspense fallback that fills the navigation, and the App Router
+    // transition holds the evidence arbiter overlay until it's ready. The old
+    // body::before bridge sat ABOVE the app's stacking context and obscured BOTH
+    // the loading cover and the result overlay with an empty dark blur — the
+    // "blank before the result loads". Branded covers now hand off seamlessly.
     router.push(`/result/${sid}`);
     return true;
   }, [router]);
