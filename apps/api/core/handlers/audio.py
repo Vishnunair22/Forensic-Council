@@ -505,11 +505,16 @@ class AudioHandlers(BaseToolHandler):
             return blocked
         # Run as managed subprocess — avoids the Python startup cost on repeat calls
         # and keeps heavy SpeechBrain/librosa imports out of the main process.
+        # The SpeechBrain voice-clone model cold-loads on the worker's first call;
+        # under concurrent deep-phase load a 30s budget intermittently times out
+        # that load, degrading the check and wobbling the aggregate confidence
+        # (Suspicious verdict held, but 87% vs 90% between runs). Give the cold
+        # load headroom so the result is deterministic.
         result = await run_ml_tool(
             "voice_clone_detector.py",
             artifact.file_path,
             extra_args=["--model", self.agent.config.voice_clone_model_name],
-            timeout=30.0,
+            timeout=60.0,
         )
         if not result.get("error") and result.get("available"):
             await self.agent._record_tool_result("voice_clone_detect", result)
