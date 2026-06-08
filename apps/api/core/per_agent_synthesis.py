@@ -30,7 +30,7 @@ class VisualContextSplit(BaseModel):
 
 
 class AgentSynthesisInput(BaseModel):
-    agent_id: Literal["Agent1", "Agent3", "Agent5"]
+    agent_id: Literal["Agent1", "Agent2", "Agent3", "Agent4", "Agent5"]
     persona_name: str
     persona_rules: dict = Field(default_factory=dict)
     visual_context_section: dict | None = None
@@ -164,6 +164,12 @@ def format_finding_first(finding: dict) -> str:
     )
 
     finding_text = str(finding_text).strip()
+    # Strip leaked internal grounding/annotation markers ("[UNCORROBORATED VISUAL
+    # CLAIM]", "[WARNING]", …) prepended upstream by the grounding pass. The
+    # grounding effect is already applied to verdict/confidence; the bracketed tag
+    # must never reach a signed, court-facing key finding. Mirrors the per-agent
+    # card path's strip in findings_humanizer so both surfaces agree.
+    finding_text = re.sub(r"\[[A-Z][A-Z /_-]{3,}\]\s*", "", finding_text).strip()
     # Strip tool prefix if it duplicates the tool name
     if tool_label.lower() in finding_text.lower():
         for prefix in (tool_label + ":", tool_label + " -", tool_label + " —", tool_label):
@@ -178,6 +184,22 @@ def format_finding_first(finding: dict) -> str:
     else:
         conf_pct = int(round(float(conf) * 100))
         return f"{finding_text} — {tool_label} ({conf_pct}%)"
+
+
+# Modality-aware phrasing for the "holistic read flagged this" narrative so an
+# audio/video/document agent never reads "holistic VISUAL assessment / see Visual
+# Context" (there is no visual context for those). (assessment phrase, context ref).
+_HOLISTIC_TERMS: dict[str, tuple[str, str]] = {
+    "Agent1": ("holistic visual assessment", "Visual Context"),
+    "Agent2": ("holistic audio analysis", "the audio analysis"),
+    "Agent3": ("holistic scene assessment", "Visual Context"),
+    "Agent4": ("holistic media analysis", "the media analysis"),
+    "Agent5": ("holistic content analysis", "the content analysis"),
+}
+
+
+def _holistic_terms(agent_id: str) -> tuple[str, str]:
+    return _HOLISTIC_TERMS.get(agent_id, ("holistic assessment", "the holistic read"))
 
 
 _FILE_TYPE_ARTICLE = {
@@ -382,12 +404,12 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
                 f"results with no manipulation signal."
             )
     elif _alert_verdict:
-        # Alert verdict driven by the holistic visual read, not a discrete tool
-        # POSITIVE. Lead with the holistic signal so the key findings do not read
-        # as all-clean beside a SUSPICIOUS/MANIPULATED verdict.
+        # Alert verdict driven by the holistic read, not a discrete tool POSITIVE.
+        # Lead with the holistic signal so the key findings do not read as all-clean
+        # beside a SUSPICIOUS/MANIPULATED verdict. Modality-aware wording.
+        _assess, _ctx = _holistic_terms(input_data.agent_id)
         key_findings = [
-            "The holistic visual assessment flagged this evidence as anomalous; see Visual "
-            "Context for the contributing read."
+            f"The {_assess} flagged this evidence as anomalous; see {_ctx} for the contributing read."
         ] + _clean[:4]
     elif _clean:
         # Clean path: the evidence is benign — surface the substantive clean
@@ -567,9 +589,11 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
 
     _axis_fallback = {
         "Agent1": "no distinct image-integrity signals were observed",
+        "Agent2": "no distinct acoustic or voice-integrity signals were observed",
         "Agent3": "no distinct object or scene context was observed",
-        "Agent5": "no distinct visual metadata or provenance clues were observed",
-    }.get(input_data.agent_id, "no distinct visual context was observed")
+        "Agent4": "no distinct temporal or media-integrity signals were observed",
+        "Agent5": "no distinct metadata or provenance clues were observed",
+    }.get(input_data.agent_id, "no distinct context was observed")
 
     if identity_lead and axis_detail:
         vis_summary = f"{identity_lead} {axis_detail}"
@@ -637,10 +661,11 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
             f"{_n_sig} {_sig_noun}(s). {findings_joined}."
         )
     elif _alert_verdict:
+        _assess_b, _ctx_b = _holistic_terms(input_data.agent_id)
         agent_brief = (
             f"The {_axis_label} examination completed {_n_checks} check(s). No individual "
-            f"tool isolated a discrete manipulation signal, but the holistic assessment is "
-            f"anomalous (see Visual Context for the contributing read)."
+            f"tool isolated a discrete manipulation signal, but the {_assess_b} is "
+            f"anomalous (see {_ctx_b} for the contributing read)."
         )
     elif _clean:
         # Lead with the strongest clean finding — the head of the overview should
@@ -664,10 +689,12 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
         )
 
     # Append the deterministic verdict so the overview states the outcome arrived.
+    # No confidence % in the prose — the authoritative grounded confidence is shown
+    # in the card header and per-agent metrics; citing a pre-grounding number here
+    # drifts from it (e.g. brief "85%" beside a grounded 89% card header).
     if input_data.agent_verdict:
         _vv = str(input_data.agent_verdict).replace("_", " ").title()
-        _cc = int(round(float(input_data.agent_confidence or 0.0) * 100))
-        agent_brief += f" Verdict: {_vv} ({_cc}% confidence)."
+        agent_brief += f" Verdict: {_vv}."
 
     # Derive the opinion / confidence reason from the SAME positive/clean split
     # that drives the brief, so the "Your Opinion" block can never state a
@@ -694,9 +721,10 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
             f"evidence remains inconclusive.{_failed_note}"
         )
     elif _alert_verdict:
+        _assess_o, _ = _holistic_terms(input_data.agent_id)
         confidence_reason = (
-            f"No discrete tool isolated a manipulation signal, but the holistic visual "
-            f"assessment supports {_art} {_vw or 'suspicious'} finding across "
+            f"No discrete tool isolated a manipulation signal, but the {_assess_o} "
+            f"supports {_art} {_vw or 'suspicious'} finding across "
             f"{_n_checks} completed check(s).{_failed_note}"
         )
     elif _clean:
@@ -1121,7 +1149,7 @@ async def refine_synthesis_batch(
                 cleaned_resp = "\n".join(lines).strip()
 
             parsed = json.loads(cleaned_resp)
-            for aid in ("Agent1", "Agent3", "Agent5"):
+            for aid in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5"):
                 if aid in parsed and aid in outputs:
                     polished_data = parsed[aid]
                     _verdict = outputs[aid].agent_verdict

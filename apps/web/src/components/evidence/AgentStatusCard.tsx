@@ -70,6 +70,22 @@ export interface AgentStatusCardProps {
   };
   completedData?: AgentUpdate;
   phase?: "initial" | "deep";
+  mimeType?: string | null;
+}
+
+// The agent-card context block is modality-aware: "Visual Context" only makes
+// sense for images. Audio/video/document evidence shows the native CONTENT
+// context (Gemini's understanding of the file) under the appropriate label.
+// Agent5 (metadata/provenance) shows its provenance axis except on documents,
+// where it is the sole forensic agent and surfaces the document content.
+function contextLabelFor(agentId: string, mimeType?: string | null): string {
+  const m = (mimeType || "").toLowerCase();
+  const isDocument = m === "application/pdf" || m.startsWith("text/") || m.includes("document");
+  if (agentId === "Agent5") return isDocument ? "Document Context" : "Provenance Context";
+  if (m.startsWith("audio/")) return "Audio Context";
+  if (m.startsWith("video/")) return "Media Context";
+  if (isDocument) return "Document Context";
+  return "Visual Context";
 }
 
 const statusConfig = {
@@ -316,9 +332,10 @@ interface AgentBriefProps {
   findings: FindingPreview[];
   toolsRan: number;
   imageContext?: string | null;
+  contextLabel?: string;
 }
 
-function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBriefProps) {
+function AgentBrief({ completedData, findings, toolsRan, imageContext, contextLabel = "Visual Context" }: AgentBriefProps) {
   const _prefersReduced = useReducedMotion();
   const rawSummary = typeof completedData.summary === "string"
     ? completedData.summary
@@ -417,11 +434,11 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext }: AgentBr
 
   return (
     <div className="border-t border-white/[0.07] pt-4 mt-3 space-y-3">
-      {/* Visual Context — the agent's visual axis (Agent1 integrity, Agent3
-          object/scene, Agent5 metadata), sourced from the shared visual context. */}
+      {/* Context block — modality-aware: Visual Context for images, Audio/Media/
+          Document Context for non-image evidence (the native Gemini content read). */}
       {fileIdentityLine && (
         <div className="space-y-1">
-          <span className="fc-eyebrow fc-text-muted block">Visual Context</span>
+          <span className="fc-eyebrow fc-text-muted block">{contextLabel}</span>
           <p className="text-xs fc-text-secondary leading-relaxed">
             {fileIdentityLine}
           </p>
@@ -464,6 +481,7 @@ export function AgentStatusCard({
   liveUpdate,
   completedData,
   phase = "initial",
+  mimeType,
 }: AgentStatusCardProps) {
   const prefersReduced = useReducedMotion();
   const sanitizeThinking = (text?: string) => {
@@ -744,6 +762,7 @@ export function AgentStatusCard({
                  findings={findings}
                  toolsRan={toolsRan}
                  imageContext={completedData.image_context}
+                 contextLabel={contextLabelFor(agentId, mimeType)}
                />
             </motion.div>
           )}

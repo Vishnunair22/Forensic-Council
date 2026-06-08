@@ -89,13 +89,39 @@ def deliberate_findings(
     provenance_anomalies: list[str] = []
     content_risks: list[str] = []
 
-    # Define critical/important tools
-    critical_tools = {"file_structure_analysis", "exif_extract", "ela_full_image", "neural_ela"}
-    important_tools = {
-        "ela_full_image", "neural_ela", "frequency_domain_analysis",
-        "diffusion_artifact_detector", "object_detection",
-        "screenshot_layout_forensics", "exif_extract", "file_structure_analysis"
-    }
+    # Define critical/important tools — MODALITY-AWARE. Image-only forensic tools
+    # (ELA, frequency, diffusion, object detection) never run for audio/video/
+    # document evidence, so scoring those modalities against the image set made
+    # their coverage appear <0.4 and forced a spurious INCONCLUSIVE_LIMITED_COVERAGE
+    # verdict + depressed confidence even when every applicable agent was clean.
+    _mt = (mime_type or "").lower()
+    if _mt.startswith("audio/"):
+        critical_tools = {"file_hash_verify", "audio_gen_signature"}
+        important_tools = {
+            "audio_gen_signature", "voice_clone_detect", "anti_spoofing_detect",
+            "neural_prosody", "voice_clone_deep_ensemble", "anti_spoofing_deep_ensemble",
+            "speaker_diarize",
+        }
+    elif _mt.startswith("video/"):
+        critical_tools = {"file_hash_verify", "av_file_identity"}
+        important_tools = {
+            "frame_consistency_analysis", "optical_flow_analysis",
+            "interframe_forgery_detector", "compression_artifact_analysis",
+            "rolling_shutter_validation", "video_metadata", "mediainfo_profile",
+        }
+    elif _mt == "application/pdf" or _mt.startswith("text/") or "document" in _mt:
+        critical_tools = {"file_hash_verify", "file_structure_analysis"}
+        important_tools = {
+            "file_structure_analysis", "hex_signature_scan", "provenance_chain_verify",
+            "metadata_anomaly_score", "timestamp_analysis",
+        }
+    else:  # image/* and default
+        critical_tools = {"file_structure_analysis", "exif_extract", "ela_full_image", "neural_ela"}
+        important_tools = {
+            "ela_full_image", "neural_ela", "frequency_domain_analysis",
+            "diffusion_artifact_detector", "object_detection",
+            "screenshot_layout_forensics", "exif_extract", "file_structure_analysis"
+        }
 
     # First pass: Deliberate each finding
     for f in findings:

@@ -277,6 +277,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         completed_tools = []
         failed_tools = []
         not_applicable_tools = []
+        degraded_tools = []
         for _aid, res in active_results.items():
             findings = res.get("findings", [])
             for f in findings:
@@ -296,14 +297,22 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     not_applicable_tools.append(tool)
                 else:
                     completed_tools.append(tool)
+                    # A tool that completed in a reduced-fidelity fallback path is a
+                    # coverage limitation even though it did not error — the report's
+                    # degradation notice surfaces it, so the executive summary must
+                    # not simultaneously claim "without errors, full coverage".
+                    if meta.get("degraded") or meta.get("fallback_reason"):
+                        degraded_tools.append(tool)
 
         completed_tools = list(set(completed_tools))
         failed_tools = list(set(failed_tools))
         not_applicable_tools = list(set(not_applicable_tools))
+        degraded_tools = list(set(degraded_tools))
         tool_coverage = {
             "completed_tools": completed_tools,
             "failed_tools": failed_tools,
-            "not_applicable_tools": not_applicable_tools
+            "not_applicable_tools": not_applicable_tools,
+            "degraded_tools": degraded_tools,
         }
 
         # ── 4. Retrieve Visual Context & Per-Agent Synthesis ──
@@ -388,12 +397,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     _orig_summary = str(_f.get("reasoning_summary") or "").strip()
                     if _orig_summary:
                         _meta["pre_downgrade_summary"] = _orig_summary
-                    _tool_disp = str(_tool or "a screening check").replace("_", " ")
-                    _downgraded_text = (
-                        f"A weak screening signal from {_tool_disp} was not corroborated by the "
-                        "holistic visual model; held inconclusive — consistent with a benign "
-                        "processing/recompression artifact rather than manipulation."
-                    )
+                    from core.severity import uncorroborated_screening_text
+                    _downgraded_text = uncorroborated_screening_text(_tool)
                     # Rewrite EVERY narrative field, not just reasoning_summary. The
                     # key-findings formatter (per_agent_synthesis.format_finding_first)
                     # and the evidence-card outcome text prefer metadata.key_signal /
@@ -453,7 +458,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # badge (per_agent_summary) reuses the SAME value as the synthesis brief —
         # otherwise the badge recomputes tool-only/ungrounded and silently drifts.
         grounded_agent_verdicts: dict[str, tuple[str, float]] = {}
-        for aid in ("Agent1", "Agent3", "Agent5"):
+        # ALL applicable agents, not just the image pipeline. Audio (Agent2) and
+        # video (Agent4) were previously excluded here, so audio/video evidence got
+        # no grounded per-agent verdict and no structured synthesis/narrative from
+        # the arbiter — the result page fell back to raw findings, contradicting the
+        # holistic-driven verdict. They now flow through the same synthesis path.
+        for aid in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5"):
             if aid in active_results:
                 res = active_results[aid]
                 findings = res.get("findings", [])
@@ -719,7 +729,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         )
 
         summary_structured = {
-            "verdict_line": f"{mapped_verdict.title()} at {int(round(deliberation_result.final_confidence * 100))}% confidence.",
+            "verdict_line": f"{mapped_verdict.title()} at {int(deliberation_result.final_confidence * 100 + 0.5)}% confidence.",
             "integrity_lines": [f.finding_statement for f in deliberation_result.strongest_findings if f.signal_category == "integrity"],
             "context_lines": [f.finding_statement for f in deliberation_result.supporting_findings],
             "coverage_line": final_report_dict.get("methodology") or "Completed analysis."

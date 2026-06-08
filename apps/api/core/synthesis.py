@@ -4,6 +4,7 @@ Post-analysis Groq synthesis to produce structured forensic narratives.
 """
 
 import json
+import re
 from typing import Any
 
 from core.config import Settings
@@ -13,6 +14,29 @@ from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# Agent-level "verdict confidence" cited in brief/narrative PROSE drifts from the
+# card header and report metrics, which use the post-grounding confidence computed
+# later in the pipeline (the brief is written pre-grounding). The authoritative
+# value is shown in the card header and per-agent metrics, so the prose must not
+# restate it. Strips "(85% confidence)", "with 85% confidence", "— 85% confidence",
+# etc. — but never tool-finding citations like "(70%)" (no "confidence" word).
+_VERDICT_CONF_CLAUSE_RE = re.compile(
+    r"\s*(?:[\(,—-]\s*|\b(?:with|at|of|having)\s+)?\d+%\s+confidence\s*\)?",
+    re.IGNORECASE,
+)
+
+
+def _strip_verdict_confidence(text: str) -> str:
+    if not text:
+        return text
+    out = _VERDICT_CONF_CLAUSE_RE.sub("", text)
+    out = re.sub(r"\s*,\s*,", ",", out)
+    out = re.sub(r"\s+([.,;])", r"\1", out)
+    out = re.sub(r"\(\s*\)", "", out)
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    return out
 
 
 class _CleanSynthesisSkip(Exception):
@@ -1096,6 +1120,21 @@ Return ONLY a JSON object with this exact schema:
         desc = self._visual_context_sentence(visual_profile_context)
         if not desc:
             return text
+        # The local-ensemble content_description carries raw pixel telemetry
+        # ("Resolution: 275x183px, Sharpness: 2069, Brightness: 85/255.") and a
+        # forensic-screening tail. Those belong to the on-device read shown in the
+        # Visual Context block — never in a court-facing agent brief. Strip them so
+        # the brief lead is a clean scene identity. (No-op on remote/Gemini
+        # narratives, which lack this format.)
+        desc = re.sub(
+            r"\s*Resolution:\s*\d+x\d+px,\s*Sharpness:\s*[\d.]+,\s*Brightness:\s*[\d.]+/255\.?",
+            "", desc,
+        )
+        desc = re.sub(r"\s*Forensic (?:signals|screening)[^.]*\.", "", desc, flags=re.IGNORECASE)
+        desc = re.sub(r"^Identified as:\s*", "", desc, flags=re.IGNORECASE)
+        desc = " ".join(desc.split()).strip()
+        if len(desc) < 6:
+            return text
         lower = str(text or "").lower()
         if desc[:60].lower() in lower or "visual profile identified" in lower:
             return text
@@ -1257,15 +1296,19 @@ Return ONLY a JSON object with this exact schema:
                 if useful
                 else f"{agent_name} completed screenshot-specific checks; review tool rows for exact OCR, layout, and provenance metrics."
             )
-        response["narrative_summary"] = self._prepend_visual_context(
-            str(response.get("narrative_summary") or ""),
-            visual_profile_context,
-            agent_name=agent_name,
+        response["narrative_summary"] = _strip_verdict_confidence(
+            self._prepend_visual_context(
+                str(response.get("narrative_summary") or ""),
+                visual_profile_context,
+                agent_name=agent_name,
+            )
         )
-        response["agent_brief"] = self._prepend_visual_context(
-            str(response.get("agent_brief") or ""),
-            visual_profile_context,
-            agent_name=agent_name,
+        response["agent_brief"] = _strip_verdict_confidence(
+            self._prepend_visual_context(
+                str(response.get("agent_brief") or ""),
+                visual_profile_context,
+                agent_name=agent_name,
+            )
         )
         return response
 

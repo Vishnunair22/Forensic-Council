@@ -539,6 +539,7 @@ export function AgentProgressDisplay({
                     liveUpdate={agentUpdates[agent.id]}
                     completedData={completedAgents.find((c) => c.agent_id === agent.id)}
                     phase={phase}
+                    mimeType={mimeType}
                   />
                 </motion.div>
               ))

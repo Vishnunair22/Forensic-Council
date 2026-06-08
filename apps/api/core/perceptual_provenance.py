@@ -164,10 +164,11 @@ def analyze_provenance(image_path: str) -> dict[str, Any]:
     clues: list[str] = []
     signals: list[str] = []
 
+    # NOTE: the raw perceptual-hash digest is recorded in metadata (below) for
+    # matching, but is NOT surfaced as a user-facing provenance clue — a bare 64-bit
+    # hash ("Perceptual fingerprint (dHash): 4373...") is internal plumbing, not an
+    # informative provenance fact. Only actual matches / C2PA credentials are shown.
     digest = hash_res.get("perceptual_hash")
-    if digest:
-        clues.append(f"Perceptual fingerprint (dHash): {digest}.")
-
     match = hash_res.get("match")
     if match:
         label = str(match.get("label") or "known image")
@@ -181,8 +182,6 @@ def analyze_provenance(image_path: str) -> dict[str, Any]:
             signals.append(
                 f"Image matches a known {label} reference (perceptual hash, distance {dist})"
             )
-    elif hash_res.get("index_size", 0) == 0:
-        clues.append("No local provenance index configured; fingerprint recorded for future matching.")
 
     if c2pa_res.get("c2pa_present"):
         clues.append(

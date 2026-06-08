@@ -222,7 +222,22 @@ async def save_visual_context(
         await redis.set(f"visual_context:{session_id}", context_json, ex=14400)  # 4 hour TTL
         if sha256:
             prompt_version = 1
-            await redis.set(f"visual_context_by_hash:{sha256}:{prompt_version}", context_json, ex=86400)  # 24 hour TTL
+            # An authoritative Gemini read is cached 24h (deterministic + quota-friendly).
+            # A local-ensemble FALLBACK (Gemini unavailable/quota-limited at preflight)
+            # must NOT inherit that lifetime under the cross-session by-hash key: a 24h
+            # entry bypasses Gemini for EVERY future analysis of this image — a persistent
+            # false-negative trap on AI-generated content (the GAN-face miss: a cached
+            # local read of source=local_ensemble / external_llm_used=False classified a
+            # StyleGAN portrait as authentic and skipped Gemini for 24h). Give fallbacks a
+            # short TTL so a burst stays consistent but Gemini is retried promptly.
+            _is_authoritative = bool(getattr(context, "external_llm_used", False))
+            _ttl = 86400 if _is_authoritative else 900
+            await redis.set(f"visual_context_by_hash:{sha256}:{prompt_version}", context_json, ex=_ttl)
+            if not _is_authoritative:
+                logger.info(
+                    "Cached non-authoritative local-ensemble visual context with short TTL",
+                    sha256=sha256[:12], source=getattr(context, "source", None), ttl_s=_ttl,
+                )
     except Exception as e:
         logger.warning("Failed saving visual context to Redis", error=str(e))
 
@@ -422,7 +437,35 @@ async def create_visual_context_preflight(
                 error=str(exc),
             )
 
-        # ── Local ensemble fallback ───────────────────────────────────────────
+        # ── Local ensemble fallback (IMAGE evidence only) ─────────────────────
+        # analyze_local_visual_profile is an IMAGE ensemble (CLIP/YOLO/ELA/Noiseprint).
+        # Running it on audio/video produces image-forensics nonsense ("Live
+        # Photograph", "Visual content could not be categorized. Forensic signals:
+        # ELA/Noiseprint/Splicing…") that leaks into the audio/video agent's findings.
+        # When the native (Gemini) read fails for non-image evidence — e.g. an HTTP 429
+        # on the audio File API — there is NO local holistic substitute; leave the
+        # context absent so the modality-specific tools (audio/video forensics) carry
+        # the analysis instead of a fabricated visual read.
+        if context is None:
+            import mimetypes as _mt_guard
+
+            _fallback_mime = (_mt_guard.guess_type(file_path)[0] or "").lower()
+            _is_image_fallback = _fallback_mime.startswith("image/") or (
+                not _fallback_mime
+                and str(file_path).lower().rsplit(".", 1)[-1]
+                in ("jpg", "jpeg", "png", "webp", "gif", "bmp")
+            )
+            if not _is_image_fallback:
+                # Audio / video / document / text: the IMAGE ensemble (CLIP/YOLO/ELA)
+                # has no meaningful read here and would fabricate image-forensics
+                # nonsense. Leave the holistic context absent — the modality-specific
+                # tools carry the analysis.
+                logger.info(
+                    "Skipping image-ensemble preflight fallback for non-image evidence",
+                    session_id=session_id,
+                    mime=_fallback_mime or "unknown",
+                )
+                return None
         if context is None:
             try:
                 import mimetypes

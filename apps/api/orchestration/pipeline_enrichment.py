@@ -65,19 +65,24 @@ def _detect_visual_profile_provenance(pipeline: Any, report: Any) -> None:
     for agent_findings in getattr(report, "per_agent_findings", {}).values():
         all_findings.extend(agent_findings)
 
+    # The holistic profile is recorded as visual_evidence_profile for images and as
+    # read_shared_image_context (the cross-modal native read) for audio/video/
+    # document evidence — both count, so audio/video/doc runs that DID get a
+    # holistic read are not falsely flagged as "no visual profile".
+    _profile_names = {"visual_evidence_profile", "read_shared_image_context"}
     visual_findings = [
         f
         for f in all_findings
         if isinstance(f, dict)
         and (
-            f.get("finding_type") == "visual_evidence_profile"
-            or f.get("metadata", {}).get("tool_name") == "visual_evidence_profile"
+            f.get("finding_type") in _profile_names
+            or (f.get("metadata") or {}).get("tool_name") in _profile_names
         )
     ]
 
     if not visual_findings:
         pipeline._degradation_flags.append(
-            "No visual evidence profile was recorded; downstream agents may lack visual grounding."
+            "No holistic evidence profile was recorded; downstream agents may lack grounding."
         )
         return
 

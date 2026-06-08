@@ -108,6 +108,23 @@ _PLATFORM_KEYWORDS = {
 }
 
 
+def _meaningful_ocr_lines(ocr_lines: list[str]) -> list[str]:
+    """Drop low-coherence OCR noise. Photos/objects/textures produce garbage OCR
+    ('Salas lh hg a =" ES, _ rr Tan ...') that must never surface as 'Extracted
+    text' or a visible timestamp. A line is kept only when it contains at least two
+    word-like tokens (3+ letters with a vowel) AND is predominantly alphabetic."""
+    out: list[str] = []
+    for ln in (ocr_lines or []):
+        s = str(ln).strip()
+        if len(s) < 4:
+            continue
+        words = [w for w in _re.findall(r"[A-Za-z]{3,}", s) if _re.search(r"[aeiouAEIOU]", w)]
+        alpha = sum(c.isalpha() or c.isspace() for c in s)
+        if len(words) >= 2 and (alpha / max(1, len(s))) >= 0.6:
+            out.append(s)
+    return out
+
+
 def _extract_visible_metadata_clues(
     ocr_lines: list[str],
     interface_id: str,
@@ -147,7 +164,12 @@ def _extract_visible_metadata_clues(
     for platform, keywords in _PLATFORM_KEYWORDS.items():
         if any(kw in lower for kw in keywords):
             platforms.append(platform)
-    if interface_id:
+    # Only a concrete interface/app identification is a software clue. The generic
+    # FALLBACK ("Identified digital interface category: <category>") is a meta-
+    # description of the scene, not a software name — appending it surfaces a garbled
+    # "software: Identified digital interface category: web site (iOS platform signs)"
+    # in Agent5's provenance. Drop the fallback; keep real identifications.
+    if interface_id and not interface_id.lower().startswith("identified digital interface category:"):
         clues["software_clues"].append(interface_id)
     # OS-level vs app-level split
     for p in platforms:
@@ -815,6 +837,12 @@ async def _analyze_local_visual_profile_impl(
         or clip_routing_category == "screenshot"
     )
 
+    # OCR text is only meaningful context for text-bearing evidence (screenshots,
+    # documents). On photos/objects it is noise (spurious "Salas lh hg a =..."
+    # from texture) that must not surface as "Extracted text" / visible timestamps.
+    _text_bearing = is_screenshot or final_category in ("document", "document_scan", "id_document")
+    ocr_lines = _meaningful_ocr_lines(ocr_lines) if _text_bearing else []
+
     # ── Cross-signal synthesis ───────────────────────────────────────────
     verdict, signals, narrative, conflict_detected = _cross_signal_synthesis(
         ela_res, fft_res, noiseprint_res, splicing_res, diffusion_res, opencv_res,
@@ -822,7 +850,12 @@ async def _analyze_local_visual_profile_impl(
     )
 
     # ── Content description ──────────────────────────────────────────────
-    desc_parts = [f"CLIP classified the image as '{clip_category}'."]
+    # Never name the underlying model (CLIP) in user-facing copy.
+    _cat_disp = str(clip_category or "unknown").strip()
+    if _cat_disp and _cat_disp.lower() != "unknown":
+        desc_parts = [f"Identified as: {_cat_disp}."]
+    else:
+        desc_parts = ["Visual content could not be confidently categorized."]
     if opencv_res:
         desc_parts.append(
             f"Resolution: {opencv_res.get('width', 0)}x{opencv_res.get('height', 0)}px, "

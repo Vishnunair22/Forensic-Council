@@ -239,6 +239,63 @@ async def run_agents_concurrent(
                 # live-page counterpart to the report's per-agent Visual Context.
                 vctx = getattr(agent_inst, "visual_context", None)
                 aid = str(getattr(agent_inst, "agent_id", "") or "")
+
+                # Non-image modalities surface the native CONTENT context (Gemini's
+                # understanding of the audio/video/document) instead of an image axis.
+                # The shared visual_context is often NOT threaded onto audio/video
+                # agents at live-brief time (the holistic read runs DURING the agent),
+                # so resolve the content_description from the agent's own holistic
+                # finding / tool context. Audio (Agent2) and video (Agent4) always;
+                # metadata (Agent5) only when the file itself is a document.
+                _mime = (getattr(evidence_artifact, "mime_type", "") or "").lower()
+                _is_document = (
+                    _mime == "application/pdf" or _mime.startswith("text/") or "document" in _mime
+                )
+                if aid in ("Agent2", "Agent4") or (aid == "Agent5" and _is_document):
+                    def _is_image_ensemble_text(s: str) -> bool:
+                        sl = (s or "").lower()
+                        # Local IMAGE-ensemble content fragments — meaningless on a
+                        # non-image card (they appear when the native content read
+                        # falls back to the local image ensemble).
+                        return (
+                            sl.startswith("clip classified")
+                            or sl.startswith("identified as:")
+                            or "forensic signals: ela" in sl
+                            or "forensic screening surfaced" in sl
+                            or "visual content could not" in sl
+                            or ("resolution:" in sl and "px" in sl)
+                        )
+                    _cd = ""
+                    # 1. Threaded preflight visual context.
+                    if vctx is not None:
+                        _cd = str(getattr(vctx, "scene_description", "") or "").strip()
+                    # 2. Persisted preflight context from the bus — the authoritative
+                    #    native (Gemini) content read the signed report uses.
+                    if not _cd:
+                        try:
+                            _bus = getattr(agent_inst, "inter_agent_bus", None)
+                            _sid = str(getattr(agent_inst, "session_id", "") or "")
+                            if _bus is not None and _sid:
+                                _vp_bus = _bus.get_visual_profile(_sid) or {}
+                                _cd = str(_vp_bus.get("scene_description") or "").strip()
+                        except Exception:
+                            _cd = ""
+                    # 3. The agent's own holistic finding — but never the image-ensemble
+                    #    fallback ("CLIP classified the image as unknown ...") which is
+                    #    meaningless for audio/video.
+                    if not _cd:
+                        for _f in (getattr(agent_inst, "_findings", []) or []):
+                            _fm = getattr(_f, "metadata", {}) or {}
+                            _tn = str(_fm.get("tool_name") or getattr(_f, "finding_type", "") or "")
+                            if _tn in ("visual_evidence_profile", "read_shared_image_context"):
+                                _cand = str(_fm.get("content_description") or getattr(_f, "content_description", "") or "").strip()
+                                if _cand and not _is_image_ensemble_text(_cand):
+                                    _cd = _cand
+                                    break
+                    if _is_image_ensemble_text(_cd):
+                        _cd = ""
+                    return _cd or None
+
                 if vctx is not None:
                     try:
                         # Each agent shows its OWN slice of the shared Gemini visual
@@ -630,6 +687,66 @@ async def run_agents_concurrent(
                         if _cv:
                             _live_verdict = _cv
                             _live_conf = _cc
+
+                        # Card/report parity: the arbiter holds uncorroborated
+                        # integrity-screening POSITIVES inconclusive (benign processing
+                        # artifact) whenever the holistic read is clean — INDEPENDENT of
+                        # the agent verdict. Mirror that REFRAMING on the live preview so
+                        # a screening ELA/copy-move positive does not read as an assertive
+                        # manipulation signal beside an Authentic card while the result
+                        # page shows the non-asserting text. Verdict-agnostic by design.
+                        try:
+                            from core.severity import (
+                                NON_INTEGRITY_TOOLS,
+                                holistic_read_flags_manipulation,
+                                should_clear_uncorroborated_integrity,
+                                uncorroborated_screening_text,
+                            )
+
+                            def _gf(f, k, d=None):
+                                return f.get(k, d) if isinstance(f, dict) else getattr(f, k, d)
+
+                            _vc2 = getattr(agent_inst, "visual_context", None)
+                            _av2 = str(getattr(_vc2, "authenticity_verdict", "") or "")
+                            _ii2 = getattr(_vc2, "image_integrity_context", None)
+                            _ass2 = str(getattr(_ii2, "integrity_assessment", "") or "").lower()
+                            _holistic_clean2 = (_vc2 is not None) and not holistic_read_flags_manipulation(_av2, _ass2)
+                            _norm2 = [
+                                {
+                                    "tool_name": (_gf(f, "metadata", {}) or {}).get("tool_name")
+                                    or _gf(f, "finding_type", "") or "",
+                                    "evidence_verdict": _gf(f, "evidence_verdict", ""),
+                                    "court_defensible": _gf(f, "court_defensible", False),
+                                    "confidence": _gf(f, "confidence_raw", 0.0),
+                                    "severity_tier": _gf(f, "severity_tier", "")
+                                    or (_gf(f, "metadata", {}) or {}).get("severity_tier", ""),
+                                }
+                                for f in _af
+                            ]
+                            if preview and should_clear_uncorroborated_integrity(_norm2, _holistic_clean2):
+                                # Map normalized tool name -> raw name for the cleared
+                                # integrity positives (mirrors the arbiter's _int_pos set).
+                                _cleared_raw = {}
+                                for f in _af:
+                                    if str(_gf(f, "evidence_verdict", "")).upper() != "POSITIVE":
+                                        continue
+                                    _rt = str(
+                                        (_gf(f, "metadata", {}) or {}).get("tool_name")
+                                        or _gf(f, "finding_type", "") or ""
+                                    )
+                                    if _rt and _rt not in NON_INTEGRITY_TOOLS:
+                                        _cleared_raw[_normalize_tool_name(_rt)] = _rt
+                                for p in preview:
+                                    _pn = _normalize_tool_name(str(p.get("tool") or ""))
+                                    if _pn in _cleared_raw and p.get("verdict") in ("FLAGGED", "NEEDS_REVIEW"):
+                                        p["summary"] = uncorroborated_screening_text(_cleared_raw[_pn])
+                                        p["key_signal"] = ""
+                                        p["severity"] = "LOW"
+                                        p["verdict"] = "CLEAN"
+                                        p["finding_kind"] = "confirmation"
+                        except Exception:
+                            pass
+
                         # Holistic corroboration gate (mirrors arbiter_deliberation):
                         # a Suspicious/Manipulated live verdict driven only by
                         # uncorroborated integrity-screening positives — while the

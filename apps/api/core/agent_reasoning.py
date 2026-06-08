@@ -339,6 +339,43 @@ class AgentReasoningService:
         # from the stored summary, not the card humanizer) show the grounded text
         # instead of the original alarming POSITIVE wording.
         _summary_override: str | None = None
+
+        # Scene-physics heuristics (lighting / shadow / scale / scene-incongruence)
+        # are FP-prone on studio, product, and diffuse-lit images and must NEVER
+        # assert manipulation on their own. Hold them INCONCLUSIVE unless the holistic
+        # visual read CORROBORATES (is an alert). This also covers the INITIAL phase,
+        # where agents run concurrently and the holistic read may not be ready yet
+        # (cannot_determine) — without it, a lone studio-lighting shadow flag falsely
+        # reads as "may indicate compositing" before grounding catches up at deep.
+        _FP_PRONE_SCENE_TOOLS = {
+            "lighting_consistency", "lighting_correlation_initial",
+            "scene_incongruence", "scale_validation", "shadow_validation",
+        }
+        _holistic_assessment = vis_ctx.image_integrity_context.integrity_assessment
+        _holistic_is_alert = _holistic_assessment in (
+            "suspicious", "likely_manipulated", "ai_generated", "ai_generated_suspect",
+        )
+        if verdict == "POSITIVE" and tool_name in _FP_PRONE_SCENE_TOOLS and not _holistic_is_alert:
+            verdict = "INCONCLUSIVE"
+            is_uncorroborated_visual_claim = True
+            court_defensible = False
+            if confidence is not None:
+                confidence = min(confidence, 0.45)
+            _summary_override = (
+                "A scene-physics screening heuristic flagged a possible inconsistency, but it "
+                "is uncorroborated by the holistic visual read; held as a non-asserting signal "
+                "(false-positive-prone on studio/product/diffuse-lit images)."
+            )
+            contradiction_notes.append({
+                "tool_name": tool_name,
+                "message": (
+                    f"'{tool_name}' is a scene-physics heuristic prone to false positives on "
+                    f"studio/product/diffuse-lit images; held inconclusive because it is "
+                    f"uncorroborated by the holistic visual read."
+                ),
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            })
+
         # If tool flags positive manipulation but visual context is clean, register contradiction
         if verdict == "POSITIVE" and vis_ctx.image_integrity_context.integrity_assessment == "no_visible_issue":
             note = f"Contradiction: Tool '{tool_name}' flags anomaly/manipulation, but shared visual context assessment is 'no_visible_issue'."

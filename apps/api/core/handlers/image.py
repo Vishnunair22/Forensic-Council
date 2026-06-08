@@ -908,8 +908,14 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         """
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
 
+        # The ViT loads its weights on the worker's first real call; under concurrent
+        # pipeline load (many ML tools + the vision model contending for CPU) a 25s
+        # budget intermittently times out the cold load, silently degrading the
+        # PRIMARY AI-generation signal to the spectral heuristic. In isolation the
+        # model runs in a few seconds, so the extra headroom is paid only on a
+        # genuinely contended first call.
         result = await run_ml_tool(
-            "ai_generation_detector.py", artifact.file_path, timeout=25.0
+            "ai_generation_detector.py", artifact.file_path, timeout=45.0
         )
         model_ran = bool(result.get("available")) and result.get("method") == "vit_classifier"
 
@@ -937,6 +943,12 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 result.get("error") or "AI-generation model unavailable — spectral screening only",
             )
             spectral["court_defensible"] = False
+            # The PRIMARY (trained ViT) detector did not run, so this is a reduced-
+            # coverage screening result — mark it degraded. A spectral "0.00 / no AI"
+            # must surface as a COVERAGE GAP, never a confident clean signal that
+            # suppresses AI-generation detection (the GAN-face miss: the ViT timed out
+            # under load and the spectral 0.00 read as authoritative "no AI").
+            spectral["degraded"] = True
             result = spectral
 
         diffusion_probability = result.get("diffusion_probability")

@@ -296,7 +296,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
               {/* 6. Evidence context — "what this shows", once, above the agents */}
               {rs.report.evidence_summary && (
                 <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                  <EvidenceContextCard evidenceSummary={rs.report.evidence_summary} />
+                  <EvidenceContextCard evidenceSummary={rs.report.evidence_summary} mimeType={rs.mimeType} />
                 </motion.div>
               )}
 

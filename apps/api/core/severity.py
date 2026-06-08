@@ -115,6 +115,19 @@ def should_clear_uncorroborated_integrity(
     return not trufor
 
 
+def uncorroborated_screening_text(tool_name: str | None) -> str:
+    """Canonical non-asserting narrative for an integrity-screening POSITIVE that
+    the clean holistic read does not corroborate (held inconclusive as a benign
+    processing artifact). Single source of truth so the live per-agent card and
+    the signed report phrase the downgrade IDENTICALLY."""
+    tool_disp = str(tool_name or "a screening check").replace("_", " ")
+    return (
+        f"A weak screening signal from {tool_disp} was not corroborated by the "
+        "holistic visual model; held inconclusive — consistent with a benign "
+        "processing/recompression artifact rather than manipulation."
+    )
+
+
 # Not-applicable metadata flags that indicate a tool doesn't apply to this file type
 _NA_FLAGS = (
     "ela_not_applicable",

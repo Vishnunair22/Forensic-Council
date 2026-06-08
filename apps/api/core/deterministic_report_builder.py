@@ -80,7 +80,11 @@ def build_deterministic_report(
         if display_verdict
         else arbiter_deliberation.final_verdict.replace("_", " ").title()
     )
-    confidence_pct = int(round(arbiter_deliberation.final_confidence * 100))
+    # Round half-up to match the frontend header's JS Math.round (toPct). Python's
+    # built-in round() is banker's rounding (half-to-even), which at an exact .5
+    # boundary (e.g. 0.925 → 92) disagrees with the header (→ 93), surfacing two
+    # different confidence numbers for the same verdict.
+    confidence_pct = int(arbiter_deliberation.final_confidence * 100 + 0.5)
 
     agent_list = [f"Agent {aid[-1]}" for aid in norm_syn.keys()]
     n_agents = len(agent_list)
@@ -126,12 +130,24 @@ def build_deterministic_report(
     # Sentence 3 — coverage and tool reliability
     _all_metrics = list(tool_coverage.get("completed_tools", []))
     _failed = list(tool_coverage.get("failed_tools", []))
+    _degraded = list(tool_coverage.get("degraded_tools", []))
     _n_completed = len(_all_metrics)
     _n_failed = len(_failed)
-    if _n_failed == 0 and _n_completed > 0:
+    _n_degraded = len(_degraded)
+    if _n_failed == 0 and _n_degraded == 0 and _n_completed > 0:
         _s3 = (
             f"All {_n_completed} forensic tool{'' if _n_completed == 1 else 's'} completed "
             f"execution without errors, achieving full coverage across every active analytical domain."
+        )
+    elif _n_failed == 0 and _n_degraded > 0:
+        # Completed without hard errors, but one or more tools ran in a
+        # reduced-fidelity fallback path — a coverage limitation the report's
+        # degradation notice also flags. Never claim "full coverage" here.
+        _s3 = (
+            f"All {_n_completed} forensic tool{'' if _n_completed == 1 else 's'} completed execution; "
+            f"{_n_degraded} ran in a reduced-fidelity fallback mode and {'is' if _n_degraded == 1 else 'are'} "
+            f"treated as a coverage limitation, though {'it does' if _n_degraded == 1 else 'they do'} not "
+            f"affect the evidentiary weight of the fully completed checks."
         )
     elif _n_failed > 0:
         _s3 = (

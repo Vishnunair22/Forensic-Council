@@ -62,6 +62,59 @@ _GEMINI_FILE_UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1be
 # Native media (audio/video) cannot be delivered as inline base64 — they go
 # through the File API (resumable upload → poll ACTIVE → fileData part → delete).
 _NATIVE_MEDIA_PREFIXES = ("audio/", "video/")
+
+# Single-model (non-image) preflight: how many times to retry the SAME model on a
+# transient overload (503/500/timeout). Quota errors (429) break out immediately.
+_SINGLE_MODEL_MAX_ATTEMPTS = 3
+
+# Document MIME types Gemini reads natively (PDF + office formats). Routed through
+# the File API alongside audio/video so large documents never blow the inline
+# base64 ceiling, and so the document content is actually delivered (a non-PDF
+# document previously degraded to a content-less "[Non-visual file]" prompt).
+_DOCUMENT_MIMES = frozenset({
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.oasis.opendocument.text",
+    "application/rtf",
+    "text/rtf",
+})
+
+
+def _classify_media(mime: str, file_path: str = "") -> str:
+    """Single source of truth for modality routing → 'audio' | 'video' | 'document'
+    | 'image'. Keeps the preflight prompt selection and the file-delivery path in
+    lockstep so an audio/video/document file is never analysed with the image
+    prompt or vice-versa."""
+    m = (mime or "").lower()
+    if m.startswith("audio/"):
+        return "audio"
+    if m.startswith("video/") or m == "application/mp4":
+        return "video"
+    if m in _DOCUMENT_MIMES or m.startswith("text/"):
+        return "document"
+    return "image"
+
+
+# Cap embedded plain-text so a huge log/CSV can't blow the model's context or the
+# token budget; the head holds the forensically salient material for AI-text and
+# tamper assessment.
+_MAX_TEXT_EMBED_CHARS = 60_000
+
+
+def _read_text_file(file_path: str) -> str:
+    """Read a plain-text-class document for inline delivery to Gemini, decoded
+    tolerantly and truncated to a sane ceiling. Returns "" on failure so the
+    caller degrades cleanly."""
+    try:
+        with open(file_path, "rb") as fh:
+            raw = fh.read(_MAX_TEXT_EMBED_CHARS * 4 + 16)
+        text = raw.decode("utf-8", errors="replace").strip()
+        if len(text) > _MAX_TEXT_EMBED_CHARS:
+            text = text[:_MAX_TEXT_EMBED_CHARS] + "\n…[truncated]"
+        return text
+    except Exception:
+        return ""
 _MAX_RETRIES = 5
 _BASE_BACKOFF = 2.0
 
@@ -140,20 +193,28 @@ def _build_nonimage_preflight_prompt(media_class: str) -> str:
     natively (File API), so transcription / temporal / document reading are real."""
     if media_class == "audio":
         framing = (
-            "You are a senior forensic AUDIO examiner. The attached file is AUDIO. "
-            "Listen to the FULL track. Transcribe all intelligible speech verbatim. "
-            "Judge whether speech is human or synthetic (TTS / voice-clone), and listen "
-            "for splice points, abrupt cuts, background-noise discontinuities, and codec "
-            "re-encoding seams."
+            "You are a senior forensic AUDIO examiner. The attached file is AUDIO — listen to "
+            "it natively end to end; do NOT treat it as an image. Transcribe every intelligible "
+            "word verbatim. Your PRIMARY task is to decide whether the voice is a real human "
+            "recording or SYNTHETIC (text-to-speech, neural voice-clone, or vocoder output). "
+            "Modern TTS is often near-perfect, so scrutinise the subtle tells: unnaturally even "
+            "prosody and pacing, missing breaths / lip / mouth / saliva sounds, absent room tone "
+            "or reverb, robotic or over-smooth timbre, spectral regularity, and flat emotional "
+            "affect. Separately, listen for editing: splice points, abrupt cuts, background-noise "
+            "discontinuities, and codec re-encoding seams."
         )
         field_help = (
-            "- description: 2-3 sentences on what the audio contains (speech, music, "
-            "environment, language, number of distinct voices).\n"
-            "- file_type_assessment: use 'ai_generated' if speech is synthetic/cloned, else "
-            "'photograph'->ignore; prefer 'unknown' when unsure.\n"
-            "- manipulation_signals: splice/edit/cut/discontinuity cues with timestamps.\n"
-            "- ai_generation_signals: TTS/voice-clone/synthetic-speech artifacts (flat "
-            "prosody, spectral regularity, absent breaths) with timestamps.\n"
+            "- description: 2-3 sentences on what the audio contains (speech/music/environment, "
+            "language, number of distinct voices, recording character).\n"
+            "- file_type_assessment: 'ai_generated' if the voice is synthetic/cloned/TTS; "
+            "otherwise 'unknown'. (Image-only labels like 'photograph' never apply to audio.)\n"
+            "- manipulation_signals: splice/edit/cut/discontinuity cues, each with a timestamp.\n"
+            "- ai_generation_signals: concrete synthetic-speech tells you actually hear (flat or "
+            "metronomic prosody, no breaths, no room tone, vocoder shimmer, uniform energy) with "
+            "timestamps. Populate this whenever ANY such tell is present — do not leave it empty "
+            "just because the voice is clear.\n"
+            "- integrity_assessment: use 'ai_generated_suspect' if you judge the voice synthetic, "
+            "'suspicious' for editing/splicing, 'no_visible_issue' only for a clean human capture.\n"
             "- visible_text (object_scene_context): the FULL verbatim transcription.\n"
             "- people (object_scene_context): each distinct speaker/voice.\n"
             "- metadata_provenance: codec/channel/sample-rate/format cues you can infer."
@@ -161,41 +222,61 @@ def _build_nonimage_preflight_prompt(media_class: str) -> str:
         scene_type = "audio"
     elif media_class == "video":
         framing = (
-            "You are a senior forensic VIDEO examiner. The attached file is VIDEO. "
-            "Sample across the full timeline. Summarize the scene and the sequence of "
-            "events with timestamps. Look for deepfake/face-swap artifacts, frame edits, "
-            "abrupt cuts, temporal/lighting inconsistencies, and AV-sync mismatches. "
-            "Transcribe any on-screen text AND spoken dialogue."
+            "You are a senior forensic VIDEO examiner. The attached file is VIDEO — watch it "
+            "natively across the full timeline. Summarise the scene and the sequence of events "
+            "with timestamps. Your PRIMARY task is to decide whether any person/face is a "
+            "DEEPFAKE or the footage is AI-generated/synthetic. Scrutinise: face-boundary "
+            "blending/warping, mismatched skin texture or lighting on faces, unnatural blinking "
+            "or mouth-sync, flicker/temporal inconsistency, impossible physics, and over-smooth "
+            "AI-generated texture. Also detect conventional edits (frame inserts/cuts, splices) "
+            "and AV-sync mismatch. Transcribe on-screen text AND spoken dialogue verbatim."
         )
         field_help = (
             "- description: 2-3 sentences on the video content + an event timeline.\n"
-            "- file_type_assessment: 'ai_generated' if synthetic/deepfake, else 'unknown'.\n"
+            "- file_type_assessment: 'ai_generated' if synthetic/deepfake; otherwise 'unknown'.\n"
             "- manipulation_signals: frame edits, cuts, warping, face-swap seams, temporal "
-            "discontinuities — with time codes.\n"
-            "- ai_generation_signals: deepfake/AI-generation artifacts with time codes.\n"
-            "- people: each person/face; flag unnatural or deepfake-like faces.\n"
+            "discontinuities — each with a time code.\n"
+            "- ai_generation_signals: deepfake/AI-generation artifacts (face-blend seams, texture "
+            "smoothness, flicker, sync drift) with time codes. Populate whenever present.\n"
+            "- integrity_assessment: 'ai_generated_suspect' for deepfake/synthetic video, "
+            "'suspicious' for editing, 'no_visible_issue' only for clean authentic footage.\n"
+            "- people: each person/face; flag any unnatural or deepfake-like face.\n"
             "- visible_text: on-screen text AND spoken dialogue (verbatim).\n"
             "- scene_inconsistencies: lighting/shadow/physics/temporal contradictions.\n"
             "- metadata_provenance: codec/fps/aspect/format cues you can infer."
         )
         scene_type = "video"
-    else:  # document
+    else:  # document / text
         framing = (
-            "You are a senior forensic DOCUMENT examiner. The attached file is a DOCUMENT. "
-            "Read ALL text. Determine the document type and summarize its content. Assess "
-            "whether the TEXT reads as AI/LLM-generated (generic phrasing, hedging, uniform "
-            "cadence, hallucinated specifics) and look for tampering: inconsistent fonts, "
-            "misaligned text, edited figures, mismatched producers, or altered fields."
+            "You are a senior forensic DOCUMENT examiner. The attached file is a DOCUMENT or "
+            "TEXT file — read ALL of its text. Determine the document type and summarise the "
+            "content. You have two tasks:\n"
+            "(1) AI/LLM-GENERATED TEXT — flag this ONLY when the writing is GENERIC and EMPTY of "
+            "concrete substance: marketing/buzzword density ('synergy', 'cutting-edge', 'holistic', "
+            "'leverage', 'unprecedented'), templated filler, hedging, and broad claims with NO "
+            "specific, verifiable particulars. DO NOT flag a document merely for being well-"
+            "structured, concise, formal, or free of typos — competent humans (incident reports, "
+            "memos, legal/technical writing) write exactly that way. CONCRETE specifics — real "
+            "names, dates, times, measurements, IDs/part numbers, addresses, domain detail — are "
+            "STRONG evidence of GENUINE human authorship; when present, default to authentic.\n"
+            "(2) TAMPERING — inconsistent fonts/spacing, misaligned or re-flowed text, edited "
+            "figures/totals, mismatched producers/metadata, or altered fields/signatures."
         )
         field_help = (
-            "- description: 2-3 sentences on the document type and content.\n"
-            "- file_type_assessment: 'document_scan'; use 'ai_generated' if the text reads "
-            "as machine-generated.\n"
-            "- manipulation_signals: tampering cues — font/alignment/figure/field edits.\n"
-            "- ai_generation_signals: AI/LLM-generated-text indicators.\n"
+            "- description: 2-3 sentences on the document type and its content.\n"
+            "- file_type_assessment: 'ai_generated' ONLY for generic, specifics-free machine prose; "
+            "otherwise 'document_scan'.\n"
+            "- manipulation_signals: tampering cues — font/alignment/figure/field/signature edits.\n"
+            "- ai_generation_signals: populate ONLY with concrete genericness/buzzword/templating "
+            "tells. Leave EMPTY [] when the text carries specific verifiable detail — clean, formal, "
+            "well-structured writing is NOT by itself an AI signal.\n"
+            "- integrity_assessment: 'ai_generated_suspect' ONLY for generic specifics-free prose; "
+            "'suspicious' for tampering; 'no_visible_issue' for a clean authentic document "
+            "(including well-written human reports with concrete detail).\n"
             "- documents_or_ids (object_scene_context): document type(s)/forms/IDs present.\n"
-            "- visible_text: the extracted text (verbatim; truncate very long bodies).\n"
-            "- metadata_provenance: producer/author/software/format cues visible in content."
+            "- visible_text: the extracted text verbatim (truncate very long bodies, keep the "
+            "forensically salient parts).\n"
+            "- metadata_provenance: producer/author/software/format cues visible in the content."
         )
         scene_type = "document"
 
@@ -1013,22 +1094,19 @@ class GeminiVisionClient:
 
         import mimetypes as _mt
         _pf_mime = (_mt.guess_type(file_path)[0] or "").lower()
-        if _pf_mime.startswith("audio/"):
-            _media_class = "audio"
-        elif _pf_mime.startswith("video/") or _pf_mime == "application/mp4":
-            _media_class = "video"
-        elif _pf_mime == "application/pdf":
-            _media_class = "document"
-        else:
-            _media_class = "image"
+        _media_class = _classify_media(_pf_mime, file_path)
         prompt = _build_preflight_prompt(
             is_screen_capture_like=is_screen_capture_like, media_class=_media_class
         )
 
+        # Non-image evidence (audio/video/document/text) is analysed in a SINGLE
+        # Gemini call — one model, no fallback cascade — so the comprehensive
+        # 3-section prompt must (and does) extract every forensic signal in one shot.
         gf = await self._run_vision_analysis(
             file_path=file_path,
             prompt=prompt,
             analysis_type="visual_context_preflight",
+            single_model=(_media_class != "image"),
         )
 
         if gf.error:
@@ -1342,8 +1420,14 @@ class GeminiVisionClient:
         analysis_type: str,
         model_hint: str | None = None,
         is_screen_capture_like: bool = False,
+        single_model: bool = False,
     ) -> GeminiVisionFinding:
-        """Encode file and call Gemini generateContent, parse structured result."""
+        """Encode file and call Gemini generateContent, parse structured result.
+
+        ``single_model=True`` restricts the call to ONE model (no fallback cascade)
+        so audio/video/document preflights spend at most a single request against
+        the free-tier quota — the whole non-image analysis must fit in one shot.
+        """
         # Check circuit breaker before attempting API call
         if self._circuit_breaker.state == "OPEN":
             logger.warning(
@@ -1355,9 +1439,14 @@ class GeminiVisionClient:
 
         time.monotonic()
 
-        # ── Media delivery: native File API for audio/video, inline for the rest ──
-        # Audio/video are sent to Gemini natively (true multimodal perception)
-        # instead of the spectrogram-image / frame-thumbnail workarounds.
+        # ── Media delivery — modality-aware ──────────────────────────────────────
+        #   audio / video           → File API (native multimodal perception)
+        #   PDF / office documents   → File API (reliable for any size; inline base64
+        #                              breaks the ceiling on large docs)
+        #   plain-text-class files   → read the text and deliver it inline as text
+        #                              (a non-PDF document previously degraded to a
+        #                              content-less "[Non-visual file]" prompt)
+        #   images / fallback        → inline base64
         uploaded_file_name = ""
         import mimetypes as _mt
         import os as _os
@@ -1369,10 +1458,29 @@ class GeminiVisionClient:
                 ".aac": "audio/aac", ".ogg": "audio/ogg", ".m4a": "audio/mp4",
                 ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime",
                 ".webm": "video/webm", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
+                ".pdf": "application/pdf", ".rtf": "application/rtf",
+                ".doc": "application/msword",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".odt": "application/vnd.oasis.opendocument.text",
+                ".txt": "text/plain", ".md": "text/markdown", ".csv": "text/csv",
+                ".json": "application/json", ".html": "text/html", ".htm": "text/html",
+                ".xml": "text/xml", ".log": "text/plain",
             }.get(_ext, "")
 
         parts: list[dict] = []
-        if self._enabled and guessed_mime.startswith(_NATIVE_MEDIA_PREFIXES):
+
+        # Plain-text-class evidence: deliver the text verbatim (no File API; base64
+        # of text would only waste tokens and Gemini reads inline text natively).
+        if self._enabled and (guessed_mime.startswith("text/") or guessed_mime == "application/json"):
+            try:
+                _doc_text = await asyncio.to_thread(_read_text_file, file_path)
+            except Exception:
+                _doc_text = ""
+            if _doc_text:
+                parts = [{"text": f"{prompt}\n\n--- BEGIN DOCUMENT TEXT ---\n{_doc_text}\n--- END DOCUMENT TEXT ---"}]
+
+        _use_file_api = guessed_mime.startswith(_NATIVE_MEDIA_PREFIXES) or guessed_mime in _DOCUMENT_MIMES
+        if not parts and self._enabled and _use_file_api:
             try:
                 name, uri = await self._upload_media_file_api(file_path, guessed_mime)
                 uploaded_file_name = name
@@ -1385,7 +1493,7 @@ class GeminiVisionClient:
                 ]
             except Exception as up_exc:
                 logger.warning(
-                    f"Gemini File API native upload failed for {file_path}: {up_exc}; "
+                    f"Gemini File API upload failed for {file_path}: {up_exc}; "
                     f"falling back to inline encoding"
                 )
                 if uploaded_file_name:
@@ -1436,17 +1544,29 @@ class GeminiVisionClient:
         if model_hint:
             models_to_try.append(model_hint)
         models_to_try.append(self.model)
-        models_to_try.extend(self.fallback_chain)
+        if not single_model:
+            models_to_try.extend(self.fallback_chain)
 
         seen_models: set[str] = set()
         models_to_try = [
             m for m in models_to_try
             if m and not (m in seen_models or seen_models.add(m))
         ]
+        # Single-call contract for non-image preflights: ONE model (no fanning across
+        # the fallback chain → quota protection), but retried on TRANSIENT overload
+        # (503/500/timeout) since those do not consume quota and the multimodal
+        # endpoint is intermittently overloaded. A 429/quota error breaks immediately
+        # in the loop so a genuine quota limit is never hammered.
+        if single_model:
+            models_to_try = models_to_try[:1] * _SINGLE_MODEL_MAX_ATTEMPTS
 
         last_error: Exception | None = None
 
-        for active_model in models_to_try:
+        for _attempt_idx, active_model in enumerate(models_to_try):
+            # Short backoff before a same-model retry (single_model transient path) so
+            # a momentarily-overloaded multimodal endpoint has time to recover.
+            if single_model and _attempt_idx > 0:
+                await asyncio.sleep(min(1.5 * _attempt_idx, 4.0))
             attempt_url = f"{_GEMINI_API_BASE}/models/{active_model}:generateContent"
 
             generation_config_for_model = dict(generation_config)
@@ -1475,6 +1595,8 @@ class GeminiVisionClient:
                         reason=quota_result.reason,
                     )
                     last_error = GeminiQuotaBlocked(f"{active_model}: {quota_result.reason}")
+                    if single_model:
+                        break  # quota — never retry the same model
                     continue
 
                 try:
@@ -1511,6 +1633,8 @@ class GeminiVisionClient:
                         error=str(exc),
                     )
                     last_error = exc
+                    if single_model:
+                        break  # quota — never retry the same model
                     continue
 
                 except _ApiKeyInvalidError:
@@ -1526,10 +1650,13 @@ class GeminiVisionClient:
                     if status == 429:
                         retry_after = _parse_retry_after(exc.response)
                         last_error = GeminiRateLimited(f"{active_model}: HTTP 429", retry_after=retry_after)
+                        if single_model:
+                            break  # quota — never retry the same model
                         continue
 
                     logger.warning(
-                        "Gemini transient HTTP failure; trying next fallback",
+                        "Gemini transient HTTP failure; retrying same model"
+                        if single_model else "Gemini transient HTTP failure; trying next fallback",
                         model=active_model,
                         status=status,
                         error=str(exc),
