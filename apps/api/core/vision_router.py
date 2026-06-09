@@ -216,7 +216,9 @@ class VisionRouter:
                 # left the arbiter with no shared context to corroborate against.
                 # Returns immediately once the context lands (the common case).
                 preflight_ctx = await wait_for_visual_context(
-                    session_id=session_id, timeout=20.0
+                    session_id=session_id,
+                    sha256=getattr(artifact, "content_hash", None),
+                    timeout=20.0,
                 )
                 if preflight_ctx:
                     logger.info(
@@ -296,8 +298,24 @@ class VisionRouter:
             result.fallback_reason = "Visual context provider reserved for Agent1 single-call policy"
             return result
 
-        # ── Agent1 — attempt Gemini if configured ─────────────────────────
-        if self._gemini_enabled and self.gemini_client._enabled:
+        # ── Agent1 — Gemini is the per-file VISUAL-CONTEXT-CREATION call only ──
+        # In the pipeline a session_id is always present and the per-file visual
+        # context is created exactly once by the preflight (handled above and reused
+        # by every agent/phase). Making a second deep_forensic Gemini call here would
+        # duplicate that read and multiply free-tier RPM/RPD usage, which is what
+        # saturated quota on deep image runs. Policy: session_id present ⇒ the
+        # preflight is the single Gemini touchpoint, so if we reach here without a
+        # reusable context we degrade to the local ensemble instead of re-calling
+        # Gemini. A direct (no-session) call still allows Gemini for standalone use.
+        if session_id:
+            logger.info(
+                "VisionRouter: preflight-only Gemini policy — no redundant deep call, using local ensemble",
+                agent_id=agent_id,
+            )
+            provider_attempts.append(
+                {"provider": "gemini", "success": False, "reason": "preflight_only_policy"}
+            )
+        elif self._gemini_enabled and self.gemini_client._enabled:
             try:
                 logger.info("Attempting Gemini deep forensic analysis for Agent1")
                 gf = await self.gemini_client.deep_forensic_analysis(
