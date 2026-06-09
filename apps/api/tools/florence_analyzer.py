@@ -54,6 +54,12 @@ class FlorenceAnalyzer:
     def available(self) -> bool:
         return self._available
 
+    def ensure_loaded(self) -> bool:
+        """Public pre-warm entry point — load the model now (e.g. at worker boot)
+        so the first investigation doesn't pay a cold load inside the ensemble's
+        concurrent tool budget (where it silently timed out). Returns availability."""
+        return self._load()
+
     def _load(self) -> bool:
         if self._loaded:
             return self._available
@@ -110,10 +116,13 @@ class FlorenceAnalyzer:
             from core.model_guard import cap_image_dimension
 
             image = cap_image_dimension(Image.open(image_path).convert("RGB"))
-            caption = self._run_task("<CAPTION>", image)
+            # Run ONLY the detailed caption: it is the richest read and the one used
+            # for the on-device description, and skipping the plain <CAPTION> pass
+            # halves CPU inference time so Florence fits inside the ensemble's
+            # concurrent tool budget instead of timing out and being dropped.
             detailed = self._run_task("<DETAILED_CAPTION>", image)
             return FlorenceResult(
-                caption=caption,
+                caption=detailed,
                 detailed_caption=detailed,
                 available=True,
             )

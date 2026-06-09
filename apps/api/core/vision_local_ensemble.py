@@ -766,7 +766,7 @@ async def _analyze_local_visual_profile_impl(
         "Noiseprint": run_with_timeout("Noiseprint", _run_noiseprint(), 20.0),
         "Splicing": run_with_timeout("Splicing", _run_splicing(), 30.0),
         "Diffusion": run_with_timeout("Diffusion", _run_diffusion(), 40.0),
-        "Florence": run_with_timeout("Florence", _run_florence(), 75.0),
+        "Florence": run_with_timeout("Florence", _run_florence(), 120.0),
         "OpenCV": run_with_timeout("OpenCV", _run_opencv_stats(), 10.0),
     }
 
@@ -817,7 +817,18 @@ async def _analyze_local_visual_profile_impl(
 
     clip_category = clip_res.get("image_type", "unknown") if isinstance(clip_res, dict) else "unknown"
     ocr_lines = ocr_res.get("extracted_text", []) if isinstance(ocr_res, dict) else []
-    detected = detr_res if isinstance(detr_res, list) else []
+    # DETR/YOLO runs at a low screening threshold (0.20) to surface candidates for
+    # the object agent; for the visual-context DESCRIPTION and cross-signal synthesis,
+    # keep only confident detections (>=0.5) so low-probability noise like
+    # "suitcase (0.26)" never pollutes the on-device read or the object summary.
+    def _detr_conf(label: str) -> float:
+        m = re.search(r"\(([01]?\.\d+)\)\s*$", str(label))
+        return float(m.group(1)) if m else 1.0
+    detected = (
+        [d for d in detr_res if _detr_conf(d) >= 0.5]
+        if isinstance(detr_res, list)
+        else []
+    )
     florence_desc = florence_res.get("description", "") if isinstance(florence_res, dict) else ""
 
     # Ground the file-type assessment with the canonical deterministic categorizer
@@ -850,22 +861,29 @@ async def _analyze_local_visual_profile_impl(
     )
 
     # ── Content description ──────────────────────────────────────────────
-    # Never name the underlying model (CLIP) in user-facing copy.
+    # Lead with the richest available natural-language read so the on-device
+    # context reads like a description of WHAT THIS SHOWS, not telemetry:
+    #   1. Florence-2 VLM caption (closest to a hosted-VLM description), else
+    #   2. the categorical identification + detected objects.
+    # Raw image telemetry (resolution / sharpness / brightness) is deliberately
+    # kept OUT of the human-facing description — it is diagnostic metadata, not
+    # content, and remains available to the forensic tools via opencv_res.
+    # Never name the underlying model (CLIP/Florence) in user-facing copy.
     _cat_disp = str(clip_category or "unknown").strip()
-    if _cat_disp and _cat_disp.lower() != "unknown":
-        desc_parts = [f"Identified as: {_cat_disp}."]
+    _flo = (florence_desc or "").strip()
+    desc_parts: list[str] = []
+    if _flo:
+        desc_parts.append(_flo if _flo.endswith((".", "!", "?")) else f"{_flo}.")
+    elif _cat_disp and _cat_disp.lower() != "unknown":
+        desc_parts.append(f"Photograph identified as: {_cat_disp}.")
     else:
-        desc_parts = ["Visual content could not be confidently categorized."]
-    if opencv_res:
-        desc_parts.append(
-            f"Resolution: {opencv_res.get('width', 0)}x{opencv_res.get('height', 0)}px, "
-            f"Sharpness: {opencv_res.get('sharpness', 0):.0f}, "
-            f"Brightness: {opencv_res.get('brightness', 0):.0f}/255."
-        )
-    if florence_desc:
-        desc_parts.append(f"Scene: {florence_desc}")
+        desc_parts.append("Visual content could not be confidently categorized.")
     if detected:
-        desc_parts.append(f"Detected objects: {', '.join(detected)}.")
+        # Don't repeat objects the caption already named.
+        _flo_l = _flo.lower()
+        _new_objs = [d for d in detected if d.lower() not in _flo_l]
+        if _new_objs:
+            desc_parts.append(f"Detected objects: {', '.join(_new_objs)}.")
     if ocr_lines:
         desc_parts.append(f"Extracted text: {', '.join(ocr_lines[:5])}.")
     _alert_verdict = str(verdict).upper() in (

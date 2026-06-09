@@ -282,6 +282,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Gemini model validation skipped", error=str(e))
 
+    # ── Pre-warm Florence-2 VLM ───────────────────────────────────────────────
+    # The backend also fires the local-ensemble visual-context preflight (and can
+    # win the single-flight lock when Gemini is unavailable). Loading Florence here
+    # at boot — single-threaded, before serving — avoids the lazy mid-request load
+    # that fails under uvicorn --reload with an `accelerate` circular import, so
+    # backend-built contexts get a rich on-device description instead of a bare
+    # category. Mirrors the worker boot pre-warm; best-effort, never blocks startup.
+    try:
+        from core.startup_diagnostics import prewarm_florence
+        await asyncio.to_thread(prewarm_florence)
+    except Exception as _flo_exc:
+        logger.warning("Florence pre-warm at startup skipped", error=str(_flo_exc))
+
     # ── Crash-recovery: orphaned sessions ────────────────────────────────────
     try:
         from api.routes._session_state import SESSION_METADATA_KEY_PREFIX

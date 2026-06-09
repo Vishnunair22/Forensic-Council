@@ -1424,9 +1424,11 @@ class GeminiVisionClient:
     ) -> GeminiVisionFinding:
         """Encode file and call Gemini generateContent, parse structured result.
 
-        ``single_model=True`` restricts the call to ONE model (no fallback cascade)
-        so audio/video/document preflights spend at most a single request against
-        the free-tier quota — the whole non-image analysis must fit in one shot.
+        ``single_model=True`` (audio/video/document preflights) sends ONE model at a
+        time and retries it only on TRANSIENT overload — so a successful read spends a
+        single request. On a QUOTA error (429) it falls FORWARD to the next model in
+        the chain rather than stranding the evidence with no Gemini context; on success
+        it stops, so the fallback model is touched only when the primary is exhausted.
         """
         # Check circuit breaker before attempting API call
         if self._circuit_breaker.state == "OPEN":
@@ -1544,25 +1546,37 @@ class GeminiVisionClient:
         if model_hint:
             models_to_try.append(model_hint)
         models_to_try.append(self.model)
-        if not single_model:
-            models_to_try.extend(self.fallback_chain)
+        models_to_try.extend(self.fallback_chain)
 
         seen_models: set[str] = set()
-        models_to_try = [
+        distinct_models = [
             m for m in models_to_try
             if m and not (m in seen_models or seen_models.add(m))
         ]
-        # Single-call contract for non-image preflights: ONE model (no fanning across
-        # the fallback chain → quota protection), but retried on TRANSIENT overload
-        # (503/500/timeout) since those do not consume quota and the multimodal
-        # endpoint is intermittently overloaded. A 429/quota error breaks immediately
-        # in the loop so a genuine quota limit is never hammered.
+        # Non-image (single_model) evidence is sent to ONE model at a time and retried
+        # on TRANSIENT overload (503/500/timeout) — those don't consume quota and the
+        # multimodal File-API endpoint is intermittently overloaded. On a QUOTA error
+        # (429), however, we now FALL FORWARD to the next model in the chain rather
+        # than stranding audio/video/document evidence with no Gemini context: a
+        # quota-exhausted primary must not block a sibling model that still has quota.
+        # The repeated-per-model layout gives each model its transient retries; the
+        # models_to_skip set below makes a quota/unavailable error jump straight to the
+        # next distinct model (skipping that model's remaining retry slots).
         if single_model:
-            models_to_try = models_to_try[:1] * _SINGLE_MODEL_MAX_ATTEMPTS
+            models_to_try = [
+                m for model in distinct_models for m in [model] * _SINGLE_MODEL_MAX_ATTEMPTS
+            ]
+        else:
+            models_to_try = distinct_models
 
+        # Models proven spent (quota 429 / quota-guard block) or unavailable (404) on
+        # this call — their remaining repeated attempts are skipped so we advance.
+        models_to_skip: set[str] = set()
         last_error: Exception | None = None
 
         for _attempt_idx, active_model in enumerate(models_to_try):
+            if active_model in models_to_skip:
+                continue  # spent/unavailable on this call — jump to the next distinct model
             # Short backoff before a same-model retry (single_model transient path) so
             # a momentarily-overloaded multimodal endpoint has time to recover.
             if single_model and _attempt_idx > 0:
@@ -1595,8 +1609,7 @@ class GeminiVisionClient:
                         reason=quota_result.reason,
                     )
                     last_error = GeminiQuotaBlocked(f"{active_model}: {quota_result.reason}")
-                    if single_model:
-                        break  # quota — never retry the same model
+                    models_to_skip.add(active_model)  # quota — advance to next model, never retry this one
                     continue
 
                 try:
@@ -1624,6 +1637,7 @@ class GeminiVisionClient:
                         error=str(exc),
                     )
                     last_error = exc
+                    models_to_skip.add(active_model)  # unavailable — don't retry this model
                     continue
 
                 except GeminiRateLimited as exc:
@@ -1633,8 +1647,7 @@ class GeminiVisionClient:
                         error=str(exc),
                     )
                     last_error = exc
-                    if single_model:
-                        break  # quota — never retry the same model
+                    models_to_skip.add(active_model)  # quota — advance to next model, never retry this one
                     continue
 
                 except _ApiKeyInvalidError:
@@ -1650,8 +1663,7 @@ class GeminiVisionClient:
                     if status == 429:
                         retry_after = _parse_retry_after(exc.response)
                         last_error = GeminiRateLimited(f"{active_model}: HTTP 429", retry_after=retry_after)
-                        if single_model:
-                            break  # quota — never retry the same model
+                        models_to_skip.add(active_model)  # quota — advance to next model, never retry this one
                         continue
 
                     logger.warning(

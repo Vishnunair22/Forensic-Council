@@ -37,6 +37,7 @@ def run_startup_diagnostics() -> dict[str, str]:
     _config_trap_warnings()
     _prewarm_and_test_librosa()
     _test_audio_model()
+    prewarm_florence()
     ok = [k for k, v in _STATUS.items() if v == "OK"]
     bad = {k: v for k, v in _STATUS.items() if v not in ("OK",) and not v.startswith("SKIPPED")}
     if bad:
@@ -68,6 +69,28 @@ def _config_trap_warnings() -> None:
             _STATUS["config_numba_jit"] = "OK"
     except Exception as exc:
         logger.warning(f"Config trap check failed (non-fatal): {exc!r}")
+
+
+def prewarm_florence() -> None:
+    """Load the Florence-2 VLM captioner at boot so the on-device visual-context
+    description is a rich natural-language read (not a bare category) — without
+    paying a cold model load inside the ensemble's concurrent tool budget, where
+    it silently timed out and was dropped. Best-effort: never blocks boot."""
+    try:
+        from tools.florence_analyzer import get_florence_analyzer
+
+        if get_florence_analyzer().ensure_loaded():
+            _STATUS["florence2_vlm"] = "OK"
+            logger.info("Startup: Florence-2 VLM pre-warmed (on-device captioning live).")
+        else:
+            _STATUS["florence2_vlm"] = "UNAVAILABLE"
+            logger.warning(
+                "Startup: Florence-2 VLM unavailable — on-device descriptions fall back "
+                "to categorical identification."
+            )
+    except Exception as exc:
+        _STATUS["florence2_vlm"] = f"ERROR: {exc!r}"
+        logger.warning(f"Startup: Florence-2 pre-warm failed (non-fatal): {exc!r}")
 
 
 def _prewarm_and_test_librosa() -> None:

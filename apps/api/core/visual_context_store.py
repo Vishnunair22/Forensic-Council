@@ -184,6 +184,41 @@ def build_visual_context_from_finding(
     )
 
 
+# A visual context earns the long (24h) cross-session by-hash TTL only when it is a
+# genuinely high-quality ("top tier") Gemini read: an authoritative LLM result, with
+# usable content and adequate self-reported confidence. Everything else — local-
+# ensemble fallbacks, low-confidence or content-less Gemini replies — gets a short
+# TTL so Gemini is re-attempted promptly instead of a mediocre read being locked in
+# for a day (the StyleGAN-face false-negative trap). NOTE: we deliberately do NOT
+# require a decisive authenticity_verdict: for audio/video/document evidence the
+# verdict is intentionally deferred to the modality tools, so the context's value is
+# its description — gating on a decisive verdict would wrongly demote good non-image
+# reads (which legitimately carry CANNOT_DETERMINE).
+_TOP_TIER_MIN_CONFIDENCE = 0.7
+_TOP_TIER_TTL_S = 86400  # 24h
+_SHORT_TTL_S = 900       # 15m
+
+
+def _is_top_tier_context(context: "VisualContext") -> bool:
+    """True only for a high-quality authoritative Gemini read worth caching 24h."""
+    if not bool(getattr(context, "external_llm_used", False)):
+        return False
+    if getattr(context, "source", "") != "llm_assisted":
+        return False
+    try:
+        confidence = float(getattr(context, "confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    if confidence < _TOP_TIER_MIN_CONFIDENCE:
+        return False
+    has_content = bool(
+        (getattr(context, "scene_description", "") or "").strip()
+        or (getattr(context, "file_type_assessment", "") or "").strip()
+        or (getattr(context, "extracted_text", None) or [])
+    )
+    return has_content
+
+
 async def save_visual_context(
     session_id: str,
     sha256: str,
@@ -222,21 +257,24 @@ async def save_visual_context(
         await redis.set(f"visual_context:{session_id}", context_json, ex=14400)  # 4 hour TTL
         if sha256:
             prompt_version = 1
-            # An authoritative Gemini read is cached 24h (deterministic + quota-friendly).
-            # A local-ensemble FALLBACK (Gemini unavailable/quota-limited at preflight)
-            # must NOT inherit that lifetime under the cross-session by-hash key: a 24h
-            # entry bypasses Gemini for EVERY future analysis of this image — a persistent
-            # false-negative trap on AI-generated content (the GAN-face miss: a cached
-            # local read of source=local_ensemble / external_llm_used=False classified a
-            # StyleGAN portrait as authentic and skipped Gemini for 24h). Give fallbacks a
-            # short TTL so a burst stays consistent but Gemini is retried promptly.
-            _is_authoritative = bool(getattr(context, "external_llm_used", False))
-            _ttl = 86400 if _is_authoritative else 900
+            # Top-tier authoritative Gemini reads are cached 24h (deterministic +
+            # quota-friendly: a re-upload of the same bytes reuses it with no Gemini
+            # call). Anything weaker — local-ensemble fallbacks, or low-confidence /
+            # content-less Gemini replies — gets a short TTL so Gemini is re-attempted
+            # promptly rather than a mediocre read being locked in for a day (the
+            # GAN-face false-negative trap: a cached local "authentic" read of a
+            # StyleGAN portrait that skipped Gemini for 24h).
+            _top_tier = _is_top_tier_context(context)
+            _ttl = _TOP_TIER_TTL_S if _top_tier else _SHORT_TTL_S
             await redis.set(f"visual_context_by_hash:{sha256}:{prompt_version}", context_json, ex=_ttl)
-            if not _is_authoritative:
+            if not _top_tier:
                 logger.info(
-                    "Cached non-authoritative local-ensemble visual context with short TTL",
-                    sha256=sha256[:12], source=getattr(context, "source", None), ttl_s=_ttl,
+                    "Cached non-top-tier visual context with short TTL (Gemini will be re-attempted)",
+                    sha256=sha256[:12],
+                    source=getattr(context, "source", None),
+                    external_llm_used=getattr(context, "external_llm_used", None),
+                    confidence=getattr(context, "confidence", None),
+                    ttl_s=_ttl,
                 )
     except Exception as e:
         logger.warning("Failed saving visual context to Redis", error=str(e))

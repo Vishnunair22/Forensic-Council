@@ -233,3 +233,92 @@ class TestGeminiDisabledGraceful:
         GeminiVisionClient.configure_quota_pool(3)
         sem = GeminiVisionClient._get_quota_semaphore()
         assert sem is not None
+
+
+class TestSingleModelQuotaFallForward:
+    """single_model (audio/video/document) must fall FORWARD to the next model on a
+    quota 429 instead of stranding non-image evidence to local — and must NOT touch
+    the fallback model when the primary succeeds."""
+
+    def _client(self):
+        return _make_client(
+            gemini_api_key="AIzaSyRealKey1234567890",
+            gemini_api_key_policy_ok=True,
+            gemini_model="model-primary",
+            gemini_fallback_models="model-fallback",
+        )
+
+    def _patch_common(self, monkeypatch, client, fake_post_once):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        import core.gemini_client as gc
+
+        monkeypatch.setattr(client, "_encode_file", lambda fp: ("ZGF0YQ==", "image/jpeg"))
+        monkeypatch.setattr(
+            gc.ProviderQuotaGuard,
+            "check_and_record",
+            AsyncMock(return_value=(True, SimpleNamespace(reason="ok"))),
+        )
+        monkeypatch.setattr(client, "_post_once", fake_post_once)
+        monkeypatch.setattr(
+            client,
+            "_parse_response",
+            lambda raw, atype, lat: GeminiVisionFinding(
+                analysis_type=atype,
+                model_used="",
+                content_description="ok",
+                confidence=0.9,
+                court_defensible=True,
+            ),
+        )
+
+    @pytest.mark.asyncio
+    async def test_falls_forward_to_fallback_on_quota(self, monkeypatch, tmp_path):
+        import core.gemini_client as gc
+
+        client = self._client()
+        img = tmp_path / "x.jpg"
+        img.write_bytes(b"\xff\xd8\xff\xd9")
+
+        calls: list[str] = []
+
+        async def fake_post_once(url, payload, model_name=None):
+            calls.append(model_name)
+            if model_name == "model-primary":
+                raise gc.GeminiRateLimited("model-primary: HTTP 429")
+            return '{"candidates": []}'
+
+        self._patch_common(monkeypatch, client, fake_post_once)
+
+        finding = await client._run_vision_analysis(
+            str(img), "prompt", "visual_context_preflight", single_model=True
+        )
+
+        assert finding.model_used == "model-fallback"   # fell forward, not stranded to local
+        assert not finding.error
+        assert calls[0] == "model-primary"              # primary attempted first
+        assert "model-fallback" in calls
+        # the spent primary's remaining retry slots are skipped, not hammered
+        assert calls.count("model-primary") == 1
+
+    @pytest.mark.asyncio
+    async def test_primary_success_never_touches_fallback(self, monkeypatch, tmp_path):
+        client = self._client()
+        img = tmp_path / "x.jpg"
+        img.write_bytes(b"\xff\xd8\xff\xd9")
+
+        calls: list[str] = []
+
+        async def fake_post_once(url, payload, model_name=None):
+            calls.append(model_name)
+            return '{"candidates": []}'
+
+        self._patch_common(monkeypatch, client, fake_post_once)
+
+        finding = await client._run_vision_analysis(
+            str(img), "prompt", "visual_context_preflight", single_model=True
+        )
+
+        assert finding.model_used == "model-primary"
+        assert calls == ["model-primary"]   # exactly one call; fallback untouched on success
