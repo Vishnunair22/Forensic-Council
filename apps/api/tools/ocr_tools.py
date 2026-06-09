@@ -322,6 +322,52 @@ def _extract_text_pymupdf_sync(file_path: str) -> dict[str, Any]:
         doc.close()
 
 
+def _ocr_pdf_pages_sync(file_path: str, max_pages: int = 8) -> dict[str, Any]:
+    """Rasterise PDF pages and OCR them — the fallback for SCANNED / image-only PDFs
+    that carry no embedded text layer (pymupdf get_text returns nothing). Reuses the
+    shared EasyOCR reader; runs in the OCR thread pool. Court-defensible local
+    extraction that does not depend on the cloud model."""
+    try:
+        import numpy as np  # noqa: PLC0415
+
+        reader = _get_easyocr_reader()
+        if reader is None:
+            return {"easyocr_available": False, "has_text": False}
+        doc = fitz.open(file_path)
+    except Exception as exc:
+        return {"easyocr_available": False, "has_text": False, "error": str(exc)}
+
+    pages_text: list[str] = []
+    try:
+        for i, page in enumerate(doc):
+            if i >= max_pages:
+                break
+            # 200 DPI is a good legibility/cost trade-off for document OCR.
+            pix = page.get_pixmap(dpi=200)
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+            if pix.n == 4:  # drop alpha — EasyOCR wants 3-channel
+                img = img[:, :, :3]
+            try:
+                lines = reader.readtext(img, detail=0)
+            except Exception as ocr_exc:
+                logger.debug("EasyOCR page OCR failed", page=i, error=str(ocr_exc))
+                continue
+            page_text = "\n".join(str(ln).strip() for ln in (lines or []) if str(ln).strip())
+            if page_text:
+                pages_text.append(page_text)
+        full_text = "\n\n".join(pages_text)
+        return {
+            "easyocr_available": True,
+            "page_count": doc.page_count,
+            "full_text": full_text,
+            "lines": [ln for ln in full_text.splitlines() if ln.strip()],
+            "word_count": len(full_text.split()),
+            "has_text": bool(full_text.strip()),
+        }
+    finally:
+        doc.close()
+
+
 async def extract_text_from_pdf(
     artifact: EvidenceArtifact,
 ) -> dict[str, Any]:
@@ -633,9 +679,24 @@ async def extract_evidence_text(
         result = await extract_text_from_pdf(artifact)
         if result.get("has_text"):
             return _finalize_result(result, file_type_hint)
+        # Scanned / image-only PDF — no embedded text layer. Rasterise the pages and
+        # OCR them so the document text is still recovered locally (previously this
+        # path only left a note and returned empty).
+        loop = asyncio.get_running_loop()
+        ocr_result = await loop.run_in_executor(
+            _OCR_EXECUTOR, _ocr_pdf_pages_sync, artifact.file_path
+        )
+        if ocr_result.get("has_text"):
+            ocr_result["method"] = "pymupdf_rasterize+easyocr"
+            ocr_result["court_defensible"] = True
+            ocr_result["scanned_pdf"] = True
+            # Preserve the pymupdf document metadata (producer/dates) for provenance.
+            ocr_result["doc_metadata"] = result.get("doc_metadata", {})
+            ocr_result["embedded_image_count"] = result.get("embedded_image_count", 0)
+            return _finalize_result(ocr_result, file_type_hint)
         result.setdefault(
             "scanned_pdf_note",
-            "PDF has no embedded text; rasterise pages before image OCR.",
+            "PDF has no embedded text layer and page OCR recovered no legible text.",
         )
         return _finalize_result(result, file_type_hint)
 
