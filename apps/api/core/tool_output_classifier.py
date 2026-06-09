@@ -170,6 +170,10 @@ class ToolOutputClassifier:
             return max(0.0, min(1.0, parsed))
 
         if isinstance(output, dict):
+            # Not-applicable is a KNOWN, valid shape (a tool opting out of this file
+            # type), not an unrecognised one — return without the fallback warning.
+            if ToolOutputClassifier.has_not_applicable_marker(output):
+                return 0.0, False
             if output.get("shared_context_available") is not None:
                 raw_conf = 0.75 if output.get("shared_context_available") else 0.0
             elif output.get("available") is False or output.get("degraded") is True or "error" in output:
@@ -274,6 +278,12 @@ class ToolOutputClassifier:
                         raw_conf = 0.40
                     else:
                         raw_conf = 0.50
+                elif output.get("has_text") is not None or "word_count" in output:
+                    # OCR / document text-extraction shape (extract_text_from_image):
+                    # a context tool, not a forensic verdict. Confidence reflects a
+                    # successful extraction, not authenticity.
+                    _has = bool(output.get("has_text")) or int(output.get("word_count") or 0) > 0
+                    raw_conf = 0.85 if _has else 0.50
                 elif "anomalies" in output and isinstance(output["anomalies"], list):
                     num_anomalies = len(output["anomalies"])
                     raw_conf = max(0.40, 1.0 - (num_anomalies * 0.15))

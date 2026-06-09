@@ -1673,8 +1673,21 @@ class GeminiVisionClient:
                     last_error = exc
                     continue
 
-        # All models in cascade exhausted.
-        self._circuit_breaker.record_failure()
+        # All models in cascade exhausted. Only trip the circuit breaker on failures
+        # that indicate the Gemini path itself is unhealthy — NOT on transient
+        # server-side overload (HTTP 5xx), rate-limiting, or quota (429). Those are
+        # external/temporary; counting them would OPEN the breaker and short-circuit
+        # EVERY subsequent call to the local fallback for the whole recovery window —
+        # exactly the silent-degradation trap that produced false negatives on
+        # non-image evidence when the multimodal endpoint was briefly overloaded.
+        _transient = isinstance(last_error, (GeminiRateLimited, GeminiQuotaBlocked))
+        if isinstance(last_error, httpx.HTTPStatusError):
+            _sc = last_error.response.status_code if last_error.response else 0
+            _transient = _transient or _sc == 429 or 500 <= _sc <= 599
+        if isinstance(last_error, (TimeoutError, asyncio.TimeoutError)):
+            _transient = True
+        if not _transient:
+            self._circuit_breaker.record_failure()
         if uploaded_file_name:
             await self._delete_file_api(uploaded_file_name)
 

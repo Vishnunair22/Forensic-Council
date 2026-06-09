@@ -434,6 +434,12 @@ async def run_agents_concurrent(
                 # When findings is None (deep phase with no new tool findings), allow ALL
                 # synthesis sections through so the deep card can still show LLM-refined summaries.
                 actual_tools: set[str] = set()
+                # Map each tool to ITS OWN evidence verdict/severity so a refined
+                # synthesis section carries the tool's real conclusion — NOT the
+                # agent-level verdict. Previously every section inherited the agent
+                # verdict, so a clean voice-clone/anti-spoof check read as SUSPICIOUS
+                # under a Suspicious agent and inflated the "N anomalies flagged" count.
+                _raw_fv: dict[str, tuple[str, str]] = {}
                 restrict_to_actual = bool(findings) or bool(initial_tool_names)
                 for existing_finding in findings or []:
                     existing_meta = (
@@ -452,6 +458,9 @@ async def run_agents_concurrent(
                     )
                     if existing_tool:
                         actual_tools.add(str(existing_tool))
+                        _ev = str(_finding_attr(existing_finding, "evidence_verdict", "")).upper()
+                        _sevt = str(existing_meta.get("severity_tier") or "").upper()
+                        _raw_fv[_normalize_tool_name(str(existing_tool))] = (_ev, _sevt)
 
                 seen_synthesis_tools: set[str] = set()
                 for section in synthesis_data.get("sections") or []:
@@ -473,12 +482,36 @@ async def run_agents_concurrent(
                         summary = str(item.get("user_friendly_summary") or "").strip()
                         if not summary:
                             continue
+                        # Per-tool verdict from the tool's OWN result (evidence_verdict
+                        # is authoritative; NEGATIVE/NOT_APPLICABLE are never alerts),
+                        # falling back to the section's flag only when no raw finding
+                        # exists (e.g. deep synthesis-only section).
+                        _nt = _normalize_tool_name(tool_name)
+                        _ev, _sevt = _raw_fv.get(_nt, ("", ""))
+                        _sec_sev = (section.get("severity") or "LOW").upper()
+                        if _ev == "NOT_APPLICABLE":
+                            _item_tv = "NOT_APPLICABLE"
+                        elif _ev == "ERROR":
+                            _item_tv = "NEEDS_REVIEW"
+                        elif _ev in ("NEGATIVE", "CLEAN"):
+                            _item_tv = "CLEAN"
+                        elif _ev in ("POSITIVE", "TAMPERED", "SUSPICIOUS", "MANIPULATED") or _sevt in ("CRITICAL", "HIGH"):
+                            _item_tv = "FLAGGED"
+                        elif not _ev:
+                            # No matching raw finding — trust the section's own flag.
+                            _item_tv = "FLAGGED" if _sec_sev in ("CRITICAL", "HIGH", "MEDIUM") else "CLEAN"
+                        else:
+                            _item_tv = "INCONCLUSIVE"
                         preview.append(
                             {
                                 "tool": _normalize_tool_name(tool_name),
                                 "summary": summary[:560],
-                                "severity": section.get("severity") or "LOW",
-                                "verdict": str(synthesis_data.get("verdict") or "INCONCLUSIVE"),
+                                # A clean / not-applicable finding must never carry an
+                                # alerting severity — otherwise it is counted as an
+                                # "anomaly" purely on a stray section severity.
+                                "severity": "LOW" if _item_tv in ("CLEAN", "NOT_APPLICABLE")
+                                else (_sevt or section.get("severity") or "LOW"),
+                                "verdict": _item_tv,
                                 "key_signal": "",
                                 "confidence": synthesis_data.get("agent_confidence"),
                                 "section": section.get("label") or "",
@@ -488,7 +521,7 @@ async def run_agents_concurrent(
                                 # degradation.
                                 "degraded": bool(section.get("degraded")),
                                 "fallback_reason": section.get("fallback_reason"),
-                                "finding_kind": "discovery" if (section.get("severity") or "LOW") in ("HIGH", "CRITICAL", "MEDIUM") else "confirmation",
+                                "finding_kind": "discovery" if _item_tv in ("FLAGGED", "NEEDS_REVIEW") else "confirmation",
                             }
                         )
 
