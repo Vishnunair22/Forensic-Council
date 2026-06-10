@@ -9,15 +9,28 @@ interface DeepModelTelemetryProps {
   report: ReportDTO;
 }
 
+// Honest tool labels — the real method each tool runs, no fabricated SOTA model
+// names. TruFor (splicing) and the diffusion/ai-gen detector are real learned
+// models; copy-move, anomaly, and frequency checks are classical screening-tier.
 const TOOL_LABELS: Record<string, string> = {
-  neural_copy_move: "BusterNet-V2 (SOTA)",
-  neural_splicing: "TruFor Transformer",
-  anomaly_tracer: "ManTra-Net Tracer",
-  f3_net_frequency: "F3-Net Frequency",
-  neural_ela: "Neural ELA (ViT-L)",
-  diffusion_artifact_detector: "Diffusion Discriminator",
+  neural_copy_move: "Copy-Move Screening",
+  neural_splicing: "TruFor Splicing Localization",
+  anomaly_tracer: "Anomaly Screening (One-Class SVM)",
+  f3_net_frequency: "Frequency Screening (DWT/FFT)",
+  neural_ela: "Neural Error-Level Analysis",
+  diffusion_artifact_detector: "Diffusion Artifact Detector",
   visual_evidence_profile: "Visual Evidence Profile",
 };
+
+// Tools backed by a real learned model that can ASSERT a finding, vs classical
+// screening-tier checks that only flag for review (non-asserting). Drives the
+// honest per-row tier label instead of the old invented "Transformer V2/Tensor V4".
+const ASSERTING_MODELS = new Set([
+  "neural_splicing",
+  "diffusion_artifact_detector",
+  "neural_ela",
+  "visual_evidence_profile",
+]);
 
 export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
   const allFindings = Object.values(report.per_agent_findings ?? {}).flat();
@@ -42,14 +55,9 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
             Deep Model Telemetry
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div
-            className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
-          />
-          <span className="fc-eyebrow fc-text-muted">
-            Heavy-Compute Active
-          </span>
-        </div>
+        <span className="fc-eyebrow fc-text-muted">
+          {models.length} model{models.length === 1 ? "" : "s"} · deep pass
+        </span>
       </div>
 
       {/* Elevated Model Rows */}
@@ -82,7 +90,7 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
                       {TOOL_LABELS[model] || model.replace(/_/g, " ").toUpperCase()}
                     </span>
                   </div>
-                  <span className="text-sm font-mono font-bold text-primary drop-shadow-[0_0_5px_rgba(var(--color-primary-rgb),0.5)]">
+                  <span className="text-sm font-mono font-bold text-primary">
                     {avgConf}%
                   </span>
                 </div>
@@ -105,9 +113,9 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
 
                 <div className="flex justify-between items-center text-xs font-mono fc-text-muted uppercase tracking-widest relative z-10">
                   <span>
-                    {model.startsWith("neural_") || model === "anomaly_tracer" ? "Transformer V2" : "Tensor V4"}
+                    {ASSERTING_MODELS.has(model) ? "Asserting model" : "Screening tier"}
                   </span>
-                  <span>{count} INVOCATION{count !== 1 ? "S" : ""}</span>
+                  <span>{count} run{count !== 1 ? "s" : ""}</span>
                 </div>
               </motion.div>
             );

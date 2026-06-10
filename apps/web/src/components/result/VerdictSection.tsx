@@ -96,12 +96,6 @@ export function VerdictSection({
             {primaryText}
           </p>
         )}
-
-        {agentCount > 0 && (
-          <p className="mt-3 text-xs fc-text-muted">
-            Signed {isDeepPhase ? "deep-analysis" : "initial-analysis"} report &middot; {agentCount} active agent{agentCount === 1 ? "" : "s"} &middot; {confPct}% aggregate confidence.
-          </p>
-        )}
       </div>
 
       {/* Metric Strip */}
