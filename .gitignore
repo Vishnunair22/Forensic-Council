@@ -265,13 +265,15 @@ test_*.ps1
 /test_*.ps1
 
 
-# ── Scratch / temp directories ────────────────────────────────────────────────
-/scratch/
-/browser-shots/
-/test-images-broad/
+# ── Scratch / temp directories (anywhere in tree, not just root) ─────────────
+**/scratch/
+**/*-shots/
+**/test-images-broad/
+# Re-include the apps/api/scratch placeholder: a non-anchored `**/scratch/`
+# ignores the directory, so the dir must be un-ignored before its .gitkeep.
+!/apps/api/scratch/
 /apps/api/scratch/*
 !/apps/api/scratch/.gitkeep
-/apps/web/scratch/
 /apps/web/public/temp/*
 !/apps/web/public/temp/.gitkeep
 /artifacts/
@@ -281,6 +283,13 @@ test_*.ps1
 /reports/
 /exports/
 /downloads/
+
+# Live-harness / driver outputs (golden_check, audit runs, drive_investigation)
+golden_check*.json
+audit_*.json
+*_audit.json
+drive_*.json
+*.har.json
 
 
 # ── CI artifacts — generated files, never committed ──────────────────────────
@@ -323,19 +332,12 @@ docs/DOCUMENTATION_INVENTORY.md
 *.rej
 *.patch
 
-# ── Additional AI agent / IDE artifacts (belt-and-suspenders) ────────────────
+# ── Additional AI agent / IDE artifacts ──────────────────────────────────────
+# (.cursor/ .aider* .windsurf/ .continue/ already covered above)
 .gemini/
 .codeium/
 .sourcegraph/
-.cursor/
 .cursorignore
-.aider*
-.windsurf/
-.continue/
 .zed/
 .github/copilot-instructions.md
 *.code-workspace
-# Developer scratch / local test outputs (never part of the repo)
-/scratch/
-/browser-shots/
-/test-images-broad/
