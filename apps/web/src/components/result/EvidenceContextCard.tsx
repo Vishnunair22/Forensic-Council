@@ -69,6 +69,7 @@ export function EvidenceContextCard({
   evidenceSummary?: EvidenceSummary;
   mimeType?: string | null;
 }) {
+  const [open, setOpen] = React.useState(false);
   const modality = modalityOf(mimeType);
   let scene = cleanFindingText(String(evidenceSummary?.scene_description || "").trim());
   // Never surface the image-ensemble fallback ("CLIP classified the image as
@@ -92,7 +93,6 @@ export function EvidenceContextCard({
   const integrityRead =
     typeof details?.integrity_assessment === "string" ? details.integrity_assessment.trim() : "";
   const hasDetails = presentGroups.length > 0 || !!integrityRead;
-  const [open, setOpen] = React.useState(false);
 
   const isRemote = evidenceSummary?.source === "remote_vision";
   // Modality-aware header, icon and provenance label — "Visual"/"shows" is wrong
