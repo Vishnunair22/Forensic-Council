@@ -397,8 +397,19 @@ def deliberate_findings(
 
     confidence_reason = "Computed based on: " + ", ".join(reasons) if reasons else "Based on completed tools coverage."
 
+    # Partition the deliberated findings so that NOTHING report-safe is dropped:
+    # strongest = CRITICAL/HIGH, supporting = everything else report-safe
+    # (MEDIUM, LOW, CONTEXT_ONLY), excluded = not report-safe. Previously
+    # `supporting` only captured MEDIUM, so a report-safe LOW-weight finding
+    # (jpeg_ghost_detect / copy_move_detect) landed in no bucket and vanished
+    # from the report even though it still counted toward the verdict — the
+    # arbiter could assert a concern without ever surfacing the finding.
     strongest_findings = [df for df in deliberated if df.evidence_weight in (EvidenceWeight.CRITICAL, EvidenceWeight.HIGH) and df.report_safe]
-    supporting_findings = [df for df in deliberated if df.evidence_weight == EvidenceWeight.MEDIUM and df.report_safe]
+    supporting_findings = [
+        df for df in deliberated
+        if df.report_safe
+        and df.evidence_weight not in (EvidenceWeight.CRITICAL, EvidenceWeight.HIGH, EvidenceWeight.EXCLUDED)
+    ]
     excluded_findings = [df for df in deliberated if not df.report_safe or df.evidence_weight == EvidenceWeight.EXCLUDED]
 
     unresolved_limitations = []
