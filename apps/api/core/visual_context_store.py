@@ -92,7 +92,12 @@ def build_visual_context_from_finding(
         VisualContext,
     )
 
-    source_val = "llm_assisted" if (finding.provider_used != "local_visual_ensemble" and finding.provider_used != "local") else "local_ensemble"
+    # Any on-device provider is a LOCAL (screening-tier, not court-defensible) source.
+    # "local_media_profile" is the audio/video/document analog of the image ensemble;
+    # mislabeling it llm_assisted would wrongly mark it court-defensible AND suppress
+    # the report's no-holistic-model coverage caveat (gated on external_llm_used).
+    _local_providers = ("local_visual_ensemble", "local", "local_media_profile")
+    source_val = "local_ensemble" if finding.provider_used in _local_providers else "llm_assisted"
     external_llm_used = (source_val == "llm_assisted")
 
     raw_verdict = str(finding._authenticity_verdict or "").upper()
@@ -545,16 +550,35 @@ async def create_visual_context_preflight(
                 in ("jpg", "jpeg", "png", "webp", "gif", "bmp")
             )
             if not _is_image_fallback:
-                # Audio / video / document / text: the IMAGE ensemble (CLIP/YOLO/ELA)
-                # has no meaningful read here and would fabricate image-forensics
-                # nonsense. Leave the holistic context absent — the modality-specific
-                # tools carry the analysis.
-                logger.info(
-                    "Skipping image-ensemble preflight fallback for non-image evidence",
-                    session_id=session_id,
-                    mime=_fallback_mime or "unknown",
-                )
-                return None
+                # Audio / video / document: the IMAGE ensemble (CLIP/YOLO/ELA) would
+                # fabricate image-forensics nonsense. Instead build the LOCAL MEDIA
+                # profile (the no-Gemini holistic substitute: audio properties, a
+                # captioned video key-frame, or extracted document text + coverage
+                # caveat) and CACHE it here — symmetric with the image fallback below.
+                # Caching the context makes the agent's later read_shared_image_context
+                # a cache hit, so there is a SINGLE Gemini→local handoff: no second
+                # Gemini attempt and no re-running the frame-caption / text-extract in
+                # the deep phase.
+                try:
+                    from core.vision_local_ensemble import analyze_local_media_profile
+
+                    _media_finding = await analyze_local_media_profile(file_path, _fallback_mime)
+                    context = build_visual_context_from_finding(
+                        session_id, sha256, _media_finding
+                    )
+                    logger.info(
+                        "Local media profile preflight visual context created",
+                        session_id=session_id,
+                        mime=_fallback_mime or "unknown",
+                        file_type=context.file_type_assessment,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Local media profile failed — visual context unavailable",
+                        session_id=session_id,
+                        error=str(exc),
+                    )
+                    return None
         if context is None:
             try:
                 import mimetypes

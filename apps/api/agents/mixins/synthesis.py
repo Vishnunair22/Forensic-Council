@@ -463,8 +463,19 @@ class NeuralSynthesisMixin:
                     if _vc is not None:
                         _prof = visual_context_to_profile_dict(_vc)
                         if _prof:
+                            # The preflight now returns EITHER a native (Gemini) context
+                            # OR a local media profile — label the source accurately so a
+                            # local read is not presented as a court-defensible native one.
+                            _is_native = bool(
+                                getattr(_vc, "external_llm_used", False)
+                            ) and str(getattr(_vc, "source", "")) == "llm_assisted"
                             result = self._visual_profile_to_tool_result(
-                                _prof, source="native_preflight_visual_context"
+                                _prof,
+                                source=(
+                                    "native_preflight_visual_context"
+                                    if _is_native
+                                    else "local_media_profile"
+                                ),
                             )
                             result["agent_id"] = self.agent_id
                             if hasattr(self, "_record_tool_result"):

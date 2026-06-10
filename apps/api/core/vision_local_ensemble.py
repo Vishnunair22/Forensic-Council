@@ -534,6 +534,200 @@ def _minimal_degraded_finding(
     )
 
 
+async def analyze_local_media_profile(file_path: str, mime: str) -> VisualEvidenceFinding:
+    """On-device holistic profile for NON-IMAGE evidence (audio / video / document)
+    when no native (Gemini) media read is available — the no-Gemini analog of
+    analyze_local_visual_profile for media.
+
+    Returns a VisualEvidenceFinding describing WHAT the media is (audio properties, a
+    captioned video key-frame, or extracted document text) plus an honest coverage
+    caveat (CANNOT_DETERMINE — the modality tools carry the verdict). Used by BOTH the
+    preflight cascade AND the agent's read_shared_image_context handler so the
+    Gemini→local handoff is a SINGLE cached step per investigation, symmetric with the
+    image path's analyze_local_visual_profile fallback."""
+    mime = (mime or "").lower()
+    is_video = mime.startswith("video/")
+    is_document = (
+        mime == "application/pdf"
+        or mime.startswith("text/")
+        or "officedocument" in mime
+        or "msword" in mime
+        or "document" in mime
+    )
+    dur = sr = ch = None
+    w = h = 0
+    caption = ""
+    extracted: list[str] = []
+
+    if is_video:
+        def _probe_video() -> tuple:
+            import os
+            import tempfile
+            _dur = None
+            _w = _h = 0
+            _cap = ""
+            fp = ""
+            try:
+                import cv2
+                c = cv2.VideoCapture(file_path)
+                fps = c.get(cv2.CAP_PROP_FPS) or 0.0
+                n = c.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0
+                _w = int(c.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+                _h = int(c.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+                if fps and n:
+                    _dur = n / fps
+                if n:
+                    c.set(cv2.CAP_PROP_POS_FRAMES, int(n // 2))
+                ok, frame = c.read()
+                c.release()
+                if ok and frame is not None:
+                    fd, fp = tempfile.mkstemp(suffix=".jpg")
+                    os.close(fd)
+                    cv2.imwrite(fp, frame)
+            except Exception:
+                pass
+            if fp:
+                try:
+                    from tools.florence_analyzer import get_florence_analyzer
+                    r = get_florence_analyzer().analyze(fp)
+                    if getattr(r, "available", False):
+                        _cap = (r.best_description() or "").strip()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        os.unlink(fp)
+                    except Exception:
+                        pass
+            return _dur, _w, _h, _cap
+
+        dur, w, h, caption = await asyncio.to_thread(_probe_video)
+        for _pre in ("the image shows ", "the image is ", "this image shows "):
+            if caption.lower().startswith(_pre):
+                caption = caption[len(_pre):]
+                break
+        _vp = []
+        if dur:
+            _vp.append(f"~{dur:.0f}s")
+        if w and h:
+            _vp.append(f"{w}x{h}")
+        _vps = ", ".join(_vp)
+        _lead = f"The video shows {caption}" if caption else "Video file"
+        description = (
+            _lead.rstrip(".") + ". " + (f"({_vps}). " if _vps else "")
+            + "On-device frame-integrity, motion, and audio-track forensic checks were "
+            "applied locally."
+        )
+        coverage = (
+            "Coverage note: no holistic video model (frame-level deepfake / "
+            "synthetic-render assessment) is available on this analysis path, so "
+            "AI-generation / deepfake determination is screening-tier only — a clean "
+            "result does not exclude high-quality synthetic or rendered video."
+        )
+        ftype = "video"
+    elif is_document:
+        def _probe_doc() -> tuple:
+            np_ = 0
+            text = ""
+            try:
+                import fitz  # PyMuPDF
+                d = fitz.open(file_path)
+                np_ = d.page_count
+                chunks = []
+                for i, p in enumerate(d):
+                    if i >= 3:
+                        break
+                    chunks.append(p.get_text() or "")
+                text = " ".join(chunks).strip()
+                d.close()
+            except Exception:
+                try:
+                    with open(file_path, "r", errors="ignore") as f:
+                        text = f.read(4000).strip()
+                        np_ = 1
+                except Exception:
+                    pass
+            return np_, text
+
+        npages, _text = await asyncio.to_thread(_probe_doc)
+        snippet = " ".join((_text or "").split())[:180]
+        if snippet:
+            extracted = [snippet]
+        _lead = f"A {npages}-page document" if npages else "A text document"
+        description = (
+            _lead
+            + (f". Opening text: “{snippet}…”" if snippet else ".")
+            + " On-device text extraction and structural / provenance checks were "
+            "applied locally."
+        )
+        coverage = (
+            "Coverage note: no holistic document model (semantic AI-authored-text "
+            "assessment) is available on this analysis path, so AI-generated-text / "
+            "document-tampering determination is screening-tier only — a clean result "
+            "does not exclude machine-authored text."
+        )
+        ftype = "document"
+    else:
+        def _probe_audio() -> tuple:
+            try:
+                import soundfile as sf
+                info = sf.info(file_path)
+                return info.duration, info.samplerate, info.channels
+            except Exception:
+                try:
+                    import wave
+                    with wave.open(file_path, "rb") as w_:
+                        s = w_.getframerate() or 0
+                        return (w_.getnframes() / float(s or 1), s, w_.getnchannels())
+                except Exception:
+                    return (None, None, None)
+
+        dur, sr, ch = await asyncio.to_thread(_probe_audio)
+        _chd = {1: "mono", 2: "stereo"}.get(ch, (f"{ch}-channel" if ch else ""))
+        _ap = []
+        if dur:
+            _ap.append(f"~{dur:.0f}s")
+        if _chd:
+            _ap.append(_chd)
+        if sr:
+            _ap.append(f"{int(sr)} Hz")
+        _aps = ", ".join(_ap)
+        description = (
+            "On-device profile — audio recording" + (f" ({_aps})" if _aps else "") + ". "
+            "Acoustic forensic checks (spectral, prosody, voice-clone, anti-spoofing, "
+            "codec) were applied locally."
+        )
+        coverage = (
+            "Coverage note: no holistic speech model (transcription + synthetic-speech "
+            "assessment) is available on this analysis path, so AI-voice / voice-clone "
+            "determination is screening-tier only — a clean result does not exclude "
+            "high-quality speech synthesis."
+        )
+        ftype = "audio"
+
+    return VisualEvidenceFinding(
+        analysis_type="visual_evidence_profile",
+        provider_used="local_media_profile",
+        model_used="local_media_profile",
+        content_description=description,
+        manipulation_signals=[],
+        detected_objects=[],
+        file_type_assessment=ftype,
+        confidence=0.5,
+        court_defensible=False,
+        caveat=coverage,
+        _authenticity_verdict="CANNOT_DETERMINE",
+        _extracted_text=extracted,
+        _contextual_narrative=description,
+        _metadata_visual_consistency=coverage,
+        provider_attempts=[{"provider": "local_media_profile", "success": True}],
+        fallback_applied=True,
+        fallback_reason="native media read unavailable — local media profile",
+        tool_coverage={},
+        degradation_flags=[],
+    )
+
+
 async def analyze_local_visual_profile(
     artifact: EvidenceArtifact,
     exif_summary: dict[str, Any] | None = None,
