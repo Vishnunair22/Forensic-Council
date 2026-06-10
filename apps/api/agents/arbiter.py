@@ -846,6 +846,56 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     "source": "remote_vision" if _remote else "on_device",
                     "court_defensible": _remote,
                 }
+                # Full holistic-read details — the complete content/provenance the
+                # vision/media model surfaced, rendered collapsed under the summary on
+                # the result page. Same VisualContext for every modality (image scene,
+                # audio/video media profile, document text), so the consolidated block
+                # reads coherently for all supported file types. NOT a verdict —
+                # manipulation/AI signals here are already verdict-gated upstream
+                # (build_visual_context_from_finding only fills them on an alert read).
+                def _strs(items, limit=24):
+                    # A bare string is a single value, not an iterable of characters
+                    # (metadata_consistency_notes can arrive as str OR list[str]).
+                    if isinstance(items, str):
+                        items = [items] if items.strip() else []
+                    out = []
+                    for it in (items or []):
+                        if isinstance(it, str):
+                            s = it
+                        elif isinstance(it, dict):
+                            s = it.get("label") or it.get("name") or ""
+                        else:
+                            s = getattr(it, "label", None) or str(it)
+                        s = str(s or "").strip()
+                        if s:
+                            out.append(s)
+                    return out[:limit]
+
+                _osc = getattr(visual_context, "object_scene_context", None)
+                _ii = getattr(visual_context, "image_integrity_context", None)
+                _mv = getattr(visual_context, "metadata_visual_context", None)
+                _details = {
+                    "objects": _strs(getattr(_osc, "objects", None) or getattr(visual_context, "detected_objects", None)),
+                    "people": _strs(getattr(_osc, "people", None)),
+                    "weapons": _strs(getattr(_osc, "weapons_or_dangerous_items", None)),
+                    "documents": _strs(getattr(_osc, "documents_or_ids", None)),
+                    "extracted_text": _strs(getattr(visual_context, "extracted_text", None)),
+                    "scene_inconsistencies": _strs(getattr(_osc, "scene_inconsistencies", None)),
+                    "device_platform": _strs(getattr(_mv, "device_or_platform_clues", None)),
+                    "software": _strs(getattr(_mv, "software_or_app_clues", None)),
+                    "timestamps": _strs(getattr(_mv, "visible_timestamps", None)),
+                    "location_clues": _strs(getattr(_mv, "visible_location_clues", None)),
+                    "metadata_notes": _strs(getattr(_mv, "metadata_consistency_notes", None)),
+                    "ai_generation_signals": _strs(getattr(_ii, "ai_generation_signals", None)),
+                    "manipulation_signals": _strs(getattr(_ii, "visible_manipulation_signals", None)),
+                }
+                _integ = str(getattr(_ii, "integrity_assessment", "") or "").strip() if _ii is not None else ""
+                if _integ and _integ.lower() not in ("cannot_determine", ""):
+                    _details["integrity_assessment"] = _integ.replace("_", " ")
+                # Keep only present fields so the frontend renders nothing empty.
+                _details = {k: v for k, v in _details.items() if v}
+                if _details:
+                    evidence_summary["details"] = _details
 
         report = ForensicReport(
             session_id=self.session_id,

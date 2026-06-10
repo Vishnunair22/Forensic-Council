@@ -62,6 +62,23 @@ export interface ReportDTO {
     file_type_assessment?: string;
     source?: string;
     court_defensible?: boolean;
+    // Full holistic-read details (rendered collapsed under the summary).
+    details?: {
+      objects?: string[];
+      people?: string[];
+      weapons?: string[];
+      documents?: string[];
+      extracted_text?: string[];
+      scene_inconsistencies?: string[];
+      device_platform?: string[];
+      software?: string[];
+      timestamps?: string[];
+      location_clues?: string[];
+      metadata_notes?: string[];
+      ai_generation_signals?: string[];
+      manipulation_signals?: string[];
+      integrity_assessment?: string;
+    };
   };
   manipulation_probability?: number;
   confidence_min?: number;

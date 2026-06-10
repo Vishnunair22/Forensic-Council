@@ -1,12 +1,31 @@
 "use client";
 
 import React from "react";
-import { ImageIcon, Sparkles, Cpu, AudioLines, Film, FileText } from "lucide-react";
+import { ImageIcon, Sparkles, Cpu, AudioLines, Film, FileText, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
 import type { ReportDTO } from "@/lib/api";
 import { cleanFindingText } from "@/lib/findingText";
 
 type EvidenceSummary = NonNullable<ReportDTO["evidence_summary"]>;
+type EvidenceDetails = NonNullable<EvidenceSummary["details"]>;
+
+// Ordered detail groups: content → integrity → provenance. `alert` groups (signals)
+// get a subtle amber tint; `text` groups render as lines, the rest as chips.
+const DETAIL_GROUPS: Array<{ key: keyof EvidenceDetails; label: string; kind?: "text" | "alert" }> = [
+  { key: "objects", label: "Objects / entities" },
+  { key: "people", label: "People" },
+  { key: "weapons", label: "Weapons / dangerous items", kind: "alert" },
+  { key: "documents", label: "Documents / IDs" },
+  { key: "extracted_text", label: "Extracted text", kind: "text" },
+  { key: "scene_inconsistencies", label: "Scene inconsistencies", kind: "alert" },
+  { key: "ai_generation_signals", label: "AI-generation signals", kind: "alert" },
+  { key: "manipulation_signals", label: "Manipulation signals", kind: "alert" },
+  { key: "device_platform", label: "Device / platform" },
+  { key: "software", label: "Software / app" },
+  { key: "timestamps", label: "Visible timestamps" },
+  { key: "location_clues", label: "Location clues" },
+  { key: "metadata_notes", label: "Notes", kind: "text" },
+];
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   screenshot: "Screenshot / screen capture",
@@ -65,6 +84,16 @@ export function EvidenceContextCard({
   const fileType = prettyFileType(evidenceSummary?.file_type_assessment, modality);
   if (!scene && !fileType) return null;
 
+  const details = evidenceSummary?.details;
+  const presentGroups = DETAIL_GROUPS.filter((g) => {
+    const v = details?.[g.key];
+    return Array.isArray(v) && v.length > 0;
+  });
+  const integrityRead =
+    typeof details?.integrity_assessment === "string" ? details.integrity_assessment.trim() : "";
+  const hasDetails = presentGroups.length > 0 || !!integrityRead;
+  const [open, setOpen] = React.useState(false);
+
   const isRemote = evidenceSummary?.source === "remote_vision";
   // Modality-aware header, icon and provenance label — "Visual"/"shows" is wrong
   // for audio/document evidence.
@@ -108,6 +137,79 @@ export function EvidenceContextCard({
           >
             {fileType}
           </span>
+        </div>
+      )}
+
+      {hasDetails && (
+        <div className="mt-3.5 pt-3.5 border-t border-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="flex items-center gap-1.5 text-xs font-semibold tracking-wide fc-text-muted hover:text-white/80 transition-colors"
+          >
+            <ChevronDown
+              className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")}
+            />
+            {open ? "Hide full evidence context" : "Show full evidence context"}
+          </button>
+
+          {open && (
+            <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              {integrityRead && (
+                <div className="sm:col-span-2">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wider fc-text-muted mb-1">
+                    Holistic integrity read
+                  </dt>
+                  <dd className="text-sm fc-text-secondary">{integrityRead}</dd>
+                </div>
+              )}
+              {presentGroups.map((g) => {
+                const items = (details?.[g.key] as string[]) ?? [];
+                const isText = g.kind === "text";
+                const isAlert = g.kind === "alert";
+                return (
+                  <div key={g.key} className={clsx(isText && "sm:col-span-2")}>
+                    <dt
+                      className={clsx(
+                        "text-[11px] font-semibold uppercase tracking-wider mb-1.5",
+                        isAlert ? "text-amber-300/80" : "fc-text-muted",
+                      )}
+                    >
+                      {g.label}
+                    </dt>
+                    <dd>
+                      {isText ? (
+                        <ul className="space-y-1">
+                          {items.map((it, i) => (
+                            <li key={i} className="text-sm fc-text-secondary leading-relaxed">
+                              {cleanFindingText(it)}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {items.map((it, i) => (
+                            <span
+                              key={i}
+                              className={clsx(
+                                "text-xs px-2 py-0.5 rounded-md border",
+                                isAlert
+                                  ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-200/90"
+                                  : "border-white/10 bg-white/[0.04] fc-text-secondary",
+                              )}
+                            >
+                              {it}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
         </div>
       )}
     </div>
