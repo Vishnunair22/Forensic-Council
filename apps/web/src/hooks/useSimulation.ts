@@ -199,6 +199,17 @@ export const useSimulation = ({
             return;
           }
 
+          // Deep-phase agents broadcast under a "_deep" working-memory namespace id
+          // (e.g. "Agent1_deep"), but the UI keys agent cards by the canonical base
+          // id ("Agent1") and distinguishes phase via data.analysis_phase. Without
+          // stripping the suffix, deep AGENT_UPDATE live-text lands in an
+          // "Agent1_deep" bucket the card never reads — freezing Agent 1's live text
+          // during deep analysis. Normalise once here so every downstream key
+          // (agentUpdates, AGENT_COMPLETE upsert, timeline) uses the base id.
+          if (update.agent_id) {
+            update.agent_id = update.agent_id.replace(/_deep$/, "");
+          }
+
           const messagePhase = getMessagePhase(update);
           const allowedCrossPhaseTypes = new Set([
             "PIPELINE_PAUSED", "ARBITER_UPDATE", "REPORT_READY", "CONNECTED", "HITL_CHECKPOINT",
