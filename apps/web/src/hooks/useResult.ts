@@ -50,23 +50,29 @@ interface SessionDisplayContext {
 
 // Resolve a session's file/display context from the most authoritative source
 // available, in order: per-session context blob → per-session scoped keys →
-// History item (survives full resets) → active-session base keys. This ensures
-// a revisited session always renders ITS OWN metadata and never inherits the
-// currently-active session's file name/thumbnail when its scoped keys were
-// pruned.
+// History item (survives full resets). This ensures a revisited session always
+// renders ITS OWN metadata.
+//
+// We deliberately do NOT fall back to the un-scoped *active-session* base keys
+// (FILE_NAME / MIME_TYPE / THUMBNAIL / PIPELINE_START). Those always describe the
+// most recent upload, so a session whose scoped keys were pruned (e.g. an old
+// History entry) would otherwise inherit the CURRENT investigation's thumbnail
+// and file name — stale cross-session pollution. Scoped keys + the History item
+// already cover every legitimate session; an unknown session correctly resolves
+// to null and renders the neutral typed-icon / "Evidence File" defaults.
 function resolveSessionDisplayContext(sid: string | null): SessionDisplayContext {
   const ctx = readSessionContext(sid);
   const hist = readHistoryItem(sid);
   const scoped = (base: string) => (sid ? storage.getItem(`${base}:${sid}`) : null);
   return {
     fileName:
-      ctx?.file_name ?? scoped(STORAGE_KEYS.FILE_NAME) ?? hist?.fileName ?? storage.getItem(STORAGE_KEYS.FILE_NAME),
+      ctx?.file_name ?? scoped(STORAGE_KEYS.FILE_NAME) ?? hist?.fileName ?? null,
     mimeType:
-      ctx?.mime_type ?? scoped(STORAGE_KEYS.MIME_TYPE) ?? hist?.mime ?? storage.getItem(STORAGE_KEYS.MIME_TYPE),
+      ctx?.mime_type ?? scoped(STORAGE_KEYS.MIME_TYPE) ?? hist?.mime ?? null,
     thumbnail:
-      scoped(STORAGE_KEYS.THUMBNAIL) ?? hist?.thumbnail ?? storage.getItem(STORAGE_KEYS.THUMBNAIL),
+      scoped(STORAGE_KEYS.THUMBNAIL) ?? hist?.thumbnail ?? null,
     pipelineStart:
-      ctx?.pipeline_start ?? scoped(STORAGE_KEYS.PIPELINE_START) ?? storage.getItem(STORAGE_KEYS.PIPELINE_START),
+      ctx?.pipeline_start ?? scoped(STORAGE_KEYS.PIPELINE_START) ?? null,
   };
 }
 

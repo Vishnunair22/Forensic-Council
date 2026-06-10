@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Image as ImageIcon, Film, Mic, FileText, Calendar } from "lucide-react";
 
 interface EvidenceHeaderProps {
@@ -32,13 +32,19 @@ function EvidencePreview({
 }) {
   const cat = mimeCategory(mimeType);
   const Icon = CAT_ICON[cat];
+  // Gracefully fall back to the typed icon if the stored data URL is missing or
+  // corrupt, instead of rendering a broken-image glyph. Reset on thumbnail change
+  // so a new session's preview is re-attempted.
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => { setImgError(false); }, [thumbnail]);
 
-  if ((cat === "image" || cat === "video") && thumbnail) {
+  if ((cat === "image" || cat === "video") && thumbnail && !imgError) {
     return (
       /* eslint-disable-next-line @next/next/no-img-element */
       <img
         src={thumbnail}
         alt={`Evidence: ${fileName}`}
+        onError={() => setImgError(true)}
         className="w-full h-full object-cover"
         loading="lazy"
         decoding="async"

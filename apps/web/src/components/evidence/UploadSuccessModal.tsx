@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Lock,
@@ -41,6 +40,7 @@ export function UploadSuccessModal({
   const { playSound } = useSound();
   const prefersReducedMotion = useReducedMotion();
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const fileCategory = getFileCategory(file.type);
@@ -128,15 +128,18 @@ export function UploadSuccessModal({
             animate={prefersReducedMotion ? false : { scale: 1, opacity: 1, filter: "blur(0px)" }}
             transition={TRANSITION_ENTER}
           >
-            {fileCategory === "image" && objectUrl ? (
+            {fileCategory === "image" && objectUrl && !previewError ? (
               <>
-                <Image
+                {/* Plain <img> (not next/image) renders blob: object URLs
+                    reliably without the optimizer; object-contain shows the
+                    whole evidence frame. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={objectUrl}
                   alt={`Evidence file preview: ${file.name}`}
-                  fill
-                  sizes="(max-width: 640px) 100vw, 576px"
-                  unoptimized
-                  className="object-cover"
+                  onError={() => setPreviewError(true)}
+                  className="absolute inset-0 w-full h-full object-contain"
+                  decoding="async"
                 />
                 {/* Scan line animation — reduced-motion gated */}
                 {!prefersReducedMotion && (

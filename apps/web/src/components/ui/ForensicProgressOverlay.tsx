@@ -60,7 +60,6 @@ export function ForensicProgressOverlay({
   };
 
   const isArbiter = variant === "arbiter";
-  const borderColor    = isArbiter ? "border-success/40"  : "border-primary/40";
   const indicatorBorder = isArbiter ? "border-success/30" : "border-primary/30";
   const indicatorBg    = isArbiter ? "bg-success/5"       : "bg-primary/5";
   const pulseDot       = isArbiter ? "bg-success"         : "bg-primary";
@@ -78,7 +77,7 @@ export function ForensicProgressOverlay({
       exit={prefersReducedMotion ? {} : { opacity: 0, transition: { duration: 0.4, ease: "easeIn" } }}
       transition={{ duration: 0.16, ease: "easeOut" }}
     >
-      <div className={`relative z-10 w-full max-w-xl mx-auto border-l-2 ${borderColor} pl-8 md:pl-12 py-4`}>
+      <div className="relative z-10 w-full max-w-xl mx-auto flex flex-col items-center text-center px-6 py-4">
         {/* Status indicator */}
         <div className="flex items-center gap-4 mb-10">
           <div className={`relative w-8 h-8 flex items-center justify-center border ${indicatorBorder} rounded-2xl ${indicatorBg}`}>
