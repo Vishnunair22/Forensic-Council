@@ -158,7 +158,7 @@ export function EvidenceContextCard({
             <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
               {integrityRead && (
                 <div className="sm:col-span-2">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wider fc-text-muted mb-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wider fc-text-muted mb-1">
                     Holistic integrity read
                   </dt>
                   <dd className="text-sm fc-text-secondary">{integrityRead}</dd>
@@ -172,7 +172,7 @@ export function EvidenceContextCard({
                   <div key={g.key} className={clsx(isText && "sm:col-span-2")}>
                     <dt
                       className={clsx(
-                        "text-[11px] font-semibold uppercase tracking-wider mb-1.5",
+                        "text-xs font-semibold uppercase tracking-wider mb-1.5",
                         isAlert ? "text-amber-300/80" : "fc-text-muted",
                       )}
                     >
