@@ -749,6 +749,7 @@ class LLMClient:
         max_tokens: int | None = None,
         timeout_override: float | None = None,
         json_mode: bool = True,
+        priority: str = "medium",
     ) -> str:
         """Inner synthesis implementation — always called under _synthesis_semaphore."""
         with _tracer.start_as_current_span("llm.generate_synthesis"):
@@ -802,9 +803,11 @@ class LLMClient:
                 if not target_api_key or is_placeholder_secret(target_api_key):
                     continue
 
-                # Check priority-based quota manager
+                # Check priority-based quota manager. Honor the caller-supplied
+                # priority (e.g. the final-report refiner passes "critical"); the
+                # arbiter tier still escalates everything to critical.
                 from core.quota_manager import get_quota_manager
-                priority = "critical" if self.use_arbiter_tier else "medium"
+                priority = "critical" if self.use_arbiter_tier else priority
 
                 rpm_limit = getattr(self.config, f"{target_provider}_rpm_limit", 15)
                 rpd_limit = getattr(self.config, f"{target_provider}_rpd_limit", 1500)
@@ -847,6 +850,7 @@ class LLMClient:
                     target_model,
                     estimated_tokens=estimated_tokens,
                     tpm_limit_override=self._model_tpm_limit(target_provider, target_model),
+                    priority=priority,
                 )
                 if not allowed:
                     self._last_synthesis_blocked_reason = quota_result.reason
@@ -1144,6 +1148,7 @@ class LLMClient:
                 max_tokens=max_tokens,
                 timeout_override=timeout_override,
                 json_mode=json_mode,
+                priority=effective_priority,
             )
             return result
 

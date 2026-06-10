@@ -140,6 +140,7 @@ class ProviderQuotaGuard:
         *,
         estimated_tokens: int = 0,
         tpm_limit_override: int | None = None,
+        priority: str = "medium",
     ) -> tuple[bool, QuotaCheckResult]:
         """
         Check quota availability and record a call.
@@ -149,6 +150,14 @@ class ProviderQuotaGuard:
 
         Window order: RPM first (60-second sliding), then RPD (24-hour).
         RPM is the tighter constraint for most free-tier APIs.
+
+        priority="critical" calls (e.g. the final-report narrative refiner) skip
+        the *soft* TPM pre-block: TPM is the bucket most easily exhausted by the
+        many synthesis calls in one investigation, and pre-emptively blocking the
+        single most important call drops the report to the deterministic narrative.
+        Critical calls instead attempt the request and rely on the provider's real
+        429 + the higher-TPM-model fallback cascade. Tokens are still recorded, and
+        the hard RPM/RPD request-count limits remain enforced for all priorities.
         """
         config = cls._configs.get(provider)
         if config is None or not config.enabled:
@@ -190,7 +199,7 @@ class ProviderQuotaGuard:
                 return False, result
 
             effective_tpm_limit = tpm_limit_override or config.tpm_limit
-            if effective_tpm_limit and estimated_tokens > 0:
+            if effective_tpm_limit and estimated_tokens > 0 and priority != "critical":
                 recent_tokens = [
                     item for item in _TOKEN_TIMESTAMPS[key] if item[0] > cutoff_60s
                 ]
