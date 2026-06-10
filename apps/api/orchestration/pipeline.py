@@ -205,6 +205,12 @@ class ForensicCouncilPipeline:
 
             ws_session_id = str(session_id)
             original_log_entry = self.custody_logger.log_entry
+            # Monotonic per-agent count of tools broadcast to the UI. Drives the
+            # X/Y progress counter directly, independent of the ReAct loop's
+            # _current_iteration — that counter interleaves THOUGHT steps and, in
+            # the deep pass (a separate Agent1_deep loop), did not advance per tool,
+            # leaving the frontend "1/5" counter frozen while the live text changed.
+            _agent_tool_progress: dict[str, int] = {}
 
             async def broadcast_log_entry(**kwargs):
                 result = await original_log_entry(**kwargs)
@@ -277,10 +283,11 @@ class ForensicCouncilPipeline:
                         )
 
                         thinking_text = f"Running {display_name}..."
-                        iteration = content.get("iteration")
-                        tools_done = (
-                            iteration if isinstance(iteration, int) and iteration > 0 else None
-                        )
+                        # Advance this agent's X/Y counter by one per broadcast tool
+                        # action. Keyed by the raw agent_id, so the deep pass
+                        # ("Agent1_deep") counts independently from the initial pass.
+                        _agent_tool_progress[agent_id] = _agent_tool_progress.get(agent_id, 0) + 1
+                        tools_done = _agent_tool_progress[agent_id]
                         current_phase = "deep" if getattr(self, "run_deep_analysis_flag", False) else "initial"
                         await broadcast_update(
                             ws_session_id,

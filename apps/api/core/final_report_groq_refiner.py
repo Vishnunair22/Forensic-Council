@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from core.config import Settings
@@ -24,6 +25,15 @@ PROHIBITED_WORDS = [
     "gemini", "groq", "cerebras", "openai", "llama", "google", "meta", "gpt-", "claude",
     "llm assisted", "llm-assisted",
 ]
+
+# Match prohibited vendor terms as WHOLE WORDS, not substrings. A naive substring
+# check rejected legitimate forensic prose: "meta" matched "metadata"/"metallic",
+# so every report with a metadata finding was wrongly refused. Word boundaries fix
+# the false positives while still catching the standalone vendor names.
+_PROHIBITED_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(w) for w in PROHIBITED_WORDS) + r")\b",
+    re.IGNORECASE,
+)
 
 _SYSTEM_PROMPT = (
     "You are a forensic report editor. The arbiter has already determined the verdict, "
@@ -125,11 +135,11 @@ async def refine_report_with_groq(
                 " ".join(str(x) for x in sec_val)
                 if isinstance(sec_val, list)
                 else str(sec_val)
-            ).lower()
-            for word in PROHIBITED_WORDS:
-                if word in text_to_check:
-                    logger.warning(f"Groq refiner rejected: prohibited word `{word}` in `{sec}`.")
-                    return deterministic_report, False
+            )
+            _m = _PROHIBITED_RE.search(text_to_check)
+            if _m:
+                logger.warning(f"Groq refiner rejected: prohibited vendor term `{_m.group(0)}` in `{sec}`.")
+                return deterministic_report, False
 
         # key_findings must keep the em-dash format
         refined_kfs = parsed.get("key_findings")
