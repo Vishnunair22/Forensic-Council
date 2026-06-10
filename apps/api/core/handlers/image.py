@@ -558,7 +558,10 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
                 "neural_ela", aliases=("ela_full_image",), record=record
             )
 
-        result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=15.0)
+        # 38s inner budget (the registry allows 45s for neural_ela). 15s was far
+        # below the documented ELA-transformer cold-start (>35s) and timed out +
+        # restarted the subprocess under concurrent load.
+        result = await run_ml_tool("neural_ela_transformer.py", artifact.file_path, timeout=38.0)
         result = self._attach_visual_grounding(result, tool_name="neural_ela")
 
         # Publish anomaly regions for downstream tools
@@ -1187,7 +1190,7 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
             # NOT_APPLICABLE, making the per-agent confidence/check-count wobble. A
             # warm inference is ~1-2s, so 45s only ever absorbs a cold-load race.
             fingerprint = await asyncio.wait_for(
-                client.get_neural_fingerprint(artifact.file_path), timeout=45.0
+                client.get_neural_fingerprint(artifact.file_path), timeout=55.0
             )
             result = {
                 "fingerprint": fingerprint,

@@ -27,13 +27,17 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # never blocks the analyst decision gate.
     "extract_text_from_image": 130.0,
     "extract_evidence_text": 130.0,
-    "neural_fingerprint": 45.0,
+    # Neural fingerprint is a CPU-heavy model; under concurrent deep-phase load
+    # 45s was too tight (timed out on a constrained worker). 65s gives headroom.
+    "neural_fingerprint": 65.0,
     # noiseprint++ loads the sensor model on first call; 50s covers cold-start
     "noiseprint_cluster": 50.0,
     # ELA transformer cold-start can exceed 35s in Docker; 45s gives headroom
+    # (the inner subprocess call is budgeted at 38s — see image handler).
     "neural_ela": 45.0,
-    # CLIP/SigLIP models need 45s; BLIP-2 fallback may cold-start up to 30s
-    "analyze_image_content": 60.0,
+    # CLIP/SigLIP cold-start ~45s; under concurrent load 60s timed out. 90s gives
+    # headroom now that the tool is semaphore-gated (less CPU contention).
+    "analyze_image_content": 90.0,
     # YOLO object detection in Docker can cold-load slowly
     "object_detection": 60.0,
     # Speaker diarization loads heavy audio models
@@ -75,6 +79,14 @@ HEAVY_TOOLS: set[str] = {
     "deepfake_frequency_check",
     "neural_fingerprint",
     "neural_copy_move",
+    # neural_ela (ELA transformer) and analyze_image_content (CLIP/SigLIP scene
+    # read) were previously UNGATED, so they contended with the gated heavy tools
+    # and caused 3-way CPU starvation → concurrent timeouts on a constrained
+    # worker. Gate them so total heavy-ML concurrency stays within the semaphore.
+    # (The semaphore wait is OUTSIDE the per-tool timeout, so gating adds queue
+    # latency but never causes a timeout.)
+    "neural_ela",
+    "analyze_image_content",
     "extract_text_from_image",
     "extract_evidence_text",
     "speaker_diarize",
