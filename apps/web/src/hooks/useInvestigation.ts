@@ -880,9 +880,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         await new Promise<void>((r) => setTimeout(r, ARBITER_MIN_DISPLAY_MS - elapsed));
       }
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      // Only mark the report "ready" when it ACTUALLY finalized. On an arbiter-wait
+      // timeout (ok=false — e.g. a wedged worker) setting this told the result page
+      // to reveal immediately against a report that isn't there; navigating WITHOUT
+      // it lets the result page show its normal loading state and its own deadline
+      // resolve a true wedge to an actionable error instead of a stuck overlay.
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
+      sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
     }
-    sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
-    sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
     // No data-fc-loading bridge: the route's loading.tsx (a solid branded dark
     // cover) is the Suspense fallback that fills the navigation, and the App Router
     // transition holds the evidence arbiter overlay until it's ready. The old

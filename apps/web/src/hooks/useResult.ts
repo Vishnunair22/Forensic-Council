@@ -374,8 +374,27 @@ export function useResult(initialSessionId?: string) {
 
     const activeSessionId = sessionId;
 
+    // Overall escape hatch: the result page is shown AFTER the agents complete
+    // (Accept Baseline / View Results), so the report should finalize in seconds.
+    // If the backend wedges (e.g. a worker OOM-crash during arbiter deliberation),
+    // metadata.status stays a non-terminal value and the status endpoint returns
+    // "running" forever — leaving the user stuck on the deliberation overlay. This
+    // generous deadline guarantees the overlay always resolves to an actionable
+    // error instead of hanging. It cannot false-fire: a real report finalizes far
+    // inside this window, and the awaiting-decision wait happens on the EVIDENCE
+    // page, never here.
+    const RESULT_REPORT_DEADLINE_MS = 240_000; // 4 min
+
     async function poll() {
       if (cancelled) return;
+
+      if (Date.now() - pollStart > RESULT_REPORT_DEADLINE_MS) {
+        setErrorMsg(
+          "The report is taking longer than expected — the investigation may have stalled. Please refresh, or start a new analysis.",
+        );
+        setState("error");
+        return;
+      }
 
       try {
         const s = await getArbiterStatus(activeSessionId);
