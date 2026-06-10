@@ -520,8 +520,12 @@ services:
       # NOTE: dev target. prod overlay flips this to `runner` (see docker-compose.prod.yml).
       # If you forget the prod overlay, a banner is logged at container start.
       args:
+        # Only NEXT_PUBLIC_API_URL is a build-time arg (baked into the bundle by
+        # the web Dockerfile's `ARG NEXT_PUBLIC_API_URL`). INTERNAL_API_URL is a
+        # SERVER-SIDE runtime var read by the Next.js API routes — it is provided
+        # via `environment:` below, never baked, so it is intentionally not a
+        # build arg (the Dockerfile declares no ARG for it).
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
-        INTERNAL_API_URL: "http://backend:8000"
     restart: unless-stopped
     # Port 3000 intentionally NOT exposed at base level — the host binding lives
     # in infra/docker-compose.dev.yml so the base/prod stacks route all frontend

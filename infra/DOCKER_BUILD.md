@@ -725,6 +725,17 @@ docker compose \
 | `docker-compose.dev.yml` | Dev host-port overlay — exposes ports 3000, 8000, 5432, 6379, 6333/6334 to localhost | Development only |
 | `docker-compose.prod.yml` | Production targets, hardened restart, log rotation | Production |
 
+### Shared backend/worker image
+
+The `backend` and `worker` services build from the **same** Dockerfile target
+with identical args and differ only by runtime command (default API vs `worker`),
+so they share one image via an explicit tag — `forensic-council-api:dev` in dev
+and `forensic-council-api:prod` in prod. Compose builds the API image once and
+reuses it for both services, so they can never drift into two separate multi-GB
+images. (Containers are still named per-service, e.g. `forensic-council-backend-1`
+and `forensic-council-worker-1`.) The `migration` service keeps its own lighter
+image — it builds the `migration` target, which omits the ML dependencies.
+
 ### Build arguments
 
 | Argument | Default | Effect |
