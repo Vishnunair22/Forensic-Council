@@ -30,7 +30,9 @@ _SYSTEM_PROMPT = (
     "confidence, and all evidentiary findings. Your role is strictly narrative: improve "
     "clarity, precision, and professional register of the four provided fields.\n\n"
     "INVIOLABLE RULES:\n"
-    "1. Do NOT change 'final_verdict' or 'confidence_score' — echo them verbatim.\n"
+    "1. 'final_verdict' and 'confidence_score' are FIXED context set by the arbiter. "
+    "Never change them, and do NOT include them as keys in your output — your output is "
+    "ONLY the four narrative keys listed below.\n"
     "2. Do NOT invent tool names, findings, or metrics not present in the input.\n"
     "3. Do NOT mention any AI provider, model name, or vendor "
     "(Gemini, Groq, OpenAI, Cerebras, Llama, Claude, GPT, YOLO, CLIP, etc.).\n"
@@ -97,11 +99,19 @@ async def refine_report_with_groq(
 
         # ── Validation ────────────────────────────────────────────────────────
 
-        # Verdict and confidence must be unchanged
-        if parsed.get("final_verdict") != deterministic_report.get("final_verdict"):
+        # Verdict/confidence are FIXED by the arbiter and are NOT part of the
+        # refiner's output contract (system rule #8 asks for only the 4 narrative
+        # keys), so the model legitimately OMITS them. The merge below always
+        # preserves the deterministic verdict, so an omission is harmless — reject
+        # only an explicit, DIFFERING override. (Previously a `None != verdict`
+        # comparison rejected every report, wasting the Groq call and always
+        # falling back to the unrefined deterministic narrative.)
+        rv = parsed.get("final_verdict")
+        if rv is not None and rv != deterministic_report.get("final_verdict"):
             logger.warning("Groq refiner rejected: modified final_verdict.")
             return deterministic_report, False
-        if parsed.get("confidence_score") != deterministic_report.get("confidence_score"):
+        rc = parsed.get("confidence_score")
+        if rc is not None and rc != deterministic_report.get("confidence_score"):
             logger.warning("Groq refiner rejected: modified confidence_score.")
             return deterministic_report, False
 
