@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Clock } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { clsx } from "clsx";
 import { fmtTime, fmtDuration } from "@/lib/fmt";
 import { accentFor } from "@/lib/agentTheme";
@@ -30,6 +30,7 @@ export function ExecutionTimeline({
   agentTimeline,
   pipelineStartAt,
 }: ExecutionTimelineProps) {
+  const prefersReducedMotion = useReducedMotion();
   const hasLiveTimeline = agentTimeline.length > 0;
 
   const steps: Array<{
@@ -114,12 +115,15 @@ export function ExecutionTimeline({
       <div className="p-6 relative">
         {/* The Tactical Guide Line */}
         <div className="absolute left-[38px] top-8 bottom-8 w-[2px] bg-white/[0.05] rounded-full overflow-hidden">
-          {/* Animated Data Tracer */}
-          <motion.div
-            className="absolute top-0 w-full h-32 bg-gradient-to-b from-transparent via-primary/50 to-primary shadow-[0_0_10px_rgba(var(--color-primary-rgb),1)]"
-            animate={{ top: ["-20%", "120%"] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-          />
+          {/* Animated Data Tracer — suppressed under reduced-motion (a continuous
+              positional loop is exactly the kind of motion to honor the pref for). */}
+          {!prefersReducedMotion && (
+            <motion.div
+              className="absolute top-0 w-full h-32 bg-gradient-to-b from-transparent via-primary/50 to-primary shadow-[0_0_10px_rgba(var(--color-primary-rgb),1)]"
+              animate={{ top: ["-20%", "120%"] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+            />
+          )}
         </div>
 
         <div className="space-y-7 relative z-10">

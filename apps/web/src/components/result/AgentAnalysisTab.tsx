@@ -22,6 +22,7 @@ import type { ReportDTO } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { AgentFindingCard } from "@/components/ui/AgentFindingCard";
 import { ExecutionTimeline } from "./ExecutionTimeline";
+import { useSound } from "@/hooks/useSound";
 import { accentFor } from "@/lib/agentTheme";
 import { fmtTool } from "@/lib/fmtTool";
 import type { AgentUpdate } from "@/components/evidence/types";
@@ -336,6 +337,7 @@ export function AgentAnalysisTab({
   pipelineStartAt = null,
 }: AgentAnalysisTabProps) {
   const prefersReduced = useReducedMotion();
+  const { playSound } = useSound();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
     activeAgentIds[0] ?? null
   );
@@ -351,9 +353,15 @@ export function AgentAnalysisTab({
 
   const handleTileClick = useCallback(
     (agentId: string) => {
-      setSelectedAgentId((prev) => (prev === agentId ? null : agentId));
+      setSelectedAgentId((prev) => {
+        const opening = prev !== agentId;
+        // Soft "pop" only when opening a card — closing is silent so a
+        // double-click doesn't fire two clashing cues.
+        if (opening) playSound("card_reveal");
+        return opening ? agentId : null;
+      });
     },
-    []
+    [playSound]
   );
 
   const selectedFindings = useMemo(() => {
@@ -462,7 +470,12 @@ export function AgentAnalysisTab({
               agentId={agentId}
               reason={reason}
               isOpen={openSkipped === agentId}
-              onToggle={() => setOpenSkipped((prev) => (prev === agentId ? null : agentId))}
+              onToggle={() => setOpenSkipped((prev) => {
+                const collapsing = prev === agentId;
+                // Descending "whoosh" matches the panel sliding shut.
+                if (collapsing) playSound("skipped_hide");
+                return collapsing ? null : agentId;
+              })}
             />
           ))}
         </div>
