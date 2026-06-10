@@ -284,10 +284,15 @@ class ForensicCouncilPipeline:
 
                         thinking_text = f"Running {display_name}..."
                         # Advance this agent's X/Y counter by one per broadcast tool
-                        # action. Keyed by the raw agent_id, so the deep pass
-                        # ("Agent1_deep") counts independently from the initial pass.
-                        _agent_tool_progress[agent_id] = _agent_tool_progress.get(agent_id, 0) + 1
-                        tools_done = _agent_tool_progress[agent_id]
+                        # action (initial pass). The DEEP pass ("*_deep") is driven by
+                        # the deep progress monitor in pipeline_phases, which reports the
+                        # authoritative completed-task count — emitting a competing count
+                        # here would fight it, so leave tools_done unset for deep.
+                        if agent_id.endswith("_deep"):
+                            tools_done = None
+                        else:
+                            _agent_tool_progress[agent_id] = _agent_tool_progress.get(agent_id, 0) + 1
+                            tools_done = _agent_tool_progress[agent_id]
                         current_phase = "deep" if getattr(self, "run_deep_analysis_flag", False) else "initial"
                         await broadcast_update(
                             ws_session_id,

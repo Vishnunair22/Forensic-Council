@@ -133,6 +133,7 @@ async def run_agents_concurrent(
         aid: str, status: str, message: str, findings=None, error=None, agent_inst=None,
         initial_tool_names: set | None = None,
         analysis_phase: str = "initial",
+        tools_done: int | None = None,
     ):
         try:
             from api.routes._session_state import AGENT_NAMES, broadcast_update
@@ -857,7 +858,12 @@ async def run_agents_concurrent(
                         "tool_name": "file_type_validation"
                         if status == "validating"
                         else None,
-                        "tools_done": 0 if status in ("validating", "running") else None,
+                        # Use the caller-supplied per-tool count when given (the deep
+                        # progress monitor passes the real completed-task count). Only
+                        # the "validating" pre-roll seeds 0 — NEVER "running", which
+                        # previously reset the live X/Y counter to 0 on every 3s deep
+                        # progress poll, freezing it at 1/N while the text cycled.
+                        "tools_done": tools_done if tools_done is not None else (0 if status == "validating" else None),
                         "tools_total": len(getattr(agent_inst, "deep_task_decomposition" if analysis_phase == "deep" else "task_decomposition", []) or [])
                         if agent_inst is not None and status == "running"
                         else 1
@@ -1333,6 +1339,7 @@ async def run_agents_concurrent(
                 agent_inst=a_inst,
                 initial_tool_names=_initial_tool_names,
                 analysis_phase="deep",
+                tools_done=0,  # reset the X/Y counter for the fresh deep pass
             )
 
             # Progress monitor: polls working memory every 3s to show per-tool progress
@@ -1360,6 +1367,9 @@ async def run_agents_concurrent(
                                     agent_inst=a_inst,
                                     initial_tool_names=_initial_tool_names,
                                     analysis_phase="deep",
+                                    # Authoritative per-tool progress from working memory:
+                                    # completed tasks + the one now in progress = current X.
+                                    tools_done=len(_done) + (1 if _in_progress else 0),
                                 )
                                 _last_current = _current
                             if _done and not _in_progress:
@@ -1370,6 +1380,7 @@ async def run_agents_concurrent(
                                     agent_inst=a_inst,
                                     initial_tool_names=_initial_tool_names,
                                     analysis_phase="deep",
+                                    tools_done=len(_done),
                                 )
                     except Exception:
                         pass
