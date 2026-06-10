@@ -96,13 +96,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     if settings.enable_research_models and settings.app_env == "production":
-        logger.error(
-            "CRITICAL: RESEARCH_MODELS enabled in production. These models (BusterNet, F3-Net, "
-            "ManTra-Net, TruFor, clovaai/AASIST) are strictly non-commercial. "
-            "Refusing to start in production to prevent licensing violations. "
-            "Set ENABLE_RESEARCH_MODELS=false in production."
+        _research_ack = (
+            os.environ.get("RESEARCH_MODELS_NONCOMMERCIAL_ACK", "").strip().lower() == "true"
         )
-        raise RuntimeError("Research models enabled in production")
+        if not _research_ack:
+            logger.error(
+                "CRITICAL: RESEARCH_MODELS enabled in production. These models (BusterNet, F3-Net, "
+                "ManTra-Net, TruFor, clovaai/AASIST) are strictly non-commercial. "
+                "Refusing to start in production to prevent licensing violations. "
+                "Set ENABLE_RESEARCH_MODELS=false, or set RESEARCH_MODELS_NONCOMMERCIAL_ACK=true to "
+                "explicitly acknowledge academic/non-commercial use."
+            )
+            raise RuntimeError("Research models enabled in production")
+        logger.warning(
+            "RESEARCH_MODELS enabled in production with RESEARCH_MODELS_NONCOMMERCIAL_ACK=true. "
+            "Non-commercial research models (TruFor, BusterNet, F3-Net, ManTra-Net, AASIST) are "
+            "active. This deployment asserts academic/non-commercial use only — commercial use "
+            "would violate the upstream model licenses."
+        )
 
     if settings.jwt_algorithm.startswith("RS") and not settings.jwt_private_key:
         if settings.app_env == "production":

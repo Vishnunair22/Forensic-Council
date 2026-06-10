@@ -111,6 +111,11 @@ x-backend-env: &backend-env
   # Non-commercial research models (TruFor splicing localization, etc.). Default
   # off; enabled for this academic deployment via .env. Keep false in production.
   ENABLE_RESEARCH_MODELS: ${ENABLE_RESEARCH_MODELS:-false}
+  # Explicit acknowledgment that running ENABLE_RESEARCH_MODELS=true in production
+  # is for academic/non-commercial use only. Required by api/lifespan.py to start
+  # in production with research models enabled (otherwise it refuses to boot to
+  # prevent licensing violations). Default empty/false.
+  RESEARCH_MODELS_NONCOMMERCIAL_ACK: ${RESEARCH_MODELS_NONCOMMERCIAL_ACK:-false}
 
 services:
   # --------------------------------------------------------------------------
