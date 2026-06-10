@@ -72,6 +72,15 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const rs = useResult(initialSessionId);
   const prefersReduced = useReducedMotion();
 
+  // The GlobalNavbar (h-16 / 64px) drops to top-7 (28px) when the dev-mode banner
+  // is present (NEXT_PUBLIC_API_URL set), putting its bottom edge at 92px instead
+  // of 64px. The tab bar must sit flush below it — without this offset the navbar
+  // (z-50) overlaps and hides the Analysis/History tabs (z-40) in dev. Mirrors the
+  // exact `directApiUrl ? top-7 : top-0` logic in GlobalNavbar.
+  const directApiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const tabBarTopClass = directApiUrl ? "top-[5.75rem]" : "top-16"; // 92px : 64px
+  const contentPadClass = directApiUrl ? "pt-[8.75rem]" : "pt-28";  // clears navbar+tab bar
+
   const sessionChangeRef = useRef<string | undefined>(initialSessionId);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -111,7 +120,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
   const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ analysis: null, history: null });
 
   return (
-    <div className="min-h-screen pb-24 pt-20 sm:pt-12 relative">
+    <div className={clsx("min-h-screen pb-24 relative", contentPadClass)}>
       {/* ── Arbiter/Loading overlay ── */}
       {/* Cover the whole "no report yet" window with a single continuous overlay.
           When "Accept Baseline" set FC_REPORT_READY, useResult optimistically
@@ -138,7 +147,10 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
 
       {/* ── Tab Nav ── */}
       <nav
-        className="fixed top-16 left-0 right-0 z-40 border-b border-white/[0.06] bg-background/95"
+        className={clsx(
+          "fixed left-0 right-0 z-40 border-b border-white/[0.06] bg-background/95",
+          tabBarTopClass,
+        )}
         aria-label="Report sections"
       >
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-12 flex items-center gap-2">
