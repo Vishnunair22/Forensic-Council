@@ -687,42 +687,45 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     }
   }
 
-  // 1. Structural integrity / manipulation probability narrative
+  // 1. Structural integrity / manipulation probability narrative.
+  // These are fallbacks shown only when the backend supplies too few real
+  // findings — kept to one tight sentence each so they read as findings, not
+  // boilerplate that restates the verdict metric strip above.
   if (manip !== null) {
     if (manip >= 0.75) {
-      push(`Structural and statistical analysis produced a ${Math.round(manip * 100)}% manipulation probability — a critically high signal indicating the file has likely been altered or fabricated. Multiple independent domains corroborate this finding.`);
+      push(`Statistical analysis returned a ${Math.round(manip * 100)}% manipulation probability — a critically high signal that the file was likely altered or fabricated.`);
     } else if (manip >= 0.50) {
-      push(`Analysis returned a ${Math.round(manip * 100)}% manipulation probability, placing this file in contested territory. Significant anomalies were identified that are inconsistent with an authentic, unaltered source.`);
+      push(`A ${Math.round(manip * 100)}% manipulation probability places the file in contested territory, with anomalies inconsistent with an unaltered source.`);
     } else if (manip >= 0.20) {
-      push(`Manipulation probability stands at ${Math.round(manip * 100)}%, within an uncertain range. Some forensic signals are ambiguous and full authenticity cannot be confirmed or excluded without additional context.`);
+      push(`Manipulation probability is an uncertain ${Math.round(manip * 100)}%; some signals are ambiguous and authenticity cannot be confirmed without further context.`);
     } else if (manip < 0.10) {
-      push(`File structure, binary composition, and embedded data were examined and returned a ${Math.round(manip * 100)}% manipulation probability. The file's makeup is consistent with an unmodified original and shows no signs of synthetic or AI-generated content.`);
+      push(`File structure and embedded data are consistent with an unmodified original (${Math.round(manip * 100)}% manipulation probability), with no synthetic or AI-generated traces.`);
     }
   }
 
   // 2. Agent domain narrative
   if (alertAgents.length > 0) {
-    push(`Tampering signals were specifically flagged by ${alertAgents.join(" and ")}, each identifying anomalies in their domain that are inconsistent with an authentic, unmodified file.`);
+    push(`Tampering signals were flagged by ${alertAgents.join(" and ")}.`);
   } else if (highConfAuthAgents.length >= 2) {
     const listed = highConfAuthAgents.length > 2
       ? `${highConfAuthAgents.slice(0, -1).join(", ")}, and ${highConfAuthAgents.slice(-1)}`
       : highConfAuthAgents.join(" and ");
-    push(`Specialist examination by ${listed} confirmed authentic characteristics across each domain, with no anomalies detected in file structure, statistical patterns, or embedded metadata.`);
+    push(`${listed} each confirmed authentic characteristics with no anomalies in their domain.`);
   } else if (highConfAuthAgents.length === 1) {
     const label = highConfAuthAgents[0];
-    push(`${label.charAt(0).toUpperCase()}${label.slice(1)} examined its domain and confirmed authentic characteristics with no anomalies detected.`);
+    push(`${label.charAt(0).toUpperCase()}${label.slice(1)} confirmed authentic characteristics with no anomalies detected.`);
   }
 
   // 3. Agent discord
   if (stdDev !== null && stdDev >= 0.20) {
-    push(`Specialist agents showed substantial disagreement, with a ${Math.round(stdDev * 100)}% confidence spread across the panel. This level of discord suggests contested or ambiguous evidence that warrants human review before any determination is relied upon.`);
+    push(`Specialists disagreed by a ${Math.round(stdDev * 100)}% confidence spread — contested evidence that warrants human review.`);
   }
 
   // 4. Coverage / error rate
   if (errRate !== null && errRate < 0.05 && conf !== null && conf >= 0.80) {
-    push(`All forensic examination tools ran to completion without errors, achieving full coverage across every analytical domain. The determination is supported by complete, uncompromised toolchain output.`);
+    push(`All forensic tools ran to completion with full domain coverage and no errors.`);
   } else if (errRate !== null && errRate >= 0.30) {
-    push(`A ${Math.round(errRate * 100)}% tool error rate was recorded during this analysis. Reduced coverage in affected domains may limit the completeness of the determination, and results should be interpreted accordingly.`);
+    push(`A ${Math.round(errRate * 100)}% tool error rate reduced coverage in affected domains; interpret the determination accordingly.`);
   }
 
   // ── TIER 2: High-confidence tool findings ────────────────────────────────────
