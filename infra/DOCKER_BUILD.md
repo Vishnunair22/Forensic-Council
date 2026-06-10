@@ -623,7 +623,7 @@ docker compose -f infra/docker-compose.yml --env-file .env exec qdrant wget -qO-
 | `migration` | `exited (0)` | Runs once — exit 0 is correct |
 | `backend` | `healthy` | 120 s start period |
 | `worker` | `healthy` | 300 s start period |
-| `frontend` | `healthy` | 180 s start period (Next.js compilation) |
+| `frontend` | `healthy` | 60 s start period (Next.js compilation) |
 | `caddy` | `healthy` | |
 | `prometheus` | `healthy` | |
 
@@ -703,6 +703,7 @@ docker compose \
 | `yolo_cache` | `/app/cache/ultralytics` | Ultralytics/YOLO weights when `ENABLE_AGPL_MODELS=true` | Triggers re-download |
 | `numba_cache` | `/app/cache/numba_cache` | Compiled JIT cache | Safe — rebuilds on next use |
 | `calibration_models_cache` | `/app/cache/calibration_models` | Calibration JSON files | Safe — re-seeded from image on next start |
+| `trufor_cache` | `/app/cache/trufor` | TruFor splicing weights (~281 MB, only when `ENABLE_RESEARCH_MODELS=true`) | Triggers re-download on next use |
 
 > **Do not run `docker compose down -v`** unless you intend to delete all model downloads and database state. The `-v` flag removes named volumes.
 
@@ -767,7 +768,7 @@ In `infra/docker-compose.yml`, Caddy’s startup is coupled to the background wo
 The backend and worker services use `read_only: true` with a `tmpfs: /tmp` mount. This configuration:
 
 - Blocks writes to the root filesystem and all paths except `/tmp` and mounted volumes.
-- Requires `PYTHONDONTWRITEBYTECODE=1` (set in docker-compose.yml line 88) to prevent `.pyc` writes to `/app/__pycache__/`.
+- Requires `PYTHONDONTWRITEBYTECODE=1` (set in the shared `x-backend-env` block of `docker-compose.yml`) to prevent `.pyc` writes to `/app/__pycache__/`.
 - Requires that all writable paths (model caches, evidence storage, signing keys) be mounted as volumes.
 
 **Never remove `PYTHONDONTWRITEBYTECODE=1` without also removing `read_only: true`** from the backend/worker services, or the container will fail at startup when Python attempts to write bytecode.

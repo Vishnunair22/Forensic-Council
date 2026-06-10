@@ -59,7 +59,8 @@ if [ "$(id -u)" = "0" ]; then
         /app/cache/torch \
         /app/cache/numba_cache \
         /app/cache/ultralytics \
-        /app/cache/easyocr
+        /app/cache/easyocr \
+        /app/cache/trufor
     do
         mkdir -p "$WRITABLE_DIR" 2>/dev/null || true
         if ! runuser -u appuser -- test -w "$WRITABLE_DIR" 2>/dev/null; then

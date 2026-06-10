@@ -273,6 +273,11 @@ services:
   # Backend API
   # --------------------------------------------------------------------------
   backend:
+    # Backend and worker run the SAME image (identical Dockerfile target + build
+    # args) and differ only by runtime command (default API vs `worker`). Pinning
+    # an explicit shared image tag makes compose build it once and guarantees the
+    # two can never drift into separate multi-GB images.
+    image: forensic-council-api:dev
     build:
       context: ../apps/api
       dockerfile: Dockerfile
@@ -368,6 +373,9 @@ services:
   # Forensic Worker — consumes and processes the task queue
   # --------------------------------------------------------------------------
   worker:
+    # Shares the backend image (see backend.image note). Same build, different
+    # command — compose builds forensic-council-api:dev once and reuses it here.
+    image: forensic-council-api:dev
     build:
       context: ../apps/api
       dockerfile: Dockerfile

@@ -7,6 +7,9 @@
 
 services:
   backend:
+    # Prod backend + worker share ONE production image (mirrors the dev overlay's
+    # forensic-council-api:dev). Built once, reused for both services.
+    image: forensic-council-api:prod
     restart: always
     read_only: true
     tmpfs:
@@ -35,6 +38,7 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/cache/calibration_models:rw
+      - trufor_cache:/app/cache/trufor:rw
     logging:
       driver: "json-file"
       options:
@@ -65,6 +69,7 @@ services:
         max-file: "5"
 
   worker:
+    image: forensic-council-api:prod
     restart: always
     read_only: true
     tmpfs:
@@ -89,6 +94,7 @@ services:
       - numba_cache:/app/cache/numba_cache:rw
       - yolo_cache:/app/cache/ultralytics:rw
       - calibration_models_cache:/app/cache/calibration_models:rw
+      - trufor_cache:/app/cache/trufor:rw
     logging:
       driver: "json-file"
       options:
