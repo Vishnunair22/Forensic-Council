@@ -12,6 +12,7 @@ import { resetActiveInvestigation } from "@/lib/appReset";
 import { toast } from "@/hooks/use-toast";
 import { authService } from "@/lib/upload/authService";
 import { fileHandoffManager } from "@/lib/upload/fileHandoffManager";
+import { loadingOverlayController } from "@/lib/upload/loadingOverlayController";
 import { sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { computeFileSha256 } from "@/lib/crypto/fileHash";
@@ -126,10 +127,17 @@ export function HeroAuthActions() {
       clientSha256: selectedFileHash,
     });
 
-    // Do NOT close the dialog before navigating — closing reveals the landing
-    // page underneath while the loading overlay hasn't painted yet (React
-    // batches state), causing a visible flash.  The dialog unmounts naturally
-    // when the route changes to /evidence.
+    // Raise the global loading overlay NOW, on the home route, before navigating.
+    // It sets FC_SHOW_LOADING which GlobalLoadingOverlay honours on both "/" and
+    // "/evidence", so a single continuous overlay covers the whole hand-off. The
+    // overlay previously only appeared once triggerAnalysis ran on /evidence,
+    // leaving a gap where the still-open success dialog was the only cover — when
+    // the overlay then mounted/flickered, that dialog was revealed underneath
+    // ("modal shown again") and the overlay re-fired. Showing it here closes the
+    // gap. triggerAnalysis sees FC_SHOW_LOADING==="true" and will not re-fire it.
+    loadingOverlayController.show("Opening evidence analysis…");
+    // FC_HANDOFF_FIRED must be cleared so Effect A on /evidence (which skips when
+    // it is already "1") actually runs, recovers the file, and starts analysis.
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
     router.push("/evidence", { scroll: true });
     return true;
