@@ -575,12 +575,24 @@ async def start_investigation(
         validated_extension = Path(file.filename or "").suffix.lower()
 
         # ── Preflight: visual context creation ────────────────────────────
-        # Fire a single Gemini call (three-section structured prompt covering
+        # Fire the preflight (three-section structured prompt covering
         # Agent1/Agent3/Agent5) immediately after validation, in parallel with
-        # pipeline setup. By the time the first agent executes, the VisualContext
-        # is already waiting in Redis — zero extra Gemini quota consumed per agent.
+        # pipeline setup, so the VisualContext is waiting in Redis before agents run.
         # Restricted to image MIME types; audio/video agents don't use this context.
-        if actual_mime.startswith("image/"):
+        #
+        # IMPORTANT: only fire here when the BACKEND has its vision models warm
+        # (BACKEND_PREWARM_FLORENCE). On a RAM-tight host we run the backend lean
+        # (Florence pre-warm off), where a backend-built context falls back to a
+        # categorical CLIP read (Florence lazy-load fails under uvicorn --reload).
+        # In that mode we SKIP the backend preflight and let the WORKER build it
+        # up-front (pipeline.py) — the worker has Florence pre-warmed, so the cached
+        # context is the rich on-device caption, not a bare category. The worker's
+        # build is awaited before any agent runs, so nothing races.
+        import os as _os_pf
+        _backend_has_vision = str(
+            _os_pf.environ.get("BACKEND_PREWARM_FLORENCE", "")
+        ).strip().lower() in ("1", "true", "yes", "on")
+        if actual_mime.startswith("image/") and _backend_has_vision:
             # Best-effort optimization only — must never break the investigation
             # route. If it fails, agents fall back to their own visual profile.
             try:

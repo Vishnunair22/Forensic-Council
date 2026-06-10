@@ -27,6 +27,7 @@ Synthesis layer (pure Python, deterministic):
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Any
 
@@ -108,6 +109,24 @@ _PLATFORM_KEYWORDS = {
 }
 
 
+def _kw_present(keyword: str, text: str) -> bool:
+    """Whole-token keyword match for provenance/platform detection.
+
+    A bare substring test made short tokens like "ios" match inside ordinary words
+    ("various", "scenarios", "ratios"), fabricating an "iOS platform" provenance on
+    a desktop web screenshot. Pure alphanumeric keywords are matched on word
+    boundaries; multi-word or punctuation-bearing keywords ("last seen", "http://",
+    "typing…") are distinctive enough to keep the substring test.
+    """
+    kw = (keyword or "").lower()
+    txt = (text or "").lower()
+    if not kw:
+        return False
+    if re.fullmatch(r"[a-z0-9]+", kw):
+        return re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", txt) is not None
+    return kw in txt
+
+
 def _meaningful_ocr_lines(ocr_lines: list[str]) -> list[str]:
     """Drop low-coherence OCR noise. Photos/objects/textures produce garbage OCR
     ('Salas lh hg a =" ES, _ rr Tan ...') that must never surface as 'Extracted
@@ -162,7 +181,7 @@ def _extract_visible_metadata_clues(
     # Device / platform / app from OCR keywords + interface identification
     platforms: list[str] = []
     for platform, keywords in _PLATFORM_KEYWORDS.items():
-        if any(kw in lower for kw in keywords):
+        if any(_kw_present(kw, lower) for kw in keywords):
             platforms.append(platform)
     # Only a concrete interface/app identification is a software clue. The generic
     # FALLBACK ("Identified digital interface category: <category>") is a meta-
@@ -448,7 +467,7 @@ def _cross_signal_synthesis(
             'Twitter': 'twitter', 'Facebook': 'facebook', 'Gmail': 'gmail',
             'YouTube': 'youtube', 'Safari': 'safari', 'Chrome': 'chrome',
         }.items():
-            if keyword in ocr_text_lower:
+            if _kw_present(keyword, ocr_text_lower):
                 app_hint = name
                 break
         narrative = (
@@ -766,7 +785,7 @@ async def _analyze_local_visual_profile_impl(
         "Noiseprint": run_with_timeout("Noiseprint", _run_noiseprint(), 20.0),
         "Splicing": run_with_timeout("Splicing", _run_splicing(), 30.0),
         "Diffusion": run_with_timeout("Diffusion", _run_diffusion(), 40.0),
-        "Florence": run_with_timeout("Florence", _run_florence(), 120.0),
+        "Florence": run_with_timeout("Florence", _run_florence(), 60.0),
         "OpenCV": run_with_timeout("OpenCV", _run_opencv_stats(), 10.0),
     }
 
@@ -913,9 +932,9 @@ async def _analyze_local_visual_profile_impl(
     if is_screenshot:
         interface_id = _synthesize_interface_id(ocr_res, clip_res, detr_res) or f"Identified digital interface category: {clip_category}"
         ocr_text_lower = " ".join(ocr_lines).lower()
-        if "iphone" in ocr_text_lower or "ios" in ocr_text_lower:
+        if _kw_present("iphone", ocr_text_lower) or _kw_present("ios", ocr_text_lower):
             interface_id += " (iOS platform signs)"
-        elif "android" in ocr_text_lower:
+        elif _kw_present("android", ocr_text_lower):
             interface_id += " (Android platform signs)"
         elif "http" in ocr_text_lower or "www." in ocr_text_lower:
             interface_id += " (Web/Browser interface)"
@@ -1066,17 +1085,21 @@ def _synthesize_interface_id(ocr_res: dict, clip_res: dict, detr_res: list) -> s
     ocr_text = " ".join(ocr_res.get("extracted_text", []) if isinstance(ocr_res, dict) else []).lower()
     if "screenshot" not in clip_category:
         return ""
+    # Only DISTINCTIVE, low-false-positive markers. Generic UI words ("settings",
+    # "following", "seen", "story", "likes", "channels", "chrome", "gmail") appear in
+    # virtually any app — including a desktop forensic dashboard — and previously
+    # fabricated an "iOS / WhatsApp" provenance on an unrelated web screenshot.
     platform_signals = {
-        'iOS': ['imessage', 'airdrop', 'facetime', 'safari', 'settings'],
-        'Android': ['google play', 'settings', 'chrome', 'gmail'],
-        'WhatsApp': ['whatsapp', 'last seen', 'typing...'],
-        'Telegram': ['telegram', 'seen', 'channels'],
-        'Twitter/X': ['retweets', 'likes', 'following'],
-        'Instagram': ['instagram', 'followers', 'following', 'story'],
+        'iOS': ['imessage', 'airdrop', 'facetime'],
+        'Android': ['google play', 'play store'],
+        'WhatsApp': ['whatsapp'],
+        'Telegram': ['telegram'],
+        'Twitter/X': ['retweet'],
+        'Instagram': ['instagram'],
     }
     detected_platform = []
     for platform, keywords in platform_signals.items():
-        if any(kw in ocr_text for kw in keywords):
+        if any(_kw_present(kw, ocr_text) for kw in keywords):
             detected_platform.append(platform)
     if detected_platform:
         return f"Digital interface: {', '.join(detected_platform)} ({clip_category})"

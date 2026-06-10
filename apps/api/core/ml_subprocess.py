@@ -57,6 +57,37 @@ def _get_ml_subprocess_timeout() -> float:
     except Exception:
         return 120.0
 
+
+# ── Global ML execution concurrency cap (OOM safety, not a throttle) ─────────
+# Each ML subprocess is RLIMIT_AS-capped to 2GB, but nothing bounds how many run
+# at once. Deep analysis injects many heavy neural tools (TruFor, BusterNet, the
+# AI-gen ViT, F3-Net…); a pathological burst can sum past the host RAM and the
+# OOM-killer takes the whole process mid-investigation. Bounding concurrent
+# executions keeps the local (no-Gemini) path degrading to SLOWER, never CRASHED.
+#
+# Sizing: this is a CEILING for pathological bursts, NOT a normal-operation throttle.
+# Production ran deep with NO cap (natural orchestration concurrency ~3-5) across the
+# full lock suite without OOM, so the cap must sit just ABOVE that natural concurrency
+# — high enough not to slow normal deep, low enough to catch a runaway burst.
+#   • Initial ensemble fires only ~2-3 concurrent SUBPROCESS tools (noiseprint +
+#     diffusion + splicing); CLIP/DETR/Florence/ELA/FFT/OpenCV are in-process and
+#     never touch this semaphore — so 4 never throttles initial.
+#   • Deep is heavy-subprocess-dominated and benefits from the extra slot.
+# Default 4 is the safe ceiling on the current 7.6GiB SHARED host (worker idle ~2.7GiB
+# + other containers); raise ML_MAX_CONCURRENCY to 5-6 on a larger / dedicated host.
+_ML_MAX_CONCURRENCY = max(1, int(os.environ.get("ML_MAX_CONCURRENCY", "4") or "4"))
+_ml_exec_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_ml_semaphore() -> asyncio.Semaphore:
+    """Lazily create the process-global ML-execution semaphore (binds to the
+    running loop on first acquire). One per process; backend and worker each get
+    their own, which is correct since each has an independent memory budget."""
+    global _ml_exec_semaphore
+    if _ml_exec_semaphore is None:
+        _ml_exec_semaphore = asyncio.Semaphore(_ML_MAX_CONCURRENCY)
+    return _ml_exec_semaphore
+
 # ── Model warm-up registry ─────────────────────────────────────────────────
 # Tracks which scripts have been warmed up to avoid duplicate warm-up calls.
 _warmed_up: dict[str, bool] = {}
@@ -349,6 +380,33 @@ async def shutdown_ml_workers() -> None:
 
 
 async def run_ml_tool(
+    script_name: str,
+    input_path: str,
+    extra_args: list[str] | None = None,
+    timeout: float = 30.0,
+    timeout_budget: float | None = None,
+) -> dict:
+    """Concurrency-gated entry point for ML subprocess execution.
+
+    Bounds CONCURRENT executions to ML_MAX_CONCURRENCY so peak memory stays under
+    the container limit (OOM safety — see _get_ml_semaphore). The semaphore wraps
+    the whole call; a tool's own execution timeout starts only AFTER it acquires a
+    slot, so queueing never causes spurious tool timeouts (the investigation-level
+    budget still ticks, so heavy load degrades to fewer-tools, never a crash)."""
+    sem = _get_ml_semaphore()
+    if sem.locked():
+        logger.debug(
+            "ML concurrency cap reached — queuing tool",
+            tool=script_name.replace(".py", ""),
+            limit=_ML_MAX_CONCURRENCY,
+        )
+    async with sem:
+        return await _run_ml_tool_unbounded(
+            script_name, input_path, extra_args, timeout, timeout_budget
+        )
+
+
+async def _run_ml_tool_unbounded(
     script_name: str,
     input_path: str,
     extra_args: list[str] | None = None,

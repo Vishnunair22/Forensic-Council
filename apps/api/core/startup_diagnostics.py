@@ -38,6 +38,7 @@ def run_startup_diagnostics() -> dict[str, str]:
     _prewarm_and_test_librosa()
     _test_audio_model()
     prewarm_florence()
+    _canary_local_vision()
     ok = [k for k, v in _STATUS.items() if v == "OK"]
     bad = {k: v for k, v in _STATUS.items() if v not in ("OK",) and not v.startswith("SKIPPED")}
     if bad:
@@ -69,6 +70,33 @@ def _config_trap_warnings() -> None:
             _STATUS["config_numba_jit"] = "OK"
     except Exception as exc:
         logger.warning(f"Config trap check failed (non-fatal): {exc!r}")
+
+
+def _canary_local_vision() -> None:
+    """Confirm the no-Gemini visual path is wired and its load-bearing detector is
+    importable at boot — so a broken local path (missing module / bad import / absent
+    weights) surfaces in /health at deploy time, not on the first user upload when the
+    API is down. Lightweight: import + presence checks only; full inference is already
+    exercised by the ML pre-warm + Florence pre-warm."""
+    try:
+        import importlib
+
+        from core.vision_local_ensemble import analyze_local_visual_profile  # noqa: F401
+
+        # The AI-generation ViT is the load-bearing local synthesis signal — without
+        # it the no-Gemini path has no AI-gen detector at all.
+        importlib.import_module("tools.ml_tools.ai_generation_detector")
+        _STATUS["local_vision_path"] = "OK"
+        logger.info(
+            "Startup: local (no-Gemini) vision path wired — ensemble + AI-gen "
+            "detector importable."
+        )
+    except Exception as exc:
+        _STATUS["local_vision_path"] = f"ERROR: {exc!r}"
+        logger.error(
+            "Startup: local vision path canary FAILED — no-Gemini analysis may be "
+            f"degraded: {exc!r}"
+        )
 
 
 def prewarm_florence() -> None:

@@ -145,6 +145,48 @@ async def system_tools_health():
     }
 
 
+@router.get("/api/v1/health/degradation")
+async def degradation_health(request: Request):
+    """Degraded-mode visibility: is the app running but leaning on the no-Gemini
+    fallback? Surfaces the Gemini fallback rate + transient-outage cooldown, and the
+    local (no-Gemini) path readiness from the boot canary + pre-warm self-tests — so
+    an operator can tell 'working, but degraded' from 'healthy' without reading a report."""
+    settings = settings_from_app(request)
+    from core.gemini_client import GeminiVisionClient
+    from core.startup_diagnostics import get_startup_status
+
+    startup = get_startup_status()
+    gemini = GeminiVisionClient.get_degradation_status()
+
+    v_chain_str = str(getattr(settings, "vision_provider_chain", "") or "")
+    v_chain = [p.strip().lower() for p in v_chain_str.split(",") if p.strip()]
+
+    def _ok(key: str) -> bool:
+        v = str(startup.get(key, "OK"))
+        return v == "OK" or v.startswith("SKIPPED")
+
+    # The no-Gemini path is "ready" when the local ensemble is in the chain and its
+    # load-bearing pieces (ensemble wiring + AI-gen detector + Florence captioner)
+    # came up clean at boot.
+    no_gemini_ready = (
+        "local_ensemble" in v_chain
+        and _ok("local_vision_path")
+        and _ok("florence2_vlm")
+    )
+
+    return {
+        "status": "degraded" if gemini["transient_cooldown_active"] else "ok",
+        "no_gemini_ready": no_gemini_ready,
+        "vision_provider_chain": v_chain,
+        "gemini": gemini,
+        "local_path_self_tests": {
+            k: startup.get(k)
+            for k in ("local_vision_path", "florence2_vlm", "librosa", "audio_model", "config_numba_jit")
+            if k in startup
+        },
+    }
+
+
 @router.get("/api/v1/health/providers")
 async def providers_health(request: Request):
     """Health and rate-limiting status for the LLM provider cascade."""

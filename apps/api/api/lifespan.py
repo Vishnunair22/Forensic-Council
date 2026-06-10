@@ -282,18 +282,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Gemini model validation skipped", error=str(e))
 
-    # ── Pre-warm Florence-2 VLM ───────────────────────────────────────────────
-    # The backend also fires the local-ensemble visual-context preflight (and can
-    # win the single-flight lock when Gemini is unavailable). Loading Florence here
-    # at boot — single-threaded, before serving — avoids the lazy mid-request load
-    # that fails under uvicorn --reload with an `accelerate` circular import, so
-    # backend-built contexts get a rich on-device description instead of a bare
-    # category. Mirrors the worker boot pre-warm; best-effort, never blocks startup.
-    try:
-        from core.startup_diagnostics import prewarm_florence
-        await asyncio.to_thread(prewarm_florence)
-    except Exception as _flo_exc:
-        logger.warning("Florence pre-warm at startup skipped", error=str(_flo_exc))
+    # ── Pre-warm Florence-2 VLM (OPT-IN — off by default for memory) ───────────
+    # The backend can fire the local-ensemble preflight and win the single-flight
+    # lock, but the built context is cached by file-hash (hours), so the backend
+    # rarely builds a fresh one — meanwhile pre-warming Florence here duplicates the
+    # WORKER's ~1.5GB model residency in the backend process, and on a RAM-tight host
+    # that doubled footprint is what pushes deep analysis into an OOM kill. Default:
+    # do NOT pre-warm in the backend — Florence lazy-loads only on a genuine
+    # cache-miss preflight (rare). Set BACKEND_PREWARM_FLORENCE=1 to restore eager
+    # pre-warming on a host with ample RAM.
+    import os as _os
+    if str(_os.environ.get("BACKEND_PREWARM_FLORENCE", "")).strip().lower() in ("1", "true", "yes", "on"):
+        try:
+            from core.startup_diagnostics import prewarm_florence
+            await asyncio.to_thread(prewarm_florence)
+        except Exception as _flo_exc:
+            logger.warning("Florence pre-warm at startup skipped", error=str(_flo_exc))
+    else:
+        logger.info(
+            "Backend Florence pre-warm disabled (lazy-load on cache-miss) — avoids "
+            "duplicating the worker's ~1.5GB vision-model residency on a RAM-tight host"
+        )
 
     # ── Crash-recovery: orphaned sessions ────────────────────────────────────
     try:

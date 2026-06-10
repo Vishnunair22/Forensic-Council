@@ -117,10 +117,42 @@ def build_deterministic_report(
         )
     elif _verdicts_upper == "AUTHENTIC":
         _manip_pct = int(round(arbiter_deliberation.final_confidence * 100))
+        # Modality-aware domain phrasing — "pixel integrity / statistical frequency"
+        # is meaningless on an audio/video/document file (it read as an image-template
+        # leak on the audio report).
+        _mt = (mime_type or "").lower()
+        if _mt.startswith("audio/"):
+            _domains = "acoustic, voice-biometric, and provenance"
+        elif _mt.startswith("video/"):
+            _domains = "visual, audio-track, and temporal-integrity"
+        elif _mt == "application/pdf" or _mt.startswith("text/") or "document" in _mt:
+            _domains = "textual, structural, and provenance"
+        elif _mt.startswith("image/"):
+            _domains = "pixel integrity, statistical frequency, and provenance"
+        else:
+            _domains = "integrity, statistical, and provenance"
         _s2 = (
-            "Independent checks across pixel integrity, statistical frequency, and provenance domains "
-            "returned no manipulation indicators, consistent with an unmodified original."
+            f"Independent checks across {_domains} domains returned no manipulation "
+            "indicators, consistent with an unmodified original."
         )
+        # Qualified-verdict coverage caveat: on the local-only (no holistic media
+        # model) path the synthesis/AI determination is screening-tier, so a clean
+        # audio/video/document result must NOT be presented as a full clearance.
+        _is_doc = (
+            _mt == "application/pdf" or _mt.startswith("text/") or "document" in _mt
+        )
+        if _mt.startswith(("audio/", "video/")) and not vis_ext_llm:
+            _s2 += (
+                " Note: holistic synthetic-speech / deepfake assessment is limited "
+                "without a dedicated media model on this analysis path, so a clean "
+                "result does not exclude high-quality AI synthesis."
+            )
+        elif _is_doc and not vis_ext_llm:
+            _s2 += (
+                " Note: holistic AI-generated-text assessment is limited without a "
+                "dedicated language model on this analysis path, so a clean result "
+                "does not exclude machine-authored text."
+            )
     else:
         _s2 = (
             "Evidence across active analytical domains produced ambiguous or conflicting signals "

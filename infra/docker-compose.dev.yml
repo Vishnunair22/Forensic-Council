@@ -28,6 +28,14 @@ services:
     ports:
       - "${BACKEND_HOST_PORT:-8000}:8000"
 
+  worker:
+    environment:
+      # TRANSIENT (RAM-starved host): cap concurrent heavy ML subprocess executions
+      # lower than the code default (4) so deep analysis fits the available memory and
+      # the worker isn't OOM-killed mid-run. Restore to 4 (remove this) once the host
+      # has ~6GB+ free. Tunable via ML_MAX_CONCURRENCY.
+      - ML_MAX_CONCURRENCY=${ML_MAX_CONCURRENCY:-2}
+
   frontend:
     ports:
       - "${FRONTEND_HOST_PORT:-3000}:3000"

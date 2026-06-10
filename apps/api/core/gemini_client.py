@@ -890,6 +890,62 @@ class GeminiVisionClient:
     _quota_semaphore: asyncio.Semaphore | None = None
     _quota_limit: int = 2  # conservative default; overridden by configure_quota_pool()
 
+    # ── Process-global transient-outage cooldown ────────────────────────────
+    # The hard circuit breaker (self._circuit_breaker) deliberately IGNORES
+    # transient errors (429 / 5xx / timeout) so a brief overload never silently
+    # strands evidence on local forever. But during a SUSTAINED transient outage
+    # that means every investigation pays the full ~55s Gemini timeout before
+    # falling to local. This lightweight, class-level (cross-investigation; the
+    # client is re-instantiated per call so instance state wouldn't persist)
+    # cooldown fast-paths to local after N consecutive transient failures, then
+    # lets exactly one call through per window to PROBE for recovery — availability
+    # without the permanent-degradation trap the hard breaker avoids.
+    _transient_fail_count: int = 0
+    _transient_cooldown_until: float = 0.0
+    _TRANSIENT_FAIL_THRESHOLD: int = 3
+    _TRANSIENT_COOLDOWN_S: float = 90.0
+
+    # Process-global degradation counters (observability — surfaced at
+    # /api/v1/health/degradation so an operator sees "running, but degraded").
+    _gemini_success_total: int = 0
+    _gemini_fallback_total: int = 0
+
+    @classmethod
+    def _in_transient_cooldown(cls) -> bool:
+        return time.monotonic() < cls._transient_cooldown_until
+
+    @classmethod
+    def _record_transient_failure(cls) -> None:
+        cls._transient_fail_count += 1
+        cls._gemini_fallback_total += 1
+        if cls._transient_fail_count >= cls._TRANSIENT_FAIL_THRESHOLD:
+            # Arm (or re-arm, when a probe fails) the cooldown window.
+            cls._transient_cooldown_until = time.monotonic() + cls._TRANSIENT_COOLDOWN_S
+
+    @classmethod
+    def _record_fastpath_fallback(cls) -> None:
+        """Gemini skipped (breaker OPEN or transient cooldown) → ran local instead."""
+        cls._gemini_fallback_total += 1
+
+    @classmethod
+    def _reset_transient(cls) -> None:
+        cls._transient_fail_count = 0
+        cls._transient_cooldown_until = 0.0
+        cls._gemini_success_total += 1
+
+    @classmethod
+    def get_degradation_status(cls) -> dict:
+        """Process-global Gemini health snapshot for the degradation health route."""
+        total = cls._gemini_success_total + cls._gemini_fallback_total
+        return {
+            "gemini_outcomes_total": total,
+            "gemini_success_total": cls._gemini_success_total,
+            "gemini_fallback_total": cls._gemini_fallback_total,
+            "fallback_rate": round(cls._gemini_fallback_total / total, 3) if total else 0.0,
+            "transient_cooldown_active": cls._in_transient_cooldown(),
+            "transient_fail_count": cls._transient_fail_count,
+        }
+
     @classmethod
     def configure_quota_pool(cls, max_concurrent: int) -> None:
         """
@@ -1435,6 +1491,20 @@ class GeminiVisionClient:
             logger.warning(
                 f"Gemini circuit breaker is OPEN — falling back to local analysis for {analysis_type}"
             )
+            self._record_fastpath_fallback()
+            finding = await self._local_forensic_fallback(file_path, is_screen_capture_like=is_screen_capture_like)
+            finding.analysis_type = analysis_type
+            return finding
+
+        # Transient-outage cooldown: a sustained 429/5xx/timeout storm fast-paths to
+        # local instead of every call eating the full timeout. One call per window is
+        # still allowed through (cooldown lapses) to probe for recovery.
+        if self._in_transient_cooldown():
+            logger.warning(
+                "Gemini in transient-outage cooldown — fast-pathing to local "
+                f"analysis for {analysis_type}"
+            )
+            self._record_fastpath_fallback()
             finding = await self._local_forensic_fallback(file_path, is_screen_capture_like=is_screen_capture_like)
             finding.analysis_type = analysis_type
             return finding
@@ -1626,6 +1696,7 @@ class GeminiVisionClient:
                     finding = self._parse_response(raw_text, analysis_type, m_latency)
                     finding.model_used = active_model
                     self._circuit_breaker.record_success()
+                    self._reset_transient()  # recovery — clear any transient cooldown
                     if uploaded_file_name:
                         await self._delete_file_api(uploaded_file_name)
                     return finding
@@ -1700,6 +1771,10 @@ class GeminiVisionClient:
             _transient = True
         if not _transient:
             self._circuit_breaker.record_failure()
+        else:
+            # Sustained transient failures arm the cooldown so subsequent
+            # investigations fast-path to local instead of each eating the timeout.
+            self._record_transient_failure()
         if uploaded_file_name:
             await self._delete_file_api(uploaded_file_name)
 

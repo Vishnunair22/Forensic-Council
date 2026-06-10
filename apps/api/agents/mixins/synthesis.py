@@ -219,6 +219,206 @@ class NeuralSynthesisMixin:
         }
         return result
 
+    async def _build_local_media_profile(self, artifact, mime: str) -> dict:
+        """Fast on-device holistic profile for audio/video when no native (Gemini)
+        media context exists. Replaces the old behaviour where the non-image
+        'read_shared_image_context' axis waited 60s for an Agent1 visual profile that
+        never runs for audio, then ran the IMAGE ensemble on a non-image file —
+        producing a timeout + a degraded finding + an empty Agent2 context.
+
+        Populates the agent's CONTENT context (duration / format / channels) and
+        carries an explicit, court-honest COVERAGE caveat: without a holistic speech
+        model, synthetic-speech / voice-clone determination is screening-tier only."""
+        path = getattr(artifact, "file_path", "") or ""
+        is_video = mime.startswith("video/")
+        is_document = (
+            mime == "application/pdf"
+            or mime.startswith("text/")
+            or "officedocument" in mime
+            or "msword" in mime
+            or "document" in mime
+        )
+        dur = sr = ch = None
+        w = h = 0
+        caption = ""
+
+        if is_video:
+            # Describe what the VIDEO SHOWS (the Florence-for-images analog): probe
+            # via OpenCV and caption a representative middle frame on-device, so the
+            # video's CONTENT context is the visual scene — not just the audio track.
+            def _probe_video() -> tuple:
+                import os
+                import tempfile
+                dur = None
+                w = h = 0
+                caption = ""
+                frame_path = ""
+                try:
+                    import cv2
+                    cap = cv2.VideoCapture(path)
+                    fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
+                    n = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0
+                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+                    if fps and n:
+                        dur = n / fps
+                    if n:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, int(n // 2))
+                    ok, frame = cap.read()
+                    cap.release()
+                    if ok and frame is not None:
+                        fd, frame_path = tempfile.mkstemp(suffix=".jpg")
+                        os.close(fd)
+                        cv2.imwrite(frame_path, frame)
+                except Exception:
+                    pass
+                if frame_path:
+                    try:
+                        from tools.florence_analyzer import get_florence_analyzer
+                        res = get_florence_analyzer().analyze(frame_path)
+                        if getattr(res, "available", False):
+                            caption = (res.best_description() or "").strip()
+                    except Exception:
+                        caption = ""
+                    finally:
+                        try:
+                            os.unlink(frame_path)
+                        except Exception:
+                            pass
+                return (dur, w, h, caption)
+
+            dur, w, h, caption = await asyncio.to_thread(_probe_video)
+            for _pre in ("the image shows ", "the image is ", "this image shows "):
+                if caption.lower().startswith(_pre):
+                    caption = caption[len(_pre):]
+                    break
+            vprops = []
+            if dur:
+                vprops.append(f"~{dur:.0f}s")
+            if w and h:
+                vprops.append(f"{w}x{h}")
+            vprops_s = ", ".join(vprops)
+            lead = f"The video shows {caption}" if caption else "Video file"
+            description = (
+                lead.rstrip(".") + ". " + (f"({vprops_s}). " if vprops_s else "")
+                + "On-device frame-integrity, motion, and audio-track forensic checks "
+                "were applied locally."
+            )
+            coverage = (
+                "Coverage note: no holistic video model (frame-level deepfake / "
+                "synthetic-render assessment) is available on this analysis path, so "
+                "AI-generation / deepfake determination is screening-tier only — a clean "
+                "result does not exclude high-quality synthetic or rendered video."
+            )
+        elif is_document:
+            # Describe the DOCUMENT by its extracted text (the content axis for docs)
+            # so Agent5's context is the document content, not an empty image axis.
+            def _probe_doc() -> tuple:
+                npages = 0
+                text = ""
+                try:
+                    import fitz  # PyMuPDF
+                    _doc = fitz.open(path)
+                    npages = _doc.page_count
+                    chunks = []
+                    for _i, _page in enumerate(_doc):
+                        if _i >= 3:
+                            break
+                        chunks.append(_page.get_text() or "")
+                    text = " ".join(chunks).strip()
+                    _doc.close()
+                except Exception:
+                    try:
+                        with open(path, "r", errors="ignore") as _f:
+                            text = _f.read(4000).strip()
+                            npages = 1
+                    except Exception:
+                        pass
+                return (npages, text)
+
+            npages, _text = await asyncio.to_thread(_probe_doc)
+            snippet = " ".join((_text or "").split())[:180]
+            lead = f"A {npages}-page document" if npages else "A text document"
+            description = (
+                lead
+                + (f". Opening text: “{snippet}…”" if snippet else ".")
+                + " On-device text extraction and structural / provenance checks were "
+                "applied locally."
+            )
+            coverage = (
+                "Coverage note: no holistic document model (semantic AI-authored-text "
+                "assessment) is available on this analysis path, so AI-generated-text / "
+                "document-tampering determination is screening-tier only — a clean result "
+                "does not exclude machine-authored text."
+            )
+        else:
+            def _probe() -> tuple:
+                try:
+                    import soundfile as sf
+                    info = sf.info(path)
+                    return (info.duration, info.samplerate, info.channels, str(info.format or ""))
+                except Exception:
+                    try:
+                        import wave
+                        with wave.open(path, "rb") as w:
+                            sr = w.getframerate() or 0
+                            return (w.getnframes() / float(sr or 1), sr, w.getnchannels(), "WAV")
+                    except Exception:
+                        return (None, None, None, "")
+
+            dur, sr, ch, fmt = await asyncio.to_thread(_probe)
+            ch_desc = {1: "mono", 2: "stereo"}.get(ch, (f"{ch}-channel" if ch else ""))
+            parts = []
+            if dur:
+                parts.append(f"~{dur:.0f}s")
+            if ch_desc:
+                parts.append(ch_desc)
+            if sr:
+                parts.append(f"{int(sr)} Hz")
+            props = ", ".join(parts)
+            description = (
+                f"On-device profile — audio recording" + (f" ({props})" if props else "") + ". "
+                "Acoustic forensic checks (spectral, prosody, voice-clone, anti-spoofing, "
+                "codec) were applied locally."
+            )
+            coverage = (
+                "Coverage note: no holistic speech model (transcription + synthetic-speech "
+                "assessment) is available on this analysis path, so AI-voice / voice-clone "
+                "determination is screening-tier only — a clean result does not exclude "
+                "high-quality speech synthesis."
+            )
+        return {
+            "agent_id": self.agent_id,
+            "available": True,
+            "status": "COMPLETE",
+            "evidence_verdict": "NOT_APPLICABLE",
+            "confidence_raw": 0.0,
+            "court_defensible": False,
+            "content_description": description,
+            "reasoning_summary": coverage,
+            "summary": coverage,
+            "metadata": {
+                "tool_name": TOOL_VISUAL_PROFILE,
+                "content_description": description,
+                "coverage_caveat": coverage,
+                "analysis_source": (
+                    "local_document_profile" if is_document
+                    else "local_video_profile" if is_video
+                    else "local_audio_profile"
+                ),
+                "provider_used": (
+                    "local_document_profile" if is_document
+                    else "local_video_profile" if is_video
+                    else "local_audio_profile"
+                ),
+                "external_ai_used": False,
+                "media_duration_s": round(dur, 2) if dur else None,
+                "sample_rate_hz": int(sr) if sr else None,
+                "channels": ch,
+                "resolution": (f"{w}x{h}" if (w and h) else None),
+            },
+        }
+
     async def _visual_evidence_profile_handler(
         self,
         input_data: dict,
@@ -276,6 +476,23 @@ class NeuralSynthesisMixin:
                         agent_id=self.agent_id,
                         error=str(_vc_err),
                     )
+
+                # No native (Gemini) media context → for audio/video/document, build a
+                # fast LOCAL media profile instead of waiting 60s for an Agent1 visual
+                # profile (Agent1 never runs for non-image) or running the IMAGE
+                # ensemble on a non-image file.
+                _is_doc_mime = (
+                    _mime == "application/pdf"
+                    or _mime.startswith("text/")
+                    or "officedocument" in _mime
+                    or "msword" in _mime
+                    or "document" in _mime
+                )
+                if _mime.startswith(("audio/", "video/")) or _is_doc_mime:
+                    result = await self._build_local_media_profile(artifact, _mime)
+                    if hasattr(self, "_record_tool_result"):
+                        await self._record_tool_result(TOOL_VISUAL_PROFILE, result)
+                    return result
 
             agent1_profile = await self._wait_for_agent1_visual_profile()
             if agent1_profile:

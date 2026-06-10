@@ -195,8 +195,25 @@ def build_visual_context_from_finding(
 # its description — gating on a decisive verdict would wrongly demote good non-image
 # reads (which legitimately carry CANNOT_DETERMINE).
 _TOP_TIER_MIN_CONFIDENCE = 0.7
-_TOP_TIER_TTL_S = 86400  # 24h
-_SHORT_TTL_S = 900       # 15m
+_TOP_TIER_TTL_S = 86400   # 24h — authoritative Gemini read
+_LOCAL_STABLE_TTL_S = 14400  # 4h — good local read when Gemini is permanently off
+_SHORT_TTL_S = 900        # 15m — re-attempt Gemini soon (transient fallback)
+
+
+def _gemini_configured_enabled() -> bool:
+    """True when Gemini is a configured provider (hybrid mode). When False — the
+    local_ensemble-only baseline or a hard-disabled key — there is no point holding
+    a local context for only 15m to 're-attempt Gemini': Gemini will never be tried,
+    so re-running the full ensemble every 15m on a repeated file is pure waste."""
+    try:
+        from core.config import get_settings
+        s = get_settings()
+        if getattr(s, "local_only_analysis", False):
+            return False
+        chain = str(getattr(s, "vision_provider_chain", "") or "")
+        return "gemini" in chain and bool(getattr(s, "remote_visual_profile_allowed", True))
+    except Exception:
+        return False
 
 
 def _is_top_tier_context(context: "VisualContext") -> bool:
@@ -265,16 +282,50 @@ async def save_visual_context(
             # GAN-face false-negative trap: a cached local "authentic" read of a
             # StyleGAN portrait that skipped Gemini for 24h).
             _top_tier = _is_top_tier_context(context)
-            _ttl = _TOP_TIER_TTL_S if _top_tier else _SHORT_TTL_S
+            # A good local read (has content) earns a 4h TTL ONLY when Gemini is not
+            # configured — re-attempting it is moot, so don't re-run the ensemble every
+            # 15m on a repeated file (no-Gemini/outage efficiency + stability). In
+            # hybrid mode a local context keeps the 15m TTL so Gemini is re-tried (the
+            # GAN-face trap protection is preserved exactly).
+            # "Content" must be a REAL read, not a degraded/failed-ensemble fallback
+            # (e.g. a "could not analyze this image" sentinel with confidence 0.0,
+            # file_type=unknown — produced when the ensemble couldn't load models under
+            # memory pressure). Caching such a failure for 4h would lock a blank
+            # object/scene context onto the file. Require a non-trivial confidence and
+            # a real scene/file-type signal that is not the failure sentinel.
+            try:
+                _ctx_conf = float(getattr(context, "confidence", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                _ctx_conf = 0.0
+            _scene = (getattr(context, "scene_description", "") or "").strip()
+            _ftype = (getattr(context, "file_type_assessment", "") or "").strip()
+            _is_failure_read = (
+                _ctx_conf <= 0.0
+                or _ftype.lower() in ("", "unknown")
+                or "could not analyze" in _scene.lower()
+                or "could not be categor" in _scene.lower()
+            )
+            _has_content = bool(
+                _scene or _ftype or (getattr(context, "extracted_text", None) or [])
+            )
+            _stable_local = (
+                (not _top_tier)
+                and _has_content
+                and not _is_failure_read
+                and _ctx_conf >= 0.35
+                and not _gemini_configured_enabled()
+            )
+            _ttl = _TOP_TIER_TTL_S if _top_tier else (_LOCAL_STABLE_TTL_S if _stable_local else _SHORT_TTL_S)
             await redis.set(f"visual_context_by_hash:{sha256}:{prompt_version}", context_json, ex=_ttl)
             if not _top_tier:
                 logger.info(
-                    "Cached non-top-tier visual context with short TTL (Gemini will be re-attempted)",
+                    "Cached non-top-tier visual context",
                     sha256=sha256[:12],
                     source=getattr(context, "source", None),
                     external_llm_used=getattr(context, "external_llm_used", None),
                     confidence=getattr(context, "confidence", None),
                     ttl_s=_ttl,
+                    stable_local=_stable_local,
                 )
     except Exception as e:
         logger.warning("Failed saving visual context to Redis", error=str(e))

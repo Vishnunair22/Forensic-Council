@@ -329,6 +329,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # INCONCLUSIVE. Requires Gemini available & clean and fewer than 2 strong,
         # court-defensible agreeing integrity signals. Provenance/content-risk
         # signals and hard evidence (hash mismatch) are not touched.
+        # Reliability-honesty flag (reset per investigation): set when a strong
+        # AI-generation signal is held inconclusive ONLY because the holistic
+        # provider was local-only (no remote corroboration) — used downstream to
+        # cap confidence + disclose, so an API-failure/no-Gemini "Authentic" is
+        # never over-confident on a possible synthetic image.
+        self._uncorroborated_ai_gen_local = False
         try:
             from core.severity import (
                 NON_INTEGRITY_TOOLS,
@@ -650,6 +656,59 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         elif "NO_REPORTABLE_MANIPULATION_DETECTED" in v_upper:
             mapped_verdict = "AUTHENTIC"
 
+        # Reliability honesty — detect the dangerous no-Gemini case independent of
+        # WHERE the corroboration downgrade happened (agent grounding vs arbiter):
+        # a dedicated AI-generation detector RAW-detected synthesis, the holistic
+        # read was local-only (no remote vision to corroborate), and the verdict
+        # still came out AUTHENTIC. Keyed off the detector's own tool output (which
+        # survives any verdict downgrade), so it fires whether the positive was held
+        # inconclusive upstream or here. A genuinely clean detector run (NEGATIVE /
+        # low score) does NOT match, so the authentic majority is untouched.
+        if mapped_verdict == "AUTHENTIC":
+            _AI_GEN_TOOLS = {"diffusion_artifact_detector", "ai_generation_detector"}
+            _holistic_local_only = (
+                visual_context is None
+                or str(getattr(visual_context, "source", "") or "") == "local_ensemble"
+                or not getattr(visual_context, "external_llm_used", False)
+            )
+            if _holistic_local_only:
+                for _f in all_findings:
+                    if not isinstance(_f, dict):
+                        continue
+                    _m = _f.get("metadata") or {}
+                    _tool = _m.get("tool_name") or _f.get("finding_type") or ""
+                    if _tool not in _AI_GEN_TOOLS:
+                        continue
+                    try:
+                        _prob = float(_m.get("diffusion_probability") or _m.get("confidence_raw") or _m.get("confidence") or 0.0)
+                    except (TypeError, ValueError):
+                        _prob = 0.0
+                    if (
+                        bool(_m.get("is_ai_generated"))
+                        or str(_m.get("predicted_label") or "").lower() == "artificial"
+                        or bool(_m.get("corroboration_downgrade"))
+                        or str(_f.get("evidence_verdict") or "").upper() == "POSITIVE"
+                        or _prob >= 0.70
+                    ):
+                        self._uncorroborated_ai_gen_local = True
+                        break
+
+        # Reliability honesty: cap an AUTHENTIC verdict's confidence when a local
+        # AI-generation signal was held inconclusive purely for lack of a holistic
+        # corroborator (no-Gemini / API-failure path). Done BEFORE _final_conf is
+        # read so the verdict line, overall_confidence, manipulation probability,
+        # and the deterministic report all reflect the capped value consistently.
+        if getattr(self, "_uncorroborated_ai_gen_local", False) and mapped_verdict == "AUTHENTIC":
+            _AI_GEN_CONF_CAP = 0.70
+            if deliberation_result.final_confidence > _AI_GEN_CONF_CAP:
+                logger.info(
+                    "Confidence capped — uncorroborated local AI-generation signal "
+                    "(holistic review unavailable)",
+                    from_confidence=round(deliberation_result.final_confidence, 3),
+                    cap=_AI_GEN_CONF_CAP,
+                )
+                deliberation_result.final_confidence = _AI_GEN_CONF_CAP
+
         _final_conf = deliberation_result.final_confidence
         manipulation_probability = _manipulation_probability(mapped_verdict, _final_conf)
 
@@ -689,6 +748,24 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if success:
                 final_report_dict = refined
                 groq_used = True
+
+        # Disclose the uncorroborated AI-generation signal in the executive summary
+        # (paired with the confidence cap above) so a reader of the report knows the
+        # authenticity finding is provisional for lack of a holistic corroborator.
+        if getattr(self, "_uncorroborated_ai_gen_local", False) and mapped_verdict == "AUTHENTIC":
+            _ai_gen_caveat = (
+                " Reliability note: an on-device AI-generation detector flagged this "
+                "image, but no holistic vision model was available to corroborate it, "
+                "so the signal was held inconclusive and this authenticity finding is "
+                "provisional — recommend re-review with a holistic vision model before "
+                "relying on it."
+            )
+            try:
+                _es = str(final_report_dict.get("executive_summary") or "").rstrip()
+                if "Reliability note:" not in _es:
+                    final_report_dict["executive_summary"] = _es + _ai_gen_caveat
+            except Exception:
+                pass
 
         # ── 8. Mapping Back to ForensicReport Pydantic Model ──
         # (mapped_verdict + derived metrics computed above, before report build)

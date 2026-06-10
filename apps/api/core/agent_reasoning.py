@@ -215,12 +215,26 @@ class AgentReasoningService:
 
         # 1. Grounding: Agent 3 (Object/Scene/Contraband)
         if agent_id.startswith("Agent3") and tool_name in ["object_detection", "vector_contraband_search"]:
-            # If weapon or contraband detected, verify against visual context
+            # If weapon or contraband detected, verify against visual context.
+            # Scan BOTH the envelope regions AND the raw tool result: the object
+            # detector surfaces its hits under raw["weapon_detections"]/["detections"]
+            # (class_name), which do NOT round-trip into envelope.regions — so without
+            # this the benign/absent downgrade below never ran for object_detection and
+            # a YOLO weapon misclassification (e.g. wooden chisels read as "knife")
+            # escalated the verdict on the no-Gemini path even though the holistic read
+            # was clean.
+            _weapon_terms = ["weapon", "gun", "knife", "pistol", "rifle", "firearm", "contraband", "bomb"]
+            _raw_env = getattr(envelope, "raw", {}) or {}
+            _scan_items = list(regions) + list(_raw_env.get("weapon_detections") or []) + list(_raw_env.get("detections") or [])
             detected_weapons_or_contraband = []
-            for r in regions:
-                label = str(r.get("label") or r.get("class_name") or r.get("name") or "").lower()
-                if any(w in label for w in ["weapon", "gun", "knife", "pistol", "rifle", "firearm", "contraband", "bomb"]):
+            for r in _scan_items:
+                label = str(
+                    (r.get("label") or r.get("class_name") or r.get("name") or "")
+                    if isinstance(r, dict) else r
+                ).lower()
+                if any(w in label for w in _weapon_terms):
                     detected_weapons_or_contraband.append(label)
+            detected_weapons_or_contraband = sorted(set(detected_weapons_or_contraband))
 
             if detected_weapons_or_contraband:
                 # Check visual context for corresponding mentions
