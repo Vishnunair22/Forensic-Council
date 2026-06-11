@@ -48,7 +48,7 @@ export function HomeClient() {
             <motion.h1
               id="hero-heading"
               variants={itemVariants}
-              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.08] tracking-[-0.03em] text-hero-gradient text-balance"
+              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold leading-[1.08] tracking-[-0.03em] text-hero-gradient text-glow text-balance"
             >
               Multi-Agent Forensic Evidence Analysis
             </motion.h1>
@@ -62,12 +62,39 @@ export function HomeClient() {
             </motion.p>
           </div>
 
-          {/* CTA */}
-          <motion.div variants={itemVariants} className="mt-2">
+          {/* CTA — soft radial halo behind the button gives the single primary
+              action a focal stage (background gradient, not a box-shadow, so it
+              stays inside the no-neon-shadow rule) */}
+          <motion.div variants={itemVariants} className="mt-2 relative">
+            <div
+              aria-hidden="true"
+              className="absolute -inset-x-20 -inset-y-10 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(ellipse at center, rgba(var(--color-primary-rgb),0.13), transparent 70%)",
+                filter: "blur(14px)",
+              }}
+            />
             <HeroAuthActions />
           </motion.div>
 
         </motion.div>
+
+        {/* Scroll affordance — hairline + status dot (animate-pulse is permitted
+            on w-1.5 indicator dots; suppressed automatically by reduced-motion) */}
+        <div
+          aria-hidden="true"
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none"
+        >
+          <div
+            className="w-px h-10"
+            style={{
+              background:
+                "linear-gradient(to bottom, transparent, rgba(147,197,253,0.45))",
+            }}
+          />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary/70 animate-pulse" />
+        </div>
 
         <div
           className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"

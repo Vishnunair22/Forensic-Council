@@ -1,0 +1,2 @@
+Large numbers are numbers significantly larger than those typically used in everyday life (for instance in simple counting or in monetary transactions), appearing frequently in fields such as mathematics, cosmology, cryptography, and statistical mechanics. They are typically large positive integers, or more generally, large positive real numbers, but may also be other numbers in other contexts. 
+Googology is the study of nomenclature and properties of large numbers.[better source needed]

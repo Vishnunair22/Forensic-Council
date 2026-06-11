@@ -1,0 +1,1 @@
+Tor is an encryption system that bounces your data between dozens of computers around the world , each computer unravelling one layer of encryption that tells it who to send it to next , to make it tough to trace . Each one of those computers is a node , and the one at the end of the chain - where your data hits the rest of the internet - is an exit node .

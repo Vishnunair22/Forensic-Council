@@ -1,0 +1,5 @@
+A self-driving car, also known as an autonomous vehicle or a driverless car, is a vehicle that is capable of sensing its environment and navigating without human input. Self-driving cars use a variety of technologies, such as cameras, radar, and lidar, to gather data about their surroundings and make decisions about how to navigate. They also use artificial intelligence (AI) algorithms to process this data and determine the best course of action.
+
+
+
+Self-driving cars have the potential to revolutionize transportation by making it safer, more efficient, and more accessible. They can reduce the number of accidents caused by human error, improve traffic flow, and provide mobility to people who are unable to drive due to age, disability, or other factors. However, there are also concerns about the safety and reliability of self-driving cars, and there is ongoing debate about the appropriate level of regulation and oversight for these vehicles.

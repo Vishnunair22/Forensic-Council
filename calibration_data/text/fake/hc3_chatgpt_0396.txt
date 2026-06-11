@@ -1,0 +1,9 @@
+The "AI effect" refers to the phenomenon where people underestimate the capabilities of artificial intelligence (AI) because they perceive it as being similar to their own thought processes and behaviors. This can lead to a tendency to attribute intelligent behavior to other factors, such as the programmer or the underlying algorithms, rather than the AI system itself.
+
+
+
+The AI effect can lead people to overestimate their own abilities and underestimate the potential of AI systems. For example, if a person is able to perform a task with relative ease, they may assume that the task is not particularly difficult or intelligent and therefore attribute their success to their own abilities rather than recognizing the potential of the AI system that may be assisting them.
+
+
+
+Overall, the AI effect can be a barrier to understanding and appreciating the capabilities of AI systems, and can lead to a lack of appreciation for the value that AI can bring to various fields.

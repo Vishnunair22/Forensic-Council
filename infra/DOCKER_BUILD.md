@@ -301,7 +301,8 @@ APP_ENV=production
 
 # Your public domain (Caddy provisions TLS automatically)
 DOMAIN=forensic.yourdomain.com
-CADDY_SITE_ADDRESS=forensic.yourdomain.com
+# Must include the scheme — validate_production_readiness.sh rejects a bare domain.
+CADDY_SITE_ADDRESS=https://forensic.yourdomain.com
 
 # Let's Encrypt expiry notifications
 ACME_EMAIL=admin@yourdomain.com

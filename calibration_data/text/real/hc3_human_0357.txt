@@ -1,0 +1,42 @@
+Logical consequence (also entailment) is a fundamental concept in logic, which describes the relationship between statements that hold true when one statement logically follows from one or more statements. A valid logical argument is one in which the conclusion is entailed by the premises, because the conclusion is the consequence of the premises. The philosophical analysis of logical consequence involves the questions: In what sense does a conclusion follow from its premises?  and What does it mean for a conclusion to be a consequence of premises?  All of philosophical logic is meant to provide accounts of the nature of logical consequence and the nature of logical truth.
+Logical consequence is necessary and formal, by way of examples that explain with formal proof and models of interpretation. A sentence is said to be a logical consequence of a set of sentences, for a given language, if and only if, using only logic (i.e., without regard to any personal interpretations of the sentences) the sentence must be true if every sentence in the set is true.
+Logicians make precise accounts of logical consequence regarding a given language 
+
+
+
+
+
+L
+
+
+
+
+{\displaystyle {\mathcal {L}}}
+
+, either by constructing a deductive system for 
+
+
+
+
+
+L
+
+
+
+
+{\displaystyle {\mathcal {L}}}
+
+ or by formal intended semantics for language 
+
+
+
+
+
+L
+
+
+
+
+{\displaystyle {\mathcal {L}}}
+
+.  The Polish logician Alfred Tarski identified three features of an adequate characterization of entailment: (1) The logical consequence relation relies on the logical form of the sentences: (2) The relation is a priori, i.e., it can be determined with or without regard to empirical evidence (sense experience); and (3) The logical consequence relation has a modal component.

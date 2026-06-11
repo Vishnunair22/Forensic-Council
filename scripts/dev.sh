@@ -82,7 +82,14 @@ ELAPSED=0
 DOWNLOAD_NOTED=0
 STATUS=""
 while [ $ELAPSED -lt $TIMEOUT_SEC ]; do
-  STATUS=$(curl -sf http://localhost:8000/health 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+  # Parse with grep, not python3 — Git Bash on Windows (a documented supported
+  # shell) ships neither python3 nor jq, and a missing parser must not make a
+  # healthy API look permanently unhealthy.
+  if curl -sf http://localhost:8000/health 2>/dev/null | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+    STATUS="ok"
+  else
+    STATUS=""
+  fi
   if [[ "$STATUS" == "ok" ]]; then
     echo "  API healthy on http://localhost:8000 (after ${ELAPSED}s)"
     break

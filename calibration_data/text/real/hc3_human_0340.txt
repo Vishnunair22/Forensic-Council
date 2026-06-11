@@ -1,0 +1,4 @@
+Natural-language user interface (LUI or NLUI) is a type of computer human interface where linguistic phenomena such as verbs, phrases and clauses act as UI controls for creating, selecting and modifying data in software applications.
+In interface design, natural-language interfaces are sought after for their speed and ease of use, but most suffer the challenges to understanding wide varieties of ambiguous input.
+Natural-language interfaces are an active area of study in the field of natural-language processing and computational linguistics. An intuitive general natural-language interface is one of the active goals of the Semantic Web.
+Text interfaces are "natural" to varying degrees. Many formal (un-natural) programming languages incorporate idioms of natural human language. Likewise, a traditional keyword search engine could be described as a "shallow" natural-language user interface.

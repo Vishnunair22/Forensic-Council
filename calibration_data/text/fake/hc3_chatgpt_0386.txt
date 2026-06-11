@@ -1,0 +1,9 @@
+Web search is a way to find information on the World Wide Web (also known as the internet). When you perform a web search, you enter a query, which is a word or phrase that describes what you are looking for, into a search engine. The search engine then searches through a database of websites and returns a list of results that match your query.
+
+
+
+There are many different search engines available, such as Google, Bing, and Yahoo. Each search engine uses its own algorithms to rank the results and determine which websites are the most relevant to your query. You can usually access a search engine by going to its website or by using a search bar that is built into your web browser.
+
+
+
+Web search is a useful tool for finding information on a wide variety of topics, including news, images, videos, products, and more. It is also a useful way to find websites that you might not have known about otherwise.

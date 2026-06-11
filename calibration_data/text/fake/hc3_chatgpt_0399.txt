@@ -1,0 +1,17 @@
+Symbolic artificial intelligence (AI) is a subfield of AI that focuses on the use of symbolic representations and logic-based methods to solve problems. It is also sometimes referred to as "classical AI" or "good old-fashioned AI (GOFAI)."
+
+
+
+In symbolic AI, problems are solved by manipulating symbols according to a set of rules. The symbols represent concepts or entities in the problem domain, and the rules represent the relationships between those concepts or entities. For example, a symbolic AI system might be designed to solve a puzzle by representing the different pieces of the puzzle as symbols and using rules to manipulate those symbols and find a solution.
+
+
+
+Symbolic AI systems are often based on first-order logic, which allows them to represent and reason about the properties of objects and the relationships between them. This makes them well-suited for tasks that require logical reasoning and problem-solving, such as natural language processing, planning, and theorem proving.
+
+
+
+However, symbolic AI systems have some limitations. They can be difficult to design and implement, and they may require a large amount of human-generated knowledge to be encoded into the system. In addition, they can be inflexible and may not be able to handle uncertainty or handle tasks that require a lot of data or sensory input.
+
+
+
+Today, symbolic AI is often used in combination with other AI techniques, such as machine learning and neural networks, in order to improve their performance and overcome some of their limitations.

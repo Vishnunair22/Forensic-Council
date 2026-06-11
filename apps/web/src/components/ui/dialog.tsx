@@ -44,7 +44,7 @@ const DialogContent = React.forwardRef<
         // Only Radix fade is kept so the dialog shell fades on close.
         // max-h prevents the dialog from extending beyond the viewport when
         // content is tall, which would break the translate-y-[-50%] centering.
-        "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-[160ms]",
+        "fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-150",
         "max-h-[calc(100vh-2rem)] overflow-y-auto",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "fc-surface-overlay overflow-hidden",

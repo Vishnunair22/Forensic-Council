@@ -1,0 +1,4 @@
+Artificial general intelligence (AGI) is the ability of an intelligent agent to understand or learn any intellectual task that a human being can.
+It is a primary goal of some artificial intelligence research and a common topic in science fiction and futures studies. AGI is also called strong AI, full AI, or general intelligent action, although some academic sources reserve the term "strong AI" for computer programs that experience sentience or consciousness.[a]
+Strong AI contrasts with weak AI (or narrow AI), which is not intended to have general cognitive abilities; rather, weak AI is any program that is designed to solve exactly one problem. (Academic sources reserve "weak AI" for programs that do not experience consciousness or do not have a mind in the same sense people do.)[a] 
+A 2020 survey identified 72 active AGI R&D projects spread across 37 countries.

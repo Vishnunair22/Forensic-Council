@@ -62,8 +62,10 @@ export class FileHandoffManager {
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_TEXT);
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_LOADING_DISPATCHED);
-    sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_ARBITER_TRANSITIONING);
-    sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_REPORT_READY);
+    // NOTE: FC_ARBITER_TRANSITIONING and FC_REPORT_READY are only ever written
+    // as per-session keys ("<key>:<sid>"), never bare — bare removeItem calls
+    // here were no-ops. The per-session entries are swept by
+    // clearInvestigationPersistence() → pruneOrphanScopedKeys() above.
   }
 
   getFileMeta(): PendingEvidenceFileMeta | null {

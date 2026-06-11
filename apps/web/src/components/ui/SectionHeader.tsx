@@ -29,9 +29,20 @@ export function SectionHeader({ headingId, eyebrow, titleLead, titleAccent, subt
 
   return (
     <div className="mb-12 text-center">
-      <motion.p {...fade} className="fc-eyebrow fc-text-muted mb-4">
-        {eyebrow}
-      </motion.p>
+      {/* Eyebrow flanked by hairline rules — quiet typographic framing */}
+      <motion.div {...fade} className="flex items-center justify-center gap-3 mb-4">
+        <span
+          aria-hidden="true"
+          className="h-px w-10"
+          style={{ background: "linear-gradient(90deg, transparent, rgba(147,197,253,0.35))" }}
+        />
+        <p className="fc-eyebrow fc-text-muted">{eyebrow}</p>
+        <span
+          aria-hidden="true"
+          className="h-px w-10"
+          style={{ background: "linear-gradient(90deg, rgba(147,197,253,0.35), transparent)" }}
+        />
+      </motion.div>
       <motion.h2
         id={headingId}
         {...fadeUp}

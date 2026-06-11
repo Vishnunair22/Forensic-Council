@@ -248,6 +248,7 @@ export function HeroAuthActions() {
                   setSelectedFileHash(null);
                   setHashError(null);
                 }}
+                onCancel={closeUpload}
                 isHandingOff={isHandingOff}
                 authError={localAuthError}
                 onStartAnalysis={async () => {

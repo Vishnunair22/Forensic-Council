@@ -613,7 +613,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         storage.removeItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sessionIdToUse}`);
         storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sessionIdToUse}`);
         resetSimulation();
-        setPhase("initial");
+        // FLOW FIX: rejoin the session in the phase it actually reached. The
+        // RESULT_PHASE scoped key survives the cache purge above; without this
+        // a duplicate upload into a mid-deep session pinned the phase ref to
+        // "initial" and the cross-phase guard dropped every replayed deep
+        // event from the server's buffer.
+        const dupPhase: "initial" | "deep" =
+          storage.getItem(`${STORAGE_KEYS.RESULT_PHASE}:${sessionIdToUse}`) === "deep"
+            ? "deep"
+            : "initial";
+        setPhase(dupPhase);
+        setSimulationPhase(dupPhase);
         connectWebSocket(sessionIdToUse, true)
         .then(() => {
           setAnalysisStreamReady(true);
@@ -782,6 +792,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     setPhase(restoredPhase);
     startSimulation();
+    // FLOW FIX: sync the simulation's phase ref to the restored phase AFTER
+    // startSimulation() (which force-resets it to "initial"). Without this, a
+    // refresh mid-deep reconnected with activePhaseRef="initial", so every
+    // replayed deep-phase AGENT_UPDATE/AGENT_COMPLETE was dropped by the
+    // cross-phase guard ("Ignoring deep-phase AGENT_COMPLETE during initial
+    // analysis") and the deep findings never repopulated.
+    setSimulationPhase(restoredPhase);
     const savedAgentCount = savedAgents.length;
     const restoredStatus: "awaiting_decision" | "analyzing" = 
       savedAgentCount > 0 ? "awaiting_decision" : "analyzing";
@@ -838,7 +855,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         });
     })();
     return () => { effectCancelled = true; };
-  }, [autoStartBlocking, isUploading, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, router]);
+  }, [autoStartBlocking, isUploading, startSimulation, connectWebSocket, resetSimulation, restoreSimulationState, setSimulationPhase, router]);
 
   const handleHITLDecision = async (decision: HITLDecision, note?: string) => {
     if (!hitlCheckpoint || isSubmittingHITL) return;
@@ -868,6 +885,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     arbiterStartTime: number,
   ): Promise<boolean> => {
     arbiterAbortControllerRef.current = new AbortController();
+    // FLOW FIX: register the controller on the GLOBAL arbiterControl handle.
+    // Every arbiterControl.abort() call site (navbar reset, app reset, new
+    // upload, deep-analysis switch) was a silent no-op before this line —
+    // nothing ever assigned abortController, so "aborting the arbiter wait"
+    // only actually happened on component unmount via the local ref cleanup.
+    arbiterControl.abortController = arbiterAbortControllerRef.current;
     const ok = await waitForFinalReport(
       sid,
       setArbiterLiveText,

@@ -494,7 +494,14 @@ services:
       worker:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/lb-health 2>&1 | head -1"]
+      # NOTE: do NOT pipe wget into head — a pipeline's exit code is the last
+      # command's, so `wget … | head -1` always exits 0 and the check can never
+      # fail. The check must propagate wget's own exit status.
+      # Probe over HTTPS so the check survives CADDY_SITE_ADDRESS=https://… (the
+      # HTTP port then 308-redirects into TLS; a plain http probe would follow the
+      # redirect, fail the self-signed handshake, and report unhealthy even though
+      # the site is serving). --no-check-certificate accepts the internal CA cert.
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://localhost/lb-health > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -1,0 +1,5 @@
+Automated decision-making refers to the use of computer algorithms and other technologies to make decisions without human intervention. These decisions can be made based on data and rules that have been programmed into the system, and they can be made at a faster rate and with greater consistency than if they were made by humans.
+
+
+
+Automated decision-making is used in a variety of settings, including finance, insurance, healthcare, and the criminal justice system. It is often used to improve efficiency, reduce the risk of errors, and make more objective decisions. However, it can also raise ethical concerns, particularly if the algorithms or data used to make the decisions are biased or if the consequences of the decisions are significant. In these cases, it may be important to have human oversight and review of the automated decision-making process to ensure that it is fair and just.

@@ -7,12 +7,23 @@ assert_min_len() {
     [ "${#v}" -ge "$min" ] || { echo "FATAL: $name too short ($((${#v})) < $min)"; exit 1; }
 }
 
+# Prefer python3, fall back to openssl — Git Bash on Windows (a documented
+# supported shell) ships openssl but usually not python3.
 hex64() {
-    python3 -c 'import secrets; print(secrets.token_hex(32))'
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import secrets; print(secrets.token_hex(32))'
+    else
+        openssl rand -hex 32
+    fi
 }
 
 alnum32() {
-    python3 -c 'import secrets, string; a = string.ascii_letters + string.digits; print("".join(secrets.choice(a) for _ in range(32)))'
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import secrets, string; a = string.ascii_letters + string.digits; print("".join(secrets.choice(a) for _ in range(32)))'
+    else
+        # base64 over-generates, then strip non-alphanumerics and trim to 32.
+        openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32; echo
+    fi
 }
 
 echo "Generating secure keys and passwords for production environment..."

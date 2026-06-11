@@ -1,0 +1,5 @@
+Go is a board game that originated in China more than 2,500 years ago. It is played on a grid of 19 by 19 lines, with each player starting with an initial allotment of stones of their color (black or white). The goal of the game is to surround a larger total area of the board with your stones than your opponent does with theirs. Players take turns placing their stones on the intersections of the lines on the board, and the game ends when both players pass, indicating that they do not wish to make any more moves.
+
+
+
+The game is known for its simple rules, but deep strategy and complexity. It is particularly popular in East Asia, and is played professionally in countries such as China, Japan, and South Korea. Go has also gained a following in other parts of the world, and international tournaments are held regularly. The game is widely recognized for the unique challenges it presents to players and for the mental discipline and concentration it requires.

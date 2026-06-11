@@ -44,7 +44,11 @@ echo "OK: docker daemon reachable."
 
 echo "[0b/3] Checking system resources..."
 
-PRELOAD_VAL=$(grep "^PRELOAD_MODELS=" .env | cut -d= -f2- || echo "1")
+PRELOAD_VAL=$(grep "^PRELOAD_MODELS=" .env | cut -d= -f2- || true)
+# The `|| echo` never fires when the key is absent (cut exits 0 on empty input),
+# and the prod compose overlay defaults PRELOAD_MODELS to 1 — so an empty value
+# must size disk for the full preloaded build, not the minimal one.
+[ -n "$PRELOAD_VAL" ] || PRELOAD_VAL="1"
 if [[ "$PRELOAD_VAL" == "1" ]]; then
   REQUIRED_DISK_GB=40
 else

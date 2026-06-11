@@ -1,0 +1,2 @@
+Natural-language understanding (NLU) or natural-language interpretation (NLI) is a subtopic  of natural-language processing in artificial intelligence that deals with machine reading comprehension. Natural-language understanding is considered an AI-hard problem.
+There is considerable commercial interest in the field because of its application to automated reasoning, machine translation, question answering, news-gathering, text categorization, voice-activation, archiving, and large-scale content analysis.

@@ -8,10 +8,11 @@ The primary entry points for development are the root wrapper scripts:
   ```bash
   bash scripts/dev.sh
   ```
-- To run tests:
+- To run the frontend verification suite (npm ci, type-check, lint, jest, build):
   ```bash
-  bash scripts/verify_project.sh
+  bash scripts/verify_project.sh frontend
   ```
+  (With no argument the script runs `static` checks only — docs, hygiene, compile, shell syntax.)
 
 For detailed setup instructions, host-run options, and workflow commands, please refer to the root [README.md](../../README.md) and the [Docker Build & Lifecycle Guide](../../infra/DOCKER_BUILD.md).
 

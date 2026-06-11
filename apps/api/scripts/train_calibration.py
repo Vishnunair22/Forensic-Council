@@ -55,18 +55,30 @@ def _sigmoid(a: float, b: float, x: float) -> float:
 def fit_platt(
     scores: np.ndarray,
     labels: np.ndarray,
-    max_iter: int = 200,
-    lr: float = 0.01,
+    max_iter: int = 5000,
+    lr: float = 0.3,
+    tol: float = 1e-7,
 ) -> tuple[float, float]:
     """
     Fit Platt scaling parameters A, B via gradient descent on negative
-    log-likelihood of Bernoulli(labels | sigmoid(A*score + B)).
+    log-likelihood of Bernoulli(labels | sigmoid(A*score + B)), where the
+    calibrated probability is p = 1 / (1 + exp(A*score + B)).
+
+    Gradient of the NLL w.r.t. the parameters (with p as above):
+        dL/dA = mean((label - p) * score)
+        dL/dB = mean(label - p)
+    so a gradient-DESCENT step is
+        A <- A - lr*dL/dA = A + lr*mean((p - label)*score)
+        B <- B - lr*dL/dB = B + lr*mean(p - label)
+    (The previous implementation subtracted these, which is gradient *ascent*
+    on the NLL and diverged — A ran off to +/-inf and the fit was unusable.)
 
     Args:
         scores: Raw detector scores, shape (N,), in [0, 1]
         labels: Ground-truth binary labels, shape (N,), {0, 1}
         max_iter: Maximum gradient descent iterations
         lr: Learning rate
+        tol: Stop early once the gradient L2 norm falls below this
 
     Returns:
         (A, B) tuple of fitted Platt parameters
@@ -79,14 +91,17 @@ def fit_platt(
         z = np.clip(z, -500, 500)  # prevent overflow
         p = 1.0 / (1.0 + np.exp(z))
 
-        # Gradients of negative log-likelihood
+        # Gradients of the negative log-likelihood (see docstring derivation).
         error = p - labels  # (N,)
         grad_a = np.mean(error * scores)
         grad_b = np.mean(error)
 
-        # Update
-        a -= lr * grad_a
-        b -= lr * grad_b
+        # Gradient-DESCENT update (minimise NLL).
+        a += lr * grad_a
+        b += lr * grad_b
+
+        if (grad_a * grad_a + grad_b * grad_b) ** 0.5 < tol:
+            break
 
     return float(a), float(b)
 

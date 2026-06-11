@@ -57,6 +57,19 @@ export function GlobalNavbar() {
 
   const scrollEnabledRef = useRef(false);
 
+  // Scroll-aware material: transparent over the hero (the landing aurora reads
+  // uninterrupted), frosted glass once content scrolls beneath. Runs regardless
+  // of reduced-motion (it is a state change, not an animation) — the global
+  // prefers-reduced-motion rule collapses the 160ms transition automatically.
+  const [isAtTop, setIsAtTop] = useState(true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onScrollTop = () => setIsAtTop(window.scrollY < 24);
+    onScrollTop();
+    window.addEventListener("scroll", onScrollTop, { passive: true });
+    return () => window.removeEventListener("scroll", onScrollTop);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       scrollEnabledRef.current = true;
@@ -198,7 +211,7 @@ export function GlobalNavbar() {
       }}
       {...(!isVisible && !isKeyboardUser ? { inert: true } : {})}
       data-nav-offset={directApiUrl ? "banner" : "default"}
-      className={`fixed inset-x-0 z-50 h-16 fc-surface-elevated rounded-none transition-[transform,opacity] duration-200 ease-in-out ${directApiUrl ? "top-7" : "top-0"} ${
+      className={`fixed inset-x-0 z-50 h-16 ${isAtTop ? "" : "fc-surface-elevated"} rounded-none transition-[transform,opacity,background-color,border-color,box-shadow] duration-200 ease-in-out ${directApiUrl ? "top-7" : "top-0"} ${
         isVisible || isKeyboardUser
           ? "translate-y-0 opacity-100"
           : "-translate-y-full opacity-0 pointer-events-none"
@@ -206,14 +219,17 @@ export function GlobalNavbar() {
       style={{
         borderRadius: 0,
         border: "none",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 8px 40px rgba(0,0,0,0.45)",
+        borderBottom: isAtTop
+          ? "1px solid transparent"
+          : "1px solid rgba(255,255,255,0.08)",
+        boxShadow: isAtTop ? "none" : "0 8px 40px rgba(0,0,0,0.45)",
+        background: isAtTop ? "transparent" : undefined,
       }}
     >
-      {/* Blue bottom accent gradient */}
+      {/* Blue bottom accent gradient — fades in with the glass material */}
       <div
         aria-hidden="true"
-        className="absolute bottom-0 inset-x-0 h-px pointer-events-none"
+        className={`absolute bottom-0 inset-x-0 h-px pointer-events-none transition-opacity duration-200 ${isAtTop ? "opacity-0" : "opacity-100"}`}
         style={{
           background:
             "linear-gradient(90deg, transparent 0%, rgba(147,197,253,0.18) 20%, rgba(59,130,246,0.42) 50%, rgba(147,197,253,0.18) 80%, transparent 100%)",

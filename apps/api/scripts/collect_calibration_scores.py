@@ -16,6 +16,8 @@ Detectors (``--detector``):
   • ai_generation  → score = diffusion_probability   (AI-generated image P)
   • splicing       → score = splicing_score           (region tampering)
   • voice_clone    → score = clone_probability        (synthetic voice)
+  • deepfake_video → score = interframe_probability    (video deepfake, Agent4)
+  • ai_text        → score = ai_text_probability       (AI-generated text, Agent5)
   (extend DETECTORS below as needed — each maps a runner to its score key.)
 
 Usage (inside the worker container, where ML models are available):
@@ -39,6 +41,8 @@ from pathlib import Path
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp", ".gif"}
 _AUDIO_EXTS = {".wav", ".mp3", ".flac", ".aac", ".ogg", ".m4a"}
+_VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+_TEXT_EXTS = {".txt", ".md", ".text", ".csv", ".pdf", ".docx"}
 
 
 def _ai_generation_score(path: str) -> float | None:
@@ -52,22 +56,54 @@ def _ai_generation_score(path: str) -> float | None:
 
 
 def _splicing_score(path: str) -> float | None:
-    from tools.ml_tools.splicing_detector import detect
+    # Agent3 (object/splicing). Calibrate the REAL court-defensible detector
+    # (TruFor neural splicing -> detection_score), not the classical DCT screen.
+    # Returns None when TruFor weights are unavailable so the row is skipped.
+    from tools.ml_tools.trufor_infer import analyze
 
-    res = detect(path)
-    if not isinstance(res, dict) or res.get("error"):
+    res = analyze(path)
+    if not isinstance(res, dict) or not res.get("available"):
         return None
-    val = res.get("splicing_score")
+    val = res.get("detection_score")
     return float(val) if val is not None else None
 
 
 def _voice_clone_score(path: str) -> float | None:
-    from tools.ml_tools.voice_clone_detector import detect
+    from tools.ml_tools.voice_clone_detector import detect_voice_clone
 
-    res = detect(path)
-    if not isinstance(res, dict) or res.get("error"):
+    res = detect_voice_clone(path)
+    if not isinstance(res, dict) or res.get("error") or not res.get("available", True):
         return None
     val = res.get("clone_probability", res.get("synthetic_probability"))
+    return float(val) if val is not None else None
+
+
+def _deepfake_video_score(path: str) -> float | None:
+    # Agent4 (video). Temporal inter-frame consistency analysis emits a 0-1
+    # probability that the clip is generative/temporally forged — the calibration
+    # signal for FaceForensics++ / DFDC / Celeb-DF v2 style benchmarks.
+    from tools.ml_tools.interframe_forgery_detector import (
+        analyze_interframe_consistency,
+    )
+
+    res = analyze_interframe_consistency(path)
+    if not isinstance(res, dict) or res.get("error") or not res.get("available"):
+        return None
+    val = res.get("interframe_probability")
+    return float(val) if val is not None else None
+
+
+def _ai_text_score(path: str) -> float | None:
+    # Agent5 (text/metadata). Self-contained statistical AI-text screening emits a
+    # 0-1 probability that the passage is machine-authored — the calibration signal
+    # for RAID / HC3 style benchmarks. Uncalibrated by design; calibration is what
+    # this collector unblocks.
+    from tools.ml_tools.ai_text_detector import detect
+
+    res = detect(path, is_path=True)
+    if not isinstance(res, dict) or res.get("error") or not res.get("available"):
+        return None
+    val = res.get("ai_text_probability")
     return float(val) if val is not None else None
 
 
@@ -76,6 +112,8 @@ DETECTORS = {
     "ai_generation": (_ai_generation_score, _IMAGE_EXTS),
     "splicing": (_splicing_score, _IMAGE_EXTS),
     "voice_clone": (_voice_clone_score, _AUDIO_EXTS),
+    "deepfake_video": (_deepfake_video_score, _VIDEO_EXTS),
+    "ai_text": (_ai_text_score, _TEXT_EXTS),
 }
 
 

@@ -153,15 +153,16 @@ function ActiveAgentsPanel({
                   key={agent.id}
                   className="flex items-center gap-3 px-5 py-3 border-b border-white/4 last:border-0"
                 >
-                  {/* Status dot */}
-                  <div className="shrink-0 w-2 h-2">
+                  {/* Status dot — w-1.5: the only dot size animate-pulse is
+                      sanctioned for (§6); all states sized consistently */}
+                  <div className="shrink-0 w-1.5 h-1.5">
                     {status === "running" && (
-                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                     )}
-                    {status === "complete" && <div className="w-2 h-2 rounded-full bg-success" />}
-                    {status === "error" && <div className="w-2 h-2 rounded-full bg-danger" />}
+                    {status === "complete" && <div className="w-1.5 h-1.5 rounded-full bg-success" />}
+                    {status === "error" && <div className="w-1.5 h-1.5 rounded-full bg-danger" />}
                     {(status === "waiting" || status === "queued" || status === "checking" || status === "validating") && (
-                      <div className="w-2 h-2 rounded-full bg-white/20" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
                     )}
                   </div>
 

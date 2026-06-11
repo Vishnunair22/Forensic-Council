@@ -78,11 +78,11 @@ def main() -> int:
     n_test = max(int(len(x) * args.test_frac), 6)
     te, tr = idx[:n_test], idx[n_test:]
 
-    from core.calibration import CalibrationManager
+    from core.calibration import CalibrationLayer
     from scripts.train_calibration import fit_platt
 
     a_t, b_t = fit_platt(x[tr], y[tr])
-    default = CalibrationManager().fit_default_model(args.agent)
+    default = CalibrationLayer().fit_default_model(args.agent)
     a_d = float(default.params["A"])
     b_d = float(default.params["B"])
 

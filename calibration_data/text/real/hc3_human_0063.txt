@@ -1,0 +1,1 @@
+To put it simply , more megapixels = higher resolution = larger filesize = more 1s/0s . I 'm not sure about the data transfer rate between the probe and Earth , but I 'm assuming that it 's not a quick process . The lower resolution image probably took a little while to send , therefore a higher resolution image will take a significantly longer time to send .

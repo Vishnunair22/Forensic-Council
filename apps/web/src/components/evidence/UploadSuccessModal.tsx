@@ -22,7 +22,10 @@ export interface UploadSuccessModalProps {
   hashError?: string | null;
   isHashComputing?: boolean;
   onStartAnalysis: () => Promise<void> | void;
+  /** Return to the file picker (UploadModal) keeping the dialog open. */
   onDismiss: () => void;
+  /** Close the entire dialog. When omitted, Cancel falls back to onDismiss. */
+  onCancel?: () => void;
   isHandingOff?: boolean;
   authError?: string | null;
 }
@@ -34,6 +37,7 @@ export function UploadSuccessModal({
   isHashComputing = false,
   onStartAnalysis,
   onDismiss,
+  onCancel,
   isHandingOff = false,
   authError,
 }: UploadSuccessModalProps) {
@@ -63,17 +67,26 @@ export function UploadSuccessModal({
     return () => URL.revokeObjectURL(url);
   }, [file, fileCategory]);
 
-  const closeModal = useCallback(() => {
+  // FLOW: "Reselect" returns to the picker (onDismiss); "Cancel" closes the
+  // whole dialog (onCancel). Previously both invoked onDismiss, so Cancel
+  // confusingly re-opened the picker instead of dismissing the flow.
+  const reselectFile = useCallback(() => {
     playSound("click");
     onDismiss();
   }, [playSound, onDismiss]);
 
+  const cancelFlow = useCallback(() => {
+    playSound("envelope-close");
+    (onCancel ?? onDismiss)();
+  }, [playSound, onCancel, onDismiss]);
+
   return (
     <motion.div
       key="success-state"
-      initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.96, y: 10, filter: "blur(4px)" }}
-      animate={prefersReducedMotion ? false : { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, scale: 1.02, y: -6, filter: "blur(4px)" }}
+      // §6: opacity + subtle Y only — no scale/blur entrances.
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+      animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
+      exit={prefersReducedMotion ? {} : { opacity: 0, y: -4 }}
       transition={TRANSITION_ENTER}
       className="p-6 sm:p-8 flex flex-col text-left relative"
     >
@@ -86,10 +99,10 @@ export function UploadSuccessModal({
       {/* ── Reselect button ── */}
       <button
         type="button"
-        onClick={closeModal}
+        onClick={reselectFile}
         aria-label="Reselect a different file"
         data-testid="success-modal-close"
-        className="absolute top-4 right-4 z-20 inline-flex items-center gap-1.5 h-9 px-3 min-w-[44px] rounded-full text-xs font-medium fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring cursor-pointer"
+        className="absolute top-4 right-4 z-20 inline-flex items-center gap-1.5 h-9 px-3 min-w-[44px] rounded-full text-xs font-medium fc-text-muted hover:text-foreground hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring cursor-pointer"
       >
         <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
         <span>Reselect</span>
@@ -98,9 +111,9 @@ export function UploadSuccessModal({
       {/* ── Status header ── */}
       <div className="mb-5 flex items-center gap-3 relative z-10">
         <motion.div
-          initial={prefersReducedMotion ? false : { rotate: -90, opacity: 0 }}
-          animate={prefersReducedMotion ? false : { rotate: 0, opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
+          initial={prefersReducedMotion ? false : { opacity: 0 }}
+          animate={prefersReducedMotion ? false : { opacity: 1 }}
+          transition={{ duration: 0.16, delay: 0.05 }}
           className="w-9 h-9 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0"
         >
           <Lock className="w-5 h-5" aria-hidden="true" />
@@ -121,11 +134,11 @@ export function UploadSuccessModal({
       <div className="bg-white/[0.03] border border-white/10 rounded-xl overflow-hidden mb-5">
 
         {/* Preview area — varies by file category */}
-        <div className="relative overflow-hidden bg-black/30 border-b border-white/5 min-h-[160px] max-h-[220px] flex items-center justify-center">
+        <div className="relative overflow-hidden bg-surface-1 border-b border-white/5 min-h-[160px] max-h-[220px] flex items-center justify-center">
           <motion.div
             className="absolute inset-0 flex flex-col items-center justify-center"
-            initial={prefersReducedMotion ? false : { scale: 0.9, opacity: 0, filter: "blur(4px)" }}
-            animate={prefersReducedMotion ? false : { scale: 1, opacity: 1, filter: "blur(0px)" }}
+            initial={prefersReducedMotion ? false : { opacity: 0 }}
+            animate={prefersReducedMotion ? false : { opacity: 1 }}
             transition={TRANSITION_ENTER}
           >
             {fileCategory === "image" && objectUrl && !previewError ? (
@@ -141,13 +154,18 @@ export function UploadSuccessModal({
                   className="absolute inset-0 w-full h-full object-contain"
                   decoding="async"
                 />
-                {/* Scan line animation — reduced-motion gated */}
+                {/* Seal glint — one-shot opacity fade over the preview confirms
+                    capture (§6: scan-beam sweeps and colored shadows are banned) */}
                 {!prefersReducedMotion && (
                   <motion.div
-                    initial={{ top: "0%", opacity: 1 }}
-                    animate={{ top: "100%", opacity: 0 }}
-                    transition={{ duration: 1.5, ease: "easeInOut" }}
-                    className="absolute left-0 right-0 h-[2px] bg-primary/80 shadow-[0_0_8px_var(--color-primary)] pointer-events-none z-10"
+                    initial={{ opacity: 0.22 }}
+                    animate={{ opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="absolute inset-0 pointer-events-none z-10"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, rgba(255,255,255,0.5), transparent 60%)",
+                    }}
                     aria-hidden="true"
                   />
                 )}
@@ -198,7 +216,7 @@ export function UploadSuccessModal({
                   <span className="text-primary/60">Calculating SHA-256...</span>
                 </>
               ) : hashError ? (
-                <span className="text-red-400">Hash unavailable — reselect file</span>
+                <span className="fc-text-danger">Hash unavailable — reselect file</span>
               ) : fileSha256 ? (
                 `${fileSha256.slice(0, 24).toLowerCase()}...${fileSha256.slice(-12).toLowerCase()}`
               ) : (
@@ -223,7 +241,8 @@ export function UploadSuccessModal({
       <div className="flex gap-3 relative z-10">
         <button
           type="button"
-          onClick={closeModal}
+          onClick={cancelFlow}
+          aria-label="Cancel and close the upload dialog"
           className="fc-btn-secondary flex-1 text-sm"
         >
           Cancel
@@ -263,17 +282,15 @@ export function UploadSuccessModal({
               <>
                 Deploy Council
                 <ArrowRight
-                  className="w-4 h-4 group-hover:translate-x-1 transition-transform"
+                  className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-150"
                   aria-hidden="true"
                 />
               </>
             )}
           </span>
-          {/* Hover shimmer */}
-          <div
-            className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"
-            aria-hidden="true"
-          />
+          {/* Hover treatment comes from fc-btn-primary itself — the previous
+              white-wash slide-in overlay fought the button system's hover state
+              and used a non-canonical 300ms transform. */}
         </button>
       </div>
     </motion.div>
@@ -288,51 +305,57 @@ function FileCategoryIcon({
   category: "image" | "audio" | "video" | "document" | "unknown";
   extension: string;
 }) {
+  // Evidence-type hues come from the agent accent token palette (globals.css)
+  // so a file type previews in the SAME color its analyzing agent uses across
+  // live progress and the report. Raw teal/violet/amber Tailwind hues are out:
+  // amber especially collided with the semantic warning color. Every class
+  // literal below is also declared in agentTheme.ts, so Tailwind's scanner
+  // has already generated them.
   const configs = {
     image: {
       Icon: ImageFileIcon,
       label: "Image Evidence",
-      gradient: "from-primary/20 to-primary/10",
-      border: "border-primary/30",
-      color: "text-primary",
+      bg: "bg-[var(--color-agent-image)]/10",
+      border: "border-[var(--color-agent-image)]/30",
+      color: "text-[var(--color-agent-image)]",
     },
     audio: {
       Icon: Music,
       label: "Audio Evidence",
-      gradient: "from-teal-500/20 to-teal-500/10",
-      border: "border-teal-500/30",
-      color: "text-teal-400",
+      bg: "bg-[var(--color-agent-audio)]/10",
+      border: "border-[var(--color-agent-audio)]/30",
+      color: "text-[var(--color-agent-audio)]",
     },
     video: {
       Icon: Video,
       label: "Video Evidence",
-      gradient: "from-violet-500/20 to-violet-500/10",
-      border: "border-violet-500/30",
-      color: "text-violet-400",
+      bg: "bg-[var(--color-agent-video)]/10",
+      border: "border-[var(--color-agent-video)]/30",
+      color: "text-[var(--color-agent-video)]",
     },
     document: {
       Icon: FileText,
       label: "Document Evidence",
-      gradient: "from-amber-500/20 to-amber-500/10",
-      border: "border-amber-500/30",
-      color: "text-amber-400",
+      bg: "bg-[var(--color-agent-metadata)]/10",
+      border: "border-[var(--color-agent-metadata)]/30",
+      color: "text-[var(--color-agent-metadata)]",
     },
     unknown: {
       Icon: ImageFileIcon,
       label: "Evidence File",
-      gradient: "from-white/10 to-white/5",
+      bg: "bg-white/5",
       border: "border-white/20",
       color: "fc-text-muted",
     },
   } as const;
 
   const cfg = configs[category] ?? configs.unknown;
-  const { Icon, label, gradient, border, color } = cfg;
+  const { Icon, label, bg, border, color } = cfg;
 
   return (
     <div className="flex flex-col items-center justify-center p-6 text-center gap-3">
       <div
-        className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${gradient} border ${border} ${color} flex items-center justify-center`}
+        className={`w-16 h-16 rounded-2xl ${bg} border ${border} ${color} flex items-center justify-center`}
       >
         <Icon className="w-8 h-8" aria-hidden="true" />
       </div>

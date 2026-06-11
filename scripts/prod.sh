@@ -71,7 +71,10 @@ echo "  Running production readiness validation..."
 "$ROOT/infra/validate_production_readiness.sh"
 
 # ── Warn about PRELOAD_MODELS ────────────────────────────────────────────────
-PRELOAD_VAL=$(grep "^PRELOAD_MODELS=" "$ROOT/.env" 2>/dev/null | cut -d= -f2- || echo "1")
+PRELOAD_VAL=$(grep "^PRELOAD_MODELS=" "$ROOT/.env" 2>/dev/null | cut -d= -f2- || true)
+# Compose's prod overlay defaults PRELOAD_MODELS to 1 when unset — mirror that
+# here so an absent key still triggers the large-build warning.
+[[ -z "$PRELOAD_VAL" ]] && PRELOAD_VAL="1"
 if [[ "$PRELOAD_VAL" == "1" ]]; then
   echo "  WARNING: PRELOAD_MODELS=1 is enabled in .env."
   echo "   This will bake all ML models (YOLO, CLIP, EasyOCR, ECAPA, etc.) into the Docker image."
@@ -101,7 +104,13 @@ fi
 
 echo "  Waiting for API health (up to 600s)..."
 for i in $(seq 1 120); do
-  STATUS=$(curl -sf "$HEALTH_URL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+  # Parse with grep, not python3 — Git Bash on Windows (a documented supported
+  # shell) ships neither python3 nor jq.
+  if curl -sf "$HEALTH_URL" 2>/dev/null | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+    STATUS="ok"
+  else
+    STATUS=""
+  fi
   if [[ "$STATUS" == "ok" ]]; then
     echo "  API healthy"
     break

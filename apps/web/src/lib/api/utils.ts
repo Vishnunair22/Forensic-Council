@@ -130,7 +130,14 @@ export function clearAuthToken(): void {
 export function isAuthenticated(): boolean {
   if (getAuthToken() !== null) return true;
   if (typeof document !== "undefined") {
-    return document.cookie.includes("access_token=");
+    // access_token is set HttpOnly by /api/auth/demo and the backend, so it is
+    // normally invisible to document.cookie — keep the check for non-HttpOnly
+    // token setups, but also check csrf_token, which is deliberately
+    // JS-readable and is issued/expired in lockstep with the access token.
+    return (
+      document.cookie.includes("access_token=") ||
+      document.cookie.includes("csrf_token=")
+    );
   }
   return false;
 }

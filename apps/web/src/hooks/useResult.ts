@@ -222,9 +222,20 @@ export function useResult(initialSessionId?: string) {
     }
   }, [state]);
 
-  // Sync sessionId if initialSessionId changes (e.g. dynamic route navigation)
+  // Sync sessionId when the initialSessionId PROP changes (dynamic route
+  // navigation, e.g. /result/A → /result/B).
+  //
+  // F-NAV-1: this must react only to actual prop changes — never to sessionId
+  // drifting away from the prop. selectSession() (History tab) intentionally
+  // switches the displayed session in place WITHOUT changing the URL; the
+  // previous `initialSessionId !== sessionId` condition treated that divergence
+  // as a route change and immediately reverted to the URL's session, making
+  // every History selection snap back to the original report.
+  const lastInitialSessionIdRef = useRef<string | undefined>(initialSessionId);
   useEffect(() => {
     if (!mounted) return;
+    if (initialSessionId === lastInitialSessionIdRef.current) return;
+    lastInitialSessionIdRef.current = initialSessionId;
     if (initialSessionId && initialSessionId !== sessionId) {
       setSessionId(initialSessionId);
       setReport(null);

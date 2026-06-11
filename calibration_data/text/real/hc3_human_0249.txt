@@ -1,0 +1,1 @@
+It uses an external power supply to make the DRAM non-volatile.A solid-state drive (SSD) (also known as a solid-state disk or electronic disk, though it contains no actual "disk" of any kind) is a data storage device using integrated circuit assemblies as memory to store data persistently .

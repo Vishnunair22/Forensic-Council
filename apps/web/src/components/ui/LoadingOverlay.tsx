@@ -118,38 +118,33 @@ export function LoadingOverlay({
 
       {/* Main Frosted Glass Dialog Surface */}
       <div className="relative z-10 w-full max-w-lg mx-auto fc-surface-overlay p-8 sm:p-10 md:p-12">
-        {/* Subtle scan line sweep effect */}
-        <div 
-          className="absolute inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent pointer-events-none"
-          style={{
-            top: 0,
-            animation: "fc-marker-blink 2.5s ease-in-out infinite",
-          }}
+        {/* Static top keyline — same registry-blue accent the navbar carries.
+            (Previously blinked on a 2.5s loop; §6 bans constant shimmering.) */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent pointer-events-none"
         />
 
-        {/* Status indicator */}
+        {/* Status indicator — static ring + sanctioned w-1.5 pulsing dot */}
         <div className="flex items-center gap-4 mb-8">
           <div className="relative w-9 h-9 flex items-center justify-center border border-primary/30 rounded-xl bg-primary/5">
-            <motion.div
-              animate={prefersReducedMotion ? {} : { scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute inset-0 rounded-xl border border-primary/40"
-            />
-            <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
           </div>
           <span className="fc-eyebrow fc-text-muted">{eyebrowLabel}</span>
         </div>
 
-        {/* Title + filename */}
+        {/* Title + filename — <p>, not a heading: this is a transient overlay,
+            and injecting an extra h1 above the page's own heading hierarchy
+            confuses screen-reader document outlines. */}
         <div className="mb-10 space-y-3">
-          <motion.h1
+          <motion.p
             initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="text-3xl lg:text-4xl font-heading font-extrabold fc-text-primary text-hero-gradient tracking-tight leading-tight"
           >
             Forensic Analysis
-          </motion.h1>
+          </motion.p>
 
           {/* Filename — gives the user confidence their file was received */}
           {fileName && (

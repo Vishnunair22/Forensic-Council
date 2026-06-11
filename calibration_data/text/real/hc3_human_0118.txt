@@ -1,0 +1,1 @@
+They use less data because they are modern and compressed ( lots of pixels squeezed together ) . Gifs as a technology are old , obsolete and from before compression like this existed . With gifycat and imgur doing html5 compression , usage will slowly go down . That said there are millions of gifs out there , and being an image as opposed to video has a certain attraction .

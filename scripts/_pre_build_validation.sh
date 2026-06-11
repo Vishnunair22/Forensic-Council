@@ -26,16 +26,22 @@ validate_check() {
   echo -n "  $description... "
 
   if "$@" > /tmp/prebuild_check.log 2>&1; then
-    echo ""
-    CHECKS_PASSED=$((CHECKS_PASSED + 1))
-  else
-    if grep -qi "warn\|warning" /tmp/prebuild_check.log 2>/dev/null; then
+    # Check passed; still surface any WARN lines it printed (e.g. low Docker
+    # memory) so they are counted and visible instead of swallowed.
+    if grep -qi "warn" /tmp/prebuild_check.log 2>/dev/null; then
       echo " (warnings)"
       WARNINGS=$((WARNINGS + 1))
+      grep -i "warn" /tmp/prebuild_check.log 2>/dev/null | head -3
     else
-      echo " FAILED"
-      CHECKS_FAILED=$((CHECKS_FAILED + 1))
+      echo ""
     fi
+    CHECKS_PASSED=$((CHECKS_PASSED + 1))
+  else
+    # A non-zero exit is ALWAYS a failure. (Previously a failing check whose
+    # output merely contained the word "warning" was downgraded to a warning,
+    # letting genuinely failed gates pass pre-build validation.)
+    echo " FAILED"
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
     cat /tmp/prebuild_check.log 2>/dev/null | head -5
   fi
 }

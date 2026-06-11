@@ -63,7 +63,13 @@
         reverse_proxy backend:8000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For "{http.request.header.X-Forwarded-For}, {remote_host}"
+            # X-Forwarded-For is intentionally NOT set manually. Caddy's
+            # reverse_proxy manages it automatically and (since v2.5) only
+            # trusts an incoming XFF chain from configured trusted_proxies.
+            # The previous manual override had two defects: it produced a
+            # leading ", " when no upstream XFF existed, and it blindly
+            # prepended the client-supplied XFF header — letting any client
+            # spoof its source IP to the backend.
             header_up X-Forwarded-Proto {scheme}
             header_up Upgrade {http.request.header.Upgrade}
             header_up Connection {http.request.header.Connection}

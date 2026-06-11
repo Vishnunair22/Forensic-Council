@@ -17,7 +17,17 @@ export function HowWorksSection() {
         subtitle="A multi-stage verification pipeline ensuring cryptographic and semantic integrity through specialized AI coordination."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
+      <div className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
+        {/* Pipeline connector — hairline through the icon row communicates the
+            four steps as one sequential process (lg+ only, decorative) */}
+        <div
+          aria-hidden="true"
+          className="hidden lg:block absolute top-7 left-[12%] right-[12%] h-px z-10 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(147,197,253,0.22) 18%, rgba(147,197,253,0.22) 82%, transparent)",
+          }}
+        />
         {HOW_IT_WORKS.map((item, i) => (
           <motion.div
             key={item.step}
@@ -31,13 +41,21 @@ export function HowWorksSection() {
           >
             {/* Step number + icon */}
             <div className="relative z-20 mb-5" aria-hidden="true">
-              <div className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full flex items-center justify-center z-10 bg-background border border-white/10">
+              <div className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full flex items-center justify-center z-10 bg-background border border-primary/25">
                 <span className="text-xs font-mono font-bold fc-text-secondary">
                   {String(i + 1).padStart(2, "0")}
                 </span>
               </div>
 
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10">
+              <div
+                className="relative overflow-hidden w-14 h-14 rounded-2xl flex items-center justify-center border border-primary/20 group-hover:border-primary/45 fc-transition fc-glass-highlight"
+                style={{
+                  // Solid base under the tint so the pipeline connector line
+                  // terminates cleanly at the tile edges instead of showing through.
+                  background:
+                    "linear-gradient(180deg, rgba(var(--color-primary-rgb),0.10), rgba(255,255,255,0.03)), var(--color-background)",
+                }}
+              >
                 <item.icon className="w-6 h-6 fc-text-secondary fc-transition group-hover:text-primary" />
               </div>
             </div>

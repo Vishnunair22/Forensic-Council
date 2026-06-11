@@ -93,7 +93,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
       <button
         type="button"
         onClick={() => toggleMute()}
-        className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/8 fc-transition fc-focus-ring rounded-full cursor-pointer opacity-50 hover:opacity-100"
+        className="absolute top-4 left-4 w-9 h-9 flex items-center justify-center fc-text-muted hover:text-foreground hover:bg-white/5 border border-transparent hover:border-white/8 fc-transition fc-focus-ring rounded-full cursor-pointer opacity-50 hover:opacity-100"
         aria-label={isMuted ? "Unmute sounds" : "Mute sounds"}
       >
         {isMuted
@@ -105,7 +105,7 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
       <button
         type="button"
         onClick={closeModal}
-        className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center fc-text-muted hover:fc-text-primary hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer"
+        className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center fc-text-muted hover:text-foreground hover:bg-white/5 border border-transparent hover:border-white/10 fc-transition fc-focus-ring rounded-full cursor-pointer"
         aria-label="Close upload dialog"
       >
         <X className="w-5 h-5" aria-hidden="true" />
@@ -113,8 +113,9 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
 
       <div className="mb-8 border-b border-white/5 pb-4">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
-          <p className="text-xs font-mono font-semibold tracking-widest text-primary uppercase" aria-hidden="true">
+          {/* w-1.5 — the only dot size animate-pulse is sanctioned for (§6) */}
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+          <p className="fc-eyebrow text-primary uppercase" aria-hidden="true">
             Node: Alpha-7 Intake
           </p>
         </div>
@@ -149,14 +150,14 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
           }
         }}
         animate={isDragging ? "active" : "idle"}
+        // §6: no scale on interaction and no scan-beam loops — drag feedback is
+        // expressed through border, tint, and an inner glow wash only.
         variants={{
           idle: {
-            scale: 1,
             borderColor: "rgba(var(--color-primary-rgb),0.2)",
             backgroundColor: "rgba(var(--color-primary-rgb),0.02)",
           },
           active: {
-            scale: prefersReducedMotion ? 1 : 1.02,
             borderColor: "rgba(var(--color-primary-rgb),0.8)",
             backgroundColor: "rgba(var(--color-primary-rgb),0.08)",
           },
@@ -165,21 +166,25 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
         className="fc-upload-zone w-full py-16 px-8 group flex flex-col items-center justify-center gap-4 relative overflow-hidden rounded-2xl border border-dashed fc-focus-ring cursor-pointer"
       >
         <AnimatePresence>
-          {isDragging && !prefersReducedMotion && (
+          {isDragging && (
             <motion.div
-              initial={{ top: "0%", opacity: 0 }}
-              animate={{ top: ["0%", "100%", "0%"], opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ top: { duration: 2, repeat: Infinity, ease: "linear" }, opacity: { duration: 0.2 } }}
-              className="absolute left-0 right-0 h-[2px] bg-primary z-10 pointer-events-none"
+              initial={prefersReducedMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={prefersReducedMotion ? {} : { opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="absolute inset-0 z-10 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(ellipse at 50% 30%, rgba(var(--color-primary-rgb),0.14), transparent 70%)",
+              }}
               aria-hidden="true"
             />
           )}
         </AnimatePresence>
 
         <CloudUpload
-          className={`w-10 h-10 transition-colors duration-300 relative z-20 ${
-            isDragging ? "text-primary drop-shadow-[0_0_8px_rgba(var(--color-primary-rgb),0.5)]" : "fc-text-muted group-hover:fc-text-primary"
+          className={`w-10 h-10 fc-transition relative z-20 ${
+            isDragging ? "text-primary" : "fc-text-muted group-hover:text-foreground"
           }`}
           strokeWidth={1.2}
           aria-hidden="true"
@@ -195,8 +200,8 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
               Securing Evidence
             </span>
           ) : (
-            <span className={`text-lg font-bold transition-colors duration-300 ${
-                isDragging ? "text-primary" : "fc-text-secondary group-hover:fc-text-primary"
+            <span className={`text-lg font-bold fc-transition ${
+                isDragging ? "text-primary" : "fc-text-secondary group-hover:text-foreground"
               }`}
             >
               {isDragging ? "Drop to Upload" : "Select Evidence"}
