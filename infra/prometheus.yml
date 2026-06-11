@@ -4,6 +4,12 @@ global:
   external_labels:
     project: forensic-council
 
+# WS-6 #30: LLM degradation alert rules (refiner fallbacks, synthesis
+# template degradations, Groq token burn). The compose prometheus service
+# must mount infra/prometheus-alerts.yml at this path.
+rule_files:
+  - /etc/prometheus/prometheus-alerts.yml
+
 scrape_configs:
   - job_name: forensic_api
     metrics_path: /api/v1/metrics/raw

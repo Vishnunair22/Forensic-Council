@@ -38,6 +38,20 @@ _KEY_INV_FAILED = "metrics:investigations_failed"
 _KEY_START_TIME = "metrics:start_time"
 _KEY_RATE_LIMIT_BYPASSES = "metrics:rate_limit_redis_bypasses"
 
+# WS-6 #30: LLM usage & degradation observability.
+# These make silent LLM-quality degradation visible to operators:
+#   groq_tokens_total          — cumulative tokens consumed across all Groq calls
+#   groq_calls_total           — cumulative Groq API calls attempted
+#   refiner_fallback_total     — final-report refiner fell back to the
+#                                deterministic report (quota/429/parse-reject)
+#   synthesis_degradations_total — a per-agent synthesis degraded to the
+#                                deterministic template (soft TPM block,
+#                                timeout, provider failure)
+_KEY_GROQ_TOKENS = "metrics:groq_tokens_total"
+_KEY_GROQ_CALLS = "metrics:groq_calls_total"
+_KEY_REFINER_FALLBACKS = "metrics:refiner_fallback_total"
+_KEY_SYNTHESIS_DEGRADATIONS = "metrics:synthesis_degradations_total"
+
 # Pipeline phase durations (histogram buckets in seconds)
 _KEY_PHASE_INITIAL = "metrics:pipeline_phase_seconds_initial"
 _KEY_PHASE_HITL = "metrics:pipeline_phase_seconds_hitl"
@@ -61,6 +75,10 @@ _local: dict[str, Any] = {
     "investigations_failed": 0,
     "start_time": time.time(),
     "rate_limit_redis_bypasses": 0,
+    "groq_tokens_total": 0,
+    "groq_calls_total": 0,
+    "refiner_fallback_total": 0,
+    "synthesis_degradations_total": 0,
     # Phase durations stored as sum and count for histogram approximation
     "phase_initial_sum": 0.0,
     "phase_initial_count": 0,
@@ -233,6 +251,45 @@ def increment_rate_limit_redis_bypasses() -> None:
         _local["rate_limit_redis_bypasses"] = _local.get("rate_limit_redis_bypasses", 0) + 1
 
 
+def record_groq_usage(tokens: int) -> None:
+    """WS-6 #30: record a Groq API call and its (estimated or actual) token cost."""
+    try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
+        loop = asyncio.get_running_loop()
+        loop.create_task(_redis_incr(_KEY_GROQ_CALLS))
+        if tokens > 0:
+            loop.create_task(_redis_incr(_KEY_GROQ_TOKENS, int(tokens)))
+    except RuntimeError:
+        _local["groq_calls_total"] = _local.get("groq_calls_total", 0) + 1
+        if tokens > 0:
+            _local["groq_tokens_total"] = _local.get("groq_tokens_total", 0) + int(tokens)
+
+
+def increment_refiner_fallback() -> None:
+    """WS-6 #30: final-report refiner degraded to the deterministic report."""
+    try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
+        loop = asyncio.get_running_loop()
+        loop.create_task(_redis_incr(_KEY_REFINER_FALLBACKS))
+    except RuntimeError:
+        _local["refiner_fallback_total"] = _local.get("refiner_fallback_total", 0) + 1
+
+
+def increment_synthesis_degradation(count: int = 1) -> None:
+    """WS-6 #30: per-agent synthesis degraded to the deterministic template."""
+    try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
+        loop = asyncio.get_running_loop()
+        loop.create_task(_redis_incr(_KEY_SYNTHESIS_DEGRADATIONS, count))
+    except RuntimeError:
+        _local["synthesis_degradations_total"] = (
+            _local.get("synthesis_degradations_total", 0) + count
+        )
+
+
 def record_pipeline_phase_duration(phase: str, duration_seconds: float) -> None:
     """Record pipeline phase duration for observability.
 
@@ -286,6 +343,12 @@ async def _snapshot() -> dict:
     rate_limit_bypasses = await _redis_get_int(
         _KEY_RATE_LIMIT_BYPASSES, "rate_limit_redis_bypasses"
     )
+    groq_tokens = await _redis_get_int(_KEY_GROQ_TOKENS, "groq_tokens_total")
+    groq_calls = await _redis_get_int(_KEY_GROQ_CALLS, "groq_calls_total")
+    refiner_fallbacks = await _redis_get_int(_KEY_REFINER_FALLBACKS, "refiner_fallback_total")
+    synthesis_degradations = await _redis_get_int(
+        _KEY_SYNTHESIS_DEGRADATIONS, "synthesis_degradations_total"
+    )
 
     # Pipeline phase durations. O-C-2: read from Redis sum+count keys
     # written by the worker, falling back to in-process counters when
@@ -332,6 +395,10 @@ async def _snapshot() -> dict:
         "investigations_failed": inv_failed,
         "success_rate": success_rate,
         "rate_limit_redis_bypasses": rate_limit_bypasses,
+        "groq_tokens_total": groq_tokens,
+        "groq_calls_total": groq_calls,
+        "refiner_fallback_total": refiner_fallbacks,
+        "synthesis_degradations_total": synthesis_degradations,
         "db_pool_size": pool_stats["size"],
         "db_pool_available": pool_stats["available"],
         "db_pool_in_use": pool_stats["in_use"],
@@ -383,6 +450,10 @@ class MetricsResponse(BaseModel):
     investigations_failed: int
     success_rate: float
     rate_limit_redis_bypasses: int
+    groq_tokens_total: int
+    groq_calls_total: int
+    refiner_fallback_total: int
+    synthesis_degradations_total: int
     db_pool_size: int
     db_pool_available: int
     db_pool_in_use: int
@@ -435,6 +506,24 @@ async def get_prometheus_metrics(current_user: User = Depends(require_admin)) ->
         "# HELP forensic_investigations_failed_total Total investigations failed",
         "# TYPE forensic_investigations_failed_total counter",
         f'forensic_investigations_failed_total{{app="forensic_council"}} {snap["investigations_failed"]}',
+        "",
+        # WS-6 #30: LLM degradation observability — alert when refiner
+        # fallbacks or synthesis degradations grow, and graph token burn.
+        "# HELP forensic_groq_tokens_total Cumulative Groq tokens consumed",
+        "# TYPE forensic_groq_tokens_total counter",
+        f'forensic_groq_tokens_total{{app="forensic_council"}} {snap["groq_tokens_total"]}',
+        "",
+        "# HELP forensic_groq_calls_total Cumulative Groq API calls attempted",
+        "# TYPE forensic_groq_calls_total counter",
+        f'forensic_groq_calls_total{{app="forensic_council"}} {snap["groq_calls_total"]}',
+        "",
+        "# HELP forensic_refiner_fallback_total Final-report refiner fell back to deterministic report",
+        "# TYPE forensic_refiner_fallback_total counter",
+        f'forensic_refiner_fallback_total{{app="forensic_council"}} {snap["refiner_fallback_total"]}',
+        "",
+        "# HELP forensic_synthesis_degradations_total Per-agent synthesis degraded to deterministic template",
+        "# TYPE forensic_synthesis_degradations_total counter",
+        f'forensic_synthesis_degradations_total{{app="forensic_council"}} {snap["synthesis_degradations_total"]}',
         "",
         "# HELP forensic_pipeline_phase_seconds_avg Average pipeline phase duration in seconds",
         "# TYPE forensic_pipeline_phase_seconds_avg gauge",

@@ -1275,4 +1275,18 @@ async def refine_synthesis_batch(
         logger.warning(f"Batched synthesis refinement failed or rejected: {e}. Using deterministic fallbacks.")
         # Fallbacks are already populated in outputs
 
+    # WS-6 #30: refinement was ATTEMPTED (guards above passed) — every agent
+    # that still carries the deterministic synthesis here degraded. Intentional
+    # skips (LLM disabled, clean evidence) returned earlier and are not counted.
+    _degraded = sum(
+        1 for out in outputs.values() if getattr(out, "synthesis_source", "") != "groq_refined"
+    )
+    if _degraded:
+        try:
+            from api.routes.metrics import increment_synthesis_degradation
+
+            increment_synthesis_degradation(_degraded)
+        except Exception:  # metrics must never break synthesis
+            pass
+
     return outputs

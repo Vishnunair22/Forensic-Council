@@ -600,6 +600,7 @@ services:
       - "--web.enable-lifecycle"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro  # WS-6 #30 alert rules
       - prometheus_data:/prometheus
     secrets:
       - source: metrics_scrape_token

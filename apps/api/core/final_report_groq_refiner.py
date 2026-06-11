@@ -83,12 +83,34 @@ async def refine_report_with_groq(
 
     Returns the updated report dict and a success flag. Falls back to the
     deterministic report on any failure or validation rejection.
+
+    WS-6 #30: an *attempted* refinement that falls back (quota, 429, parse
+    or validation rejection) increments `forensic_refiner_fallback_total` so
+    operators can alert on silent narrative degradation. An intentional skip
+    (LLM disabled / no key) is not counted — that is configuration, not
+    degradation.
     """
     llm_client = LLMClient(config=config, use_arbiter_tier=True)
     if not (config.llm_enable_post_synthesis and config.llm_api_key and llm_client.is_available):
         logger.info("Skipping Groq report polish: LLM disabled or api key unavailable.")
         return deterministic_report, False
 
+    report, success = await _attempt_refine(deterministic_report, llm_client)
+    if not success:
+        try:
+            from api.routes.metrics import increment_refiner_fallback
+
+            increment_refiner_fallback()
+        except Exception:  # metrics must never break report generation
+            pass
+    return report, success
+
+
+async def _attempt_refine(
+    deterministic_report: dict[str, Any],
+    llm_client: LLMClient,
+) -> tuple[dict[str, Any], bool]:
+    """One refinement attempt against an available LLM client."""
     # Narrow input — only send the sections Groq is allowed to touch.
     input_payload = {
         "final_verdict": deterministic_report.get("final_verdict"),

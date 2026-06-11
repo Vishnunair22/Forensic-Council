@@ -935,7 +935,18 @@ class LLMClient:
                     resp.raise_for_status()
 
                     if target_provider == "groq":
-                        result = resp.json()["choices"][0]["message"].get("content", "").strip()
+                        _data = resp.json()
+                        result = _data["choices"][0]["message"].get("content", "").strip()
+                        # WS-6 #30: record actual Groq token consumption so
+                        # operators can graph burn rate vs TPM limits.
+                        try:
+                            from api.routes.metrics import record_groq_usage
+
+                            record_groq_usage(
+                                int((_data.get("usage") or {}).get("total_tokens") or 0)
+                            )
+                        except Exception:  # metrics must never break synthesis
+                            pass
                     else:
                         result = (
                             resp.json()["candidates"][0]["content"]["parts"][0]

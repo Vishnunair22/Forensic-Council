@@ -1,0 +1,59 @@
+# WS-6 #30 — LLM degradation alert rules.
+# Loaded via `rule_files` in prometheus.yml. These fire when the LLM layer
+# starts degrading silently: the refiner falling back to deterministic
+# narratives, per-agent syntheses dropping to templates, or token burn
+# approaching the provider TPM ceiling.
+groups:
+  - name: llm_degradation
+    rules:
+      - alert: RefinerFallbackOccurring
+        expr: increase(forensic_refiner_fallback_total[30m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Final-report refiner fell back to deterministic narrative"
+          description: >-
+            {{ $value }} final-report refinement(s) in the last 30m fell back
+            to the unrefined deterministic report (quota/429/validation
+            rejection). Reports are still correct but unpolished. Check Groq
+            quota and provider health.
+
+      - alert: SynthesisDegradationElevated
+        expr: increase(forensic_synthesis_degradations_total[30m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Per-agent syntheses degrading to deterministic templates"
+          description: >-
+            {{ $value }} per-agent synthesis degradations in the last 30m.
+            Agent narrative briefs are shipping as deterministic templates.
+            Likely Groq TPM exhaustion — check forensic_groq_tokens_total
+            burn rate and the per-investigation token budget.
+
+      - alert: GroqTokenBurnHigh
+        expr: rate(forensic_groq_tokens_total[5m]) * 60 > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Groq token burn near TPM ceiling"
+          description: >-
+            Sustained Groq consumption above 10K tokens/min — within ~85% of
+            the 12K TPM free-tier ceiling of llama-3.3-70b-versatile.
+            Synthesis calls will start soft-blocking; the critical refiner is
+            exempt but real 429s follow. Consider model right-sizing or
+            batched synthesis.
+
+      - alert: AllInvestigationsFailing
+        expr: increase(forensic_investigations_failed_total[1h]) > 0 and increase(forensic_investigations_completed_total[1h]) == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Investigations failing with zero completions"
+          description: >-
+            At least one investigation failed in the last hour with no
+            successful completions. Check worker health, model loading,
+            and the capability manifest of recent sessions.
