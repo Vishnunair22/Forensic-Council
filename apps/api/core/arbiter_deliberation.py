@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.calibration import is_system_uncalibrated
 from core.react_loop import AgentFinding
 from core.structured_logging import get_logger
 
@@ -391,17 +392,28 @@ def deliberate_findings(
     weak_completed_positives = [df for df in deliberated if df.report_safe and df.evidence_verdict == "POSITIVE" and df.evidence_weight == EvidenceWeight.LOW]
     weak_single_signal_penalty = 1.0 if len(weak_completed_positives) == 1 and len(positive_integrity_tools) == 1 else 0.0
 
+    # Confidence must be HONEST, not pinned at the ceiling (audit C1). The previous
+    # weights summed to ~1.05 for any clean, fully-covered, Gemini-corroborated file,
+    # so every clean verdict clipped to a fabricated 0.98 "certainty" — the same flat
+    # 98% on every file, which an UNCALIBRATED system cannot justify. Rescaled so a
+    # perfect-coverage clean result tops out near 0.85 and the score genuinely varies
+    # with tool coverage, cross-agent agreement, and visual corroboration below that.
+    # (WS-5 calibration training will replace these hand-set weights with benchmarked
+    # ones; until then the report labels confidence "indicative (uncalibrated)".)
     raw_conf = (
-        0.45
-        + 0.20 * important_tool_completion_rate
-        + 0.15 * cross_agent_agreement_score
-        + 0.15 * high_weight_evidence_score
+        0.35
+        + 0.15 * important_tool_completion_rate
+        + 0.12 * cross_agent_agreement_score
+        + 0.12 * high_weight_evidence_score
         + _vc_coeff * visual_context_support_score
         - 0.20 * critical_tool_failure_rate
         - 0.15 * unresolved_conflict_score
         - 0.10 * weak_single_signal_penalty
     )
-    final_confidence = max(0.0, min(0.98, raw_conf))
+    # Hard ceiling stays defensive; an uncalibrated system is additionally capped so
+    # it can never present >~0.85 certainty regardless of the term sum.
+    _ceiling = 0.85 if is_system_uncalibrated() else 0.98
+    final_confidence = max(0.0, min(_ceiling, raw_conf))
 
     # P0.2 — PDF/document verdicts reached on the metadata-only path (no content
     # or rendered-page analysis) cannot earn high confidence: a forged visible
