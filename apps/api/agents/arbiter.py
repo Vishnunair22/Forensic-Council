@@ -315,6 +315,14 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             "degraded_tools": degraded_tools,
         }
 
+        # WS-1 #1 — Capability Manifest: honest per-tool {status, method, model,
+        # license} snapshot, signed into the report so a gated-off/heuristic/failed
+        # analysis can never be presented as a full neural examination.
+        from core.capability_manifest import build_capability_manifest
+        _capability_manifest = build_capability_manifest(
+            active_results, self.config, mime_type=artifact_mime
+        )
+
         # ── 4. Retrieve Visual Context & Per-Agent Synthesis ──
         from core.visual_context_store import get_visual_context
         visual_context = await get_visual_context(
@@ -811,6 +819,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             llm_synthesis_failed=False,
             mime_type=artifact_mime,
         )
+        # WS-1 #1 — surface the capability-manifest disclosures in the existing
+        # degradation banner so gated-off/heuristic/unavailable detectors are visible.
+        for _disc in _capability_manifest.get("disclosures", []):
+            if _disc not in degradation_flags:
+                degradation_flags.append(_disc)
 
         summary_structured = {
             "verdict_line": f"{mapped_verdict.title()} at {int(deliberation_result.final_confidence * 100 + 0.5)}% confidence.",
@@ -948,6 +961,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
         # P0.4 — embed the deterministic-baseline hash in the signed payload.
         report.deterministic_baseline_sha256 = _baseline_sha256
+        # WS-1 #1 — embed the capability manifest in the signed payload.
+        report.capability_manifest = _capability_manifest
 
         return await self.sign_report(report)
 

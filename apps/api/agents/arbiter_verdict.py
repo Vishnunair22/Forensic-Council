@@ -189,6 +189,10 @@ class ForensicReport(BaseModel):
     # in the signed payload so it is possible to prove post-hoc that LLM narrative
     # refinement did not alter the verdict, confidence, or evidentiary substance.
     deterministic_baseline_sha256: str = ""
+    # WS-1 #1 — Capability Manifest: per-tool {status, method, model, license} +
+    # research_models_enabled / gemini_enabled. Signed, so the report cannot claim a
+    # neural examination that did not run. See core.capability_manifest.
+    capability_manifest: dict[str, Any] = Field(default_factory=dict)
     # Overall calibration status for the report — TRAINED only if ALL agents used trained models
     overall_calibration_status: str = "UNCALIBRATED"
     signed_utc: datetime | None = None
@@ -413,7 +417,7 @@ def calculate_manipulation_probability(
         if not f.get("stub_result")
     )
 
-    _manip_weighted: list[tuple[float, float]] = []  # (confidence, weight)
+    _manip_weighted: list[tuple[float, float, str]] = []  # (confidence, weight, signal_family)
     _seen_tool_agents: dict[tuple[str, str], tuple[float, str]] = {}
 
     for _f in all_findings:
@@ -465,24 +469,33 @@ def calculate_manipulation_probability(
                         continue
                 _seen_tool_agents[_agent_tool_key] = (_c, _phase)
 
-                _manip_weighted.append((_c, _w))
+                _manip_weighted.append((_c, _w, ForensicPolicy.signal_family(_tool)))
 
-    signals_count = len(_manip_weighted)
+    # WS-3 #11 — signal-family fusion. Correlated detectors (ELA + JPEG-ghost +
+    # frequency all fire on the SAME recompression artifact) must not each count as
+    # independent evidence. Collapse to ONE signal per family at its strongest member,
+    # and delete the volume bonus that rewarded raw signal count — a legitimately
+    # re-encoded WhatsApp photo no longer climbs to SUSPICIOUS on volume alone.
+    _by_family: dict[str, tuple[float, float]] = {}
+    for _c, _w, _fam in _manip_weighted:
+        _prev = _by_family.get(_fam)
+        if _prev is None or (_c * _w) > (_prev[0] * _prev[1]):
+            _by_family[_fam] = (_c, _w)
+    _family_signals = list(_by_family.values())
+    signals_count = len(_family_signals)
 
-    if not _manip_weighted:
+    if not _family_signals:
         base_prob = 0.0
-    elif len(_manip_weighted) == 1:
-        _c0, _w0 = _manip_weighted[0]
+    elif len(_family_signals) == 1:
+        _c0, _w0 = _family_signals[0]
         _anchored_decay = max(0.4, _w0 * 0.8)
         base_prob = _c0 * _anchored_decay
     else:
-        _sorted_manip = sorted(_manip_weighted, key=lambda x: x[0] * x[1], reverse=True)
+        _sorted_manip = sorted(_family_signals, key=lambda x: x[0] * x[1], reverse=True)
         _top = _sorted_manip[:7]
         _tw = sum(_w for _, _w in _top)
         _sum_weighted = sum(_c * _w for _c, _w in _top)
         base_prob = _sum_weighted / _tw if _tw > 0 else 0.0
-        _volume_bonus = min(0.25, (len(_sorted_manip) - 1) * 0.05)
-        base_prob += _volume_bonus
 
     # ── Visual assessment integration ──────────────────────────────────────
     # When the visual profile flags manipulation but no pixel tool fired,

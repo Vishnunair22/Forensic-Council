@@ -288,6 +288,22 @@ class VideoHandlers(BaseToolHandler):
     async def face_swap_detection_handler(self, input_data: dict) -> dict:
         artifact = input_data.get("artifact") or self.agent.evidence_artifact
         await self.agent.update_sub_task("Scanning frames for neural face-swap artifacts...")
+
+        # WS-4 #17 — prefer the trained DeepFace/Facenet detector (previously
+        # implemented but wired nowhere). It runs directly on the video; only when
+        # DeepFace is unavailable do we fall back to the heuristic frame method. The
+        # unavailable/heuristic state is disclosed (capability manifest + caveat),
+        # never a silent face_swap_detected=False.
+        from tools.video_tools import face_swap_detect_deepface
+        deepface_result = await face_swap_detect_deepface(
+            artifact, progress_callback=self.agent.update_sub_task  # type: ignore[arg-type]
+        )
+        if deepface_result.get("available") is not False:
+            deepface_result.setdefault("court_defensible", True)
+            deepface_result.setdefault("backend", "deepface-facenet")
+            await self.agent._record_tool_result("face_swap_detection", deepface_result)
+            return deepface_result
+
         loop = asyncio.get_running_loop()
         frame_paths = await loop.run_in_executor(
             None, self._extract_sample_frame_dir, artifact.file_path

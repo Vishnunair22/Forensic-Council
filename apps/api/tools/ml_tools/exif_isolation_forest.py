@@ -86,45 +86,25 @@ def score_exif(path: str) -> dict[str, Any]:
     if vec[6] < -4.5 or vec[6] > 1.5:
         reasons.append("unusual exposure-time value")
 
-    used_sklearn = False
+    # WS-3 #16 — the previous IsolationForest was fit at runtime on 5 hardcoded
+    # baseline rows: statistically meaningless. Replaced with a transparent, auditable
+    # rule score. WS-3 #15 — the ABSENCE of EXIF is INFO, not an anomaly: screenshots,
+    # social-media exports and privacy tools legitimately strip metadata, so it no
+    # longer raises the score (the old forced 0.58/0.52 floors and the +0.20 no-EXIF
+    # term were a built-in false-positive bias). Only PRESENT, internally-inconsistent
+    # EXIF raises the score.
     anomaly_score = 0.0
-    try:
-        import numpy as np
-        from sklearn.ensemble import IsolationForest
-
-        baseline = np.array(
-            [
-                [24, 0, 0, 2.0, 1.0, 0.45, -2.0, 0],
-                [36, 0, 0, 2.2, 1.2, 0.55, -2.7, 1],
-                [18, 2, 0, 2.4, 1.0, 0.60, -1.6, 0],
-                [12, 4, 0, 2.0, 0.8, 0.40, -2.3, 0],
-                [8, 5, 1, 2.0, 0.0, 0.0, -5.0, 0],
-            ],
-            dtype=float,
-        )
-        model = IsolationForest(contamination=0.25, random_state=42)
-        model.fit(baseline)
-        raw = float(-model.score_samples(np.array([vec], dtype=float))[0])
-        anomaly_score = max(0.0, min(1.0, (raw - 0.35) / 0.35))
-        used_sklearn = True
-    except Exception:
-        anomaly_score = 0.0
-        anomaly_score += min(0.35, len(missing) * 0.055)
-        anomaly_score += 0.25 if vec[2] > 0 else 0.0
-        anomaly_score += 0.20 if not exif else 0.0
-        anomaly_score += 0.10 if vec[6] < -4.5 or vec[6] > 1.5 else 0.0
-        anomaly_score = min(1.0, anomaly_score)
-
-    if not exif:
-        anomaly_score = max(anomaly_score, 0.58)
-    elif len(missing) >= 5:
-        anomaly_score = max(anomaly_score, 0.52)
+    anomaly_score += 0.30 if vec[2] > 0 else 0.0  # editing software named in EXIF Software field
+    if exif:
+        anomaly_score += 0.15 if (vec[6] < -4.5 or vec[6] > 1.5) else 0.0  # implausible exposure time
+        anomaly_score += 0.10 if vec[5] == 0.0 else 0.0  # invalid aperture despite present EXIF
+    anomaly_score = min(1.0, anomaly_score)
 
     is_anomalous = anomaly_score >= 0.50
     return {
         "available": True,
         "court_defensible": True,
-        "backend": "sklearn-isolation-forest" if used_sklearn else "robust-rule-isolation-score",
+        "backend": "transparent-rule-score",
         "verdict": "ANOMALOUS_EXIF" if is_anomalous else "EXIF_WITHIN_EXPECTED_RANGE",
         "is_anomalous": is_anomalous,
         "anomaly_score": round(anomaly_score, 3),
