@@ -49,6 +49,21 @@ __all__ = [
 ]
 
 
+def _sha256_file(path: str) -> str:
+    """Stream a SHA-256 of a file on disk (P2.17 TOCTOU re-hash). Returns "" if the
+    file cannot be read so the caller can skip the check rather than crash."""
+    import hashlib
+
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+    except OSError:
+        return ""
+    return h.hexdigest()
+
+
 class ForensicCouncilPipeline:
     """
     End-to-end pipeline for forensic evidence analysis.
@@ -637,6 +652,25 @@ class ForensicCouncilPipeline:
         self.signal_bus = SignalBus(all_agents)
 
         from orchestration.session_manager import SessionStatus
+
+        # P2.17 — TOCTOU guard: re-hash the evidence on disk immediately before the
+        # agents read it and reject on mismatch. This proves the bytes analysed are
+        # the bytes that were ingested and hashed, not a file swapped in between.
+        if self._intake_hash:
+            _ev_path = getattr(evidence_artifact, "file_path", None) or evidence_file_path
+            _disk_hash = await asyncio.to_thread(_sha256_file, _ev_path)
+            if _disk_hash and _disk_hash != self._intake_hash:
+                from core.exceptions import EvidenceIntegrityError
+
+                logger.error(
+                    "Evidence integrity check failed before analysis — hash mismatch",
+                    session_id=str(session_id),
+                    intake_prefix=self._intake_hash[:12],
+                    disk_prefix=_disk_hash[:12],
+                )
+                raise EvidenceIntegrityError(
+                    "Evidence hash changed between ingestion and analysis — refusing to analyse."
+                )
 
         await self.session_manager.update_agent_status(
             session_id=session_id,

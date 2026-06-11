@@ -562,12 +562,19 @@ class Settings(BaseSettings):
         return v
 
     # Agent Configuration
-    default_iteration_ceiling: int = Field(
-        default=20, description="Default iteration ceiling for agent loops"
-    )
+    # P2.15 — removed default_iteration_ceiling (dead: no consumer in the codebase).
     hitl_enabled: bool = Field(default=True, description="Enable Human-in-the-Loop checkpoints")
     investigation_timeout: int = Field(
         default=2400, description="Max seconds for a single investigation (40 min — accounts for up to 5 concurrent deep agents, each 480s)"
+    )
+    initial_agent_timeout_seconds: int = Field(
+        default=300,
+        description=(
+            "Per-agent timeout for the INITIAL analysis pass (P2.15). Config-driven "
+            "so deployments on slower hardware can RAISE it; previously hardcoded at "
+            "300s with a min() that only ever let config lower it. Still bounded by "
+            "investigation_timeout so one agent cannot exceed the whole budget."
+        ),
     )
     hitl_decision_timeout: int = Field(
         default=3600,
@@ -601,9 +608,7 @@ class Settings(BaseSettings):
     investigation_max_retries: int = Field(
         default=3, description="Max retry attempts for failed investigations"
     )
-    investigation_retry_delay: float = Field(
-        default=5.0, description="Base delay between investigation retries (seconds)"
-    )
+    # P2.15 — removed investigation_retry_delay (dead: no consumer in the codebase).
     session_ttl_hours: int = Field(
         default=24,
         description="Hours to retain completed investigation sessions in memory before eviction",

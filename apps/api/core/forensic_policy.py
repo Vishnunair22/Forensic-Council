@@ -14,7 +14,16 @@ class ForensicPolicy:
     """
 
     # --- Tool Reliability Tiers ---
-    # Maps tool names to their base reliability weight (0.0 to 1.0)
+    # Maps tool names to their base reliability weight (0.0 to 1.0).
+    #
+    # P1.12 / audit C3 — UNSOURCED ENGINEERING DEFAULTS. None of these weights are
+    # derived from a labelled forensic benchmark; they are hand-picked priors. They
+    # MUST NOT be presented as validated reliabilities, and the report discloses this
+    # alongside the calibration disclosure (is_system_uncalibrated → reliability note).
+    # To make them defensible, fit them on a ground-truth corpus (P1.7) and replace
+    # the values here with benchmark-cited numbers; until then they are indicative
+    # weighting only. See WEIGHTS_ARE_VALIDATED.
+    WEIGHTS_ARE_VALIDATED: bool = False
     TOOL_RELIABILITY_TIERS: dict[str, float] = {
         # Calibrated / Neural High-Recall (highest weight)
         "neural_ela": 1.0,

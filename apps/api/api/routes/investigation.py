@@ -110,6 +110,34 @@ async def _detect_mime_from_head(head: bytes) -> str:
         ) from exc
 
 
+async def _mp4_has_real_video_stream(path: Path) -> bool | None:
+    """P2.18 — disambiguate an MP4 container with ffprobe.
+
+    Returns True if the file has a genuine (non-cover-art) video stream, False if
+    it is audio-only, or None if ffprobe is unavailable/failed (caller keeps the
+    libmagic-detected MIME). An audio-only ``.mp4`` is commonly detected as
+    ``video/mp4`` and would misroute to the video agent; this lets the upload path
+    reclassify it as audio. Album-art video streams (disposition attached_pic=1)
+    are ignored so an audio file with embedded cover art is not treated as video.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-select_streams", "v",
+            "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
+            "-of", "csv=p=0", str(path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+    except Exception as exc:
+        logger.debug("ffprobe a/v disambiguation unavailable", error=str(exc))
+        return None
+    for line in out.decode("utf-8", "ignore").splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if parts and parts[0] == "video" and (len(parts) < 2 or parts[1] != "1"):
+            return True
+    return False
+
+
 async def _write_file(path: Path, chunks: list[bytes]) -> None:
     def _write():
         with path.open("wb") as f:
@@ -425,6 +453,20 @@ async def start_investigation(
             raise HTTPException(status_code=400, detail="File is empty.")
 
         content_hash = hasher.hexdigest()
+
+        # P2.18 — now that the full file is on disk, use ffprobe to resolve the
+        # MP4 audio/video ambiguity before the file is routed to an agent. libmagic
+        # reports audio-only MP4/M4A as video/mp4; reclassify so it reaches the
+        # audio specialist instead of the video one.
+        if actual_mime in ("video/mp4", "application/mp4"):
+            _has_video = await _mp4_has_real_video_stream(tmp_path)
+            if _has_video is False:
+                logger.info(
+                    "ffprobe disambiguation: MP4 has no real video stream → audio/mp4",
+                    session_id=session_id,
+                )
+                actual_mime = "audio/mp4"
+                applicable_agents = get_applicable_agents(actual_mime)
 
         client_hash_verified = False
         if client_sha256 and isinstance(client_sha256, str):

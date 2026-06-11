@@ -17,7 +17,25 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from core.structured_logging import get_logger
+
+_verdict_logger = get_logger(__name__)
+
+# P2.15 — canonical set of overall report verdicts. Used to validate that an
+# unexpected verdict string never silently propagates into a signed report. Kept
+# permissive (warn, don't reject) so a live investigation is never failed on an
+# edge-case label, while still surfacing genuinely unknown verdicts in monitoring.
+VALID_OVERALL_VERDICTS = frozenset({
+    "AUTHENTIC", "LIKELY_AUTHENTIC",
+    "SUSPICIOUS",
+    "MANIPULATED", "LIKELY_MANIPULATED",
+    "AI_GENERATED", "LIKELY_AI_GENERATED",
+    "INCONCLUSIVE",
+    "ABSTAIN",
+    "REVIEW REQUIRED",
+})
 
 from core.agent_registry import AgentID
 from core.forensic_policy import ForensicPolicy
@@ -99,6 +117,16 @@ class ForensicReport(BaseModel):
     overall_confidence: float = 0.0
     overall_error_rate: float = 0.0
     overall_verdict: str = "REVIEW REQUIRED"
+
+    @field_validator("overall_verdict")
+    @classmethod
+    def _validate_overall_verdict(cls, v: str) -> str:
+        if v and v.upper() not in {x.upper() for x in VALID_OVERALL_VERDICTS}:
+            _verdict_logger.warning(
+                "Unknown overall_verdict produced — not in canonical set",
+                verdict=v,
+            )
+        return v
     cross_modal_confirmed: list[dict[str, Any]] = Field(default_factory=list)
     contested_findings: list[dict[str, Any]] = Field(default_factory=list)
     tribunal_resolved: list[TribunalCase] = Field(default_factory=list)

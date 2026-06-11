@@ -1019,7 +1019,9 @@ async def run_agents_concurrent(
     async def _run_one(agent, aid: str, supported: bool):
         if not supported:
             return agent, [], "unsupported"
-        agent_timeout = 300  # 5 minutes per agent maximum
+        # P2.15 — config-driven per-agent initial timeout (was hardcoded 300s).
+        # Bounded by the overall investigation budget so one agent can't exceed it.
+        agent_timeout = float(getattr(pipeline.config, "initial_agent_timeout_seconds", 300))
         try:
             logger.info(f"Running {aid} initial investigation")
             initial_findings = await asyncio.wait_for(

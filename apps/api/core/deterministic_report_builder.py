@@ -360,12 +360,20 @@ def build_deterministic_report(
     # This must be the most prominent reliability note, so it is added first.
     uncalibrated = is_system_uncalibrated()
     if uncalibrated:
+        from core.forensic_policy import ForensicPolicy
+        _weights_clause = (
+            " The relative reliability weights used to combine detector signals are likewise "
+            "unsourced engineering defaults, not benchmarked reliabilities."
+            if not getattr(ForensicPolicy, "WEIGHTS_ARE_VALIDATED", False)
+            else ""
+        )
         reliability_notes.append(
             "Reliability note (confidence calibration): The confidence scores in this report are "
             "INDICATIVE (UNCALIBRATED). They were produced by engineering-default scaling that was "
             "NOT fitted to any labelled forensic benchmark dataset, and MUST NOT be cited as "
-            "calibrated probabilities in legal proceedings. To obtain court-admissible scores, run "
-            "site-specific calibration against a validated forensic benchmark."
+            "calibrated probabilities in legal proceedings." + _weights_clause +
+            " To obtain court-admissible scores, run site-specific calibration against a validated "
+            "forensic benchmark."
         )
     if groq_used:
         reliability_notes.append(

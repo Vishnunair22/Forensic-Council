@@ -123,6 +123,20 @@ def deliberate_findings(
             "screenshot_layout_forensics", "exif_extract", "file_structure_analysis"
         }
 
+    # P1.10 — modality gating. On a screenshot, the pixel-integrity detectors
+    # (ELA, splicing, copy-move) fire on UI chrome, text anti-aliasing, and the
+    # lossless re-encode rather than tampering — they are FP-prone and must not
+    # drive the verdict for this content class. Their findings are still recorded
+    # and shown; they are only barred from escalating the manipulation verdict.
+    _is_screenshot = bool(
+        visual_context is not None
+        and "screenshot" in str(getattr(visual_context, "file_type_assessment", "")).lower()
+    )
+    _SCREENSHOT_FP_PRONE = {
+        "ela_full_image", "neural_ela", "jpeg_ghost_detect",
+        "neural_splicing", "splicing_detect", "copy_move_detect", "neural_copy_move",
+    }
+
     # First pass: Deliberate each finding
     for f in findings:
         fid = str(f.get("finding_id", ""))
@@ -180,8 +194,15 @@ def deliberate_findings(
         grounded_sev = str(meta.get("severity_tier") or f.get("severity_tier") or "").upper()
         grounded_down = grounded_sev in ("LOW", "INFO")
 
+        _screenshot_discounted = _is_screenshot and tool_name in _SCREENSHOT_FP_PRONE
+        if _screenshot_discounted and verdict == "POSITIVE":
+            df.limitation_notes.append(
+                "Discounted for screenshot: pixel-integrity detectors are false-positive-prone "
+                "on screen captures and do not drive the verdict."
+            )
+
         if report_safe:
-            if verdict == "POSITIVE" and not grounded_down:
+            if verdict == "POSITIVE" and not grounded_down and not _screenshot_discounted:
                 if category == "integrity":
                     positive_integrity_tools.append(tool_name)
                     positive_integrity_findings.append(f)
