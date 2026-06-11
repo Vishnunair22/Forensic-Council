@@ -580,3 +580,29 @@ def get_calibration_layer() -> CalibrationLayer:
     if _calibration_layer is None:
         _calibration_layer = CalibrationLayer()
     return _calibration_layer
+
+
+# Agents whose detector scores are rescaled through the calibration layer.
+_CALIBRATION_AGENTS = ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5")
+
+
+def is_system_uncalibrated() -> bool:
+    """True when ANY contributing agent's calibration model is UNCALIBRATED.
+
+    An UNCALIBRATED model uses engineering-default sigmoid parameters that were
+    NOT fitted to any labelled forensic benchmark, so the confidence numbers it
+    produces are indicative only and must not be cited as calibrated
+    probabilities. While this returns True, every report must disclose that its
+    confidence scores are uncalibrated (see the report builder's reliability
+    notes). Fails closed: if a model's status cannot be confirmed, treat the
+    system as uncalibrated so the disclosure is shown.
+    """
+    layer = get_calibration_layer()
+    for agent_id in _CALIBRATION_AGENTS:
+        try:
+            model = layer.load_model(agent_id)
+        except Exception:
+            return True
+        if model.calibration_status == CalibrationStatus.UNCALIBRATED:
+            return True
+    return False

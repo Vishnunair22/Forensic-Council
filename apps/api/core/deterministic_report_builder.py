@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from core.arbiter_deliberation import ArbiterDeliberationResult
+from core.calibration import is_system_uncalibrated
 from core.finding_humanizer import CONTEXT_ONLY_TOOLS
 from core.per_agent_synthesis import AgentSynthesisOutput
 from core.structured_logging import get_logger
@@ -126,7 +127,11 @@ def build_deterministic_report(
         elif _mt.startswith("video/"):
             _domains = "visual, audio-track, and temporal-integrity"
         elif _mt == "application/pdf" or _mt.startswith("text/") or "document" in _mt:
-            _domains = "textual, structural, and provenance"
+            # P0.2 — only claim "textual" coverage when document CONTENT was
+            # actually analyzed (native LLM doc read). The metadata-only path
+            # (Agent5 structure/provenance tools) never inspects rendered text, so
+            # claiming textual checks there is an overstatement.
+            _domains = "textual, structural, and provenance" if vis_ext_llm else "metadata and file-structure"
         elif _mt.startswith("image/"):
             _domains = "pixel integrity, statistical frequency, and provenance"
         else:
@@ -149,9 +154,9 @@ def build_deterministic_report(
             )
         elif _is_doc and not vis_ext_llm:
             _s2 += (
-                " Note: holistic AI-generated-text assessment is limited without a "
-                "dedicated language model on this analysis path, so a clean result "
-                "does not exclude machine-authored text."
+                " Note: this path examined container metadata and file structure only — "
+                "no content-level or rendered-page forgery detection was performed, so a "
+                "clean result does not exclude forged visible content or machine-authored text."
             )
     else:
         _s2 = (
@@ -349,6 +354,19 @@ def build_deterministic_report(
 
     # --- 10. Reliability Notes ---
     reliability_notes = []
+    # P0.1 — calibration disclosure. While any contributing detector runs on
+    # UNCALIBRATED engineering-default scaling, every confidence number in this
+    # report is indicative only and not a court-admissible calibrated probability.
+    # This must be the most prominent reliability note, so it is added first.
+    uncalibrated = is_system_uncalibrated()
+    if uncalibrated:
+        reliability_notes.append(
+            "Reliability note (confidence calibration): The confidence scores in this report are "
+            "INDICATIVE (UNCALIBRATED). They were produced by engineering-default scaling that was "
+            "NOT fitted to any labelled forensic benchmark dataset, and MUST NOT be cited as "
+            "calibrated probabilities in legal proceedings. To obtain court-admissible scores, run "
+            "site-specific calibration against a validated forensic benchmark."
+        )
     if groq_used:
         reliability_notes.append(
             "Reliability note: Final narrative cohesion was assisted by an external text model. "
@@ -369,9 +387,10 @@ def build_deterministic_report(
         reliability_notes.append("No visual context was used to ground the report.")
 
     # --- 11. Final Conclusion ---
+    _conf_label = f"{confidence_pct}% indicative (uncalibrated) confidence" if uncalibrated else f"{confidence_pct}% confidence"
     final_conclusion = (
         f"In conclusion, the examination of `{filename}` resulted in a verdict of '{verdict_label}' "
-        f"with {confidence_pct}% confidence. The cumulative evidence supports this determination."
+        f"with {_conf_label}. The cumulative evidence supports this determination."
     )
 
     return {

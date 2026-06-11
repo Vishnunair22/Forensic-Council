@@ -82,7 +82,9 @@ class ForensicPolicy:
     LIKELY_MANIPULATED_PROB_THRESHOLD = 0.60
     SUSPICIOUS_PROB_THRESHOLD = 0.50
     MANIP_SIGNAL_MIN_REQUIRED = 2  # Min direct signals for "MANIPULATED"
-    SINGLE_SIGNAL_MANIP_THRESHOLD = 0.85
+    # SINGLE_SIGNAL_MANIP_THRESHOLD removed (P0.6): a solo signal is hard-capped at
+    # 0.45 probability, so this 0.85 gate was unreachable dead logic. A proper tiered
+    # single-signal rule (P1.9) requires validated tool weights (P1.12) first.
 
     AUTHENTIC_CONF_THRESHOLD = 0.70  # Lowered from 0.75 to prevent real images from getting stuck in INCONCLUSIVE
     AUTHENTIC_ERROR_MAX = 0.20       # Slightly increased to tolerate minor tool timeouts on real images

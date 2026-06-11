@@ -382,6 +382,18 @@ def deliberate_findings(
     )
     final_confidence = max(0.0, min(0.98, raw_conf))
 
+    # P0.2 — PDF/document verdicts reached on the metadata-only path (no content
+    # or rendered-page analysis) cannot earn high confidence: a forged visible
+    # payload with clean container metadata would pass undetected. Cap confidence
+    # to reflect the limited evidentiary basis. Hard provenance evidence (custody
+    # hash mismatch) is exempt — it stands on its own regardless of content reach.
+    _is_document = _mt == "application/pdf" or _mt.startswith("text/") or "document" in _mt
+    _content_analyzed = bool(
+        visual_context is not None and getattr(visual_context, "external_llm_used", False)
+    )
+    if _is_document and not _content_analyzed and not hash_mismatches:
+        final_confidence = min(final_confidence, 0.70)
+
     # Formulate confidence reason
     reasons = []
     if important_tool_completion_rate > 0.8:
@@ -412,9 +424,20 @@ def deliberate_findings(
     ]
     excluded_findings = [df for df in deliberated if not df.report_safe or df.evidence_weight == EvidenceWeight.EXCLUDED]
 
+    # P0.3 — a failed critical tool is LOST COVERAGE, not absence of evidence: its
+    # domain could not be verified. Name those domains explicitly, and cap an
+    # otherwise-clean verdict so a silently-dead critical detector cannot leave the
+    # report MORE confident than a fully-covered run.
     unresolved_limitations = []
     for f in failed_tools:
-        unresolved_limitations.append(f"Tool failed: {f}")
+        if f in critical_tools:
+            unresolved_limitations.append(
+                f"Critical tool '{f}' did not complete — its domain could not be verified."
+            )
+        else:
+            unresolved_limitations.append(f"Tool failed: {f}")
+    if failed_critical and final_verdict == "NO_REPORTABLE_MANIPULATION_DETECTED":
+        final_confidence = min(final_confidence, 0.75)
 
     return ArbiterDeliberationResult(
         final_verdict=final_verdict,

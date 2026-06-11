@@ -35,6 +35,20 @@ _PROHIBITED_RE = re.compile(
     re.IGNORECASE,
 )
 
+# P0.4 — mandatory disclosures the refiner must never drop. The narrative model
+# may improve wording, but a calibration / coverage / tool-failure disclosure that
+# was in the signed deterministic baseline must always survive refinement. Any
+# baseline reliability note matching this is re-injected after refinement.
+_MANDATORY_DISCLOSURE_RE = re.compile(
+    r"uncalibrated|calibration|could not be verified|not court-admissible|"
+    r"must not be cited|coverage limitation|tool failure|did not complete",
+    re.IGNORECASE,
+)
+
+
+def _is_mandatory_disclosure(note: Any) -> bool:
+    return bool(_MANDATORY_DISCLOSURE_RE.search(str(note or "")))
+
 _SYSTEM_PROMPT = (
     "You are a forensic report editor. The arbiter has already determined the verdict, "
     "confidence, and all evidentiary findings. Your role is strictly narrative: improve "
@@ -51,7 +65,9 @@ _SYSTEM_PROMPT = (
     "5. Every item in 'key_findings' must follow: "
     "`[Finding with metric] — [tool_name] ([confidence]%)`. "
     "The em-dash (—) is required. Do not reorder or remove items.\n"
-    "6. 'reliability_notes' is a list of strings — preserve it as a list.\n"
+    "6. 'reliability_notes' is a list of strings — preserve it as a list, and NEVER "
+    "remove or weaken any calibration, coverage-limitation, or tool-failure disclosure; "
+    "you may polish wording but the disclosure must remain.\n"
     "7. 'final_conclusion' is one sentence. Keep it concise.\n"
     "8. Return ONLY a JSON object with exactly these four keys: "
     "executive_summary, key_findings, reliability_notes, final_conclusion. "
@@ -151,6 +167,22 @@ async def refine_report_with_groq(
                 logger.warning(f"Groq refiner rejected: key finding lacks em-dash format: {kf!r}")
                 return deterministic_report, False
 
+        # P0.4 — post-refinement tool-existence guard: the deterministic baseline
+        # only cites tools that actually ran, so a refined finding citing a tool
+        # absent from the baseline is a fabrication. Reject rather than ship it.
+        def _cited_tools(items: Any) -> set[str]:
+            out: set[str] = set()
+            for it in items or []:
+                m = re.search(r"—\s*([A-Za-z0-9 _/().,-]+?)\s*\(", str(it))
+                if m:
+                    out.add(re.sub(r"[^a-z0-9]", "", m.group(1).lower()))
+            return out
+
+        _baseline_tools = _cited_tools(deterministic_report.get("key_findings"))
+        if not _cited_tools(refined_kfs).issubset(_baseline_tools):
+            logger.warning("Groq refiner rejected: refined key findings cite a tool absent from the baseline.")
+            return deterministic_report, False
+
         # ── Merge only the 4 refined fields ──────────────────────────────────
         final_report = dict(deterministic_report)
         for sec in REQUIRED_SECTIONS:
@@ -171,6 +203,15 @@ async def refine_report_with_groq(
         )
         if groq_note not in reliability_notes:
             reliability_notes.append(groq_note)
+
+        # P0.4 — re-inject any MANDATORY disclosure from the deterministic baseline
+        # that the model dropped or paraphrased away, so calibration/coverage/
+        # failure disclosures can never be silently removed by refinement.
+        _orig_notes = list(deterministic_report.get("reliability_notes") or [])
+        _refined_blob = " ".join(str(n) for n in reliability_notes).lower()
+        for _note in _orig_notes:
+            if _is_mandatory_disclosure(_note) and str(_note).lower() not in _refined_blob:
+                reliability_notes.insert(0, _note)
         final_report["reliability_notes"] = reliability_notes
 
         logger.info("Successfully refined 4 narrative sections with Groq.")

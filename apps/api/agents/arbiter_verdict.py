@@ -157,6 +157,10 @@ class ForensicReport(BaseModel):
     )
     cryptographic_signature: str = ""
     report_hash: str = ""
+    # P0.4 — SHA-256 of the pre-refinement deterministic baseline report. Included
+    # in the signed payload so it is possible to prove post-hoc that LLM narrative
+    # refinement did not alter the verdict, confidence, or evidentiary substance.
+    deterministic_baseline_sha256: str = ""
     # Overall calibration status for the report — TRAINED only if ALL agents used trained models
     overall_calibration_status: str = "UNCALIBRATED"
     signed_utc: datetime | None = None

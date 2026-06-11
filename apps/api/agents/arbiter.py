@@ -740,6 +740,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         )
 
         # ── 7. Optional Groq Polish ──
+        # P0.4 — hash the deterministic baseline BEFORE any LLM refinement so the
+        # signed report carries proof of what the deterministic pipeline produced.
+        import hashlib as _hashlib
+        import json as _json
+        _baseline_blob = _json.dumps(det_report_dict, sort_keys=True, default=str, ensure_ascii=False)
+        _baseline_sha256 = _hashlib.sha256(_baseline_blob.encode("utf-8")).hexdigest()
         final_report_dict = det_report_dict
         groq_used = False
         if use_llm:
@@ -802,7 +808,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             findings=all_findings,
             metrics=per_agent_metrics,
             narrative_warnings=[],
-            llm_synthesis_failed=False
+            llm_synthesis_failed=False,
+            mime_type=artifact_mime,
         )
 
         summary_structured = {
@@ -938,6 +945,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             cross_modal_fusion=_fusion,
             compression_penalty=1.0,
         )
+
+        # P0.4 — embed the deterministic-baseline hash in the signed payload.
+        report.deterministic_baseline_sha256 = _baseline_sha256
 
         return await self.sign_report(report)
 
@@ -1198,13 +1208,16 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         ):
             return "MANIPULATED"
 
-        elif manipulation_probability >= _likely_manipulated_threshold and (
-            manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
-            or (
-                manipulation_signals == 1
-                and manipulation_probability >= ForensicPolicy.SINGLE_SIGNAL_MANIP_THRESHOLD
-            )
+        elif (
+            manipulation_probability >= _likely_manipulated_threshold
+            and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
         ):
+            # P0.6 — removed the dead `signals == 1 and prob >= SINGLE_SIGNAL_MANIP_THRESHOLD`
+            # branch: a solo signal is hard-capped at 0.45 (arbiter_verdict.py), so the
+            # 0.85 threshold was unreachable. Hash mismatch — the one signal that may
+            # stand alone — is already escalated separately in arbiter_deliberation. A
+            # proper tiered single-signal rule (P1.9) must wait for validated tool weights
+            # (P1.12) rather than build on unvalidated ones.
             return "LIKELY_MANIPULATED"
 
         elif (
@@ -1378,7 +1391,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             }
         return summary
 
-    def _get_degradation_flags(self, llm_ok, penalty, findings, metrics, narrative_warnings: list[str] | None = None, llm_synthesis_failed: bool = False) -> list[str]:
+    def _get_degradation_flags(self, llm_ok, penalty, findings, metrics, narrative_warnings: list[str] | None = None, llm_synthesis_failed: bool = False, mime_type: str = "") -> list[str]:
         flags = []
         for f in findings:
             meta = f.get("metadata") or {}
@@ -1390,6 +1403,25 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 or meta.get("error")
             ):
                 flags.append(f"{tool} failed or returned incomplete output")
+
+        # P0.5 — disclose per-type reduced coverage so a reader is not misled into
+        # treating a structurally limited analysis path as a full examination.
+        _mt = (mime_type or "").lower()
+        if _mt == "image/gif":
+            flags.append(
+                "Animated GIF: splicing, copy-move, and physical-scene checks were skipped "
+                "(not applicable to this format) — coverage is reduced for this type."
+            )
+        if _mt.startswith("audio/") and not getattr(self.config, "enable_audio_models", False):
+            flags.append(
+                "Audio neural models are disabled — synthetic-speech and voice-clone detection "
+                "ran at screening-tier capability only; a clean result does not exclude AI synthesis."
+            )
+        if _mt.startswith("video/") and not getattr(self.config, "enable_video_models", False):
+            flags.append(
+                "Video neural models are disabled — deepfake/frame-manipulation detection ran at "
+                "screening-tier capability only; a clean result does not exclude AI synthesis."
+            )
         return list(dict.fromkeys(flags))
 
     def _empty_report(self, case_id, findings, metrics) -> ForensicReport:
