@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { clsx } from "clsx";
-import { cleanFindingText } from "@/lib/findingText";
+import { cleanFindingText, sanitizeLiveText } from "@/lib/findingText";
 import {
   getDefaultProgressTotal,
   getLiveProgressDescriptor,
@@ -485,11 +485,10 @@ export function AgentStatusCard({
 }: AgentStatusCardProps) {
   const prefersReduced = useReducedMotion();
   const sanitizeThinking = (text?: string) => {
-    if (!text) return "";
-    const s = text
-      .replace(/^(Thinking|THOUGHT|ACTION):\s*/i, "")
-      .replace(/_/g, " ")
-      .trim();
+    // Shared cleaner strips leaked paths/metrics/verdict labels/state tokens and
+    // humanizes tool tokens; the <12-char gate drops noise so the card can fall
+    // back to a rotating phrase.
+    const s = sanitizeLiveText(text);
     if (s.length < 12) return "";
     return s;
   };

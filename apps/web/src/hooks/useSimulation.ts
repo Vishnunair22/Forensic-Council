@@ -10,6 +10,7 @@ import { AGENTS as AGENTS_DATA } from "@/lib/constants";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { clearInvestigationPersistence } from "@/lib/investigationStorage";
+import { sanitizeLiveText } from "@/lib/findingText";
 
 import { createLiveSocket, connectLiveSSE, BriefUpdate, HITLCheckpoint, getArbiterStatus, dbg, refreshAuthToken, autoLoginAsInvestigator } from "@/lib/api";
 import { BriefUpdateSchema } from "@/lib/schemas";
@@ -266,12 +267,12 @@ export const useSimulation = ({
                   // Pipeline-level updates come through with agent_id=null.
                   // Surface them separately so the UI can show "what the backend is doing" in real time.
                   if (!update.agent_id) {
-                    setPipelineMessage(update.message || "");
+                    setPipelineMessage(sanitizeLiveText(update.message));
                     const t = (update.data as Record<string, unknown> | null)?.[
                       "thinking"
                     ];
                     setPipelineThinking(
-                      typeof t === "string" ? t : update.message || "",
+                      sanitizeLiveText(typeof t === "string" ? t : update.message),
                     );
                     // Transition to "analyzing" from either "idle" or "initiating"
                     // (status is never set to "initiating" externally; it starts as "idle")
@@ -306,12 +307,13 @@ export const useSimulation = ({
                         ...prev,
                         [incomingId]: {
                           status: agentData.status || "running",
+                          // Clean at the source so no consumer (overlay, card,
+                          // progress display) leaks raw paths/metrics/state tokens.
                           // Preserve the last non-empty thinking so agent cards never
                           // flip to the pipeline-level fallback between tool executions.
                           thinking:
-                            (agentData.thinking?.trim()
-                              ? agentData.thinking
-                              : prev[incomingId]?.thinking) ?? "",
+                            (sanitizeLiveText(agentData.thinking) ||
+                              prev[incomingId]?.thinking) ?? "",
                           tools_done:
                             typeof agentData.tools_done === "number"
                               ? agentData.tools_done
@@ -461,7 +463,7 @@ export const useSimulation = ({
                         ...prev,
                         [agent.id]: {
                           status: newUpdate.status,
-                          thinking: newUpdate.message,
+                          thinking: sanitizeLiveText(newUpdate.message),
                           tools_done:
                             typeof newUpdate.tools_ran === "number"
                               ? newUpdate.tools_ran
@@ -624,7 +626,7 @@ export const useSimulation = ({
                   if (update.data) {
                     const arbData = update.data as { status?: string; thinking?: string };
                     setArbiterStatus(arbData.status || "processing");
-                    setArbiterThinking(arbData.thinking || update.message);
+                    setArbiterThinking(sanitizeLiveText(arbData.thinking || update.message));
                   }
                   break;
 

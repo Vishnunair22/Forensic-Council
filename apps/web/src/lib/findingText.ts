@@ -46,3 +46,21 @@ export function cleanFindingText(text: string | null | undefined, maxLen?: numbe
   const lastSpace = clipped.lastIndexOf(" ");
   return `${lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped}...`;
 }
+
+/**
+ * Clean text destined for the LIVE progress UI — loading overlays, the agent-card
+ * "thinking" line, and the pipeline/arbiter narration. Runs the same leak-stripping
+ * as {@link cleanFindingText} (file paths, UUIDs, metric/verdict fragments, pipeline
+ * state tokens) so raw backend reasoning never reaches the screen, then applies
+ * live-text tidy: drop ReAct step prefixes and humanize snake_case tool tokens
+ * (e.g. "ela_full_image" → "ela full image"). Returns "" for empty/noise so callers
+ * can fall back to a rotating phrase.
+ */
+export function sanitizeLiveText(text: string | null | undefined): string {
+  if (!text) return "";
+  return cleanFindingText(text)
+    .replace(/^(?:Thinking|THOUGHT|ACTION|OBSERVATION|REASONING)\s*:\s*/i, "")
+    .replace(/\b([a-z0-9]+(?:_[a-z0-9]+)+)\b/gi, (m) => m.replace(/_/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
