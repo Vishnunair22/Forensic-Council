@@ -604,6 +604,11 @@ async def get_raw_metrics(request: Request):
         f"forensic_investigations_started_total {snap['investigations_started']}",
         f"forensic_investigations_completed_total {snap['investigations_completed']}",
         f"forensic_investigations_failed_total {snap['investigations_failed']}",
+        # WS-6 #30 — these MUST be on the scraped /raw endpoint (not just /prometheus),
+        # otherwise the refiner-fallback / synthesis-degradation alerts have no data.
+        f"forensic_groq_tokens_total {snap['groq_tokens_total']}",
+        f"forensic_refiner_fallback_total {snap['refiner_fallback_total']}",
+        f"forensic_synthesis_degradations_total {snap['synthesis_degradations_total']}",
     ]
     from fastapi.responses import PlainTextResponse as _PTR
 
