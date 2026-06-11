@@ -309,8 +309,18 @@ class VideoHandlers(BaseToolHandler):
                     frames_artifact=frames_artifact, progress_callback=self.agent.update_sub_task  # type: ignore[arg-type]
                 )
                 result.setdefault("available", True)
-                result.setdefault("court_defensible", True)
+                # II.2-1 — the wired face-swap detector is a heuristic frequency-domain
+                # stub, NOT a trained FaceForensics++ classifier. Disclose it loudly and
+                # keep it out of court-defensible so a heuristic "no deepfake" is never
+                # presented as a confident clearance and cannot drive the court verdict.
+                result["court_defensible"] = False
                 result.setdefault("face_swap_detected", bool(result.get("deepfake_suspected")))
+                result.setdefault(
+                    "forensic_caveat",
+                    "Face-swap screening used a heuristic frequency-domain method, not a "
+                    "trained deepfake classifier — treat as low-reliability screening only; "
+                    "a clean result does NOT exclude a high-quality face swap.",
+                )
         await self.agent._record_tool_result("face_swap_detection", result)
         return result
 

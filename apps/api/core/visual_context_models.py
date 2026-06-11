@@ -72,3 +72,7 @@ class VisualContext(BaseModel):
     provider_attempts: list[dict[str, Any]] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     created_at: str
+    # II.3-3 — set True when this read was reused from the cross-session content-hash
+    # cache (same file, earlier session) rather than computed fresh this run. Drives a
+    # report disclosure so a reader knows the visual read was not produced live.
+    cached: bool = False

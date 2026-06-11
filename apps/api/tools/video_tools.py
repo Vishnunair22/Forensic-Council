@@ -715,15 +715,23 @@ async def face_swap_detect_deepface(
     try:
         from deepface import DeepFace  # type: ignore[import-untyped]  # no stubs available
     except ImportError:
-        # Fall back to heuristic face_swap_detect if DeepFace not available
+        # II.2-1 — FAIL LOUDLY: the trained face-swap detector is unavailable, so no
+        # deepfake determination was made. Returning face_swap_detected=False here
+        # read as a clean "no swap found" result; instead mark it not court-defensible
+        # (→ EXCLUDED from the verdict, not counted as clean) and disclose the gap so
+        # the report states a face swap could NOT be ruled out.
         return {
-            "face_swap_detected": False,
+            "face_swap_detected": None,
             "confidence": 0.0,
             "available": False,
+            "analysis_performed": False,
+            "court_defensible": False,
+            "evidence_verdict": "INCONCLUSIVE",
             "forensic_caveat": (
-                "DeepFace library not installed. Discontinuity analysis skipped. "
-                "Falling back to heuristic frequency analysis (FFT) which may "
-                "have lower accuracy for high-quality deepfakes."
+                "Trained face-swap detector (DeepFace) is unavailable in this deployment — "
+                "no deepfake/face-swap determination was made. This is a COVERAGE GAP, not a "
+                "clean result: a face swap CANNOT be excluded. Install DeepFace / enable the "
+                "trained model to perform this check."
             ),
             "backend": "unavailable",
         }

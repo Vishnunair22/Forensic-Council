@@ -1404,6 +1404,15 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             ):
                 flags.append(f"{tool} failed or returned incomplete output")
 
+        # II.1 — disclose when the analyst-decision window timed out and final
+        # synthesis proceeded automatically (the gate-2 timeout path), so the report
+        # is never a silently auto-generated template presented as analyst-reviewed.
+        if getattr(self, "_gate2_timed_out", False):
+            flags.append(
+                "Final report was generated automatically after the analyst-decision window "
+                "timed out — it was not explicitly confirmed by an analyst before synthesis."
+            )
+
         # P0.5 — disclose per-type reduced coverage so a reader is not misled into
         # treating a structurally limited analysis path as a full examination.
         _mt = (mime_type or "").lower()

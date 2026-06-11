@@ -432,6 +432,12 @@ async def create_visual_context_preflight(
             session_id=session_id,
             source=existing.source,
         )
+        # II.3-3 — mark the read as cache-reused so the report can disclose it was
+        # not produced fresh this session (content-hash keyed; same bytes = same read).
+        try:
+            existing.cached = True
+        except Exception:
+            pass
         # A hit may have come from the 24h hash-keyed cache (same file, new
         # session). Consumers look up by session_id only (no sha256), so re-save
         # under the current session/layers — otherwise agents see "Visual context

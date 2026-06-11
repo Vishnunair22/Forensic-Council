@@ -73,6 +73,7 @@ def build_deterministic_report(
         )
         vis_source = getattr(visual_context, "source", "none")
         vis_ext_llm = getattr(visual_context, "external_llm_used", False)
+    vis_cached = bool(getattr(visual_context, "cached", False)) if visual_context else False
 
     # --- 1. Executive Summary ---
     # Prefer the mapped/user-facing verdict so narrative prose == overall_verdict.
@@ -391,6 +392,13 @@ def build_deterministic_report(
             reliability_notes.append("Visual reliability context was assisted by an external LLM and cross-checked against local forensic tools.")
         else:
             reliability_notes.append("Visual reliability context was generated using local forensic models and deterministic image-processing tools.")
+        # II.3-3 — disclose provenance when the visual read was reused from the
+        # cross-session content-hash cache rather than produced fresh this run.
+        if vis_cached:
+            reliability_notes.append(
+                "Provenance: the visual-context read was reused from a cached analysis of an "
+                "identical file (same content hash) from an earlier session, not recomputed this run."
+            )
     else:
         reliability_notes.append("No visual context was used to ground the report.")
 

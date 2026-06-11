@@ -1894,6 +1894,13 @@ async def _await_deep_report_request(
             session_id=str(session_id),
             timeout_seconds=timeout,
         )
+        # II.1 — record that the analyst-decision window timed out so the signed
+        # report DISCLOSES that final synthesis proceeded automatically (not
+        # analyst-confirmed), instead of silently shipping a bare template report.
+        try:
+            pipeline.arbiter._gate2_timed_out = True
+        except Exception:
+            pass
     finally:
         pipeline._awaiting_user_decision = False
         try:
