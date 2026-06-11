@@ -1112,9 +1112,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     if (!showLoadingOverlay) return;
 
+    // Drop the overlay only once the initial analysis has ACTUALLY started
+    // producing work — the first agent/tool/pipeline update flips status from
+    // "idle"/"initiating" to "analyzing" (or a later/terminal state). Dismissing
+    // on the bare WebSocket connection (analysisStreamReady) dropped the overlay
+    // a beat before any agent was visibly running, leaving a dead-wait gap on the
+    // analysis page. A genuinely stuck start is still bounded by
+    // GlobalLoadingOverlay's EVIDENCE_MAX_DISPLAY_MS safety timer; a failed socket
+    // dismisses via wsConnectionError.
     const shouldDismiss =
-      analysisStreamReady ||
-      (status !== "idle" && status !== "initiating");
+      (status !== "idle" && status !== "initiating") ||
+      !!wsConnectionError;
 
     if (shouldDismiss) {
       loadingOverlayController.dismiss();
@@ -1123,7 +1131,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [showLoadingOverlay, analysisStreamReady, status]);
+  }, [showLoadingOverlay, status, wsConnectionError]);
 
   useEffect(() => {
     if (showLoadingOverlay && !analysisStreamReady) {
