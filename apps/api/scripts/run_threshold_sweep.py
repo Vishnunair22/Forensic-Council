@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generic per-detector threshold sweep (ELEVATION_PLAN Phase 1b).
+Generic per-detector threshold sweep (calibration Phase 1b; see docs/CALIBRATION_RUNBOOK.md).
 
 Takes a collector CSV (``score,label`` — the exact format emitted by
 ``scripts/collect_calibration_scores.py``) and sweeps the decision threshold
@@ -31,7 +31,7 @@ import argparse
 import csv
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -150,7 +150,7 @@ def main() -> int:
     result = {
         "source_csv": str(csv_path),
         "detector": args.detector,
-        "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_utc": datetime.now(UTC).isoformat(),
         "n_samples": int(len(scores)),
         "n_positive": n_pos,
         "n_negative": n_neg,
@@ -161,7 +161,7 @@ def main() -> int:
             "TPR/FPR measured on the supplied labelled benchmark at each score "
             "threshold (prediction = score >= threshold). Record the chosen "
             "operating point in the capability manifest so reports disclose "
-            "per-tool error rates (ELEVATION_PLAN Phase 1b)."
+            "per-tool error rates (calibration Phase 1b)."
         ),
     }
 

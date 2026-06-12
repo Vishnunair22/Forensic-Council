@@ -2,7 +2,7 @@
 #
 # acquire_calibration_datasets.sh
 # -------------------------------------------------------------------
-# Fetches the calibration benchmarks named in CALIBRATION_PLAN.md.
+# Fetches the calibration benchmarks named in docs/CALIBRATION.md and docs/CALIBRATION_RUNBOOK.md.
 # RUN THIS INSIDE THE WORKER CONTAINER (ML models + real network),
 # not in a sandbox with a restricted egress allowlist.
 #

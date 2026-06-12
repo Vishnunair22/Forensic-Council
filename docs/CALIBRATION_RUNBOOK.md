@@ -1,4 +1,4 @@
-# Calibration Runbook — Agents 2 / 3 / 4 (ELEVATION_PLAN Phase 1)
+# Calibration Runbook — Agents 2 / 3 / 4
 
 **Date:** 2026-06-12
 **Status:** Agent5 (text) is **TRAINED + ADOPTED** (HC3, see `storage/calibration_models/Agent5/`). Agent1 (image) calibration is wired and runnable. **Agents 2, 3, 4 remain UNCALIBRATED** — this runbook is how to take each to TRAINED once its labelled benchmark is on disk. Until then every confidence they contribute is disclosed as *"indicative (uncalibrated)"* in the signed report (Phase 0.7 / 3.3).
@@ -81,4 +81,4 @@ python scripts/run_agent_calibration.py --agent Agent4 \
 2. The report's **Reliability Notes** will now carry the positive calibration disclosure for that agent (Phase 3.3), citing the dataset + model version, and its confidences drop the *"indicative (uncalibrated)"* label.
 3. The Phase 1b sweep JSON (`calibration_data/agentN_<detector>_sweep.json`) holds the per-tool `(threshold, TPR, FPR)` operating points — fold the chosen point into the capability manifest so reports disclose measured per-tool error rates.
 
-See `docs/CALIBRATION_PLAN.md` for the dataset-acquisition helper (`acquire_calibration_datasets.sh`) and `docs/ELEVATION_PLAN_CPU_FREE_TIER.md` Phase 1 for the rationale.
+See `docs/CALIBRATION.md` for the calibration workflow + golden rule and the dataset-acquisition helper (`acquire_calibration_datasets.sh`); `docs/CHANGELOG.md` (v1.9.0) records the completed elevation/calibration work and rationale.

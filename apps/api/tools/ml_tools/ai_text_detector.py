@@ -1,4 +1,4 @@
-"""Statistical AI-generated-text detector (CALIBRATION_PLAN §5, Agent 5).
+"""Statistical AI-generated-text detector (Agent 5; see docs/CALIBRATION.md).
 
 A self-contained, offline, deterministic detector that scores how machine-like a
 passage reads on 0-1 (higher = more likely AI-generated). It exploits interpretable
@@ -75,7 +75,7 @@ def detect(text_or_path: str, *, is_path: bool = False) -> dict[str, Any]:
         low_burstiness = 0.5
 
     # 2. Repetition — share of bigrams that recur.
-    bigrams = list(zip(words, words[1:]))
+    bigrams = list(zip(words, words[1:], strict=False))
     uniq_bi = len(set(bigrams))
     repetition = _clamp01(1.0 - (uniq_bi / len(bigrams))) if bigrams else 0.0
     repetition = _clamp01((repetition - 0.15) / 0.35)  # only count above human baseline

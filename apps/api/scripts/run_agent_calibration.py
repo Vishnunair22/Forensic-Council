@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end per-agent calibration runner (ELEVATION_PLAN Phase 1).
+"""End-to-end per-agent calibration runner (see docs/CALIBRATION_RUNBOOK.md).
 
 One command takes a LABELLED benchmark for ONE agent through the full pipeline:
 
@@ -57,7 +57,7 @@ def _run(label: str, argv: list[str]) -> tuple[int, str]:
     """Run a child script, streaming nothing but capturing combined output."""
     print(f"\n=== {label} ===")
     print("  $ " + " ".join(argv))
-    proc = subprocess.run(argv, capture_output=True, text=True)
+    proc = subprocess.run(argv, capture_output=True, text=True)  # noqa: S603 — fixed interpreter + repo scripts, not user input
     out = (proc.stdout or "") + (proc.stderr or "")
     print(out.rstrip())
     return proc.returncode, out

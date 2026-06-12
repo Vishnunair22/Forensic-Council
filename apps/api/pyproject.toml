@@ -216,7 +216,6 @@ ignore = ["E501", "S101", "UP042"]
 # Tests intentionally use temp paths, fixture secrets, broad exception guards, and import-time monkeypatches.
 "tests/**/*.py" = ["B007", "B017", "E402", "E712", "N806", "PT011", "PT018", "PT028", "S105", "S106", "S108", "S110", "S311"]
 "scripts/*.py" = ["S106", "S110", "S112", "S310", "N806"]
-"test_scripts/*.py" = ["S105", "S106", "S108"]
 # ML scripts use conventional scientific notation and tolerate per-sample failures in tight loops.
 "tools/ml_tools/*.py" = ["E702", "N803", "N806", "N812", "N816", "S108", "S110", "S112"]
 # Forensic image tools: UPPER_CASE region-area constants + best-effort guards.
