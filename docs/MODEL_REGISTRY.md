@@ -62,7 +62,7 @@ Required for Agents 1, 3, and 5 deep analysis passes.
 GEMINI_API_KEY=AIza...
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_FALLBACK_MODELS=gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite
-GEMINI_TIMEOUT=55.0
+GEMINI_TIMEOUT=90.0
 ```
 
 **Policy flag (REQUIRED):**
@@ -81,15 +81,16 @@ ARBITER_GEMINI_API_KEY=
 # Set to a different key to isolate Arbiter quota from agent quota.
 ```
 
-**Per-provider free-tier limits (as shipped in `.env.example`):**
+**Per-provider free-tier limits (per-process; match the in-code defaults and both `.env` templates):**
 ```dotenv
-GEMINI_RPM_LIMIT=5      # halved from the 10 RPM free-tier ceiling (API + worker share the key)
+GEMINI_RPM_LIMIT=5      # halved from the 10 RPM ceiling — API + Worker each enforce it
 GEMINI_RPD_LIMIT=1500
-GROQ_RPM_LIMIT=30       # free-tier ceiling
+GROQ_RPM_LIMIT=15       # halved from the 30 RPM ceiling — combined API+Worker = 30
 GROQ_TPM_LIMIT=12000    # matches llama-3.3-70b-versatile free-tier (12K TPM)
 ```
-> Note: the in-code defaults (when these vars are unset) are more conservative —
-> `GROQ_RPM_LIMIT=15` per process. `.env.example` is the canonical configuration.
+> The per-process RPM limits are halved so the combined API+Worker rate stays under
+> the free-tier ceiling. A single in-process instance (`USE_REDIS_WORKER=false`) can
+> safely raise them to the full ceiling (10 / 30).
 
 **Verification:**
 ```bash
