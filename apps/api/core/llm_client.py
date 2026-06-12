@@ -906,6 +906,14 @@ class LLMClient:
                         }
                         if json_mode:
                             payload["response_format"] = {"type": "json_object"}
+                            # Groq/OpenAI reject json_object response_format with a
+                            # 400 ("'messages' must contain the word 'json'") unless
+                            # the literal token "json" appears in the prompt. Guarantee
+                            # it so synthesis never silently falls back to template.
+                            if "json" not in (system_prompt + trimmed_user).lower():
+                                payload["messages"][0]["content"] = (
+                                    system_prompt + "\n\nRespond ONLY with a single valid JSON object."
+                                )
                         async with LLMClient._global_semaphore:
                             resp = await client.post(url, headers=req_headers, json=payload, timeout=req_timeout)
 
