@@ -20,12 +20,12 @@ Default: `FREE_TIER_MODE=true`
 
 ### Groq (Logic & Reasoning)
 
-| Role | Primary model | Fallback | Use case |
-|------|---------------|----------|---------|
-| Agent synthesis | `llama-3.3-70b-versatile` | `llama-3.1-8b-instant` | Per-agent forensic narrative synthesis |
-| Arbiter synthesis | `llama-3.3-70b-versatile` | `llama-3.1-8b-instant` | Cross-agent deliberation, narrative, and verdict reasoning |
+| Role | Model | Fallback | Use case |
+|------|-------|----------|---------|
+| Per-agent synthesis | `llama-3.1-8b-instant` | `llama-3.3-70b-versatile` | Per-agent narrative synthesis — routed to the small, separate-TPM-bucket model (`SYNTHESIS_MODEL`) to preserve 70B headroom |
+| Arbiter / final refiner | `llama-3.3-70b-versatile` | `ARBITER_FALLBACK_CHAIN` | Cross-agent deliberation, narrative, and verdict reasoning (`ARBITER_PRIMARY_MODEL`) |
 
-Both roles default to `llama-3.3-70b-versatile` (primary) with `llama-3.1-8b-instant` as the automatic fallback, configured via `LLM_MODEL` / `LLM_FALLBACK_MODELS` (agents) and `ARBITER_*` settings (arbiter).
+Per-agent synthesis is routed to `llama-3.1-8b-instant` (via `SYNTHESIS_MODEL`) — it is a low-reasoning task, and a separate TPM bucket keeps the 70B reserved for the arbiter. The arbiter and final refiner use `llama-3.3-70b-versatile` (`ARBITER_PRIMARY_MODEL`). The base agent model / fallback are `LLM_MODEL` / `LLM_FALLBACK_MODELS`.
 
 **Get a key:** https://console.groq.com/keys
 
@@ -81,13 +81,15 @@ ARBITER_GEMINI_API_KEY=
 # Set to a different key to isolate Arbiter quota from agent quota.
 ```
 
-**Per-provider free-tier limits (defaults):**
+**Per-provider free-tier limits (as shipped in `.env.example`):**
 ```dotenv
-GEMINI_RPM_LIMIT=10
+GEMINI_RPM_LIMIT=5      # halved from the 10 RPM free-tier ceiling (API + worker share the key)
 GEMINI_RPD_LIMIT=1500
-GROQ_RPM_LIMIT=30
-GROQ_TPM_LIMIT=6000
+GROQ_RPM_LIMIT=30       # free-tier ceiling
+GROQ_TPM_LIMIT=12000    # matches llama-3.3-70b-versatile free-tier (12K TPM)
 ```
+> Note: the in-code defaults (when these vars are unset) are more conservative —
+> `GROQ_RPM_LIMIT=15` per process. `.env.example` is the canonical configuration.
 
 **Verification:**
 ```bash
@@ -140,7 +142,7 @@ cd apps/api
 POSTGRES_HOST=localhost uv run python scripts/model_pre_download.py --strict
 ```
 
-This seeds the local model cache (`apps/api/cache/`). Subsequent runs skip download if weights are present.
+This seeds the model cache directories configured by `HF_HOME` / `TORCH_HOME` / `YOLO_MODEL_DIR` / `EASYOCR_MODEL_DIR` (in Docker these are the named volumes `hf_cache`, `torch_cache`, `yolo_cache`, `easyocr_cache` mounted under `/app/cache/`). Subsequent runs skip download if weights are present.
 
 ### Validate ML tools
 ```bash
