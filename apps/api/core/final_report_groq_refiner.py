@@ -220,8 +220,12 @@ async def _attempt_refine(
     try:
         raw_response = await llm_client.generate_synthesis(
             system_prompt=system_prompt,
-            user_content=json.dumps(input_payload, indent=2, default=str),
-            max_tokens=800,
+            # The refiner re-emits the full report (executive summary, key findings,
+            # reliability notes, conclusion) as one JSON object. 800 tokens was too
+            # tight: on a real report the model hit the completion limit mid-JSON and
+            # Groq rejected the whole call with `json_validate_failed`, silently
+            # dropping the narrative to the deterministic template. Give it room.
+            max_tokens=2048,
             timeout_override=30.0,
             json_mode=True,
             priority="critical",

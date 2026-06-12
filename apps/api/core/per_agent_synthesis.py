@@ -1459,10 +1459,11 @@ async def refine_synthesis_batch(
                 user_content=user_payload,
                 json_mode=True,
                 priority="medium",
-                # Three short expert briefs (visual_context_summary + agent_brief +
-                # 3–5 key_findings per agent). 900 tokens is sufficient and saves
-                # ~25% of per-call quota vs the previous 1200 ceiling.
-                max_tokens=900,
+                # One JSON object covering every active agent (visual_context_summary
+                # + agent_brief + 3–5 key_findings each). 900 was too tight once
+                # findings are present — the model can hit the completion limit
+                # mid-JSON and Groq rejects the whole call with `json_validate_failed`.
+                max_tokens=1400,
             ),
             timeout=40.0,
         )
