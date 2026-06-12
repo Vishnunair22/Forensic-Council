@@ -16,6 +16,25 @@ Default: `FREE_TIER_MODE=true`
 
 ---
 
+## LLM Usage Pattern (quota-bounded)
+
+The system is deliberately frugal with external calls so it stays inside the free
+tiers and degrades gracefully. Per investigation:
+
+| Stage | Provider | Calls | Fallback when unavailable |
+|-------|----------|-------|---------------------------|
+| Visual / file context | **Gemini** (vision) | **Once per file** — Agent 1 builds the shared visual profile, cached by content hash and reused by every agent | Local forensic vision ensemble (`local_ensemble`) — `VISION_PROVIDER_CHAIN=gemini,local_ensemble` |
+| Per-agent findings synthesis | **Groq** | One call per applicable agent (`LLM_ENABLE_POST_SYNTHESIS=true`) | Deterministic grounded synthesis (template) |
+| Final report synthesis | **Groq** (arbiter / refiner) | One call | Deterministic report builder |
+| In-loop ReAct reasoning | **none** | `LLM_ENABLE_REACT_REASONING=false` — agents run the fast deterministic task-decomposition driver | n/a (disabled to avoid one LLM call per step starving quota) |
+
+Gemini is **never** used for text synthesis (`GEMINI_TEXT_CALLS_ENABLED=false`) — it
+is reserved for that single visual probe. Groq owns all narrative synthesis, and
+every LLM stage falls back to a deterministic path, so no provider outage or
+rate-limit can block an evidentiary report.
+
+---
+
 ## LLM Providers
 
 ### Groq (Logic & Reasoning)

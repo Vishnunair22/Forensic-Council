@@ -83,12 +83,12 @@ All 5 specialist agents extend `ForensicAgent` (abstract base class) and share:
 
 1. **ReAct loop** (`core/react_loop.py`) — Reason → Act → Observe cycle
    - Task-decomposition driver (default, no LLM needed)
-   - Optional Groq LLM driver for richer reasoning traces
+   - In-loop LLM reasoning is **disabled by default** (`LLM_ENABLE_REACT_REASONING=false`) — it would spend one Groq call per step and starve the free-tier quota
 2. **Working memory** — Redis-backed task queue with 200ms heartbeat to frontend
 3. **Self-reflection pass** — Quality check after tool execution
 4. **Episodic memory** — Historical context from Qdrant
 5. **Chain-of-custody logging** — Every signed entry to PostgreSQL
-6. **Post-synthesis** — Optional Groq call to generate court-admissible narrative
+6. **Post-synthesis** — one Groq call per agent (`LLM_ENABLE_POST_SYNTHESIS=true`) to synthesize tool findings into a court-admissible narrative; falls back to deterministic synthesis when Groq is unavailable. See the [LLM usage pattern](MODEL_REGISTRY.md#llm-usage-pattern-quota-bounded).
 
 ### Two-Phase Execution
 
