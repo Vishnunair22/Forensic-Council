@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  ScanSearch,
   type LucideIcon
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -449,6 +450,26 @@ export function AgentFindingCard({
   }, [realFindings]);
 
   const sections = useMemo(() => groupFindingsBySection(realFindings), [realFindings]);
+
+  // Plan 3.4 — per-pixel forensic localization maps (e.g. TruFor splicing
+  // heatmap) carried inline on the finding metadata as base64 data URIs. Visual
+  // evidence is the most persuasive artifact for a human reviewer; surface it
+  // once per distinct map rather than discarding it.
+  const localizationMaps = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { src: string; caption: string; tool: string }[] = [];
+    for (const f of realFindings) {
+      const src = f.metadata?.localization_map_png;
+      if (typeof src !== "string" || !src.startsWith("data:image") || seen.has(src)) continue;
+      seen.add(src);
+      out.push({
+        src,
+        caption: String(f.metadata?.localization_map_caption || "Forensic localization map."),
+        tool: String(f.metadata?.tool_name || f.finding_type || "Localization"),
+      });
+    }
+    return out;
+  }, [realFindings]);
   // Prefer the typed structured narrative from the backend DTO; fall back to JSON
   // parse of per_agent_analysis string (legacy path) if the field is absent.
   const parsedNarrative = useMemo(() => {
@@ -743,6 +764,36 @@ export function AgentFindingCard({
                   </div>
                 </div>
               )
+            )}
+
+            {/* Plan 3.4 — forensic localization heatmap(s). The detector's
+                per-pixel manipulation-probability map, overlaid on the evidence,
+                is the single most persuasive artifact for a human reviewer. */}
+            {localizationMaps.length > 0 && (
+              <div className="space-y-3">
+                {localizationMaps.map((m, i) => (
+                  <figure
+                    key={i}
+                    className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.08] space-y-3"
+                  >
+                    <figcaption className="flex items-center gap-2 text-primary">
+                      <ScanSearch className="w-4 h-4 shrink-0" />
+                      <h4 className="text-xs font-bold tracking-wider font-mono text-primary">
+                        Forensic localization map — {fmtTool(m.tool)}
+                      </h4>
+                    </figcaption>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={m.src}
+                      alt={m.caption}
+                      className="w-full max-w-md rounded-xl border border-white/[0.08]"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <p className="text-xs fc-text-muted leading-relaxed">{m.caption}</p>
+                  </figure>
+                ))}
+              </div>
             )}
 
             {/* Technical evidence (Tier 3) — collapsed by default so the plain-

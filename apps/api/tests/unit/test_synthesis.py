@@ -210,9 +210,72 @@ class TestSynthesisPromptContent:
         assert "PROMPT-INJECTION RESISTANCE" in _SAFETY_PREAMBLE
 
 
+class TestCompactMetricsHeatmapIsolation:
+    """Plan 3.4 — the base64 localization heatmap is a report/UI artifact and must
+    never reach metric extraction, narrative prose, or LLM synthesis tuples."""
+
+    def test_localization_map_excluded_from_metrics(self, service):
+        f = MagicMock(spec=AgentFinding)
+        f.metadata = {
+            "tool_name": "neural_splicing",
+            "splicing_detected": True,
+            "detection_score": 0.91,
+            "localization_map_png": "data:image/png;base64," + ("A" * 5000),
+            "localization_map_caption": "TruFor forgery map.",
+            "huge_blob": "z" * 1000,  # any oversized string is excluded defensively
+        }
+        f.finding_type = "test"
+        f.confidence_raw = 0.91
+        f.status = AgentFindingStatus("CONFIRMED")
+        f.evidence_verdict = "POSITIVE"
+        f.reasoning_summary = "splice"
+
+        metrics = service._compact_metrics(f)
+
+        assert "localization_map_png" not in metrics
+        assert "localization_map_caption" not in metrics
+        assert "huge_blob" not in metrics
+        # The decisive numeric signals are still carried.
+        assert metrics["splicing_detected"] is True
+        assert metrics["detection_score"] == 0.91
+
+
 class TestSynthesisSource:
     @pytest.mark.asyncio
-    async def test_successful_llm_synthesis_marks_source(self, service):
+    async def test_batch_only_default_skips_individual_groq_call(self, service):
+        """Default routing: per-agent Groq narration is consolidated into the
+        arbiter's refine_synthesis_batch call — the individual path must not
+        spend quota and falls back to the deterministic grounded synthesis."""
+        called = {"n": 0}
+
+        class FakeLLMClient:
+            provider = "groq"
+
+            async def generate_synthesis(self, **kwargs):
+                called["n"] += 1
+                return ""
+
+        findings = [_finding("file_hash_verify", verdict="SUSPICIOUS")]
+        ev = _evidence()
+
+        with patch("core.synthesis.LLMClient", return_value=FakeLLMClient()):
+            result = await service.synthesize_findings(
+                agent_id="Agent1",
+                agent_name="Agent1_Image",
+                findings=findings,
+                evidence_artifact=ev,
+                tool_success_count=1,
+                tool_error_count=0,
+                phase="initial",
+            )
+
+        assert called["n"] == 0
+        assert result["synthesis_source"] == "tool_grounded_fallback"
+
+    @pytest.mark.asyncio
+    async def test_successful_llm_synthesis_marks_source(self, service, monkeypatch):
+        # Individual Groq path is an explicit opt-out of batch-only routing.
+        monkeypatch.setenv("SYNTHESIS_BATCH_ONLY", "0")
         class FakeLLMClient:
             provider = "groq"
 

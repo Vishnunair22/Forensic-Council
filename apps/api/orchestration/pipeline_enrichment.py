@@ -58,6 +58,54 @@ async def enrich_report(
     if pipeline._degradation_flags:
         report.degradation_flags.extend(pipeline._degradation_flags)
 
+    # Plan 0.6 — defensive sync: every capability-manifest disclosure must be
+    # visible in the degradation banner even if an upstream path skipped it.
+    _sync_capability_disclosures(report)
+    # Plan 3.6 — visual-context cache provenance disclosure (source / provider /
+    # creation time). Cache age in seconds is not currently recorded by the
+    # store, so only the original creation timestamp can be rendered.
+    await _record_visual_cache_provenance(report, session_id)
+
+
+def _sync_capability_disclosures(report: Any) -> None:
+    """Append capability-manifest disclosures missing from degradation_flags."""
+    try:
+        manifest = getattr(report, "capability_manifest", None) or {}
+        flags = getattr(report, "degradation_flags", None)
+        if flags is None:
+            return
+        for disclosure in manifest.get("disclosures") or []:
+            if disclosure not in flags:
+                flags.append(disclosure)
+    except Exception as e:
+        logger.debug("Capability disclosure sync skipped", error=str(e))
+
+
+async def _record_visual_cache_provenance(report: Any, session_id: UUID) -> None:
+    """Disclose when the visual-context read was reused from cache, with the
+    provenance fields that exist (source, provider, original creation time)."""
+    try:
+        from core.visual_context_store import get_visual_context
+
+        ctx = await asyncio.wait_for(
+            get_visual_context(session_id=str(session_id)), timeout=10.0
+        )
+    except Exception as e:
+        logger.debug("Visual-context provenance lookup skipped", error=str(e))
+        return
+    if ctx is None or not getattr(ctx, "cached", False):
+        return
+    created = str(getattr(ctx, "created_at", "") or "").strip()
+    note = (
+        "Visual-context provenance: the visual read was reused from a cached analysis "
+        f"of an identical file (source: {getattr(ctx, 'source', 'unknown')}, provider: "
+        f"{getattr(ctx, 'provider_name', None) or 'unknown'}, originally created "
+        f"{created or 'time unrecorded'}), not recomputed this run."
+    )
+    flags = getattr(report, "degradation_flags", None)
+    if flags is not None and note not in flags:
+        flags.append(note)
+
 
 def _detect_visual_profile_provenance(pipeline: Any, report: Any) -> None:
     """Record visual provider provenance without treating provider choice as degradation."""

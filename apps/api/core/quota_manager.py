@@ -7,6 +7,7 @@ over optional calls (per-agent synthesis, ReAct reasoning).
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -14,6 +15,15 @@ from typing import Literal
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+# ── Per-investigation token budget ──────────────────────────────────────────
+# Free-tier math: llama-3.3-70b-versatile has ~12K TPM. One investigation must
+# fit inside a single TPM window, with ~4800 tokens RESERVED for the final-report
+# refiner (the single most important LLM call). Synthesis calls that would invade
+# the reserve are rejected so the caller falls back to the deterministic template.
+# Env-overridable (os.environ-with-default — same style as ml_subprocess.py).
+INVESTIGATION_TOKEN_BUDGET = int(os.environ.get("INVESTIGATION_TOKEN_BUDGET", "12000") or "12000")
+REFINER_RESERVE_TOKENS = int(os.environ.get("REFINER_RESERVE_TOKENS", "4800") or "4800")
 
 
 @dataclass
@@ -174,6 +184,98 @@ class QuotaManager:
         if now.date() > self._last_reset.date():
             self._daily_calls = dict.fromkeys(self._daily_calls, 0)
             self._last_reset = now
+
+
+class InvestigationTokenBudget:
+    """Tracks LLM tokens consumed by a single investigation.
+
+    The total budget covers ONE Groq TPM window (default 12K). The last
+    ``refiner_reserve`` tokens (default 4800) are reserved for the final-report
+    refiner: synthesis-class calls may only consume up to
+    ``total_tokens - refiner_reserve``; a call that would invade the reserve is
+    rejected and the caller must fall back to the deterministic template
+    (tagged ``synthesis_source="deterministic_template"`` at the generation site).
+    """
+
+    def __init__(
+        self,
+        investigation_id: str,
+        total_tokens: int | None = None,
+        refiner_reserve: int | None = None,
+    ):
+        self.investigation_id = investigation_id
+        self.total_tokens = total_tokens if total_tokens is not None else INVESTIGATION_TOKEN_BUDGET
+        self.refiner_reserve = (
+            refiner_reserve if refiner_reserve is not None else REFINER_RESERVE_TOKENS
+        )
+        self._consumed = 0
+        self._lock = asyncio.Lock()
+
+    @property
+    def consumed(self) -> int:
+        return self._consumed
+
+    @property
+    def remaining(self) -> int:
+        return max(0, self.total_tokens - self._consumed)
+
+    async def try_consume(self, tokens: int, job: str = "synthesis") -> tuple[bool, str]:
+        """Reserve `tokens` for a call. Returns (allowed, reason).
+
+        job="synthesis" calls may not invade the refiner reserve;
+        job="refiner" may consume the full budget including the reserve.
+        """
+        tokens = max(0, int(tokens))
+        async with self._lock:
+            ceiling = (
+                self.total_tokens
+                if job == "refiner"
+                else self.total_tokens - self.refiner_reserve
+            )
+            if self._consumed + tokens > ceiling:
+                reason = (
+                    f"investigation token budget exhausted for {job} "
+                    f"({self._consumed}+{tokens}>{ceiling}; "
+                    f"{self.refiner_reserve} reserved for refiner)"
+                )
+                logger.warning(
+                    "Investigation token budget rejected call",
+                    investigation_id=self.investigation_id,
+                    job=job,
+                    consumed=self._consumed,
+                    requested=tokens,
+                    ceiling=ceiling,
+                )
+                return False, reason
+            self._consumed += tokens
+            logger.debug(
+                "Investigation tokens consumed",
+                investigation_id=self.investigation_id,
+                job=job,
+                consumed=self._consumed,
+                total=self.total_tokens,
+            )
+            return True, "ok"
+
+
+# Per-investigation budgets (bounded; oldest evicted FIFO so a long-lived
+# worker process cannot grow this without bound).
+_investigation_budgets: dict[str, InvestigationTokenBudget] = {}
+_MAX_TRACKED_INVESTIGATIONS = 256
+
+
+def get_investigation_budget(investigation_id: str) -> InvestigationTokenBudget:
+    """Get or create the token budget for an investigation (session id)."""
+    budget = _investigation_budgets.get(investigation_id)
+    if budget is None:
+        if len(_investigation_budgets) >= _MAX_TRACKED_INVESTIGATIONS:
+            try:
+                _investigation_budgets.pop(next(iter(_investigation_budgets)))
+            except StopIteration:  # pragma: no cover — racy empty dict
+                pass
+        budget = InvestigationTokenBudget(investigation_id)
+        _investigation_budgets[investigation_id] = budget
+    return budget
 
 
 # Global quota managers

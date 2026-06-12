@@ -34,6 +34,7 @@ import asyncio
 import base64
 import json
 import mimetypes
+import os
 import random
 import time
 from dataclasses import dataclass, field
@@ -123,6 +124,114 @@ _DEFAULT_MODEL = "gemini-2.5-flash"
 _DEFAULT_FALLBACK_CHAIN = "gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite"
 
 _THINKING_MODEL_PREFIXES = ("gemini-2.5",)
+
+# ── Schema-locked JSON output ────────────────────────────────────────────────
+# Calls whose output feeds verdict logic use Gemini structured output
+# (responseMimeType="application/json" + responseSchema) so downstream parsing
+# never scrapes free text. NOTE: the old observation that bare
+# responseMimeType suppressed visual perception applied to JSON-mode WITHOUT a
+# schema; constrained decoding with responseSchema is a different mode. The
+# env kill-switch below allows instant rollback if a model regression appears.
+_RESPONSE_SCHEMA_ENABLED = str(os.environ.get("GEMINI_RESPONSE_SCHEMA", "1")).strip().lower() in (
+    "1", "true", "yes", "on",
+)
+
+
+def _schema_str_array() -> dict[str, Any]:
+    return {"type": "ARRAY", "items": {"type": "STRING"}}
+
+
+# Vision-preflight schema. "reasoning" is deliberately FIRST (propertyOrdering)
+# so the model writes its chain-of-thought before committing to the structured
+# fields — the cheap CoT measurably reduces over-calling on benign edits.
+_PREFLIGHT_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "propertyOrdering": [
+        "reasoning", "image_integrity", "object_scene_context", "metadata_provenance", "confidence",
+    ],
+    "properties": {
+        "reasoning": {
+            "type": "STRING",
+            "description": "2-3 sentences of forensic reasoning written BEFORE the structured fields",
+        },
+        "image_integrity": {
+            "type": "OBJECT",
+            "properties": {
+                "description": {"type": "STRING"},
+                "file_type_assessment": {"type": "STRING"},
+                "manipulation_signals": _schema_str_array(),
+                "ai_generation_signals": _schema_str_array(),
+                "editing_signals": _schema_str_array(),
+                "compression_signals": _schema_str_array(),
+                "regions_for_followup": _schema_str_array(),
+                "integrity_assessment": {
+                    "type": "STRING",
+                    "enum": [
+                        "no_visible_issue", "suspicious", "likely_manipulated",
+                        "ai_generated_suspect", "cannot_determine",
+                    ],
+                },
+            },
+            "required": ["description", "integrity_assessment"],
+        },
+        "object_scene_context": {
+            "type": "OBJECT",
+            "properties": {
+                "scene_type": {"type": "STRING"},
+                "scene_description": {"type": "STRING"},
+                "objects": _schema_str_array(),
+                "weapons_or_dangerous_items": _schema_str_array(),
+                "documents_or_ids": _schema_str_array(),
+                "people": _schema_str_array(),
+                "ui_elements": _schema_str_array(),
+                "visible_text": _schema_str_array(),
+                "scene_inconsistencies": _schema_str_array(),
+                "platform": {"type": "STRING"},
+            },
+            "required": ["scene_description"],
+        },
+        "metadata_provenance": {
+            "type": "OBJECT",
+            "properties": {
+                "visible_timestamps": _schema_str_array(),
+                "visible_location_clues": _schema_str_array(),
+                "device_platform_clues": _schema_str_array(),
+                "app_software_clues": _schema_str_array(),
+                "lighting_weather_season_clues": _schema_str_array(),
+                "format_compression_clues": _schema_str_array(),
+                "metadata_consistency_notes": _schema_str_array(),
+                "provenance_anomalies": _schema_str_array(),
+            },
+        },
+        "confidence": {"type": "NUMBER"},
+    },
+    "required": ["image_integrity", "object_scene_context", "metadata_provenance", "confidence"],
+}
+
+# Free-text calls that feed verdict logic — locked to their declared JSON shape.
+_MANIP_XVAL_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "visual_confirmation": {"type": "STRING"},
+        "additional_anomalies": _schema_str_array(),
+        "authenticity_assessment": {"type": "STRING"},
+        "confidence": {"type": "NUMBER"},
+    },
+    "required": ["visual_confirmation", "authenticity_assessment", "confidence"],
+}
+
+_META_CONSISTENCY_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "visual_timestamp_consistency": {"type": "STRING"},
+        "visual_location_consistency": {"type": "STRING"},
+        "device_consistency": {"type": "STRING"},
+        "content_provenance_flags": _schema_str_array(),
+        "overall_verdict": {"type": "STRING"},
+        "confidence": {"type": "NUMBER"},
+    },
+    "required": ["overall_verdict", "confidence"],
+}
 
 # Prompt caching tracking for SAFETY_PREAMBLE
 _CACHED_PREAMBLE_COUNT: int = 0
@@ -375,8 +484,29 @@ def _build_preflight_prompt(is_screen_capture_like: bool = False, media_class: s
         "- Distinguish BENIGN edits (crop, background removal/transparency, color/exposure, "
         "resize) from DECEPTIVE manipulation (splice, clone, inpaint, AI generation).\n\n"
         + focus + "\n\n"
+        # Compact CoT: the "reasoning" field comes FIRST so the model commits to
+        # an inspection narrative before filling the structured fields.
+        "CHAIN OF REASONING: populate the \"reasoning\" field FIRST — 2-3 sentences "
+        "naming what you inspected (rendering, lighting/shadows, text, compression, "
+        "textures) and why your assessment follows. Every structured field below must "
+        "be consistent with that reasoning.\n\n"
+        # Two compact few-shot exemplars (format anchors only).
+        "FORMAT EXAMPLES — structure only, NEVER copy their content into your answer:\n"
+        "Example 1 (banking-app screenshot with a pasted overlay):\n"
+        '{"reasoning": "Native UI chrome renders crisply, but the alert banner uses a '
+        'non-platform font with misaligned corner radii; no AI-generation texture cues.", '
+        '"image_integrity": {"file_type_assessment": "screenshot", '
+        '"manipulation_signals": ["pasted alert banner: font and corner-radius mismatch"], '
+        '"ai_generation_signals": [], "integrity_assessment": "suspicious"}, ...}\n'
+        "Example 2 (ordinary outdoor photograph, unedited):\n"
+        '{"reasoning": "Lighting direction, shadow angles and depth-of-field are mutually '
+        'consistent; sensor noise is uniform; no compositing boundaries or synthetic '
+        'textures.", "image_integrity": {"file_type_assessment": "photograph", '
+        '"manipulation_signals": [], "ai_generation_signals": [], '
+        '"integrity_assessment": "no_visible_issue"}, ...}\n\n'
         "Return ONLY this JSON object — no markdown, no preamble, no trailing text:\n"
         "{\n"
+        '  "reasoning": "<2-3 sentences: what you inspected and why your assessment follows>",\n'
         '  "image_integrity": {\n'
         '    "description": "<2-3 sentence factual description of what this image shows>",\n'
         '    "file_type_assessment": "<one of: screenshot|photograph|document_scan|ai_generated|composite|web_image|unknown>",\n'
@@ -1163,6 +1293,9 @@ class GeminiVisionClient:
             prompt=prompt,
             analysis_type="visual_context_preflight",
             single_model=(_media_class != "image"),
+            # Schema-locked: the preflight feeds verdict logic (authenticity
+            # verdict, integrity assessment) so the output shape is constrained.
+            response_schema=_PREFLIGHT_RESPONSE_SCHEMA,
         )
 
         if gf.error:
@@ -1261,6 +1394,8 @@ class GeminiVisionClient:
             file_path=file_path,
             prompt=prompt,
             analysis_type="manipulation_cross_validation",
+            # authenticity_assessment feeds verdict logic — schema-locked.
+            response_schema=_MANIP_XVAL_RESPONSE_SCHEMA,
         )
 
     async def analyze_objects_and_scene(
@@ -1463,6 +1598,8 @@ class GeminiVisionClient:
             file_path=file_path,
             prompt=prompt,
             analysis_type="metadata_visual_consistency",
+            # overall_verdict feeds verdict logic — schema-locked.
+            response_schema=_META_CONSISTENCY_RESPONSE_SCHEMA,
         )
 
     # ------------------------------------------------------------------ #
@@ -1477,6 +1614,7 @@ class GeminiVisionClient:
         model_hint: str | None = None,
         is_screen_capture_like: bool = False,
         single_model: bool = False,
+        response_schema: dict[str, Any] | None = None,
     ) -> GeminiVisionFinding:
         """Encode file and call Gemini generateContent, parse structured result.
 
@@ -1604,12 +1742,17 @@ class GeminiVisionClient:
             # on borderline inputs.
             "temperature": 0.0,
             "maxOutputTokens": 2048,
-            # NOTE: responseMimeType="application/json" is intentionally omitted.
-            # When set alongside multimodal (image) input it causes Gemini 2.x to
-            # enter a JSON-generation mode that suppresses visual perception,
-            # producing "no visual content detected" responses even for valid images.
-            # We rely on our own _parse_response() JSON extraction instead.
+            # NOTE: bare responseMimeType="application/json" (JSON mode WITHOUT a
+            # schema) is still omitted by default — alongside multimodal input it
+            # historically pushed Gemini 2.x into a mode that suppressed visual
+            # perception. Schema-locked structured output (mime + responseSchema,
+            # below) is a different decoding mode and is applied for calls that
+            # feed verdict logic; GEMINI_RESPONSE_SCHEMA=0 rolls it back.
+            # _parse_response() JSON extraction remains as the parse fallback.
         }
+        if response_schema is not None and _RESPONSE_SCHEMA_ENABLED:
+            generation_config["responseMimeType"] = "application/json"
+            generation_config["responseSchema"] = response_schema
 
         # Build ordered model cascade with deduplication.
         models_to_try: list[str] = []
@@ -2158,7 +2301,23 @@ class GeminiVisionClient:
             "image/gif",
         }
         _MAX_RAW_BYTES = 3 * 1024 * 1024  # 3 MB
-        if mime_type in _IMAGE_MIME_TYPES and len(raw) > _MAX_RAW_BYTES:
+        # Vision-call thrift: Gemini tiles/downsamples internally anyway, so
+        # pixels beyond ~1536px on the long side only inflate upload size and
+        # token cost without improving the forensic read. Animated GIFs are
+        # exempt from the dimension-only trigger (a re-encode drops frames).
+        _MAX_LONG_SIDE = 1536
+        _needs_dim_resize = False
+        if mime_type in _IMAGE_MIME_TYPES and mime_type != "image/gif":
+            try:
+                import io as _io_probe
+
+                from PIL import Image as _PImageProbe
+
+                with _PImageProbe.open(_io_probe.BytesIO(raw)) as _probe:
+                    _needs_dim_resize = max(_probe.width, _probe.height) > _MAX_LONG_SIDE
+            except Exception:
+                _needs_dim_resize = False
+        if mime_type in _IMAGE_MIME_TYPES and (len(raw) > _MAX_RAW_BYTES or _needs_dim_resize):
             try:
                 import io
 
@@ -2168,8 +2327,13 @@ class GeminiVisionClient:
                 # Convert palette/RGBA modes that don't survive JPEG re-encode
                 if img.mode not in ("RGB", "L"):
                     img = img.convert("RGB")
-                # Scale down proportionally until raw size is under limit
-                scale = (_MAX_RAW_BYTES / len(raw)) ** 0.5
+                # Scale down proportionally: under the byte limit AND under the
+                # 1536px long-side ceiling (whichever requires the smaller scale).
+                byte_scale = (
+                    (_MAX_RAW_BYTES / len(raw)) ** 0.5 if len(raw) > _MAX_RAW_BYTES else 1.0
+                )
+                dim_scale = min(1.0, _MAX_LONG_SIDE / max(img.width, img.height))
+                scale = min(byte_scale, dim_scale)
                 new_w = max(256, int(img.width * scale))
                 new_h = max(256, int(img.height * scale))
                 img = img.resize((new_w, new_h), _PImage.LANCZOS)
