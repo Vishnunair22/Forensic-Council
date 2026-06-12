@@ -1,5 +1,36 @@
 # Changelog
 
+## [v1.9.0] - 2026-06-12
+
+CPU / free-tier elevation: makes the verdict math defensible, the confidence
+numbers honest, the LLM layer non-degrading, and the report court-grade — all
+within CPU-only inference and Gemini/Groq free tiers. (Folds in the former
+`ELEVATION_PLAN_CPU_FREE_TIER.md` and `CALIBRATION_PLAN.md`, now removed.)
+
+### Added
+- **Capability manifest per investigation** (`core/capability_manifest.py`): snapshots every applicable tool as `{ran, failed, gated_off, model_unavailable}` plus model name/version, embedded in the signed report. Drives the Methodology and Limitations sections and truthful tool naming.
+- **Per-tool threshold sweep** (`scripts/run_threshold_sweep.py`): ROC table + AUC + operating thresholds at FPR ≤ 0.05 / 0.01 from a `score,label` CSV, for disclosing measured per-tool error rates.
+- **End-to-end calibration runner** (`scripts/run_agent_calibration.py`): one command chains collect → sweep → validate → gated-train; persists a model only on an `ADOPT` verdict *and* explicit `--adopt`. See `docs/CALIBRATION_RUNBOOK.md`.
+- **AI-text detector** (`tools/ml_tools/ai_text_detector.py`) wired into the collector — Agent5 (text) is now calibratable; **Agent5 is TRAINED+ADOPTED** on HC3 (`storage/calibration_models/Agent5/`).
+- **DeepFace face-swap detection** wired into Agent4's production path (CPU-fine on sampled frames).
+- **TruFor localization heatmaps** (Phase 3.4): the per-pixel forgery-probability map is colour-mapped, overlaid on the evidence, and surfaced inline in the report/UI (`AgentFindingCard`) via finding metadata — the base64 image is isolated from LLM/narrative extraction.
+- **Report sections**: Methodology (from the manifest), qualitative likelihood-ratio language, auto-generated Limitations, Reproducibility block, and a calibration disclosure block (court-inadmissibility statement for UNCALIBRATED agents; dataset+version citation for TRAINED agents).
+
+### Changed
+- **EXIF anomaly scoring** (`tools/ml_tools/exif_isolation_forest.py`): replaced the runtime 5-row IsolationForest fit with transparent rule scores; absent metadata is now INFO, not a forced anomaly (kills the screenshot/social-export false positive).
+- **Verdict engine** (`agents/arbiter_verdict.py`, `core/forensic_policy.py`): signal-family fusion (correlated recompression tools counted once), a tiered single-signal rule (validated tools can reach SUSPICIOUS alone; weak tools need a different-family corroborator), and tool weights/severity bands re-derived from measured AUC instead of unsourced defaults.
+- **Lost-coverage handling** (`core/arbiter_deliberation.py`): a failed/gated *critical* tool reads as "could not be verified", not "no anomaly" — removing the silent-clean bias.
+- **Screenshot gating** is now applied in `compute_agent_verdict` (`core/severity.py`), so agent-phase verdicts agree with the final arbiter verdict.
+- **LLM layer** (`core/synthesis.py`, `agents/arbiter.py`, `core/quota_manager.py`, `core/provider_quota_guard.py`): batch synthesis is canonical (1 Groq call, not 5), job-based model routing, a per-investigation token budget that falls back to template *with a provenance tag* rather than silently, and Redis-backed quota state. Enum-constrained JSON everywhere; the substring-keyword taxonomy is demoted to a legacy fallback.
+- **Truthful tool naming** (`core/finding_formatter.py`): `neural_*` / `f3_net` / `mantra` / `synthid` tools state the method that actually ran when research weights are not loaded.
+
+### Fixed
+- **`fit_platt` ran gradient *ascent*** (`scripts/train_calibration.py`): the sign was inverted for the `p = 1/(1+exp(A·x+B))` parameterisation, so `A` diverged and any "calibrated" model was random (`A=+954, acc=0.500`). Corrected to descent (`A=-17, acc≈1.0, ECE 0.218→0.029`), with tuned `lr`/`max_iter` and a gradient-norm stop. Any model trained before this fix must be discarded and refit; on-disk UNCALIBRATED defaults were unaffected.
+- Verdict↔confidence pinning: removed the fabricated ~98% confidence floor on clean files.
+
+### Removed
+- Audit/scratch artifacts and standalone planning docs (`ELEVATION_PLAN_CPU_FREE_TIER.md`, `CALIBRATION_PLAN.md`, `docs/audits/`) — completed and folded here. Tracked one-off audit scripts (`scripts/*_audit.py`, `apps/api/test_scripts/`) removed.
+
 ## [v1.8.0] - 2026-05-28
 
 ### Added

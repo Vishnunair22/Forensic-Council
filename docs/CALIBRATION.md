@@ -18,7 +18,31 @@ default. Always go through the **adopt-only-if-it-beats-default** gate
 (`validate_calibration.py`) — it adopts a trained model only if it improves
 **ECE and Brier** on a held-out split **without raising the false-positive rate**.
 
+## Current state
+
+Agents ship `CalibrationStatus.UNCALIBRATED` engineering defaults. **Agent5 (text)
+is TRAINED+ADOPTED** on HC3 (`storage/calibration_models/Agent5/`); Agent1 (image)
+is wired and runnable; Agents 2/3/4 await their benchmark media. Uncalibrated
+agents are disclosed as *"indicative (uncalibrated)"* in every signed report;
+TRAINED agents cite their dataset + model version.
+
 ## Workflow
+
+The fastest path is the one-command runner, which chains collect → threshold
+sweep → validate → gated-train and persists **only** on an `ADOPT` verdict *and*
+explicit `--adopt`:
+
+```bash
+python scripts/run_agent_calibration.py --agent Agent1 \
+    --real /data/genimage/real --fake /data/genimage/ai --adopt
+```
+
+> `--agent` is the **capitalised store key** (`Agent1`…`Agent5`) — the directory the
+> running system loads (`storage/calibration_models/AgentN/`). The runner selects
+> the detector by modality; per-agent datasets + commands are in
+> [CALIBRATION_RUNBOOK.md](CALIBRATION_RUNBOOK.md).
+
+The same pipeline, run step by step:
 
 ```bash
 # 1. Collect raw detector scores over a LABELLED benchmark (label 0=authentic, 1=manipulated/AI)
@@ -28,13 +52,13 @@ python scripts/collect_calibration_scores.py \
     --out /tmp/agent1_ai_scores.csv
 
 # 2. Validate against the conservative default on a held-out split (the safety gate)
-python scripts/validate_calibration.py --dataset /tmp/agent1_ai_scores.csv --agent agent1_image
+python scripts/validate_calibration.py --dataset /tmp/agent1_ai_scores.csv --agent Agent1
 #   → VERDICT: ADOPT   (trained beats default on ECE+Brier, FPR not worse)
 #   → VERDICT: KEEP_DEFAULT  (otherwise — do not persist)
 
 # 3. Persist ONLY if step 2 said ADOPT
 python scripts/train_calibration.py --dataset /tmp/agent1_ai_scores.csv \
-    --agent agent1_image --output-dir storage/calibration_models
+    --agent Agent1 --output-dir storage/calibration_models
 ```
 
 Run inside the worker container (ML models present). Calibrate **per agent /
@@ -52,8 +76,8 @@ uploads with dubious labels calibrate to noise.
 | AI-generated images (`ai_generation`) | agent1_image | **GenImage** (2023), Synthbuster, DRCT-2M; real side: COCO/ImageNet subsets | research licences; balance generators (SD, Midjourney, DALL·E) |
 | Image splicing / tamper (`splicing`) | agent1_image / agent3 | **NIST MFC 2018/2019**, CASIA v2, Columbia, DEFACTO (2019) | NIST requires registration; cite version |
 | Audio spoof / synthetic voice (`voice_clone`) | agent2_audio | **ASVspoof 2019 LA + 2021 DF** (current TTS/VC) | ASVspoof EULA; 2021 DF covers modern neural TTS |
-| Video / face deepfake | agent4_video | **FaceForensics++** (c23/c40), **DFDC**, Celeb-DF v2, DeepfakeTIMIT | large; sample a balanced subset |
-| AI-generated text | agent5_metadata | RAID (2024), HC3, M4 — *requires an AI-text detector first* | no local detector yet; needs a model or Gemini |
+| Video / face deepfake | agent4_video | **FaceForensics++** (c23/c40), **DFDC**, Celeb-DF v2, DeepfakeTIMIT | large; sample a balanced subset; FF++/DFDC are EULA-gated |
+| AI-generated text (`ai_text`) | agent5_metadata | **HC3** (used; TRAINED), RAID (2024), M4 | local `ai_text_detector.py` (statistical screening) — calibrated on HC3 |
 
 Kaggle is fine **only** as a mirror of the above; verify the source matches the
 canonical benchmark and labels.
@@ -72,7 +96,8 @@ canonical benchmark and labels.
 
 ## What calibration will NOT fix
 
-- **Capability gaps** — there is no local AI-*text* detector; calibration data
-  cannot create one (add a model / Gemini path).
-- **Detector ceilings** — a synthesis method the audio model cannot perceive stays
-  undetected regardless of calibration; upgrade the detector.
+- **Capability gaps** — calibration rescales an existing detector's scores; it
+  cannot create a detector where none exists (it took adding `ai_text_detector.py`
+  to make Agent5 calibratable). A missing modality needs a model, not data.
+- **Detector ceilings** — a synthesis method the detector cannot physically
+  perceive stays undetected regardless of calibration; upgrade the detector.
