@@ -150,6 +150,7 @@ Backend capability contract for frontend policy sync. **No authentication requir
 | GET | `/api/v1/health/ml-tools` | ML tool readiness summary |
 | GET | `/api/v1/health/tools` | Tool registry readiness summary |
 | GET | `/api/v1/health/providers` | LLM/vision provider readiness + quota summary |
+| GET | `/api/v1/health/degradation` | Per-provider degradation status (Gemini/Groq) |
 
 ### GET `/api/v1/sessions/{session_id}/progress`
 
