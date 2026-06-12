@@ -218,7 +218,6 @@ class ForensicReport(BaseModel):
 
 
 # --- Verdict Constants ---
-
 AGENT_NAMES: dict[str, str] = {aid.value: aid.friendly_name for aid in AgentID}
 
 FINDING_CATEGORY_MAP: dict[str, str] = {
@@ -417,7 +416,8 @@ def calculate_manipulation_probability(
         if not f.get("stub_result")
     )
 
-    _manip_weighted: list[tuple[float, float, str]] = []  # (confidence, weight, signal_family)
+    # (confidence, weight, signal_family, tool_name)
+    _manip_weighted: list[tuple[float, float, str, str]] = []
     _seen_tool_agents: dict[tuple[str, str], tuple[float, str]] = {}
 
     for _f in all_findings:
@@ -469,32 +469,32 @@ def calculate_manipulation_probability(
                         continue
                 _seen_tool_agents[_agent_tool_key] = (_c, _phase)
 
-                _manip_weighted.append((_c, _w, ForensicPolicy.signal_family(_tool)))
+                _manip_weighted.append((_c, _w, ForensicPolicy.signal_family(_tool), _tool))
 
     # WS-3 #11 — signal-family fusion. Correlated detectors (ELA + JPEG-ghost +
     # frequency all fire on the SAME recompression artifact) must not each count as
     # independent evidence. Collapse to ONE signal per family at its strongest member,
     # and delete the volume bonus that rewarded raw signal count — a legitimately
     # re-encoded WhatsApp photo no longer climbs to SUSPICIOUS on volume alone.
-    _by_family: dict[str, tuple[float, float]] = {}
-    for _c, _w, _fam in _manip_weighted:
+    _by_family: dict[str, tuple[float, float, str]] = {}  # family -> (conf, weight, tool)
+    for _c, _w, _fam, _tool in _manip_weighted:
         _prev = _by_family.get(_fam)
         if _prev is None or (_c * _w) > (_prev[0] * _prev[1]):
-            _by_family[_fam] = (_c, _w)
+            _by_family[_fam] = (_c, _w, _tool)
     _family_signals = list(_by_family.values())
     signals_count = len(_family_signals)
 
     if not _family_signals:
         base_prob = 0.0
     elif len(_family_signals) == 1:
-        _c0, _w0 = _family_signals[0]
+        _c0, _w0, _ = _family_signals[0]
         _anchored_decay = max(0.4, _w0 * 0.8)
         base_prob = _c0 * _anchored_decay
     else:
         _sorted_manip = sorted(_family_signals, key=lambda x: x[0] * x[1], reverse=True)
         _top = _sorted_manip[:7]
-        _tw = sum(_w for _, _w in _top)
-        _sum_weighted = sum(_c * _w for _c, _w in _top)
+        _tw = sum(_w for _, _w, _ in _top)
+        _sum_weighted = sum(_c * _w for _c, _w, _ in _top)
         base_prob = _sum_weighted / _tw if _tw > 0 else 0.0
 
     # ── Visual assessment integration ──────────────────────────────────────
@@ -507,10 +507,24 @@ def calculate_manipulation_probability(
     elif _assessment == "minor" and base_prob < 0.15:
         base_prob = max(base_prob, 0.15)
 
-    # ── Single-signal downgrade ───────────────────────────────────────────
-    # A single weak signal must not drive a "manipulated"/"AI-generated" verdict.
-    if signals_count < 2 and base_prob >= 0.5:
-        base_prob = min(base_prob, 0.45)
+    # ── Single-signal downgrade (P0.4 — tiered rule) ──────────────────────
+    # A single signal from a HIGH-RELIABILITY tool (TruFor/BusterNet real path,
+    # ViT AI-gen detector, hash mismatch, AASIST/wav2vec2 audio) at confidence
+    # >= ForensicPolicy.SINGLE_SIGNAL_MANIP_THRESHOLD may reach SUSPICIOUS-level
+    # probability (capped at SINGLE_SIGNAL_HIGH_RELIABILITY_CAP). A single signal
+    # from any other tool stays capped at SINGLE_SIGNAL_DEFAULT_CAP and requires
+    # a corroborator from a DIFFERENT signal family to go higher.
+    if signals_count < 2:
+        _solo = next(iter(_by_family.values()), None)
+        _solo_is_high_reliability = (
+            _solo is not None
+            and _solo[2] in ForensicPolicy.HIGH_RELIABILITY_TOOLS
+            and _solo[0] >= ForensicPolicy.SINGLE_SIGNAL_MANIP_THRESHOLD
+        )
+        if _solo_is_high_reliability:
+            base_prob = min(base_prob, ForensicPolicy.SINGLE_SIGNAL_HIGH_RELIABILITY_CAP)
+        else:
+            base_prob = min(base_prob, ForensicPolicy.SINGLE_SIGNAL_DEFAULT_CAP)
 
     final_prob = round(min(ForensicPolicy.MANIP_PROBABILITY_CAP, base_prob), 3)
     return final_prob, signals_count

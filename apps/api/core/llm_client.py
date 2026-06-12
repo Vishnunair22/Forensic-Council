@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import random
 import time
 from dataclasses import dataclass
@@ -62,6 +63,14 @@ def is_placeholder_secret(value: str | None) -> bool:
         return True
     return not lower or any(sig in lower for sig in PLACEHOLDER_SIGNALS)
 
+
+# Model routing by job: per-agent/batch synthesis is a constrained narration
+# task that does not need the 70B reasoning model. Routing it to a small,
+# separate-TPM-bucket model (llama-3.1-8b-instant, 6K TPM) preserves the
+# llama-3.3-70b 12K TPM budget for the final-report refiner, which stays on
+# the arbiter-tier primary model. os.environ-with-default (env-read style
+# already used across core modules) so deployments can override per-tier.
+SYNTHESIS_MODEL = os.environ.get("SYNTHESIS_MODEL", "llama-3.1-8b-instant").strip()
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 _MAX_RETRIES = 3
@@ -756,8 +765,22 @@ class LLMClient:
             if not self.is_available:
                 return ""
 
-            tokens = max_tokens or min(self.max_tokens, 1500)
+            # Synthesis output ceiling 1500→1000: per-agent briefs and the batch
+            # refiner never legitimately need more, and the lower ceiling shrinks
+            # the estimated-token reservation against the TPM bucket.
+            tokens = max_tokens or min(self.max_tokens, 1000)
             candidates = list(self._get_model_candidates())
+
+            # Job-based model routing (agent tier only): synthesis defaults to
+            # SYNTHESIS_MODEL (llama-3.1-8b-instant). The arbiter tier — which
+            # carries the final-report refiner — keeps its configured primary
+            # (70B) so report polish quality is unchanged.
+            if (
+                self.provider == "groq"
+                and not self.use_arbiter_tier
+                and SYNTHESIS_MODEL
+            ):
+                candidates = [SYNTHESIS_MODEL] + [c for c in candidates if c != SYNTHESIS_MODEL]
 
             # High-TPM Groq escape hatch (synthesis only). On the free tier the
             # primary/low-TPM Groq models (llama-3.3-70b = 12k, llama-3.1-8b = 6k)

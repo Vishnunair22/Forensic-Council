@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-EXIF isolation-forest style anomaly scorer.
+EXIF anomaly scorer (rule_based_v2).
 
-Uses sklearn IsolationForest when available and a deterministic robust-score
-fallback otherwise. It does not require a trained project-specific database.
+Deterministic, transparent rule score over EXIF features. The former runtime
+IsolationForest (fit on ~5 hardcoded baseline rows) was statistically
+meaningless and has been removed (P0.1); the tool name is kept for pipeline
+compatibility. Absence of EXIF is reported as informational, never anomalous
+(P0.2). It does not require a trained project-specific database.
 """
 
 from __future__ import annotations
@@ -76,8 +79,9 @@ def score_exif(path: str) -> dict[str, Any]:
     reasons: list[str] = []
 
     if not exif:
-        reasons.append("no EXIF metadata present")
-    if len(missing) >= 5:
+        # Informational, not an anomaly signal (see P0.2 below).
+        reasons.append("no EXIF metadata present (expected for screenshots/social-media exports)")
+    elif len(missing) >= 5:
         reasons.append("many expected camera fields are absent")
     if vec[2] > 0:
         reasons.append("editing software appears in EXIF Software field")
@@ -86,29 +90,58 @@ def score_exif(path: str) -> dict[str, Any]:
     if vec[6] < -4.5 or vec[6] > 1.5:
         reasons.append("unusual exposure-time value")
 
-    # WS-3 #16 — the previous IsolationForest was fit at runtime on 5 hardcoded
+    # P0.1 (WS-3 #16) — the previous IsolationForest was fit at runtime on 5 hardcoded
     # baseline rows: statistically meaningless. Replaced with a transparent, auditable
-    # rule score. WS-3 #15 — the ABSENCE of EXIF is INFO, not an anomaly: screenshots,
+    # rule score ("rule_based_v2"): each rule below is an explicit, documented check
+    # over the same EXIF features with a fixed weight; the sum is clamped to [0, 1].
+    # P0.2 (WS-3 #15) — the ABSENCE of EXIF is INFO, not an anomaly: screenshots,
     # social-media exports and privacy tools legitimately strip metadata, so it no
     # longer raises the score (the old forced 0.58/0.52 floors and the +0.20 no-EXIF
     # term were a built-in false-positive bias). Only PRESENT, internally-inconsistent
     # EXIF raises the score.
+    exif_absent = not exif
     anomaly_score = 0.0
-    anomaly_score += 0.30 if vec[2] > 0 else 0.0  # editing software named in EXIF Software field
-    if exif:
-        anomaly_score += 0.15 if (vec[6] < -4.5 or vec[6] > 1.5) else 0.0  # implausible exposure time
-        anomaly_score += 0.10 if vec[5] == 0.0 else 0.0  # invalid aperture despite present EXIF
-    anomaly_score = min(1.0, anomaly_score)
+    # Rule 1 (+0.30): editing software named in the EXIF Software field — direct,
+    # self-declared evidence the file passed through an editor.
+    anomaly_score += 0.30 if vec[2] > 0 else 0.0
+    if not exif_absent:
+        # Rule 2 (+0.15): physically implausible exposure time (<~30 µs or >~30 s)
+        # — contradicts real camera capture parameters.
+        anomaly_score += 0.15 if (vec[6] < -4.5 or vec[6] > 1.5) else 0.0
+        # Rule 3 (+0.10): missing/invalid aperture (FNumber) while other capture
+        # fields are present — internally contradictory camera block.
+        anomaly_score += 0.10 if vec[5] == 0.0 else 0.0
+    anomaly_score = min(1.0, max(0.0, anomaly_score))
 
     is_anomalous = anomaly_score >= 0.50
+    if exif_absent:
+        # Non-alerting informational result: score stays ~0.0, never an anomaly.
+        verdict = "EXIF_ABSENT_INFORMATIONAL"
+        assessment = (
+            "No EXIF metadata is present. Metadata absence is expected for "
+            "screenshots, social-media/messaging-app exports, and privacy-stripped "
+            "files, and is NOT evidence of tampering."
+        )
+        confidence = 0.6  # informational observation — modest, never a strong clean claim
+    elif is_anomalous:
+        verdict = "ANOMALOUS_EXIF"
+        assessment = "Present EXIF metadata is internally inconsistent or implausible."
+        confidence = anomaly_score
+    else:
+        verdict = "EXIF_WITHIN_EXPECTED_RANGE"
+        assessment = "EXIF metadata fields are within expected ranges."
+        confidence = max(0.62, 1.0 - anomaly_score)
     return {
         "available": True,
         "court_defensible": True,
         "backend": "transparent-rule-score",
-        "verdict": "ANOMALOUS_EXIF" if is_anomalous else "EXIF_WITHIN_EXPECTED_RANGE",
+        "method": "rule_based_v2",
+        "verdict": verdict,
+        "assessment": assessment,
+        "exif_absent": exif_absent,
         "is_anomalous": is_anomalous,
         "anomaly_score": round(anomaly_score, 3),
-        "confidence": round(anomaly_score if is_anomalous else max(0.62, 1.0 - anomaly_score), 3),
+        "confidence": round(confidence, 3),
         "field_count": len(exif),
         "missing_expected_fields": missing,
         "anomalous_fields": missing[:8],
@@ -131,7 +164,7 @@ def _worker() -> None:
         print(json.dumps(result), flush=True)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     parser = argparse.ArgumentParser()
     parser.add_argument("--input")
     parser.add_argument("--worker", action="store_true")

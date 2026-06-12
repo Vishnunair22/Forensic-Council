@@ -184,6 +184,12 @@ class Agent4Video(ForensicAgent):
                     "Temporal discontinuity detected; injecting face-swap audit",
                     agent_id=self.agent_id,
                 )
+                # Elevation 0.8 — face_swap_detection prefers the trained
+                # DeepFace/Facenet embedding detector (tools/video_tools.py:
+                # face_swap_detect_deepface) and only falls back to the Haar+FFT
+                # heuristic ({"method": "haar_fft_heuristic", "degraded": true})
+                # when DeepFace is not importable; a missing DeepFace install is
+                # disclosed as method="model_unavailable", never a silent negative.
                 await self.inject_task(
                     description="Run face_swap_detection on frames near detected discontinuities",
                     priority=20,  # High priority
@@ -233,4 +239,25 @@ class Agent4Video(ForensicAgent):
                 await self.inject_task(
                     description="Run deepfake_frequency_check on extracted frames",
                     priority=17,
+                )
+            elif (
+                finding.metadata.get("method") in ("haar_fft_heuristic", "model_unavailable")
+                or finding.metadata.get("degraded")
+            ):
+                # Elevation 0.8 — the trained DeepFace detector did not run
+                # (heuristic fallback or model unavailable). The face-swap axis is
+                # degraded coverage, not a clearance, so inject the frequency-domain
+                # check as a compensating signal rather than treating it as clean.
+                logger.info(
+                    "Face-swap detection ran degraded (no trained DeepFace model); "
+                    "injecting compensating deepfake frequency check",
+                    agent_id=self.agent_id,
+                    method=str(finding.metadata.get("method")),
+                )
+                await self.inject_task(
+                    description=(
+                        "Run deepfake_frequency_check to compensate for degraded "
+                        "face-swap coverage (trained DeepFace detector unavailable)"
+                    ),
+                    priority=16,
                 )

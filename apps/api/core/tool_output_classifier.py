@@ -8,13 +8,62 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.manipulation_signal_taxonomy import LLM_DERIVED_CONFIDENCE_CAP
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
+# Structured integrity_assessment enum (schema-locked Gemini output) → unit
+# confidence. These replace substring scraping of LLM free text; values are
+# deliberately conservative and are additionally subject to the LLM cap below.
+_STRUCTURED_ASSESSMENT_CONFIDENCE: dict[str, float] = {
+    "no_visible_issue": 0.60,
+    "suspicious": 0.50,
+    "likely_manipulated": 0.55,
+    "ai_generated_suspect": 0.55,
+    "cannot_determine": 0.40,
+}
+
 
 class ToolOutputClassifier:
     """Classify heterogeneous tool outputs into the strict evidence contract."""
+
+    @staticmethod
+    def is_llm_derived(output: dict[str, Any]) -> bool:
+        """True when this output came from an LLM/vision-model read rather than
+        a deterministic tool — used to prefer structured-field parsing and to
+        cap the (uncalibrated) confidence."""
+        if not isinstance(output, dict):
+            return False
+        meta = output.get("metadata") if isinstance(output.get("metadata"), dict) else {}
+        src = str(output.get("analysis_source") or meta.get("analysis_source") or "").lower()
+        if src.startswith(("gemini", "llm")):
+            return True
+        if output.get("external_ai_used") or output.get("external_llm_used") or meta.get("external_ai_used"):
+            return True
+        return "gemini_verdict" in output or "authenticity_verdict" in output
+
+    @staticmethod
+    def _structured_llm_confidence(output: dict[str, Any]) -> float | None:
+        """Parse the schema-locked STRUCTURED fields of an LLM output.
+
+        Replaces substring-keyword scraping of LLM free text: the responseSchema
+        calls emit a numeric ``confidence`` plus enum ``integrity_assessment`` /
+        ``authenticity_verdict`` fields, which are read directly. Returns None
+        when no structured field is present (caller then uses the clearly-
+        labeled legacy keyword path)."""
+        ia = str(output.get("integrity_assessment") or "").strip().lower()
+        av = str(output.get("authenticity_verdict") or "").strip()
+        conf = output.get("confidence")
+        try:
+            conf_val = float(conf) if conf is not None else None
+        except (TypeError, ValueError):
+            conf_val = None
+        if conf_val is not None and (ia or av):
+            return max(0.0, min(1.0, conf_val))
+        if ia in _STRUCTURED_ASSESSMENT_CONFIDENCE:
+            return _STRUCTURED_ASSESSMENT_CONFIDENCE[ia]
+        return None
 
     @staticmethod
     def has_not_applicable_marker(output: dict[str, Any]) -> bool:
@@ -169,6 +218,7 @@ class ToolOutputClassifier:
                 parsed = parsed / 100.0
             return max(0.0, min(1.0, parsed))
 
+        _llm_derived = isinstance(output, dict) and ToolOutputClassifier.is_llm_derived(output)
         if isinstance(output, dict):
             # Not-applicable is a KNOWN, valid shape (a tool opting out of this file
             # type), not an unrecognised one — return without the fallback warning.
@@ -178,6 +228,11 @@ class ToolOutputClassifier:
                 raw_conf = 0.75 if output.get("shared_context_available") else 0.0
             elif output.get("available") is False or output.get("degraded") is True or "error" in output:
                 raw_conf = 0.0
+            elif _llm_derived:
+                # Schema-locked LLM output: parse the STRUCTURED fields (numeric
+                # confidence + enum assessment/verdict) first. The generic key
+                # scans below act as the legacy fallback when this yields None.
+                raw_conf = ToolOutputClassifier._structured_llm_confidence(output)
             for key in ("confidence", "confidence_raw", "confidence_score"):
                 if raw_conf is None:
                     raw_conf = _as_unit_float(output.get(key))
@@ -271,6 +326,8 @@ class ToolOutputClassifier:
                 elif output.get("spoof_probability") is not None:
                     raw_conf = round(max(0.10, 1.0 - float(output["spoof_probability"])), 3)
                 elif "gemini_verdict" in output:
+                    # LEGACY fallback: keyword mapping of an LLM verdict word —
+                    # runs only when the structured parse above yielded nothing.
                     v = str(output.get("gemini_verdict", "")).upper()
                     if v in ("AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"):
                         raw_conf = 0.85
@@ -316,6 +373,12 @@ class ToolOutputClassifier:
                     raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
                 elif output.get("c2pa_present") is not None or output.get("provenance_found") is not None:
                     raw_conf = 0.85 if output.get("c2pa_present") or output.get("provenance_found") else 0.50
+
+            # Cap any LLM-derived confidence: this is an UNCALIBRATED LLM SIGNAL
+            # (the model's self-assessment, not a measured error rate) — it must
+            # never outweigh deterministic tool evidence in the verdict math.
+            if _llm_derived and raw_conf is not None:
+                raw_conf = min(float(raw_conf), LLM_DERIVED_CONFIDENCE_CAP)
 
         from_fallback = raw_conf is None
         try:

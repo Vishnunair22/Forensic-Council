@@ -4,6 +4,7 @@ Post-analysis Groq synthesis to produce structured forensic narratives.
 """
 
 import json
+import os
 import re
 from typing import Any
 
@@ -43,6 +44,22 @@ class _CleanSynthesisSkip(Exception):
     """Sentinel: skip the Groq polish for clean evidence and use the deterministic
     grounded synthesis (which is already optimal). Routed through the existing
     deterministic fallback path so behaviour is identical to a Groq miss."""
+
+
+def _batch_synthesis_only() -> bool:
+    """Batch-only synthesis routing (default ON).
+
+    Per-agent Groq narration is consolidated into the arbiter's single
+    ``refine_synthesis_batch`` call (one Groq call covers all agents), so this
+    per-agent individual path runs deterministically and never spends quota.
+    The individual Groq call survives only as an explicit opt-out
+    (SYNTHESIS_BATCH_ONLY=0) — e.g. when the arbiter batch layer is disabled.
+    Read from the environment at call time (os.environ-with-default, matching
+    the existing env-read style) so tests/operators can flip it without restart.
+    """
+    return str(os.environ.get("SYNTHESIS_BATCH_ONLY", "1")).strip().lower() in (
+        "1", "true", "yes", "on",
+    )
 
 
 # S-H-5 / OWASP LLM01: every Groq synthesis prompt embeds attacker-controlled
@@ -497,13 +514,17 @@ class SynthesisService:
                 or bool(f.metadata.get("degraded"))
                 or bool(f.metadata.get("metadata_incomplete"))
             )
+            # Pre-summarised structured tuple per finding: (tool_name,
+            # key_metrics, confidence, verdict). The raw reasoning text used to
+            # be embedded here truncated to 260 chars — a token sink AND a
+            # hallucination source (the model continued the cut-off sentence).
+            # Numeric metrics are carried whole; no mid-string truncation.
             flat_tool_evidence.append({
                 "tool": f.metadata.get("tool_name", "unknown"),
                 "verdict": "TOOL_LIMITATION" if is_tool_limitation else f.status,
                 "evidence_verdict": f.evidence_verdict,
                 "confidence": round(f.confidence_raw, 3) if f.confidence_raw is not None else 0.5,
-                "summary": str(f.reasoning_summary or "")[:260],
-                "key_metrics": self._compact_metrics(f),
+                "key_metrics": self._numeric_metrics(f),
             })
 
         # Construct Groq Synthesis Prompt. S-H-5: filename and tool results
@@ -686,6 +707,19 @@ Return ONLY a JSON object with this exact schema:
                     original_len=original_user_len,
                     truncated_len=len(user_content),
                 )
+
+            # Batch-only routing: the arbiter's refine_synthesis_batch makes ONE
+            # Groq call covering all agents' syntheses; this per-agent path is
+            # deterministic by default and acts only as an explicit fallback
+            # (SYNTHESIS_BATCH_ONLY=0) when the batch layer is unavailable.
+            if _batch_synthesis_only():
+                logger.info(
+                    "Per-agent Groq synthesis routed to the arbiter batch call "
+                    "(SYNTHESIS_BATCH_ONLY) — using deterministic grounded synthesis here.",
+                    agent=agent_name,
+                    phase=phase,
+                )
+                raise _CleanSynthesisSkip()
 
             # Clean-evidence cost guard — mirror per_agent_synthesis.refine_synthesis_batch:
             # when no finding carries an alert verdict, the deterministic grounded
@@ -1824,6 +1858,22 @@ Return ONLY a JSON object with this exact schema:
             )
         return ""
 
+    def _numeric_metrics(self, f: AgentFinding) -> dict[str, Any]:
+        """Numeric key metrics only, from the normalized tool output.
+
+        Used for the synthesis prompt's structured finding tuples: scores,
+        counts, probabilities, and booleans are the decisive values the model
+        must cite; free text is excluded entirely (no truncated-prose
+        hallucination source) and metric values are never string-trimmed.
+        """
+        out: dict[str, Any] = {}
+        for k, v in self._compact_metrics(f).items():
+            if isinstance(v, (bool, int, float)):
+                out[k] = v
+            if len(out) >= 10:
+                break
+        return out
+
     def _compact_metrics(self, f: AgentFinding) -> dict[str, Any]:
         _SKIP_META = {
             "tool_name",
@@ -1834,10 +1884,19 @@ Return ONLY a JSON object with this exact schema:
             "analysis_phase",
             "analysis_source",
             "backend",
+            # Plan 3.4 — the localization heatmap is a base64 image payload for the
+            # report/UI only; it must never reach metric extraction, narrative prose,
+            # or LLM synthesis tuples.
+            "localization_map_png",
+            "localization_map_caption",
         }
         out = {}
         for k, v in f.metadata.items():
             if k in _SKIP_META:
+                continue
+            # Defensive: exclude embedded image/data-URI blobs and any oversized
+            # string so a large value can never leak into a metric/narrative.
+            if isinstance(v, str) and (len(v) > 512 or v.startswith("data:")):
                 continue
             if isinstance(v, (bool, int, float, str, list)):
                 out[k] = v

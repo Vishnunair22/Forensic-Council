@@ -193,7 +193,19 @@ def analyze(image_path: str) -> dict:
         # overlays do not.
         loc_mean = float(pmap.mean())
         splicing_detected = score >= 0.70 or (score >= 0.5 and loc_mean >= 0.15)
-        return {
+
+        # Plan 3.4 — surface the per-pixel forgery-localization map instead of
+        # discarding it. It is the single most persuasive artifact for a human
+        # reviewer and is already computed. Attach only when there is something to
+        # show (a detected splice or a materially elevated hot-spot) so clean
+        # reports stay lean; the PNG is downscaled + colour-mapped, overlaid on the
+        # evidence for spatial context, and embedded as a base64 data URI that
+        # travels inside the signed report (no separate served artifact).
+        localization_map_png = None
+        if splicing_detected or float(pmap.max()) >= 0.30:
+            localization_map_png = _encode_localization_heatmap(pmap, rgb)
+
+        result = {
             "splicing_detected": bool(splicing_detected),
             # Declare the evidence verdict explicitly so the tool-output classifier
             # records it directly (a trained court-defensible detector). Without
@@ -212,5 +224,53 @@ def analyze(image_path: str) -> dict:
             "model_version": "trufor_real_v1",
             "backend": "TruFor CMX (SegFormer-B2 + Noiseprint++)",
         }
+        if localization_map_png:
+            result["localization_map_png"] = localization_map_png
+            result["localization_map_caption"] = (
+                "TruFor per-pixel forgery-probability map (warm regions = higher "
+                "manipulation likelihood) overlaid on the evidence."
+            )
+        return result
     except Exception as e:
         return {"available": False, "error": f"TruFor inference failed: {e}", "model_version": "trufor_real_v1"}
+
+
+def _encode_localization_heatmap(pmap, base_rgb, max_side: int = 256) -> str | None:
+    """Render TruFor's forgery-probability map as a base64 PNG data URI (plan 3.4).
+
+    The probability map is colour-mapped (JET: cool→warm with rising likelihood),
+    alpha-blended over the downscaled evidence for spatial context, capped to
+    ``max_side`` px on the long edge to keep the signed-report payload small, and
+    returned as a ``data:image/png;base64,...`` URI. Deterministic for a given
+    input (no timestamp chunks), so it does not perturb the report signature.
+    Returns ``None`` on any failure — the heatmap is supplementary, never required.
+    """
+    try:
+        import base64
+
+        import cv2
+        import numpy as np
+
+        hm = np.clip(np.asarray(pmap, dtype=np.float32), 0.0, 1.0)
+        heat = cv2.applyColorMap((hm * 255.0).astype(np.uint8), cv2.COLORMAP_JET)  # BGR
+        base_bgr = cv2.cvtColor(base_rgb, cv2.COLOR_RGB2BGR)
+        if heat.shape[:2] != base_bgr.shape[:2]:
+            heat = cv2.resize(
+                heat, (base_bgr.shape[1], base_bgr.shape[0]), interpolation=cv2.INTER_LINEAR
+            )
+        overlay = cv2.addWeighted(base_bgr, 0.55, heat, 0.45, 0.0)
+
+        h, w = overlay.shape[:2]
+        long_side = max(h, w)
+        if long_side > max_side:
+            s = max_side / float(long_side)
+            overlay = cv2.resize(
+                overlay, (int(round(w * s)), int(round(h * s))), interpolation=cv2.INTER_AREA
+            )
+
+        ok, buf = cv2.imencode(".png", overlay)
+        if not ok:
+            return None
+        return "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode("ascii")
+    except Exception:
+        return None

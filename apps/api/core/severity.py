@@ -1,6 +1,6 @@
 """
 Severity Tier Assignment
-=========================
+========================
 
 Shared logic for assigning INFO/LOW/MEDIUM/HIGH/CRITICAL severity tiers
 to forensic findings. Used by both the Arbiter and the Investigation routes
@@ -128,6 +128,21 @@ def uncorroborated_screening_text(tool_name: str | None) -> str:
     )
 
 
+# P0.9 / P1.10 — screenshot gating, shared by the arbiter deliberation AND
+# compute_agent_verdict (single source of truth so agent-phase and final verdicts
+# cannot drift). On screen captures, pixel-integrity and compression-artifact
+# detectors (ELA, splicing, copy-move, frequency/compression probes) fire on UI
+# chrome, text anti-aliasing and the lossless re-encode rather than tampering —
+# their POSITIVE findings are context-only for this content class: still recorded
+# and shown, but barred from counting as alert/strong manipulation signals.
+SCREENSHOT_FP_PRONE_TOOLS: frozenset[str] = frozenset({
+    "ela_full_image", "neural_ela", "jpeg_ghost_detect",
+    "neural_splicing", "splicing_detect", "copy_move_detect", "neural_copy_move",
+    # compression-artifact probes co-fire on the screenshot re-encode
+    "frequency_domain_analysis", "compression_artifact_analysis",
+})
+
+
 # Not-applicable metadata flags that indicate a tool doesn't apply to this file type
 _NA_FLAGS = (
     "ela_not_applicable",
@@ -248,7 +263,7 @@ def assign_severity_tier(f: Any) -> str:
     return "LOW"
 
 
-_SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+_SEVERITY_RANK: dict[str, int] = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
 
 # Minimum confidence for a high-severity POSITIVE finding to count as a STRONG
 # (manipulation-confirming) signal. Below this it is treated as a medium alert.
@@ -275,6 +290,7 @@ def compute_agent_verdict(
     findings: list[Any],
     visual_signal: dict[str, Any] | None = None,
     is_deep: bool = False,
+    screenshot_context: bool | None = None,
 ) -> tuple[str, float, str]:
     """Compute a per-agent verdict + confidence from its findings, severity-aware
     and grounded in the shared visual context.
@@ -306,6 +322,13 @@ def compute_agent_verdict(
       ``anomalies``         – scene inconsistencies (Agent3) / metadata
                               contradictions (Agent5) / AI-gen signals (Agent1)
 
+    ``screenshot_context`` (P0.9, optional/backward-compatible): when truthy, the
+    evidence is a screen capture and POSITIVE findings from the FP-prone
+    pixel-integrity / compression-artifact tools (SCREENSHOT_FP_PRONE_TOOLS,
+    mirroring the arbiter's screenshot exclusion list) are treated as
+    context-only — they never count as alert or strong signals — so the
+    agent-phase verdict matches the arbiter's screenshot gating.
+
     Returns (verdict, confidence, reason) where verdict is one of
     AUTHENTIC / INCONCLUSIVE / SUSPICIOUS / MANIPULATED.
     """
@@ -336,6 +359,19 @@ def compute_agent_verdict(
             clean_confirmations += 1
         if verdict != "POSITIVE":
             continue
+
+        # P0.9 — screenshot gating (mirrors the arbiter's exclusion list so the
+        # agent-phase verdict agrees with the final): on a screen capture, a
+        # POSITIVE from an FP-prone pixel-integrity / compression-artifact tool is
+        # context-only — recorded as a completed check but never an alert/strong
+        # signal driving the verdict.
+        if screenshot_context:
+            if isinstance(f, dict):
+                _tool = str(meta.get("tool_name") or f.get("finding_type") or "")
+            else:
+                _tool = str(meta.get("tool_name") or getattr(f, "finding_type", "") or "")
+            if _tool in SCREENSHOT_FP_PRONE_TOOLS:
+                continue
 
         # Prefer a pre-computed grounded severity_tier; fall back to deriving one.
         sev = ""

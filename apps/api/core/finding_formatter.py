@@ -7,11 +7,41 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.capability_manifest import actual_method_for, method_disclosure_for
 from core.structured_logging import get_logger
 from core.tool_interpreters import _TOOL_INTERPRETERS
 from core.tool_output_classifier import ToolOutputClassifier
 
 logger = get_logger(__name__)
+
+
+def _research_models_enabled() -> bool:
+    try:
+        from core.config import get_settings
+
+        return bool(getattr(get_settings(), "enable_research_models", False))
+    except Exception:
+        return False
+
+
+def truthful_tool_label(tool_name: str, base_label: str | None = None) -> str:
+    """Plan 0.10 — truthful tool naming for report rendering.
+
+    Returns the friendly label for `tool_name`, annotated with the method that
+    ACTUALLY executes when the tool's name implies a neural examination that is
+    not loaded in this deployment (e.g. "F3 Net Frequency (Haar DWT + FFT
+    heuristic — neural weights not loaded)"). Tools whose names already match
+    what runs are returned unchanged.
+    """
+    label = base_label or TOOL_LABELS.get(tool_name, tool_name.replace("_", " ").title())
+    disclosure = method_disclosure_for(tool_name)
+    if not disclosure:
+        return label
+    actual = actual_method_for(tool_name, research_models_enabled=_research_models_enabled())
+    # Annotate only when what ran differs from the neural method the name implies.
+    if actual and actual != disclosure.get("neural_method") and actual.lower() not in label.lower():
+        return f"{label} ({actual})"
+    return label
 
 TOOL_LABELS: dict[str, str] = {
     "ela_full_image": "ELA — Image Manipulation",
@@ -345,7 +375,9 @@ def build_readable_summary(
     Uses tool-specific detailed reasoning builders for rich,
     court-admissible findings. Falls back to generic scalar extraction.
     """
-    tool_label = tool_name.replace("_", " ").title()
+    # Plan 0.10 — render the truthful label (annotated with the actual method
+    # when the tool name implies a neural model that is not what ran).
+    tool_label = truthful_tool_label(tool_name, tool_name.replace("_", " ").title())
 
     if not tool_result.success:
         err = tool_result.error or "unknown error"

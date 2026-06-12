@@ -736,11 +736,14 @@ class TestSynthesisService:
         assert result["verdict"] == "AUTHENTIC"
 
     @pytest.mark.asyncio
-    async def test_screenshot_synthesis_replaces_generic_llm_tool_text(self):
+    async def test_screenshot_synthesis_replaces_generic_llm_tool_text(self, monkeypatch):
         from core.config import get_settings
         from core.react_loop import AgentFinding
         from core.synthesis import SynthesisService
 
+        # This test exercises the INDIVIDUAL Groq path (LLM-output grounding),
+        # which is batch-only-routed by default — opt out explicitly.
+        monkeypatch.setenv("SYNTHESIS_BATCH_ONLY", "0")
         service = SynthesisService(get_settings())
         finding = AgentFinding(
             agent_id="Agent1_image",

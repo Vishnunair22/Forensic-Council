@@ -614,7 +614,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     phase1_confidence=_p1_c,
                 )
 
-        agent_syntheses = await refine_synthesis_batch(inputs, self.config)
+        # Single batched Groq call for all agents' syntheses; the per-investigation
+        # token budget (keyed by session) protects the final-refiner reserve.
+        agent_syntheses = await refine_synthesis_batch(
+            inputs, self.config, investigation_id=str(self.session_id)
+        )
 
         # ── 5. Arbiter Deliberation ──
         from core.arbiter_deliberation import deliberate_findings
@@ -758,7 +762,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         groq_used = False
         if use_llm:
             from core.final_report_groq_refiner import refine_report_with_groq
-            refined, success = await refine_report_with_groq(det_report_dict, self.config)
+            refined, success = await refine_report_with_groq(
+                det_report_dict, self.config, investigation_id=str(self.session_id)
+            )
             if success:
                 final_report_dict = refined
                 groq_used = True

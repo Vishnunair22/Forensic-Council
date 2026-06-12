@@ -34,6 +34,33 @@ except ImportError:
     _fire_webhook = None
 
 
+def _capability_summary(report) -> dict | None:
+    """Compact per-run capability summary (plan 0.6) for session metadata.
+
+    Lets session listings disclose degraded capability (failed / gated-off /
+    model-unavailable tools) without loading the full signed report.
+    """
+    try:
+        manifest = getattr(report, "capability_manifest", None) or {}
+        tools = manifest.get("tools") or []
+        if not tools and not manifest:
+            return None
+        counts: dict[str, int] = {}
+        for t in tools:
+            status = str(t.get("execution_status") or t.get("status") or "unknown")
+            counts[status] = counts.get(status, 0) + 1
+        return {
+            "tool_count": int(manifest.get("tool_count") or len(tools)),
+            "status_counts": counts,
+            "research_models_enabled": bool(manifest.get("research_models_enabled")),
+            "gemini_enabled": bool(manifest.get("gemini_enabled")),
+            "disclosure_count": len(manifest.get("disclosures") or []),
+        }
+    except Exception as exc:
+        logger.debug("Capability summary unavailable for session metadata", error=str(exc))
+        return None
+
+
 async def _get_investigator_metadata(session_id: str, investigator_id: str) -> tuple:
     existing_meta = await get_active_pipeline_metadata(session_id) or {}
     return (
@@ -118,21 +145,23 @@ async def mark_investigation_completed(
 
     await set_final_report(session_id, report)
     # F-15: use atomic CAS for terminal status transition
-    await update_active_pipeline_metadata(
-        session_id,
-        {
-            "status": "completed",
-            "brief": "Investigation complete.",
-            "case_id": case_id,
-            "investigator_id": _investigator_id,
-            "investigator_role": _investigator_role,
-            "case_investigator_label": _case_label,
-            "file_path": evidence_file_path,
-            "original_filename": original_filename,
-            "completed_at": datetime.now(UTC).isoformat(),
-            "report_id": str(report.report_id),
-        },
-    )
+    _completed_meta = {
+        "status": "completed",
+        "brief": "Investigation complete.",
+        "case_id": case_id,
+        "investigator_id": _investigator_id,
+        "investigator_role": _investigator_role,
+        "case_investigator_label": _case_label,
+        "file_path": evidence_file_path,
+        "original_filename": original_filename,
+        "completed_at": datetime.now(UTC).isoformat(),
+        "report_id": str(report.report_id),
+    }
+    # Plan 0.6 — additive capability disclosure for session listings.
+    _cap_summary = _capability_summary(report)
+    if _cap_summary:
+        _completed_meta["capability_summary"] = _cap_summary
+    await update_active_pipeline_metadata(session_id, _completed_meta)
     increment_investigations_completed()
 
     if _WEBHOOKS_AVAILABLE and _fire_webhook:

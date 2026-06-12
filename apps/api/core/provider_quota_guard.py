@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -27,6 +28,17 @@ from dataclasses import dataclass, field
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
+
+# Cross-process quota persistence: API and worker processes each keep their own
+# in-memory sliding window, so without a shared store the effective limit is
+# N_processes × limit. When a real Redis is available the rolling RPM/RPD/TPM
+# counters are ALSO enforced through Redis fixed-window buckets keyed by
+# provider:model. Degrades gracefully (in-memory only) when Redis is down.
+# os.environ-with-default, matching the env-read style used in these modules.
+_REDIS_PERSIST_ENABLED = str(os.environ.get("QUOTA_GUARD_REDIS", "1")).strip().lower() in (
+    "1", "true", "yes", "on",
+)
+_REDIS_KEY_PREFIX = "pqg"
 
 # Per-process in-memory call tracking for quota enforcement.
 # Resets on process restart — acceptable for per-session quota guards.
@@ -249,6 +261,21 @@ class ProviderQuotaGuard:
                 )
                 return False, result
 
+            # Cross-process Redis counters (rolling fixed-window RPM/TPM/RPD).
+            # Only consulted after the in-process checks pass; on a Redis block
+            # nothing is recorded in-memory so both layers stay consistent.
+            redis_block = await cls._redis_check_and_record(
+                provider,
+                model,
+                config,
+                now=now,
+                estimated_tokens=estimated_tokens,
+                tpm_limit=effective_tpm_limit,
+                priority=priority,
+            )
+            if redis_block is not None:
+                return False, redis_block
+
             # Record the call while still holding the lock so concurrent agents
             # cannot overshoot the quota between check and append.
             _CALL_TIMESTAMPS[key].append(now)
@@ -262,6 +289,110 @@ class ProviderQuotaGuard:
             limit=rpm_limit,
             window_type="rpm",
         )
+
+    @classmethod
+    async def _redis_check_and_record(
+        cls,
+        provider: str,
+        model: str,
+        config: ProviderConfig,
+        *,
+        now: float,
+        estimated_tokens: int = 0,
+        tpm_limit: int | None = None,
+        priority: str = "medium",
+    ) -> QuotaCheckResult | None:
+        """Enforce + record the call in shared Redis counters.
+
+        Returns a blocking QuotaCheckResult when a cross-process limit is hit,
+        or None when the call is allowed (counters recorded) OR Redis is
+        unusable (graceful in-memory-only fallback — the caller's process-local
+        sliding window remains the enforcement layer).
+
+        Windows are fixed buckets (60s minute bucket for RPM/TPM, UTC day for
+        RPD) — slightly coarser than the in-memory sliding window but atomic
+        via INCR and shared across API/worker processes. Mirrors the in-memory
+        semantics: critical priority bypasses the soft TPM block (tokens still
+        recorded); hard RPM/RPD request counts apply to all priorities.
+        """
+        if not _REDIS_PERSIST_ENABLED:
+            return None
+        try:
+            from core.persistence.redis_client import InMemoryRedisClient, get_redis_client
+
+            redis = await get_redis_client()
+            if isinstance(redis, InMemoryRedisClient):
+                # The in-memory fallback client is process-local — it adds no
+                # cross-process value over the sliding window and would only
+                # double-count, so skip it (dev/test environments).
+                return None
+
+            minute_bucket = int(now // 60)
+            day_bucket = time.strftime("%Y%m%d", time.gmtime(now))
+            base = f"{_REDIS_KEY_PREFIX}:{provider}:{model}"
+            rpm_key = f"{base}:rpm:{minute_bucket}"
+            tpm_key = f"{base}:tpm:{minute_bucket}"
+            rpd_key = f"{base}:rpd:{day_bucket}"
+
+            rpm_count = await redis.incr(rpm_key)
+            await redis.expire(rpm_key, 120)
+            if rpm_count > config.rpm_limit:
+                await redis.incr(rpm_key, -1)
+                return QuotaCheckResult(
+                    allowed=False,
+                    reason=(
+                        f"{provider} RPM limit reached across processes "
+                        f"({rpm_count - 1}/{config.rpm_limit}) — next allowed in ~60s"
+                    ),
+                    calls_in_window=rpm_count - 1,
+                    limit=config.rpm_limit,
+                    window_type="rpm",
+                )
+
+            if tpm_limit and estimated_tokens > 0:
+                token_count = await redis.incr(tpm_key, estimated_tokens)
+                await redis.expire(tpm_key, 120)
+                if token_count > tpm_limit and priority != "critical":
+                    await redis.incr(tpm_key, -estimated_tokens)
+                    await redis.incr(rpm_key, -1)
+                    return QuotaCheckResult(
+                        allowed=False,
+                        reason=(
+                            f"{provider} TPM limit would be exceeded across processes "
+                            f"({token_count}/{tpm_limit})"
+                        ),
+                        calls_in_window=token_count - estimated_tokens,
+                        limit=tpm_limit,
+                        window_type="tpm",
+                    )
+
+            rpd_count = await redis.incr(rpd_key)
+            await redis.expire(rpd_key, 2 * 86400)
+            if rpd_count > config.rpd_limit:
+                await redis.incr(rpd_key, -1)
+                await redis.incr(rpm_key, -1)
+                if tpm_limit and estimated_tokens > 0:
+                    await redis.incr(tpm_key, -estimated_tokens)
+                return QuotaCheckResult(
+                    allowed=False,
+                    reason=(
+                        f"{provider} RPD limit reached across processes "
+                        f"({rpd_count - 1}/{config.rpd_limit}) — next allowed tomorrow"
+                    ),
+                    calls_in_window=rpd_count - 1,
+                    limit=config.rpd_limit,
+                    window_type="rpd",
+                )
+            return None
+        except Exception as exc:
+            # Graceful degradation: Redis being down must never block LLM calls;
+            # the process-local sliding window keeps enforcing limits.
+            logger.debug(
+                "Quota guard Redis persistence unavailable — in-memory window only",
+                provider=provider,
+                error=str(exc),
+            )
+            return None
 
     @classmethod
     def _cleanup_stale(cls, provider: str, model: str, now: float) -> None:

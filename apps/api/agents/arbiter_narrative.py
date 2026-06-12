@@ -143,6 +143,38 @@ def _tool_name(finding: dict[str, Any]) -> str:
     return str((finding.get("metadata") or {}).get("tool_name") or finding.get("finding_type") or "")
 
 
+# ── Plan 3.5 — narrative traceability ────────────────────────────────────────
+_NARRATIVE_TAG = "[narrative]"
+_FINDING_REF_RE = re.compile(r"\[F-[0-9a-fA-F-]{4,}\]")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _finding_ref(finding: dict[str, Any] | None) -> str:
+    """A '[F-<id>]' reference for a finding, or the '[narrative]' tag when the
+    finding carries no ID. Every narrative sentence must carry one of the two."""
+    fid = str((finding or {}).get("finding_id") or "").strip()
+    return f"[F-{fid[:8]}]" if fid else _NARRATIVE_TAG
+
+
+def _tag_narrative(text: str) -> str:
+    """Tag every sentence in `text` that does not already reference a finding ID
+    with the '[narrative]' marker, so report prose is fully traceable: each
+    sentence is either grounded in a finding ([F-<id>]) or declared narrative."""
+    text = str(text or "").strip()
+    if not text:
+        return text
+    out: list[str] = []
+    for sentence in _SENTENCE_SPLIT_RE.split(text):
+        s = sentence.strip()
+        if not s:
+            continue
+        if _FINDING_REF_RE.search(s) or _NARRATIVE_TAG in s:
+            out.append(s)
+        else:
+            out.append(f"{s} {_NARRATIVE_TAG}")
+    return " ".join(out)
+
+
 def _truncate_at_sentence(text: str, max_chars: int = 1200) -> str:
     """Truncate at the last sentence boundary before max_chars."""
     if len(text) <= max_chars:
@@ -680,7 +712,8 @@ class ArbiterNarrativeMixin:
                 line = f"{phase} / {line}"
             line = line.replace(" â€” ", " - ")
             human_line = _human_tool_finding(f)
-            key_findings_list.append(human_line or line)
+            # Plan 3.5 — each key finding traces to its finding ID where available.
+            key_findings_list.append(f"{human_line or line} {_finding_ref(f)}")
 
         key_findings_str = "\n".join(_clean_key_findings(key_findings_list, limit=6))
 
@@ -1075,10 +1108,14 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
             )
         if all_findings:
             top = sorted(all_findings, key=_finding_importance, reverse=True)[:3]
-            highlights = [f.get("reasoning_summary", "") for f in top if f.get("reasoning_summary")]
+            highlights = [
+                f"{f.get('reasoning_summary', '')} {_finding_ref(f)}"
+                for f in top
+                if f.get("reasoning_summary")
+            ]
             if highlights:
-                lines.append("Key signal: " + " ".join(highlights[:2])[:360])
-        return "\n".join(lines[:3])
+                lines.append("Key signal: " + " ".join(highlights[:2])[:400])
+        return "\n".join(_tag_narrative(line) for line in lines[:3])
 
     def _grounded_executive_summary(
         self,
@@ -1192,16 +1229,29 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
             direction = meta.get("light_direction_consistency") or "unknown"
             context_bits.append(f"lighting consistency score {float(l_score):.3f} (direction: {direction})")
 
+        # Plan 3.5 — trace each summary line to the findings it derives from
+        # ([F-<id>] refs); lines without a backing finding ID are tagged [narrative].
+        _integrity_refs = " ".join(
+            _finding_ref(f) for f in (freq, hash_f, structure, hex_f) if f and f.get("finding_id")
+        )
+        _context_refs = " ".join(
+            _finding_ref(f)
+            for f in (ocr, layout, exif, compression, object_det, scene_inc, lighting)
+            if f and f.get("finding_id")
+        )
         line_one = (
             f"{verdict}"
             + (f" at {confidence}% confidence" if confidence else "")
             + ": "
             + "; ".join(integrity_bits[:3])
             + "."
+            + (f" {_integrity_refs}" if _integrity_refs else "")
         )
         line_two = "; ".join(context_bits[:3])
         if analysis_coverage_note and "failed" in analysis_coverage_note.lower():
             line_two = (line_two + f"; coverage note: {analysis_coverage_note}").strip("; ")
+        if line_two and _context_refs:
+            line_two = f"{line_two}. {_context_refs}"
         if not line_two:
             line_two = "No high-confidence manipulation signal was reported; provenance strength depends on available metadata and successful tool coverage."
         line_three_bits: list[str] = []
@@ -1217,7 +1267,7 @@ Write the 2-3 line Executive Summary for this forensic report. Justify the {over
         lines = [line_one, line_two]
         if line_three:
             lines.append(line_three)
-        return "\n".join(_truncate_at_sentence(line) for line in lines)
+        return "\n".join(_tag_narrative(_truncate_at_sentence(line)) for line in lines)
 
     async def _generate_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
@@ -1434,14 +1484,17 @@ Rules:
         contested_count: int,
         analysis_coverage_note: str,
     ) -> tuple[str, list[str], str]:
+        # Plan 3.5 — exactly one NEUTRAL sentence per verdict class. No
+        # superlative or assurance language; each states only what the executed
+        # checks returned, bounded by the executed tool set.
         _VERDICT_LABELS = {
-            "AUTHENTIC": "No manipulation signals detected",
-            "LIKELY_AUTHENTIC": "Evidence is likely authentic",
-            "SUSPICIOUS": "Suspicious signals were identified",
-            "INCONCLUSIVE": "Analysis produced inconclusive results",
-            "LIKELY_MANIPULATED": "Probable manipulation indicators detected",
-            "MANIPULATED": "Strong manipulation indicators detected",
-            "ABSTAIN": "Insufficient evidence to render a verdict",
+            "AUTHENTIC": "The executed checks returned no reportable manipulation indicators",
+            "LIKELY_AUTHENTIC": "The executed checks returned no significant manipulation indicators",
+            "SUSPICIOUS": "One or more executed checks returned indicators that require review",
+            "INCONCLUSIVE": "The executed checks did not support a determination",
+            "LIKELY_MANIPULATED": "Multiple executed checks returned manipulation indicators",
+            "MANIPULATED": "Executed checks returned manipulation indicators meeting the reporting threshold",
+            "ABSTAIN": "Insufficient applicable evidence was available to support a determination",
         }
         _va = "agent" if applicable_agent_count == 1 else "agents"
         _conf_str = f" — {overall_confidence * 100:.0f}% confidence across {applicable_agent_count} active {_va}"
@@ -1476,12 +1529,19 @@ Rules:
             key=_finding_importance,
             reverse=True,
         )[:5]
-        key_findings_list = [
-            _strip_rs_prefix(_truncate(f.get("reasoning_summary") or "")) for f in top
-        ]
-        key_findings_list = _clean_key_findings(key_findings_list)
+        # Plan 3.5 — each key finding carries its finding-ID reference; sentences
+        # without a backing finding ID are tagged [narrative].
+        key_findings_list: list[str] = []
+        _seen_kf: set[str] = set()
+        for f in top:
+            text = _clean_key_finding(_strip_rs_prefix(_truncate(f.get("reasoning_summary") or "")))
+            key = text.lower().strip()
+            if not key or key in _seen_kf:
+                continue
+            _seen_kf.add(key)
+            key_findings_list.append(f"{text} {_finding_ref(f)}")
         if not key_findings_list:
-            key_findings_list = ["No significant findings were identified."]
+            key_findings_list = [f"No significant findings were identified. {_NARRATIVE_TAG}"]
 
         err_note = (
             f"; {overall_error_rate * 100:.0f}% tool error rate"
@@ -1489,11 +1549,11 @@ Rules:
             else ""
         )
         _a = "agent" if applicable_agent_count == 1 else "agents"
-        reliability_note = (
+        reliability_note = _tag_narrative(
             f"{overall_confidence * 100:.0f}% overall confidence across "
             f"{applicable_agent_count} active {_a}{err_note}."
         )
-        return verdict_sentence, key_findings_list, reliability_note
+        return _tag_narrative(verdict_sentence), key_findings_list, reliability_note
 
     def _template_uncertainty_statement(
         self, incomplete: int, contested: int, overall_error_rate: float = 0.0
@@ -1516,7 +1576,7 @@ Rules:
             )
         if not statements:
             statements.append("No significant uncertainties remain.")
-        return " ".join(statements)
+        return _tag_narrative(" ".join(statements))
 
     async def _llm_arbiter_synthesis(
         self,
@@ -2442,6 +2502,23 @@ Rules:
                     warning_count=len(grounding_warnings),
                     warnings=grounding_warnings,
                 )
+
+        # Plan 3.5 — traceability pass on every arbiter-level narrative field:
+        # each sentence either references a finding ID ([F-<id>]) or is tagged
+        # [narrative]. Template paths are pre-tagged; this also covers LLM output.
+        if cross_modal_analysis:
+            cross_modal_analysis = _tag_narrative(cross_modal_analysis)
+        if arbiter_reasoning:
+            arbiter_reasoning = _tag_narrative(arbiter_reasoning)
+        v_sent = _tag_narrative(v_sent)
+        exec_sum = _tag_narrative(exec_sum)
+        unc_stmt = _tag_narrative(unc_stmt)
+        r_note = _tag_narrative(r_note)
+        kf_list = [
+            kf if _FINDING_REF_RE.search(str(kf)) or _NARRATIVE_TAG in str(kf)
+            else f"{kf} {_NARRATIVE_TAG}"
+            for kf in kf_list
+        ]
 
         # Store new arbiter fields in summary_structured (fits inside existing model)
         if cross_modal_analysis:

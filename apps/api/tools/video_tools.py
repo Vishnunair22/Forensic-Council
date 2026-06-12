@@ -503,6 +503,8 @@ async def face_swap_detect(
                 "confidence": 0.0,
                 "flagged_frames": [],
                 "face_count": 0,
+                "method": "haar_fft_heuristic",
+                "degraded": True,
                 "message": "No frames found for analysis",
             }
 
@@ -610,6 +612,12 @@ async def face_swap_detect(
             "confidence": confidence,
             "flagged_frames": flagged_frames,
             "face_count": total_faces,
+            # Elevation 0.8: this path is the DEGRADED fallback behind
+            # face_swap_detect_deepface. Disclose the method explicitly so the
+            # capability manifest / report can never present a Haar+FFT screen
+            # as a trained deepfake determination.
+            "method": "haar_fft_heuristic",
+            "degraded": True,
             "analysis_method": "heuristic_frequency_analysis",
             "production_note": (
                 "This is a heuristic stub implementation. For production use, "
@@ -727,13 +735,15 @@ async def face_swap_detect_deepface(
             "analysis_performed": False,
             "court_defensible": False,
             "evidence_verdict": "INCONCLUSIVE",
+            "method": "model_unavailable",
             "forensic_caveat": (
-                "Trained face-swap detector (DeepFace) is unavailable in this deployment — "
-                "no deepfake/face-swap determination was made. This is a COVERAGE GAP, not a "
-                "clean result: a face swap CANNOT be excluded. Install DeepFace / enable the "
-                "trained model to perform this check."
+                "DeepFace library not installed — the trained face-swap detector is "
+                "unavailable in this deployment, so no deepfake/face-swap determination "
+                "was made. This is a COVERAGE GAP, not a clean result: a face swap "
+                "CANNOT be excluded. Install DeepFace / enable the trained model to "
+                "perform this check."
             ),
-            "backend": "unavailable",
+            "backend": "model_unavailable",
         }
 
     try:

@@ -43,6 +43,9 @@ class ArbiterDeliberationResult(BaseModel):
     cross_agent_conflicts: list[str] = Field(default_factory=list)
     unresolved_limitations: list[str] = Field(default_factory=list)
     tool_failures_affecting_report: list[str] = Field(default_factory=list)
+    # P0.5 — explicit "could not be verified" entries, one per failed/gated-off
+    # CRITICAL tool. Lost coverage is named, never silently scored as "no anomaly".
+    unverified_domains: list[str] = Field(default_factory=list)
 
 def deliberate_findings(
     findings_list: list[AgentFinding] | list[dict],
@@ -129,14 +132,15 @@ def deliberate_findings(
     # lossless re-encode rather than tampering — they are FP-prone and must not
     # drive the verdict for this content class. Their findings are still recorded
     # and shown; they are only barred from escalating the manipulation verdict.
+    # P0.9 — the exclusion list is shared with compute_agent_verdict via
+    # core.severity.SCREENSHOT_FP_PRONE_TOOLS (single source of truth, no drift).
+    from core.severity import SCREENSHOT_FP_PRONE_TOOLS
+
     _is_screenshot = bool(
         visual_context is not None
         and "screenshot" in str(getattr(visual_context, "file_type_assessment", "")).lower()
     )
-    _SCREENSHOT_FP_PRONE = {
-        "ela_full_image", "neural_ela", "jpeg_ghost_detect",
-        "neural_splicing", "splicing_detect", "copy_move_detect", "neural_copy_move",
-    }
+    _SCREENSHOT_FP_PRONE = SCREENSHOT_FP_PRONE_TOOLS
 
     # First pass: Deliberate each finding
     for f in findings:
@@ -320,8 +324,39 @@ def deliberate_findings(
     completed_important = len(important_tools.intersection(completed_tools))
     failed_important = len(important_tools.intersection(failed_tools))
 
-    # If key tools failed, it is inconclusive
-    if failed_important >= 2 or (total_important > 0 and (completed_important / total_important) < 0.4):
+    # P0.5 — a failed (or gated-off / never-run) CRITICAL tool is LOST COVERAGE,
+    # never "no anomaly": each one becomes an explicit unverified-domain entry.
+    # (A gated-off critical tool also depresses important_tool_completion_rate
+    # below, so effective coverage genuinely shrinks; tool absence never counts
+    # toward clean confirmations anywhere in this function.)
+    failed_critical_tools = sorted(critical_tools.intersection(failed_tools))
+    gated_critical_tools = sorted(critical_tools - completed_tools - failed_tools)
+    unverified_domains: list[str] = [
+        f"Critical tool '{t}' failed — its domain could not be verified."
+        for t in failed_critical_tools
+    ] + [
+        f"Critical tool '{t}' did not run (gated off or unavailable) — "
+        "its domain could not be verified."
+        for t in gated_critical_tools
+    ]
+
+    # P0.5 — INCONCLUSIVE_LIMITED_COVERAGE triggers when EITHER important-tool
+    # coverage is <40% OR at least one critical tool failed while the remaining
+    # signals are weak (no custody-hash mismatch and no strong court-defensible
+    # positive) — a single dead critical detector must not leave a confident
+    # "clean" verdict standing on partial evidence.
+    _has_strong_signal = bool(hash_mismatches) or any(
+        (f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or 0)
+        >= strong_corroborator_bar
+        and (f.get("metadata") or {}).get("court_defensible", True)
+        for f in positive_integrity_findings
+    )
+    _coverage_low = total_important > 0 and (completed_important / total_important) < 0.4
+    if (
+        failed_important >= 2
+        or _coverage_low
+        or (failed_critical_tools and not _has_strong_signal)
+    ):
         final_verdict = "INCONCLUSIVE_LIMITED_COVERAGE"
 
     # Set supports_final_verdict on findings
@@ -482,5 +517,6 @@ def deliberate_findings(
         cross_agent_agreements=agreements,
         cross_agent_conflicts=conflicts,
         unresolved_limitations=unresolved_limitations,
-        tool_failures_affecting_report=list(failed_tools)
+        tool_failures_affecting_report=list(failed_tools),
+        unverified_domains=unverified_domains,
     )

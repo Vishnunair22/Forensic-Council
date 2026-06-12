@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 from typing import Any, Literal
@@ -64,7 +65,10 @@ class AgentSynthesisOutput(BaseModel):
         "groq_refined",
         "deterministic_with_visual_context",
         "deterministic_tool_only",
-        "groq_tool_only"
+        "groq_tool_only",
+        # Per-investigation token budget rejected the LLM call (refiner reserve
+        # protected) — the deterministic template was used instead.
+        "deterministic_template",
     ]
 
 
@@ -1032,9 +1036,310 @@ def _has_narratable_signal(inp: AgentSynthesisInput) -> bool:
     return False
 
 
+# ── Synthesis result cache ───────────────────────────────────────────────────
+# Keyed by a hash of the finding set (tool/verdict/confidence/severity tuples +
+# per-agent verdicts). The same evidence re-analysed (re-runs, gate-2 retries,
+# pre-warm → finalise) yields an identical deterministic basis, so the refined
+# narrative can be reused with ZERO Groq tokens. Small in-module dict with a
+# best-effort Redis layer (same pattern as gemini_client._DEEP_FORENSIC_CACHE +
+# visual_context_store's Redis persistence).
+_SYNTHESIS_CACHE: dict[str, dict[str, dict]] = {}
+_SYNTHESIS_CACHE_MAX = 64
+_SYNTHESIS_CACHE_TTL_S = 4 * 3600
+_SYNTHESIS_CACHE_KEY_PREFIX = "synthesis_batch:"
+
+
+def _synthesis_cache_key(inputs: dict[str, AgentSynthesisInput]) -> str:
+    """SHA-256 over the deterministic finding basis for this batch."""
+    basis: dict[str, Any] = {}
+    for aid in sorted(inputs.keys()):
+        inp = inputs[aid]
+        basis[aid] = {
+            "findings": sorted(
+                (
+                    str((f.get("metadata") or {}).get("tool_name") or f.get("finding_type") or ""),
+                    str(f.get("evidence_verdict") or ""),
+                    str(f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or ""),
+                    str((f.get("metadata") or {}).get("severity_tier") or ""),
+                )
+                for f in (inp.grounded_findings or inp.findings)
+            ),
+            "verdict": inp.agent_verdict,
+            "confidence": round(float(inp.agent_confidence or 0.0), 3),
+            "deep": inp.is_deep_analysis,
+        }
+    blob = json.dumps(basis, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+async def _synthesis_cache_get(key: str) -> dict[str, dict] | None:
+    cached = _SYNTHESIS_CACHE.get(key)
+    if cached:
+        return cached
+    try:
+        from core.persistence.redis_client import get_redis_client
+
+        redis = await get_redis_client()
+        value = await redis.get_json(f"{_SYNTHESIS_CACHE_KEY_PREFIX}{key}")
+        if isinstance(value, dict) and value:
+            _SYNTHESIS_CACHE[key] = value
+            return value
+    except Exception as exc:  # cache must never break synthesis
+        logger.debug("Synthesis cache Redis read failed", error=str(exc))
+    return None
+
+
+async def _synthesis_cache_put(key: str, value: dict[str, dict]) -> None:
+    if len(_SYNTHESIS_CACHE) >= _SYNTHESIS_CACHE_MAX:
+        try:
+            _SYNTHESIS_CACHE.pop(next(iter(_SYNTHESIS_CACHE)))
+        except StopIteration:  # pragma: no cover
+            pass
+    _SYNTHESIS_CACHE[key] = value
+    try:
+        from core.persistence.redis_client import get_redis_client
+
+        redis = await get_redis_client()
+        await redis.set(f"{_SYNTHESIS_CACHE_KEY_PREFIX}{key}", value, ex=_SYNTHESIS_CACHE_TTL_S)
+    except Exception as exc:  # cache must never break synthesis
+        logger.debug("Synthesis cache Redis write failed", error=str(exc))
+
+
+def _build_agent_entry(inp: AgentSynthesisInput) -> dict:
+    """Build the per-agent prompt payload entry (shared by batch + individual paths).
+
+    Findings are pre-summarised structured tuples (tool, verdict, confidence,
+    severity, phase) — never raw tool prose — which both cuts tokens and removes
+    the truncated-free-text hallucination source.
+    """
+    clean_findings = [
+        {
+            "tool": f.get("metadata", {}).get("tool_name") or f.get("finding_type"),
+            "verdict": f.get("evidence_verdict"),
+            "confidence": f.get("confidence_raw") or f.get("metadata", {}).get("confidence"),
+            "severity": (f.get("metadata") or {}).get("severity_tier"),
+            "phase": (f.get("metadata") or {}).get("analysis_phase", "initial"),
+        }
+        for f in (inp.grounded_findings or inp.findings)
+        # Skip NOT_APPLICABLE and ERROR findings — they add no narrative value
+        if str(f.get("evidence_verdict") or "").upper() not in ("NOT_APPLICABLE", "ERROR")
+    ]
+    entry: dict = {
+        "agent_id": inp.agent_id,
+        "evidence_identity": inp.evidence_identity,
+        "visual_context_available": inp.visual_context_available,
+        "visual_context_section": inp.visual_context_section,
+        "completed_tools": inp.completed_tools,
+        "failed_tools": inp.failed_tools,
+        "findings": clean_findings,
+        "agent_verdict": inp.agent_verdict,
+        "agent_confidence": inp.agent_confidence,
+        "confidence_reason": inp.confidence_reason,
+    }
+    if inp.is_deep_analysis and inp.phase1_verdict:
+        entry["phase1_verdict"] = inp.phase1_verdict
+        entry["phase1_confidence_pct"] = round(inp.phase1_confidence * 100)
+        entry["deep_verdict"] = inp.agent_verdict
+        entry["deep_confidence_pct"] = round(inp.agent_confidence * 100)
+    return entry
+
+
+def _apply_polished_agent(
+    aid: str,
+    polished_data: dict,
+    outputs: dict[str, AgentSynthesisOutput],
+    inputs: dict[str, AgentSynthesisInput],
+) -> bool:
+    """Validate + apply one agent's LLM-polished narrative fields.
+
+    All verdict-consistency / fabricated-tool / degenerate-summary guards live
+    here so the batched call and the individual fallback enforce identical
+    court-defensibility rules. Returns True when the agent's synthesis was
+    upgraded to groq_refined.
+    """
+    if aid not in outputs or not isinstance(polished_data, dict):
+        return False
+    _verdict = outputs[aid].agent_verdict
+    # Real tool set for THIS agent — used to reject LLM-fabricated
+    # key findings that cite a tool which never ran (e.g. a vision
+    # model inventing "scene_geometry_analysis" / "lighting_analysis"
+    # on a screenshot). Court-defensibility: a signed finding must
+    # trace to an executed tool.
+    _inp = inputs.get(aid)
+    _agent_tools: set[str] = set()
+    if _inp is not None:
+        for _t in (_inp.completed_tools or []):
+            _agent_tools.add(str(_t).lower())
+        for _f in (_inp.grounded_findings or _inp.findings or []):
+            _tn = (_f.get("metadata") or {}).get("tool_name") or _f.get("finding_type")
+            if _tn:
+                _agent_tools.add(str(_tn).lower())
+    brief = polished_data.get("agent_brief")
+    if brief and isinstance(brief, str):
+        # Verdict is the single source of truth: reject a refined brief
+        # that asserts manipulation while the verdict is clean/inconclusive.
+        if _text_contradicts_verdict(brief, _verdict):
+            logger.warning(
+                f"{aid}: LLM brief contradicts verdict '{_verdict}'; keeping deterministic brief."
+            )
+        elif _is_echoed_instruction(brief):
+            logger.warning(
+                f"{aid}: LLM brief echoed prompt instructions; keeping deterministic brief."
+            )
+        elif _brief_misstates_verdict(brief, _verdict):
+            logger.warning(
+                f"{aid}: LLM brief assessment tier disagrees with verdict "
+                f"'{_verdict}'; keeping deterministic brief."
+            )
+        else:
+            outputs[aid].agent_brief = _round_pcts(brief)
+
+    vc_sum = polished_data.get("visual_context_summary")
+    _det_vc = outputs[aid].visual_context_summary
+    if vc_sum and isinstance(vc_sum, str):
+        if _text_contradicts_verdict(vc_sum, _verdict):
+            logger.warning(
+                f"{aid}: LLM visual_context_summary contradicts verdict "
+                f"'{_verdict}'; keeping deterministic."
+            )
+        elif _is_degenerate_visual_summary(vc_sum, _det_vc):
+            logger.warning(
+                f"{aid}: LLM visual_context_summary collapsed to "
+                f"{vc_sum!r}; keeping deterministic axis prose."
+            )
+        else:
+            outputs[aid].visual_context_summary = _round_pcts(vc_sum)
+
+    reason = polished_data.get("confidence_reason")
+    if reason and isinstance(reason, str):
+        outputs[aid].confidence_reason = _round_pcts(reason)
+
+    kfs = polished_data.get("key_findings")
+    if kfs and isinstance(kfs, list):
+        seen_kf_norms: set[str] = set()
+        validated_kfs: list[str] = []
+        for kf in kfs:
+            kf_str = str(kf).strip()
+            if not kf_str:
+                continue
+            if _text_contradicts_verdict(kf_str, _verdict):
+                logger.warning(
+                    f"{aid}: key_finding contradicts verdict '{_verdict}'; dropped."
+                )
+                continue
+            # Tool-grounding: a finding that attributes itself to a
+            # specific tool slug must cite one this agent actually
+            # ran. Drops hallucinated tools and context-only plumbing.
+            _m = re.search(r"—\s*([a-z0-9]+(?:_[a-z0-9]+)+)\s*(?:\(\d+(?:\.\d+)?%\))?\s*$", kf_str)
+            if _m:
+                _cited = _m.group(1).lower()
+                if _cited not in _agent_tools or _cited in CONTEXT_ONLY_TOOLS:
+                    logger.warning(
+                        f"{aid}: key_finding cites tool '{_cited}' that did not run; dropped (fabricated)."
+                    )
+                    continue
+                # The synthesis prompt asks the model to name the exact
+                # tool, so it emits the raw slug ("frequency_domain_
+                # analysis"). Swap in the friendly label for a
+                # court-readable report.
+                _label = TOOL_LABELS.get(_cited) or _cited.replace("_", " ").title()
+                kf_str = kf_str[:_m.start(1)] + _label + kf_str[_m.end(1):]
+            # Normalise the cited confidence "(NN%)": the model sometimes
+            # emits the raw 0-1 fraction ("(0.297%)" → meant 30%) or
+            # float-precision noise ("(39.999996%)"). A cited tool
+            # confidence is never a genuine sub-1% value, so a value < 1
+            # is a fraction to scale up; everything is rounded to an int.
+            def _norm_conf_pct(m: re.Match[str]) -> str:
+                v = float(m.group(1))
+                if v < 1:
+                    v *= 100
+                return f"({round(v)}%)"
+            kf_str = re.sub(r"\((\d+(?:\.\d+)?)%\)", _norm_conf_pct, kf_str)
+            # Deduplicate: strip trailing confidence percentage before
+            # normalising so near-identical findings that only differ in
+            # the reported % (e.g. "tool (97%)" vs "tool (98%)") are
+            # caught. Then take the first 80 chars as the dedup key.
+            norm = re.sub(r"\s*\(\d+\.?\d*%\)\s*$", "", kf_str.lower())
+            norm = re.sub(r"\s+", " ", norm).strip()[:80]
+            if norm in seen_kf_norms:
+                continue
+            seen_kf_norms.add(norm)
+            validated_kfs.append(kf_str)
+        if validated_kfs:
+            outputs[aid].key_findings = validated_kfs
+
+    # phase_comparison — deep-mode only; stored on the output for
+    # the arbiter to surface in per_agent_narrative_structured.
+    pc = polished_data.get("phase_comparison")
+    if pc and isinstance(pc, str) and len(pc.strip()) > 10:
+        outputs[aid].phase_comparison = pc.strip()
+
+    outputs[aid].synthesis_source = "groq_refined"
+    logger.info(f"Refined synthesis for {aid} using LLM.")
+    return True
+
+
+async def _refine_individual_fallback(
+    llm_client: LLMClient,
+    inputs: dict[str, AgentSynthesisInput],
+    outputs: dict[str, AgentSynthesisOutput],
+    is_deep: bool,
+    investigation_id: str = "",
+) -> None:
+    """EXPLICIT FALLBACK ONLY: per-agent individual synthesis calls.
+
+    The batched call is the sole primary path; this runs only when the batch
+    Groq call failed (timeout / parse error / empty response). Each narratable
+    agent gets one small single-agent call under the same persona prompt and
+    the same validation, still subject to the per-investigation token budget.
+    """
+    for aid, inp in inputs.items():
+        if aid not in outputs or not _has_narratable_signal(inp):
+            continue
+        if outputs[aid].synthesis_source == "groq_refined":
+            continue
+        system_prompt = _build_persona_system_prompt([aid], is_deep=is_deep)
+        user_payload = json.dumps({aid: _build_agent_entry(inp)}, indent=2, default=str)
+        if investigation_id:
+            from core.quota_manager import get_investigation_budget
+
+            estimated = (len(system_prompt) + len(user_payload)) // 4 + 400
+            allowed, reason = await get_investigation_budget(investigation_id).try_consume(
+                estimated, job="synthesis"
+            )
+            if not allowed:
+                outputs[aid].synthesis_source = "deterministic_template"
+                logger.warning(
+                    f"{aid}: individual synthesis fallback rejected by token budget: {reason}"
+                )
+                continue
+        try:
+            raw = await asyncio.wait_for(
+                llm_client.generate_synthesis(
+                    system_prompt=system_prompt,
+                    user_content=user_payload,
+                    json_mode=True,
+                    priority="medium",
+                    max_tokens=400,
+                ),
+                timeout=25.0,
+            )
+            if not raw:
+                continue
+            parsed = json.loads(LLMClient._strip_markdown_fences(raw))
+            polished = parsed.get(aid) if isinstance(parsed, dict) else None
+            if not isinstance(polished, dict) and isinstance(parsed, dict):
+                polished = parsed  # model returned the agent object directly
+            if isinstance(polished, dict):
+                _apply_polished_agent(aid, polished, outputs, inputs)
+        except Exception as exc:
+            logger.warning(f"Individual synthesis fallback failed for {aid}: {exc}")
+
+
 async def refine_synthesis_batch(
     inputs: dict[str, AgentSynthesisInput],
     config: Settings,
+    investigation_id: str = "",
 ) -> dict[str, AgentSynthesisOutput]:
     """Single batched synthesis refiner.
 
@@ -1079,48 +1384,71 @@ async def refine_synthesis_batch(
         agents=[aid for aid, inp in inputs.items() if _has_narratable_signal(inp)],
     )
 
-    # 3. Build the per-agent payload
+    # 3. Build the per-agent payload (pre-summarised structured tuples — the
+    #    verbose reasoning_summary prose is intentionally never sent).
     is_deep = any(inp.is_deep_analysis for inp in inputs.values())
 
-    batch_prompt_data = {}
-    for aid, inp in inputs.items():
-        # Strip reasoning_summary from the payload — it's verbose prose that
-        # duplicates information already present in verdict/confidence, and
-        # sending it inflates token usage without improving synthesis quality.
-        clean_findings = [
-            {
-                "tool": f.get("metadata", {}).get("tool_name") or f.get("finding_type"),
-                "verdict": f.get("evidence_verdict"),
-                "confidence": f.get("confidence_raw") or f.get("metadata", {}).get("confidence"),
-                "severity": (f.get("metadata") or {}).get("severity_tier"),
-                "phase": (f.get("metadata") or {}).get("analysis_phase", "initial"),
-            }
-            for f in (inp.grounded_findings or inp.findings)
-            # Skip NOT_APPLICABLE and ERROR findings — they add no narrative value
-            if str(f.get("evidence_verdict") or "").upper() not in ("NOT_APPLICABLE", "ERROR")
-        ]
-        entry: dict = {
-            "agent_id": inp.agent_id,
-            "evidence_identity": inp.evidence_identity,
-            "visual_context_available": inp.visual_context_available,
-            "visual_context_section": inp.visual_context_section,
-            "completed_tools": inp.completed_tools,
-            "failed_tools": inp.failed_tools,
-            "findings": clean_findings,
-            "agent_verdict": inp.agent_verdict,
-            "agent_confidence": inp.agent_confidence,
-            "confidence_reason": inp.confidence_reason,
-        }
-        if inp.is_deep_analysis and inp.phase1_verdict:
-            entry["phase1_verdict"] = inp.phase1_verdict
-            entry["phase1_confidence_pct"] = round(inp.phase1_confidence * 100)
-            entry["deep_verdict"] = inp.agent_verdict
-            entry["deep_confidence_pct"] = round(inp.agent_confidence * 100)
-        batch_prompt_data[aid] = entry
+    batch_prompt_data = {aid: _build_agent_entry(inp) for aid, inp in inputs.items()}
 
     system_prompt = _build_persona_system_prompt(list(inputs.keys()), is_deep=is_deep)
     user_payload = json.dumps(batch_prompt_data, indent=2, default=str)
 
+    # 3b. Synthesis cache — identical finding set ⇒ reuse the refined narrative
+    #     with zero Groq tokens.
+    cache_key = _synthesis_cache_key(inputs)
+    cached = await _synthesis_cache_get(cache_key)
+    if cached:
+        applied = 0
+        for aid, fields in cached.items():
+            out = outputs.get(aid)
+            if out is None or not isinstance(fields, dict):
+                continue
+            if fields.get("agent_brief"):
+                out.agent_brief = str(fields["agent_brief"])
+            if fields.get("visual_context_summary"):
+                out.visual_context_summary = str(fields["visual_context_summary"])
+            if fields.get("confidence_reason"):
+                out.confidence_reason = str(fields["confidence_reason"])
+            if isinstance(fields.get("key_findings"), list) and fields["key_findings"]:
+                out.key_findings = [str(k) for k in fields["key_findings"]]
+            if fields.get("phase_comparison"):
+                out.phase_comparison = str(fields["phase_comparison"])
+            out.synthesis_source = "groq_refined"
+            applied += 1
+        if applied:
+            logger.info(
+                "Per-agent synthesis cache hit — reused refined narrative (no Groq call).",
+                agents=list(cached.keys()),
+            )
+            return outputs
+
+    # 3c. Per-investigation token budget: never let synthesis invade the
+    #     refiner reserve. On rejection the deterministic template is the
+    #     result and carries the provenance tag.
+    if investigation_id:
+        from core.quota_manager import get_investigation_budget
+
+        estimated_tokens = (len(system_prompt) + len(user_payload)) // 4 + 1000
+        allowed, reason = await get_investigation_budget(investigation_id).try_consume(
+            estimated_tokens, job="synthesis"
+        )
+        if not allowed:
+            for out in outputs.values():
+                out.synthesis_source = "deterministic_template"
+            logger.warning(
+                f"Per-agent synthesis rejected by investigation token budget: {reason}. "
+                "Using deterministic template.",
+                investigation_id=investigation_id,
+            )
+            try:
+                from api.routes.metrics import increment_synthesis_degradation
+
+                increment_synthesis_degradation(len(outputs))
+            except Exception:  # metrics must never break synthesis
+                pass
+            return outputs
+
+    batch_failed = False
     try:
         # Hard ceiling on the Groq refinement so a rate-limited/slow run can never
         # block the arbiter deliberation — the deterministic outputs are already
@@ -1151,129 +1479,39 @@ async def refine_synthesis_batch(
             parsed = json.loads(cleaned_resp)
             for aid in ("Agent1", "Agent2", "Agent3", "Agent4", "Agent5"):
                 if aid in parsed and aid in outputs:
-                    polished_data = parsed[aid]
-                    _verdict = outputs[aid].agent_verdict
-                    # Real tool set for THIS agent — used to reject LLM-fabricated
-                    # key findings that cite a tool which never ran (e.g. a vision
-                    # model inventing "scene_geometry_analysis" / "lighting_analysis"
-                    # on a screenshot). Court-defensibility: a signed finding must
-                    # trace to an executed tool.
-                    _inp = inputs.get(aid)
-                    _agent_tools: set[str] = set()
-                    if _inp is not None:
-                        for _t in (_inp.completed_tools or []):
-                            _agent_tools.add(str(_t).lower())
-                        for _f in (_inp.grounded_findings or _inp.findings or []):
-                            _tn = (_f.get("metadata") or {}).get("tool_name") or _f.get("finding_type")
-                            if _tn:
-                                _agent_tools.add(str(_tn).lower())
-                    brief = polished_data.get("agent_brief")
-                    if brief and isinstance(brief, str):
-                        # Verdict is the single source of truth: reject a refined brief
-                        # that asserts manipulation while the verdict is clean/inconclusive.
-                        if _text_contradicts_verdict(brief, _verdict):
-                            logger.warning(
-                                f"{aid}: LLM brief contradicts verdict '{_verdict}'; keeping deterministic brief."
-                            )
-                        elif _is_echoed_instruction(brief):
-                            logger.warning(
-                                f"{aid}: LLM brief echoed prompt instructions; keeping deterministic brief."
-                            )
-                        elif _brief_misstates_verdict(brief, _verdict):
-                            logger.warning(
-                                f"{aid}: LLM brief assessment tier disagrees with verdict "
-                                f"'{_verdict}'; keeping deterministic brief."
-                            )
-                        else:
-                            outputs[aid].agent_brief = _round_pcts(brief)
-
-                    vc_sum = polished_data.get("visual_context_summary")
-                    _det_vc = outputs[aid].visual_context_summary
-                    if vc_sum and isinstance(vc_sum, str):
-                        if _text_contradicts_verdict(vc_sum, _verdict):
-                            logger.warning(
-                                f"{aid}: LLM visual_context_summary contradicts verdict "
-                                f"'{_verdict}'; keeping deterministic."
-                            )
-                        elif _is_degenerate_visual_summary(vc_sum, _det_vc):
-                            logger.warning(
-                                f"{aid}: LLM visual_context_summary collapsed to "
-                                f"{vc_sum!r}; keeping deterministic axis prose."
-                            )
-                        else:
-                            outputs[aid].visual_context_summary = _round_pcts(vc_sum)
-
-                    reason = polished_data.get("confidence_reason")
-                    if reason and isinstance(reason, str):
-                        outputs[aid].confidence_reason = _round_pcts(reason)
-
-                    kfs = polished_data.get("key_findings")
-                    if kfs and isinstance(kfs, list):
-                        seen_kf_norms: set[str] = set()
-                        validated_kfs: list[str] = []
-                        for kf in kfs:
-                            kf_str = str(kf).strip()
-                            if not kf_str:
-                                continue
-                            if _text_contradicts_verdict(kf_str, _verdict):
-                                logger.warning(
-                                    f"{aid}: key_finding contradicts verdict '{_verdict}'; dropped."
-                                )
-                                continue
-                            # Tool-grounding: a finding that attributes itself to a
-                            # specific tool slug must cite one this agent actually
-                            # ran. Drops hallucinated tools and context-only plumbing.
-                            _m = re.search(r"—\s*([a-z0-9]+(?:_[a-z0-9]+)+)\s*(?:\(\d+(?:\.\d+)?%\))?\s*$", kf_str)
-                            if _m:
-                                _cited = _m.group(1).lower()
-                                if _cited not in _agent_tools or _cited in CONTEXT_ONLY_TOOLS:
-                                    logger.warning(
-                                        f"{aid}: key_finding cites tool '{_cited}' that did not run; dropped (fabricated)."
-                                    )
-                                    continue
-                                # The synthesis prompt asks the model to name the exact
-                                # tool, so it emits the raw slug ("frequency_domain_
-                                # analysis"). Swap in the friendly label for a
-                                # court-readable report.
-                                _label = TOOL_LABELS.get(_cited) or _cited.replace("_", " ").title()
-                                kf_str = kf_str[:_m.start(1)] + _label + kf_str[_m.end(1):]
-                            # Normalise the cited confidence "(NN%)": the model sometimes
-                            # emits the raw 0-1 fraction ("(0.297%)" → meant 30%) or
-                            # float-precision noise ("(39.999996%)"). A cited tool
-                            # confidence is never a genuine sub-1% value, so a value < 1
-                            # is a fraction to scale up; everything is rounded to an int.
-                            def _norm_conf_pct(m: re.Match[str]) -> str:
-                                v = float(m.group(1))
-                                if v < 1:
-                                    v *= 100
-                                return f"({round(v)}%)"
-                            kf_str = re.sub(r"\((\d+(?:\.\d+)?)%\)", _norm_conf_pct, kf_str)
-                            # Deduplicate: strip trailing confidence percentage before
-                            # normalising so near-identical findings that only differ in
-                            # the reported % (e.g. "tool (97%)" vs "tool (98%)") are
-                            # caught. Then take the first 80 chars as the dedup key.
-                            norm = re.sub(r"\s*\(\d+\.?\d*%\)\s*$", "", kf_str.lower())
-                            norm = re.sub(r"\s+", " ", norm).strip()[:80]
-                            if norm in seen_kf_norms:
-                                continue
-                            seen_kf_norms.add(norm)
-                            validated_kfs.append(kf_str)
-                        if validated_kfs:
-                            outputs[aid].key_findings = validated_kfs
-
-                    # phase_comparison — deep-mode only; stored on the output for
-                    # the arbiter to surface in per_agent_narrative_structured.
-                    pc = polished_data.get("phase_comparison")
-                    if pc and isinstance(pc, str) and len(pc.strip()) > 10:
-                        outputs[aid].phase_comparison = pc.strip()
-
-                    outputs[aid].synthesis_source = "groq_refined"
-                    logger.info(f"Refined synthesis for {aid} using LLM.")
+                    _apply_polished_agent(aid, parsed[aid], outputs, inputs)
+        else:
+            batch_failed = True
     except TimeoutError:
-        logger.warning("Groq per-agent synthesis timed out (40s) — using deterministic fallbacks.")
+        batch_failed = True
+        logger.warning("Groq per-agent synthesis timed out (40s) — trying individual fallback.")
     except Exception as e:
-        logger.warning(f"Batched synthesis refinement failed or rejected: {e}. Using deterministic fallbacks.")
-        # Fallbacks are already populated in outputs
+        batch_failed = True
+        logger.warning(f"Batched synthesis refinement failed or rejected: {e}.")
+        # Deterministic fallbacks are already populated in outputs
+
+    # Individual per-agent path — EXPLICIT fallback, used only when the batch
+    # call failed. Same prompts/validation, one small call per narratable agent.
+    if batch_failed:
+        await _refine_individual_fallback(
+            llm_client, inputs, outputs, is_deep, investigation_id=investigation_id
+        )
+
+    # Cache the refined narrative fields keyed by the finding-set hash so an
+    # identical re-run costs zero Groq tokens.
+    refined_fields = {
+        aid: {
+            "agent_brief": out.agent_brief,
+            "visual_context_summary": out.visual_context_summary,
+            "key_findings": list(out.key_findings),
+            "confidence_reason": out.confidence_reason,
+            "phase_comparison": out.phase_comparison,
+        }
+        for aid, out in outputs.items()
+        if getattr(out, "synthesis_source", "") == "groq_refined"
+    }
+    if refined_fields:
+        await _synthesis_cache_put(cache_key, refined_fields)
 
     # WS-6 #30: refinement was ATTEMPTED (guards above passed) — every agent
     # that still carries the deterministic synthesis here degraded. Intentional
