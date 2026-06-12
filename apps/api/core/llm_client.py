@@ -997,7 +997,18 @@ class LLMClient:
                 except Exception as exc:
                     await quota_mgr.record_call(priority, success=False)
                     last_exc = exc
-                    logger.warning(f"Synthesis candidate {model_spec} failed: {exc}")
+                    # Surface the provider's error body — a bare "400 Bad Request"
+                    # from raise_for_status hides the actual reason (bad param,
+                    # context overflow, json-keyword, etc.) and makes synthesis
+                    # failures undiagnosable.
+                    _body = ""
+                    _resp = getattr(exc, "response", None)
+                    if _resp is not None:
+                        try:
+                            _body = f" | body: {_resp.text[:400]}"
+                        except Exception:
+                            _body = ""
+                    logger.warning(f"Synthesis candidate {model_spec} failed: {exc}{_body}")
 
             # All candidates exhausted — try one final lightweight Gemini model
             # after a short pause. Using gemini-2.0-flash-lite which has a separate
