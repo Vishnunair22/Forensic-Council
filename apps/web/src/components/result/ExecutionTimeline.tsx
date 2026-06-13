@@ -46,7 +46,7 @@ export function ExecutionTimeline({
   if (pipelineStartAt) {
     steps.push({
       key: "upload",
-      label: "Evidence Ingested",
+      label: "Evidence Received",
       time: fmtTime(pipelineStartAt),
       dot: "start",
     });
@@ -82,7 +82,7 @@ export function ExecutionTimeline({
   if (report.signed_utc) {
     steps.push({
       key: "complete",
-      label: "Report Signed & Sealed",
+      label: "Report Signed",
       time: fmtTime(report.signed_utc),
       dot: "complete",
       duration: pipelineStartAt

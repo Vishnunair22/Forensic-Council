@@ -52,11 +52,11 @@ export function DeepModelTelemetry({ report }: DeepModelTelemetryProps) {
         <div className="flex items-center gap-2">
           <Cpu className="w-3.5 h-3.5 text-primary/60" />
           <span className="fc-eyebrow fc-text-muted">
-            Deep Model Telemetry
+            Deep Analysis Models
           </span>
         </div>
         <span className="fc-eyebrow fc-text-muted">
-          {models.length} model{models.length === 1 ? "" : "s"} · deep pass
+          {models.length} model{models.length === 1 ? "" : "s"}
         </span>
       </div>
 

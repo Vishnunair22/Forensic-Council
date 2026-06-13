@@ -322,10 +322,10 @@ from the Gemini API. To fix:
 ```
 
 ### Prometheus UI
-- `http://localhost:9090`
+- `http://localhost:9090` — exposed by the **dev** overlay only (`infra/docker-compose.dev.yml`). In production these ports are not published; use port-forwarding or a sidecar exporter.
 
 ### Jaeger tracing
-- `http://localhost:16686`
+- `http://localhost:16686` — dev overlay only (see Prometheus UI note above).
 
 ### Health endpoint
 ```bash

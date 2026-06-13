@@ -223,8 +223,8 @@ export function deriveSummary(finding: AgentFindingDTO): string {
 
  const tool = fmtTool((metadata.tool_name as string) || finding.finding_type);
  const verdict = String(finding.evidence_verdict || "").toUpperCase();
- if (verdict === "POSITIVE") return `${tool} reported a manipulation signal — review the metrics below.`;
- if (verdict === "NEGATIVE") return `${tool} found no anomaly for its specific test.`;
+ if (verdict === "POSITIVE") return `${tool} flagged a manipulation signal.`;
+ if (verdict === "NEGATIVE") return `${tool} found no anomaly in its specific test.`;
  if (verdict === "ERROR") return `${tool} did not complete — treat as a coverage limitation.`;
  if (verdict === "NOT_APPLICABLE") return `${tool} is not applicable to this file type.`;
  return `${tool} returned an inconclusive result.`;

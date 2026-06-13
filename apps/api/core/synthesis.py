@@ -498,10 +498,27 @@ class SynthesisService:
                     }
                 )
 
-            # Cap to 5 highest-confidence findings per group to stay within context budget
-            tools_summary.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
+            # Cap each group to stay within context budget — but NEVER drop a
+            # material (POSITIVE) signal. The old "sort by confidence, take 5" cap
+            # could discard a low-confidence manipulation indicator in favour of
+            # high-confidence clean results; because grouped_sections_data feeds the
+            # technical-evidence sections, signal_rows, AND key_findings, that
+            # silently suppressed a confirmed tool finding from the entire report.
+            # Keep every POSITIVE finding, then fill the remaining budget with the
+            # highest-confidence non-positive rows.
+            _GROUP_BUDGET = 5
+            _positive_rows = [
+                t for t in tools_summary
+                if str(t.get("evidence_verdict") or "").upper() == "POSITIVE"
+            ]
+            _other_rows = [
+                t for t in tools_summary
+                if str(t.get("evidence_verdict") or "").upper() != "POSITIVE"
+            ]
+            _other_rows.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
+            _kept = _positive_rows + _other_rows[: max(0, _GROUP_BUDGET - len(_positive_rows))]
             grouped_sections_data.append(
-                {"id": grp["id"], "label": grp["label"], "findings": tools_summary[:5]}
+                {"id": grp["id"], "label": grp["label"], "findings": _kept}
             )
 
         # Fix 2: Build flat tool evidence list (not pre-grouped) for the 3-layer prompt
@@ -976,18 +993,21 @@ Return ONLY a JSON object with this exact schema:
                     }
                 )
 
-            grounded_key_findings = []
+            # Partition by materiality so the key-findings cap (applied below) can
+            # never truncate a POSITIVE signal out of the report. signal_rows is
+            # already POSITIVE-first, so this preserves order while guaranteeing
+            # every material finding survives the cap.
+            _pos_kf: list[str] = []
+            _other_kf: list[str] = []
             for item in signal_rows:
-                grounded = self._tool_grounded_summary(item, screenshot_like=screenshot_like)
-                if grounded:
-                    grounded_key_findings.append(grounded)
+                grounded = self._tool_grounded_summary(item, screenshot_like=screenshot_like) or (
+                    f"{item.get('tool', 'tool')}: {item.get('evidence_verdict', 'INCONCLUSIVE')} "
+                    f"({item.get('confidence', 0.0):.2f})"
+                )
+                if str(item.get("evidence_verdict") or "").upper() == "POSITIVE":
+                    _pos_kf.append(grounded)
                 else:
-                    grounded_key_findings.append(
-                        f"{item.get('tool', 'tool')}: {item.get('evidence_verdict', 'INCONCLUSIVE')} "
-                        f"({item.get('confidence', 0.0):.2f})"
-                    )
-            if visual_desc:
-                grounded_key_findings.insert(0, f"Visual profile: {visual_desc}")
+                    _other_kf.append(grounded)
 
             if phase == "deep" and phase1_context:
                 phase1_verdict = str(phase1_context.get("phase1_verdict") or "INCONCLUSIVE").upper()
@@ -1039,7 +1059,13 @@ Return ONLY a JSON object with this exact schema:
                 visual_profile_context=visual_profile_context,
                 screenshot_like=screenshot_like,
             )
-            fallback_result["key_findings"] = grounded_key_findings[:6]
+            # Keep every POSITIVE key finding; fill the remaining budget with the
+            # highest-ranked non-positive rows, then prepend the visual-profile lead.
+            _KF_BUDGET = 6
+            _vis_lead = [f"Visual profile: {visual_desc}"] if visual_desc else []
+            fallback_result["key_findings"] = (
+                _vis_lead + _pos_kf + _other_kf[: max(0, _KF_BUDGET - len(_pos_kf))]
+            )
             if phase == "deep":
                 fallback_result["phase_delta"] = phase_delta
                 fallback_result["delta_reason"] = delta_reason

@@ -303,8 +303,21 @@ class ForensicCouncilPipeline:
                         # the deep progress monitor in pipeline_phases, which reports the
                         # authoritative completed-task count — emitting a competing count
                         # here would fight it, so leave tools_done unset for deep.
+                        #
+                        # Only count tools that will SURFACE as a Key Finding — context/
+                        # custody tools (visual_evidence_profile, hash, file-type
+                        # validation, frame extraction) execute but are never surfaced,
+                        # so counting them drifted the live "X/Y" above the completed
+                        # "N tools ran" (the denominator excludes them too, see
+                        # _count_surfacing_tasks in pipeline_phases).
+                        from orchestration.pipeline_phases import PREVIEW_EXCLUDED_TOOLS
+                        _is_surfacing = str(tool_name or "").lower() not in PREVIEW_EXCLUDED_TOOLS
                         if agent_id.endswith("_deep"):
                             tools_done = None
+                        elif not _is_surfacing:
+                            # Keep the counter steady but still broadcast the live
+                            # descriptor so the user sees the context tool running.
+                            tools_done = _agent_tool_progress.get(agent_id, 0)
                         else:
                             _agent_tool_progress[agent_id] = _agent_tool_progress.get(agent_id, 0) + 1
                             tools_done = _agent_tool_progress[agent_id]

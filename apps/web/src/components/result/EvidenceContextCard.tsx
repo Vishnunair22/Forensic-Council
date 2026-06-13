@@ -114,8 +114,8 @@ export function EvidenceContextCard({
           className="flex items-center gap-1.5 text-xs font-semibold tracking-wide fc-text-muted px-2.5 py-1 rounded-full border border-white/10 bg-white/[0.03]"
           title={
             isRemote
-              ? "Described by the cloud multimodal model"
-              : "Described on-device — orientation only, not a court-grade reading"
+              ? "Cloud vision model"
+              : "On-device read — orientation only, not court-grade"
           }
         >
           {isRemote ? <Sparkles className="w-3.5 h-3.5" /> : <Cpu className="w-3.5 h-3.5" />}
@@ -151,7 +151,7 @@ export function EvidenceContextCard({
             <ChevronDown
               className={clsx("w-3.5 h-3.5 transition-transform", open && "rotate-180")}
             />
-            {open ? "Hide full evidence context" : "Show full evidence context"}
+            {open ? "Hide details" : "Show details"}
           </button>
 
           {open && (
@@ -159,7 +159,7 @@ export function EvidenceContextCard({
               {integrityRead && (
                 <div className="sm:col-span-2">
                   <dt className="text-xs font-semibold uppercase tracking-wider fc-text-muted mb-1">
-                    Holistic integrity read
+                    Integrity read
                   </dt>
                   <dd className="text-sm fc-text-secondary">{integrityRead}</dd>
                 </div>

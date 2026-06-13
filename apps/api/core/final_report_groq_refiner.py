@@ -220,6 +220,11 @@ async def _attempt_refine(
     try:
         raw_response = await llm_client.generate_synthesis(
             system_prompt=system_prompt,
+            # The narrowed deterministic report IS the user content the model
+            # refines. Omitting it raised "generate_synthesis() missing 1 required
+            # positional argument: 'user_content'" on every call, so the refiner
+            # always crashed and the verbose deterministic narrative shipped unrefined.
+            user_content=json.dumps(input_payload, default=str),
             # The refiner re-emits the full report (executive summary, key findings,
             # reliability notes, conclusion) as one JSON object. 800 tokens was too
             # tight: on a real report the model hit the completion limit mid-JSON and

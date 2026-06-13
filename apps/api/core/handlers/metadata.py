@@ -526,7 +526,17 @@ class MetadataHandlers(BaseToolHandler):
         sw = str(exif.get("software", "")).lower()
         make = str(exif.get("make", "")).lower()
         model = str(exif.get("model", "")).lower()
-        file_name = str(getattr(artifact, "file_name", "") or "").lower()
+        # The artifact is stored under a UUID path; the original upload name lives in
+        # metadata["original_filename"]. Reading getattr(artifact, "file_name") alone
+        # always returned "" (no such attribute), so the WhatsApp/screenshot/camera
+        # filename signals below never fired and every metadata-light image fell
+        # through to the generic "Unknown (Stripped Metadata)" branch.
+        _art_meta = getattr(artifact, "metadata", None)
+        file_name = str(
+            (_art_meta.get("original_filename") if isinstance(_art_meta, dict) else "")
+            or getattr(artifact, "file_name", "")
+            or ""
+        ).lower()
 
         # EXIF-field-count reasoning only applies to images. Audio/video/PDF do not
         # carry EXIF at all, so "few EXIF fields" is the normal case and must never
@@ -579,6 +589,12 @@ class MetadataHandlers(BaseToolHandler):
             elif is_camera_file:
                 penalty = 0.95  # Camera capture with privacy-stripped metadata
                 platform = "Camera Capture (Stripped Metadata)"
+            elif is_screen_capture_like(artifact):
+                # A visually-confirmed screenshot legitimately carries no camera EXIF —
+                # absent metadata is EXPECTED here, not a provenance concern. Treat it
+                # as the normal screenshot path rather than the generic "stripped" flag.
+                penalty = 0.85
+                platform = "System Screenshot (UI Compression)"
             else:
                 penalty = 0.78  # Minor penalty — non-standard name with near-zero EXIF
                 platform = "Unknown (Stripped Metadata)"

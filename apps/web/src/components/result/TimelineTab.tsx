@@ -38,12 +38,12 @@ export function TimelineTab({
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between gap-6">
           <div className="flex flex-col gap-0.5">
-            <h3 className="text-sm font-bold fc-text-primary">Sequence Registry</h3>
-            <p className="fc-eyebrow fc-text-faint">Atomic Tool Execution Logs</p>
+            <h3 className="text-sm font-bold fc-text-primary">Execution Timeline</h3>
+            <p className="fc-eyebrow fc-text-faint">Per-agent tool execution</p>
           </div>
           {pipelineStartAt && report.signed_utc && (
             <div className="px-3 py-1.5 rounded-lg bg-primary/5 border border-primary/20 fc-eyebrow fc-text-primary-accent">
-              Cycle Time: {fmtDuration(pipelineStartAt, report.signed_utc)}
+              Total time: {fmtDuration(pipelineStartAt, report.signed_utc)}
             </div>
           )}
         </div>
@@ -60,11 +60,11 @@ export function TimelineTab({
                   <div className="absolute left-[-5px] top-1.5 w-2 h-2 rounded-full bg-white/20 border border-white/30" />
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-primary-accent opacity-80">Phase 01</span>
-                    <h4 className="text-sm font-heading font-bold fc-text-primary">Evidence Ingress</h4>
+                    <h4 className="text-sm font-heading font-bold fc-text-primary">Evidence Intake</h4>
                     <p className="text-xs fc-text-faint leading-relaxed max-w-xl italic">
-                      Secure intake of forensic evidence. Metadata extraction and integrity pre-check completed.
+                      Evidence received; metadata and integrity checks completed.
                     </p>
-                    <div className="text-xs font-mono fc-text-faint">[{fmtTime(pipelineStartAt)}] Transmission Secured</div>
+                    <div className="text-xs font-mono fc-text-faint">[{fmtTime(pipelineStartAt)}] Received</div>
                   </div>
                 </div>
               )}
@@ -77,9 +77,9 @@ export function TimelineTab({
                 <div className="space-y-8">
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-primary-accent opacity-80">Phase 02</span>
-                    <h4 className="text-sm font-heading font-bold fc-text-primary">Forensic Agent Scans</h4>
+                    <h4 className="text-sm font-heading font-bold fc-text-primary">Agent Analysis</h4>
                     <p className="text-xs fc-text-faint leading-relaxed max-w-xl italic">
-                      Execution of deep neural probes and specialized investigative agents.
+                      Specialist agents ran their forensic tools on the evidence.
                     </p>
                   </div>
 
@@ -107,7 +107,7 @@ export function TimelineTab({
                               {"agent_name" in update ? update.agent_name : agentId}
                             </span>
                             <div className="text-xs font-mono fc-text-faint mt-0.5 truncate">
-                              {"message" in update ? update.message : "Verification Protocol Applied"}
+                              {"message" in update ? update.message : "Analysis completed"}
                             </div>
                           </div>
                           <div className="text-right shrink-0">
@@ -135,12 +135,12 @@ export function TimelineTab({
                   />
                   <div className="space-y-2">
                     <span className="fc-eyebrow fc-text-success opacity-80">Phase 03</span>
-                    <h4 className="text-sm font-heading font-bold fc-text-primary">Consensus Synthesis</h4>
+                    <h4 className="text-sm font-heading font-bold fc-text-primary">Synthesis &amp; Verdict</h4>
                     <p className="text-xs fc-text-faint leading-relaxed max-w-xl italic">
-                      Arbiter consolidation of all agent findings. Final verdict calculation and cryptographic signing.
+                      Arbiter consolidated the findings, computed the verdict, and signed the report.
                     </p>
                     <div className="text-xs font-mono fc-text-faint">
-                      [{fmtTime(report.signed_utc)}] Consensus Reached
+                      [{fmtTime(report.signed_utc)}] Report signed
                       {lastAgentTime && ` // Deliberation: ${fmtDuration(lastAgentTime, report.signed_utc)}`}
                     </div>
                   </div>

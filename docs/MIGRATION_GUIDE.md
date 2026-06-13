@@ -1,5 +1,9 @@
 # Migration Guide — v1.7.0 to v1.8.0
 
+> **Historical.** This guide covers the v1.7.0 → v1.8.0 step only. The current
+> release is v1.9.0 (see `docs/CHANGELOG.md`); v1.8.0 → v1.9.0 introduced no
+> breaking schema changes, so no migration step is required beyond this guide.
+
 ## Overview
 
 This release introduces two new forensic tools for screenshot analysis and file-type-aware arbiter thresholds. No breaking schema changes are introduced.

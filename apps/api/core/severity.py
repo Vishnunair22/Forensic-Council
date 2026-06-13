@@ -334,6 +334,8 @@ def compute_agent_verdict(
     """
     completed = 0
     clean_confirmations = 0    # NEGATIVE verdicts — tools that affirmatively confirmed clean
+    clean_conf_sum = 0.0       # Σ per-tool clean confidence — its MEAN drives the clean score
+    clean_conf_n = 0           # count of clean findings carrying a usable confidence
     failed = 0
     alert_signals = 0          # POSITIVE, MEDIUM+
     strong_signals = 0         # POSITIVE, HIGH/CRITICAL
@@ -357,6 +359,19 @@ def compute_agent_verdict(
         completed += 1
         if verdict == "NEGATIVE":
             clean_confirmations += 1
+            # Capture HOW STRONGLY this tool confirmed clean (its measurement-derived
+            # confidence), so the agent's clean score reflects evidence strength, not
+            # just the count of clean tools.
+            _cc = _get_confidence(f)
+            if not _cc:
+                _cc = float(
+                    meta.get("confidence")
+                    or (f.get("raw_confidence_score") if isinstance(f, dict) else 0.0)
+                    or 0.0
+                )
+            if _cc > 0:
+                clean_conf_sum += _cc
+                clean_conf_n += 1
         if verdict != "POSITIVE":
             continue
 
@@ -488,7 +503,20 @@ def compute_agent_verdict(
         # coverage, not confirmation, and must not inflate confidence in a clean
         # verdict. A small additional bump when Gemini's holistic read also says
         # clean/authentic (two independent pipelines agreeing is meaningful).
-        conf = min(0.92, 0.74 + 0.03 * clean_confirmations + (0.04 if gemini_clean_vote else 0.0))
+        # Confidence reflects HOW STRONGLY the tools confirmed clean (the mean
+        # per-tool clean confidence), not just HOW MANY did. Two different clean
+        # files with the same tool count but different measurement strength no
+        # longer render an identical score. Same clean band/bounds, now genuinely
+        # file-dependent: base + a small count bump + the measurement-strength term.
+        _mean_clean = (clean_conf_sum / clean_conf_n) if clean_conf_n else 0.74
+        conf = min(
+            0.92,
+            max(
+                0.70,
+                0.62 + 0.02 * clean_confirmations + 0.20 * _mean_clean
+                + (0.04 if gemini_clean_vote else 0.0),
+            ),
+        )
         verdict = "AUTHENTIC"
 
     moderate_signals = alert_signals - strong_signals

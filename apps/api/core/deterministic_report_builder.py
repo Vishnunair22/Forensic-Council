@@ -87,6 +87,38 @@ def _likelihood_assessment(manipulation_probability: float) -> str:
     )
 
 
+# Mirror of the result page's KeyFindings danger heuristic (KeyFindings.tsx) so the
+# report-level key-finding order agrees with how the UI classifies each line.
+_KF_MANIP_RE = re.compile(
+    r"tamper|manipulat|fabricat|synthetic|forged|splic|composit|confirmed anomaly|"
+    r"malware|payload|deepfake|ai.generat|artificially generated|generated image",
+    re.IGNORECASE,
+)
+_KF_CONSISTENT_MANIP_RE = re.compile(
+    r"consistent with (?:a |an )?(?:composit|splic|manipulat|tamper|forg|generat|synthetic|cloned|fabricat)",
+    re.IGNORECASE,
+)
+_KF_NEGATED_RE = re.compile(
+    r"\b(no|not|without|free of|negative for|consistent with|unmodified|authentic|coherent)\b|absen",
+    re.IGNORECASE,
+)
+
+
+def _kf_asserts_manipulation(kf: str) -> bool:
+    """True when a key finding ASSERTS a manipulation signal (so it should lead the
+    list); False for clean/negated lines. Classifies the STATEMENT only — the part
+    before the ` — Tool (NN%)` attribution — so a tool name like "AI-Generation
+    Detection" on a clean line does not trip the manipulation keywords. Used only for
+    stable material-first ordering, never to drop a finding.
+    """
+    statement = re.split(r"\s+—\s+", kf, maxsplit=1)[0].lower()
+    if _KF_CONSISTENT_MANIP_RE.search(statement):
+        return True
+    if _KF_NEGATED_RE.search(statement):
+        return False
+    return bool(_KF_MANIP_RE.search(statement))
+
+
 def _uncalibrated_contributors(agent_ids) -> list[str]:
     """Agents among `agent_ids` whose calibration model is UNCALIBRATED.
 
@@ -264,8 +296,6 @@ def build_deterministic_report(
 
     agent_list = [f"Agent {aid[-1]}" for aid in norm_syn.keys()]
     n_agents = len(agent_list)
-    ", ".join(agent_list) if agent_list else "analytical agents"
-    domain_count = n_agents  # one domain per active agent
 
     # Sentence 0 — verdict qualification (plan 3.8): when coverage is materially
     # limited or a critical tool failed, the FIRST sentence of the executive
@@ -298,8 +328,7 @@ def build_deterministic_report(
     _s1 = (
         f"Forensic examination of `{filename}` ({mime_type}) returned {_article} "
         f"**{verdict_label}** verdict with {_conf_phrase} "
-        f"after {n_agents} specialist agent{'' if n_agents == 1 else 's'} completed "
-        f"analysis across {domain_count} forensic domain{'' if domain_count == 1 else 's'}."
+        f"after {n_agents} specialist agent{'' if n_agents == 1 else 's'} completed analysis."
     )
 
     # Sentence 2 — evidence basis (strongest finding or agent synthesis)
@@ -340,8 +369,7 @@ def build_deterministic_report(
         # Plan 3.5 — neutral wording only: state what the executed checks found,
         # never the canned "consistent with an unmodified original" claim.
         _s2 = (
-            f"Independent checks across {_domains} domains returned no manipulation "
-            "indicators within the scope and limits of the executed tool set."
+            f"Independent checks across {_domains} domains returned no manipulation indicators."
         )
         # Qualified-verdict coverage caveat: on the local-only (no holistic media
         # model) path the synthesis/AI determination is screening-tier, so a clean
@@ -367,56 +395,43 @@ def build_deterministic_report(
             "that preclude a definitive conclusion without additional context."
         )
 
-    # Sentence 3 — coverage and tool reliability
-    _all_metrics = list(tool_coverage.get("completed_tools", []))
-    _failed = list(tool_coverage.get("failed_tools", []))
-    _degraded = list(tool_coverage.get("degraded_tools", []))
-    _n_completed = len(_all_metrics)
-    _n_failed = len(_failed)
-    _n_degraded = len(_degraded)
-    if _n_failed == 0 and _n_degraded == 0 and _n_completed > 0:
-        # Plan 3.5 — neutral phrasing (no "full coverage across every domain"
-        # superlative; coverage is always bounded by the executed tool set).
+    # Sentence 3 — coverage caveat, included ONLY when something did not fully
+    # complete. A clean, fully-completed run needs no coverage sentence in the
+    # executive summary: the methodology section and the reliability_note (rendered
+    # directly under the summary) carry the tool inventory. Keeping the summary to
+    # verdict + evidence basis (+ caveat when warranted) avoids the 5–6 sentence wall
+    # of methodology meta that read as boilerplate.
+    _n_failed = len(list(tool_coverage.get("failed_tools", []) or []))
+    _n_degraded = len(list(tool_coverage.get("degraded_tools", []) or []))
+    if _n_failed > 0:
         _s3 = (
-            f"All {_n_completed} applicable forensic tool{'' if _n_completed == 1 else 's'} "
-            f"completed execution without errors."
+            f"{_n_failed} forensic tool{'' if _n_failed == 1 else 's'} did not complete and "
+            f"{'is' if _n_failed == 1 else 'are'} treated as a coverage limitation only, "
+            f"not as evidence against the completed checks."
         )
-    elif _n_failed == 0 and _n_degraded > 0:
-        # Completed without hard errors, but one or more tools ran in a
-        # reduced-fidelity fallback path — a coverage limitation the report's
-        # degradation notice also flags. Never claim "full coverage" here.
+    elif _n_degraded > 0:
         _s3 = (
-            f"All {_n_completed} forensic tool{'' if _n_completed == 1 else 's'} completed execution; "
-            f"{_n_degraded} ran in a reduced-fidelity fallback mode and {'is' if _n_degraded == 1 else 'are'} "
-            f"treated as a coverage limitation, though {'it does' if _n_degraded == 1 else 'they do'} not "
-            f"affect the evidentiary weight of the fully completed checks."
-        )
-    elif _n_failed > 0:
-        _s3 = (
-            f"{_n_completed} forensic tool{'' if _n_completed == 1 else 's'} completed execution; "
-            f"{_n_failed} did not complete and are treated as coverage limitations only — "
-            f"they do not affect the evidentiary weight of completed checks."
+            f"{_n_degraded} tool{'' if _n_degraded == 1 else 's'} ran in a reduced-fidelity "
+            f"fallback and {'is' if _n_degraded == 1 else 'are'} treated as a coverage limitation."
         )
     else:
-        _s3 = "Tool coverage reflects the completed execution path for this file type."
+        _s3 = ""
 
-    # Sentence 4 — visual context and report provenance
-    if vis_available and vis_ext_llm:
-        _s4 = "Visual scene grounding was provided by a remote vision model and cross-validated against local forensic tools; the verdict and confidence are computed deterministically from tool outputs."
-    elif vis_available:
-        _s4 = "Visual scene context was generated using local forensic models and informed the grounding of tool-level findings; all evidentiary weights are computed deterministically."
-    else:
-        _s4 = "Visual context was unavailable for this analysis; the determination relies exclusively on completed tool findings and arbiter deliberation."
-
-    # Plan 3.2 — deterministic likelihood-ratio language for the manipulation
-    # probability (mirrors the arbiter's verdict→probability banding).
+    # Deterministic likelihood-ratio banding for the manipulation probability is
+    # retained as its OWN report field (`likelihood_assessment`) for the full report
+    # and exports. It is intentionally NOT appended to the executive summary: the
+    # verdict and confidence already state the result, and the full likelihood-ratio
+    # base-rate caveat read as legalese padding on the result page.
     manipulation_probability = _mirror_manipulation_probability(
         display_verdict or arbiter_deliberation.final_verdict,
         arbiter_deliberation.final_confidence,
     )
     likelihood_assessment = _likelihood_assessment(manipulation_probability)
 
-    _summary_sentences = [s for s in (_s0, _s1, _s2, _s3, _s4, likelihood_assessment) if s]
+    # Executive summary: limitation (if any) → verdict → evidence basis → coverage
+    # caveat (if any). Visual-grounding provenance and methodology live in the
+    # methodology section, never here.
+    _summary_sentences = [s for s in (_s0, _s1, _s2, _s3) if s]
     exc_summary = " ".join(_summary_sentences)
 
     # --- 2. Evidence Overview ---
@@ -547,6 +562,16 @@ def build_deterministic_report(
             continue
         _grounded_kfs.append(kf)
     deduped_kfs = _grounded_kfs
+
+    # Material-first ordering: the result page renders only the top ~6 key findings,
+    # in the order given. Collecting them in agent order (Agent1 → Agent3 → Agent5)
+    # could bury a confirmed manipulation signal from a later agent beneath clean
+    # lines from an earlier one. Stable-partition so asserted manipulation signals
+    # lead and clean lines follow — order within each tier is preserved, and nothing
+    # is dropped (exports still receive the full list).
+    _material_kfs = [kf for kf in deduped_kfs if _kf_asserts_manipulation(kf)]
+    _clean_kfs = [kf for kf in deduped_kfs if not _kf_asserts_manipulation(kf)]
+    deduped_kfs = _material_kfs + _clean_kfs
 
     if not deduped_kfs:
         deduped_kfs = ["No anomalous signatures or physical manipulation artifacts were identified."]
@@ -707,13 +732,12 @@ def build_deterministic_report(
         )
     if groq_used:
         reliability_notes.append(
-            "Reliability note: Final narrative cohesion was assisted by an external text model. "
-            "The verdict, confidence, and evidentiary findings were computed by the arbiter from grounded tool outputs."
+            "Narrative wording was assisted by an external text model; the verdict, confidence, "
+            "and findings were computed by the arbiter from tool outputs."
         )
     else:
         reliability_notes.append(
-            "Reliability note: Final report narrative was generated deterministically from local tool findings and arbiter deliberation. "
-            "No external text model was used."
+            "The report narrative was generated deterministically from tool findings; no external text model was used."
         )
 
     if vis_available:
@@ -734,8 +758,7 @@ def build_deterministic_report(
     # --- 11. Final Conclusion ---
     _conf_label = f"{confidence_pct}% indicative (uncalibrated) confidence" if uncalibrated else f"{confidence_pct}% confidence"
     final_conclusion = (
-        f"In conclusion, the examination of `{filename}` resulted in a verdict of '{verdict_label}' "
-        f"with {_conf_label}. The cumulative evidence supports this determination."
+        f"`{filename}` is assessed **{verdict_label}** at {_conf_label}, on the weight of the completed checks."
     )
 
     # --- 12. Reproducibility block (plan 3.7) ---

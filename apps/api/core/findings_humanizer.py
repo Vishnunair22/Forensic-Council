@@ -115,22 +115,13 @@ def _humanize_initial_finding(
     # splicing/copy-move models carry these domains.
     if str(evidence_verdict or "").upper() == "INCONCLUSIVE":
         if tool in ("noiseprint_cluster", "noiseprint_clustering"):
-            return (
-                "Sensor-noise clustering returned no determinate camera-source separation — "
-                "a screening-tier check treated as non-asserting; the learned splicing and "
-                "copy-move models carry this domain."
-            )
+            return "Sensor-noise clustering was indeterminate — a screening-tier check, treated as non-asserting."
         if tool in ("neural_copy_move", "copy_move_detector"):
-            return (
-                "Copy-move screening returned no determinate result — a screening-tier check "
-                "treated as non-asserting; the learned splicing model carries this domain."
-            )
+            return "Copy-move screening was indeterminate — a screening-tier check, treated as non-asserting."
         if tool in ("diffusion_artifact_detector", "ai_generation_detector"):
             return (
                 "Diffusion screening flagged a possible generative texture, but the holistic "
-                "visual model found no corroborating evidence — treated as a non-asserting "
-                "screening signal, not an AI-generation finding (FP-prone on heavily-processed "
-                "real photos)."
+                "visual read found no corroboration — treated as non-asserting, not an AI-generation finding."
             )
 
     if "screenshot scene applicability" in tool or "screenshot scene applicability" in text.lower():
@@ -146,8 +137,8 @@ def _humanize_initial_finding(
                 theme = ", dark UI theme" if metadata.get("is_dark_mode") else ", light UI theme"
             chrome = ", browser/window chrome detected" if metadata.get("ui_chrome_detected") else ""
             return (
-                f"Screenshot scope confirmed ({dims}, {aspect}{theme}{chrome}). "
-                "Physical-scene object, weapon, lighting, and scale checks were bypassed because they do not apply to screen captures."
+                f"Screenshot scope confirmed ({dims}, {aspect}{theme}{chrome}); "
+                "physical-scene checks (objects, lighting, scale) don't apply and were skipped."
             )
         return "Screenshot/context check completed; no physical-scene object evidence was required."
 
@@ -158,8 +149,8 @@ def _humanize_initial_finding(
         size = metadata.get("file_size_bytes")
         size_note = f", {size:,} bytes" if isinstance(size, int) else ""
         return (
-            f"Integrity check passed. The uploaded file hash ({digest}{size_note}) matches the "
-            "chain-of-custody record, so the submitted artifact was not altered after intake."
+            f"File hash ({digest}{size_note}) matches the chain-of-custody record — "
+            "the file was not altered after intake."
         )
 
     if "exif" in tool or "metadata" in tool:
@@ -207,13 +198,16 @@ def _humanize_initial_finding(
         platform = str(metadata.get("detected_platform") or "").strip()
         impact = str(metadata.get("forensic_reliability_impact") or "NONE").upper()
         penalty = float(metadata.get("compression_penalty") or 1.0)
+        _pl = platform.lower()
         if penalty >= 0.95 or not platform:
-            return "No social media or messaging app compression footprint detected. Metadata integrity is unaffected."
-        if "unknown" in platform.lower() or "stripped" in platform.lower():
+            return "No social-media or messaging-app compression footprint detected."
+        if "screenshot" in _pl:
+            return "Compression profile matches a system screenshot — expected for a screen capture, no provenance concern."
+        if "unknown" in _pl or "stripped" in _pl:
             return (
-                f"Metadata appears stripped or platform-normalized — no specific app fingerprint identified, "
-                f"which is consistent with social media re-processing, a privacy tool, or a system screenshot. "
-                f"This limits provenance strength ({impact.lower()} reliability impact) but is not a manipulation signal."
+                "Metadata is stripped with no platform fingerprint — consistent with re-upload, "
+                f"a privacy tool, or a screenshot. Limits provenance strength ({impact.lower()} impact); "
+                "not a manipulation signal."
             )
         clean_platform = (
             platform.replace("(Stripped Metadata - High Compression Risk)", "")
@@ -223,9 +217,8 @@ def _humanize_initial_finding(
                     .strip().rstrip("-").strip()
         )
         return (
-            f"Compression footprint matches {clean_platform}. "
-            f"This platform applies significant re-compression which degrades forensic reliability "
-            f"({impact.lower()} impact)."
+            f"Compression footprint matches {clean_platform}; its re-compression reduces "
+            f"provenance reliability ({impact.lower()} impact)."
         )
 
     if "file_structure_analysis" in tool or "file structure analysis" in text.lower():
@@ -234,7 +227,7 @@ def _humanize_initial_finding(
 
     if "frequency_domain_analysis" in tool or "frequency domain analysis" in text.lower():
         if "0.000" in text or "appears natural" in text.lower():
-            return "Frequency-domain analysis found no periodic/GAN-like artifact pattern; the screenshot's high-frequency distribution is within the expected range."
+            return "Frequency-domain analysis found no periodic/GAN-like artifact pattern; the high-frequency distribution is within the expected range."
 
     if "extract_text" in tool or "extract text" in text.lower():
         preview = metadata.get("ocr_text_preview") or metadata.get("text_preview")
@@ -312,9 +305,8 @@ def _humanize_initial_finding(
     if "analyze_image_content" in tool or "analyze image content" in text.lower():
         if metadata.get("semantic_scope") == "screenshot_fast_profile":
             return (
-                f"Screenshot content was identified as a digital UI capture ({metadata.get('width')}x{metadata.get('height')}px, "
-                f"{metadata.get('color_mode')} mode). Natural-scene classification was bypassed; "
-                "OCR, layout, hash, and provenance checks carry the screenshot review."
+                f"Identified as a digital UI capture ({metadata.get('width')}x{metadata.get('height')}px, "
+                f"{metadata.get('color_mode')} mode); review relies on OCR, layout, hash, and provenance checks."
             )
         if "agent1" in agent_id.lower() and (
             "screenshot" in str(metadata).lower() or "screen capture" in str(metadata).lower()
@@ -348,9 +340,8 @@ def _humanize_initial_finding(
             except (ValueError, TypeError):
                 dev_str = str(deviation)
             return (
-                f"Error-level analysis found no re-compression residuals — "
-                f"all {regions} anomaly regions, maximum deviation {dev_str} — "
-                f"consistent with an unmodified JPEG."
+                f"Error-level analysis found no re-compression residuals "
+                f"({regions} anomaly regions, max deviation {dev_str}) — consistent with an unmodified JPEG."
             )
         elif tool_key == "noiseprint_cluster":
             return (

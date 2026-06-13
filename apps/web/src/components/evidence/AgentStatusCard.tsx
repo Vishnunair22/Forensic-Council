@@ -388,7 +388,7 @@ function AgentBrief({ completedData, findings, toolsRan, imageContext, contextLa
     }
 
     const conf = Math.round(completedData.confidence * 100);
-    const n = completedData.tools_ran ?? findings.length;
+    const n = toolsRan;
     const alertCount = findings.filter(isAlertFinding).length;
 
     if (isAlert) {
@@ -584,12 +584,28 @@ export function AgentStatusCard({
   const isAgentAlert =
     (typeof verdictScore === "number" && verdictScore > 0.6) ||
     ALERT_VERDICTS.has(agentVerdict || "");
-   // Use the backend-reported count of successful tool executions as the authoritative
-   // number. Fall back to findings.length only if the backend didn't send tools_ran.
+   // Reconcile "N tools ran" with the finding cards the user actually sees.
+   // The backend tools_ran counts distinct tools in its preview, but this card
+   // applies further suppression (no-signal template + screenshot-camera tools +
+   // dedup), so a clean tool can be counted by the backend yet hidden here →
+   // "4 ran, 3 findings". Count the distinct forensic tools among the DISPLAYED
+   // findings so the header count and the rendered cards can never diverge. Fall
+   // back to the backend count (then findings.length) only when no discrete tool
+   // finding renders — e.g. an all-clean agent that shows a single synthesis card.
+   const displayedToolCount = React.useMemo(() => {
+     const tools = new Set<string>();
+     for (const f of findings) {
+       const t = typeof f.tool === "string" ? f.tool : "";
+       if (t && t !== "agent_synthesis") tools.add(t);
+     }
+     return tools.size;
+   }, [findings]);
    const toolsRan =
-     typeof completedData?.tools_ran === "number"
-       ? completedData.tools_ran
-       : findings.length;
+     displayedToolCount > 0
+       ? displayedToolCount
+       : typeof completedData?.tools_ran === "number"
+         ? completedData.tools_ran
+         : findings.length;
   const fallbackTotal = getDefaultProgressTotal(agentId);
   const backendKnowsTotal = typeof liveUpdate?.tools_total === "number";
   const liveTotal = liveUpdate?.tools_total || toolsRan || fallbackTotal;

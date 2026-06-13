@@ -137,7 +137,7 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
         {rs.state === "loading" && !rs.report && (
           <ForensicProgressOverlay
             title="Loading Report"
-            liveText="Accessing secure forensic ledger…"
+            liveText="Retrieving report…"
             telemetryLabel="Retrieving report"
             showElapsed={false}
             variant="loading"

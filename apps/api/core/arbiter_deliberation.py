@@ -398,6 +398,34 @@ def deliberate_findings(
     else:
         high_weight_evidence_score = 1.0
 
+    # 3b. evidence_strength_score — mean per-tool confidence of the report-safe
+    # findings that SUPPORT the verdict. This is the term that makes the score VARY
+    # per file: a strongly/uniformly clean read scores higher than a weakly clean
+    # one, instead of every clean fully-covered file collapsing to the same value
+    # once the coverage/agreement/high-weight rates all saturate to 1.0. Confidence
+    # travels on the raw findings (DeliberatedFinding carries no score), so map back
+    # by finding_id.
+    _raw_conf_by_id: dict[str, float] = {}
+    for _f in findings_list:
+        _fid = str((_f.get("finding_id") if isinstance(_f, dict) else getattr(_f, "finding_id", "")) or "")
+        if not _fid:
+            continue
+        _c = float(
+            (_f.get("confidence_raw") if isinstance(_f, dict) else getattr(_f, "confidence_raw", 0.0))
+            or (_f.get("metadata", {}) if isinstance(_f, dict) else {}).get("confidence")
+            or 0.0
+        )
+        if _c > 0:
+            _raw_conf_by_id[_fid] = _c
+    _supporting_confs = [
+        _raw_conf_by_id[df.finding_id]
+        for df in deliberated
+        if df.report_safe and df.supports_final_verdict and df.finding_id in _raw_conf_by_id
+    ]
+    evidence_strength_score = (
+        sum(_supporting_confs) / len(_supporting_confs) if _supporting_confs else 0.0
+    )
+
     # 4. visual_context_support_score
     # Honesty fix: credit the visual context ONLY when it AGREES with the final
     # verdict's direction. Previously the mere PRESENCE of a visual context added
@@ -435,12 +463,18 @@ def deliberate_findings(
     # with tool coverage, cross-agent agreement, and visual corroboration below that.
     # (WS-5 calibration training will replace these hand-set weights with benchmarked
     # ones; until then the report labels confidence "indicative (uncalibrated)".)
+    # Constant terms rebalanced DOWN to leave headroom for evidence_strength_score —
+    # the file-dependent term — so a clean, fully-covered result no longer pins to a
+    # flat value the moment coverage/agreement/high-weight all hit 1.0. With strength
+    # at 0.15 weight, a strongly-clean file approaches the uncalibrated 0.85 ceiling
+    # while a weakly-clean one settles ~0.81, genuinely varying with the evidence.
     raw_conf = (
-        0.35
-        + 0.15 * important_tool_completion_rate
-        + 0.12 * cross_agent_agreement_score
-        + 0.12 * high_weight_evidence_score
+        0.30
+        + 0.12 * important_tool_completion_rate
+        + 0.10 * cross_agent_agreement_score
+        + 0.10 * high_weight_evidence_score
         + _vc_coeff * visual_context_support_score
+        + 0.15 * evidence_strength_score
         - 0.20 * critical_tool_failure_rate
         - 0.15 * unresolved_conflict_score
         - 0.10 * weak_single_signal_penalty

@@ -68,7 +68,7 @@ export function VerdictSection({
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: theme.color }} />
                 <p className="text-xs fc-text-secondary font-medium">
-                  Official Council Verdict &middot; {isDeepPhase ? "Deep" : "Initial"}
+                  Council Verdict &middot; {isDeepPhase ? "Deep" : "Initial"}
                 </p>
               </div>
 
@@ -86,7 +86,7 @@ export function VerdictSection({
               {confPct}%
             </div>
             <div className="text-xs fc-text-muted mt-2 border-t border-white/10 pt-1">
-              Confidence Index
+              Confidence
             </div>
           </div>
         </div>

@@ -99,6 +99,33 @@ SCREENSHOT_PREVIEW_EXCLUDED_TOOLS = {
 }
 
 
+def _task_text_surfaces(task_text: Any, evidence_artifact: Any) -> bool:
+    """True when a planned task maps to a tool that will surface as a Key Finding.
+
+    Mirrors the per-finding _suppress_preview_tool gate so the live "X/Y tools"
+    counter/denominator converge to the completed "N tools ran": context/custody
+    tools (visual_evidence_profile, hash, file-type validation, frame extraction)
+    are planned and executed but never surfaced, so counting them inflated the
+    live progress above the eventual finding count (e.g. "5/5" → "3 ran"). Task
+    descriptions embed the tool name as a substring (see TOOL_TO_TASK_DESCRIPTION),
+    so a substring match is sufficient.
+    """
+    excluded = set(PREVIEW_EXCLUDED_TOOLS)
+    _mime = (getattr(evidence_artifact, "mime_type", "") or "").lower()
+    if not _mime.startswith("image/"):
+        # For audio/video/document the shared native profile IS the headline
+        # finding and DOES surface — keep it counted.
+        excluded -= {
+            "read_shared_image_context",
+            "visual_evidence_profile",
+            "shared_visual_evidence_profile",
+        }
+    if is_screen_capture_like(evidence_artifact):
+        excluded |= SCREENSHOT_PREVIEW_EXCLUDED_TOOLS
+    text = str(task_text or "").lower()
+    return not any(tool in text for tool in excluded)
+
+
 async def run_agents_concurrent(
     pipeline: ForensicCouncilPipeline,
     evidence_artifact,
@@ -215,6 +242,13 @@ async def run_agents_concurrent(
                 return (
                     tool_text in SCREENSHOT_PREVIEW_EXCLUDED_TOOLS
                     and is_screen_capture_like(evidence_artifact)
+                )
+
+            def _count_surfacing_tasks(tasks: Any) -> int:
+                """Count planned tasks whose tool will surface as a Key Finding."""
+                return sum(
+                    1 for task in (tasks or [])
+                    if _task_text_surfaces(task, evidence_artifact)
                 )
 
             def _resolve_image_context(agent_inst) -> str | None:
@@ -864,7 +898,9 @@ async def run_agents_concurrent(
                         # previously reset the live X/Y counter to 0 on every 3s deep
                         # progress poll, freezing it at 1/N while the text cycled.
                         "tools_done": tools_done if tools_done is not None else (0 if status == "validating" else None),
-                        "tools_total": len(getattr(agent_inst, "deep_task_decomposition" if analysis_phase == "deep" else "task_decomposition", []) or [])
+                        "tools_total": _count_surfacing_tasks(
+                            getattr(agent_inst, "deep_task_decomposition" if analysis_phase == "deep" else "task_decomposition", [])
+                        )
                         if agent_inst is not None and status == "running"
                         else 1
                         if status == "validating"
@@ -1362,6 +1398,19 @@ async def run_agents_concurrent(
                             _done = [t for t in _state.tasks if t.status == "COMPLETE"]
                             _current = _in_progress[0].description if _in_progress else ""
                             if _current and _current != _last_current:
+                                # Count only SURFACING tasks so the deep "X/Y" tracks
+                                # the same set as its denominator (_count_surfacing_tasks)
+                                # and the completed "N tools ran" — context/custody tasks
+                                # (e.g. read_shared_image_context on an image) execute but
+                                # never surface, so counting them drifted X above Y.
+                                _done_surf = sum(
+                                    1 for t in _done
+                                    if _task_text_surfaces(t.description, evidence_artifact)
+                                )
+                                _inprog_surf = 1 if (
+                                    _in_progress
+                                    and _task_text_surfaces(_in_progress[0].description, evidence_artifact)
+                                ) else 0
                                 await _broadcast_agent_status(
                                     aid,
                                     "running",
@@ -1370,8 +1419,8 @@ async def run_agents_concurrent(
                                     initial_tool_names=_initial_tool_names,
                                     analysis_phase="deep",
                                     # Authoritative per-tool progress from working memory:
-                                    # completed tasks + the one now in progress = current X.
-                                    tools_done=len(_done) + (1 if _in_progress else 0),
+                                    # completed surfacing tasks + the one now in progress = current X.
+                                    tools_done=_done_surf + _inprog_surf,
                                 )
                                 _last_current = _current
                             if _done and not _in_progress:

@@ -1266,6 +1266,35 @@ def _apply_polished_agent(
             seen_kf_norms.add(norm)
             validated_kfs.append(kf_str)
         if validated_kfs:
+            # Guarantee no MATERIAL signal is suppressed by the LLM's 3–5 cap or an
+            # omission: the LLM key findings wholesale-replace the deterministic
+            # ones, so a POSITIVE tool finding the model left out would vanish from
+            # the report. Re-inject any positive (per the grounded finding set —
+            # so grounding-cleared signals are not resurrected) that the LLM dropped.
+            _inp_kf = inputs.get(aid)
+            if _inp_kf is not None:
+                _present_labels: set[str] = set()
+                for _vk in validated_kfs:
+                    _lm = re.search(r"—\s*([^—]+?)\s*(?:\(\d+%\))?\s*$", _vk)
+                    if _lm:
+                        _present_labels.add(re.sub(r"\s+", " ", _lm.group(1)).strip().lower())
+                for _pf in (_inp_kf.grounded_findings or _inp_kf.findings or []):
+                    if str(_pf.get("evidence_verdict") or "").upper() != "POSITIVE":
+                        continue
+                    _ptid = str((_pf.get("metadata") or {}).get("tool_name") or _pf.get("finding_type") or "")
+                    if not _ptid or _ptid in CONTEXT_ONLY_TOOLS:
+                        continue
+                    _plabel = TOOL_LABELS.get(_ptid, _ptid.replace("_", " ").title())
+                    if _plabel.strip().lower() in _present_labels:
+                        continue
+                    _pline = format_finding_first(_pf)
+                    if _text_contradicts_verdict(_pline, _verdict):
+                        continue
+                    validated_kfs.append(_pline)
+                    _present_labels.add(_plabel.strip().lower())
+                    logger.warning(
+                        f"{aid}: LLM dropped POSITIVE finding for tool '{_ptid}'; re-injected to prevent suppression."
+                    )
             outputs[aid].key_findings = validated_kfs
 
     # phase_comparison — deep-mode only; stored on the output for
