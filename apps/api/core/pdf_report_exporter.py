@@ -187,9 +187,12 @@ def _build_html_body(report_dict: dict[str, Any], session_id: str) -> str:
             finding_items = []
             for f in agent_findings:
                 if not isinstance(f, dict):
-                    continue
+                    try:
+                        f = f.model_dump(mode="json") if hasattr(f, "model_dump") else vars(f)
+                    except Exception:
+                        f = {"finding_type": str(getattr(f, "finding_type", "Unknown"))}
                 ftype = esc(f.get("finding_type", "Unknown"))
-                fsummary = esc(f.get("reasoning_summary", "")[:300])
+                fsummary = esc(f.get("reasoning_summary", "")[:600])
                 fconf = f.get("confidence_raw") or f.get("raw_confidence_score")
                 cal_status = f.get("calibration_status", "UNCALIBRATED")
                 everd = esc(f.get("evidence_verdict", "INCONCLUSIVE"))
@@ -409,9 +412,12 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
         pdf.cell(0, 7, f"Findings ({len(findings)} total)")
         pdf.ln(7)
         pdf.set_font("Helvetica", "", 8)
-        for f in findings[:20]:  # Cap at 20 to avoid overflow
+        for f in findings:
             if not isinstance(f, dict):
-                continue
+                try:
+                    f = f.model_dump(mode="json") if hasattr(f, "model_dump") else vars(f)
+                except Exception:
+                    continue
             ftype = _safe_latin1(f.get("finding_type", "Unknown")[:60])
             fconf = f.get("confidence_raw")
             conf_str = f"{float(fconf):.0%}" if fconf is not None else "N/A"

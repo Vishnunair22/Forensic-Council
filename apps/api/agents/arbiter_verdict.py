@@ -427,7 +427,7 @@ def calculate_manipulation_probability(
         _evidence_verdict = evidence_verdict_of(_f)
         if _evidence_verdict in {"NOT_APPLICABLE", "ERROR", "NEGATIVE"}:
             continue
-        _is_direct_manip = _evidence_verdict == "POSITIVE" or _has_legacy_positive_signal(_f)
+        _is_direct_manip = _evidence_verdict == "POSITIVE" and _has_legacy_positive_signal(_f)
 
         if _is_direct_manip:
             _c = confidence_of(_f, default=0.5) or 0.5

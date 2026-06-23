@@ -414,12 +414,12 @@ def generate_deterministic_agent_synthesis(input_data: AgentSynthesisInput) -> A
         _assess, _ctx = _holistic_terms(input_data.agent_id)
         key_findings = [
             f"The {_assess} flagged this evidence as anomalous; see {_ctx} for the contributing read."
-        ] + _clean[:4]
+        ] + _clean[:10]
     elif _clean:
         # Clean path: the evidence is benign — surface the substantive clean
         # findings themselves (now richly described) so the section is informative
         # rather than a bare "nothing found" line.
-        key_findings = _clean[:5]
+        key_findings = _clean[:10]
     else:
         _n = len(set(_clean_tools))
         key_findings = [
@@ -769,7 +769,7 @@ _MANIPULATION_TERMS = (
     "splicing", "deepfake", "ai-generated", "ai generated", "synthetic", "falsified",
     "altered", "edited to deceive", "not authentic", "inauthentic",
 )
-_CLEAN_VERDICTS = {"AUTHENTIC", "INCONCLUSIVE", "NEGATIVE", "NOT_APPLICABLE", "CLEAN", ""}
+_CLEAN_VERDICTS = {"AUTHENTIC", "NEGATIVE", "NOT_APPLICABLE", "CLEAN", ""}
 
 
 def _text_contradicts_verdict(text: str, verdict: str) -> bool:

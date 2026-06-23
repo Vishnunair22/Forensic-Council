@@ -105,9 +105,6 @@
   /* ── RAG citation ── */
   --color-rag-citation:        rgba(59, 130, 246, 0.08);
   --color-rag-citation-border: rgba(147, 197, 253, 0.34);
-
-  /* ── Loading bridge ── */
-  --fc-loading-bridge-bg: rgba(2, 4, 10, 0.97);
 }
 
 /* ─────────────────────────────────────────────────────────────── */
@@ -146,18 +143,6 @@
      Adjust main content padding without a server-component env var read. */
   :has(nav[data-nav-offset="banner"]) #main-content {
     padding-top: calc(64px + 28px);
-  }
-
-  /* Loading bridge overlay — set by useInvestigation before route push */
-  body[data-fc-loading="1"]::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: var(--fc-loading-bridge-bg);
-    backdrop-filter: blur(32px);
-    -webkit-backdrop-filter: blur(32px);
-    pointer-events: none;
   }
 
   /* Loading label is rendered by GlobalLoadingOverlay — no CSS pseudo needed. */

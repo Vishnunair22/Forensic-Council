@@ -118,9 +118,9 @@ class ForensicPolicy:
     # SUSPICIOUS-level probability (capped at SINGLE_SIGNAL_HIGH_RELIABILITY_CAP);
     # a single signal from any other tool stays capped at SINGLE_SIGNAL_DEFAULT_CAP
     # and needs a corroborator from a DIFFERENT signal family to go higher.
-    SINGLE_SIGNAL_MANIP_THRESHOLD: float = 0.85
+    SINGLE_SIGNAL_MANIP_THRESHOLD: float = 0.75
     SINGLE_SIGNAL_HIGH_RELIABILITY_CAP: float = 0.65
-    SINGLE_SIGNAL_DEFAULT_CAP: float = 0.45
+    SINGLE_SIGNAL_DEFAULT_CAP: float = 0.55
 
     # Tools whose REAL-model path is reliable enough that a lone, very-high-confidence
     # positive can stand on its own (TruFor, BusterNet, the ViT AI-gen detector,
@@ -144,12 +144,6 @@ class ForensicPolicy:
 
     ABSTAIN_CONF_FLOOR = 0.35
     ABSTAIN_ERROR_CEILING = 0.55
-
-    # --- Per-Agent Summary Thresholds ---
-    AGENT_AUTHENTIC_CONF = 0.70
-    AGENT_AUTHENTIC_ERR = 0.20
-    AGENT_SUSPICIOUS_CONF = 0.50
-    AGENT_SUSPICIOUS_ERR = 0.45
 
     # WS-3 #11 / P0.3 — signal families. Detectors in the same family respond to the
     # SAME underlying artifact (e.g. ELA/JPEG-ghost/classical-FFT all fire on
@@ -235,22 +229,6 @@ class ForensicPolicy:
         unique family so they are never wrongly fused with another signal."""
         key = tool_name.lower().replace(" ", "_")
         return cls.SIGNAL_FAMILIES.get(key, f"tool:{key}")
-
-    @classmethod
-    def is_authentic(cls, confidence: float, error_rate: float) -> bool:
-        """Check if metrics meet the AUTHENTIC threshold."""
-        return confidence >= cls.AGENT_AUTHENTIC_CONF and error_rate <= cls.AGENT_AUTHENTIC_ERR
-
-    @classmethod
-    def is_suspicious(cls, confidence: float, error_rate: float) -> bool:
-        """Check if metrics meet the SUSPICIOUS threshold.
-
-        NOTE: A finding can satisfy both is_authentic and is_suspicious when
-        confidence >= 0.75 and error_rate is in (0.15, 0.40].  Callers must
-        check is_authentic first and treat is_suspicious as a fallback tier.
-        """
-        # Suspicious = medium/high error rate but still some usable confidence
-        return confidence >= cls.AGENT_SUSPICIOUS_CONF and error_rate > cls.AGENT_SUSPICIOUS_ERR
 
     @classmethod
     def get_verdict_thresholds(cls, mime_type: str = "") -> dict[str, float]:

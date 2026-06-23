@@ -232,8 +232,8 @@ export function EvidenceUploadClient() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    void resetActiveInvestigation(queryClient);
+                  onClick={async () => {
+                    await resetActiveInvestigation(queryClient);
                     router.push("/");
                   }}
                   className="fc-btn-primary mt-4"

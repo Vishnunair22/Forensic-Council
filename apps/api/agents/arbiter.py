@@ -54,8 +54,8 @@ def _manipulation_probability(mapped_verdict: str, confidence: float) -> float:
     if v == "SUSPICIOUS":
         return round(0.50 + 0.25 * c, 3)        # 0.50–0.75 band
     if v == "AUTHENTIC":
-        return round(0.15 * (1.0 - c), 3)       # high confidence → near 0
-    return 0.5                                   # INCONCLUSIVE — genuine uncertainty
+        return round(max(0.05, 0.15 * (1.0 - c)), 3)       # high confidence → near 0, floored at 0.05
+    return round(0.5, 3)                           # INCONCLUSIVE — genuine uncertainty
 
 # Re-exporting for backward compatibility
 __all__ = [
@@ -740,6 +740,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             confidence_min = confidence_max = round(_final_conf, 3)
             confidence_std_dev = 0.0
 
+        # B5: Start cross-agent comparison EARLY — it only needs all_findings
+        # (already computed) and can run concurrently with the report build + Groq.
+        _comparison_task = asyncio.create_task(cross_agent_comparison(all_findings))
+
         det_report_dict = build_deterministic_report(
             case_data=case_data,
             visual_context=visual_context,
@@ -768,6 +772,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if success:
                 final_report_dict = refined
                 groq_used = True
+
+        # B5: Await the cross-agent comparison that was started before report build
+        comparisons = await _comparison_task
+        contested = await self._run_challenges(comparisons)
 
         # Disclose the uncorroborated AI-generation signal in the executive summary
         # (paired with the confidence cap above) so a reader of the report knows the
@@ -837,9 +845,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             "context_lines": [f.finding_statement for f in deliberation_result.supporting_findings],
             "coverage_line": final_report_dict.get("methodology") or "Completed analysis."
         }
-
-        comparisons = await cross_agent_comparison(all_findings)
-        contested = await self._run_challenges(comparisons)
 
         # ── 9. Case Finalisation ──
         _fusion = {}
@@ -1278,11 +1283,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         they re-run their ReAct loop with contradiction context and may revise
         their finding. Without agent_factory, contradictions are recorded as
         contested and escalated to HITL tribunal.
+
+        B4: Contradictions are processed concurrently to avoid compounding delays.
         """
-        contested = []
         contradictions = [c for c in comparisons if c.verdict == FindingVerdict.CONTRADICTION]
 
-        for comp in contradictions:
+        async def _challenge_one(comp: FindingComparison) -> dict:
             fa, fb = comp.finding_a, comp.finding_b
             agent_a_id = fa.get("agent_id", "")
             agent_b_id = fb.get("agent_id", "")
@@ -1297,9 +1303,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 "challenge_resolved": False,
             }
 
-            # Challenge loop: re-invoke the lower-confidence agent if factory available.
-            # Without agent_factory this remains a contested (HITL-escalated) finding.
-            # Limited to MAX_CHALLENGE_ATTEMPTS to prevent resource exhaustion.
             if self.agent_factory is not None:
                 try:
                     conf_a = (
@@ -1317,10 +1320,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
 
                     challenge_entry["challenge_attempts"] = 0
                     revised_findings = []
-                    # B-C-4: a wedged agent ReAct loop must not stall the
-                    # arbiter indefinitely. Cap each reinvocation at a quarter
-                    # of the investigation budget so the deliberation can
-                    # still finalise (with an unresolved-challenge entry).
                     challenge_timeout = max(
                         15.0,
                         float(self.config.investigation_timeout) / 4.0,
@@ -1368,9 +1367,24 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 except Exception as exc:
                     logger.warning(f"Challenge invocation failed for {challenged_id}: {exc}")
 
-            contested.append(challenge_entry)
+            return challenge_entry
 
-        return contested
+        # B4: Run all contradictions concurrently instead of sequentially
+        if contradictions:
+            contested = await asyncio.gather(
+                *[_challenge_one(c) for c in contradictions],
+                return_exceptions=True,
+            )
+            # Handle any exceptions from gather
+            return [
+                entry if isinstance(entry, dict) else {
+                    "plain_description": "Challenge processing failed",
+                    "challenge_attempted": False,
+                    "challenge_resolved": False,
+                }
+                for entry in contested
+            ]
+        return []
 
     def _get_coverage_note(self, metrics, findings) -> str:
         total = sum(m.get("total_tools_called", 0) for m in metrics)

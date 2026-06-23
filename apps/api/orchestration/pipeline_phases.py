@@ -704,7 +704,7 @@ async def run_agents_concurrent(
                     if tool_key:
                         seen_tools.add(tool_key)
                     deduped.append(item)
-                    if len(deduped) >= 8:
+                    if len(deduped) >= 12:
                         break
                 preview = deduped
             if isinstance(synthesis, dict) and synthesis.get("narrative_summary") and not preview:
@@ -1630,10 +1630,16 @@ async def _run_agent_deep_only(
             )
             all_findings = getattr(agent, "_findings", initial_findings)
             for finding in all_findings:
-                meta = finding.metadata
-                if not isinstance(meta, dict):
-                    meta = {}
-                    finding.metadata = meta
+                if isinstance(finding, dict):
+                    meta = finding.get("metadata") or {}
+                    if not isinstance(meta, dict):
+                        meta = {}
+                        finding["metadata"] = meta
+                else:
+                    meta = getattr(finding, "metadata", None) or {}
+                    if not isinstance(meta, dict):
+                        meta = {}
+                        finding.metadata = meta
                 meta["context_version"] = 2
                 phase = meta.get("analysis_phase", "")
                 if phase != "deep":
@@ -1649,13 +1655,18 @@ async def _run_agent_deep_only(
                 if is_gated:
                     meta["gated"] = True
 
-            deep_only = [f for f in all_findings if (f.metadata or {}).get("analysis_phase") == "deep"]
+            def _get_meta(f):
+                if isinstance(f, dict):
+                    return f.get("metadata") or {}
+                return getattr(f, "metadata", None) or {}
+
+            deep_only = [f for f in all_findings if _get_meta(f).get("analysis_phase") == "deep"]
             deep_count = len(deep_only)
             span.set_attribute("deep_finding_count", deep_count)
             span.set_attribute("total_finding_count", len(all_findings))
             return AgentLoopResult(
                 agent_id=agent_id,
-                findings=[f.model_dump(mode="json") for f in all_findings],
+                findings=[f.model_dump(mode="json") if hasattr(f, "model_dump") else (f if isinstance(f, dict) else {}) for f in all_findings],
                 reflection_report=(
                     getattr(agent, "_reflection_report", None).model_dump(mode="json")
                     if getattr(agent, "_reflection_report", None)

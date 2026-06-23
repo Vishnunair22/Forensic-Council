@@ -79,7 +79,10 @@ def deliberate_findings(
         elif hasattr(f, "model_dump"):
             findings.append(f.model_dump(mode="json"))
         else:
-            findings.append(dict(f or {}))
+            try:
+                findings.append(dict(f or {}))
+            except (TypeError, ValueError):
+                logger.warning("Skipping unconvertible finding", type=type(f).__name__)
 
     deliberated: list[DeliberatedFinding] = []
 
@@ -262,13 +265,14 @@ def deliberate_findings(
     # Rule-based final verdict determination
     final_verdict = "NO_REPORTABLE_MANIPULATION_DETECTED"
 
-    # Check custody hash mismatch
-    hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") == "file_hash_verify" and f.get("evidence_verdict") == "POSITIVE"]
+    # Check custody hash mismatch — includes legacy tool name aliases
+    _HASH_MISMATCH_TOOLS = {"file_hash_verify", "hash_verify", "custody_check"}
+    hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") in _HASH_MISMATCH_TOOLS and f.get("evidence_verdict") == "POSITIVE"]
 
     # Determine verdict
     if hash_mismatches:
         final_verdict = "LIKELY_MANIPULATED"
-    elif len(positive_integrity_tools) >= 2:
+    elif len(set(positive_integrity_tools)) >= 2:
         final_verdict = "LIKELY_MANIPULATED"
     elif len(positive_integrity_tools) == 1:
         # Check if high confidence or supported by visual context
@@ -341,10 +345,10 @@ def deliberate_findings(
     ]
 
     # P0.5 — INCONCLUSIVE_LIMITED_COVERAGE triggers when EITHER important-tool
-    # coverage is <40% OR at least one critical tool failed while the remaining
-    # signals are weak (no custody-hash mismatch and no strong court-defensible
-    # positive) — a single dead critical detector must not leave a confident
-    # "clean" verdict standing on partial evidence.
+    # coverage is <40% OR at least two critical tools failed, OR one critical tool
+    # failed while coverage is below 80% — a single dead critical detector must
+    # not leave a confident "clean" verdict standing on partial evidence, but
+    # a single failure in an otherwise well-covered analysis is not enough.
     _has_strong_signal = bool(hash_mismatches) or any(
         (f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or 0)
         >= strong_corroborator_bar
@@ -352,11 +356,13 @@ def deliberate_findings(
         for f in positive_integrity_findings
     )
     _coverage_low = total_important > 0 and (completed_important / total_important) < 0.4
+    _coverage_moderate = total_important > 0 and (completed_important / total_important) < 0.8
     if (
         failed_important >= 2
         or _coverage_low
-        or (failed_critical_tools and not _has_strong_signal)
-    ):
+        or len(failed_critical_tools) >= 2
+        or (failed_critical_tools and _coverage_moderate and not _has_strong_signal)
+    ) and not hash_mismatches:
         final_verdict = "INCONCLUSIVE_LIMITED_COVERAGE"
 
     # Set supports_final_verdict on findings
@@ -386,8 +392,10 @@ def deliberate_findings(
     important_tool_completion_rate = (completed_important / total_important) if total_important > 0 else 1.0
 
     # 2. cross_agent_agreement_score
-    # If no conflicts, score is 1.0. If conflicts, score is 0.0.
-    cross_agent_agreement_score = 1.0 if not conflicts else 0.0
+    # Graduated: start at 1.0, deduct 0.10 per conflict (floored at 0.0).
+    # A single minor cross-agent disagreement no longer destroys the entire
+    # agreement term — only a barrage of contradictions drives it to zero.
+    cross_agent_agreement_score = max(0.0, 1.0 - 0.10 * len(conflicts))
 
     # 3. high_weight_evidence_score
     # If all critical/high tools that completed are clean/negative, or support the final verdict
@@ -412,6 +420,7 @@ def deliberate_findings(
             continue
         _c = float(
             (_f.get("confidence_raw") if isinstance(_f, dict) else getattr(_f, "confidence_raw", 0.0))
+            or (_f.get("raw_confidence_score") if isinstance(_f, dict) else getattr(_f, "raw_confidence_score", 0.0))
             or (_f.get("metadata", {}) if isinstance(_f, dict) else {}).get("confidence")
             or 0.0
         )
@@ -428,20 +437,19 @@ def deliberate_findings(
 
     # 4. visual_context_support_score
     # Honesty fix: credit the visual context ONLY when it AGREES with the final
-    # verdict's direction. Previously the mere PRESENCE of a visual context added
-    # confidence even when it CONTRADICTED the verdict (verdict clean but the
-    # vision model flagged an integrity issue, or vice-versa) — inflating the score
-    # on exactly the cases where the evidence is most ambiguous. Corroboration =
-    # both read clean OR both flag a problem; disagreement (and ambiguous/
-    # uncorroborated verdicts) earns no visual-support credit. Remote (court-
-    # defensible) Gemini is weighted more than the screening-tier local ensemble.
+    # verdict's direction. Corroboration = both read clean OR both flag a problem;
+    # disagreement (and ambiguous/uncorroborated verdicts) earns no visual-support
+    # credit. Remote (court-defensible) Gemini is weighted more than the screening-
+    # tier local ensemble.
+    _vc_coeff = 0.10 if vc_remote else 0.05
     if visual_context is None:
         visual_context_support_score = 0.0
     else:
         _verdict_clean = final_verdict == "NO_REPORTABLE_MANIPULATION_DETECTED"
         _vc_flags_issue = bool(has_vc_integrity_issue)
-        visual_context_support_score = 1.0 if (_verdict_clean != _vc_flags_issue) else 0.0
-    _vc_coeff = 0.10 if vc_remote else 0.05
+        # Agreement: both clean (no issue flagged) or both dirty (issue flagged).
+        # Disagreement or ambiguous verdicts earn no credit.
+        visual_context_support_score = 1.0 if (_verdict_clean == (not _vc_flags_issue)) else 0.0
 
     # 5. critical_tool_failure_rate
     failed_critical = critical_tools.intersection(failed_tools)
@@ -468,6 +476,22 @@ def deliberate_findings(
     # flat value the moment coverage/agreement/high-weight all hit 1.0. With strength
     # at 0.15 weight, a strongly-clean file approaches the uncalibrated 0.85 ceiling
     # while a weakly-clean one settles ~0.81, genuinely varying with the evidence.
+    # Clamp penalty coefficients so the formula can never go negative before the
+    # floor.  Worst case: base 0.30 + all positives at 0 − all penalties at max.
+    # Penalties are capped at 0.30 total (0.10 + 0.10 + 0.10) so the raw sum
+    # stays ≥ 0.0 and the floor is never the only thing preventing an absurd value.
+    _penalty_total = (
+        0.20 * critical_tool_failure_rate
+        + 0.15 * unresolved_conflict_score
+        + 0.10 * weak_single_signal_penalty
+    )
+    _max_penalty = 0.30  # sum of the three penalty coefficients
+    if _penalty_total > _max_penalty:
+        _penalty_scale = _max_penalty / _penalty_total if _penalty_total > 0 else 1.0
+        critical_tool_failure_rate *= _penalty_scale
+        unresolved_conflict_score *= _penalty_scale
+        weak_single_signal_penalty *= _penalty_scale
+
     raw_conf = (
         0.30
         + 0.12 * important_tool_completion_rate
@@ -482,7 +506,10 @@ def deliberate_findings(
     # Hard ceiling stays defensive; an uncalibrated system is additionally capped so
     # it can never present >~0.85 certainty regardless of the term sum.
     _ceiling = 0.85 if is_system_uncalibrated() else 0.98
-    final_confidence = max(0.0, min(_ceiling, raw_conf))
+    # Floor of 0.10 — a fully-failed investigation still carries minimal
+    # non-zero confidence so downstream consumers can distinguish "we checked
+    # and found nothing" (0.0) from "we could not check" (0.10).
+    final_confidence = max(0.10, min(_ceiling, raw_conf))
 
     # P0.2 — PDF/document verdicts reached on the metadata-only path (no content
     # or rendered-page analysis) cannot earn high confidence: a forged visible

@@ -63,7 +63,6 @@ export function cleanupLocalInvestigationState(queryClient?: QueryClient) {
   expireCookie(STORAGE_KEYS.SESSION_ID);
   clearAuthCookies();
 
-  document.body.removeAttribute("data-fc-loading");
   document.body.style.overflow = "";
 
   __pendingFileStore.file = null;
@@ -80,6 +79,12 @@ export async function resetActiveInvestigation(queryClient?: QueryClient) {
   if (typeof window === "undefined") return;
 
   const runningSessionId = resolveActiveSessionId();
+
+  // Cleanup synchronously BEFORE any async work so storage, cookies, and DOM
+  // state are reset before the caller navigates away. Previously this ran after
+  // await getMutationHeaders() (up to 2s), causing navigation to fire before
+  // cleanup — leaving stale storage/cookies in the new page.
+  cleanupLocalInvestigationState(queryClient);
 
   let mutationHeaders: Headers | undefined;
   try {
@@ -103,8 +108,6 @@ export async function resetActiveInvestigation(queryClient?: QueryClient) {
     headers: mutationHeaders,
     keepalive: true,
   }).catch(() => null);
-
-  cleanupLocalInvestigationState(queryClient);
 
   await Promise.race([
     Promise.allSettled([terminatePromise, logoutPromise]),

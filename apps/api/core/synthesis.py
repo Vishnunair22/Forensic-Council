@@ -407,14 +407,25 @@ class SynthesisService:
         # Secondary dedup: keep only the highest-confidence finding per tool_name
         # to prevent the same tool appearing twice across initial+deep passes.
         # Findings WITHOUT a tool_name are preserved as-is (they cannot be keyed).
+        # CRITICAL: never replace a POSITIVE finding with a non-POSITIVE one — if a
+        # tool flagged manipulation in one phase, that signal must survive dedup.
         for f in unique_findings:
             tool_name = f.metadata.get("tool_name") or ""
             if not tool_name:
                 no_tool_name_findings.append(f)
                 continue
             existing = seen_tools.get(tool_name)
-            if existing is None or (f.confidence_raw or 0.0) > (existing.confidence_raw or 0.0):
+            if existing is None:
                 seen_tools[tool_name] = f
+                continue
+            _existing_is_pos = str(getattr(existing, "evidence_verdict", "") or "").upper() == "POSITIVE"
+            _new_is_pos = str(getattr(f, "evidence_verdict", "") or "").upper() == "POSITIVE"
+            if _existing_is_pos and not _new_is_pos:
+                continue  # keep the POSITIVE finding
+            if not _existing_is_pos and _new_is_pos:
+                seen_tools[tool_name] = f  # replace with POSITIVE
+            elif (f.confidence_raw or 0.0) > (existing.confidence_raw or 0.0):
+                seen_tools[tool_name] = f  # same-verdict: keep higher confidence
         unique_findings = list(seen_tools.values()) + no_tool_name_findings
 
         findings = unique_findings
@@ -506,7 +517,7 @@ class SynthesisService:
             # silently suppressed a confirmed tool finding from the entire report.
             # Keep every POSITIVE finding, then fill the remaining budget with the
             # highest-confidence non-positive rows.
-            _GROUP_BUDGET = 5
+            _GROUP_BUDGET = 10
             _positive_rows = [
                 t for t in tools_summary
                 if str(t.get("evidence_verdict") or "").upper() == "POSITIVE"
@@ -715,7 +726,7 @@ Return ONLY a JSON object with this exact schema:
             # contains the schema and rules; 4.5k evidence chars is enough for
             # the top tool metrics while leaving room for 2-3 Groq calls/minute
             # on llama-3.3-70b's 12K TPM bucket.
-            MAX_INPUT_CHARS = 4500
+            MAX_INPUT_CHARS = 8000
             original_user_len = len(user_content)
             if len(user_content) > MAX_INPUT_CHARS:
                 user_content = user_content[:MAX_INPUT_CHARS] + "\n\n[...truncated for context window...]"
@@ -836,7 +847,12 @@ Return ONLY a JSON object with this exact schema:
                     for row in layout_rows
                 )
                 has_positive = positive_count > 0
-                if clean_layout and not has_positive:
+                has_tool_alert = any(
+                    str(f.get("evidence_verdict")).upper() in ("POSITIVE", "SUSPICIOUS", "TAMPERED")
+                    for group in grouped_sections_data
+                    for f in group.get("findings", [])
+                )
+                if clean_layout and not has_positive and not has_tool_alert:
                     groq_verdict = "AUTHENTIC"
                     calibrated_confidence = max(calibrated_confidence, 0.78)
             result = {
@@ -1040,7 +1056,7 @@ Return ONLY a JSON object with this exact schema:
                     f"({item.get('confidence', 0.0):.2f})"
                     for group in grouped_sections_data
                     for item in group.get("findings", [])
-                ][:5],
+                ][:10],
                 "signal_weight": {},
                 "sections": self._ground_synthesis_response(
                     {"sections": sections, "agent_brief": "__SKIP_BRIEF_CHECK__"},
@@ -1061,7 +1077,7 @@ Return ONLY a JSON object with this exact schema:
             )
             # Keep every POSITIVE key finding; fill the remaining budget with the
             # highest-ranked non-positive rows, then prepend the visual-profile lead.
-            _KF_BUDGET = 6
+            _KF_BUDGET = 12
             _vis_lead = [f"Visual profile: {visual_desc}"] if visual_desc else []
             fallback_result["key_findings"] = (
                 _vis_lead + _pos_kf + _other_kf[: max(0, _KF_BUDGET - len(_pos_kf))]

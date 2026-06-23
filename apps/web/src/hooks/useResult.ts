@@ -209,17 +209,11 @@ export function useResult(initialSessionId?: string) {
     return () => clearTimeout(timer);
   }, [mounted, reportAlreadyReady, minOverlayDone]);
 
-  // Remove the full-screen loading bridge (body[data-fc-loading]) ONLY once the
-  // report (or a terminal state) is actually on screen. Removing it earlier — on
-  // mount, as the previous code did for reportAlreadyReady — exposed the empty
-  // result scaffold for a frame ("blank before the report loads"). Keeping it up
-  // under the arbiter overlay until state="ready" makes the hand-off seamless:
-  // bridge + overlay cover continuously, then the overlay fades out to reveal the
-  // report in one fluid step.
+  // Safety net: strip any residual data-fc-loading attribute. The attribute
+  // bridge was removed; this call is kept only for in-flight transitions from
+  // old code paths.
   useEffect(() => {
-    if (state === "ready" || state === "error" || state === "empty") {
-      document.body.removeAttribute("data-fc-loading");
-    }
+    document.body.removeAttribute("data-fc-loading");
   }, [state]);
 
   // Sync sessionId when the initialSessionId PROP changes (dynamic route
@@ -495,14 +489,14 @@ export function useResult(initialSessionId?: string) {
     }
   }, [state, report, isDeepPhase, thumbnail, mimeType, sessionId, fileName]);
 
-  const _resetAndNavigate = useCallback((path: string) => {
+  const _resetAndNavigate = useCallback(async (path: string) => {
     playSound("reset");
-    void resetActiveInvestigation(queryClient);
+    await resetActiveInvestigation(queryClient);
     router.push(path);
   }, [playSound, router, queryClient]);
 
-  const handleNew = useCallback(() => _resetAndNavigate("/?upload=1"), [_resetAndNavigate]);
-  const handleHome = useCallback(() => _resetAndNavigate("/#hero"), [_resetAndNavigate]);
+  const handleNew = useCallback(() => { void _resetAndNavigate("/?upload=1"); }, [_resetAndNavigate]);
+  const handleHome = useCallback(() => { void _resetAndNavigate("/"); }, [_resetAndNavigate]);
 
   const handleExport = useCallback(() => {
     if (!report) return;

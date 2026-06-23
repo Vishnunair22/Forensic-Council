@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { AlertTriangle, RotateCcw, Home } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { clearInvestigationPersistence } from "@/lib/investigationStorage";
+import { useQueryClient } from "@tanstack/react-query";
+import { resetActiveInvestigation } from "@/lib/appReset";
 
 export default function EvidenceError({
   error,
@@ -13,6 +14,7 @@ export default function EvidenceError({
   reset: () => void;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -20,23 +22,13 @@ export default function EvidenceError({
     }
   }, [error]);
 
-  const handleReset = () => {
-    // Canonical clear (preserves forensic_history per WORKFLOW_TRACE.md).
-    clearInvestigationPersistence();
-    // Notify home page to reset its modal state if the user navigates back.
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("fc:reset-home"));
-    }
-    reset();
-  };
+  const handleReset = useCallback(() => {
+    void resetActiveInvestigation(queryClient).then(() => reset());
+  }, [queryClient, reset]);
 
-  const handleHome = () => {
-    clearInvestigationPersistence();
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("fc:reset-home"));
-    }
-    router.push("/");
-  };
+  const handleHome = useCallback(() => {
+    void resetActiveInvestigation(queryClient).then(() => router.push("/"));
+  }, [queryClient, router]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 text-center px-6">

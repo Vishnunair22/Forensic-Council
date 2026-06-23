@@ -328,6 +328,7 @@ export async function startInvestigation(
       headers,
       body: formData,
       credentials: "include",
+      signal: AbortSignal.timeout(60_000), // 60s timeout for file upload
     });
 
     if (!response.ok) {

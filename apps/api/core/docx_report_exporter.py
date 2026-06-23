@@ -149,7 +149,7 @@ async def export_report_docx(report_dict: dict[str, Any], session_id: str) -> by
                     run.bold = True
                     run.font.size = Pt(8)
 
-        for f in all_findings[:20]:
+        for f in all_findings:
             row = table.add_row().cells
             row[0].text = str(f.get("_agent_id", f.get("agent_id", "")))[:30]
             row[1].text = str(f.get("finding_type", ""))[:40]
@@ -161,9 +161,6 @@ async def export_report_docx(report_dict: dict[str, Any], session_id: str) -> by
                 for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.font.size = Pt(8)
-
-        if len(all_findings) > 20:
-            doc.add_paragraph(f"... and {len(all_findings) - 20} more findings.")
 
     doc.add_paragraph()
 

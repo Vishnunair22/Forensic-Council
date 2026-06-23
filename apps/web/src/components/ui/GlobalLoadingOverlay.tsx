@@ -13,16 +13,27 @@ export function GlobalLoadingOverlay() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [show, setShow] = useState(() => {
-    if (typeof window !== "undefined" && pathname !== "/evidence") {
-      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+    if (typeof window === "undefined") return false;
+    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+    const isHandoffActive = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
+    const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
+
+    // On non-evidence pages: keep the overlay alive during an active handoff or
+    // auto-start so the loading cover is not stripped mid-transition. Only tear
+    // it down when neither is in progress (stale leftover from a prior run).
+    if (pathname !== "/evidence") {
+      if (showLoading && (isHandoffActive || isAutoStart)) return true;
+      if (showLoading) {
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      }
       return false;
     }
-    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+
+    // Evidence page: honour FC_SHOW_LOADING with the hard-refresh safety guard
     if (showLoading) {
       const guard = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
       if (guard) {
         const guardTime = parseInt(guard, 10);
-        const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
         if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file && !isAutoStart) {
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
           return false;

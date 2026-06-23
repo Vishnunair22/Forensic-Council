@@ -167,7 +167,7 @@ def _extract_signals(findings_by_agent: dict[str, list[dict]]) -> list[ModalityS
                     modality=modality,
                     agent_id=agent_id,
                     finding_type=finding_type,
-                    confidence=float(confidence) if confidence else 0.5,
+                    confidence=float(confidence) if confidence is not None else 0.5,
                     status=status,
                     manipulation_detected=manipulation,
                     key_metrics=key_metrics,
@@ -183,10 +183,10 @@ def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> dict[st
     """
     Check if two signals corroborate each other.
 
-    Corroboration requires both signals to be CONFIRMED AND at least one
-    must detect manipulation. Two "nothing found" findings from different
-    modalities do NOT count as meaningful corroboration — absence of
-    evidence is not evidence of absence.
+    Corroboration requires both signals to be CONFIRMED and both must agree
+    on the same direction: both detect manipulation (manipulation corroboration)
+    or both confirm no manipulation (clean corroboration). Conflicting results
+    return None — handled by _find_contradiction instead.
     """
     if sig_a.status != "CONFIRMED" or sig_b.status != "CONFIRMED":
         return None
@@ -196,6 +196,13 @@ def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> dict[st
             "modalities": f"{sig_a.modality.value} + {sig_b.modality.value}",
             "direction": "manipulation",
             "detail": f"{sig_a.finding_type} and {sig_b.finding_type} both detect manipulation",
+        }
+    if not sig_a.manipulation_detected and not sig_b.manipulation_detected:
+        return {
+            "agents": f"{sig_a.agent_id} + {sig_b.agent_id}",
+            "modalities": f"{sig_a.modality.value} + {sig_b.modality.value}",
+            "direction": "clean",
+            "detail": f"{sig_a.finding_type} and {sig_b.finding_type} both confirm no manipulation",
         }
     return None
 
@@ -286,7 +293,7 @@ def fuse(
                 if ini.manipulation_detected and not dep.manipulation_detected:
                     contradictions.append(
                         {
-                            "agents": f"{agent_id} initial vs deep",
+                            "agents": f"{agent_id} vs {agent_id}",
                             "modalities": f"{ini.modality.value} initial vs deep",
                             "detail": (
                                 f"{ini.finding_type} (initial) detects manipulation "
@@ -295,15 +302,39 @@ def fuse(
                             ),
                         }
                     )
+                elif not ini.manipulation_detected and dep.manipulation_detected:
+                    contradictions.append(
+                        {
+                            "agents": f"{agent_id} vs {agent_id}",
+                            "modalities": f"{ini.modality.value} initial vs deep",
+                            "detail": (
+                                f"{ini.finding_type} (initial) indicates authenticity "
+                                f"while {dep.finding_type} (deep) detects manipulation "
+                                f"within the same agent (deep escalation)"
+                            ),
+                        }
+                    )
                 elif ini.manipulation_detected and dep.manipulation_detected:
                     corroborations.append(
                         {
-                            "agents": f"{agent_id} initial + deep",
+                            "agents": f"{agent_id} + {agent_id}",
                             "modalities": f"{ini.modality.value} initial + deep",
                             "direction": "manipulation",
                             "detail": (
                                 f"{ini.finding_type} (initial) and {dep.finding_type} (deep) "
                                 f"both detect manipulation within the same agent"
+                            ),
+                        }
+                    )
+                elif not ini.manipulation_detected and not dep.manipulation_detected:
+                    corroborations.append(
+                        {
+                            "agents": f"{agent_id} + {agent_id}",
+                            "modalities": f"{ini.modality.value} initial + deep",
+                            "direction": "clean",
+                            "detail": (
+                                f"{ini.finding_type} (initial) and {dep.finding_type} (deep) "
+                                f"both confirm no manipulation within the same agent"
                             ),
                         }
                     )
@@ -346,15 +377,22 @@ def fuse(
 
         fused_confidence = (weighted_power_sum / weight_sum) ** (1 / p) if weight_sum > 0 else 0.5
     else:
-        # No corroboration — use simple max confidence to represent "strongest hint"
-        fused_confidence = max(s.confidence for s in signals)
+        # No corroboration — use mean confidence rather than max.
+        # Max over-represents a single strong manipulation-positive signal
+        # while ignoring a consensus of weaker clean signals.
+        fused_confidence = sum(s.confidence for s in signals) / len(signals)
 
-    # Determine verdict
+    # Determine verdict — cross-agent corroborations only (intra-agent pairs
+    # confirm consistency but are not independent cross-modal corroboration).
+    _cross_agent_corroborations = [
+        c for c in corroborations
+        if len(set(c.get("agents", "").replace(" + ", " vs ").split(" vs "))) > 1
+    ]
     if contradictions and not corroborations:
         verdict = CrossModalVerdict.CONTRADICTED
     elif contradictions and corroborations:
         verdict = CrossModalVerdict.PARTIALLY_CORROBORATED
-    elif len(corroborations) >= 3:
+    elif len(_cross_agent_corroborations) >= 3:
         verdict = CrossModalVerdict.CORROBORATED
     elif corroborations:
         verdict = CrossModalVerdict.PARTIALLY_CORROBORATED

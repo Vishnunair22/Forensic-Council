@@ -838,11 +838,11 @@ class ForensicCouncilPipeline:
                 )
 
             _mime = getattr(self, "_evidence_mime", "")
-            use_llm = (
-                self.config.external_ai_allowed
-                and self.config.llm_enable_post_synthesis
-            )
-            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=use_llm, artifact_mime=_mime)
+            # B6: Pre-warm always uses deterministic logic (use_llm=False) so
+            # Groq tokens are not wasted while the investigator reviews initial
+            # results. The final report path (finalise_from_cache) invokes LLM
+            # refinement exactly once when needed.
+            report = await self.arbiter.deliberate(agent_results, case_id, use_llm=False, artifact_mime=_mime)
 
             # F-5: invalidation gate — if invalidate_pre_warm() was called
             # while deliberate() was running (e.g. user chose deep analysis),
@@ -854,7 +854,7 @@ class ForensicCouncilPipeline:
             self.arbiter._pre_warm_report = report
             self.arbiter._pre_warm_agent_results = agent_results
             self.arbiter._pre_warm_case_id = case_id
-            self.arbiter._pre_warm_used_llm = use_llm
+            self.arbiter._pre_warm_used_llm = False  # B6: pre-warm is always deterministic
 
             # Reconcile the live per-agent cards to the arbiter-grounded verdict the
             # signed report will use (single source of truth). The card streams a

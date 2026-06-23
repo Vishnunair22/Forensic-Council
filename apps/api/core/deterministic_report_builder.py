@@ -582,7 +582,7 @@ def build_deterministic_report(
     if a1_syn:
         integrity_parts.append(f"Agent 1 analysis: {a1_syn.agent_brief}")
     # Add any specific integrity findings
-    pos_int = [f for f in arbiter_deliberation.strongest_findings if f.signal_category == "integrity" and f.evidence_verdict == "POSITIVE"]
+    pos_int = [f for f in (arbiter_deliberation.strongest_findings or []) if f.signal_category == "integrity" and f.evidence_verdict == "POSITIVE"]
     if pos_int:
         integrity_parts.append(f"Identified tampering indicators: {', '.join([f.finding_statement for f in pos_int])}.")
     else:
@@ -611,7 +611,7 @@ def build_deterministic_report(
     a5_syn = norm_syn.get("Agent5")
     if a5_syn:
         meta_parts.append(f"Agent 5 metadata assessment: {a5_syn.agent_brief}")
-    pos_prov = [f for f in arbiter_deliberation.strongest_findings if f.signal_category == "provenance" and f.evidence_verdict == "POSITIVE"]
+    pos_prov = [f for f in (arbiter_deliberation.strongest_findings or []) if f.signal_category == "provenance" and f.evidence_verdict == "POSITIVE"]
     if pos_prov:
         meta_parts.append(f"Metadata anomalies detected: {', '.join([f.finding_statement for f in pos_prov])}.")
     else:

@@ -48,7 +48,7 @@ def _clean_key_finding(text: str) -> str:
     return cleaned.rstrip(" .") + "."
 
 
-def _clean_key_findings(items: list[Any], limit: int = 8) -> list[str]:
+def _clean_key_findings(items: list[Any], limit: int = 15) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
     for item in items:
@@ -115,6 +115,11 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             "NOT_APPLICABLE",
             "ERROR",
         }:
+            logger.warning(
+                "Unknown evidence_verdict coerced to INCONCLUSIVE",
+                finding_type=str(d.get("finding_type", ""))[:60],
+                original_verdict=evidence_verdict,
+            )
             evidence_verdict = "INCONCLUSIVE"
 
         dto = AgentFindingDTO(
@@ -128,13 +133,14 @@ def _forensic_report_to_dto(report) -> ReportDTO:
             calibrated=bool(d.get("calibrated", False)),
             calibrated_probability=_opt_float(d.get("calibrated_probability")),
             raw_confidence_score=_opt_float(d.get("raw_confidence_score"))
-            or _opt_float(d.get("confidence_raw")),
+            if _opt_float(d.get("raw_confidence_score")) is not None
+            else _opt_float(d.get("confidence_raw")),
             calibration_status=str(d.get("calibration_status", "UNCALIBRATED")),
             court_statement=d.get("court_statement") or meta.get("court_statement"),
             robustness_caveat=bool(d.get("robustness_caveat", False)),
             robustness_caveat_detail=d.get("robustness_caveat_detail"),
             reasoning_summary=str(d.get("reasoning_summary") or ""),
-            metadata=meta if meta else None,
+            metadata=meta if meta else {},
         )
         dto.severity_tier = _assign_severity_tier(d)
         return dto
@@ -153,38 +159,49 @@ def _forensic_report_to_dto(report) -> ReportDTO:
     degraded_findings_summary: dict[str, list[str]] = {}
     paf = _get_val(report, "per_agent_findings", {})
     for agent_id, findings in (paf or {}).items():
-        try:
-            real = [_to_finding_dto(f) for f in findings if _is_real_finding(f)]
-            if real:
-                per_agent[agent_id] = real
-            degraded_tools = []
-            for f in findings:
-                d = _as_dict(f)
-                meta = d.get("metadata") or {}
-                if meta.get("degraded") or meta.get("fallback_reason"):
-                    degraded_tools.append(str(meta.get("tool_name") or d.get("finding_type", "unknown")))
-            if degraded_tools:
-                degraded_findings_summary[agent_id] = degraded_tools
-        except Exception as e:
-            logger.warning(
-                "Failed to convert findings for agent",
-                agent_id=agent_id,
-                error=str(e),
-            )
+        real = []
+        for f in findings:
+            if not _is_real_finding(f):
+                continue
+            try:
+                real.append(_to_finding_dto(f))
+            except Exception as e:
+                logger.warning(
+                    "Failed to convert finding for agent — skipping",
+                    agent_id=agent_id,
+                    finding_type=str((f if isinstance(f, dict) else getattr(f, "finding_type", "")) or "")[:60],
+                    error=str(e),
+                )
+        if real:
+            per_agent[agent_id] = real
+        degraded_tools = []
+        for f in findings:
+            d = _as_dict(f)
+            meta = d.get("metadata") or {}
+            if meta.get("degraded") or meta.get("fallback_reason"):
+                degraded_tools.append(str(meta.get("tool_name") or d.get("finding_type", "unknown")))
+        if degraded_tools:
+            degraded_findings_summary[agent_id] = degraded_tools
 
     cross_modal = []
-    try:
-        cmc = _get_val(report, "cross_modal_confirmed", [])
-        cross_modal = [_to_finding_dto(f) for f in (cmc or []) if _is_real_finding(f)]
-    except Exception as e:
-        logger.warning("Failed to convert cross-modal findings", error=str(e))
+    cmc = _get_val(report, "cross_modal_confirmed", [])
+    for f in (cmc or []):
+        if not _is_real_finding(f):
+            continue
+        try:
+            cross_modal.append(_to_finding_dto(f))
+        except Exception as e:
+            logger.warning("Failed to convert cross-modal finding — skipping", error=str(e))
 
     incomplete = []
-    try:
-        inc = _get_val(report, "incomplete_findings", [])
-        incomplete = [_to_finding_dto(f) for f in (inc or []) if _is_real_finding(f)]
-    except Exception as e:
-        logger.warning("Failed to convert incomplete findings", error=str(e))
+    inc = _get_val(report, "incomplete_findings", [])
+    for f in (inc or []):
+        if not _is_real_finding(f):
+            continue
+        try:
+            incomplete.append(_to_finding_dto(f))
+        except Exception as e:
+            logger.warning("Failed to convert incomplete finding — skipping", error=str(e))
 
     tribunal_resolved = []
     tr = _get_val(report, "tribunal_resolved", [])
@@ -289,7 +306,8 @@ def _rebuild_finding(f: dict) -> AgentFindingDTO:
         calibrated=bool(f.get("calibrated", False)),
         calibrated_probability=_opt_float(f.get("calibrated_probability")),
         raw_confidence_score=_opt_float(f.get("raw_confidence_score"))
-        or _opt_float(f.get("confidence_raw")),
+        if _opt_float(f.get("raw_confidence_score")) is not None
+        else _opt_float(f.get("confidence_raw")),
         calibration_status=str(f.get("calibration_status", "UNCALIBRATED")),
         court_statement=f.get("court_statement"),
         robustness_caveat=bool(f.get("robustness_caveat", False)),

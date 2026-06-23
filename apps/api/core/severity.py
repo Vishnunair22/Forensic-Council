@@ -23,6 +23,8 @@ NON_INTEGRITY_TOOLS: frozenset[str] = frozenset({
     "exif_extract", "timestamp_analysis", "gps_timezone_validate",
     "file_structure_analysis", "file_hash_verify", "metadata_anomaly_score",
     "provenance_chain_verify", "hex_signature_scan", "compression_risk_audit",
+    # Legacy aliases for file_hash_verify
+    "hash_verify", "custody_check",
     # Content / context
     "object_detection", "vector_contraband_search", "scene_incongruence",
     # Descriptive / non-manipulation tools — never a manipulation claim
@@ -109,7 +111,7 @@ def should_clear_uncorroborated_integrity(
         str(f.get("tool_name") or "") == "neural_splicing"
         and str(f.get("evidence_verdict", "")).upper() == "POSITIVE"
         and bool(f.get("court_defensible"))
-        and float(f.get("confidence") or 0.0) >= 0.5
+        and _safe_float(f.get("confidence")) >= 0.5
         for f in findings
     )
     return not trufor
@@ -140,6 +142,10 @@ SCREENSHOT_FP_PRONE_TOOLS: frozenset[str] = frozenset({
     "neural_splicing", "splicing_detect", "copy_move_detect", "neural_copy_move",
     # compression-artifact probes co-fire on the screenshot re-encode
     "frequency_domain_analysis", "compression_artifact_analysis",
+    # noise/PRNU tools unreliable on screenshots (no real camera sensor noise)
+    "noiseprint_cluster", "noise_fingerprint", "prnu_sensor_verification",
+    # adversarial/ROI tools tuned for natural images, not screenshots
+    "adversarial_robustness_check", "roi_extract",
 })
 
 
@@ -162,13 +168,25 @@ def _get_metadata(f: Any) -> dict[str, Any]:
     return {}
 
 
-def _get_confidence(f: Any) -> float:
-    """Extract confidence score from a finding."""
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Convert val to float, returning default on any error."""
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_confidence(f: Any) -> float | None:
+    """Extract confidence score from a finding. Returns None if not found."""
     if hasattr(f, "confidence_raw"):
-        return float(getattr(f, "confidence_raw", 0.0) or 0.0)
+        v = getattr(f, "confidence_raw", None)
+        return _safe_float(v) if v is not None else None
     elif isinstance(f, dict):
-        return float(f.get("confidence_raw") or 0.0)
-    return 0.0
+        v = f.get("confidence_raw")
+        return _safe_float(v) if v is not None else None
+    return None
 
 
 def _get_status(f: Any) -> str:
@@ -192,12 +210,13 @@ def is_not_applicable(meta: dict[str, Any]) -> bool:
 
 
 def is_failed(meta: dict[str, Any], is_na: bool) -> bool:
-    """True if the tool failed (not court-defensible or status INCOMPLETE)."""
+    """True if the tool failed (not court-defensible or status INCOMPLETE/TIMEOUT/FAILED)."""
     if is_na:
         return False
     # Only return true if the tool failed to produce any usable forensic signal.
     # Degraded results (court_defensible=False) are still usable signals.
-    return str(meta.get("status", "")).upper() == "INCOMPLETE" or "error" in meta
+    status = str(meta.get("status", "")).upper()
+    return status in ("INCOMPLETE", "TIMEOUT", "FAILED", "ERROR") or "error" in meta
 
 
 def assign_severity_tier(f: Any) -> str:
@@ -232,27 +251,29 @@ def assign_severity_tier(f: Any) -> str:
         return "INFO"
     if meta.get("not_applicable") or meta.get("skipped"):
         return "INFO"
-    if meta.get("hash_matches") is True:
+    if meta.get("hash_matches"):
         return "INFO"
     if evidence_verdict == "ERROR" or failed or status_str == "INCOMPLETE":
         return "LOW"
     if evidence_verdict == "POSITIVE":
         return "CRITICAL" if conf >= 0.75 else "HIGH"
+    if evidence_verdict == "NEGATIVE":
+        return "LOW"
 
     has_manip = (
-        meta.get("manipulation_detected") is True
-        or meta.get("deepfake_detected") is True
-        or meta.get("splicing_detected") is True
-        or meta.get("copy_move_detected") is True
-        or meta.get("mismatch_detected") is True
-        or meta.get("gan_artifact_detected") is True
-        or meta.get("stego_suspected") is True
+        meta.get("manipulation_detected")
+        or meta.get("deepfake_detected")
+        or meta.get("splicing_detected")
+        or meta.get("copy_move_detected")
+        or meta.get("mismatch_detected")
+        or meta.get("gan_artifact_detected")
+        or meta.get("stego_suspected")
         or "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
     )
     has_anomaly = (
-        meta.get("anomaly_detected") is True
-        or meta.get("inconsistency_detected") is True
-        or meta.get("is_anomalous") is True
+        meta.get("anomaly_detected")
+        or meta.get("inconsistency_detected")
+        or meta.get("is_anomalous")
         or str(meta.get("verdict", "")).upper() in ("TAMPERED", "SUSPICIOUS", "MANIPULATED")
     )
 
@@ -340,6 +361,8 @@ def compute_agent_verdict(
     alert_signals = 0          # POSITIVE, MEDIUM+
     strong_signals = 0         # POSITIVE, HIGH/CRITICAL
     alert_conf_max = 0.0       # strongest alert-signal confidence (graduates INCONCLUSIVE)
+    strong_conf_sum = 0.0      # Σ per-signal confidence for strong signals (graduates MANIPULATED)
+    strong_conf_n = 0          # count of strong signals with usable confidence
 
     for f in findings or []:
         meta = _get_metadata(f)
@@ -363,7 +386,7 @@ def compute_agent_verdict(
             # confidence), so the agent's clean score reflects evidence strength, not
             # just the count of clean tools.
             _cc = _get_confidence(f)
-            if not _cc:
+            if _cc is None:
                 _cc = float(
                     meta.get("confidence")
                     or (f.get("raw_confidence_score") if isinstance(f, dict) else 0.0)
@@ -402,7 +425,7 @@ def compute_agent_verdict(
         # the agent to MANIPULATED. This stops a cluster of low-confidence
         # positives from over-calling manipulation.
         conf_f = _get_confidence(f)
-        if not conf_f:
+        if conf_f is None:
             conf_f = float(
                 meta.get("confidence")
                 or (f.get("raw_confidence_score") if isinstance(f, dict) else 0.0)
@@ -412,6 +435,8 @@ def compute_agent_verdict(
             strong_signals += 1
             alert_signals += 1
             alert_conf_max = max(alert_conf_max, conf_f)
+            strong_conf_sum += conf_f
+            strong_conf_n += 1
         elif rank >= 2:
             alert_signals += 1
             alert_conf_max = max(alert_conf_max, conf_f)
@@ -422,6 +447,7 @@ def compute_agent_verdict(
     vs = visual_signal or {}
     v_verdict = str(vs.get("verdict") or "").upper()
     v_court = bool(vs.get("court_defensible"))
+    v_conf = float(vs.get("confidence") or 0.0)
     v_anomalies = [a for a in (vs.get("anomalies") or []) if a]
     visual_contributed = False
     gemini_strong_vote = False  # True when court-defensible Gemini asserts manipulation
@@ -439,6 +465,12 @@ def compute_agent_verdict(
             strong_signals += _court_strong_weight
             alert_signals += _court_strong_weight
             gemini_strong_vote = True
+            # Gemini's confidence contributes to the average strong-signal
+            # confidence used to graduate the MANIPULATED verdict floor.
+            # When weighted (deep mode), add confidence proportionally so the
+            # mean remains correct: weight=2 means the signal counts as 2 entries.
+            strong_conf_sum += v_conf * _court_strong_weight
+            strong_conf_n += _court_strong_weight
         else:
             alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
     elif v_verdict == "SUSPICIOUS":
@@ -469,8 +501,13 @@ def compute_agent_verdict(
 
     if strong_signals >= 2:
         verdict = "MANIPULATED"
-        # Convergent pipelines are more reliable than a single channel.
-        conf = min(0.94, 0.85 + (_CONV_VISUAL_TOOL_CONF_BOOST if visual_tool_convergent else 0.0))
+        # Graduated floor: start at mean strong-signal confidence (bounded
+        # 0.70–0.90) so two barely-strong signals (0.65 conf each) produce
+        # a lower floor than two high-confidence hits. Convergent pipeline
+        # boost applies on top.
+        _mean_strong = strong_conf_sum / strong_conf_n if strong_conf_n else 0.85
+        _graduated_floor = min(0.90, max(0.70, _mean_strong))
+        conf = min(0.94, _graduated_floor + (_CONV_VISUAL_TOOL_CONF_BOOST if visual_tool_convergent else 0.0))
     elif strong_signals == 1:
         verdict = "SUSPICIOUS"
         if gemini_strong_vote and tool_strong == 0:
@@ -508,7 +545,7 @@ def compute_agent_verdict(
         # files with the same tool count but different measurement strength no
         # longer render an identical score. Same clean band/bounds, now genuinely
         # file-dependent: base + a small count bump + the measurement-strength term.
-        _mean_clean = (clean_conf_sum / clean_conf_n) if clean_conf_n else 0.74
+        _mean_clean = (clean_conf_sum / clean_conf_n) if clean_conf_n else 0.65
         conf = min(
             0.92,
             max(

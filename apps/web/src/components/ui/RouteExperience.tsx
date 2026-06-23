@@ -23,13 +23,6 @@ export function RouteExperience() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (!pathname.startsWith("/result")) {
-      document.body.removeAttribute("data-fc-loading");
-    }
-  }, [pathname]);
-
   // F-M-9: dev-only diagnostics — gated so production bundles tree-shake it.
   useEffect(() => {
     if (typeof window === "undefined") return;

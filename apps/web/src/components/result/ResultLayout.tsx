@@ -411,6 +411,10 @@ function ExportDropdown({
         triggerRef.current?.focus();
         return;
       }
+      if (e.key === "Tab") {
+        setOpen(false);
+        return;
+      }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');

@@ -23,13 +23,21 @@ export class RootErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(_error: Error, _errorInfo: React.ErrorInfo) {
-    // Clear all forensic session storage rather than a hand-picked subset so
-    // no stale flow-control flags survive the error boundary recovery.
+    // Clear only transient flow-control flags so no stale overlay/loading state
+    // survives the error boundary recovery. Preserve critical investigation data
+    // (SESSION_ID, INVESTIGATION_CTX, HISTORY, agent caches) so the user does
+    // not lose an ongoing investigation due to a transient rendering error.
     try {
+      const FLOW_CONTROL_PREFIXES = [
+        "fc_show_loading", "fc_loading_", "fc_handoff",
+        "fc_pending_file", "fc_hard_refresh", "fc_no_reconnect",
+        "fc_arbiter_", "fc_report_ready", "fc_resume_",
+        "forensic_auto_start",
+      ];
       const keysToRemove: string[] = [];
       for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
-        if (key && (key.startsWith("fc_") || key.startsWith("forensic_"))) {
+        if (key && FLOW_CONTROL_PREFIXES.some((p) => key.startsWith(p))) {
           keysToRemove.push(key);
         }
       }
