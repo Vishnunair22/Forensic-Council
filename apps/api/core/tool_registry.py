@@ -63,6 +63,9 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # visual_evidence_profile runs CLIP/SigLIP embedding + scene analysis;
     # model cold-start + inference can exceed 60s on first call in Docker.
     "visual_evidence_profile": 120.0,
+    # vector_contraband_search loads SigLIP (same CLIP model) — cold-start ~20s
+    # plus inference; 90s gives headroom under concurrent load.
+    "vector_contraband_search": 90.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0
