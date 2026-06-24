@@ -174,6 +174,23 @@ export function useResult(initialSessionId?: string) {
   // Mount + hydrate from storage (client only). Runs once.
   useEffect(() => {
     const sid = initialSessionId ?? storage.getItem(STORAGE_KEYS.SESSION_ID);
+
+    // Detect hard refresh — FC_REPORT_READY flag should not survive a hard refresh.
+    const isHardRefresh = (() => {
+      try {
+        const navEntries = performance.getEntriesByType("navigation");
+        return navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === "reload";
+      } catch {
+        return false;
+      }
+    })();
+
+    // On hard refresh, clear stale one-shot flags that would skip the arbiter overlay.
+    if (isHardRefresh && sid) {
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
+      sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
+    }
+
     const ready = sid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`) === "1" : false;
     const deep = readResultPhase(sid) === "deep";
 

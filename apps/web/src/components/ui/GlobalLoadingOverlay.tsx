@@ -28,6 +28,41 @@ export function GlobalLoadingOverlay() {
   useEffect(() => {
     // Resolve initial show state from sessionStorage only after mount to avoid
     // server/client hydration mismatch.
+
+    // Detect hard refresh (Ctrl+F5 / Shift+Reload) and clear transient state.
+    // sessionStorage persists through hard refresh but not across tab close.
+    // Without this guard, stale FC_* flags cause the overlay to reappear
+    // after a hard refresh with no active handoff.
+    const isHardRefresh = (() => {
+      try {
+        const navEntries = performance.getEntriesByType("navigation");
+        return navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === "reload";
+      } catch {
+        return false;
+      }
+    })();
+
+    if (isHardRefresh) {
+      // Clear all transient FC_* sessionStorage flags on hard refresh.
+      // This ensures the app starts with a clean slate.
+      const fcKeys = [
+        STORAGE_KEYS.FC_SHOW_LOADING,
+        STORAGE_KEYS.FC_LOADING_TEXT,
+        STORAGE_KEYS.FC_LOADING_DISPATCHED,
+        STORAGE_KEYS.FC_HANDOFF_FIRED,
+        STORAGE_KEYS.FC_REPORT_READY,
+        STORAGE_KEYS.FC_ARBITER_TRANSITIONING,
+        STORAGE_KEYS.FC_HARD_REFRESH_GUARD,
+        STORAGE_KEYS.AUTO_START,
+        STORAGE_KEYS.FC_NO_RECONNECT,
+      ];
+      for (const key of fcKeys) {
+        sessionOnlyStorage.removeItem(key);
+      }
+      setMounted(true);
+      return;
+    }
+
     const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
     const isHandoffActive = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
     const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
@@ -42,10 +77,21 @@ export function GlobalLoadingOverlay() {
       const guard = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
       if (guard) {
         const guardTime = parseInt(guard, 10);
-        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file && !isAutoStart) {
+        const pendingFile = __pendingFileStore.file;
+        // Guard clears the overlay if: within 30s window AND no file in memory
+        // (regardless of AUTO_START — a hard refresh kills the in-memory file).
+        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !pendingFile) {
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-        } else {
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+        } else if (pendingFile) {
+          // File is still in memory (normal page reload, not hard refresh).
           setShow(true);
+        } else {
+          // Guard expired (>30s) with no file — clear stale state.
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
         }
       } else {
         setShow(true);
