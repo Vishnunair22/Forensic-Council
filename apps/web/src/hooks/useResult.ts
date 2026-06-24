@@ -185,10 +185,16 @@ export function useResult(initialSessionId?: string) {
       }
     })();
 
-    // On hard refresh, clear stale one-shot flags that would skip the arbiter overlay.
+    // On hard refresh, clear stale one-shot flags and cached agent snapshots
+    // that would flash stale data before the fresh report arrives.
     if (isHardRefresh && sid) {
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
+      // Clear stale streaming agent snapshots from localStorage —
+      // the fresh report's per_agent_metrics will rebuild the timeline.
+      storage.removeItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`);
+      storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
+      storage.removeItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`);
     }
 
     const ready = sid ? sessionOnlyStorage.getItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`) === "1" : false;
