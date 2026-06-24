@@ -419,7 +419,7 @@ async def main() -> None:
     # Wait for model warmup BEFORE starting the worker so the first
     # investigation doesn't pay the cold-start penalty (CLIP ~26s, DETR ~15s).
     try:
-        await asyncio.wait_for(_warmup_task, timeout=90.0)
+        await asyncio.wait_for(_warmup_task, timeout=150.0)
     except (asyncio.TimeoutError, asyncio.CancelledError):
         logger.warning("Model warmup timed out or was cancelled — worker will cold-start on first request")
 
