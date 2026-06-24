@@ -179,7 +179,7 @@ class TestOCRTools:
             mock_pdf.return_value = {"method": "pymupdf", "has_text": False}
             result = await extract_evidence_text(mock_artifact)
             assert "scanned_pdf_note" in result
-            assert "rasterise pages" in result["scanned_pdf_note"]
+            assert "no embedded text layer" in result["scanned_pdf_note"]
 
     @pytest.mark.asyncio
     async def test_gemini_ocr_is_disabled_even_when_key_exists(self, mock_artifact):

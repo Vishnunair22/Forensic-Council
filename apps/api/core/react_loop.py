@@ -1285,47 +1285,55 @@ class ReActLoopEngine:
                     if finding.evidence_verdict not in ["ERROR", "NOT_APPLICABLE"] and not is_stub and finding.confidence_raw is not None:
                         try:
                             from core.calibration import get_calibration_layer
+                            from core.severity import NON_INTEGRITY_TOOLS
 
-                            calibration_layer = get_calibration_layer()
-                            if calibration_layer:
-                                cal_result = calibration_layer.calibrate(
-                                    agent_id=self.agent_id,
-                                    raw_score=finding.confidence_raw,
-                                    finding_class=next_step.tool_name,
-                                )
-                                finding.raw_confidence_score = cal_result.raw_confidence_score
-                                finding.calibrated = cal_result.calibration_status.value == "TRAINED"
-                                finding.calibration_status = cal_result.calibration_status.value
-                                finding.metadata["confidence_interval"] = cal_result.confidence_interval
-                                if cal_result.uncertainty:
-                                    finding.metadata["uncertainty"] = cal_result.uncertainty.model_dump()
+                            if next_step.tool_name in NON_INTEGRITY_TOOLS:
+                                # Deterministic/provenance tools (hash, EXIF, hex) don't
+                                # have epistemic uncertainty and shouldn't be Platt-scaled.
+                                finding.raw_confidence_score = finding.confidence_raw
+                                finding.calibrated = False
+                                finding.calibration_status = "UNCALIBRATED"
+                            else:
+                                calibration_layer = get_calibration_layer()
+                                if calibration_layer:
+                                    cal_result = calibration_layer.calibrate(
+                                        agent_id=self.agent_id,
+                                        raw_score=finding.confidence_raw,
+                                        finding_class=next_step.tool_name,
+                                    )
+                                    finding.raw_confidence_score = cal_result.raw_confidence_score
+                                    finding.calibrated = cal_result.calibration_status.value == "TRAINED"
+                                    finding.calibration_status = cal_result.calibration_status.value
+                                    finding.metadata["confidence_interval"] = cal_result.confidence_interval
+                                    if cal_result.uncertainty:
+                                        finding.metadata["uncertainty"] = cal_result.uncertainty.model_dump()
 
-                                    # Check for epistemic uncertainty escalation (arXiv:2512.16614)
-                                    if cal_result.uncertainty.should_escalate:
-                                        logger.warning(
-                                            "Epistemic uncertainty escalation triggered",
-                                            agent_id=self.agent_id,
-                                            tool_name=next_step.tool_name,
-                                            epistemic=cal_result.uncertainty.epistemic_uncertainty,
-                                            reason=cal_result.uncertainty.escalation_reason,
-                                        )
-                                        # Write escalation flag to working memory
-                                        try:
-                                            await self.working_memory.update_state(
-                                                session_id=self.session_id,
-                                                agent_id=self.agent_id,
-                                                updates={
-                                                    "tribunal_escalation": True,
-                                                    "escalation_reason": cal_result.uncertainty.escalation_reason,
-                                                },
-                                            )
-                                        except Exception as exc:
-                                            logger.debug(
-                                                "Failed to persist epistemic escalation flag",
+                                        # Check for epistemic uncertainty escalation (arXiv:2512.16614)
+                                        if cal_result.uncertainty.should_escalate:
+                                            logger.warning(
+                                                "Epistemic uncertainty escalation triggered",
                                                 agent_id=self.agent_id,
                                                 tool_name=next_step.tool_name,
-                                                error=str(exc),
+                                                epistemic=cal_result.uncertainty.epistemic_uncertainty,
+                                                reason=cal_result.uncertainty.escalation_reason,
                                             )
+                                            # Write escalation flag to working memory
+                                            try:
+                                                await self.working_memory.update_state(
+                                                    session_id=self.session_id,
+                                                    agent_id=self.agent_id,
+                                                    updates={
+                                                        "tribunal_escalation": True,
+                                                        "escalation_reason": cal_result.uncertainty.escalation_reason,
+                                                    },
+                                                )
+                                            except Exception as exc:
+                                                logger.debug(
+                                                    "Failed to persist epistemic escalation flag",
+                                                    agent_id=self.agent_id,
+                                                    tool_name=next_step.tool_name,
+                                                    error=str(exc),
+                                                )
                         except Exception as cal_err:
                             logger.warning(
                                 "Calibration layer failed on post_tool_reasoning output",

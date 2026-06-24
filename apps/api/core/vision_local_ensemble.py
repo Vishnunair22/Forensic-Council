@@ -447,6 +447,11 @@ def _cross_signal_synthesis(
         # A single tool (even strong) or weak-only screening signal: surface for
         # review, do not alarm. Corroboration is required to call SUSPICIOUS.
         verdict = "INCONCLUSIVE"
+    elif any(isinstance(res, dict) and res.get("status") in ("error", "timeout", "degraded") for res in [diffusion_res, ela_res, fft_res, splicing_res, noiseprint_res]):
+        # If no substantive signals were found BUT a tool failed (e.g., AI generation detector timed out),
+        # we must not falsely declare the evidence AUTHENTIC because we have a critical blind spot.
+        verdict = "INCONCLUSIVE"
+        signals.append("One or more local forensic tools failed or timed out — cannot conclusively confirm authenticity.")
     else:
         verdict = "AUTHENTIC"
 
@@ -629,24 +634,54 @@ async def analyze_local_media_profile(file_path: str, mime: str) -> VisualEviden
         def _probe_doc() -> tuple:
             np_ = 0
             text = ""
+            fp_lower = file_path.lower()
             try:
-                import fitz  # PyMuPDF
-                d = fitz.open(file_path)
-                np_ = d.page_count
-                chunks = []
-                for i, p in enumerate(d):
-                    if i >= 3:
-                        break
-                    chunks.append(p.get_text() or "")
-                text = " ".join(chunks).strip()
-                d.close()
-            except Exception:
-                try:
-                    with open(file_path, "r", errors="ignore") as f:
-                        text = f.read(4000).strip()
+                if fp_lower.endswith(".pdf"):
+                    import fitz  # PyMuPDF
+                    d = fitz.open(file_path)
+                    np_ = d.page_count
+                    chunks = []
+                    for i, p in enumerate(d):
+                        if i >= 3:
+                            break
+                        chunks.append(p.get_text() or "")
+                    text = " ".join(chunks).strip()
+                    d.close()
+                elif fp_lower.endswith(".docx"):
+                    try:
+                        from docx import Document as _DocxDoc
+                        d = _DocxDoc(file_path)
+                        paragraphs = [p.text for p in d.paragraphs if p.text.strip()]
+                        text = "\n".join(paragraphs[:50]).strip()
+                        np_ = max(1, len(d.paragraphs) // 40)  # rough page estimate
+                    except Exception:
+                        pass
+                elif fp_lower.endswith(".odt"):
+                    try:
+                        from odf.text import P as _OdfP
+                        from odf.opendocument import load as _odf_load
+                        doc = _odf_load(file_path)
+                        paragraphs = [str(p) for p in doc.getElementsByType(_OdfP) if str(p).strip()]
+                        text = "\n".join(paragraphs[:50]).strip()
+                        np_ = max(1, len(paragraphs) // 40)
+                    except Exception:
+                        pass
+                elif fp_lower.endswith(".rtf"):
+                    try:
+                        from striprtf.striprtf import rtf_to_text as _rtf2text
+                        with open(file_path, "r", errors="ignore") as rf:
+                            raw = rf.read(200_000)
+                        text = _rtf2text(raw).strip()
                         np_ = 1
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+                else:
+                    # Plain text / CSV / Markdown — read directly
+                    with open(file_path, "r", errors="ignore") as f:
+                        text = f.read(8000).strip()
+                        np_ = 1
+            except Exception:
+                pass
             return np_, text
 
         npages, _text = await asyncio.to_thread(_probe_doc)
@@ -656,7 +691,7 @@ async def analyze_local_media_profile(file_path: str, mime: str) -> VisualEviden
         _lead = f"A {npages}-page document" if npages else "A text document"
         description = (
             _lead
-            + (f". Opening text: “{snippet}…”" if snippet else ".")
+            + (f". Opening text: \u201c{snippet}\u2026\u201d" if snippet else ".")
             + " On-device text extraction and structural / provenance checks were "
             "applied locally."
         )
@@ -875,8 +910,7 @@ async def _analyze_local_visual_profile_impl(
         no-Gemini path gets a real trained signal whenever weights are present."""
         try:
             from core.ml_subprocess import run_ml_tool
-
-            result = await run_ml_tool("ai_generation_detector.py", art.file_path, timeout=25.0)
+            result = await run_ml_tool("ai_generation_detector.py", art.file_path, timeout=45.0)
             if result.get("available") and result.get("method") == "vit_classifier":
                 return result
             # Model unavailable → spectral heuristic, honestly labelled as screening.

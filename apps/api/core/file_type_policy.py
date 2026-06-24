@@ -55,6 +55,14 @@ SUPPORTED_MIME_TYPES: frozenset[str] = frozenset({
 
     # ── Documents ──
     "application/pdf",   # PDF
+    "application/msword",  # DOC (legacy Word)
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # DOCX
+    "application/vnd.oasis.opendocument.text",  # ODT
+    "application/rtf",   # RTF
+    "text/rtf",          # RTF (alternate)
+    "text/plain",        # Plain text
+    "text/csv",          # CSV
+    "text/markdown",     # Markdown
 })
 
 
@@ -90,6 +98,13 @@ _EXTENSION_MAP: dict[str, str] = {
 
     # Documents
     ".pdf":  "application/pdf",
+    ".doc":  "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".odt":  "application/vnd.oasis.opendocument.text",
+    ".rtf":  "application/rtf",
+    ".txt":  "text/plain",
+    ".csv":  "text/csv",
+    ".md":   "text/markdown",
 }
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(_EXTENSION_MAP.keys())
@@ -129,6 +144,14 @@ EXACT_MIME_EXT_MAP: dict[str, frozenset[str]] = {
 
     # Documents
     "application/pdf":     frozenset({".pdf"}),
+    "application/msword":  frozenset({".doc"}),
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": frozenset({".docx"}),
+    "application/vnd.oasis.opendocument.text": frozenset({".odt"}),
+    "application/rtf":     frozenset({".rtf"}),
+    "text/rtf":            frozenset({".rtf"}),
+    "text/plain":          frozenset({".txt"}),
+    "text/csv":            frozenset({".csv"}),
+    "text/markdown":       frozenset({".md"}),
 }
 
 
@@ -162,13 +185,19 @@ AGENT_FILE_CAPABILITIES: dict[str, dict[str, Any]] = {
     },
     "Agent5": {
         # Metadata expert handles every supported format — exiftool reads all.
-        "mime_prefixes": ["image/", "audio/", "video/"],
-        "full_mimes": ["application/pdf", "application/mp4"],
+        "mime_prefixes": ["image/", "audio/", "video/", "text/"],
+        "full_mimes": [
+            "application/pdf", "application/mp4",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.oasis.opendocument.text",
+            "application/rtf",
+        ],
         "extensions": [
             ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp",
             ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a",
             ".mp4", ".m4v", ".mpeg", ".mpg", ".webm", ".mov", ".avi", ".mkv",
-            ".pdf",
+            ".pdf", ".doc", ".docx", ".odt", ".rtf", ".txt", ".csv", ".md",
         ],
     },
 }
@@ -220,6 +249,14 @@ def describe_file_type(ext: str, mime_type: str) -> str:
         "application/mp4": "MP4 media",
         # Documents
         "application/pdf": "PDF document",
+        "application/msword": "Word document (DOC)",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word document (DOCX)",
+        "application/vnd.oasis.opendocument.text": "OpenDocument text (ODT)",
+        "application/rtf": "Rich Text Format document",
+        "text/rtf": "Rich Text Format document",
+        "text/plain": "Plain text file",
+        "text/csv": "CSV spreadsheet",
+        "text/markdown": "Markdown document",
     }
     name = descriptions.get(mime_type, f"file (.{ext.lstrip('.')})")
     return f"{name} (.{ext.lstrip('.')})"
@@ -339,9 +376,10 @@ TOOL_CONTENT_REQUIREMENTS: dict[str, ContentClass] = {
     "vfi_error_map": ContentClass.VIDEO,
     "thumbnail_coherence": ContentClass.VIDEO,
 
-    # ── OCR / text extraction: images + PDF, never audio/video ──
+    # ── OCR / text extraction: images + documents (PDF/DOCX/ODT/RTF/TXT), never audio/video ──
     "extract_text_from_image": ContentClass.IMAGE_OR_DOCUMENT,
     "extract_evidence_text": ContentClass.IMAGE_OR_DOCUMENT,
+    "ai_text_detector": ContentClass.DOCUMENT,
 }
 
 
@@ -354,7 +392,18 @@ def _media_class_of(mime_type: str, ext: str) -> str:
         return "audio"
     if m.startswith("video/"):
         return "video"
-    if m == "application/pdf":
+    # Document: PDF + office formats + plain text
+    if m in (
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.oasis.opendocument.text",
+        "application/rtf",
+        "text/rtf",
+        "text/plain",
+        "text/csv",
+        "text/markdown",
+    ) or m.startswith("text/"):
         return "document"
     if m == "application/mp4":
         return "video"  # generic MP4 container — treat as video for gating

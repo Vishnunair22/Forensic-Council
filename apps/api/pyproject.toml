@@ -78,6 +78,10 @@ dependencies = [
     "fpdf2>=2.7",
     # DOCX report generation (pure Python — court-ready Word export)
     "python-docx>=1.1",
+    # ODT text extraction (local fallback when Gemini unavailable)
+    "odfpy>=1.4",
+    # RTF text extraction (local fallback when Gemini unavailable)
+    "striprtf>=0.0.28",
 ]
 
 [project.optional-dependencies]

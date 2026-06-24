@@ -104,6 +104,7 @@ _AUDIO_TOOLS: frozenset[str] = frozenset(
         "audio_splice_detect",
         "enf_analysis",
         "background_noise_analysis",
+        "audio_visual_sync",
         "read_shared_image_context",
         # Hash / file integrity always applicable
         "file_hash_verify",
@@ -165,10 +166,12 @@ _DOCUMENT_TOOLS: frozenset[str] = frozenset(
         "hex_signature_scan",
         "compression_risk_audit",
         "timestamp_analysis",
+        "metadata_anomaly_score",
         "provenance_chain_verify",
         "visual_evidence_profile",
         "gemini_deep_forensic",  # deprecated compatibility alias
         "read_shared_image_context",
+        "ai_text_detector",
     }
 )
 
@@ -197,7 +200,9 @@ MIME_TOOL_MATRIX: dict[str, frozenset[str]] = {
     "text/": _DOCUMENT_TOOLS,
     "application/msword": _DOCUMENT_TOOLS,
     "application/vnd.openxmlformats-officedocument": _DOCUMENT_TOOLS,
+    "application/vnd.oasis.opendocument": _DOCUMENT_TOOLS,
     "application/vnd.ms-": _DOCUMENT_TOOLS,
+    "application/rtf": _DOCUMENT_TOOLS,
     "*": _UNIVERSAL_TOOLS,
 }
 

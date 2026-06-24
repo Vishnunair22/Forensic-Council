@@ -61,6 +61,7 @@ class ForensicPolicy:
         "vector_contraband_search": 0.80,  # real SigLIP embedding search — kept
         "copy_move_detect": 0.55,
         "splicing_detect": 0.55,
+        "ai_text_detector": 0.65,  # statistical AI-text screening
         "audio_splice_detect": 0.60,  # P1b: MFCC/spectral-delta heuristic, 0.75 → 0.60
         "rolling_shutter_validation": 0.60,  # P1b: classical CV heuristic, 0.75 → 0.60
         "adversarial_robustness_check": 0.60,  # P1b: heuristic perturbation probe, 0.70 → 0.60
@@ -177,6 +178,7 @@ class ForensicPolicy:
         "diffusion_artifact_detector": "generative", "ai_generation_detector": "generative",
         "synthid_watermark_detect": "generative", "face_swap_detection": "generative",
         "face_swap_detect": "generative", "face_swap_detect_deepface": "generative",
+        "ai_text_detector": "generative",
         # temporal_video — inter-frame / motion consistency
         "optical_flow_analysis": "temporal_video", "optical_flow_analyze": "temporal_video",
         "frame_consistency_analysis": "temporal_video",

@@ -109,6 +109,11 @@ class MetadataHandlers(BaseToolHandler):
             self.prnu_sensor_verification_handler,
             "PRNU camera sensor fingerprint match",
         )
+        registry.register(
+            "ai_text_detector",
+            self.ai_text_detector_handler,
+            "Statistical AI-generated-text detector for documents",
+        )
 
         # Compatibility aliases for older task plans and arbiter/synthesis labels.
         registry.register(
@@ -652,4 +657,35 @@ class MetadataHandlers(BaseToolHandler):
             }
 
         await self.agent._record_tool_result("prnu_sensor_verification", result)
+        return result
+
+    async def ai_text_detector_handler(self, input_data: dict) -> dict:
+        """Audits document text for statistical signatures of AI generation."""
+        artifact = input_data.get("artifact") or self.agent.evidence_artifact
+        await self.agent.update_sub_task("Auditing document text for AI-generation statistical signatures...")
+
+        result = await run_ml_tool("ai_text_detector.py", artifact.file_path, extra_args=["--is-path"], timeout=20.0)
+        
+        # If the worker failed because the text is too short or file could not be read, 
+        # ensure it degrades gracefully without raising
+        if result.get("error") or not result.get("available"):
+            result.setdefault("available", False)
+            result.setdefault("ai_text_probability", 0.0)
+            result.setdefault("is_ai_suspected", False)
+            result.setdefault("degraded", True)
+            result.setdefault("fallback_reason", f"ai_text_detector failed or inapplicable: {result.get('error') or result.get('reason') or 'unavailable'}")
+
+        # The AI text detector gives 'ai_text_probability' and 'is_ai_suspected'.
+        # We need to map this to evidence_verdict so it shows up in findings natively.
+        prob = float(result.get("ai_text_probability") or 0.0)
+        if prob >= 0.70:
+            result["evidence_verdict"] = "POSITIVE"
+            result["severity_tier"] = "HIGH"
+        elif prob >= 0.50:
+            result["evidence_verdict"] = "SUSPICIOUS"
+            result["severity_tier"] = "MEDIUM"
+        else:
+            result["evidence_verdict"] = "AUTHENTIC"
+            
+        await self.agent._record_tool_result("ai_text_detector", result)
         return result

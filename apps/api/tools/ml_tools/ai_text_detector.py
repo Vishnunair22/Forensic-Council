@@ -157,3 +157,36 @@ def _read(path: str) -> str:
         return p.read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return ""
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+    import sys
+
+    from core.ml_tool_worker import run_warmup_mode, run_worker_mode
+
+    def _inference_adapter(input_data: str, extra_args: list | None = None) -> dict:
+        # Default to is_path=True if input_data is a file path, unless overridden
+        is_path = True
+        if extra_args and "--is-text" in extra_args:
+            is_path = False
+        return detect(input_data, is_path=is_path)
+
+    parser = argparse.ArgumentParser(description="Statistical AI-text detector")
+    parser.add_argument("--worker", action="store_true", help="Run as persistent worker")
+    parser.add_argument("--warmup", action="store_true", help="Warmup mode")
+    parser.add_argument("--input", type=str, help="Path or text to analyze")
+    parser.add_argument("--is-path", action="store_true", help="Treat input as a file path")
+    args = parser.parse_args()
+
+    if args.worker:
+        run_worker_mode(_inference_adapter)
+    elif args.warmup:
+        # No model to load, return a dummy object to satisfy warmup
+        run_warmup_mode(lambda: True)
+    elif args.input:
+        print(json.dumps(detect(args.input, is_path=args.is_path)))
+    else:
+        parser.print_help()
+        sys.exit(1)

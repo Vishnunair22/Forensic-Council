@@ -38,10 +38,6 @@ import sys
 import time
 from collections.abc import Callable
 
-from core.structured_logging import get_logger
-
-logger = get_logger(__name__)
-
 
 def run_worker_mode(
     inference_fn: Callable[[str, list | None], dict],
@@ -57,15 +53,15 @@ def run_worker_mode(
     # Preload model if provided
     if model_loader:
         try:
-            logger.info("Loading model for worker mode...")
+            print("[Worker] Loading model for worker mode...", file=sys.stderr)
             model_loader()
-            logger.info("Model loaded successfully")
+            print("[Worker] Model loaded successfully", file=sys.stderr)
         except Exception as e:
-            logger.error("Failed to load model", error=str(e), exc_info=True)
+            print(f"[Worker] Failed to load model: {e}", file=sys.stderr)
             print(json.dumps({"error": f"Model load failed: {str(e)}", "available": False}))
             sys.exit(1)
 
-    logger.info("Worker mode started, reading from stdin...")
+    print("[Worker] Worker mode started, reading from stdin...", file=sys.stderr)
 
     try:
         for line in sys.stdin:
@@ -89,17 +85,17 @@ def run_worker_mode(
                 sys.stdout.flush()
 
             except json.JSONDecodeError as e:
-                logger.error("Invalid JSON from stdin", error=str(e))
+                print(f"[Worker] Invalid JSON from stdin: {e}", file=sys.stderr)
                 print(json.dumps({"error": f"Invalid JSON: {str(e)}", "available": False}))
                 sys.stdout.flush()
             except Exception as e:
-                logger.error("Inference failed", error=str(e), exc_info=True)
+                print(f"[Worker] Inference failed: {e}", file=sys.stderr)
                 print(json.dumps({"error": str(e), "available": False}))
                 sys.stdout.flush()
     except KeyboardInterrupt:
-        logger.info("Worker interrupted, shutting down...")
+        print("[Worker] Worker interrupted, shutting down...", file=sys.stderr)
     except Exception as e:
-        logger.critical("Worker crashed", error=str(e), exc_info=True)
+        print(f"[Worker] Worker crashed: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -114,7 +110,7 @@ def run_warmup_mode(model_loader: Callable, timeout: float = 60.0):
     start_time = time.time()
 
     try:
-        logger.info("Starting model warmup...")
+        print("[Worker] Starting model warmup...", file=sys.stderr)
         model = model_loader()
         elapsed = time.time() - start_time
 
@@ -130,7 +126,7 @@ def run_warmup_mode(model_loader: Callable, timeout: float = 60.0):
             )
             sys.exit(1)
 
-        logger.info(f"Model warmup completed in {elapsed:.1f}s")
+        print(f"[Worker] Model warmup completed in {elapsed:.1f}s", file=sys.stderr)
         print(
             json.dumps(
                 {
@@ -143,7 +139,7 @@ def run_warmup_mode(model_loader: Callable, timeout: float = 60.0):
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("Model warmup failed", error=str(e), exc_info=True)
+        print(f"[Worker] Model warmup failed: {e}", file=sys.stderr)
         print(
             json.dumps(
                 {"status": "warmup_failed", "error": str(e), "elapsed_seconds": round(elapsed, 2)}

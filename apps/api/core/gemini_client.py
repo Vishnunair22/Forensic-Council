@@ -1694,7 +1694,7 @@ class GeminiVisionClient:
             try:
                 name, uri = await self._upload_media_file_api(file_path, guessed_mime)
                 uploaded_file_name = name
-                max_wait = 180.0 if guessed_mime.startswith("video/") else 45.0
+                max_wait = 180.0 if guessed_mime.startswith("video/") else 90.0
                 if not uri or not await self._poll_file_active(name, max_wait=max_wait):
                     raise _ModelUnavailableError("File API media did not become ACTIVE")
                 parts = [
@@ -2439,14 +2439,14 @@ class GeminiVisionClient:
     ) -> GeminiVisionFinding:
         """
         Fallback path when Gemini fails or is unavailable.
-        Delegates visual profile generation entirely to the canonical local ensemble.
+        Delegates to the canonical local ensemble — uses the image ensemble for
+        images and the media-profile fallback for audio/video/document.
         """
         import hashlib
         import mimetypes
         from uuid import uuid4
 
         from core.evidence import ArtifactType, EvidenceArtifact
-        from core.vision_local_ensemble import analyze_local_visual_profile
 
         logger.warning(
             "Gemini unavailable. Delegating to local visual ensemble.",
@@ -2459,6 +2459,9 @@ class GeminiVisionClient:
         except OSError:
             content_hash = ""
 
+        mime = (mimetypes.guess_type(file_path)[0] or "").lower()
+        is_image = mime.startswith("image/")
+
         artifact = EvidenceArtifact.create_root(
             artifact_type=ArtifactType.ORIGINAL,
             file_path=file_path,
@@ -2466,14 +2469,20 @@ class GeminiVisionClient:
             action="vision_router_input",
             agent_id="system",
             session_id=uuid4(),
-            metadata={"mime_type": mimetypes.guess_type(file_path)[0] or ""},
+            metadata={"mime_type": mime},
         )
 
-        finding = await analyze_local_visual_profile(
-            artifact=artifact,
-            exif_summary=exif_summary,
-            is_screen_capture_like=is_screen_capture_like,
-        )
+        if is_image:
+            from core.vision_local_ensemble import analyze_local_visual_profile
+            finding = await analyze_local_visual_profile(
+                artifact=artifact,
+                exif_summary=exif_summary,
+                is_screen_capture_like=is_screen_capture_like,
+            )
+        else:
+            from core.vision_local_ensemble import analyze_local_media_profile
+            finding = await analyze_local_media_profile(file_path, mime)
+
         return finding  # pyright: ignore[reportReturnType]  # GeminiVisionFinding is an alias of VisualEvidenceFinding
 
     def _disabled_finding(self, analysis_type: str) -> GeminiVisionFinding:

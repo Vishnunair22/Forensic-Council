@@ -367,10 +367,16 @@ class Agent5Metadata(ForensicAgent):
         )
 
         # ── OCR (for screenshot timestamp extraction) ─────────────────────────
+        image_h = ImageHandlers(self)
         registry.register(
             "extract_text_from_image",
-            ImageHandlers(self).extract_text_from_image_handler,
+            image_h.extract_text_from_image_handler,
             "Tiered OCR for displayed metadata extraction",
+        )
+        registry.register(
+            "extract_evidence_text",
+            image_h.extract_text_from_image_handler,
+            "Alias for extract_text_from_image (document text extraction)",
         )
 
         return registry
