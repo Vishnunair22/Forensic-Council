@@ -237,8 +237,11 @@ def analyze(image_path: str) -> dict[str, Any]:
         _real = trufor_infer.analyze(image_path)
         if isinstance(_real, dict) and _real.get("available"):
             return _real
-    except Exception:
-        pass
+    except Exception as _exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "TruFor real model failed, falling back to SRM heuristic: %s", _exc
+        )
 
     img = cv2.imread(image_path)
     if img is None:

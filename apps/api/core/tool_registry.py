@@ -66,9 +66,11 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # vector_contraband_search loads SigLIP (same CLIP model) — cold-start ~20s
     # plus inference; 90s gives headroom under concurrent load.
     "vector_contraband_search": 90.0,
-    # neural_splicing (TruFor) can fail with a chunk-length ValueError at ~59s
-    # on certain image sizes. Fail at 45s rather than burning the full 60s default.
-    "neural_splicing": 45.0,
+    # neural_splicing (TruFor) runs a heavy 68M-param SegFormer model via
+    # persistent worker; cold-start + inference can take ~40-50s, and the
+    # chunk-length overflow retry adds another pass. 90s gives headroom for
+    # the worker + a subprocess fallback without hitting the registry ceiling.
+    "neural_splicing": 90.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0

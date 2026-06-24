@@ -175,10 +175,11 @@ def analyze(image_path: str) -> dict:
             return pred, det, scale_i
 
         # Attempt inference at _MAX_SIDE; if the SegFormer tokenizer overflows
-        # (ValueError "chunk is longer than limit"), retry at a smaller size.
+        # ("chunk is longer than limit" — can surface as ValueError or RuntimeError
+        # depending on the tokenizers Rust binding version), retry at a smaller size.
         try:
             pred, det, scale = _run_inference(rgb, _MAX_SIDE)
-        except ValueError as ve:
+        except Exception as ve:
             if "chunk" in str(ve).lower():
                 logger.warning(
                     "TruFor chunk-length overflow at %dpx — retrying at 256px",
