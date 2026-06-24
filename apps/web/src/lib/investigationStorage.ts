@@ -122,23 +122,26 @@ export function expireSessionCookie() {
 export function clearInvestigationPersistence() {
   const savedHistory = _saveHistory();
 
-  [
-    STORAGE_KEYS.SESSION_ID,
-    STORAGE_KEYS.INVESTIGATION_CTX,
-    STORAGE_KEYS.THUMBNAIL,
-    STORAGE_KEYS.MIME_TYPE,
-    STORAGE_KEYS.FILE_NAME,
-    STORAGE_KEYS.CASE_ID,
-    STORAGE_KEYS.PIPELINE_START,
-    STORAGE_KEYS.HITL_CHECKPOINT,
-    STORAGE_KEYS.IS_DEEP,
-  ].forEach((key) => {
-    storage.removeItem(key);
-    sessionOnlyStorage.removeItem(key);
-  });
+  try {
+    [
+      STORAGE_KEYS.SESSION_ID,
+      STORAGE_KEYS.INVESTIGATION_CTX,
+      STORAGE_KEYS.THUMBNAIL,
+      STORAGE_KEYS.MIME_TYPE,
+      STORAGE_KEYS.FILE_NAME,
+      STORAGE_KEYS.CASE_ID,
+      STORAGE_KEYS.PIPELINE_START,
+      STORAGE_KEYS.HITL_CHECKPOINT,
+      STORAGE_KEYS.IS_DEEP,
+    ].forEach((key) => {
+      storage.removeItem(key);
+      sessionOnlyStorage.removeItem(key);
+    });
 
-  clearAgentSnapshots();
-  pruneOrphanScopedKeys();
-  expireSessionCookie();
-  _restoreHistory(savedHistory);
+    clearAgentSnapshots();
+    pruneOrphanScopedKeys();
+    expireSessionCookie();
+  } finally {
+    _restoreHistory(savedHistory);
+  }
 }

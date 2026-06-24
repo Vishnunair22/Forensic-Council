@@ -56,4 +56,11 @@ export class AuthService {
   }
 }
 
-export const authService = new AuthService();
+const globalStore = globalThis as typeof globalThis & {
+  __fcAuthService?: AuthService;
+};
+
+const existing = globalStore.__fcAuthService;
+export const AuthService_class = AuthService;
+export const authService = existing ?? new AuthService();
+globalStore.__fcAuthService = authService;

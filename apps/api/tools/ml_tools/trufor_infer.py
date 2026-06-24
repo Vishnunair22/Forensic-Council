@@ -15,6 +15,7 @@ caller can use its heuristic fallback.
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 
@@ -22,13 +23,18 @@ _THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+logger = logging.getLogger(__name__)
+
 _WEIGHTS_CANDIDATES = [
     os.environ.get("TRUFOR_WEIGHTS", ""),
     "/app/cache/trufor/trufor.pth.tar",
     "/tmp/trufor/trufor.pth.tar",
 ]
-_MAX_SIDE = 512  # cap long side: SegFormer-B2 on CPU is ~4x faster at 512 vs 1024;
+_MAX_SIDE = 384  # cap long side: SegFormer-B2 on CPU is ~4x faster at 384 vs 1024;
 # the global detection score (primary signal) stays discriminative at this size.
+# 384 avoids the "chunk is longer than limit" tokenizer error seen at 512 on
+# certain image aspect ratios (the SegFormer patch embedding overflows the
+# tokenizer's max chunk length when the token count is too high).
 
 _model = None
 _model_failed = False
@@ -150,16 +156,38 @@ def analyze(image_path: str) -> dict:
             return {"available": False, "error": "Cannot read image", "model_version": "trufor_real_v1"}
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         h0, w0 = rgb.shape[:2]
-        # Cap long side for memory/latency; record scale to map regions back.
-        scale = 1.0
-        long_side = max(h0, w0)
-        if long_side > _MAX_SIDE:
-            scale = _MAX_SIDE / float(long_side)
-            rgb = cv2.resize(rgb, (int(round(w0 * scale)), int(round(h0 * scale))), interpolation=cv2.INTER_AREA)
 
-        x = torch.from_numpy(rgb.transpose(2, 0, 1)).float().unsqueeze(0) / 256.0
-        with torch.no_grad():
-            pred, conf, det, _npp = model(x)
+        def _run_inference(rgb_in, max_side):
+            """Run TruFor inference; returns (pred, det, scale) or raises."""
+            h0i, w0i = rgb_in.shape[:2]
+            scale_i = 1.0
+            long_side_i = max(h0i, w0i)
+            if long_side_i > max_side:
+                scale_i = max_side / float(long_side_i)
+                rgb_in = cv2.resize(
+                    rgb_in,
+                    (int(round(w0i * scale_i)), int(round(h0i * scale_i))),
+                    interpolation=cv2.INTER_AREA,
+                )
+            x = torch.from_numpy(rgb_in.transpose(2, 0, 1)).float().unsqueeze(0) / 256.0
+            with torch.no_grad():
+                pred, _conf, det, _npp = model(x)
+            return pred, det, scale_i
+
+        # Attempt inference at _MAX_SIDE; if the SegFormer tokenizer overflows
+        # (ValueError "chunk is longer than limit"), retry at a smaller size.
+        try:
+            pred, det, scale = _run_inference(rgb, _MAX_SIDE)
+        except ValueError as ve:
+            if "chunk" in str(ve).lower():
+                logger.warning(
+                    "TruFor chunk-length overflow at %dpx — retrying at 256px",
+                    _MAX_SIDE,
+                )
+                pred, det, scale = _run_inference(rgb, 256)
+            else:
+                raise
+
         det_sig = float(torch.sigmoid(det).item()) if det is not None else None
         pmap = F.softmax(torch.squeeze(pred, 0), dim=0)[1].cpu().numpy()  # (H,W) forgery prob
 
@@ -194,16 +222,12 @@ def analyze(image_path: str) -> dict:
         loc_mean = float(pmap.mean())
         splicing_detected = score >= 0.70 or (score >= 0.5 and loc_mean >= 0.15)
 
-        # Plan 3.4 — surface the per-pixel forgery-localization map instead of
-        # discarding it. It is the single most persuasive artifact for a human
-        # reviewer and is already computed. Attach only when there is something to
-        # show (a detected splice or a materially elevated hot-spot) so clean
-        # reports stay lean; the PNG is downscaled + colour-mapped, overlaid on the
-        # evidence for spatial context, and embedded as a base64 data URI that
-        # travels inside the signed report (no separate served artifact).
-        localization_map_png = None
-        if splicing_detected or float(pmap.max()) >= 0.30:
-            localization_map_png = _encode_localization_heatmap(pmap, rgb)
+        # Plan 3.4 — surface the per-pixel forgery-localization map.  Always
+        # generate the heatmap when TruFor succeeds so the result page shows a
+        # visual confirmation of the analysis (green/cool = authentic, warm = spliced).
+        # The base64 PNG is small (~20-40KB after the 256px cap in the encoder) and
+        # travels inline in the signed report payload.
+        localization_map_png = _encode_localization_heatmap(pmap, rgb)
 
         result = {
             "splicing_detected": bool(splicing_detected),
@@ -226,10 +250,16 @@ def analyze(image_path: str) -> dict:
         }
         if localization_map_png:
             result["localization_map_png"] = localization_map_png
-            result["localization_map_caption"] = (
-                "TruFor per-pixel forgery-probability map (warm regions = higher "
-                "manipulation likelihood) overlaid on the evidence."
-            )
+            if splicing_detected:
+                result["localization_map_caption"] = (
+                    "TruFor per-pixel forgery-probability map — warm regions indicate "
+                    "higher manipulation likelihood, overlaid on the evidence."
+                )
+            else:
+                result["localization_map_caption"] = (
+                    "TruFor per-pixel forgery-probability map — predominantly cool/green "
+                    "confirms low manipulation likelihood across the evidence."
+                )
         return result
     except Exception as e:
         return {"available": False, "error": f"TruFor inference failed: {e}", "model_version": "trufor_real_v1"}

@@ -549,8 +549,8 @@ def compute_agent_verdict(
         conf = min(
             0.92,
             max(
-                0.70,
-                0.62 + 0.02 * clean_confirmations + 0.20 * _mean_clean
+                0.65,
+                0.45 + 0.03 * clean_confirmations + 0.40 * _mean_clean
                 + (0.04 if gemini_clean_vote else 0.0),
             ),
         )

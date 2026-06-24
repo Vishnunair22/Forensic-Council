@@ -110,10 +110,14 @@ export function HeroAuthActions() {
     isHandingOffRef.current = true;
     setIsHandingOff(true);
 
-    // Close the upload dialog IMMEDIATELY so it is not visible behind the
-    // loading overlay during the / → /evidence transition. Previously the
-    // dialog stayed open (showUpload=true) while the overlay appeared on top,
-    // causing the "upload success modal shown again after overlay" flicker.
+    // Raise the global loading overlay FIRST so it is fully visible before the
+    // dialog begins its 150ms fade-out. Previously setShowUpload(false) fired
+    // before loadingOverlayController.show(), creating a gap where the
+    // UploadSuccessModal was visible through the semi-transparent overlay during
+    // its opacity:0→1 fade-in.
+    loadingOverlayController.show("Opening evidence analysis…");
+
+    // Now close the upload dialog — the overlay is already on screen.
     setShowUpload(false);
 
     try {
@@ -126,6 +130,7 @@ export function HeroAuthActions() {
       });
       isHandingOffRef.current = false;
       setIsHandingOff(false);
+      loadingOverlayController.forceDismiss();
       return false;
     }
 
@@ -133,11 +138,6 @@ export function HeroAuthActions() {
       clientSha256: selectedFileHash,
     });
 
-    // Raise the global loading overlay NOW, on the home route, before navigating.
-    // It sets FC_SHOW_LOADING which GlobalLoadingOverlay honours on both "/" and
-    // "/evidence", so a single continuous overlay covers the whole hand-off.
-    // triggerAnalysis sees FC_SHOW_LOADING==="true" and will not re-fire it.
-    loadingOverlayController.show("Opening evidence analysis…");
     // FC_HANDOFF_FIRED must be cleared so Effect A on /evidence (which skips when
     // it is already "1") actually runs, recovers the file, and starts analysis.
     sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);

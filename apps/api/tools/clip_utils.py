@@ -205,6 +205,7 @@ class CLIPImageAnalyzer:
         self._pretrained = "openai"
         self._fallback_classifiers: list[TorchVisionClassifier] = []
         self._active_model_name: str = "none"
+        self._model_load_lock = threading.Lock()
 
     @property
     def available(self) -> bool:
@@ -281,22 +282,27 @@ class CLIPImageAnalyzer:
         if self._model is not None:
             return True
 
-        # Tier 1: OpenCLIP (full zero-shot semantic understanding)
-        if self._try_load_clip():
-            self._active_model_name = f"clip_{self._model_name}"
-            return True
-
-        # Tier 2-4: torchvision classifiers (ImageNet prediction only)
-        for model_type in ("vit", "efficientnet", "resnet"):
-            classifier = TorchVisionClassifier(model_type)
-            if classifier._load():
-                self._fallback_classifiers.append(classifier)
-                self._active_model_name = model_type
-                logger.info(f"CLIP cascade using {model_type} as active classifier")
+        with self._model_load_lock:
+            # Double-check after acquiring lock (another thread may have loaded)
+            if self._model is not None:
                 return True
 
-        logger.error("All CLIP cascade models failed to load")
-        return False
+            # Tier 1: OpenCLIP (full zero-shot semantic understanding)
+            if self._try_load_clip():
+                self._active_model_name = f"clip_{self._model_name}"
+                return True
+
+            # Tier 2-4: torchvision classifiers (ImageNet prediction only)
+            for model_type in ("vit", "efficientnet", "resnet"):
+                classifier = TorchVisionClassifier(model_type)
+                if classifier._load():
+                    self._fallback_classifiers.append(classifier)
+                    self._active_model_name = model_type
+                    logger.info(f"CLIP cascade using {model_type} as active classifier")
+                    return True
+
+            logger.error("All CLIP cascade models failed to load")
+            return False
 
     def _try_load_clip(self) -> bool:
         """

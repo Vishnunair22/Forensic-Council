@@ -318,16 +318,17 @@ async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
 
 async def warmup_all_tools(timeout_per_tool: float = 60.0) -> dict[str, bool]:
     """
-    Warm up all heavy ML tools concurrently.
+    Warm up all heavy ML tools sequentially.
 
     Call this at application startup (in lifespan) so the first investigation
-    doesn't incur 30-50s of cold-start model loading.
+    doesn't incur cold-start model loading.  Sequential is preferred over
+    parallel on CPU-constrained containers because concurrent model loads
+    compete for CPU and end up slower overall.
     """
-    tasks = {name: warmup_ml_tool(name, timeout=timeout_per_tool) for name in _WARMUP_SCRIPTS}
-    results = {}
-    for name, coro in tasks.items():
+    results: dict[str, bool] = {}
+    for name in _WARMUP_SCRIPTS:
         try:
-            results[name] = await coro
+            results[name] = await warmup_ml_tool(name, timeout=timeout_per_tool)
         except Exception as e:
             logger.warning(f"Warm-up exception for {name}: {e}")
             results[name] = False

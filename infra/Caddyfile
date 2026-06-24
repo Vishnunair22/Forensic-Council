@@ -134,8 +134,9 @@
         }
     }
 
-    # Frontend
+    # Frontend — no-cache for HTML to prevent stale SPA pages
     handle {
+        header Cache-Control "no-store, must-revalidate"
         encode zstd gzip
         reverse_proxy frontend:3000 {
             header_up Host {host}

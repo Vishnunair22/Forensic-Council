@@ -12,36 +12,9 @@ import { EVIDENCE_MAX_DISPLAY_MS } from "@/lib/timings";
 export function GlobalLoadingOverlay() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [show, setShow] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
-    const isHandoffActive = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
-    const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
-
-    // On non-evidence pages: keep the overlay alive during an active handoff or
-    // auto-start so the loading cover is not stripped mid-transition. Only tear
-    // it down when neither is in progress (stale leftover from a prior run).
-    if (pathname !== "/evidence") {
-      if (showLoading && (isHandoffActive || isAutoStart)) return true;
-      if (showLoading) {
-        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-      }
-      return false;
-    }
-
-    // Evidence page: honour FC_SHOW_LOADING with the hard-refresh safety guard
-    if (showLoading) {
-      const guard = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
-      if (guard) {
-        const guardTime = parseInt(guard, 10);
-        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file && !isAutoStart) {
-          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
-          return false;
-        }
-      }
-    }
-    return showLoading;
-  });
+  // Always initialise false on both server and client to avoid hydration mismatch.
+  // Storage-dependent state is resolved in the mount effect below.
+  const [show, setShow] = useState(false);
   const [liveText, setLiveText] = useState(() => {
     return sessionOnlyStorage.getItem(STORAGE_KEYS.FC_LOADING_TEXT) || "Opening evidence analysis...";
   });
@@ -53,6 +26,32 @@ export function GlobalLoadingOverlay() {
   const mountTimeRef = useRef(Date.now());
 
   useEffect(() => {
+    // Resolve initial show state from sessionStorage only after mount to avoid
+    // server/client hydration mismatch.
+    const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+    const isHandoffActive = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
+    const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
+
+    if (pathname !== "/evidence") {
+      if (showLoading && (isHandoffActive || isAutoStart)) {
+        setShow(true);
+      } else if (showLoading) {
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+      }
+    } else if (showLoading) {
+      const guard = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HARD_REFRESH_GUARD);
+      if (guard) {
+        const guardTime = parseInt(guard, 10);
+        if (!isNaN(guardTime) && Date.now() - guardTime < 30000 && !__pendingFileStore.file && !isAutoStart) {
+          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
+        } else {
+          setShow(true);
+        }
+      } else {
+        setShow(true);
+      }
+    }
+
     setMounted(true);
   }, []);
 
@@ -94,10 +93,10 @@ export function GlobalLoadingOverlay() {
           setShow(true);
         } else {
           const isGracePeriod =
-            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" &&
+            (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" ||
+             sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") &&
             !storage.getItem(STORAGE_KEYS.SESSION_ID) &&
-            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true" &&
-            __pendingFileStore.file !== null;
+            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
           if (isGracePeriod) return;
           dismiss(false);
         }

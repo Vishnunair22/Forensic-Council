@@ -92,16 +92,21 @@ async def main() -> None:
         except Exception as exc:
             logger.warning("EasyOCR pre-warm failed (non-fatal)", error=str(exc))
 
-        # Pre-warm in-process inference models (SigLIP/CLIP perceptual fingerprint
-        # + object detector). These are lazy-loaded on first use; if the FIRST
-        # investigation cold-loads them on the request path, the load can exceed
-        # the per-tool timeout (e.g. neural_fingerprint's 20s) under tool
-        # contention and fall back — making neural_fingerprint intermittently
-        # NOT_APPLICABLE and the per-agent confidence/check-count wobble between
-        # otherwise identical clean runs (87%/3 checks vs 90%/4). Warming them
-        # here keeps the applicable-tool set, confidence and counts deterministic.
+        # Pre-warm in-process inference models (CLIP, SigLIP, object detector).
+        # These are lazy-loaded on first use; if the FIRST investigation
+        # cold-loads them on the request path, the load can exceed the per-tool
+        # timeout (e.g. neural_fingerprint's 20s) under tool contention and
+        # fall back — making neural_fingerprint intermittently NOT_APPLICABLE
+        # and the per-agent confidence/check-count wobble between otherwise
+        # identical clean runs (87%/3 checks vs 90%/4). Warming them here keeps
+        # the applicable-tool set, confidence and counts deterministic.
         try:
+            from tools.clip_utils import get_clip_analyzer
             from core.inference_client import get_inference_client
+
+            loop = _asyncio.get_running_loop()
+            await loop.run_in_executor(None, get_clip_analyzer)
+            logger.info("CLIP (ViT-B-32) model pre-warmed")
 
             _ic = await get_inference_client()
             await _ic.get_siglip_analyzer()

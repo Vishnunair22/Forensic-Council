@@ -112,10 +112,21 @@ export function setAuthToken(token: string, expiresInSec?: number): void {
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   const expiry = sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
-  if (expiry && Date.now() > Number(expiry)) {
-    sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-    sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
-    return null;
+  if (expiry) {
+    const expiryTime = Number(expiry);
+    const GRACE_MS = 30_000; // 30-second grace period for in-flight requests
+    if (Date.now() > expiryTime + GRACE_MS) {
+      // Expired for more than 30s — hard clear
+      sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN_EXPIRY);
+      return null;
+    }
+    if (Date.now() > expiryTime) {
+      // Expired within grace window — return the token so in-flight requests
+      // are not abruptly terminated. The token will be cleared on next
+      // non-grace expiry check.
+      return sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    }
   }
   return sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
 }

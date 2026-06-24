@@ -86,6 +86,14 @@ export function EvidenceUploadClient() {
       if (e.persisted) {
         // Defer check by one tick so sessionStorage writes from triggerAnalysis can complete
         setTimeout(() => {
+          // If a handoff is actively in progress (AUTO_START or FC_SHOW_LOADING),
+          // do NOT redirect — Effect A is recovering the file and will start
+          // analysis. Redirecting here causes a navigation loop where the
+          // evidence page loads then immediately bounces back to home.
+          const handoffInProgress =
+            sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true" ||
+            sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
+          if (handoffInProgress) return;
           if (!storage.getItem(STORAGE_KEYS.SESSION_ID) && 
               sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) !== "1") {
             loadingOverlayController.forceDismiss();

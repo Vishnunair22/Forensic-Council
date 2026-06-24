@@ -493,19 +493,19 @@ def deliberate_findings(
         weak_single_signal_penalty *= _penalty_scale
 
     raw_conf = (
-        0.30
+        0.15
         + 0.12 * important_tool_completion_rate
         + 0.10 * cross_agent_agreement_score
         + 0.10 * high_weight_evidence_score
         + _vc_coeff * visual_context_support_score
-        + 0.15 * evidence_strength_score
+        + 0.40 * evidence_strength_score
         - 0.20 * critical_tool_failure_rate
         - 0.15 * unresolved_conflict_score
         - 0.10 * weak_single_signal_penalty
     )
     # Hard ceiling stays defensive; an uncalibrated system is additionally capped so
     # it can never present >~0.85 certainty regardless of the term sum.
-    _ceiling = 0.85 if is_system_uncalibrated() else 0.98
+    _ceiling = 0.90 if is_system_uncalibrated() else 0.98
     # Floor of 0.10 — a fully-failed investigation still carries minimal
     # non-zero confidence so downstream consumers can distinguish "we checked
     # and found nothing" (0.0) from "we could not check" (0.10).
