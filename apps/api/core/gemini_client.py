@@ -66,7 +66,7 @@ _NATIVE_MEDIA_PREFIXES = ("audio/", "video/")
 
 # Single-model (non-image) preflight: how many times to retry the SAME model on a
 # transient overload (503/500/timeout). Quota errors (429) break out immediately.
-_SINGLE_MODEL_MAX_ATTEMPTS = 3
+_SINGLE_MODEL_MAX_ATTEMPTS = 2
 
 # Document MIME types Gemini reads natively (PDF + office formats). Routed through
 # the File API alongside audio/video so large documents never blow the inline

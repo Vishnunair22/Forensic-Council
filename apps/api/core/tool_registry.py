@@ -71,6 +71,11 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # chunk-length overflow retry adds another pass. 90s gives headroom for
     # the worker + a subprocess fallback without hitting the registry ceiling.
     "neural_splicing": 90.0,
+    # read_shared_image_context delegates to _visual_evidence_profile_handler which
+    # calls Gemini (File API) for non-image evidence; on transient 503 the Gemini
+    # client retries with 55s HTTP timeout each.  90s allows at least one full
+    # Gemini attempt plus time for the local-media-profile fallback.
+    "read_shared_image_context": 90.0,
 }
 
 DEFAULT_TOOL_TIMEOUT = 60.0
