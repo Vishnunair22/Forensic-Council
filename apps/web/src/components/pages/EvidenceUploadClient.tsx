@@ -86,6 +86,19 @@ export function EvidenceUploadClient() {
       if (e.persisted) {
         // Defer check by one tick so sessionStorage writes from triggerAnalysis can complete
         setTimeout(() => {
+          // Detect hard refresh — some browsers use bfcache for Ctrl+F5.
+          // If it's a hard refresh, GlobalLoadingOverlay already cleared stale
+          // state and set FC_NO_RECONNECT. Do NOT redirect home.
+          const isHardRefresh = (() => {
+            try {
+              const navEntries = performance.getEntriesByType("navigation");
+              return navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === "reload";
+            } catch {
+              return false;
+            }
+          })();
+          if (isHardRefresh) return;
+
           // If a handoff is actively in progress (AUTO_START or FC_SHOW_LOADING),
           // do NOT redirect — Effect A is recovering the file and will start
           // analysis. Redirecting here causes a navigation loop where the

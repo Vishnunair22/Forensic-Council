@@ -45,6 +45,8 @@ export function GlobalLoadingOverlay() {
     if (isHardRefresh) {
       // Clear all transient FC_* sessionStorage flags on hard refresh.
       // This ensures the app starts with a clean slate.
+      // NOTE: FC_NO_RECONNECT is NOT cleared — it is SET below to prevent
+      // useInvestigation from reconnecting to the old session.
       const fcKeys = [
         STORAGE_KEYS.FC_SHOW_LOADING,
         STORAGE_KEYS.FC_LOADING_TEXT,
@@ -54,11 +56,14 @@ export function GlobalLoadingOverlay() {
         STORAGE_KEYS.FC_ARBITER_TRANSITIONING,
         STORAGE_KEYS.FC_HARD_REFRESH_GUARD,
         STORAGE_KEYS.AUTO_START,
-        STORAGE_KEYS.FC_NO_RECONNECT,
       ];
       for (const key of fcKeys) {
         sessionOnlyStorage.removeItem(key);
       }
+      // Prevent useInvestigation from reconnecting to the old session after
+      // hard refresh. Without this, the reconnect effect fires because
+      // SESSION_ID (localStorage) still exists while FC_NO_RECONNECT was cleared.
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
       setMounted(true);
       return;
     }
