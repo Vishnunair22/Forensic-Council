@@ -63,57 +63,81 @@ async def main() -> None:
     logger.info("Signing key store initialized in worker")
 
     async def _warmup_background() -> None:
-        try:
-            from core.ml_subprocess import warmup_all_tools
+        import asyncio as _asyncio
+        loop = _asyncio.get_running_loop()
 
-            logger.info("Pre-warming ML tools in worker (background)")
-            warmup_results = await warmup_all_tools(timeout_per_tool=120.0)
-            succeeded = sum(1 for value in warmup_results.values() if value)
-            total = len(warmup_results)
+        async def _warmup_ml_tools() -> None:
+            try:
+                from core.ml_subprocess import warmup_all_tools
 
-            if succeeded < total:
-                logger.warning(
-                    f"Only {succeeded}/{total} ML tools warmed up",
-                    failed_tools=[name for name, ok in warmup_results.items() if not ok],
-                )
-            else:
-                logger.info(f"All {total} ML tools warmed up successfully")
-        except Exception as exc:
-            logger.error("ML warmup failed in worker", error=str(exc), exc_info=True)
+                logger.info("Pre-warming ML tools in worker (background)")
+                warmup_results = await warmup_all_tools(timeout_per_tool=120.0)
+                succeeded = sum(1 for value in warmup_results.values() if value)
+                total = len(warmup_results)
 
-        # Pre-warm EasyOCR reader so model init never happens on the request path
-        try:
-            import asyncio as _asyncio
+                if succeeded < total:
+                    logger.warning(
+                        f"Only {succeeded}/{total} ML tools warmed up",
+                        failed_tools=[name for name, ok in warmup_results.items() if not ok],
+                    )
+                else:
+                    logger.info(f"All {total} ML tools warmed up successfully")
+            except Exception as exc:
+                logger.error("ML warmup failed in worker", error=str(exc), exc_info=True)
 
-            from tools.ocr_tools import _get_easyocr_reader
-            loop = _asyncio.get_running_loop()
-            await loop.run_in_executor(None, _get_easyocr_reader)
-            logger.info("EasyOCR reader pre-warmed successfully")
-        except Exception as exc:
-            logger.warning("EasyOCR pre-warm failed (non-fatal)", error=str(exc))
+        async def _warmup_inference_models() -> None:
+            # Pre-warm in-process inference models (CLIP, SigLIP, object detector).
+            # These are lazy-loaded on first use; if the FIRST investigation
+            # cold-loads them on the request path, the load can exceed the per-tool
+            # timeout (e.g. neural_fingerprint's 20s) under tool contention and
+            # fall back — making neural_fingerprint intermittently NOT_APPLICABLE
+            # and the per-agent confidence/check-count wobble between otherwise
+            # identical clean runs (87%/3 checks vs 90%/4). Warming them here keeps
+            # the applicable-tool set, confidence and counts deterministic.
+            #
+            # CLIP is warmed first because it is the most expensive in-process
+            # model (~17s) and gates neural_fingerprint; running it in parallel
+            # with the ML-subprocess warmup ensures it is available well before
+            # the first investigation arrives even after a worker restart.
+            try:
+                from tools.clip_utils import get_clip_analyzer
 
-        # Pre-warm in-process inference models (CLIP, SigLIP, object detector).
-        # These are lazy-loaded on first use; if the FIRST investigation
-        # cold-loads them on the request path, the load can exceed the per-tool
-        # timeout (e.g. neural_fingerprint's 20s) under tool contention and
-        # fall back — making neural_fingerprint intermittently NOT_APPLICABLE
-        # and the per-agent confidence/check-count wobble between otherwise
-        # identical clean runs (87%/3 checks vs 90%/4). Warming them here keeps
-        # the applicable-tool set, confidence and counts deterministic.
-        try:
-            from tools.clip_utils import get_clip_analyzer
-            from core.inference_client import get_inference_client
+                def _load_clip():
+                    analyzer = get_clip_analyzer()
+                    analyzer._load_model()
+                    return analyzer
 
-            loop = _asyncio.get_running_loop()
-            await loop.run_in_executor(None, get_clip_analyzer)
-            logger.info("CLIP (ViT-B-32) model pre-warmed")
+                await loop.run_in_executor(None, _load_clip)
+                logger.info("CLIP (ViT-B-32) model pre-warmed")
+            except Exception as exc:
+                logger.warning("CLIP pre-warm failed (non-fatal)", error=str(exc))
 
-            _ic = await get_inference_client()
-            await _ic.get_siglip_analyzer()
-            await _ic.get_yolo_model()
-            logger.info("In-process inference models (SigLIP, object detector) pre-warmed")
-        except Exception as exc:
-            logger.warning("Inference-model pre-warm failed (non-fatal)", error=str(exc))
+            try:
+                from core.inference_client import get_inference_client
+
+                _ic = await get_inference_client()
+                await _ic.get_siglip_analyzer()
+                await _ic.get_yolo_model()
+                logger.info("In-process inference models (SigLIP, object detector) pre-warmed")
+            except Exception as exc:
+                logger.warning("SigLIP/YOLO pre-warm failed (non-fatal)", error=str(exc))
+
+        async def _warmup_easyocr() -> None:
+            try:
+                from tools.ocr_tools import _get_easyocr_reader
+                await loop.run_in_executor(None, _get_easyocr_reader)
+                logger.info("EasyOCR reader pre-warmed successfully")
+            except Exception as exc:
+                logger.warning("EasyOCR pre-warm failed (non-fatal)", error=str(exc))
+
+        # Run CLIP+inference warmup in parallel with ML-subprocess warmup
+        # so that CLIP is available as quickly as possible (~17s) regardless
+        # of how long the ML-subprocess warmup takes (30-90s).
+        await _asyncio.gather(
+            _warmup_ml_tools(),
+            _warmup_inference_models(),
+            _warmup_easyocr(),
+        )
 
     _warmup_task = asyncio.create_task(_warmup_background())
 

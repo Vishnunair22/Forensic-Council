@@ -1081,11 +1081,16 @@ class ForensicCouncilPipeline:
                     data={"status": status, "thinking": thinking},
                 ),
             )
-            # F-15: use atomic CAS for metadata status transition
+            # F-15: use atomic CAS for metadata status transition.
+            # NOTE: Do NOT set terminal status "completed" here — that is the
+            # responsibility of mark_investigation_completed() in
+            # session_finalization.py. Setting it here prematurely causes the
+            # idempotency guard to fire, skipping the DB update and leaving
+            # investigation_state stuck at "queued".
             await update_active_pipeline_metadata(
                 str(session_id),
                 {
-                    "status": "completed" if status == "complete" else status,
+                    "status": "report_ready" if status == "complete" else status,
                     "brief": thinking,
                     "awaiting_decision": False,
                 },

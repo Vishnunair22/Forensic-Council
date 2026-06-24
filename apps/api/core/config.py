@@ -577,8 +577,8 @@ class Settings(BaseSettings):
         ),
     )
     hitl_decision_timeout: int = Field(
-        default=3600,
-        description="Max seconds to wait for HITL decision before auto-skipping deep analysis",
+        default=300,
+        description="Max seconds to wait for HITL decision before auto-skipping deep analysis (5 min default)",
     )
     deep_agent_timeout_seconds: int = Field(
         default=900,
