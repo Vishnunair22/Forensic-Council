@@ -219,6 +219,7 @@ class Agent5Metadata(ForensicAgent):
         # Fallback logic
         if self._is_av_media:
             return [
+                "Run read_shared_image_context for neural audio audit and acoustic provenance",
                 "Run file_hash_verify against ingestion hash",
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
                 "Run hex_signature_scan for raw-byte software signatures",
@@ -286,6 +287,7 @@ class Agent5Metadata(ForensicAgent):
             ]
         if self._is_av_media:
             return [
+                "Run read_shared_image_context for neural audio audit and acoustic provenance",
                 "Run provenance_chain_verify for C2PA and digital provenance manifests",
             ]
         if not self._is_image_media:
