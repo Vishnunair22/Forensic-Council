@@ -1,6 +1,6 @@
 # Model Registry — Forensic Council
 
-**Version:** v1.0.0 | **Source-of-truth:** `apps/api/config/models.lock.json`
+**Version:** v1.9.0 | **Source-of-truth:** `apps/api/config/models.lock.json`
 
 This document covers model pinning, provider setup, licensing, and verification for the Forensic Council system. It supersedes the removed `docs/MODELS.md`.
 

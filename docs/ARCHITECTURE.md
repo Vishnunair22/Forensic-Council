@@ -1,6 +1,6 @@
 # System Architecture — Forensic Council
 
-**Version:** v1.0.0
+**Version:** v1.9.0
 
 ---
 
@@ -203,4 +203,4 @@ For a definitive list of diagnostic tools available to each specialist agent, se
 | **Agent 2 (Audio)** | Speaker verification, synthesis detection | Diarization, Anti-Spoofing, Prosody, ENF |
 | **Agent 3 (Object)** | Scene context, incongruence detection | DETR (default; YOLO opt-in), CLIP, Scale validation, Lighting check |
 | **Agent 4 (Video)** | Frame consistency, face swap detection | Optical Flow, Face Swap, Forgery, Liveness |
-| **Agent 5 (Metadata)** | Exif, GPS, steganography, C2PA | ExifTool, GPS validation, Steganography, C2PA |
+| **Agent 5 (Metadata)** | Exif, GPS, steganography, C2PA, AI-text detection | ExifTool, GPS validation, Steganography, C2PA, AI Text Detector |

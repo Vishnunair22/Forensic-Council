@@ -2,7 +2,7 @@
 
 Forensic Council is a multi-agent forensic analysis platform for digital media verification. It accepts evidence uploads, runs five specialist agents through an initial and deep analysis pipeline, and returns a cryptographically signed forensic report.
 
-[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-v1.9.0-blue.svg)](#)
 [![Status](https://img.shields.io/badge/status-production_hardening-yellow.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](#) Python 3.12 strictly required (`pyproject.toml`: `>=3.12,<3.13`)

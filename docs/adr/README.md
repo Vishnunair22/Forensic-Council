@@ -8,7 +8,7 @@ Index of all architectural decisions for the Forensic Council project.
 | [ADR-002](ADR-002-two-phase-react-pipeline.md) | Two-Phase ReAct Pipeline | Accepted | 2025-01 |
 | [ADR-003](ADR-003-groq-synthesis.md) | Groq for Narrative Synthesis | Accepted | 2025-02 |
 | [ADR-004](ADR-004-cpu-only-torch.md) | CPU-Only PyTorch in Docker | Accepted | 2025-02 |
-| [ADR-005](ADR-005-bcrypt-shim-retention.md) | bcrypt Shim Retention | Accepted | 2025-03 |
+| [ADR-005](ADR-005-bcrypt-shim-retention.md) | bcrypt Shim Retention | Accepted | 2026-05 |
 
 ## Creating a New ADR
 

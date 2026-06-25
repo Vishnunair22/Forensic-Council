@@ -2,7 +2,7 @@
 
 This file documents ML model licensing for the Forensic Council system. For detailed information, see [MODEL_REGISTRY.md](MODEL_REGISTRY.md).
 
-Last updated: 2026-04-25 | Status: v1.0.0
+Last updated: 2026-04-25 | Status: v1.9.0
 
 ---
 
@@ -18,7 +18,7 @@ Last updated: 2026-04-25 | Status: v1.0.0
 | pyannote | MIT | Requires HF account acceptance |
 | Gemini 2.5 Flash | API ToS | Review data retention policy |
 | Llama 3.3 70B | Meta Llama 3 | Under 700M MAU |
-| wav2vec2 deepfake (Vansh180/...) | HuggingFace Hub | Check model's license tag |
+| wav2vec2 deepfake (`Vansh180/deepfake-audio-wav2vec2`) | HuggingFace Hub | Check model's license tag |
 
 ---
 

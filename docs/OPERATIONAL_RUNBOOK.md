@@ -1,6 +1,6 @@
 # Operational Runbook — Forensic Council
 
-**Version:** v1.0.0
+**Version:** v1.9.0
 
 This runbook covers triage, severity levels, common failures, recovery commands, and observability for the Forensic Council stack. It supersedes the removed `docs/RUNBOOK.md`.
 

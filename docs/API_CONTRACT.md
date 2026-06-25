@@ -1,6 +1,6 @@
 # API Contract — Forensic Council
 
-**Version:** v1.0.0 | **Base URL:** `http://localhost:8000`
+**Version:** v1.9.0 | **Base URL:** `http://localhost:8000`
 
 Application REST endpoints are prefixed with `/api/v1`; health/liveness probes
 are also exposed at root-level aliases for container checks. Authentication uses
@@ -61,7 +61,7 @@ Upload evidence and start a forensic investigation. **Auth required.**
 | `case_id` | string | **MUST start with `CASE-`** (server enforces). Full value must match `[A-Za-z0-9_.-]{1,128}`. |
 | `investigator_id` | string | Alphanumeric + `-_.`, 1–128 chars. No prefix requirement. |
 
-**Accepted MIME types:** `image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`
+**Accepted MIME types:** `image/jpeg`, `image/png`, `image/tiff`, `image/webp`, `image/gif`, `image/bmp`, `video/mp4`, `video/quicktime`, `video/x-msvideo`, `audio/wav`, `audio/x-wav`, `audio/mpeg`, `audio/mp4`, `audio/flac`, `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
 
 **Response 200:**
 ```json

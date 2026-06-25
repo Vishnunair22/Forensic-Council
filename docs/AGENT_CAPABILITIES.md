@@ -1,4 +1,4 @@
-# Forensic Agent Capabilities (v1.0.0)
+# Forensic Agent Capabilities (v1.9.0)
 
 This document lists the diagnostic tools available to each specialist agent in the Forensic Council.
 
@@ -74,6 +74,7 @@ This document lists the diagnostic tools available to each specialist agent in t
 | `hex_scan` | Hex-signature scanning for software artifacts. | ✅ |
 | `hash_verify` | SHA-256 integrity verification against ledger. | ✅ |
 | `astronomical_check` | Confirms sun elevation vs. claimed GPS/Time. | ✅ |
-| `reverse_search` | Checks for prior appearance of evidence online. | ✅ |
+| `reverse_search` | Checks for prior appearance of evidence online. | ⚠️ screening |
 | `c2pa_validator` | Verifies C2PA Content Credentials/Provenance. | ✅ |
 | `ocr_text_extract` | Tesseract-backed evidence text extraction. | ✅ |
+| `ai_text_detector` | Statistical AI-generated text screening (burstiness, repetition, lexical diversity). | ⚠️ screening |
