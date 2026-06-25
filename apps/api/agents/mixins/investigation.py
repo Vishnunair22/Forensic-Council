@@ -1625,6 +1625,7 @@ class AgentInvestigationMixin:
             agent=self,
             hitl_timeout=540.0,
             per_tool_timeout=120.0,
+            enable_internal_hitl=False,
         )
 
         llm_generator = None
@@ -1750,6 +1751,7 @@ class AgentInvestigationMixin:
             agent=self,
             hitl_timeout=540.0,
             per_tool_timeout=300.0,
+            enable_internal_hitl=False,
         )
 
         # Enriched deep initial thought referencing Phase-1 findings (Fix 4)
@@ -1886,6 +1888,7 @@ class AgentInvestigationMixin:
             redis_client=getattr(self.working_memory, "_redis", None),
             heavy_tool_semaphore=self.heavy_tool_semaphore,
             hitl_timeout=540.0,
+            enable_internal_hitl=False,
         )
 
         llm_generator = None

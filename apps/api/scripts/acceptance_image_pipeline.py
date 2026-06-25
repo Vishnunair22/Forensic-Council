@@ -207,10 +207,17 @@ def wait_and_resume(
     resume_count = 0
     deep_report_requested = False
     while time.time() - start < timeout_s:
-        report = client.get(
-            f"{base_url}/api/v1/sessions/{session_id}/report",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        try:
+            report = client.get(
+                f"{base_url}/api/v1/sessions/{session_id}/report",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        except httpx.ReadTimeout:
+            # Heavy local OCR/vision work can briefly starve a polling request.
+            # Treat one missed poll as transient; the overall deadline remains
+            # the authoritative hang detector.
+            time.sleep(2)
+            continue
         if report.status_code == 200:
             return {"report": report.json(), "resume_count": resume_count}
         if report.status_code >= 500:
@@ -293,11 +300,18 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--mode", choices=["initial", "deep", "both"], default="deep")
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--case", action="append", default=[], help="Run only named corpus case(s)")
     parser.add_argument("--timeout", type=int, default=900)
     args = parser.parse_args()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     cases = generate_corpus()
+    if args.case:
+        selected = set(args.case)
+        cases = [case for case in cases if case["name"] in selected]
+        unknown = selected - {case["name"] for case in cases}
+        if unknown:
+            raise SystemExit(f"Unknown acceptance case(s): {', '.join(sorted(unknown))}")
     if args.limit:
         cases = cases[: args.limit]
     modes = [False, True] if args.mode == "both" else [args.mode == "deep"]

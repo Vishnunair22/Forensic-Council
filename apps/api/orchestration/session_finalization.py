@@ -7,6 +7,7 @@ external Redis worker. Ensures identical metadata/persistence/broadcast behavior
 regardless of execution mode.
 """
 
+import asyncio
 from datetime import UTC, datetime
 
 from api.routes._session_state import (
@@ -96,7 +97,14 @@ async def mark_investigation_completed(
     # Retry narrative generation if per_agent_analysis is empty (all Groq calls timed out)
     if arbiter is not None and hasattr(arbiter, "regenerate_missing_narratives"):
         try:
-            report = await arbiter.regenerate_missing_narratives(report)
+            report = await asyncio.wait_for(
+                arbiter.regenerate_missing_narratives(report),
+                timeout=60.0,
+            )
+        except TimeoutError:
+            logger.warning(
+                "Narrative regeneration timed out after 60s — persisting the signed deterministic report"
+            )
         except Exception as narr_err:
             logger.warning(
                 "Narrative regeneration failed — persisting with empty narratives",

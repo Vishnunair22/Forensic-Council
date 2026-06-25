@@ -772,6 +772,7 @@ class ReActLoopEngine:
         heavy_tool_semaphore: asyncio.Semaphore | None = None,
         agent: Any | None = None,
         per_tool_timeout: float = 120.0,
+        enable_internal_hitl: bool = True,
     ) -> None:
         """
         Initialize the ReAct loop engine.
@@ -787,6 +788,9 @@ class ReActLoopEngine:
             heavy_tool_semaphore: Shared semaphore for throttling heavy CPU/GPU tools
             per_tool_timeout: Per-tool execution timeout in seconds (default 120s).
                               Prevents a single slow tool from hanging the entire deep pass.
+            enable_internal_hitl: Whether the loop may block on an agent-local
+                checkpoint. Full investigations disable this because the
+                orchestration layer owns the analyst decision gate.
         """
         self.agent_id = agent_id
         self.session_id = session_id
@@ -798,6 +802,7 @@ class ReActLoopEngine:
         self.heavy_tool_semaphore = heavy_tool_semaphore
         self.agent = agent
         self.per_tool_timeout = per_tool_timeout
+        self.enable_internal_hitl = enable_internal_hitl
 
         # Internal state
         self._current_iteration = 0
@@ -1058,7 +1063,11 @@ class ReActLoopEngine:
                 break
 
             # Check HITL triggers before proceeding
-            hitl_reason = await self.check_hitl_triggers(state)
+            hitl_reason = (
+                await self.check_hitl_triggers(state)
+                if self.enable_internal_hitl
+                else None
+            )
             if hitl_reason is not None:
                 checkpoint = await self.pause_for_hitl(
                     reason=hitl_reason,

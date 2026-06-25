@@ -19,6 +19,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from core.agent_registry import AgentID
+from core.forensic_policy import ForensicPolicy
 from core.structured_logging import get_logger
 
 _verdict_logger = get_logger(__name__)
@@ -36,10 +38,6 @@ VALID_OVERALL_VERDICTS = frozenset({
     "ABSTAIN",
     "REVIEW REQUIRED",
 })
-
-from core.agent_registry import AgentID
-from core.forensic_policy import ForensicPolicy
-
 
 class FindingVerdict(StrEnum):
     """Verdict for finding comparison."""
@@ -427,7 +425,10 @@ def calculate_manipulation_probability(
         _evidence_verdict = evidence_verdict_of(_f)
         if _evidence_verdict in {"NOT_APPLICABLE", "ERROR", "NEGATIVE"}:
             continue
-        _is_direct_manip = _evidence_verdict == "POSITIVE" and _has_legacy_positive_signal(_f)
+        # The normalized evidence verdict is authoritative. Requiring a second
+        # legacy metadata boolean made valid newer POSITIVE findings disappear
+        # from family fusion entirely.
+        _is_direct_manip = _evidence_verdict == "POSITIVE"
 
         if _is_direct_manip:
             _c = confidence_of(_f, default=0.5) or 0.5

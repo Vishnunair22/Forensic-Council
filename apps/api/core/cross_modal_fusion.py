@@ -183,10 +183,9 @@ def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> dict[st
     """
     Check if two signals corroborate each other.
 
-    Corroboration requires both signals to be CONFIRMED and both must agree
-    on the same direction: both detect manipulation (manipulation corroboration)
-    or both confirm no manipulation (clean corroboration). Conflicting results
-    return None — handled by _find_contradiction instead.
+    Corroboration requires both signals to be CONFIRMED and both to detect
+    manipulation. Two clean outputs improve coverage confidence elsewhere, but
+    absence of an anomaly is not independent proof of authenticity.
     """
     if sig_a.status != "CONFIRMED" or sig_b.status != "CONFIRMED":
         return None
@@ -196,13 +195,6 @@ def _find_corroboration(sig_a: ModalitySignal, sig_b: ModalitySignal) -> dict[st
             "modalities": f"{sig_a.modality.value} + {sig_b.modality.value}",
             "direction": "manipulation",
             "detail": f"{sig_a.finding_type} and {sig_b.finding_type} both detect manipulation",
-        }
-    if not sig_a.manipulation_detected and not sig_b.manipulation_detected:
-        return {
-            "agents": f"{sig_a.agent_id} + {sig_b.agent_id}",
-            "modalities": f"{sig_a.modality.value} + {sig_b.modality.value}",
-            "direction": "clean",
-            "detail": f"{sig_a.finding_type} and {sig_b.finding_type} both confirm no manipulation",
         }
     return None
 
@@ -293,7 +285,7 @@ def fuse(
                 if ini.manipulation_detected and not dep.manipulation_detected:
                     contradictions.append(
                         {
-                            "agents": f"{agent_id} vs {agent_id}",
+                            "agents": f"{agent_id} initial vs deep",
                             "modalities": f"{ini.modality.value} initial vs deep",
                             "detail": (
                                 f"{ini.finding_type} (initial) detects manipulation "
@@ -305,7 +297,7 @@ def fuse(
                 elif not ini.manipulation_detected and dep.manipulation_detected:
                     contradictions.append(
                         {
-                            "agents": f"{agent_id} vs {agent_id}",
+                            "agents": f"{agent_id} initial vs deep",
                             "modalities": f"{ini.modality.value} initial vs deep",
                             "detail": (
                                 f"{ini.finding_type} (initial) indicates authenticity "
@@ -317,7 +309,7 @@ def fuse(
                 elif ini.manipulation_detected and dep.manipulation_detected:
                     corroborations.append(
                         {
-                            "agents": f"{agent_id} + {agent_id}",
+                            "agents": f"{agent_id} initial + deep",
                             "modalities": f"{ini.modality.value} initial + deep",
                             "direction": "manipulation",
                             "detail": (
@@ -329,7 +321,7 @@ def fuse(
                 elif not ini.manipulation_detected and not dep.manipulation_detected:
                     corroborations.append(
                         {
-                            "agents": f"{agent_id} + {agent_id}",
+                            "agents": f"{agent_id} initial + deep",
                             "modalities": f"{ini.modality.value} initial + deep",
                             "direction": "clean",
                             "detail": (
