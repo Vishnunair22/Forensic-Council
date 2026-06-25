@@ -139,6 +139,11 @@ export function GlobalLoadingOverlay() {
       return;
     }
     if (show) {
+      const isReconnecting =
+        sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1" ||
+        sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
+      if (isReconnecting) return;
+
       if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
       const elapsed = Date.now() - mountTimeRef.current;
       const remaining = Math.max(0, EVIDENCE_MAX_DISPLAY_MS - elapsed);

@@ -186,10 +186,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             alive = await rc.get("forensic:worker:heartbeat")
             if not alive:
                 logger.warning(
-                    "Worker heartbeat missing (forensic:worker:heartbeat) — "
-                    "investigations will queue but not execute. "
-                    "Start the worker container: docker compose up worker"
+                    "Worker heartbeat missing — will retry for up to 5 minutes. "
+                    "Investigations queue until worker reports ready."
                 )
+                # The worker may still be warming up ML models (~2 min for 31
+                # tools). Retry every 15s for up to 5 min before giving up.
+                import asyncio
+                for attempt in range(1, 21):
+                    await asyncio.sleep(15)
+                    alive = await rc.get("forensic:worker:heartbeat")
+                    if alive:
+                        logger.info(f"Worker heartbeat detected after {attempt * 15}s")
+                        break
+                else:
+                    logger.warning(
+                        "Worker heartbeat still missing after 5 minutes — "
+                        "investigations will queue but not execute. "
+                        "Verify the worker container is running: docker compose up worker"
+                    )
         except Exception as e:
             logger.warning("Worker heartbeat check failed", error=str(e))
     else:
