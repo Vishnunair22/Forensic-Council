@@ -121,6 +121,7 @@ def deliberate_findings(
         important_tools = {
             "file_structure_analysis", "hex_signature_scan", "provenance_chain_verify",
             "metadata_anomaly_score", "timestamp_analysis",
+            "ai_text_detector",
         }
     else:  # image/* and default
         critical_tools = {"file_structure_analysis", "exif_extract", "ela_full_image", "neural_ela"}
