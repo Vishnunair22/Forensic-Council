@@ -34,7 +34,7 @@ import {
 } from "@/lib/timings";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
 import { arbiterControl } from "@/lib/arbiterControl";
-import { type SoundType } from "@/hooks/useSound";
+import { type SoundType, playSoundSeq } from "@/hooks/useSound";
 import { type AgentUpdate } from "@/components/evidence/types";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { supportedAgentIdsForMime } from "@/lib/agentSupport";
@@ -208,6 +208,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [wsConnectionError, setWsConnectionError] = useState<string | null>(null);
   const [arbiterDeliberating, setArbiterDeliberating] = useState(false);
   const analysisCompleteSoundedRef = useRef(false);
+  const lastSoundedPhaseRef = useRef<"initial" | "deep" | null>(null);
   const autoStartFiredRef = useRef(false);
   const investigationInFlightRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
@@ -356,6 +357,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     lastSessionIdRef.current = null;
     completedAgentsRef.current = [];
     analysisCompleteSoundedRef.current = false;
+    lastSoundedPhaseRef.current = null;
     sessionExistsRef.current = false;
     resetSimulationHook();
   }, [resetSimulationHook]);
@@ -392,6 +394,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       lastSessionIdRef.current = null;
       completedAgentsRef.current = [];
       analysisCompleteSoundedRef.current = false;
+      lastSoundedPhaseRef.current = null;
       sessionExistsRef.current = false;
 
       // Use the resolved MIME (extension fallback for empty/generic browser
@@ -925,8 +928,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const handleAcceptAnalysis = useCallback(async () => {
     if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
-    playSound("click");
-    setTimeout(() => playSound("arbiter_start"), 80);
+    playSoundSeq("click", "arbiter_start", 0.04);
     storage.setItem(STORAGE_KEYS.IS_DEEP, "false");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
@@ -958,14 +960,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         setArbiterDeliberating(false);
       }
     }
-  }, [playSound, resumeInvestigation, isNavigating, _navigateToResult]);
+  }, [resumeInvestigation, isNavigating, _navigateToResult]);
 
   const handleDeepAnalysis = useCallback(async () => {
     if (investigationInFlightRef.current || resumeInFlightRef.current) return;
     investigationInFlightRef.current = true;
     resumeInFlightRef.current = true;
-    playSound("click");
-    setTimeout(() => playSound("scan"), 80);
+    playSoundSeq("click", "scan", 0.04);
     storage.setItem(STORAGE_KEYS.IS_DEEP, "true");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     const initialAgentSnapshot = (completedAgentsRef.current as AgentUpdate[]).filter(
@@ -977,10 +978,11 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`, "deep");
       storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
     }
-    analysisCompleteSoundedRef.current = false;
     clearPipelineThinking();
     clearCompletedAgents();
     completedAgentsRef.current = [];
+    analysisCompleteSoundedRef.current = false;
+    lastSoundedPhaseRef.current = null;
     setPhase("deep");
     try {
       setSimulationPhase("deep");
@@ -1037,6 +1039,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     lastSessionIdRef.current = null;
     autoStartFiredRef.current = false;
     analysisCompleteSoundedRef.current = false;
+    lastSoundedPhaseRef.current = null;
     completedAgentsRef.current = [];
     clearInvestigationPersistence();
     resetSimulation();
@@ -1119,8 +1122,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     const ready =
       (awaitingDecision && findingsSurfaced) || (phase === "deep" && allAgentsDone);
-    if (ready && !analysisCompleteSoundedRef.current) {
+    if (
+      ready &&
+      !analysisCompleteSoundedRef.current &&
+      lastSoundedPhaseRef.current !== phase
+    ) {
       analysisCompleteSoundedRef.current = true;
+      lastSoundedPhaseRef.current = phase;
       playSound("analysis_done");
     }
   }, [awaitingDecision, findingsSurfaced, phase, allAgentsDone, playSound]);

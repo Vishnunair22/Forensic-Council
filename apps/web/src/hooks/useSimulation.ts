@@ -618,7 +618,11 @@ export const useSimulation = ({
                     setStatus((prev) =>
                       prev === "complete" || prev === "error" ? prev : "complete"
                     );
-                    onCompleteRef.current?.();
+                    if (!hasFiredCompleteRef.current) {
+                      hasFiredCompleteRef.current = true;
+                      playSoundRef.current?.("complete");
+                      onCompleteRef.current?.();
+                    }
                   }
                   break;
 

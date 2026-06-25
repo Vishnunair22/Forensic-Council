@@ -1234,6 +1234,25 @@ class ReActLoopEngine:
                         # Honour cooperative cancellation (terminate / shutdown).
                         await trace.fail("cancelled")
                         raise
+                    except (ConnectionError, TimeoutError, OSError) as e:
+                        # Transient/network/timeout errors should not abort the loop.
+                        await trace.fail(str(e))
+                        logger.warning(
+                            "Tool raised a transient error; continuing the ReAct loop",
+                            agent_id=self.agent_id,
+                            tool_name=next_step.tool_name,
+                            error=str(e),
+                            exc_info=False,
+                        )
+                        tool_result = ToolResult(
+                            success=False,
+                            output={},
+                            error=f"{type(e).__name__}: {e}",
+                            tool_name=next_step.tool_name,
+                            unavailable=False,
+                        )
+                        _tool_span.set_attribute("tool_success", False)
+                        _tool_span.set_attribute("tool_exception", type(e).__name__)
                     except Exception as tool_exc:
                         # M-C-1: a tool failure must NOT abort the whole agent
                         # ReAct loop. Synthesize a failed ToolResult so the
