@@ -383,6 +383,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       // or retry button spam before React re-renders with isUploading=true.
       if (investigationInFlightRef.current) return;
       investigationInFlightRef.current = true;
+      autoStartFiredRef.current = true;
 
       arbiterControl.abort();
       resetSimulationHook();
@@ -768,7 +769,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   useEffect(() => {
     if (autoStartFiredRef.current) return;
     if (sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true") return;
-    if (__pendingFileStore.file || autoStartBlocking || isUploading) return;
+    if (__pendingFileStore.file || autoStartBlocking || isUploading || investigationInFlightRef.current) return;
 
     // fc_show_loading guard on reconnect
     if (sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true") {

@@ -17,6 +17,7 @@ import numpy as np
 
 from core.handlers.base import BaseToolHandler
 from core.ml_subprocess import run_ml_tool
+from core.scoring import ConfidenceCalibrator
 from core.structured_logging import get_logger
 from tools.mediainfo_tools import (
     get_av_file_identity as real_get_av_file_identity,
@@ -194,7 +195,10 @@ class VideoHandlers(BaseToolHandler):
         else:
             result.setdefault("available", True)
             result.setdefault("court_defensible", True)
-            result.setdefault("confidence", 0.80 if result.get("flagged_frames") else 0.90)
+            flag_count = len(result.get("flagged_frames") or [])
+            raw_sig = min(1.0, flag_count / 10.0) if flag_count else 0.0
+            conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="opencv_heuristic", base_bias=0.90)
+            result.setdefault("confidence", conf)
 
         await self.agent._record_tool_result("optical_flow_analysis", result)
         return result
@@ -281,7 +285,9 @@ class VideoHandlers(BaseToolHandler):
                 result.setdefault("inconsistency_detected", bool(inconsistencies))
                 result.setdefault("inconsistent_frame_count", len(inconsistencies))
                 result.setdefault("total_frames", stats.get("total_frames"))
-                result.setdefault("confidence", 0.82 if inconsistencies else 0.90)
+                raw_sig = min(1.0, len(inconsistencies) / 10.0) if inconsistencies else 0.0
+                conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="opencv_heuristic", base_bias=0.90)
+                result.setdefault("confidence", conf)
         await self.agent._record_tool_result("frame_consistency_analysis", result)
         return result
 
@@ -656,7 +662,9 @@ class VideoHandlers(BaseToolHandler):
         result.setdefault("audio_codec", first_audio.get("codec"))
         result["forensic_flag_labels"] = labels
         result.setdefault("inconsistency_detected", bool(significant_flags))
-        result.setdefault("confidence", 0.78 if significant_flags else 0.82)
+        raw_sig = min(1.0, len(significant_flags) / 3.0) if significant_flags else 0.0
+        conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="opencv_heuristic", base_bias=0.82)
+        result.setdefault("confidence", conf)
         result.setdefault("court_defensible", bool(result.get("available", True)))
         return result
 
@@ -672,6 +680,8 @@ class VideoHandlers(BaseToolHandler):
         result.setdefault("primary_video_codec", result.get("primary_codec"))
         result.setdefault("duration_seconds", result.get("duration_s"))
         result.setdefault("inconsistency_detected", bool(high_flags))
-        result.setdefault("confidence", 0.76 if high_flags else 0.82)
+        raw_sig = min(1.0, len(high_flags) / 2.0) if high_flags else 0.0
+        conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="opencv_heuristic", base_bias=0.82)
+        result.setdefault("confidence", conf)
         result.setdefault("court_defensible", bool(result.get("available", True)))
         return result

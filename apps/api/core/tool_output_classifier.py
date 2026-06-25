@@ -10,6 +10,7 @@ from typing import Any
 
 from core.manipulation_signal_taxonomy import LLM_DERIVED_CONFIDENCE_CAP
 from core.structured_logging import get_logger
+from core.scoring import ConfidenceCalibrator
 
 logger = get_logger(__name__)
 
@@ -272,28 +273,35 @@ class ToolOutputClassifier:
                     val = _as_unit_float(output.get(key))
                     if val is not None:
                         raw_conf = val
-                        break
             if raw_conf is None:
                 if "detections" in output:
                     detections = output.get("detections") or []
-                    raw_conf = 0.65 if len(detections) > 0 else 0.82
+                    raw_sig = min(1.0, len(detections) / 5.0)
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.82)
                 elif "objects_detected" in output:
-                    raw_conf = 0.65 if len(output.get("objects_detected") or []) > 0 else 0.82
+                    objs = output.get("objects_detected") or []
+                    raw_sig = min(1.0, len(objs) / 5.0)
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.82)
                 elif "weapon_detections" in output:
-                    raw_conf = 0.70 if len(output.get("weapon_detections") or []) > 0 else 0.82
+                    weaps = output.get("weapon_detections") or []
+                    raw_sig = min(1.0, len(weaps) / 3.0)
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="yolo11", base_bias=0.82)
                 elif "detection_count" in output:
-                    raw_conf = 0.70 if int(output.get("detection_count") or 0) > 0 else 0.82
+                    count = int(output.get("detection_count") or 0)
+                    raw_sig = min(1.0, count / 5.0)
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.82)
                 elif "classes_found" in output:
                     classes_found = output.get("classes_found") or []
-                    raw_conf = 0.65 if hasattr(classes_found, "__len__") and len(classes_found) > 0 else 0.82
+                    raw_sig = min(1.0, len(classes_found) / 5.0) if hasattr(classes_found, "__len__") else 0.0
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.82)
                 elif output.get("hash_matches") is True or output.get("hash_match") is True:
                     raw_conf = 1.0
                 elif output.get("hash_matches") is False or output.get("hash_match") is False:
                     raw_conf = 0.30
                 elif output.get("scale_consistent") is True:
-                    raw_conf = 0.85
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(0.0, reliability_tag="opencv_heuristic", base_bias=0.85)
                 elif output.get("scale_consistent") is False:
-                    raw_conf = 0.40
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(1.0, reliability_tag="opencv_heuristic", base_bias=0.40)
                 elif "verdict" in output:
                     v = str(output.get("verdict", "")).upper()
                     if v in (
@@ -306,7 +314,7 @@ class ToolOutputClassifier:
                         "CONTENT_CREDENTIALS_PRESENT",
                         "NO_CONTENT_CREDENTIALS",
                     ):
-                        raw_conf = 0.85
+                        raw_conf = ConfidenceCalibrator.calibrate_heuristic(0.0, reliability_tag="linear_fallback", base_bias=0.85)
                     elif v in (
                         "INCONSISTENT",
                         "SUSPICIOUS",
@@ -314,11 +322,15 @@ class ToolOutputClassifier:
                         "SPLICE_SUSPECTED",
                         "SPLICE_DETECTED",
                     ):
-                        raw_conf = 0.40
+                        raw_conf = ConfidenceCalibrator.calibrate_heuristic(1.0, reliability_tag="linear_fallback", base_bias=0.40)
                     elif v in ("INCONCLUSIVE", "ERROR", "NO_ENF_SIGNAL", "TOO_SHORT"):
-                        raw_conf = 0.50
+                        raw_conf = ConfidenceCalibrator.calibrate_heuristic(0.5, reliability_tag="linear_fallback", base_bias=0.50)
                     elif v == "NOT_APPLICABLE":
                         raw_conf = 0.0
+                elif "anomalies" in output and isinstance(output["anomalies"], list):
+                    num_anomalies = len(output["anomalies"])
+                    raw_sig = min(1.0, num_anomalies / 4.0)
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.40)
                 elif output.get("ai_probability") is not None:
                     raw_conf = round(max(0.10, 1.0 - float(output["ai_probability"])), 3)
                 elif output.get("synthetic_probability") is not None:
@@ -330,11 +342,11 @@ class ToolOutputClassifier:
                     # runs only when the structured parse above yielded nothing.
                     v = str(output.get("gemini_verdict", "")).upper()
                     if v in ("AUTHENTIC", "LIKELY_AUTHENTIC", "CLEAN"):
-                        raw_conf = 0.85
+                        raw_conf = ConfidenceCalibrator.calibrate_heuristic(0.0, reliability_tag="linear_fallback", base_bias=0.85)
                     elif v in ("SUSPICIOUS", "MANIPULATED", "ALTERED"):
-                        raw_conf = 0.40
+                        raw_conf = ConfidenceCalibrator.calibrate_heuristic(1.0, reliability_tag="linear_fallback", base_bias=0.40)
                     else:
-                        raw_conf = 0.50
+                        raw_conf = ConfidenceCalibrator.calibrate_heuristic(0.5, reliability_tag="linear_fallback", base_bias=0.50)
                 elif output.get("has_text") is not None or "word_count" in output:
                     # OCR / document text-extraction shape (extract_text_from_image):
                     # a context tool, not a forensic verdict. Confidence reflects a
@@ -350,12 +362,12 @@ class ToolOutputClassifier:
                     output.get("anomaly_detected") is True
                     or output.get("inconsistency_detected") is True
                 ):
-                    raw_conf = 0.40
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(1.0, reliability_tag="linear_fallback", base_bias=0.40)
                 elif (
                     output.get("anomaly_detected") is False
                     or output.get("inconsistency_detected") is False
                 ):
-                    raw_conf = 0.85
+                    raw_conf = ConfidenceCalibrator.calibrate_heuristic(0.0, reliability_tag="linear_fallback", base_bias=0.85)
                 elif output.get("header_valid") is not None:
                     anomalies = output.get("anomalies", [])
                     raw_conf = 0.85 if isinstance(anomalies, list) and len(anomalies) == 0 else 0.40

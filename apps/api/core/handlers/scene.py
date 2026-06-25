@@ -19,6 +19,7 @@ from PIL import Image
 
 from core.handlers.base import BaseToolHandler
 from core.ml_subprocess import run_ml_tool
+from core.scoring import ConfidenceCalibrator
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -243,7 +244,11 @@ class SceneHandlers(BaseToolHandler):
                 "layout_anomalies": anomalies,
                 "layout_anomaly_count": len(anomalies),
                 "evidence_verdict": "SUSPICIOUS" if anomalies else "NEGATIVE",
-                "confidence": 0.76 if anomalies else 0.70,
+                "confidence": ConfidenceCalibrator.calibrate_heuristic(
+                    min(1.0, len(anomalies) / 3.0) if anomalies else 0.0,
+                    reliability_tag="opencv_heuristic",
+                    base_bias=0.70
+                ),
                 "court_defensible": True,
                 "backend": "opencv-screenshot-layout-heuristics",
             }
@@ -429,7 +434,11 @@ class SceneHandlers(BaseToolHandler):
                     "gemini_cross_validation": gemini_validation,
                     "backend": model.ckpt_path if hasattr(model, "ckpt_path") else "object-detector",
                     "available": True,
-                    "confidence": 0.90 if detections else 0.70,
+                    "confidence": ConfidenceCalibrator.calibrate_heuristic(
+                        max([d.get("confidence", 0.0) for d in detections]) if detections else 0.0,
+                        reliability_tag="yolo11",
+                        base_bias=0.70
+                    ),
                     "court_defensible": True,
                 }
                 await self.agent._record_tool_result("object_detection", res)
@@ -514,7 +523,11 @@ class SceneHandlers(BaseToolHandler):
                 "backend": "opencv-contour-fallback",
                 "available": True,
                 "degraded": True,
-                "confidence": 0.55 if detections else 0.35,
+                "confidence": ConfidenceCalibrator.calibrate_heuristic(
+                    max([d.get("confidence", 0.0) for d in detections]) if detections else 0.0,
+                    reliability_tag="opencv_heuristic",
+                    base_bias=0.35
+                ),
                 "court_defensible": True,
                 "fallback_reason": f"Primary object detector unavailable: {reason}",
             }
@@ -739,7 +752,11 @@ class SceneHandlers(BaseToolHandler):
                 "anomaly_count": len(anomalies),
                 "objects_checked": len(detections),
                 "scale_consistent": len(anomalies) == 0,
-                "confidence": 0.65 if detections else 0.40,
+                "confidence": ConfidenceCalibrator.calibrate_heuristic(
+                    min(1.0, len(anomalies) / 2.0) if anomalies else 0.0,
+                    reliability_tag="opencv_heuristic",
+                    base_bias=0.65
+                ),
                 "available": True,
                 "court_defensible": True,
                 "backend": "heuristic-bbox-area",
@@ -859,7 +876,11 @@ class SceneHandlers(BaseToolHandler):
             "compositing_candidates", 1 if result.get("inconsistency_detected") else 0
         )
         result.setdefault("available", True)
-        result.setdefault("confidence", 0.55 if result.get("inconsistency_detected") else 0.70)
+        result.setdefault("confidence", ConfidenceCalibrator.calibrate_heuristic(
+            min(1.0, result.get("shadow_angle_std_deg", 0.0) / 60.0) if result.get("inconsistency_detected") else 0.0,
+            reliability_tag="opencv_heuristic",
+            base_bias=0.55
+        ))
         return result
 
     @staticmethod
@@ -891,7 +912,11 @@ class SceneHandlers(BaseToolHandler):
         return {
             "lighting_consistent": std_deg < 30.0,
             "shadow_angle_std_deg": round(std_deg, 2),
-            "confidence": 0.55,
+            "confidence": ConfidenceCalibrator.calibrate_heuristic(
+                min(1.0, std_deg / 60.0),
+                reliability_tag="opencv_heuristic",
+                base_bias=0.55
+            ),
             "available": True,
             "court_defensible": False,
             "backend": "heuristic-houghlines",
@@ -984,7 +1009,11 @@ class SceneHandlers(BaseToolHandler):
             "contextual_anomalies": anomalies,
             "average_histogram_correlation": round(avg_corr, 4),
             "grid_cells_analyzed": rows * cols,
-            "confidence": 0.45,
+            "confidence": ConfidenceCalibrator.calibrate_heuristic(
+                incongruence_score,
+                reliability_tag="opencv_heuristic",
+                base_bias=0.45
+            ),
             "available": True,
             "court_defensible": False,
             "backend": "heuristic-spatial-histogram-correlation",

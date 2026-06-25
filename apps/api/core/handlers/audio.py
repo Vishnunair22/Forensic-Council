@@ -32,6 +32,7 @@ import soundfile as sf
 
 from core.handlers.base import BaseToolHandler
 from core.ml_subprocess import run_ml_tool
+from core.scoring import ConfidenceCalibrator
 from core.structured_logging import get_logger
 from tools.audio import (
     anti_spoofing_detect as real_anti_spoofing_detect,
@@ -279,7 +280,11 @@ class AudioHandlers(BaseToolHandler):
         else:
             result.setdefault("available", True)
             result.setdefault("court_defensible", True)
-            result.setdefault("confidence", 0.85)
+            result.setdefault("confidence", ConfidenceCalibrator.calibrate_heuristic(
+                min(1.0, result.get("estimated_speakers", 1) / 3.0),
+                reliability_tag="speechbrain",
+                base_bias=0.85
+            ))
         if result.get("analysis_source") == "librosa_spectral_fallback":
             result.setdefault("available", True)
             result.setdefault("degraded", True)
@@ -392,7 +397,11 @@ class AudioHandlers(BaseToolHandler):
         result.setdefault("shift_detected", result.get("consistent") is False or bool(shift_points))
         result.setdefault("available", True)
         result.setdefault("court_defensible", True)
-        result.setdefault("confidence", 0.70 if result.get("shift_detected") else 0.85)
+        result.setdefault("confidence", ConfidenceCalibrator.calibrate_heuristic(
+            min(1.0, len(result.get("shift_points") or []) / 5.0) if result.get("shift_detected") else 0.0,
+            reliability_tag="audio_heuristic",
+            base_bias=0.85
+        ))
         await self.agent._record_tool_result("background_noise_analysis", result)
         return result
 
@@ -428,13 +437,17 @@ class AudioHandlers(BaseToolHandler):
                 result.setdefault("codec", codec_chain[0])
         result.setdefault("available", True)
         result.setdefault("court_defensible", True)
-        if "confidence" not in result:
-            event_confidences = [
-                float(event.get("confidence", 0.0) or 0.0)
-                for event in events or []
-                if isinstance(event, dict)
-            ]
-            result["confidence"] = max(event_confidences) if event_confidences else 0.85
+        event_confidences = [
+            float(event.get("confidence", 0.0) or 0.0)
+            for event in events or []
+            if isinstance(event, dict)
+        ]
+        base_conf = max(event_confidences) if event_confidences else 0.85
+        result["confidence"] = ConfidenceCalibrator.calibrate_heuristic(
+            min(1.0, len(events) / 3.0) if events else 0.0,
+            reliability_tag="audio_heuristic",
+            base_bias=base_conf
+        )
         await self.agent._record_tool_result("codec_fingerprinting", result)
         return result
 
@@ -493,7 +506,11 @@ class AudioHandlers(BaseToolHandler):
         if not result.get("error") and result.get("available") is not False:
             result.setdefault("available", True)
             result.setdefault("court_defensible", True)
-            result.setdefault("confidence", 0.82 if result.get("av_sync") == "IN_SYNC" else 0.55)
+            result.setdefault("confidence", ConfidenceCalibrator.calibrate_heuristic(
+                1.0 if result.get("av_sync") != "IN_SYNC" else 0.0,
+                reliability_tag="audio_heuristic",
+                base_bias=0.82
+            ))
         await self.agent._record_tool_result("audio_visual_sync", result)
         return result
 

@@ -103,6 +103,7 @@ def validate_rolling_shutter(video_path: str, sample_seconds: float = 5.0) -> di
         "mean_skew_per_frame": round(float(skew_arr.mean()), 5),
         "skew_std": round(float(skew_arr.std()), 5),
         "frames_analyzed": len(frames),
+        "confidence": round(skew_consistency, 3),
         "court_defensible": True,
         "available": True,
     }

@@ -240,6 +240,7 @@ class Agent5Metadata(ForensicAgent):
             return tasks
 
         core_tasks = [
+            "Run read_shared_image_context to incorporate visual AI-generation signals from Agent 1",
             "Run file_hash_verify against ingestion hash",
             "Run exif_extract to capture all metadata fields",
             "Run file_structure_analysis for binary anomalies in headers and trailers",

@@ -13,6 +13,7 @@ from typing import Any
 from PIL import ExifTags, Image
 
 from core.structured_logging import get_logger
+from core.scoring import ConfidenceCalibrator
 
 logger = get_logger(__name__)
 
@@ -504,7 +505,7 @@ async def steganography_scan(*, artifact: Any = None, file_path: str | None = No
                 "correlation_anomaly": round(correlation_anomaly, 4),
             },
             "total_lsb_bits_analyzed": total_bits,
-            "confidence": 0.73 if stego_suspected else 0.75,
+            "confidence": ConfidenceCalibrator.calibrate_heuristic(min(1.0, stego_score * 3.0), reliability_tag="scipy_spectral", base_bias=0.60) if stego_suspected else 0.75,
             "court_defensible": True,
             "verdict": "SUSPICIOUS" if stego_suspected else "CLEAN",
         }
@@ -563,6 +564,9 @@ async def file_structure_analysis(*, artifact: Any = None, file_path: str | None
         base["format_detected"] = "PDF"
     else:
         base["format_detected"] = "unknown"
+    
+    raw_sig = min(1.0, len(base["anomalies"]) / 4.0) if base["anomalies"] else 0.0
+    base["confidence"] = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.85) if not base["anomalies"] else ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.50)
     base["verdict"] = "REVIEW" if base["anomalies"] else "CLEAN"
     return base
 
@@ -717,7 +721,7 @@ async def timestamp_analysis(*, artifact: Any = None, file_path: str | None = No
         "software_edit_flag": bool(software_flag),
         "consistent": not bool(inconsistencies),
         "verdict": "SUSPICIOUS" if inconsistencies else "CLEAN",
-        "confidence": 0.80,
+        "confidence": ConfidenceCalibrator.calibrate_heuristic(min(1.0, len(inconsistencies) / 4.0), reliability_tag="linear_fallback", base_bias=0.50) if inconsistencies else 0.85,
         "court_defensible": True,
     }
 
@@ -773,6 +777,7 @@ async def hex_signature_scan(*, artifact: Any = None, file_path: str | None = No
         "png_software_field": png_software,
         "editing_software_detected": bool(signatures),
         "verdict": "CLEAN" if not signatures else "REVIEW",
+        "confidence": ConfidenceCalibrator.calibrate_heuristic(min(1.0, len(signatures) / 3.0), reliability_tag="linear_fallback", base_bias=0.50) if signatures else 0.85,
     }
 
 
