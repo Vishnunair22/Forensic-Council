@@ -4,11 +4,6 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { logApiTargetDiagnostics } from "@/lib/api/utils";
 
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || !("matchMedia" in window)) return true;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 export function RouteExperience() {
   const pathname = usePathname();
   // F-H-3: track whether the latest navigation was a popstate (browser back/

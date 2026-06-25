@@ -209,6 +209,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const [arbiterDeliberating, setArbiterDeliberating] = useState(false);
   const analysisCompleteSoundedRef = useRef(false);
   const lastSoundedPhaseRef = useRef<"initial" | "deep" | null>(null);
+  const arbiterPollHasSpokenRef = useRef(false);
   const autoStartFiredRef = useRef(false);
   const investigationInFlightRef = useRef(false);
   const lastSessionIdRef = useRef<string | null>(null);
@@ -361,9 +362,12 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     resetSimulationHook();
   }, [resetSimulationHook]);
 
-  // Pipe live WebSocket/resume arbiter text into the overlay while it is visible
+  // Pipe live WebSocket/resume arbiter text into the overlay while it is visible.
+  // Polling messages (waitForFinalReport) take priority over WS thinking text
+  // since the poll text is specifically formatted for display.
   useEffect(() => {
     if (!arbiterDeliberating || !arbiterThinking) return;
+    if (arbiterPollHasSpokenRef.current) return;
     setArbiterLiveText(arbiterThinking);
   }, [arbiterDeliberating, arbiterThinking]);
 
@@ -892,9 +896,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     // nothing ever assigned abortController, so "aborting the arbiter wait"
     // only actually happened on component unmount via the local ref cleanup.
     arbiterControl.abortController = arbiterAbortControllerRef.current;
+    const onPollMessage = (msg: string) => {
+      arbiterPollHasSpokenRef.current = true;
+      setArbiterLiveText(msg);
+    };
     const ok = await waitForFinalReport(
       sid,
-      setArbiterLiveText,
+      onPollMessage,
       ARBITER_WAIT_MAX_MS,
       arbiterAbortControllerRef.current.signal,
     );
@@ -936,6 +944,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     arbiterControl.abort();
     setIsNavigating(true);
     setArbiterDeliberating(true);
+    arbiterPollHasSpokenRef.current = false;
     setArbiterLiveText(UI_STRINGS.COMPILING_FINDINGS);
     const arbiterStartTime = Date.now();
     let navigationStarted = false;
@@ -1004,7 +1013,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       investigationInFlightRef.current = false;
       resumeInFlightRef.current = false;
     }
-  }, [playSound, resumeInvestigation, clearCompletedAgents, clearPipelineThinking, setSimulationPhase]);
+  }, [playSound, resumeInvestigation, clearCompletedAgents, clearPipelineThinking, setSimulationPhase, restoreSimulationState]);
 
   const retryWsConnection = useCallback(() => {
     const sid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
@@ -1060,6 +1069,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     }
     setIsNavigating(true);
     setArbiterDeliberating(true);
+    arbiterPollHasSpokenRef.current = false;
     setArbiterLiveText(UI_STRINGS.FINAL_SYNTHESIS);
     const arbiterStartTime = Date.now();
     let navigationStarted = false;

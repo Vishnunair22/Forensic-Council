@@ -185,15 +185,12 @@ export function useResult(initialSessionId?: string) {
       }
     })();
 
-    // On hard refresh, clear stale one-shot flags and cached agent snapshots
-    // that would flash stale data before the fresh report arrives.
+    // On hard refresh, clear stale one-shot flags only — agent snapshots stay
+    // so the timeline populates immediately. They're cleaned up once the fresh
+    // report arrives and buildAgentTimelineFromReport succeeds.
     if (isHardRefresh && sid) {
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`);
       sessionOnlyStorage.removeItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`);
-      // Clear stale streaming agent snapshots from localStorage —
-      // the fresh report's per_agent_metrics will rebuild the timeline.
-      storage.removeItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`);
-      storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
       storage.removeItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`);
     }
 
@@ -353,6 +350,15 @@ export function useResult(initialSessionId?: string) {
     const fromReport = buildAgentTimelineFromReport(finalReportData);
     if (fromReport.length > 0) {
       setAgentTimeline(fromReport);
+      // Stale streaming agent snapshots from before a hard refresh are no
+      // longer needed now that the authoritative report data has populated
+      // the timeline. Clean them up to prevent stale fallback display on
+      // subsequent navigations within the same tab session.
+      const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
+      if (sid) {
+        storage.removeItem(`${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`);
+        storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
+      }
     }
     // Reveal once the min-overlay window has elapsed OR the report was already
     // confirmed ready before navigation (Accept Baseline / View Results). Without

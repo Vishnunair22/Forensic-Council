@@ -60,7 +60,9 @@ export function sanitizeLiveText(text: string | null | undefined): string {
   if (!text) return "";
   return cleanFindingText(text)
     .replace(/^(?:Thinking|THOUGHT|ACTION|OBSERVATION|REASONING)\s*:\s*/i, "")
-    .replace(/\b([a-z0-9]+(?:_[a-z0-9]+)+)\b/gi, (m) => m.replace(/_/g, " "))
+    // Only humanize snake_case tokens that look like forensic tool names,
+    // not generic identifiers (agent_id, session_id, sha256_hash, etc.)
+    .replace(/\b([a-z0-9]+(?:_[a-z0-9]+)+)(?:_analysis|_detection|_check|_scan|_verify|_extract|_detect|_analyze|_compare)\b/gi, (m) => m.replace(/_/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }

@@ -83,7 +83,7 @@ export function VerdictSection({
 
           <div className="text-right shrink-0 hidden sm:flex flex-col items-end justify-center">
             <div className="text-6xl font-mono font-extrabold leading-none tabular-nums" style={{ color: theme.color }}>
-              {confPct}%
+              {confPct > 0 ? `${confPct}%` : "—"}
             </div>
             <div className="text-xs fc-text-muted mt-2 border-t border-white/10 pt-1">
               Confidence

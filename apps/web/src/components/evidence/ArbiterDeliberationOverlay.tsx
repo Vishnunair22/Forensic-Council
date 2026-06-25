@@ -19,8 +19,6 @@ interface ArbiterDeliberationOverlayProps {
 // overlay reads as "working"; the moment a real step message streams in we
 // pin it verbatim and stop cycling.
 const GENERIC_PLACEHOLDERS = new Set([
-  "council deliberating on evidence",
-  "council deliberating",
   "decrypting forensic ledger",
   "initializing investigation",
   "compiling agent findings into the final report",
