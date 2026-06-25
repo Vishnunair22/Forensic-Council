@@ -778,8 +778,12 @@ _TOOL_ALIAS_MAP: dict[str, str] = {
     "timestamp_check": "timestamp_analysis",
     "device_make_model": "device_fingerprint_db",
     "exif_provenance_chain": "provenance_chain_verify",
+    "exif_provenance_check": "provenance_chain_verify",
     "exif_fingerprint": "exif_extract",
+    "exif_field_count_check": "exif_extract",
+    "exif_anomaly_check": "metadata_anomaly_score",
     "gps_coordinates": "gps_timezone_validate",
+    "gps_coordinate_check": "gps_timezone_validate",
     "metadata_provenance": "metadata_anomaly_score",
     "c2pa_verify": "provenance_chain_verify",
     "c2pa_check": "provenance_chain_verify",
@@ -980,7 +984,7 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "FORBIDDEN in agent_brief: 'analysis complete', 'consistent with authenticity', "
         "'no anomalies detected', 'warrants further review' without specifying what.\n\n"
         "FIELD 3 — key_findings\n"
-        "Exactly 3–5 items. Each item covers ONE tool and must carry a specific metric.\n"
+        "Up to 5 items (or empty if no findings apply). Each item covers ONE tool and must carry a specific metric.\n"
         "Format: [What the tool found, with the key metric] — [tool_name] ([confidence]%)\n"
         "Rules:\n"
         "  • Lead with the highest-impact finding (strongest positive signal first; if all clean, "

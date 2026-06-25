@@ -919,15 +919,21 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       // resolve a true wedge to an actionable error instead of a stuck overlay.
       sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_REPORT_READY}:${sid}`, "1");
       sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_ARBITER_TRANSITIONING}:${sid}`, "1");
+      // No data-fc-loading bridge: the route's loading.tsx (a solid branded dark
+      // cover) is the Suspense fallback that fills the navigation, and the App Router
+      // transition holds the evidence arbiter overlay until it's ready. The old
+      // body::before bridge sat ABOVE the app's stacking context and obscured BOTH
+      // the loading cover and the result overlay with an empty dark blur — the
+      // "blank before the result loads". Branded covers now hand off seamlessly.
+      router.push(`/result/${sid}`);
+      return true;
+    } else {
+      // Arbiter wait timed out — release the navigation lock so the user
+      // can take action (new upload, retry). Don't navigate into a broken result page.
+      setIsNavigating(false);
+      setArbiterLiveText("Report generation timed out. Please try again.");
+      return false;
     }
-    // No data-fc-loading bridge: the route's loading.tsx (a solid branded dark
-    // cover) is the Suspense fallback that fills the navigation, and the App Router
-    // transition holds the evidence arbiter overlay until it's ready. The old
-    // body::before bridge sat ABOVE the app's stacking context and obscured BOTH
-    // the loading cover and the result overlay with an empty dark blur — the
-    // "blank before the result loads". Branded covers now hand off seamlessly.
-    router.push(`/result/${sid}`);
-    return true;
   }, [router]);
 
   const handleAcceptAnalysis = useCallback(async () => {

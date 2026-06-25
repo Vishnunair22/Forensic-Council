@@ -191,7 +191,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 )
                 # The worker may still be warming up ML models (~2 min for 31
                 # tools). Retry every 15s for up to 5 min before giving up.
-                import asyncio
                 for attempt in range(1, 21):
                     await asyncio.sleep(15)
                     alive = await rc.get("forensic:worker:heartbeat")

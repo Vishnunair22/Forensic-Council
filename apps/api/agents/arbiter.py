@@ -393,7 +393,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 for _res in active_results.values()
                 for _f in _res.get("findings", [])
             )
-            if visual_context is not None and _vc_clean and _int_pos and _strong < 2 and not _trufor_detected:
+            _vc_is_remote = (
+                visual_context is not None
+                and getattr(visual_context, "external_llm_used", False)
+                and getattr(visual_context, "source", "") != "local_ensemble"
+            )
+            if _vc_is_remote and _vc_clean and _int_pos and _strong < 2 and not _trufor_detected:
                 for _tool, _f in _int_pos:
                     _f["evidence_verdict"] = "INCONCLUSIVE"
                     # A signal held inconclusive as a benign, uncorroborated artifact
@@ -557,6 +562,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     _vsig = {
                         "verdict": _holistic_verdict,
                         "court_defensible": _is_remote_vision,
+                        "confidence": 0.0,
                         "anomalies": list(_sec.get("ai_generation_signals") or []),
                     }
                 elif aid == "Agent3":
@@ -565,12 +571,14 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                         if _holistic_verdict in ("AI_GENERATED", "LIKELY_MANIPULATED")
                         else "",
                         "court_defensible": _is_remote_vision,
+                        "confidence": 0.0,
                         "anomalies": list(_sec.get("scene_inconsistencies") or []),
                     }
                 else:  # Agent5
                     _vsig = {
                         "verdict": "",
                         "court_defensible": _is_remote_vision,
+                        "confidence": 0.0,
                         "anomalies": list(_sec.get("metadata_contradictions") or []),
                     }
 
@@ -1258,6 +1266,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX
             and contested_count == 0
         ):
+            # NEW: don't assert AUTHENTIC when a high-confidence AI-gen tool fired
+            # and was merely held inconclusive due to no remote corroboration.
+            if getattr(self, "_uncorroborated_ai_gen_local", False):
+                return "INCONCLUSIVE"
             return "AUTHENTIC"
 
         elif (

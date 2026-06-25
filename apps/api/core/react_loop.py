@@ -718,9 +718,24 @@ TOOL_TIMEOUT_POLICY = {
     "noiseprint_cluster": 300.0,
     "noise_fingerprint": 240.0,
     "neural_splicing": 180.0,
+    "neural_copy_move": 180.0,
+    "anomaly_tracer": 150.0,
+    "diffusion_artifact_detector": 150.0,
+    "voice_clone_detect": 150.0,
+    "anti_spoofing_detect": 120.0,
+    "voice_clone_deep_ensemble": 180.0,
+    "anti_spoofing_deep_ensemble": 180.0,
+    "gemini_deep_forensic": 90.0,       # has its own internal budget; 90s is the outer guard
     "ela_full_image": 120.0,
     "object_detection": 120.0,
+    "yolo_object_detection": 120.0,
     "vector_contraband_search": 120.0,
+    "f3_net_frequency": 120.0,
+    "face_swap_detect": 90.0,
+    "optical_flow_analyze": 90.0,
+    "rolling_shutter_validation": 90.0,
+    "interframe_forgery_detector": 90.0,
+    "speaker_diarize": 90.0,
 }
 
 
@@ -1234,7 +1249,25 @@ class ReActLoopEngine:
                         # Honour cooperative cancellation (terminate / shutdown).
                         await trace.fail("cancelled")
                         raise
-                    except (ConnectionError, TimeoutError, OSError) as e:
+                    except TimeoutError:
+                        # asyncio.wait_for raises TimeoutError (Python 3.11+) with empty message.
+                        # Build a ToolResult whose error field contains "timeout" so the normalizer
+                        # correctly marks the finding as TIMEOUT rather than a generic ERROR.
+                        await trace.fail(f"timeout after {tool_timeout:.0f}s")
+                        logger.warning(
+                            "Tool timed out",
+                            agent_id=self.agent_id,
+                            tool_name=next_step.tool_name,
+                            timeout_s=tool_timeout,
+                        )
+                        tool_result = ToolResult(
+                            success=False,
+                            output={"status": "TIMEOUT", "error": f"timeout after {tool_timeout:.0f}s"},
+                            error=f"timeout after {tool_timeout:.0f}s",
+                            tool_name=next_step.tool_name,
+                            unavailable=False,
+                        )
+                    except (ConnectionError, OSError) as e:
                         # Transient/network/timeout errors should not abort the loop.
                         await trace.fail(str(e))
                         logger.warning(

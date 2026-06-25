@@ -248,7 +248,7 @@ def deliberate_findings(
     vc_remote = bool(
         visual_context is not None
         and getattr(visual_context, "external_llm_used", False)
-        and getattr(visual_context, "source", "") == "llm_assisted"
+        and getattr(visual_context, "source", "") not in ("local_ensemble", "none", "")
     )
     vc_conf = float(getattr(visual_context, "confidence", 0.0) or 0.0) if visual_context else 0.0
     vc_strong_vote = vc_remote and has_vc_integrity_issue and vc_conf >= 0.7
@@ -436,6 +436,12 @@ def deliberate_findings(
         sum(_supporting_confs) / len(_supporting_confs) if _supporting_confs else 0.0
     )
 
+    if len(_supporting_confs) >= 3:
+        _sorted_confs = sorted(_supporting_confs)
+        _trim = max(1, len(_sorted_confs) // 5)          # trim top/bottom 20%
+        _trimmed = _sorted_confs[_trim:-_trim]
+        evidence_strength_score = sum(_trimmed) / len(_trimmed)
+
     # 4. visual_context_support_score
     # Honesty fix: credit the visual context ONLY when it AGREES with the final
     # verdict's direction. Corroboration = both read clean OR both flag a problem;
@@ -494,12 +500,12 @@ def deliberate_findings(
         weak_single_signal_penalty *= _penalty_scale
 
     raw_conf = (
-        0.15
-        + 0.12 * important_tool_completion_rate
-        + 0.10 * cross_agent_agreement_score
+        0.20
+        + 0.15 * important_tool_completion_rate
+        + 0.12 * cross_agent_agreement_score
         + 0.10 * high_weight_evidence_score
         + _vc_coeff * visual_context_support_score
-        + 0.40 * evidence_strength_score
+        + 0.25 * evidence_strength_score
         - 0.20 * critical_tool_failure_rate
         - 0.15 * unresolved_conflict_score
         - 0.10 * weak_single_signal_penalty
