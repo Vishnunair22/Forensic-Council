@@ -117,6 +117,7 @@ class AgentMetricsDTO(BaseModel):
     confidence_score: float = 0.0
     finding_count: int = 0
     skipped: bool = False
+    completed_at: str | None = None
 
 
 class ReportDTO(BaseModel):

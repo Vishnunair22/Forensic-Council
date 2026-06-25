@@ -26,8 +26,7 @@ import { ResultStateView } from "./ResultStateView";
 import { EvidenceHeader } from "./EvidenceHeader";
 import { VerdictSection } from "./VerdictSection";
 import { EvidenceContextCard } from "./EvidenceContextCard";
-import { ExecutiveSummary } from "./ExecutiveSummary";
-import { KeyFindings } from "./KeyFindings";
+import { IntelligenceBrief } from "./IntelligenceBrief";
 import { ReportIntegrity } from "./ReportIntegrity";
 import { PageNavigation } from "./PageNavigation";
 import { DegradationBanner } from "./DegradationBanner";
@@ -284,26 +283,18 @@ export function ResultLayout({ initialSessionId }: ResultLayoutProps = {}) {
                 </motion.div>
               )}
 
-              {/* 4. Executive Summary */}
-              {rs.report.executive_summary && (
-                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                  <ExecutiveSummary
-                    summary={rs.report.executive_summary}
-                    reliabilityNote={rs.report.reliability_note}
-                    isDeepPhase={rs.isDeepPhase}
-                  />
-                </motion.div>
-              )}
-
-              {/* 5. Key Findings */}
-              {keyFindings.length > 0 && (
-                <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
-                  <KeyFindings
-                    findings={keyFindings}
-                    verdictColor={getVerdictConfig(rs.report.overall_verdict ?? "").color}
-                  />
-                </motion.div>
-              )}
+              {/* 4. Intelligence Brief (combines summary, findings, and metadata notes) */}
+              <motion.div variants={prefersReduced ? EMPTY_VARIANTS : REPORT_ITEM_VARIANTS}>
+                <IntelligenceBrief
+                  verdictSentence={rs.report.executive_summary || rs.report.verdict_sentence}
+                  keyFindings={keyFindings}
+                  reliabilityNote={rs.report.reliability_note}
+                  uncertaintyStatement={rs.report.uncertainty_statement}
+                  coverageNote={rs.report.analysis_coverage_note}
+                  skippedAgents={rs.report.skipped_agents}
+                  isDeepPhase={rs.isDeepPhase}
+                />
+              </motion.div>
 
               {/* 6. Evidence context — "what this shows", once, above the agents */}
               {rs.report.evidence_summary && (

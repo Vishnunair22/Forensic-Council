@@ -91,6 +91,7 @@ class AgentMetrics(BaseModel):
     finding_count: int = 0
     deep_finding_count: int = 0  # Number of deep-phase findings
     skipped: bool = False  # True when file type not applicable
+    completed_at: str | None = None
 
 
 class ForensicReport(BaseModel):

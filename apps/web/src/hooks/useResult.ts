@@ -107,6 +107,7 @@ function buildAgentTimelineFromReport(report: ReportDTO): AgentUpdate[] {
         message: (s.message as string) ?? "",
         confidence: (s.confidence as number) ?? 0,
         findings_count: (s.findings_count as number) ?? 0,
+        completed_at: s.completed_at as string | undefined,
       }));
   }
   // Authoritative fallback: derive from per_agent_metrics, which IS part of the
@@ -130,6 +131,7 @@ function buildAgentTimelineFromReport(report: ReportDTO): AgentUpdate[] {
           message: "",
           confidence: m.confidence_score ?? 0,
           findings_count: m.finding_count ?? 0,
+          completed_at: m.completed_at as string | undefined,
           ...(verdict ? { agent_verdict: verdict as AgentUpdate["agent_verdict"] } : {}),
         };
       });

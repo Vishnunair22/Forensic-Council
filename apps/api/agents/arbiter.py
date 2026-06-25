@@ -1120,9 +1120,21 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return merged
 
     def _compute_agent_metrics(self, aid: str, findings: list[dict], skipped: bool) -> AgentMetrics:
+        from datetime import datetime, UTC
         name = AGENT_NAMES.get(aid, aid)
+        
+        latest_time = datetime.now(UTC).isoformat()
+        if findings:
+            times = []
+            for f in findings:
+                t = f.get("created_at") or (f.get("metadata") or {}).get("created_at")
+                if t:
+                    times.append(str(t))
+            if times:
+                latest_time = max(times)
+                
         if skipped:
-            return AgentMetrics(agent_id=aid, agent_name=name, skipped=True)
+            return AgentMetrics(agent_id=aid, agent_name=name, skipped=True, completed_at=latest_time)
         real = [
             f
             for f in findings
@@ -1172,6 +1184,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             confidence_score=avg_conf,
             finding_count=len(real),
             deep_finding_count=deep,
+            skipped=False,
+            completed_at=latest_time,
         )
 
     def _calculate_weighted_stats(self, active_metrics: list[dict]) -> tuple[float, float]:
