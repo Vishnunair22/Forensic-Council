@@ -82,6 +82,8 @@ dependencies = [
     "odfpy>=1.4",
     # RTF text extraction (local fallback when Gemini unavailable)
     "striprtf>=0.0.28",
+    # PDF text extraction (used by ai_text_detector for document analysis)
+    "pypdf>=3.0",
 ]
 
 [project.optional-dependencies]

@@ -1152,7 +1152,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [showLoadingOverlay, status, wsConnectionError]);
+  }, [showLoadingOverlay, status, wsConnectionError, agentUpdates]);
 
   useEffect(() => {
     if (showLoadingOverlay && !analysisStreamReady) {

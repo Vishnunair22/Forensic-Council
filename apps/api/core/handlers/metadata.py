@@ -669,9 +669,13 @@ class MetadataHandlers(BaseToolHandler):
         # If the worker failed because the text is too short or file could not be read, 
         # ensure it degrades gracefully without raising
         if result.get("error") or not result.get("available"):
-            result.setdefault("available", False)
-            result.setdefault("ai_text_probability", 0.0)
-            result.setdefault("is_ai_suspected", False)
+            result["available"] = False
+            # Use direct assignment — setdefault won't replace an existing None
+            # value, leaving downstream code to misinterpret it.
+            if result.get("ai_text_probability") is None:
+                result["ai_text_probability"] = 0.0
+            if result.get("is_ai_suspected") is None:
+                result["is_ai_suspected"] = False
             result.setdefault("degraded", True)
             result.setdefault("fallback_reason", f"ai_text_detector failed or inapplicable: {result.get('error') or result.get('reason') or 'unavailable'}")
 

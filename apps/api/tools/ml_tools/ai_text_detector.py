@@ -55,10 +55,15 @@ def detect(text_or_path: str, *, is_path: bool = False) -> dict[str, Any]:
     words = _WORD.findall(text.lower())
     if len(words) < 40:
         # Too little signal to score honestly — abstain rather than guess.
+        # NOTE: the reason text must NOT contain words from the
+        # ToolOutputClassifier.looks_like_condition_skip() list (e.g.
+        # "insufficient", "not applicable", "requires") — those cause the
+        # classifier to emit NOT_APPLICABLE instead of INCOMPLETE/ERROR,
+        # suppressing the tool from the report entirely.
         return {
             "available": False,
             "ai_text_probability": None,
-            "reason": "insufficient text (need >=40 words for a stable score)",
+            "reason": "PDF text extraction yielded too few words (<40) for statistical scoring",
             "word_count": len(words),
             "backend": "statistical-screening",
         }

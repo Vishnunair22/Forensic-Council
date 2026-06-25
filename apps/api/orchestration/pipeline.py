@@ -604,7 +604,12 @@ class ForensicCouncilPipeline:
         # idempotent (a Redis/hash cache hit is a cheap no-op) and guarantees every
         # agent starts warm instead of racing Agent 1. Best-effort: never block the
         # investigation if it fails — agents fall back to the store/local path.
-        if (self._evidence_mime or "").startswith("image/"):
+        _preflight_mimes = ("image/", "audio/", "video/", "application/pdf",
+                            "text/", "application/msword",
+                            "application/vnd.openxmlformats",
+                            "application/vnd.oasis.opendocument",
+                            "application/rtf")
+        if (self._evidence_mime or "").startswith(_preflight_mimes):
             try:
                 from core.visual_context_store import create_visual_context_preflight
 
