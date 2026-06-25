@@ -1,14 +1,10 @@
+import sys
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
 from core.evidence import EvidenceArtifact
 
-try:
-    import easyocr  # noqa: F401
-    _HAS_EASYOCR = True
-except ImportError:
-    _HAS_EASYOCR = False
 from tools.ocr_tools import (
     _build_summary,
     _extract_text_easyocr_sync,
@@ -39,14 +35,16 @@ class TestOCRTools:
         with patch("builtins.open", mock_open(read_data=b"not a pdf")):
             assert _is_pdf("dummy.txt") is False
 
-    @pytest.mark.skipif(not _HAS_EASYOCR, reason="easyocr not installed")
     def test_get_easyocr_reader_caching(self):
-        with patch("easyocr.Reader") as mock_reader:
+        fake_easyocr = MagicMock()
+        with patch.dict(sys.modules, {"easyocr": fake_easyocr}), patch(
+            "tools.ocr_tools._EASYOCR_READER", None
+        ):
             reader1 = _get_easyocr_reader()
             reader2 = _get_easyocr_reader()
             assert reader1 is reader2
             # Reader should only be called once if successful
-            mock_reader.assert_called_once()
+            fake_easyocr.Reader.assert_called_once()
 
     @patch("fitz.open")
     def test_extract_text_pymupdf_sync(self, mock_fitz_open):

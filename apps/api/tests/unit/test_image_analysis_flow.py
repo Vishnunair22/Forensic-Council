@@ -54,11 +54,13 @@ def _visual_signal(
     verdict: str = "",
     court_defensible: bool = True,
     anomalies: list[str] | None = None,
+    confidence: float = 0.85,
 ) -> dict[str, Any]:
     return {
         "verdict": verdict,
         "court_defensible": court_defensible,
         "anomalies": anomalies or [],
+        "confidence": confidence,
     }
 
 
@@ -101,8 +103,8 @@ class TestComputeAgentVerdictVisualBoost:
 
         verdict, conf, _ = compute_agent_verdict([strong_tool], visual_signal=vs)
         assert verdict == "MANIPULATED"
-        # Baseline MANIPULATED conf is 0.85; convergent boost should push it higher
-        assert conf >= 0.85 + _CONV_VISUAL_TOOL_CONF_BOOST - 0.01
+        expected = ((0.80 + 0.85) / 2) + _CONV_VISUAL_TOOL_CONF_BOOST
+        assert abs(conf - expected) < 0.01
 
     def test_two_tool_strong_no_gemini_manipulated_baseline(self):
         """2 tool strong findings → MANIPULATED at baseline 0.85 (no visual boost)."""
@@ -114,7 +116,7 @@ class TestComputeAgentVerdictVisualBoost:
         ]
         verdict, conf, _ = compute_agent_verdict(findings, visual_signal=None)
         assert verdict == "MANIPULATED"
-        assert conf == 0.85  # No convergent boost without Gemini
+        assert conf == 0.78  # Mean measured strength, with no visual boost
 
     def test_gemini_clean_vote_boosts_authentic_confidence(self):
         """Gemini AUTHENTIC + all tools clean → higher AUTHENTIC confidence."""

@@ -228,9 +228,16 @@ class TestFileTypePolicyContract:
         from core.file_type_policy import (
             SUPPORTED_MIME_TYPES,
         )
-        allowed_app = {"application/pdf", "application/mp4"}
+        allowed_app = {
+            "application/pdf",
+            "application/mp4",
+            "application/msword",
+            "application/rtf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.oasis.opendocument.text",
+        }
         for mime in SUPPORTED_MIME_TYPES:
-            assert mime.startswith(("image/", "audio/", "video/")) or mime in allowed_app, (
+            assert mime.startswith(("image/", "audio/", "video/", "text/")) or mime in allowed_app, (
                 f"{mime} is not a recognized supported modality"
             )
 

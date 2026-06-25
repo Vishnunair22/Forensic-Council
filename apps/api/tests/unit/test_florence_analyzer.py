@@ -100,12 +100,11 @@ def test_florence_analyze_success(mock_image_open):
         result = analyzer.analyze("fake_image.png")
 
         assert result.available is True
-        assert result.caption == "result for <CAPTION>"
+        assert result.caption == "result for <DETAILED_CAPTION>"
         assert result.detailed_caption == "result for <DETAILED_CAPTION>"
         assert result.best_description() == "result for <DETAILED_CAPTION>"
 
-        mock_run_task.assert_any_call("<CAPTION>", mock_converted_image)
-        mock_run_task.assert_any_call("<DETAILED_CAPTION>", mock_converted_image)
+        mock_run_task.assert_called_once_with("<DETAILED_CAPTION>", mock_converted_image)
 
 
 def test_florence_result_best_description():

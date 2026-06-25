@@ -42,7 +42,11 @@ from core.react_loop import (
 from core.tool_registry import ToolRegistry
 
 
-def _make_engine(iteration_ceiling: int = 3, hitl_timeout: float = 0.1):
+def _make_engine(
+    iteration_ceiling: int = 3,
+    hitl_timeout: float = 0.1,
+    enable_internal_hitl: bool = True,
+):
     wm = AsyncMock()
     wm.get_state = AsyncMock(return_value=None)
     wm.save_state = AsyncMock()
@@ -56,6 +60,7 @@ def _make_engine(iteration_ceiling: int = 3, hitl_timeout: float = 0.1):
         working_memory=wm,
         custody_logger=cl,
         hitl_timeout=hitl_timeout,
+        enable_internal_hitl=enable_internal_hitl,
     )
 
 
@@ -245,6 +250,20 @@ class TestReActLoopEngineRun:
 
 
 class TestCheckHitlTriggers:
+    @pytest.mark.asyncio
+    async def test_full_pipeline_mode_bypasses_internal_hitl_wait(self):
+        engine = _make_engine(enable_internal_hitl=False)
+        state = _make_state()
+        engine.working_memory.get_state = AsyncMock(return_value=state)
+        engine.check_hitl_triggers = AsyncMock(
+            return_value=HITLCheckpointReason.SEVERITY_THRESHOLD_BREACH
+        )
+
+        result = await engine.run("Initial thought.", tool_registry=ToolRegistry())
+
+        engine.check_hitl_triggers.assert_not_awaited()
+        assert result.hitl_checkpoints == []
+
     @pytest.mark.asyncio
     async def test_returns_none_with_no_triggers(self):
         engine = _make_engine()
