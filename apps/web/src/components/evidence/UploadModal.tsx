@@ -32,9 +32,8 @@ export function UploadModal({ onClose, onFileSelected, authError }: UploadModalP
   }, []);
 
   const closeModal = useCallback(() => {
-    playSound("envelope-close");
     onClose();
-  }, [playSound, onClose]);
+  }, [onClose]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

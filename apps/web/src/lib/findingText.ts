@@ -29,8 +29,8 @@ export function cleanFindingText(text: string | null | undefined, maxLen?: numbe
     .replace(/\bWAITING[_\s]FOR[_\s]DATA(?:\s+[A-Z])?\.?/g, "")
     .replace(/\b(?:IDLE|QUEUED|RUNNING|PENDING|COMPLETED?|FAILED|ERROR_STATE)\.?(?=\s|$)/g, "")
     .replace(/\b(?:STATUS|STATE):\s*[A-Z_]+\.?/g, "")
-    // Fix double/triple periods left by stripping
-    .replace(/\.{2,}/g, ".")
+    // Bound pathological punctuation without destroying intentional ellipses.
+    .replace(/\.{4,}/g, "...")
     .replace(/\s+/g, " ")
     .trim();
 

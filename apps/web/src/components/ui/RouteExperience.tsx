@@ -34,24 +34,10 @@ export function RouteExperience() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Skip forced scroll-to-top on browser back/forward so the previous scroll
-    // position is preserved (e.g. returning from a History entry).
-    // Always reset the flag so a same-path popstate doesn't leave it stuck true.
-    const wasPop = isPopRef.current;
-    isPopRef.current = false;
-    if (wasPop) return;
-
-    const behavior =
-      pathname === "/evidence" || pathname.startsWith("/result")
-        ? "auto"
-        : prefersReducedMotion()
-          ? "auto"
-          : "smooth";
-    const raf = window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, left: 0, behavior });
-    });
-
-    return () => window.cancelAnimationFrame(raf);
+    // We no longer manually scroll to top here. Next.js App Router has built-in
+    // scroll management that natively handles scrolling to the top of new pages
+    // or restoring scroll position on back/forward navigation.
+    // Manual window.scrollTo causes double-scrolling and stutter.
   }, [pathname]);
 
   return null;

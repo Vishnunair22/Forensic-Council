@@ -29,44 +29,9 @@ export function GlobalLoadingOverlay() {
     // Resolve initial show state from sessionStorage only after mount to avoid
     // server/client hydration mismatch.
 
-    // Detect hard refresh (Ctrl+F5 / Shift+Reload) and clear transient state.
-    // sessionStorage persists through hard refresh but not across tab close.
-    // Without this guard, stale FC_* flags cause the overlay to reappear
-    // after a hard refresh with no active handoff.
-    const isHardRefresh = (() => {
-      try {
-        const navEntries = performance.getEntriesByType("navigation");
-        return navEntries.length > 0 && (navEntries[0] as PerformanceNavigationTiming).type === "reload";
-      } catch {
-        return false;
-      }
-    })();
-
-    if (isHardRefresh) {
-      // Clear all transient FC_* sessionStorage flags on hard refresh.
-      // This ensures the app starts with a clean slate.
-      // NOTE: FC_NO_RECONNECT is NOT cleared — it is SET below to prevent
-      // useInvestigation from reconnecting to the old session.
-      const fcKeys = [
-        STORAGE_KEYS.FC_SHOW_LOADING,
-        STORAGE_KEYS.FC_LOADING_TEXT,
-        STORAGE_KEYS.FC_LOADING_DISPATCHED,
-        STORAGE_KEYS.FC_HANDOFF_FIRED,
-        STORAGE_KEYS.FC_REPORT_READY,
-        STORAGE_KEYS.FC_ARBITER_TRANSITIONING,
-        STORAGE_KEYS.FC_HARD_REFRESH_GUARD,
-        STORAGE_KEYS.AUTO_START,
-      ];
-      for (const key of fcKeys) {
-        sessionOnlyStorage.removeItem(key);
-      }
-      // Prevent useInvestigation from reconnecting to the old session after
-      // hard refresh. Without this, the reconnect effect fires because
-      // SESSION_ID (localStorage) still exists while FC_NO_RECONNECT was cleared.
-      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_NO_RECONNECT, "1");
-      setMounted(true);
-      return;
-    }
+    // We removed the aggressive isHardRefresh clearing here because it broke
+    // normal app refreshes (F5) by clearing session storage when type === "reload".
+    // Stale states are gracefully handled by FC_HARD_REFRESH_GUARD instead.
 
     const showLoading = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_SHOW_LOADING) === "true";
     const isHandoffActive = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
@@ -104,7 +69,7 @@ export function GlobalLoadingOverlay() {
     }
 
     setMounted(true);
-  }, []);
+  }, [pathname]);
 
   const dismiss = (clearStorage = true) => {
     setShow(false);

@@ -216,7 +216,12 @@ export function HeroAuthActions() {
 
       <Dialog
         open={showUpload}
-        onOpenChange={(open) => { if (!open) closeUpload(); }}
+        onOpenChange={(open) => { 
+          if (!open) {
+            playSound("envelope-close");
+            closeUpload(); 
+          }
+        }}
       >
         <DialogContent
           className="max-w-xl p-0"

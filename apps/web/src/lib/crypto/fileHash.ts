@@ -22,11 +22,11 @@ export async function computeFileSha256(
     throw new Error("Browser Web Crypto API is unavailable.");
   }
 
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const _totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   // Use a single hasher across all chunks via incremental digest
-  let hasher: CryptoKey;
+  let _hasher: CryptoKey;
   try {
-    hasher = await crypto.subtle.importKey(
+    _hasher = await crypto.subtle.importKey(
       "raw",
       new Uint8Array(0),
       { name: "HMAC", hash: "SHA-256" },

@@ -76,9 +76,8 @@ export function UploadSuccessModal({
   }, [playSound, onDismiss]);
 
   const cancelFlow = useCallback(() => {
-    playSound("envelope-close");
     (onCancel ?? onDismiss)();
-  }, [playSound, onCancel, onDismiss]);
+  }, [onCancel, onDismiss]);
 
   return (
     <motion.div
@@ -88,7 +87,7 @@ export function UploadSuccessModal({
       animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, y: -4 }}
       transition={TRANSITION_ENTER}
-      className="p-6 sm:p-8 flex flex-col text-left relative"
+      className="p-8 sm:p-10 flex flex-col text-left relative"
     >
       {/* Subtle dot texture */}
       <div
