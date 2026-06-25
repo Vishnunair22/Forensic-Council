@@ -68,9 +68,15 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "vector_contraband_search": 90.0,
     # neural_splicing (TruFor) runs a heavy 68M-param SegFormer model via
     # persistent worker; cold-start + inference can take ~40-50s, and the
-    # chunk-length overflow retry adds another pass. 90s gives headroom for
-    # the worker + a subprocess fallback without hitting the registry ceiling.
-    "neural_splicing": 90.0,
+    # chunk-length overflow retry adds another pass. 130s gives headroom for
+    # the 120s inner timeout + a subprocess fallback without hitting the registry ceiling.
+    "neural_splicing": 130.0,
+    # copy_move_detect (SIFT) can take up to 120s internally on large images.
+    "copy_move_detect": 130.0,
+    # neural_copy_move (BusterNet) has an inner timeout of 60s.
+    "neural_copy_move": 75.0,
+    # anomaly_tracer (ManTra-Net) has an inner timeout of 60s.
+    "anomaly_tracer": 75.0,
     # read_shared_image_context delegates to _visual_evidence_profile_handler which
     # calls Gemini (File API) for non-image evidence; on transient 503 the Gemini
     # client retries with 55s HTTP timeout each.  90s allows at least one full
@@ -92,6 +98,9 @@ HEAVY_TOOLS: set[str] = {
     "deepfake_frequency_check",
     "neural_fingerprint",
     "neural_copy_move",
+    "neural_splicing",
+    "anomaly_tracer",
+    "copy_move_detect",
     # neural_ela (ELA transformer) and analyze_image_content (CLIP/SigLIP scene
     # read) were previously UNGATED, so they contended with the gated heavy tools
     # and caused 3-way CPU starvation → concurrent timeouts on a constrained

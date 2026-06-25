@@ -26,7 +26,7 @@ let globalCtx: AudioContext | null = null;
 let _masterVolume = 0.55;
 
 // ── Persistent module-level master bus (reused across all playSound calls) ──
-let _masterBusLimiter: DynamicsCompressor | null = null;
+let _masterBusLimiter: DynamicsCompressorNode | null = null;
 let _masterBusGain: GainNode | null = null;
 
 function _ensureMasterBus(ctx: AudioContext): GainNode {

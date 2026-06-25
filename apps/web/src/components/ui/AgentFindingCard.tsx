@@ -49,7 +49,7 @@ export interface AgentFindingCardProps {
 // so the card never shows a misleading/useless Key Finding.
 function isNoiseKeyFinding(line: string): boolean {
   const t = line.replace(/^-\s*/, "").trim();
-  if (t.length < 12) return true;
+  if (t.length < 6) return true;
   const low = t.toLowerCase();
   // Tool-name dump pattern: "... detected across N check(s): a, b, c."
   if (/:\s*[a-z0-9 ]+(,\s*[a-z0-9 ]+)+\.?$/i.test(t) && /\b(check|forensic|tool)/i.test(low)) return true;
@@ -178,7 +178,7 @@ export function dedupeAndFilter(findings: AgentFindingDTO[]): AgentFindingDTO[] 
     if (verdict === "POSITIVE" || verdict === "ERROR" || verdict === "NOT_APPLICABLE") return true;
     const summary = deriveSummary(f);
     const hasReal =
-      (summary && summary.length > 32) ||
+      (summary && summary.length > 8) ||
       Object.keys(f.metadata || {}).some(
         (k) =>
           !k.startsWith("_") &&

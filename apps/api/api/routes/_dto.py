@@ -151,8 +151,6 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         ftype = str(d.get("finding_type") or "")
         if not summary and not ftype:
             return False
-        if ftype.lower() in ("file type not applicable", "format not supported"):
-            return False
         return True
 
     per_agent: dict = {}

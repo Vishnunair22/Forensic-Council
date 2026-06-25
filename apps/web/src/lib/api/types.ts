@@ -32,6 +32,7 @@ export interface AgentMetricsDTO {
   confidence_score: number;
   finding_count: number;
   skipped: boolean;
+  completed_at?: string | null;
 }
 
 export interface ReportDTO {
