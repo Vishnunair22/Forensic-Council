@@ -15,7 +15,7 @@ from core.capability_manifest import (
     truthful_tool_display,
 )
 from core.finding_humanizer import CONTEXT_ONLY_TOOLS
-from core.per_agent_synthesis import AgentSynthesisOutput
+from core.per_agent_synthesis import AgentSynthesisOutput, _fuzzy_tool_alias
 from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
@@ -545,7 +545,8 @@ def build_deterministic_report(
     # such fabricated findings must never reach a signed report. Only slug-form
     # citations not backed by a real tool are dropped; friendly-label findings and
     # pure statistical narratives are left untouched. Context-only plumbing tools
-    # (shared visual profile, etc.) are coverage inputs, never standalone findings.
+    # that did NOT run are dropped; context-only tools that DID run (e.g.
+    # visual_evidence_profile) are valid findings from a real tool execution.
     _real_tools = {
         str(t).lower()
         for key in ("completed_tools", "failed_tools", "not_applicable_tools", "skipped_tools")
@@ -554,12 +555,17 @@ def build_deterministic_report(
     _grounded_kfs = []
     for kf in deduped_kfs:
         _slug = _cited_tool_slug(kf)
-        if _slug and _TOOL_SLUG_RE.match(_slug) and (_slug not in _real_tools or _slug in CONTEXT_ONLY_TOOLS):
-            logger.warning(
-                "Dropped ungrounded key finding (cited tool did not run)",
-                extra={"cited_tool": _slug, "finding": kf[:160]},
-            )
-            continue
+        if _slug and _TOOL_SLUG_RE.match(_slug) and _slug not in _real_tools:
+            _alias = _fuzzy_tool_alias(_slug, _real_tools)
+            if _alias:
+                # Remap the cited slug to the real tool in the finding text
+                kf = re.sub(re.escape(_slug), _alias, kf, count=1)
+            else:
+                logger.warning(
+                    "Dropped ungrounded key finding (cited tool did not run)",
+                    extra={"cited_tool": _slug, "finding": kf[:160]},
+                )
+                continue
         _grounded_kfs.append(kf)
     deduped_kfs = _grounded_kfs
 

@@ -771,6 +771,40 @@ _MANIPULATION_TERMS = (
 )
 _CLEAN_VERDICTS = {"AUTHENTIC", "NEGATIVE", "NOT_APPLICABLE", "CLEAN", ""}
 
+# LLMs commonly hallucinate near-miss tool slugs. Map known hallucinated names
+# to the real tool slugs so valid findings are not silently dropped.
+_TOOL_ALIAS_MAP: dict[str, str] = {
+    "timestamp_record": "timestamp_analysis",
+    "timestamp_check": "timestamp_analysis",
+    "device_make_model": "device_fingerprint_db",
+    "exif_provenance_chain": "provenance_chain_verify",
+    "exif_fingerprint": "exif_extract",
+    "gps_coordinates": "gps_timezone_validate",
+    "metadata_provenance": "metadata_anomaly_score",
+    "c2pa_verify": "provenance_chain_verify",
+    "c2pa_check": "provenance_chain_verify",
+    "file_identity": "file_structure_analysis",
+    "hash_check": "file_hash_verify",
+}
+
+
+def _fuzzy_tool_alias(cited: str, agent_tools: set[str]) -> str | None:
+    """Return the real tool slug if ``cited`` is a known LLM hallucination,
+    or a close substring/overlap match against the agent's real tool set.
+    Returns None when no reasonable alias is found."""
+    # 1. Exact alias map
+    if cited in _TOOL_ALIAS_MAP:
+        alias = _TOOL_ALIAS_MAP[cited]
+        if alias in agent_tools:
+            return alias
+    # 2. Substring overlap: check if the cited slug is a prefix/suffix of a
+    #    real tool, or vice versa (min 6 chars to avoid false matches).
+    if len(cited) >= 6:
+        for real in agent_tools:
+            if len(real) >= 6 and (cited in real or real in cited):
+                return real
+    return None
+
 
 def _text_contradicts_verdict(text: str, verdict: str) -> bool:
     """True if narrative text asserts manipulation while the deterministic verdict
@@ -1229,15 +1263,30 @@ def _apply_polished_agent(
                 continue
             # Tool-grounding: a finding that attributes itself to a
             # specific tool slug must cite one this agent actually
-            # ran. Drops hallucinated tools and context-only plumbing.
+            # ran. Drops hallucinated tools and context-only plumbing
+            # that did NOT actually run (context-only tools that DID run
+            # — e.g. visual_evidence_profile — are valid findings).
             _m = re.search(r"—\s*([a-z0-9]+(?:_[a-z0-9]+)+)\s*(?:\(\d+(?:\.\d+)?%\))?\s*$", kf_str)
             if _m:
                 _cited = _m.group(1).lower()
-                if _cited not in _agent_tools or _cited in CONTEXT_ONLY_TOOLS:
-                    logger.warning(
-                        f"{aid}: key_finding cites tool '{_cited}' that did not run; dropped (fabricated)."
-                    )
-                    continue
+                if _cited not in _agent_tools:
+                    # Fuzzy alias: LLMs commonly hallucinate near-miss tool
+                    # slugs (e.g. "timestamp_record" for "timestamp_analysis").
+                    # Try a substring/overlap match against the real tool set
+                    # before dropping the finding entirely.
+                    _alias = _fuzzy_tool_alias(_cited, _agent_tools)
+                    if _alias:
+                        _cited = _alias
+                        kf_str = kf_str[:_m.start(1)] + _alias + kf_str[_m.end(1):]
+                    else:
+                        logger.warning(
+                            f"{aid}: key_finding cites tool '{_cited}' that did not run; dropped (fabricated)."
+                        )
+                        continue
+                elif _cited in CONTEXT_ONLY_TOOLS:
+                    # Context-only tool that actually ran — valid finding but
+                    # remap to the friendly label so the report reads cleanly.
+                    pass
                 # The synthesis prompt asks the model to name the exact
                 # tool, so it emits the raw slug ("frequency_domain_
                 # analysis"). Swap in the friendly label for a

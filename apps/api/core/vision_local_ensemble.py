@@ -335,8 +335,20 @@ def _cross_signal_synthesis(
     splice_detected = splicing_res.get("splicing_detected", False) if isinstance(splicing_res, dict) else False
     splice_score = splicing_res.get("splicing_score", 0.0) if isinstance(splicing_res, dict) else 0.0
 
-    diff_detected = diffusion_res.get("diffusion_detected", False) if isinstance(diffusion_res, dict) else False
+    diff_detected = (
+        diffusion_res.get("diffusion_detected", False)
+        or diffusion_res.get("is_ai_generated", False)
+    ) if isinstance(diffusion_res, dict) else False
     diff_probability = diffusion_res.get("diffusion_probability", 0.0) if isinstance(diffusion_res, dict) else 0.0
+
+    logger.info(
+        "Diffusion detection result",
+        diff_detected=diff_detected,
+        diff_probability=round(diff_probability, 3),
+        is_ai_generated=diffusion_res.get("is_ai_generated") if isinstance(diffusion_res, dict) else None,
+        method=diffusion_res.get("method") if isinstance(diffusion_res, dict) else None,
+        available=diffusion_res.get("available") if isinstance(diffusion_res, dict) else None,
+    )
 
     # ── Corroboration rules ──────────────────────────────────────────────
     # Rule 1: ELA + noiseprint spatial corroboration → high-confidence splice
@@ -437,6 +449,16 @@ def _cross_signal_synthesis(
         for s in substantive
     )
     strong_ai = diff_detected and diff_probability > 0.7
+
+    logger.info(
+        "Local ensemble verdict signals",
+        diff_detected=diff_detected,
+        diff_probability=round(diff_probability, 3),
+        strong_ai=strong_ai,
+        substantive_count=len(substantive),
+        corroborated=corroborated,
+        strong_substantive_count=len(strong_substantive),
+    )
 
     if corroborated or strong_ai:
         verdict = "SUSPICIOUS"
@@ -912,8 +934,19 @@ async def _analyze_local_visual_profile_impl(
             from core.ml_subprocess import run_ml_tool
             result = await run_ml_tool("ai_generation_detector.py", art.file_path, timeout=45.0)
             if result.get("available") and result.get("method") == "vit_classifier":
+                logger.info(
+                    "ViT AI-generation classifier returned",
+                    is_ai_generated=result.get("is_ai_generated"),
+                    diffusion_probability=result.get("diffusion_probability"),
+                    predicted_label=result.get("predicted_label"),
+                )
                 return result
             # Model unavailable → spectral heuristic, honestly labelled as screening.
+            logger.info(
+                "ViT AI-generation classifier unavailable, falling back to spectral heuristic",
+                error=result.get("error"),
+                available=result.get("available"),
+            )
             spectral = await run_ml_tool("diffusion_artifact_detector.py", art.file_path, timeout=12.0)
             if isinstance(spectral, dict):
                 spectral["method"] = "spectral_heuristic"
@@ -1383,7 +1416,7 @@ def _synthesize_forensic_observations(
 
         # Diffusion observations
         if isinstance(diffusion_res, dict):
-            if diffusion_res.get("diffusion_detected"):
+            if diffusion_res.get("diffusion_detected") or diffusion_res.get("is_ai_generated"):
                 observations.append(f"Diffusion artifacts: spectral spikes detected (probability={diffusion_res.get('diffusion_probability', 0):.3f})")
             elif diffusion_res.get("available"):
                 observations.append("Diffusion artifacts: no GAN/diffusion spectral signatures found")
