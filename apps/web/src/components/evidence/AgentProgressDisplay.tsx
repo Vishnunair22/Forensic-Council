@@ -49,7 +49,6 @@ interface AgentProgressDisplayProps {
   mimeType?: string;
   capabilities?: ServerCapabilities | null;
   playSound?: (type: SoundType) => void;
-  revealQueue?: AgentUpdate[];
   arbiterDeliberating?: boolean;
   overlayVisible?: boolean;
 }
@@ -295,7 +294,6 @@ export function AgentProgressDisplay({
   isNavigating = false,
   mimeType,
   capabilities,
-  revealQueue = [],
   arbiterDeliberating = false,
 }: AgentProgressDisplayProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -551,7 +549,7 @@ export function AgentProgressDisplay({
 
       {/* ── Elevated Initial Analysis Decision Gate ──────────────────────────────── */}
       <AnimatePresence>
-        {awaitingDecision && revealQueue.length === 0 && !arbiterDeliberating && (
+        {awaitingDecision && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -604,7 +602,7 @@ export function AgentProgressDisplay({
 
       {/* ── Deep analysis decision gate ──────────────────────────────────── */}
       <AnimatePresence>
-        {phase === "deep" && revealQueue.length === 0 && completedAgents.length > 0 && pipelineStatus === "awaiting_decision" && !isNavigating && !arbiterDeliberating && (
+        {phase === "deep" && completedAgents.length > 0 && pipelineStatus === "awaiting_decision" && !isNavigating && !arbiterDeliberating && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}

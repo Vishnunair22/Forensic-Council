@@ -24,8 +24,13 @@ export function GlobalLoadingOverlay() {
   });
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountTimeRef = useRef(Date.now());
+  const guardHandledRef = useRef(false);
 
   useEffect(() => {
+    // Guard against Strict Mode double-fire
+    if (guardHandledRef.current) return;
+    guardHandledRef.current = true;
+
     // Resolve initial show state from sessionStorage only after mount to avoid
     // server/client hydration mismatch.
 
@@ -54,6 +59,7 @@ export function GlobalLoadingOverlay() {
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
           sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+          setShow(false);
         } else if (pendingFile) {
           // File is still in memory (normal page reload, not hard refresh).
           setShow(true);
@@ -62,6 +68,7 @@ export function GlobalLoadingOverlay() {
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_SHOW_LOADING);
           sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+          setShow(false);
         }
       } else {
         setShow(true);

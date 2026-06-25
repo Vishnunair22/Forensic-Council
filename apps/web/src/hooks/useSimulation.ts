@@ -90,8 +90,6 @@ export const useSimulation = ({
   const [pipelineThinking, setPipelineThinking] = useState<string>("");
   const [arbiterStatus, setArbiterStatus] = useState<string | null>(null);
   const [arbiterThinking, setArbiterThinking] = useState<string | null>(null);
-  const [revealQueue] = useState<AgentUpdate[]>([]);
-  const [revealPending] = useState(false);
   const activePhaseRef = useRef<SimulationPhase>("initial");
 
   const setSimulationPhase = useCallback((phase: SimulationPhase) => {
@@ -993,24 +991,28 @@ export const useSimulation = ({
     const activeStatuses: string[] = ["analyzing", "initiating", "processing"];
     if (!activeStatuses.includes(status)) {
       if (stallTimerRef.current) {
-        clearTimeout(stallTimerRef.current);
+        clearInterval(stallTimerRef.current);
         stallTimerRef.current = null;
       }
       setStreamStalled(false);
       return;
     }
 
-    const schedule = () => {
-      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
-      stallTimerRef.current = setTimeout(() => {
+    // Use an interval that checks lastMessageAtRef so incoming messages reset
+    // the stall timer even when status hasn't changed.
+    const check = () => {
+      const elapsed = Date.now() - lastMessageAtRef.current;
+      if (elapsed > STALL_MS) {
         if (isMountedRef.current) setStreamStalled(true);
-      }, STALL_MS);
+      }
     };
 
-    schedule();
+    // Check immediately and then every second
+    check();
+    stallTimerRef.current = setInterval(check, 1000);
     return () => {
       if (stallTimerRef.current) {
-        clearTimeout(stallTimerRef.current);
+        clearInterval(stallTimerRef.current);
         stallTimerRef.current = null;
       }
     };
@@ -1335,8 +1337,6 @@ const resumeInvestigation = useCallback(
     hitlCheckpoint,
     isDeepHITL,
     errorMessage,
-    revealQueue,
-    revealPending,
     isReconnecting,
     streamStalled,
   };

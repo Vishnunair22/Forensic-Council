@@ -218,7 +218,6 @@ export function EvidenceUploadClient() {
                   mimeType={investigation.mimeType || undefined}
                   capabilities={investigation.capabilities}
                   playSound={playSound}
-                  revealQueue={investigation.revealQueue}
                   arbiterDeliberating={investigation.arbiterDeliberating}
                   overlayVisible={investigation.showLoadingOverlay}
                 />

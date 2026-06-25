@@ -130,6 +130,16 @@ export function getVerdictConfig(v: string): VerdictConfig {
       desc: "No forensic evidence of manipulation found.",
     };
   }
+  if (u === "NO_REPORTABLE_MANIPULATION_DETECTED") {
+    return {
+      label: "Authentic",
+      color: "emerald",
+      textColor: "text-emerald-400",
+      dotColor: "bg-emerald-400",
+      Icon: CheckCircle,
+      desc: "No reportable manipulation detected.",
+    };
+  }
   return {
     label: "Review Required",
     color: "amber",

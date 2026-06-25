@@ -110,16 +110,10 @@ export function HeroAuthActions() {
     isHandingOffRef.current = true;
     setIsHandingOff(true);
 
-    // Raise the global loading overlay FIRST so it is fully visible before the
-    // dialog begins its 150ms fade-out. Previously setShowUpload(false) fired
-    // before loadingOverlayController.show(), creating a gap where the
-    // UploadSuccessModal was visible through the semi-transparent overlay during
-    // its opacity:0→1 fade-in.
-    loadingOverlayController.show("Opening evidence analysis…");
-
-    // Now close the upload dialog — the overlay is already on screen.
-    setShowUpload(false);
-
+    // Authenticate first, then persist the handoff flags to storage, THEN show
+    // the overlay. Previously the overlay was raised before prepareUpload(), so
+    // FC_SHOW_LOADING was not yet in sessionStorage when the GlobalLoadingOverlay
+    // checked it — creating a one-tick gap where the guard could fail.
     try {
       await authService.ensureAuthenticated();
     } catch (error) {
@@ -130,13 +124,20 @@ export function HeroAuthActions() {
       });
       isHandingOffRef.current = false;
       setIsHandingOff(false);
-      loadingOverlayController.forceDismiss();
       return false;
     }
 
     await fileHandoffManager.prepareUpload(selectedFile, {
       clientSha256: selectedFileHash,
     });
+
+    // Raise the global loading overlay AFTER prepareUpload has written the
+    // storage flags (FC_SHOW_LOADING, AUTO_START, FC_HARD_REFRESH_GUARD) so
+    // GlobalLoadingOverlay's storage-event listener sees them immediately.
+    loadingOverlayController.show("Opening evidence analysis…");
+
+    // Now close the upload dialog — the overlay is already on screen.
+    setShowUpload(false);
 
     // FC_HANDOFF_FIRED must be cleared so Effect A on /evidence (which skips when
     // it is already "1") actually runs, recovers the file, and starts analysis.

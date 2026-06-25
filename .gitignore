@@ -186,6 +186,8 @@ pytest-cache-files-*
 .pytest_tmp_run/
 .pytest-tmp/
 apps/api/.pytest-tmp/
+apps/api/.pytest_tmp_audit/
+apps/api/.pytest_tmp_audit2/
 tmp_*
 temp/
 tmp/

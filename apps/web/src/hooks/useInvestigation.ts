@@ -255,10 +255,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     dismissCheckpoint,
     clearCompletedAgents,
     clearPipelineThinking,
-    revealQueue,
-    revealPending,
     restoreSimulationState,
     isReconnecting,
+    streamStalled,
     arbiterStatus,
     arbiterThinking,
     setSimulationPhase,
@@ -270,7 +269,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     completedAgentsRef.current = completedAgents;
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (completedAgents.length > 0 && status !== "idle" && sid) {
-      const key = phase === "deep" && status !== "awaiting_decision"
+      const key = phase === "deep"
         ? `${STORAGE_KEYS.DEEP_AGENTS}:${sid}`
         : phase === "initial"
           ? `${STORAGE_KEYS.INITIAL_AGENTS}:${sid}`
@@ -655,7 +654,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         })
         .finally(() => {
           investigationInFlightRef.current = false;
-          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
         });
         return;
       }
@@ -692,7 +690,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           __pendingFileStore.file = null;
           clearPendingEvidenceFile().catch(() => {});
           sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_PENDING_FILE_META);
-          sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
           sessionExistsRef.current = true; // Update ref snapshot
         });
     },
@@ -978,6 +975,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       sessionOnlyStorage.setItem(`${STORAGE_KEYS.FC_RESUME_REQUESTED}:${sid}`, "deep");
       storage.removeItem(`${STORAGE_KEYS.DEEP_AGENTS}:${sid}`);
     }
+    const initialStateSnapshot = [...completedAgentsRef.current] as AgentUpdate[];
     clearPipelineThinking();
     clearCompletedAgents();
     completedAgentsRef.current = [];
@@ -988,6 +986,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       setSimulationPhase("deep");
       await resumeInvestigation(true);
     } catch (err) {
+      // Restore initial findings so they are not permanently lost on error
+      restoreSimulationState(initialStateSnapshot, "awaiting_decision");
       // Roll back to initial phase so the user can retry
       const rollbackSid = lastSessionIdRef.current || storage.getItem(STORAGE_KEYS.SESSION_ID);
       if (rollbackSid) {
@@ -1156,6 +1156,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
     if (shouldDismiss) {
       loadingOverlayController.dismiss();
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
       const timer = setTimeout(() => {
         setShowLoadingOverlay(false);
       }, 800);
@@ -1195,8 +1196,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     pipelineThinking,
     hitlCheckpoint,
     dismissCheckpoint,
-    revealQueue,
-    revealPending,
     isReconnecting,
     arbiterStatus,
     arbiterThinking,
@@ -1211,6 +1210,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     arbiterDeliberating,
     arbiterLiveText,
     hasStartedAnalysis,
+    streamStalled,
     allAgentsDone,
     awaitingDecision,
     mimeType,
