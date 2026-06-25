@@ -68,8 +68,8 @@ def correlate_lighting(path: str) -> dict[str, Any]:
         }
 
     vals = np.asarray([a["angle_deg"] for a in angles], dtype=float)
-    doubled = np.radians(vals * 2.0)
-    r = float(np.sqrt(np.mean(np.cos(doubled)) ** 2 + np.mean(np.sin(doubled)) ** 2))
+    quadrupled = np.radians(vals * 4.0)
+    r = float(np.sqrt(np.mean(np.cos(quadrupled)) ** 2 + np.mean(np.sin(quadrupled)) ** 2))
     dispersion = float(1.0 - r)
     mismatch = dispersion >= 0.42
     return {
@@ -129,8 +129,8 @@ def _correlate_lighting_pil(path: str) -> dict[str, Any]:
         }
 
     vals = np.asarray([a["angle_deg"] for a in angles], dtype=float)
-    doubled = np.radians(vals * 2.0)
-    r = float(np.sqrt(np.mean(np.cos(doubled)) ** 2 + np.mean(np.sin(doubled)) ** 2))
+    quadrupled = np.radians(vals * 4.0)
+    r = float(np.sqrt(np.mean(np.cos(quadrupled)) ** 2 + np.mean(np.sin(quadrupled)) ** 2))
     dispersion = float(1.0 - r)
     mismatch = dispersion >= 0.46
     return {

@@ -776,19 +776,24 @@ _CLEAN_VERDICTS = {"AUTHENTIC", "NEGATIVE", "NOT_APPLICABLE", "CLEAN", ""}
 _TOOL_ALIAS_MAP: dict[str, str] = {
     "timestamp_record": "timestamp_analysis",
     "timestamp_check": "timestamp_analysis",
+    "timestamp_analyzer": "timestamp_analysis",
     "device_make_model": "device_fingerprint_db",
     "exif_provenance_chain": "provenance_chain_verify",
     "exif_provenance_check": "provenance_chain_verify",
+    "exif_provenance": "exif_extract",
     "exif_fingerprint": "exif_extract",
     "exif_field_count_check": "exif_extract",
+    "exif_analyzer": "exif_extract",
     "exif_anomaly_check": "metadata_anomaly_score",
     "gps_coordinates": "gps_timezone_validate",
     "gps_coordinate_check": "gps_timezone_validate",
+    "gps_presence": "gps_timezone_validate",
     "metadata_provenance": "metadata_anomaly_score",
     "c2pa_verify": "provenance_chain_verify",
     "c2pa_check": "provenance_chain_verify",
     "file_identity": "file_structure_analysis",
     "hash_check": "file_hash_verify",
+    "scene_geometry": "scene_incongruence",
 }
 
 

@@ -86,8 +86,17 @@ def classify_manipulation_signal(signal: str) -> SignalClass:
     spliced in") is treated as the more severe class.
     """
     s = (signal or "").strip().lower()
-    if not s:
+    if not s or s in ("none", "n/a", "null", "nothing", "clean", "authentic"):
         return "unknown"
+        
+    _negations = (
+        "no evidence", "not detected", "none detected", "no manip", "no tamper",
+        "no alter", "no anomal", "no signs", "no ai", "no deepfake", "no splic",
+        "no forg", "without manip", "without tamper"
+    )
+    if any(n in s for n in _negations):
+        return "unknown"
+
     if any(k in s for k in _AI_GENERATION_KEYWORDS):
         return "ai_generation"
     if any(k in s for k in _TAMPERING_KEYWORDS):
