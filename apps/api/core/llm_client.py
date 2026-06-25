@@ -733,8 +733,8 @@ class LLMClient:
     _DEFAULT_PROMPT_CHAR_LIMIT: int = 18000
 
     _GROQ_MODEL_TPM_LIMITS: dict[str, int] = {
-        "llama-3.3-70b-versatile": 12000,
-        "llama-3.1-8b-instant": 6000,
+        "llama-3.3-70b-versatile": 6000,
+        "llama-3.1-8b-instant": 30000,
         "meta-llama/llama-4-scout-17b-16e-instruct": 30000,
         "qwen/qwen3-32b": 6000,
         "openai/gpt-oss-120b": 8000,

@@ -18,11 +18,11 @@ logger = get_logger(__name__)
 
 # ── Per-investigation token budget ──────────────────────────────────────────
 # Free-tier math: llama-3.3-70b-versatile has ~12K TPM. One investigation must
-# fit inside a single TPM window, with ~4800 tokens RESERVED for the final-report
+# fits inside a single TPM window, with ~4800 tokens RESERVED for the final-report
 # refiner (the single most important LLM call). Synthesis calls that would invade
 # the reserve are rejected so the caller falls back to the deterministic template.
 # Env-overridable (os.environ-with-default — same style as ml_subprocess.py).
-INVESTIGATION_TOKEN_BUDGET = int(os.environ.get("INVESTIGATION_TOKEN_BUDGET", "12000") or "12000")
+INVESTIGATION_TOKEN_BUDGET = int(os.environ.get("INVESTIGATION_TOKEN_BUDGET", "30000") or "30000")
 REFINER_RESERVE_TOKENS = int(os.environ.get("REFINER_RESERVE_TOKENS", "4800") or "4800")
 
 

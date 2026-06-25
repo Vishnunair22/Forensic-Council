@@ -775,10 +775,10 @@ class Settings(BaseSettings):
         "API+Worker = 30, matching the free-tier limit for llama-3.3-70b).",
     )
     groq_tpm_limit: int = Field(
-        default=12000,
+        default=30000,
         description=(
             "Default Groq TPM fallback. Runtime uses per-model overrides where known "
-            "(for example llama-3.3-70b-versatile=12K, llama-3.1-8b-instant=6K)."
+            "(for example llama-3.3-70b-versatile=6K, llama-3.1-8b-instant=30K)."
         ),
     )
     groq_synthesis_rpm_limit: int = Field(default=5)
