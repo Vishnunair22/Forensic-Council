@@ -925,7 +925,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
     playSound("click");
-    playSound("arbiter_start");
+    setTimeout(() => playSound("arbiter_start"), 80);
     storage.setItem(STORAGE_KEYS.IS_DEEP, "false");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
@@ -964,7 +964,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     investigationInFlightRef.current = true;
     resumeInFlightRef.current = true;
     playSound("click");
-    playSound("scan");
+    setTimeout(() => playSound("scan"), 80);
     storage.setItem(STORAGE_KEYS.IS_DEEP, "true");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     const initialAgentSnapshot = (completedAgentsRef.current as AgentUpdate[]).filter(
@@ -1049,7 +1049,6 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
     playSound("click");
-    playSound("arbiter_start");
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
       storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "deep");
@@ -1064,6 +1063,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (!sid) throw new Error("No active session");
       const arbiterSt = await getArbiterStatus(sid).catch(() => null);
       if (arbiterSt?.status !== "complete") {
+        playSound("arbiter_start");
         await resumeInvestigation(false);
       }
       navigationStarted = await _navigateToResult(sid, arbiterStartTime);
@@ -1120,8 +1120,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       (awaitingDecision && findingsSurfaced) || (phase === "deep" && allAgentsDone);
     if (ready && !analysisCompleteSoundedRef.current) {
       analysisCompleteSoundedRef.current = true;
-      const t = setTimeout(() => playSound("analysis_done"), 420);
-      return () => clearTimeout(t);
+      playSound("analysis_done");
     }
   }, [awaitingDecision, findingsSurfaced, phase, allAgentsDone, playSound]);
 
@@ -1136,15 +1135,14 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (!showLoadingOverlay) return;
 
     // Drop the overlay only once the initial analysis has ACTUALLY started
-    // producing work — the first agent/tool/pipeline update flips status from
-    // "idle"/"initiating" to "analyzing" (or a later/terminal state). Dismissing
-    // on the bare WebSocket connection (analysisStreamReady) dropped the overlay
-    // a beat before any agent was visibly running, leaving a dead-wait gap on the
-    // analysis page. A genuinely stuck start is still bounded by
-    // GlobalLoadingOverlay's EVIDENCE_MAX_DISPLAY_MS safety timer; a failed socket
-    // dismisses via wsConnectionError.
+    // producing work AND at least one agent is visible on screen. Dismissing
+    // on the bare status flip left a dead-wait gap on the analysis page before
+    // the first agent booted. A genuinely stuck start is still bounded by
+    // GlobalLoadingOverlay's EVIDENCE_MAX_DISPLAY_MS safety timer.
     const shouldDismiss =
-      (status !== "idle" && status !== "initiating") ||
+      ((status !== "idle" && status !== "initiating") && Object.keys(agentUpdates).length > 0) ||
+      status === "awaiting_decision" ||
+      status === "complete" ||
       !!wsConnectionError;
 
     if (shouldDismiss) {

@@ -1217,8 +1217,8 @@ const resumeInvestigation = useCallback(
           : "Council Arbiter is synthesizing initial agent findings into the final report.",
       );
       if (deep) {
-        playSoundRef.current?.("think");
-        // Part 5.5 Fix: Abort any speculative frontend polling if we go DEEP
+        // Skip "think" sound — handleDeepAnalysis already plays "scan" before
+        // calling resumeInvestigation(true), so "think" would overlap with it.
         const { arbiterControl } = await import("@/lib/arbiterControl");
         arbiterControl.abort();
       }
@@ -1247,7 +1247,10 @@ const resumeInvestigation = useCallback(
             expectingPipelineCompleteRef.current = false;
             guarded(() => setStatus((prev: SimulationStatus) => {
               if (prev !== "complete") {
-                playSoundRef.current?.("complete");
+                if (!hasFiredCompleteRef.current) {
+                  hasFiredCompleteRef.current = true;
+                  playSoundRef.current?.("complete");
+                }
                 onCompleteRef.current?.();
               }
               return "complete";
