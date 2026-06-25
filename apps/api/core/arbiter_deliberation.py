@@ -126,7 +126,7 @@ def deliberate_findings(
         critical_tools = {"file_structure_analysis", "exif_extract", "ela_full_image", "neural_ela"}
         important_tools = {
             "ela_full_image", "neural_ela", "frequency_domain_analysis",
-            "diffusion_artifact_detector", "object_detection",
+            "diffusion_artifact_detector", "ai_generation_detector", "object_detection",
             "screenshot_layout_forensics", "exif_extract", "file_structure_analysis"
         }
 

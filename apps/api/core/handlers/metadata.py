@@ -685,7 +685,7 @@ class MetadataHandlers(BaseToolHandler):
             result["evidence_verdict"] = "SUSPICIOUS"
             result["severity_tier"] = "MEDIUM"
         else:
-            result["evidence_verdict"] = "AUTHENTIC"
+            result["evidence_verdict"] = "NEGATIVE"
             
         await self.agent._record_tool_result("ai_text_detector", result)
         return result

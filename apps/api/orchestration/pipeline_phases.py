@@ -75,8 +75,14 @@ def _build_live_visual_signal(aid: str, agent_inst: Any, session_id: str) -> dic
             "anomalies": list(_sec("agent3_object_scene").get("scene_inconsistencies") or []),
         }
     if aid == "Agent5":
+        # Agent 5 inherits the holistic AI-generation/manipulation verdict from
+        # the visual context so compute_agent_verdict can fold it in as a visual
+        # grounding signal. Without this, Agent 5 always receives verdict="" and
+        # the visual folding code never fires — an Agent 1 AI_GENERATED read is
+        # silently ignored in Agent 5's verdict computation.
+        _inherit_verdict = holistic if holistic in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED", "SUSPICIOUS") else ""
         return {
-            "verdict": "",
+            "verdict": _inherit_verdict,
             "court_defensible": is_remote,
             "anomalies": list(_sec("agent5_metadata_visual").get("metadata_contradictions") or []),
         }

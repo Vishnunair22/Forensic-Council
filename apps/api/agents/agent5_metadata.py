@@ -206,6 +206,7 @@ class Agent5Metadata(ForensicAgent):
             return [
                 "Run read_shared_image_context to incorporate the native document content analysis (AI-generated-text and document-tampering determination)",
                 "Run extract_text_from_image for document text extraction",
+                "Run ai_text_detector for AI-generated-text statistical screening",
                 "Run file_hash_verify against ingestion hash",
                 "Run file_structure_analysis for binary anomalies in headers and trailers",
                 "Run hex_signature_scan for raw-byte software signatures",

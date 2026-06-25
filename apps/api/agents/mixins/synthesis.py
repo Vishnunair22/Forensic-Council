@@ -166,8 +166,21 @@ class NeuralSynthesisMixin:
         # signal among many tools — forcing POSITIVE there overrode clean tool
         # evidence and produced false "Manipulated" on clean isolated-object /
         # benign-edited images. Restrict the escalation to the native non-image path.
+        # EXCEPTION: when Agent 1's own analysis flagged AI generation (strong
+        # evidence_verdict or ai_generation_signals present), the reused profile
+        # carries a real forensic signal that must not be silenced — escalate to
+        # POSITIVE so Agent 5's verdict reflects the AI detection.
         _is_native = source == "native_preflight_visual_context"
-        _profile_is_manip = _is_native and (_pv in _MANIP_PROFILE_VERDICTS or _fta == "ai_generated")
+        _has_agent1_ai_signal = (
+            not _is_native
+            and (
+                str(profile.get("evidence_verdict") or "").upper() in ("POSITIVE",)
+                or bool(profile.get("ai_generation_signals"))
+                or _pv in _MANIP_PROFILE_VERDICTS
+                or _fta == "ai_generated"
+            )
+        )
+        _profile_is_manip = (_is_native or _has_agent1_ai_signal) and (_pv in _MANIP_PROFILE_VERDICTS or _fta == "ai_generated")
         _evidence_verdict = profile.get("evidence_verdict")
         if _profile_is_manip and (not _evidence_verdict or _evidence_verdict in ("INCONCLUSIVE", "NEGATIVE")):
             _evidence_verdict = "POSITIVE"
@@ -708,6 +721,10 @@ class NeuralSynthesisMixin:
                     )
                     existing_is_rich = existing is not None and (
                         existing.source == "llm_assisted"
+                        or (
+                            existing.source != "local_ensemble"
+                            and bool(getattr(existing, "external_llm_used", False))
+                        )
                         or bool(
                             existing.metadata_visual_context.visible_timestamps
                             or existing.metadata_visual_context.device_or_platform_clues

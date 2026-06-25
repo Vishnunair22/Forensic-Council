@@ -109,6 +109,7 @@ export function EvidenceUploadClient() {
           if (handoffInProgress) return;
           if (!storage.getItem(STORAGE_KEYS.SESSION_ID) && 
               sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) !== "1") {
+            if (__pendingFileStore.file) return;
             loadingOverlayController.forceDismiss();
             router.replace("/");
           }
@@ -192,7 +193,7 @@ export function EvidenceUploadClient() {
           />
         )}
 
-        {showAgentProgress || investigation.handoffRecovering ? (
+        {showAgentProgress || investigation.handoffRecovering || !!__pendingFileStore.file ? (
           <motion.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
