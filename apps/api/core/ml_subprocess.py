@@ -160,6 +160,7 @@ class _MLWorker:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=10485760,  # 10MB limit to allow large JSON payloads (e.g. base64 heatmaps)
             env=_ml_subprocess_env(),
         )
         # Start background stderr consumer to prevent pipe deadlock
@@ -283,6 +284,7 @@ async def warmup_ml_tool(script_name: str, timeout: float = 60.0) -> bool:
             "--warmup",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=10485760,
             env=_ml_subprocess_env(),
         )
         try:
@@ -533,6 +535,7 @@ async def _run_ml_tool_unbounded(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=10485760,
             preexec_fn=_preexec,
             env=_ml_subprocess_env(),
         )
