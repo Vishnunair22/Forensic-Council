@@ -33,7 +33,7 @@ SHAREABLE_TOOLS = frozenset({"analyze_image_content", "frequency_domain_analysis
 
 
 def _key(content_hash: str, tool_name: str) -> str:
-    return f"tool_result:{content_hash}:{tool_name}"
+    return f"tool_result_v2:{content_hash}:{tool_name}"
 
 
 async def cache_tool_result(content_hash: str, tool_name: str, result: Any) -> None:

@@ -1092,7 +1092,7 @@ def _has_narratable_signal(inp: AgentSynthesisInput) -> bool:
 _SYNTHESIS_CACHE: dict[str, dict[str, dict]] = {}
 _SYNTHESIS_CACHE_MAX = 64
 _SYNTHESIS_CACHE_TTL_S = 4 * 3600
-_SYNTHESIS_CACHE_KEY_PREFIX = "synthesis_batch:"
+_SYNTHESIS_CACHE_KEY_PREFIX = "synthesis_batch_v2:"
 
 
 def _synthesis_cache_key(inputs: dict[str, AgentSynthesisInput]) -> str:

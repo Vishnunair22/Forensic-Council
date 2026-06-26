@@ -65,7 +65,7 @@ async def get_visual_context(
             return VisualContext.model_validate(data)
 
         if sha256:
-            prompt_version = 1
+            prompt_version = 2
             raw_data = await redis.get(f"visual_context_by_hash:{sha256}:{prompt_version}")
             if raw_data:
                 data = json.loads(raw_data)
@@ -278,7 +278,7 @@ async def save_visual_context(
         context_json = context.model_dump_json()
         await redis.set(f"visual_context:{session_id}", context_json, ex=14400)  # 4 hour TTL
         if sha256:
-            prompt_version = 1
+            prompt_version = 2
             # Top-tier authoritative Gemini reads are cached 24h (deterministic +
             # quota-friendly: a re-upload of the same bytes reuses it with no Gemini
             # call). Anything weaker — local-ensemble fallbacks, or low-confidence /
