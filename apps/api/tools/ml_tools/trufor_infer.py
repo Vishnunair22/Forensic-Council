@@ -164,9 +164,11 @@ def analyze(image_path: str) -> dict:
             long_side_i = max(h0i, w0i)
             if long_side_i > max_side:
                 scale_i = max_side / float(long_side_i)
+                new_w = max(1, int(round(w0i * scale_i)))
+                new_h = max(1, int(round(h0i * scale_i)))
                 rgb_in = cv2.resize(
                     rgb_in,
-                    (int(round(w0i * scale_i)), int(round(h0i * scale_i))),
+                    (new_w, new_h),
                     interpolation=cv2.INTER_AREA,
                 )
             x = torch.from_numpy(rgb_in.transpose(2, 0, 1)).float().unsqueeze(0) / 256.0
@@ -295,8 +297,10 @@ def _encode_localization_heatmap(pmap, base_rgb, max_side: int = 256) -> str | N
         long_side = max(h, w)
         if long_side > max_side:
             s = max_side / float(long_side)
+            new_w = max(1, int(round(w * s)))
+            new_h = max(1, int(round(h * s)))
             overlay = cv2.resize(
-                overlay, (int(round(w * s)), int(round(h * s))), interpolation=cv2.INTER_AREA
+                overlay, (new_w, new_h), interpolation=cv2.INTER_AREA
             )
 
         ok, buf = cv2.imencode(".png", overlay)
