@@ -82,6 +82,7 @@ export const ALLOWED_MIME_TYPES = new Set([
   "video/quicktime",   // MOV
   "video/x-msvideo",   // AVI
   "video/x-matroska",  // MKV
+  "application/mp4",   // MP4-family container reported generically by some browsers/libmagic
 
   // ── Documents ──
   "application/pdf",

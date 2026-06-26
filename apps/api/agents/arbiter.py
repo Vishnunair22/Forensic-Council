@@ -669,7 +669,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         #    so the narrative label and the verdict field can never disagree) ──
         mapped_verdict = "INCONCLUSIVE"
         v_upper = (deliberation_result.final_verdict or "INCONCLUSIVE").upper()
-        if "LIKELY_MANIPULATED" in v_upper:
+        if "AI_GENERATED" in v_upper:
+            mapped_verdict = "AI_GENERATED"
+        elif "LIKELY_MANIPULATED" in v_upper:
             mapped_verdict = "MANIPULATED"
         elif "SUSPICIOUS" in v_upper or "PROVENANCE" in v_upper or "CONTENT_RISK" in v_upper:
             mapped_verdict = "SUSPICIOUS"

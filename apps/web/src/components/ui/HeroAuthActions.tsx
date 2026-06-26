@@ -85,14 +85,18 @@ export function HeroAuthActions() {
     const params = new URLSearchParams(window.location.search);
     const openOnce = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
     if (params.get("upload") === "1" || openOnce === "1") {
+      sessionOnlyStorage.setItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE, "1");
       setShowUpload(true);
       setSelectedFile(null);
-      if (openOnce === "1") sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
       const url = new URL(window.location.href);
       if (url.searchParams.has("upload")) {
         url.searchParams.delete("upload");
         window.history.replaceState({}, "", url.toString());
       }
+      const clearOpenOnce = window.setTimeout(() => {
+        sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_OPEN_UPLOAD_ONCE);
+      }, 250);
+      return () => window.clearTimeout(clearOpenOnce);
     }
   }, []);
 

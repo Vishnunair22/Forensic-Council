@@ -54,7 +54,7 @@ export function getFileExtension(name: string): string {
 export function getFileCategory(mime: string): "image" | "audio" | "video" | "document" | "unknown" {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "audio";
-  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("video/") || mime === "application/mp4") return "video";
   if (
     mime === "application/pdf" ||
     mime === "application/msword" ||
@@ -76,12 +76,15 @@ export function getFileCategory(mime: string): "image" | "audio" | "video" | "do
  */
 export function resolveMimeType(file: File): string {
   const mime = file.type;
+  const ext = getFileExtension(file.name);
+  if (mime === "application/mp4" && EXT_TO_MIME[ext]) {
+    return EXT_TO_MIME[ext];
+  }
   const generic =
     !mime ||
     mime === "application/octet-stream" ||
     mime === "application/x-zip-compressed";
   if (generic) {
-    const ext = getFileExtension(file.name);
     return EXT_TO_MIME[ext] ?? mime ?? "";
   }
   return mime;
@@ -127,10 +130,14 @@ export function validateEvidenceFile(file: File): string | null {
     // Allow if MIME prefix matches (catches audio/wav vs audio/x-wav, etc.)
     const mimePrefix = mimeType.split("/")[0];
     const expectedPrefix = expectedFromExt?.split("/")[0];
+    const isMp4Family =
+      mimeType === "application/mp4" &&
+      [".mp4", ".m4v", ".m4a"].includes(ext);
     if (
       expectedFromExt &&
       expectedFromExt !== mimeType &&
-      mimePrefix !== expectedPrefix
+      mimePrefix !== expectedPrefix &&
+      !isMp4Family
     ) {
       return `File extension "${ext}" doesn't match content type "${mimeType}". Verify the file is not corrupted.`;
     }

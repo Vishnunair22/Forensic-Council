@@ -25,6 +25,7 @@ from agents.agent5_metadata import Agent5Metadata
 from core.agent_registry import get_agent_registry
 from core.config import Settings
 from core.evidence import ArtifactType, EvidenceArtifact
+from core.file_type_policy import EXACT_MIME_EXT_MAP, SUPPORTED_MIME_TYPES, get_applicable_agents
 from core.react_loop import ReActLoopEngine
 
 
@@ -111,6 +112,45 @@ def test_agent_file_type_support_matrix(path: str, mime_type: str, expected_agen
     assert active == expected_agents
 
 
+@pytest.mark.parametrize("mime_type", sorted(SUPPORTED_MIME_TYPES))
+def test_every_supported_mime_routes_to_expected_agents(mime_type: str):
+    ext = ".mp4" if mime_type == "application/mp4" else sorted(EXACT_MIME_EXT_MAP[mime_type])[0]
+    path = f"evidence{ext}"
+    expected_agents = set(get_applicable_agents(mime_type))
+    active = {
+        agent_id
+        for agent_cls, agent_id in AGENTS
+        if _agent(agent_cls, agent_id, path, mime_type).supports_uploaded_file
+    }
+    assert active == expected_agents
+
+
+def test_application_mp4_routes_by_extension_until_stream_disambiguation():
+    video_active = {
+        agent_id
+        for agent_cls, agent_id in AGENTS
+        if _agent(agent_cls, agent_id, "evidence.mp4", "application/mp4").supports_uploaded_file
+    }
+    assert video_active == {"Agent4", "Agent5"}
+    assert set(get_applicable_agents("audio/mp4")) == {"Agent2", "Agent5"}
+
+
+def test_upload_mime_canonicalization_for_supported_ambiguous_formats():
+    from api.routes.investigation import _canonicalize_supported_mime
+
+    assert _canonicalize_supported_mime("text/plain", ".csv") == "text/csv"
+    assert _canonicalize_supported_mime("text/plain", ".md") == "text/markdown"
+    assert (
+        _canonicalize_supported_mime("application/zip", ".docx")
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert (
+        _canonicalize_supported_mime("application/zip", ".odt")
+        == "application/vnd.oasis.opendocument.text"
+    )
+    assert _canonicalize_supported_mime("application/zip", ".zip") == "application/zip"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("path", "mime_type"),
@@ -142,6 +182,32 @@ async def test_every_applicable_agent_task_maps_to_registered_tool(path: str, mi
                 match = ReActLoopEngine._match_tool_to_task(task, tools)
                 if match is None or match.name not in registered:
                     failures.append(f"{agent_id} {phase}: {task!r}")
+
+    assert failures == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mime_type", sorted(SUPPORTED_MIME_TYPES))
+async def test_every_supported_mime_initial_and_deep_tasks_map_to_registered_tools(mime_type: str):
+    ext = ".mp4" if mime_type == "application/mp4" else sorted(EXACT_MIME_EXT_MAP[mime_type])[0]
+    failures: list[str] = []
+
+    for agent_cls, agent_id in AGENTS:
+        agent = _agent(agent_cls, agent_id, f"evidence{ext}", mime_type)
+        if not agent.supports_uploaded_file:
+            continue
+
+        registry = await agent.build_tool_registry()
+        tools = registry.list_tools()
+        registered = {tool.name for tool in tools}
+        for phase, tasks in (
+            ("initial", agent.task_decomposition),
+            ("deep", agent.deep_task_decomposition),
+        ):
+            for task in tasks:
+                match = ReActLoopEngine._match_tool_to_task(task, tools)
+                if match is None or match.name not in registered:
+                    failures.append(f"{mime_type} {agent_id} {phase}: {task!r}")
 
     assert failures == []
 

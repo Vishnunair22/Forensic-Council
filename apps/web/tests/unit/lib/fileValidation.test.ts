@@ -1,4 +1,4 @@
-import { validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
+import { getFileCategory, resolveMimeType, validateEvidenceFile, ALLOWED_EXTENSIONS } from "@/lib/fileValidation";
 
 function createMockFile(name: string, type: string, size: number): File {
   return new File([new ArrayBuffer(size)], name, { type });
@@ -48,6 +48,14 @@ describe("validateEvidenceFile", () => {
 
     it("accepts MP4 video", () => {
       expect(validateEvidenceFile(createMockFile("video.mp4", "video/mp4", 1024))).toBeNull();
+    });
+
+    it("accepts MP4-family files reported as generic application/mp4", () => {
+      expect(validateEvidenceFile(createMockFile("video.mp4", "application/mp4", 1024))).toBeNull();
+      expect(validateEvidenceFile(createMockFile("audio.m4a", "application/mp4", 1024))).toBeNull();
+      expect(getFileCategory("application/mp4")).toBe("video");
+      expect(resolveMimeType(createMockFile("audio.m4a", "application/mp4", 1024))).toBe("audio/x-m4a");
+      expect(resolveMimeType(createMockFile("video.mp4", "application/mp4", 1024))).toBe("video/mp4");
     });
 
     it("accepts WEBM video", () => {

@@ -460,7 +460,9 @@ def _cross_signal_synthesis(
         strong_substantive_count=len(strong_substantive),
     )
 
-    if corroborated or strong_ai:
+    if strong_ai:
+        verdict = "AI_GENERATED"
+    elif corroborated:
         verdict = "SUSPICIOUS"
     elif len(strong_substantive) >= 2:
         # Two independent strong tools agree → escalate.

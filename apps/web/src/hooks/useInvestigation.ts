@@ -565,7 +565,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         file_name: targetFile.name,
         case_id: caseId,
         investigator_id: investigatorId,
-        mime_type: targetFile.type,
+        mime_type: resolvedMime,
         pipeline_start: pipelineStart,
         evidence_sha256: contentHash,
       };
@@ -580,8 +580,8 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       storage.setItem(`${STORAGE_KEYS.FILE_NAME}:${sessionIdToUse}`, targetFile.name);
       storage.setItem(STORAGE_KEYS.CASE_ID, caseId);
       storage.setItem(STORAGE_KEYS.INVESTIGATOR_ID, investigatorId);
-      storage.setItem(STORAGE_KEYS.MIME_TYPE, targetFile.type);
-      storage.setItem(`${STORAGE_KEYS.MIME_TYPE}:${sessionIdToUse}`, targetFile.type);
+      storage.setItem(STORAGE_KEYS.MIME_TYPE, resolvedMime);
+      storage.setItem(`${STORAGE_KEYS.MIME_TYPE}:${sessionIdToUse}`, resolvedMime);
 
       storage.setItem(STORAGE_KEYS.PIPELINE_START, pipelineStart);
       storage.setItem(`${STORAGE_KEYS.PIPELINE_START}:${sessionIdToUse}`, pipelineStart);

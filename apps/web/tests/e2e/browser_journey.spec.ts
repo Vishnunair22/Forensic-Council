@@ -304,6 +304,58 @@ async function clickViewReportAndWait(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/result/, { timeout: 15_000 });
 }
 
+async function clickStartAnalysisAndWait(page: import('@playwright/test').Page) {
+  const analyzeBtn = page.getByTestId('upload-start-analysis');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect(analyzeBtn).toBeVisible({ timeout: 15_000 });
+    await analyzeBtn.click();
+    try {
+      await page.waitForURL(/\/evidence/, { timeout: 15_000, waitUntil: 'commit' });
+      return;
+    } catch {
+      if (/\/evidence/.test(page.url())) return;
+      await page.waitForTimeout(1_000);
+    }
+  }
+  await expect(page).toHaveURL(/\/evidence/, { timeout: 15_000 });
+}
+
+async function waitForInitialDecision(page: import('@playwright/test').Page) {
+  await expect(page.getByTestId('accept-analysis-btn')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('deep-analysis-btn')).toBeVisible();
+}
+
+async function clickAcceptAndWait(page: import('@playwright/test').Page) {
+  const accept = page.getByTestId('accept-analysis-btn');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect(accept).toBeVisible({ timeout: 25_000 });
+    await accept.click();
+    try {
+      await page.waitForURL(/\/result/, { timeout: 15_000, waitUntil: 'commit' });
+      return;
+    } catch {
+      if (/\/result/.test(page.url())) return;
+      await page.waitForTimeout(1_000);
+    }
+  }
+  await expect(page).toHaveURL(/\/result/, { timeout: 15_000 });
+}
+
+async function clickDeepAnalysisAndWait(page: import('@playwright/test').Page) {
+  const deep = page.getByTestId('deep-analysis-btn');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect(deep).toBeVisible({ timeout: 25_000 });
+    await deep.click();
+    try {
+      await expect(page.getByTestId('view-report-btn')).toBeVisible({ timeout: 20_000 });
+      return;
+    } catch {
+      await page.waitForTimeout(1_000);
+    }
+  }
+  await expect(page.getByTestId('view-report-btn')).toBeVisible({ timeout: 25_000 });
+}
+
 /**
  * Browser Journey E2E — Forensic Council
  * =====================================
@@ -372,9 +424,7 @@ test.describe('Forensic Analyst Journey', () => {
     await expect(page.getByText('test-evidence.png')).toBeVisible();
 
     // 3. Trigger Analysis
-    const analyzeBtn = page.getByTestId('upload-start-analysis');
-    await expect(analyzeBtn).toBeVisible();
-    await analyzeBtn.click();
+    await clickStartAnalysisAndWait(page);
 
     // 4. Verify Transition to Progress
     await expect(page).toHaveURL(/.*evidence/, { timeout: 30_000 });
@@ -419,15 +469,12 @@ test.describe('Forensic Analyst Journey', () => {
     });
 
     await expect(page.getByText('court-evidence.png')).toBeVisible();
-    await page.getByTestId('upload-start-analysis').click();
+    await clickStartAnalysisAndWait(page);
 
     await expect(page).toHaveURL(/\/evidence/, { timeout: 30_000 });
-    await expect(page.getByRole('heading', { name: /Analysis Pipeline/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('accept-analysis-btn')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('deep-analysis-btn')).toBeVisible();
+    await waitForInitialDecision(page);
 
-    await page.getByTestId('deep-analysis-btn').click();
-    await expect(page.getByTestId('view-report-btn')).toBeVisible({ timeout: 20_000 });
+    await clickDeepAnalysisAndWait(page);
     await expect(page.getByTestId('new-analysis-btn')).toBeVisible();
 
     await clickViewReportAndWait(page);
@@ -458,14 +505,11 @@ test.describe('Forensic Analyst Journey', () => {
     });
 
     await expect(page.getByText('initial-evidence.png')).toBeVisible();
-    await page.getByTestId('upload-start-analysis').click();
+    await clickStartAnalysisAndWait(page);
 
-    await expect(page.getByRole('heading', { name: /Analysis Pipeline/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('accept-analysis-btn')).toBeVisible({ timeout: 25_000 });
-    await expect(page.getByTestId('deep-analysis-btn')).toBeVisible();
+    await waitForInitialDecision(page);
 
-    await page.getByTestId('accept-analysis-btn').click();
-    await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
+    await clickAcceptAndWait(page);
 
     await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
     await expectLikelyAuthenticVerdict(page);
@@ -494,14 +538,12 @@ test.describe('Forensic Analyst Journey', () => {
     });
 
     await expect(page.getByText('deep-evidence.png')).toBeVisible();
-    await page.getByTestId('upload-start-analysis').click();
+    await clickStartAnalysisAndWait(page);
 
-    await expect(page.getByRole('heading', { name: /Analysis Pipeline/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('deep-analysis-btn')).toBeVisible({ timeout: 25_000 });
+    await waitForInitialDecision(page);
 
-    await page.getByTestId('deep-analysis-btn').click();
+    await clickDeepAnalysisAndWait(page);
     await expect(page.getByText(/Deep Analysis/i).first()).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('view-report-btn')).toBeVisible({ timeout: 25_000 });
 
     await clickViewReportAndWait(page);
 

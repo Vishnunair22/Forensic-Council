@@ -48,6 +48,7 @@ from core.file_type_policy import (
     SUPPORTED_EXTENSIONS,
     SUPPORTED_MIME_TYPES,
     get_applicable_agents,
+    get_mime_for_extension,
 )
 from core.structured_logging import get_logger
 from orchestration.pipeline import ForensicCouncilPipeline
@@ -108,6 +109,29 @@ async def _detect_mime_from_head(head: bytes) -> str:
             status_code=503,
             detail="Evidence MIME detection service is unavailable.",
         ) from exc
+
+
+def _canonicalize_supported_mime(detected_mime: str, raw_suffix: str) -> str:
+    """Normalize libmagic's generic container/text results for supported extensions.
+
+    libmagic correctly reports many textual formats as ``text/plain`` and
+    ZIP-backed Office formats as ``application/zip`` from the leading bytes.
+    The product explicitly supports CSV/Markdown/DOCX/ODT, so map those known
+    extension-backed cases to the policy MIME before exact extension validation.
+    """
+    suffix = raw_suffix.lower()
+    detected = (detected_mime or "").lower()
+    expected = get_mime_for_extension(suffix)
+    if not expected:
+        return detected_mime
+
+    if detected == "text/plain" and suffix in {".csv", ".md"}:
+        return expected
+
+    if detected in {"application/zip", "application/x-zip-compressed"} and suffix in {".docx", ".odt"}:
+        return expected
+
+    return detected_mime
 
 
 async def _mp4_has_real_video_stream(path: Path) -> bool | None:
@@ -382,6 +406,17 @@ async def start_investigation(
         except Exception as exc:
             logger.debug("PIL fallback MIME detection failed", error=str(exc))
 
+    # Sanitize original filename: take only the basename to prevent path
+    # traversal, strip control chars that could corrupt log/report rendering.
+    _safe_original_filename = Path(file.filename or "").name if file.filename else None
+    raw_suffix = Path(file.filename or "").suffix.lower()
+    if raw_suffix not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, detail=f"File extension '{raw_suffix}' is not permitted."
+        )
+
+    actual_mime = _canonicalize_supported_mime(actual_mime, raw_suffix)
+
     # Validate against SUPPORTED_MIME_TYPES
     if actual_mime not in SUPPORTED_MIME_TYPES:
         raise HTTPException(status_code=400, detail=f"File type '{actual_mime}' is not allowed.")
@@ -392,15 +427,6 @@ async def start_investigation(
         raise HTTPException(
             status_code=400,
             detail=f"File type '{actual_mime}' is not supported by any specialized forensic agent.",
-        )
-
-    # Sanitize original filename: take only the basename to prevent path
-    # traversal, strip control chars that could corrupt log/report rendering.
-    _safe_original_filename = Path(file.filename or "").name if file.filename else None
-    raw_suffix = Path(file.filename or "").suffix.lower()
-    if raw_suffix not in SUPPORTED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400, detail=f"File extension '{raw_suffix}' is not permitted."
         )
 
     valid_exts = EXACT_MIME_EXT_MAP.get(actual_mime, frozenset())

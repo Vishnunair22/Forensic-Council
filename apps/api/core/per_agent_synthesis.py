@@ -777,6 +777,8 @@ _TOOL_ALIAS_MAP: dict[str, str] = {
     "timestamp_record": "timestamp_analysis",
     "timestamp_check": "timestamp_analysis",
     "timestamp_analyzer": "timestamp_analysis",
+    "timestamp_correlation": "timestamp_analysis",
+    "timestamp_validator": "timestamp_analysis",
     "device_make_model": "device_fingerprint_db",
     "exif_provenance_chain": "provenance_chain_verify",
     "exif_provenance_check": "provenance_chain_verify",

@@ -725,6 +725,8 @@ class SceneHandlers(BaseToolHandler):
 
             anomalies = []
             for det in detections:
+                if not det.get("is_reliable", True):
+                    continue
                 bbox = det.get("bbox_xywh", [])
                 if len(bbox) < 4:
                     continue
@@ -788,7 +790,7 @@ class SceneHandlers(BaseToolHandler):
 
         yolo_ctx = self.agent._tool_context.get("object_detection", {})
         detections = yolo_ctx.get("detections", []) if isinstance(yolo_ctx, dict) else []
-        high_conf = [d for d in detections if d.get("confidence", 0.0) >= 0.50 and d.get("box")]
+        high_conf = [d for d in detections if d.get("confidence", 0.0) >= 0.50 and d.get("box") and d.get("is_reliable", True)]
 
         if not high_conf:
             scene_result["roi_analysis"] = "skipped — no high-confidence detections"

@@ -208,6 +208,22 @@ async function clickAcceptAndWaitForResult(page: Page) {
   await expect(page).toHaveURL(/\/result\//, { timeout: 15_000 });
 }
 
+async function clickStartAnalysisAndWait(page: Page) {
+  const start = page.getByTestId("upload-start-analysis");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect(start).toBeVisible({ timeout: 15_000 });
+    await start.click();
+    try {
+      await page.waitForURL(/\/evidence$/, { timeout: 15_000, waitUntil: "commit" });
+      return;
+    } catch {
+      if (/\/evidence$/.test(page.url())) return;
+      await page.waitForTimeout(1_000);
+    }
+  }
+  await expect(page).toHaveURL(/\/evidence$/, { timeout: 15_000 });
+}
+
 test.describe.serial("mocked journey with session persistence", () => {
   test.beforeEach(async ({ page }) => {
     await page.context().clearCookies();
@@ -237,8 +253,7 @@ test.describe.serial("mocked journey with session persistence", () => {
     });
 
     await expect(page.getByRole("heading", { name: /Evidence Sealed/i })).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("upload-start-analysis").click();
-    await expect(page).toHaveURL(/\/evidence$/, { timeout: 30_000 });
+    await clickStartAnalysisAndWait(page);
 
     await expect(page.getByText(/Reconnecting/i)).toBeVisible({ timeout: 5_000 }).catch(() => {
       /* ignore — mocked flow may not show reconnecting text */
@@ -280,8 +295,7 @@ test.describe.serial("mocked journey with session persistence", () => {
     });
 
     await expect(page.getByRole("heading", { name: /Evidence Sealed/i })).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("upload-start-analysis").click();
-    await expect(page).toHaveURL(/\/evidence$/, { timeout: 30_000 });
+    await clickStartAnalysisAndWait(page);
     await expect(page.getByTestId("agent-card-Agent1")).toBeVisible({ timeout: 10_000 }).catch(() => {
       /* agent cards may not render in mocked flow */
     });

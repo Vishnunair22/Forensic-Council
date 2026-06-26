@@ -270,32 +270,47 @@ def deliberate_findings(
     hash_mismatch_tools = {"file_hash_verify", "hash_verify", "custody_check"}
     hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") in hash_mismatch_tools and f.get("evidence_verdict") == "POSITIVE"]
 
+    ai_gen_tools = {
+        "diffusion_artifact_detector", "ai_generation_detector", "audio_gen_signature", 
+        "ai_text_detector", "voice_clone_detect", "synthid_watermark_detect",
+        "face_swap_detection", "deepfake_frequency_check", "voice_clone_deep_ensemble"
+    }
+    ai_positives = [t for t in positive_integrity_tools if t in ai_gen_tools]
+    # If the ONLY integrity positives are AI generation tools, or they dominate
+    is_primarily_ai = bool(ai_positives) and len(ai_positives) >= len(positive_integrity_tools) / 2
+    
+    vc_is_ai = False
+    if visual_context:
+        vis_integrity = getattr(visual_context, "image_integrity_context", None)
+        if vis_integrity and getattr(vis_integrity, "integrity_assessment", "") == "ai_generated_suspect":
+            vc_is_ai = True
+
     # Determine verdict
     if hash_mismatches:
         final_verdict = "LIKELY_MANIPULATED"
     elif len(set(positive_integrity_tools)) >= 2:
-        final_verdict = "LIKELY_MANIPULATED"
+        final_verdict = "AI_GENERATED" if (is_primarily_ai or vc_is_ai) else "LIKELY_MANIPULATED"
     elif len(positive_integrity_tools) == 1:
         # Check if high confidence or supported by visual context
         finding = positive_integrity_findings[0]
         conf = finding.get("confidence_raw") or finding.get("metadata", {}).get("confidence") or 0.0
         if conf >= single_signal_bar or has_vc_integrity_issue:
-            final_verdict = "LIKELY_MANIPULATED"
+            final_verdict = "AI_GENERATED" if (is_primarily_ai or vc_is_ai) else "LIKELY_MANIPULATED"
         else:
-            final_verdict = "SUSPICIOUS_INTEGRITY_SIGNALS"
+            final_verdict = "LIKELY_AI_GENERATED" if (is_primarily_ai or vc_is_ai) else "SUSPICIOUS_INTEGRITY_SIGNALS"
     elif has_vc_integrity_issue:
         # Bounded weighted voter: a high-confidence remote-Gemini manipulation/AI
         # read carries real weight on its own, so it can raise the verdict to
         # LIKELY_MANIPULATED even with no positive integrity tool. A low-confidence
         # or local-ensemble read only raises suspicion.
         if vc_strong_vote:
-            final_verdict = "LIKELY_MANIPULATED"
+            final_verdict = "AI_GENERATED" if vc_is_ai else "LIKELY_MANIPULATED"
             agreements.append(
                 f"Visual model (remote) independently assessed manipulation/AI generation "
                 f"at {int(round(vc_conf * 100))}% confidence."
             )
         else:
-            final_verdict = "SUSPICIOUS_INTEGRITY_SIGNALS"
+            final_verdict = "LIKELY_AI_GENERATED" if vc_is_ai else "SUSPICIOUS_INTEGRITY_SIGNALS"
     elif provenance_anomalies:
         final_verdict = "PROVENANCE_CONCERN"
     elif content_risks:
@@ -309,7 +324,7 @@ def deliberate_findings(
     # recompressed real photo (e.g. WhatsApp/phone-pipeline artifacts) — hold the
     # verdict inconclusive rather than asserting manipulation. Hard provenance
     # evidence (hash mismatch) is exempt; it is not overridden by visual assessment.
-    if final_verdict in ("LIKELY_MANIPULATED", "SUSPICIOUS_INTEGRITY_SIGNALS") and not hash_mismatches:
+    if final_verdict in ("LIKELY_MANIPULATED", "SUSPICIOUS_INTEGRITY_SIGNALS", "AI_GENERATED", "LIKELY_AI_GENERATED") and not hash_mismatches:
         gemini_available_and_clean = visual_context is not None and not has_vc_integrity_issue
         strong_corroborating = sum(
             1
@@ -368,9 +383,9 @@ def deliberate_findings(
 
     # Set supports_final_verdict on findings
     for df in deliberated:
-        if final_verdict == "LIKELY_MANIPULATED" and df.evidence_verdict == "POSITIVE" and df.signal_category == "integrity":
+        if final_verdict in ("LIKELY_MANIPULATED", "AI_GENERATED") and df.evidence_verdict == "POSITIVE" and df.signal_category == "integrity":
             df.supports_final_verdict = True
-        elif final_verdict == "SUSPICIOUS_INTEGRITY_SIGNALS" and df.evidence_verdict == "POSITIVE":
+        elif final_verdict in ("SUSPICIOUS_INTEGRITY_SIGNALS", "LIKELY_AI_GENERATED") and df.evidence_verdict == "POSITIVE":
             df.supports_final_verdict = True
         elif final_verdict == "PROVENANCE_CONCERN" and df.signal_category == "provenance" and df.evidence_verdict == "POSITIVE":
             df.supports_final_verdict = True
