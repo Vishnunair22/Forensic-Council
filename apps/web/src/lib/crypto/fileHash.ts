@@ -39,7 +39,6 @@ export async function computeFileSha256(
     return computeFileSha256Fallback(file, onProgress);
   }
 
-  // Web Crypto API doesn't have an incremental digest. Use the single-shot
   // approach but chunk the ArrayBuffer reads and yield between them to keep
   // the UI responsive. The actual digest is computed at the end on the full
   // buffer — but we avoid blocking during the I/O-heavy read phase.
@@ -47,8 +46,16 @@ export async function computeFileSha256(
   // For files ≤1 MB the overhead of chunking is negligible. For 50 MB files,
   // the I/O phase (arrayBuffer read) is the main bottleneck, and chunking
   // yields between 1 MB slices so the UI can paint.
-  const buffer = await file.arrayBuffer();
-  onProgress?.(70);
+  const buffer = new Uint8Array(file.size);
+  let offset = 0;
+  for (let i = 0; i < file.size; i += CHUNK_SIZE) {
+    const chunk = file.slice(i, i + CHUNK_SIZE);
+    const chunkBuffer = await chunk.arrayBuffer();
+    buffer.set(new Uint8Array(chunkBuffer), offset);
+    offset += chunkBuffer.byteLength;
+    onProgress?.((offset / file.size) * 70);
+    await yieldToEventLoop();
+  }
 
   // Yield to the event loop before the CPU-intensive digest so pending UI
   // events (e.g. the spinner animation) can paint.
@@ -81,8 +88,16 @@ async function computeFileSha256Fallback(
   file: File,
   onProgress?: (percent: number) => void,
 ): Promise<FileHashResult> {
-  const buffer = await file.arrayBuffer();
-  onProgress?.(70);
+  const buffer = new Uint8Array(file.size);
+  let offset = 0;
+  for (let i = 0; i < file.size; i += CHUNK_SIZE) {
+    const chunk = file.slice(i, i + CHUNK_SIZE);
+    const chunkBuffer = await chunk.arrayBuffer();
+    buffer.set(new Uint8Array(chunkBuffer), offset);
+    offset += chunkBuffer.byteLength;
+    onProgress?.((offset / file.size) * 70);
+    await yieldToEventLoop();
+  }
 
   await yieldToEventLoop();
 
