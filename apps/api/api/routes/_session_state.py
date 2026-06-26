@@ -207,7 +207,7 @@ async def update_active_pipeline_metadata(
                 if not isinstance(existing, dict):
                     existing = {}
                 merged = {**existing, **fields}
-                pipe.multi()
+                await _maybe_await(pipe.multi())
                 await _maybe_await(
                     pipe.set(key, _json.dumps(merged, default=str), ex=_METADATA_TTL_SECONDS)
                 )

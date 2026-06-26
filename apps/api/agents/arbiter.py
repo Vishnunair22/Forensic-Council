@@ -685,7 +685,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # inconclusive upstream or here. A genuinely clean detector run (NEGATIVE /
         # low score) does NOT match, so the authentic majority is untouched.
         if mapped_verdict == "AUTHENTIC":
-            _AI_GEN_TOOLS = {"diffusion_artifact_detector", "ai_generation_detector"}
+            ai_gen_tools = {"diffusion_artifact_detector", "ai_generation_detector"}
             _holistic_local_only = (
                 visual_context is None
                 or str(getattr(visual_context, "source", "") or "") == "local_ensemble"
@@ -697,7 +697,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                         continue
                     _m = _f.get("metadata") or {}
                     _tool = _m.get("tool_name") or _f.get("finding_type") or ""
-                    if _tool not in _AI_GEN_TOOLS:
+                    if _tool not in ai_gen_tools:
                         continue
                     try:
                         _prob = float(_m.get("diffusion_probability") or _m.get("confidence_raw") or _m.get("confidence") or 0.0)
@@ -719,15 +719,15 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # read so the verdict line, overall_confidence, manipulation probability,
         # and the deterministic report all reflect the capped value consistently.
         if getattr(self, "_uncorroborated_ai_gen_local", False) and mapped_verdict == "AUTHENTIC":
-            _AI_GEN_CONF_CAP = 0.70
-            if deliberation_result.final_confidence > _AI_GEN_CONF_CAP:
+            ai_gen_conf_cap = 0.70
+            if deliberation_result.final_confidence > ai_gen_conf_cap:
                 logger.info(
                     "Confidence capped — uncorroborated local AI-generation signal "
                     "(holistic review unavailable)",
                     from_confidence=round(deliberation_result.final_confidence, 3),
-                    cap=_AI_GEN_CONF_CAP,
+                    cap=ai_gen_conf_cap,
                 )
-                deliberation_result.final_confidence = _AI_GEN_CONF_CAP
+                deliberation_result.final_confidence = ai_gen_conf_cap
 
         _final_conf = deliberation_result.final_confidence
         manipulation_probability = _manipulation_probability(mapped_verdict, _final_conf)
@@ -800,8 +800,8 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                 _es = str(final_report_dict.get("executive_summary") or "").rstrip()
                 if "Reliability note:" not in _es:
                     final_report_dict["executive_summary"] = _es + _ai_gen_caveat
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not append AI-generation reliability caveat", error=str(exc))
 
         # ── 8. Mapping Back to ForensicReport Pydantic Model ──
         # (mapped_verdict + derived metrics computed above, before report build)
@@ -1120,9 +1120,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         return merged
 
     def _compute_agent_metrics(self, aid: str, findings: list[dict], skipped: bool) -> AgentMetrics:
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
         name = AGENT_NAMES.get(aid, aid)
-        
+
         latest_time = datetime.now(UTC).isoformat()
         if findings:
             times = []
@@ -1132,7 +1132,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     times.append(str(t))
             if times:
                 latest_time = max(times)
-                
+
         if skipped:
             return AgentMetrics(agent_id=aid, agent_name=name, skipped=True, completed_at=latest_time)
         real = [
@@ -1510,4 +1510,3 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             ],
             analysis_coverage_note="No applicable agents produced findings. ABSTAIN means no analysis was run, not that the evidence is authentic.",
         )
-

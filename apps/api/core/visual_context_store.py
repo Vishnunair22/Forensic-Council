@@ -217,7 +217,7 @@ def _gemini_configured_enabled() -> bool:
             return False
         chain = str(getattr(s, "vision_provider_chain", "") or "")
         return "gemini" in chain and bool(getattr(s, "remote_visual_profile_allowed", True))
-    except Exception:
+    except Exception:  # noqa: S110 - cache metadata annotation must not break retrieval
         return False
 
 
@@ -436,7 +436,7 @@ async def create_visual_context_preflight(
         # not produced fresh this session (content-hash keyed; same bytes = same read).
         try:
             existing.cached = True
-        except Exception:
+        except Exception:  # noqa: S110 - legacy cache entries may not allow transient attributes
             pass
         # A hit may have come from the 24h hash-keyed cache (same file, new
         # session). Consumers look up by session_id only (no sha256), so re-save
@@ -465,7 +465,7 @@ async def create_visual_context_preflight(
     try:
         redis = await get_redis_client()
         have_lock = await _acquire_preflight_lock(redis, sha256, lock_token)
-    except Exception:
+    except Exception:  # noqa: S110 - Redis preflight is optional; continue without it
         redis = None
 
     if redis is not None and not have_lock:
@@ -716,4 +716,3 @@ def visual_context_to_profile_dict(context: VisualContext) -> dict:
             "tool_coverage": context.tool_coverage,
         },
     }
-

@@ -257,13 +257,13 @@ def _finalize_result(result: dict[str, Any], file_type_hint: str) -> dict[str, A
     preview = str(result.get("ocr_text_preview") or result.get("text_preview") or "").strip()
     if not preview and full_text:
         preview = " | ".join(line.strip() for line in full_text.splitlines() if line.strip())[:240]
-        
+
     # Cap massive text payloads to prevent ReAct loop LLM OOM/Timeout (the cause of the PDF delay)
-    MAX_CHARS = 4000
-    if len(full_text) > MAX_CHARS:
+    max_chars = 4000
+    if len(full_text) > max_chars:
         original_len = len(full_text)
-        full_text = full_text[:MAX_CHARS] + f"\n... [Text truncated: original was {original_len} chars]"
-    
+        full_text = full_text[:max_chars] + f"\n... [Text truncated: original was {original_len} chars]"
+
     if isinstance(lines, list) and len(lines) > 200:
         lines = lines[:200]
         lines.append("... [lines truncated]")
@@ -274,13 +274,13 @@ def _finalize_result(result: dict[str, Any], file_type_hint: str) -> dict[str, A
         result.setdefault("text", full_text)
         result.setdefault("has_text", True)
         result.setdefault("word_count", len(full_text.split()))
-        
+
     # Ensure truncated text replaces any massive raw text
     if "full_text" in result:
         result["full_text"] = full_text
     if "text" in result:
         result["text"] = full_text
-        
+
     if preview:
         result.setdefault("ocr_text_preview", preview)
         result.setdefault("text_preview", preview)
@@ -315,7 +315,7 @@ def _extract_text_pymupdf_sync(file_path: str) -> dict[str, Any]:
             if i >= 50 or text_length > 50000:
                 pages_text.append("\n... [Further pages truncated for performance]")
                 break
-            
+
             # Extract plain text for simplicity and performance as Tier 1
             text = str(page.get_text("text")).strip()
             if text:

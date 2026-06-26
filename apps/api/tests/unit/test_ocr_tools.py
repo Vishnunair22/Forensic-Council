@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from core.evidence import EvidenceArtifact
-
 from tools.ocr_tools import (
     _build_summary,
     _extract_text_easyocr_sync,

@@ -61,23 +61,28 @@ def main() -> int:
     ap.add_argument("--fake-kw", default="spoof,fake,synthetic,convert,clone,artificial",
                     help="substrings (lower) in the label field meaning FAKE/spoof")
     ap.add_argument("--per-class", type=int, default=90)
-    ap.add_argument("--out", default="/tmp/calib/audio")
+    ap.add_argument("--out", default="/tmp/calib/audio")  # noqa: S108 - container-local calibration scratch path
     ap.add_argument("--start-offset", type=int, default=0)
     ap.add_argument("--max-pages", type=int, default=80)
     args = ap.parse_args()
 
     fake_kw = [s.strip().lower() for s in args.fake_kw.split(",") if s.strip()]
-    real_dir = Path(args.out) / "real"; real_dir.mkdir(parents=True, exist_ok=True)
-    fake_dir = Path(args.out) / "fake"; fake_dir.mkdir(parents=True, exist_ok=True)
+    real_dir = Path(args.out) / "real"
+    real_dir.mkdir(parents=True, exist_ok=True)
+    fake_dir = Path(args.out) / "fake"
+    fake_dir.mkdir(parents=True, exist_ok=True)
     n_real = n_fake = 0
-    offset = args.start_offset; page = 100; pages = 0
+    offset = args.start_offset
+    page = 100
+    pages = 0
     target = args.per_class
 
     while (n_real < target or n_fake < target) and pages < args.max_pages:
         try:
             rows = _rows(args.dataset, args.config, args.split, offset, page)
         except Exception as exc:  # noqa: BLE001
-            print(f"  rows@{offset}: {type(exc).__name__}: {exc}"); break
+            print(f"  rows@{offset}: {type(exc).__name__}: {exc}")
+            break
         if not rows:
             break
         pages += 1
@@ -98,9 +103,11 @@ def main() -> int:
             except Exception:  # noqa: BLE001 — skip unfetchable cells
                 continue
             if is_fake:
-                (fake_dir / f"aud_fake_{n_fake:04d}.wav").write_bytes(data); n_fake += 1
+                (fake_dir / f"aud_fake_{n_fake:04d}.wav").write_bytes(data)
+                n_fake += 1
             else:
-                (real_dir / f"aud_real_{n_real:04d}.wav").write_bytes(data); n_real += 1
+                (real_dir / f"aud_real_{n_real:04d}.wav").write_bytes(data)
+                n_real += 1
         offset += page
         print(f"  real={n_real} fake={n_fake} (offset={offset})")
 

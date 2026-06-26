@@ -14,7 +14,6 @@ from core.capability_manifest import (
     get_current_manifest,
     truthful_tool_display,
 )
-from core.finding_humanizer import CONTEXT_ONLY_TOOLS
 from core.per_agent_synthesis import AgentSynthesisOutput, _fuzzy_tool_alias
 from core.structured_logging import get_logger
 
@@ -151,7 +150,8 @@ def _trained_contributors(agent_ids) -> list[tuple[str, str, str]]:
     for aid in agent_ids:
         try:
             model = layer.load_model(aid)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Calibration model unavailable for report disclosure", agent_id=aid, error=str(exc))
             continue
         if model.calibration_status == CalibrationStatus.TRAINED:
             out.append((aid, str(model.benchmark_dataset or "labelled benchmark"), str(model.version or "")))

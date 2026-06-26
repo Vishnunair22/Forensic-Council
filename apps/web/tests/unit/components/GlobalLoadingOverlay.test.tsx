@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { GlobalLoadingOverlay } from "@/components/ui/GlobalLoadingOverlay";
+import { EVIDENCE_MAX_DISPLAY_MS } from "@/lib/timings";
 
 let mockPathname = "/evidence";
 
@@ -26,6 +27,8 @@ jest.mock("@/lib/storageKeys", () => ({
     FC_LOADING_DISPATCHED: "fc_loading_dispatched",
     FC_HANDOFF_FIRED: "fc_handoff_fired",
     FC_ARBITER_TRANSITIONING: "fc_arbiter_transitioning",
+    AUTO_START: "forensic_auto_start",
+    FC_HARD_REFRESH_GUARD: "fc_hard_refresh_guard",
   },
 }));
 jest.mock("framer-motion", () => ({
@@ -47,12 +50,12 @@ describe("BUG-07 — Safety timer uses remaining time on remount", () => {
     jest.useRealTimers();
   });
 
-  it("overlay dismisses within 5s safety window", () => {
+  it("overlay dismisses within the configured evidence safety window", () => {
     render(<GlobalLoadingOverlay />);
     expect(screen.getByTestId("loading-overlay")).toBeInTheDocument();
 
     act(() => {
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(EVIDENCE_MAX_DISPLAY_MS);
     });
 
     expect(screen.queryByTestId("loading-overlay")).not.toBeInTheDocument();
@@ -94,12 +97,12 @@ describe("BUG-21 — No ArbiterDeliberationOverlay in GlobalLoadingOverlay", () 
     expect(container.querySelector("[data-testid='arbiter-overlay']")).toBeNull();
   });
 
-  it("overlay dismisses within 5s safety window", () => {
+  it("overlay dismisses within the configured evidence safety window", () => {
     render(<GlobalLoadingOverlay />);
     expect(screen.getByTestId("loading-overlay")).toBeInTheDocument();
 
     act(() => {
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(EVIDENCE_MAX_DISPLAY_MS);
     });
 
     expect(screen.queryByTestId("loading-overlay")).not.toBeInTheDocument();

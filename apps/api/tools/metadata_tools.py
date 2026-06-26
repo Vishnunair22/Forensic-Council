@@ -12,8 +12,8 @@ from typing import Any
 
 from PIL import ExifTags, Image
 
-from core.structured_logging import get_logger
 from core.scoring import ConfidenceCalibrator
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -564,7 +564,7 @@ async def file_structure_analysis(*, artifact: Any = None, file_path: str | None
         base["format_detected"] = "PDF"
     else:
         base["format_detected"] = "unknown"
-    
+
     raw_sig = min(1.0, len(base["anomalies"]) / 4.0) if base["anomalies"] else 0.0
     base["confidence"] = ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.85) if not base["anomalies"] else ConfidenceCalibrator.calibrate_heuristic(raw_sig, reliability_tag="linear_fallback", base_bias=0.50)
     base["verdict"] = "REVIEW" if base["anomalies"] else "CLEAN"

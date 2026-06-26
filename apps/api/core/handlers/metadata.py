@@ -665,8 +665,8 @@ class MetadataHandlers(BaseToolHandler):
         await self.agent.update_sub_task("Auditing document text for AI-generation statistical signatures...")
 
         result = await run_ml_tool("ai_text_detector.py", artifact.file_path, extra_args=["--is-path"], timeout=20.0)
-        
-        # If the worker failed because the text is too short or file could not be read, 
+
+        # If the worker failed because the text is too short or file could not be read,
         # ensure it degrades gracefully without raising
         if result.get("error") or not result.get("available"):
             result["available"] = False
@@ -695,6 +695,6 @@ class MetadataHandlers(BaseToolHandler):
         # returns 0.0 and a POSITIVE ai_text_detector finding is treated as a
         # medium alert rather than a strong signal).
         result["confidence_raw"] = prob
-            
+
         await self.agent._record_tool_result("ai_text_detector", result)
         return result

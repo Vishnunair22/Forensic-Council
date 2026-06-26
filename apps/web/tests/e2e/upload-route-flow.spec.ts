@@ -58,7 +58,7 @@ test("landing CTA routes selected file into evidence analysis overlay", async ({
     buffer: makeValidPng(),
   });
 
-  await expect(page.getByRole("heading", { name: /evidence ready/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /evidence sealed/i })).toBeVisible();
   await expect(page.getByText("route-flow-evidence.png")).toBeVisible();
 
   await page.getByTestId("upload-start-analysis").click();

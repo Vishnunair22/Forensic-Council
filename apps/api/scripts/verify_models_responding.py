@@ -1,4 +1,3 @@
-
 import asyncio
 import sys
 from pathlib import Path
@@ -7,16 +6,13 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from core.ml_subprocess import _WARMUP_SCRIPTS, warmup_all_tools
-from core.structured_logging import get_logger
 
-logger = get_logger(__name__)
 
 async def main():
     print("=" * 60)
     print("VERIFYING ML MODELS RESPONDING (WARM-UP TEST)")
     print("=" * 60)
 
-    # Increase timeout per tool for initial load
     results = await warmup_all_tools(timeout_per_tool=120.0)
 
     print("\nResults:")
@@ -26,43 +22,50 @@ async def main():
 
     for name in sorted(_WARMUP_SCRIPTS):
         status = results.get(name, False)
-        icon = "✓" if status else "✗"
-        print(f"  {icon} {name:<40} {'READY' if status else 'FAILED'}")
+        icon = "OK" if status else "FAIL"
+        print(f"  {icon:<4} {name:<40} {'READY' if status else 'FAILED'}")
         if status:
             succeeded += 1
         else:
             failed.append(name)
 
-    print("\nVerifying Florence-2 Vision Fallback...")
+    print("\nVerifying optional Florence-2 Vision Fallback...")
+    optional_degraded = []
     try:
-
         from tools.florence_analyzer import get_florence_analyzer
 
         analyzer = get_florence_analyzer()
         load_success = analyzer._load()
         if load_success:
-            print(f"  ✓ Florence-2 model is READY (device: {analyzer._device})")
+            print(f"  OK   Florence-2 model is READY (device: {analyzer._device})")
             succeeded += 1
         else:
-            print("  ✗ Florence-2 model failed to load")
-            failed.append("florence_analyzer (in-process)")
-    except Exception as e:
-        print(f"  ✗ Florence-2 verification exception: {e}")
-        failed.append(f"florence_analyzer (exception: {e})")
+            print("  WARN Florence-2 unavailable; local visual ensemble will run without captioning")
+            optional_degraded.append("florence_analyzer (optional in-process)")
+    except Exception as exc:
+        print(f"  WARN Florence-2 verification exception: {exc}")
+        optional_degraded.append(f"florence_analyzer (optional exception: {exc})")
 
     print("-" * 60)
-    # Add 1 to expected count for Florence-2 VLM
     total_expected = len(_WARMUP_SCRIPTS) + 1
     print(f"Summary: {succeeded}/{total_expected} tools ready.")
+    if optional_degraded:
+        print(f"Optional degraded: {len(optional_degraded)}")
 
     if failed:
-        print("\nFailed tools:")
-        for f in failed:
-            print(f"  - {f}")
+        print("\nFailed required tools:")
+        for item in failed:
+            print(f"  - {item}")
         sys.exit(1)
+
+    if optional_degraded:
+        print("\nRequired models are responding; optional fallbacks degraded:")
+        for item in optional_degraded:
+            print(f"  - {item}")
     else:
         print("\nAll models are responding correctly!")
-        sys.exit(0)
+    sys.exit(0)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

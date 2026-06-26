@@ -85,6 +85,14 @@ export const ALLOWED_MIME_TYPES = new Set([
 
   // ── Documents ──
   "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.oasis.opendocument.text",
+  "application/rtf",
+  "text/rtf",
+  "text/plain",
+  "text/csv",
+  "text/markdown",
 ]);
 
 /** Maximum evidence file size — 50 MB. Must match backend MAX_EVIDENCE_SIZE_BYTES in config.py. */
@@ -129,4 +137,3 @@ export const UI_STRINGS = {
   COMPILING_FINDINGS: "Compiling agent findings...",
   FINAL_SYNTHESIS: "Final report synthesis requested. Compiling deep analysis findings.",
 } as const;
-

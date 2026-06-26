@@ -13,7 +13,7 @@ import { useSound } from "@/hooks/useSound";
 import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { __pendingFileStore } from "@/lib/pendingFileStore";
-import { resetActiveInvestigation } from "@/lib/appReset";
+import { cleanupLocalInvestigationState, resetActiveInvestigation } from "@/lib/appReset";
 import { loadingOverlayController } from "@/lib/upload/loadingOverlayController";
 import { ArbiterDeliberationOverlay } from "@/components/evidence/ArbiterDeliberationOverlay";
 import { HITLCheckpointModal } from "@/components/evidence/HITLCheckpointModal";
@@ -253,9 +253,10 @@ export function EvidenceUploadClient() {
                 </p>
                 <button
                   type="button"
-                  onClick={async () => {
-                    await resetActiveInvestigation(queryClient);
+                  onClick={() => {
+                    cleanupLocalInvestigationState(queryClient);
                     router.push("/");
+                    void resetActiveInvestigation(queryClient);
                   }}
                   className="fc-btn-primary mt-4"
                 >

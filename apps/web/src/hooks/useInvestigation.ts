@@ -1171,8 +1171,9 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       !!wsConnectionError;
 
     if (shouldDismiss) {
-      loadingOverlayController.dismiss();
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+      sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
+      loadingOverlayController.dismiss();
       const timer = setTimeout(() => {
         setShowLoadingOverlay(false);
       }, 800);

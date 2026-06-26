@@ -416,7 +416,8 @@ def _build_text_pdf_fpdf2(report_dict: dict[str, Any], session_id: str) -> Any:
             if not isinstance(f, dict):
                 try:
                     f = f.model_dump(mode="json") if hasattr(f, "model_dump") else vars(f)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Skipping non-serializable finding in PDF export", error=str(exc))
                     continue
             ftype = _safe_latin1(f.get("finding_type", "Unknown")[:60])
             fconf = f.get("confidence_raw")

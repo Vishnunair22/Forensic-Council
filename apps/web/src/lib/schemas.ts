@@ -63,7 +63,27 @@ export const ReportDTOSchema = z.object({
       file_type_assessment: z.string().optional(),
       source: z.string().optional(),
       court_defensible: z.boolean().optional(),
+      details: z
+        .object({
+          objects: z.array(z.string()).optional(),
+          people: z.array(z.string()).optional(),
+          weapons: z.array(z.string()).optional(),
+          documents: z.array(z.string()).optional(),
+          extracted_text: z.array(z.string()).optional(),
+          scene_inconsistencies: z.array(z.string()).optional(),
+          device_platform: z.array(z.string()).optional(),
+          software: z.array(z.string()).optional(),
+          timestamps: z.array(z.string()).optional(),
+          location_clues: z.array(z.string()).optional(),
+          metadata_notes: z.array(z.string()).optional(),
+          ai_generation_signals: z.array(z.string()).optional(),
+          manipulation_signals: z.array(z.string()).optional(),
+          integrity_assessment: z.string().optional(),
+        })
+        .passthrough()
+        .optional(),
     })
+    .passthrough()
     .optional(),
   uncertainty_statement: z.string().optional(),
   degradation_flags: z.array(z.string()).optional(),

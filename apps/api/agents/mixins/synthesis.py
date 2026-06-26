@@ -342,7 +342,7 @@ class NeuralSynthesisMixin:
                     _doc.close()
                 except Exception:
                     try:
-                        with open(path, "r", errors="ignore") as _f:
+                        with open(path, errors="ignore") as _f:
                             text = _f.read(4000).strip()
                             npages = 1
                     except Exception:
@@ -390,7 +390,7 @@ class NeuralSynthesisMixin:
                 parts.append(f"{int(sr)} Hz")
             props = ", ".join(parts)
             description = (
-                f"On-device profile — audio recording" + (f" ({props})" if props else "") + ". "
+                "On-device profile — audio recording" + (f" ({props})" if props else "") + ". "
                 "Acoustic forensic checks (spectral, prosody, voice-clone, anti-spoofing, "
                 "codec) were applied locally."
             )

@@ -144,7 +144,7 @@ def deliberate_findings(
         visual_context is not None
         and "screenshot" in str(getattr(visual_context, "file_type_assessment", "")).lower()
     )
-    _SCREENSHOT_FP_PRONE = SCREENSHOT_FP_PRONE_TOOLS
+    screenshot_fp_prone = SCREENSHOT_FP_PRONE_TOOLS
 
     # First pass: Deliberate each finding
     for f in findings:
@@ -203,7 +203,7 @@ def deliberate_findings(
         grounded_sev = str(meta.get("severity_tier") or f.get("severity_tier") or "").upper()
         grounded_down = grounded_sev in ("LOW", "INFO")
 
-        _screenshot_discounted = _is_screenshot and tool_name in _SCREENSHOT_FP_PRONE
+        _screenshot_discounted = _is_screenshot and tool_name in screenshot_fp_prone
         if _screenshot_discounted and verdict == "POSITIVE":
             df.limitation_notes.append(
                 "Discounted for screenshot: pixel-integrity detectors are false-positive-prone "
@@ -267,8 +267,8 @@ def deliberate_findings(
     final_verdict = "NO_REPORTABLE_MANIPULATION_DETECTED"
 
     # Check custody hash mismatch — includes legacy tool name aliases
-    _HASH_MISMATCH_TOOLS = {"file_hash_verify", "hash_verify", "custody_check"}
-    hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") in _HASH_MISMATCH_TOOLS and f.get("evidence_verdict") == "POSITIVE"]
+    hash_mismatch_tools = {"file_hash_verify", "hash_verify", "custody_check"}
+    hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") in hash_mismatch_tools and f.get("evidence_verdict") == "POSITIVE"]
 
     # Determine verdict
     if hash_mismatches:

@@ -23,6 +23,11 @@ if (typeof window !== "undefined") {
   window.scrollTo = jest.fn();
   global.scrollTo = jest.fn();
 
+  HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+    drawImage: jest.fn(),
+  })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.toDataURL = jest.fn(() => "data:image/jpeg;base64,mock");
+
   if (!window.fetch) {
     // @ts-ignore
     window.fetch = jest.fn().mockImplementation(() => Promise.resolve({
@@ -58,6 +63,7 @@ if (typeof global.fetch === "undefined") {
 
 // Mock useSound globally to avoid errors during test rendering
 jest.mock('@/hooks/useSound', () => ({
+  playSoundSeq: jest.fn(),
   useSound: () => ({
     playSound: jest.fn(),
   }),

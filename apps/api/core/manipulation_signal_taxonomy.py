@@ -88,7 +88,7 @@ def classify_manipulation_signal(signal: str) -> SignalClass:
     s = (signal or "").strip().lower()
     if not s or s in ("none", "n/a", "null", "nothing", "clean", "authentic"):
         return "unknown"
-        
+
     _negations = (
         "no evidence", "not detected", "none detected", "no manip", "no tamper",
         "no alter", "no anomal", "no signs", "no ai", "no deepfake", "no splic",

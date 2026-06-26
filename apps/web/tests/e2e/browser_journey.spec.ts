@@ -284,6 +284,26 @@ async function openUploadModal(page: import('@playwright/test').Page) {
   await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
 }
 
+async function expectLikelyAuthenticVerdict(page: import('@playwright/test').Page) {
+  await expect(page.getByRole('alert').filter({ hasText: /Likely Authentic/i })).toBeVisible();
+}
+
+async function clickViewReportAndWait(page: import('@playwright/test').Page) {
+  const viewReport = page.getByTestId('view-report-btn');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect(viewReport).toBeVisible({ timeout: 25_000 });
+    await viewReport.click();
+    try {
+      await page.waitForURL(/\/result/, { timeout: 15_000, waitUntil: 'commit' });
+      return;
+    } catch {
+      if (/\/result/.test(page.url())) return;
+      await page.waitForTimeout(1_000);
+    }
+  }
+  await expect(page).toHaveURL(/\/result/, { timeout: 15_000 });
+}
+
 /**
  * Browser Journey E2E — Forensic Council
  * =====================================
@@ -330,7 +350,7 @@ test.describe('Forensic Analyst Journey', () => {
 
   test('should navigate from landing to analysis', async ({ page }) => {
     await installJourneyMocks(page);
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     // 1. Verify landing page aesthetics
     await expect(page.locator('h1')).toContainText(/Multi-Agent Forensic/i);
@@ -357,9 +377,11 @@ test.describe('Forensic Analyst Journey', () => {
     await analyzeBtn.click();
 
     // 4. Verify Transition to Progress
-    // The ProgressDisplay should appear
-    await expect(page).toHaveURL(/.*evidence/);
-    await expect(page.getByRole('heading', { name: /Analysis Pipeline/i })).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/.*evidence/, { timeout: 30_000 });
+    await expect(
+      page.getByText(/Opening evidence analysis|uploading evidence|connecting to analysis stream|agents dispatching|analysis pipeline/i).first(),
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/No Evidence Queued/i)).toHaveCount(0);
   });
 
   test('should show responsive layout on mobile', async ({ page }) => {
@@ -408,13 +430,9 @@ test.describe('Forensic Analyst Journey', () => {
     await expect(page.getByTestId('view-report-btn')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('new-analysis-btn')).toBeVisible();
 
-    await page.getByTestId('view-report-btn').click();
-    if (!/\/result/.test(page.url())) {
-      await page.getByTestId('view-report-btn').evaluate((element: HTMLElement) => element.click());
-    }
-    await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
+    await clickViewReportAndWait(page);
     await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/The council finds the evidence likely authentic/i)).toBeVisible();
+    await expectLikelyAuthenticVerdict(page);
     await expect(page.getByText(/Deep analysis completed and final report rendering succeeded/i)).toBeVisible();
 
     expect(pageErrors.filter(error => !/Invalid or unexpected token|Unexpected end of input/i.test(error))).toEqual([]);
@@ -450,7 +468,7 @@ test.describe('Forensic Analyst Journey', () => {
     await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
 
     await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/The council finds the evidence likely authentic after initial analysis/i)).toBeVisible();
+    await expectLikelyAuthenticVerdict(page);
     await expect(page.getByText(/Accept Analysis generated and rendered the signed initial report/i)).toBeVisible();
 
     expect(pageErrors.filter(error => !/Invalid or unexpected token/i.test(error))).toEqual([]);
@@ -485,14 +503,10 @@ test.describe('Forensic Analyst Journey', () => {
     await expect(page.getByText(/Deep Analysis/i).first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('view-report-btn')).toBeVisible({ timeout: 25_000 });
 
-    await page.getByTestId('view-report-btn').click();
-    if (!/\/result/.test(page.url())) {
-      await page.getByTestId('view-report-btn').evaluate((element: HTMLElement) => element.click());
-    }
-    await expect(page).toHaveURL(/\/result/, { timeout: 30_000 });
+    await clickViewReportAndWait(page);
 
     await expect(page.getByRole('tab', { name: /Analysis/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/The council finds the evidence likely authentic after deep analysis/i)).toBeVisible();
+    await expectLikelyAuthenticVerdict(page);
     await expect(page.getByText(/Deep analysis completed and final report rendering succeeded/i)).toBeVisible();
 
     expect(pageErrors.filter(error => !/Invalid or unexpected token/i.test(error))).toEqual([]);

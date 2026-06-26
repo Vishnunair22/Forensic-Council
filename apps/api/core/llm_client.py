@@ -976,7 +976,7 @@ class LLMClient:
                             record_groq_usage(
                                 int((_data.get("usage") or {}).get("total_tokens") or 0)
                             )
-                        except Exception:  # metrics must never break synthesis
+                        except Exception:  # noqa: S110 - metrics must never break synthesis
                             pass
                     else:
                         result = (

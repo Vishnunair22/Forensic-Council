@@ -8,7 +8,7 @@ export const ALLOWED_EXTENSIONS = new Set([
   // Video
   ".mp4", ".m4v", ".mpeg", ".mpg", ".webm", ".mov", ".avi", ".mkv",
   // Documents
-  ".pdf",
+  ".pdf", ".doc", ".docx", ".odt", ".rtf", ".txt", ".csv", ".md",
 ]);
 
 /** Map from extension to authoritative MIME — mirrors backend _EXTENSION_MAP. */
@@ -36,6 +36,13 @@ const EXT_TO_MIME: Record<string, string> = {
   ".mkv": "video/x-matroska",
   // Documents
   ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".odt": "application/vnd.oasis.opendocument.text",
+  ".rtf": "application/rtf",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".md": "text/markdown",
 };
 
 export function getFileExtension(name: string): string {
@@ -48,7 +55,15 @@ export function getFileCategory(mime: string): "image" | "audio" | "video" | "do
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("video/")) return "video";
-  if (mime === "application/pdf") return "document";
+  if (
+    mime === "application/pdf" ||
+    mime === "application/msword" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/vnd.oasis.opendocument.text" ||
+    mime === "application/rtf" ||
+    mime === "text/rtf" ||
+    mime.startsWith("text/")
+  ) return "document";
   return "unknown";
 }
 
@@ -102,7 +117,7 @@ export function validateEvidenceFile(file: File): string | null {
     return (
       `File type "${file.type || ext || "unknown"}" is not supported. ` +
       `Accepted: Images (JPG PNG TIFF WEBP GIF BMP), Audio (MP3 WAV FLAC AAC OGG M4A), ` +
-      `Video (MP4 WEBM MOV AVI MKV), Documents (PDF).`
+      `Video (MP4 WEBM MOV AVI MKV), Documents (PDF DOC DOCX ODT RTF TXT CSV MD).`
     );
   }
 

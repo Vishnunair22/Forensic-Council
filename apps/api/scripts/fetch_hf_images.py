@@ -65,7 +65,7 @@ def main() -> int:
     ap.add_argument("--fake-kw", default="fake,inserted,manipulat,altered,spliced,tamper,artificial",
                     help="caption substrings (lower) meaning FAKE")
     ap.add_argument("--per-class", type=int, default=150)
-    ap.add_argument("--out", default="/tmp/calib/img")
+    ap.add_argument("--out", default="/tmp/calib/img")  # noqa: S108 - container-local calibration scratch path
     ap.add_argument("--start-offset", type=int, default=0,
                     help="row offset to start paging from (sorted datasets: jump to a class region)")
     ap.add_argument("--only-label", choices=["real", "fake"], default=None,
@@ -88,7 +88,8 @@ def main() -> int:
             if feat.get("name") == "label" and isinstance(t.get("names"), list):
                 names = t["names"]
         if not names:
-            print("ERROR: dataset has no 'label' ClassLabel; use --caption-field"); return 1
+            print("ERROR: dataset has no 'label' ClassLabel; use --caption-field")
+            return 1
         real_idx = {i for i, nm in enumerate(names) if nm in real_names}
         print(f"label names={names}  authentic indices={sorted(real_idx)}")
     else:
@@ -106,10 +107,14 @@ def main() -> int:
         lab = row.get("label")
         return None if lab is None else (int(lab) in real_idx)
 
-    real_dir = Path(args.out) / "real"; real_dir.mkdir(parents=True, exist_ok=True)
-    fake_dir = Path(args.out) / "fake"; fake_dir.mkdir(parents=True, exist_ok=True)
+    real_dir = Path(args.out) / "real"
+    real_dir.mkdir(parents=True, exist_ok=True)
+    fake_dir = Path(args.out) / "fake"
+    fake_dir.mkdir(parents=True, exist_ok=True)
     n_real = n_fake = 0
-    offset = args.start_offset; page = 100; pages = 0
+    offset = args.start_offset
+    page = 100
+    pages = 0
     target = args.per_class
     want_real = args.only_label != "fake"
     want_fake = args.only_label != "real"
@@ -121,7 +126,8 @@ def main() -> int:
         try:
             rows = _rows(args.dataset, args.config, args.split, offset, page)
         except Exception as exc:  # noqa: BLE001
-            print(f"  rows@{offset}: {type(exc).__name__}: {exc}"); break
+            print(f"  rows@{offset}: {type(exc).__name__}: {exc}")
+            break
         if not rows:
             break
         pages += 1
@@ -139,9 +145,11 @@ def main() -> int:
             except Exception:  # noqa: BLE001 — skip unfetchable cells
                 continue
             if is_real:
-                (real_dir / f"img_real_{n_real:04d}.jpg").write_bytes(data); n_real += 1
+                (real_dir / f"img_real_{n_real:04d}.jpg").write_bytes(data)
+                n_real += 1
             else:
-                (fake_dir / f"img_fake_{n_fake:04d}.jpg").write_bytes(data); n_fake += 1
+                (fake_dir / f"img_fake_{n_fake:04d}.jpg").write_bytes(data)
+                n_fake += 1
         offset += page
         print(f"  real={n_real} fake={n_fake} (offset={offset})")
 

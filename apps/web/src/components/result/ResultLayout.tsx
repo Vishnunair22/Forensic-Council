@@ -694,7 +694,7 @@ function buildKeyFindings(report: ReportDTO | null | undefined): string[] {
     } else if (manip >= 0.20) {
       push(`Manipulation probability is an uncertain ${Math.round(manip * 100)}%; some signals are ambiguous and authenticity cannot be confirmed without further context.`);
     } else if (manip < 0.10) {
-      push(`File structure and embedded data are consistent with an unmodified original (${Math.round(manip * 100)}% manipulation probability), with no synthetic or AI-generated traces.`);
+      push(`Completed checks found low manipulation risk (${Math.round(manip * 100)}% manipulation probability); this reflects the domains that ran and does not exclude unsupported or degraded synthetic-media checks.`);
     }
   }
 

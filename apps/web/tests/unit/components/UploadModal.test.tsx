@@ -35,7 +35,7 @@ describe("UploadModal", () => {
 
     fireEvent.change(screen.getByLabelText(/upload evidence file/i), {
       target: {
-        files: [new File(["bad"], "notes.txt", { type: "text/plain" })],
+        files: [new File(["bad"], "archive.zip", { type: "application/zip" })],
       },
     });
 

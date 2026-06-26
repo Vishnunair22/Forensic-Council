@@ -151,6 +151,12 @@ def _forensic_report_to_dto(report) -> ReportDTO:
         ftype = str(d.get("finding_type") or "")
         if not summary and not ftype:
             return False
+        status = str(d.get("status") or "").upper()
+        evidence_verdict = str(d.get("evidence_verdict") or "").upper()
+        if status == "NOT_APPLICABLE" or evidence_verdict == "NOT_APPLICABLE":
+            return False
+        if "not applicable" in ftype.lower():
+            return False
         return True
 
     per_agent: dict = {}

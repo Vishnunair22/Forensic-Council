@@ -999,6 +999,7 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "  • Cite the ACTUAL metric number — e.g. '0 spliced blocks', 'hash matched', "
         "'14 EXIF fields stripped', '3 scene-inconsistency flags'.\n"
         "  • No two items may cover the same tool or the same forensic signal.\n"
+        "  • You MUST ONLY cite tools that are explicitly provided in the 'findings' array. DO NOT invent or hallucinate tool names.\n"
         "  • Do NOT include NOT_APPLICABLE or ERROR results — skip those tools entirely.\n"
         "  • Do NOT write: 'flagged a manipulation indicator', 'returned a positive result', "
         "'confirmed authenticity' — always state WHAT was measured and WHAT value it returned.\n\n"
@@ -1531,7 +1532,7 @@ async def refine_synthesis_batch(
                 from api.routes.metrics import increment_synthesis_degradation
 
                 increment_synthesis_degradation(len(outputs))
-            except Exception:  # metrics must never break synthesis
+            except Exception:  # noqa: S110 - metrics must never break synthesis
                 pass
             return outputs
 
@@ -1612,7 +1613,7 @@ async def refine_synthesis_batch(
             from api.routes.metrics import increment_synthesis_degradation
 
             increment_synthesis_degradation(_degraded)
-        except Exception:  # metrics must never break synthesis
+        except Exception:  # noqa: S110 - metrics must never break synthesis
             pass
 
     return outputs

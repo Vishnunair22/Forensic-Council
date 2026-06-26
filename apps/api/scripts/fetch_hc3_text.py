@@ -51,7 +51,7 @@ def _clean(text: str) -> str | None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--per-class", type=int, default=400, help="target samples per class")
-    ap.add_argument("--out", default="/tmp/calib/text", help="output dir (gets real/ and fake/)")
+    ap.add_argument("--out", default="/tmp/calib/text", help="output dir (gets real/ and fake/)")  # noqa: S108 - container-local calibration scratch path
     args = ap.parse_args()
 
     real_dir = Path(args.out) / "real"
@@ -83,11 +83,15 @@ def main() -> int:
                 for ans in (row.get("human_answers") or []):
                     c = _clean(ans)
                     if c and c[:120] not in seen_h and len(human) < target:
-                        seen_h.add(c[:120]); human.append(c); progressed = True
+                        seen_h.add(c[:120])
+                        human.append(c)
+                        progressed = True
                 for ans in (row.get("chatgpt_answers") or []):
                     c = _clean(ans)
                     if c and c[:120] not in seen_c and len(chatgpt) < target:
-                        seen_c.add(c[:120]); chatgpt.append(c); progressed = True
+                        seen_c.add(c[:120])
+                        chatgpt.append(c)
+                        progressed = True
         offset += page
         stale_passes = 0 if progressed else stale_passes + 1
         print(f"  collected human={len(human)} chatgpt={len(chatgpt)} (offset={offset})")

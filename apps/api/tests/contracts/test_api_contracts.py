@@ -121,6 +121,19 @@ def _make_qdrant_mock() -> AsyncMock:
     return m
 
 
+def _make_queue_mock() -> AsyncMock:
+    m = AsyncMock()
+    m.is_worker_alive = AsyncMock(return_value=True)
+    m.submit = AsyncMock(return_value=None)
+    return m
+
+
+async def _contract_redis_get(key):
+    if key == "forensic:worker:heartbeat":
+        return "alive"
+    return None
+
+
 def _jwt_for(user_id: str, role: str = "investigator") -> str:
     """Create a real JWT so decode_token succeeds inside route handlers."""
     import jwt as _jwt
@@ -164,6 +177,7 @@ def _csrf(client, headers: dict | None = None) -> dict:
 def client():
     """Spin up the FastAPI app in-memory with all infra mocked."""
     redis_mock = _make_redis_mock()
+    redis_mock.get = AsyncMock(side_effect=_contract_redis_get)
     pg_mock = _make_pg_mock()
     qdrant_mock = _make_qdrant_mock()
 
@@ -260,8 +274,7 @@ class TestInvestigateEndpoint:
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
             patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
-            mock_queue = AsyncMock()
-            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue = _make_queue_mock()
             mock_queue_getter.return_value = mock_queue
 
             mock_redis = _make_redis_mock()
@@ -910,8 +923,7 @@ class TestDuplicateInvestigation409:
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
             patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
-            mock_queue = AsyncMock()
-            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue = _make_queue_mock()
             mock_queue_getter.return_value = mock_queue
 
             mock_redis = _make_redis_mock()
@@ -930,8 +942,7 @@ class TestDuplicateInvestigation409:
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
             patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
-            mock_queue = AsyncMock()
-            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue = _make_queue_mock()
             mock_queue_getter.return_value = mock_queue
 
             mock_redis = _make_redis_mock()
@@ -973,8 +984,7 @@ class TestDuplicateInvestigation409:
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
             patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
-            mock_queue = AsyncMock()
-            mock_queue.submit = AsyncMock(return_value=None)
+            mock_queue = _make_queue_mock()
             mock_queue_getter.return_value = mock_queue
 
             mock_redis = _make_redis_mock()
@@ -1255,7 +1265,7 @@ class TestDedupRedisDown503:
             patch("orchestration.investigation_queue.get_investigation_queue") as mock_queue_getter,
             patch("core.persistence.redis_client.get_redis_client", new_callable=AsyncMock) as mock_redis_getter,
         ):
-            mock_queue_getter.return_value = AsyncMock()
+            mock_queue_getter.return_value = _make_queue_mock()
             mock_redis_getter.side_effect = ConnectionError("Redis unavailable")
 
             resp = client.post(

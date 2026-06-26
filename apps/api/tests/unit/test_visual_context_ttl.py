@@ -23,14 +23,14 @@ from core.visual_context_store import _TOP_TIER_MIN_CONFIDENCE, _is_top_tier_con
 
 
 def _ctx(**kw):
-    base = dict(
-        external_llm_used=True,
-        source="llm_assisted",
-        confidence=0.9,
-        scene_description="A studio photograph of a pistol.",
-        file_type_assessment="photograph",
-        extracted_text=[],
-    )
+    base = {
+        "external_llm_used": True,
+        "source": "llm_assisted",
+        "confidence": 0.9,
+        "scene_description": "A studio photograph of a pistol.",
+        "file_type_assessment": "photograph",
+        "extracted_text": [],
+    }
     base.update(kw)
     return SimpleNamespace(**base)
 

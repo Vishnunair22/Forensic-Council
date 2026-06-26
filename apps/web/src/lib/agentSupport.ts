@@ -57,7 +57,15 @@ export function supportedAgentIdsForMime(
   if (normalized.startsWith("video/") || normalized === "application/mp4") {
     return new Set(["Agent4", "Agent5"]);
   }
-  if (normalized === "application/pdf") return new Set(["Agent5"]);
+  if (
+    normalized === "application/pdf" ||
+    normalized === "application/msword" ||
+    normalized === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    normalized === "application/vnd.oasis.opendocument.text" ||
+    normalized === "application/rtf" ||
+    normalized === "text/rtf" ||
+    normalized.startsWith("text/")
+  ) return new Set(["Agent5"]);
   return new Set();
 }
 

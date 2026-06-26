@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.manipulation_signal_taxonomy import LLM_DERIVED_CONFIDENCE_CAP
-from core.structured_logging import get_logger
 from core.scoring import ConfidenceCalibrator
+from core.structured_logging import get_logger
 
 logger = get_logger(__name__)
 

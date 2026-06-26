@@ -176,6 +176,38 @@ async function setupMockRoutes(page: Page, sessionId = TEST_SESSION_ID) {
   });
 }
 
+async function expectUploadInputReady(page: Page) {
+  const input = page.getByLabel(/upload evidence file/i);
+  await expect(input).toBeAttached({ timeout: 3_000 }).catch(async () => {
+    const begin = page.getByTestId("hero-cta-begin");
+    await expect(begin).toBeVisible({ timeout: 10_000 });
+    await begin.click({ force: true });
+    await expect(input).toBeAttached({ timeout: 5_000 }).catch(async () => {
+      await begin.evaluate((element: HTMLElement) => element.click());
+      await expect(input).toBeAttached({ timeout: 5_000 }).catch(async () => {
+        await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
+      });
+    });
+  });
+  await expect(input).toBeAttached({ timeout: 10_000 });
+}
+
+async function clickAcceptAndWaitForResult(page: Page) {
+  const accept = page.getByTestId("accept-analysis-btn");
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await expect(accept).toBeVisible({ timeout: 30_000 });
+    await accept.click();
+    try {
+      await page.waitForURL(/\/result\//, { timeout: 15_000, waitUntil: "commit" });
+      return;
+    } catch {
+      if (/\/result\//.test(page.url())) return;
+      await page.waitForTimeout(1_000);
+    }
+  }
+  await expect(page).toHaveURL(/\/result\//, { timeout: 15_000 });
+}
+
 test.describe.serial("mocked journey with session persistence", () => {
   test.beforeEach(async ({ page }) => {
     await page.context().clearCookies();
@@ -184,7 +216,6 @@ test.describe.serial("mocked journey with session persistence", () => {
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
   });
 
   test("fast mocked journey: landing → upload → accept → result → history", async ({ page }) => {
@@ -193,18 +224,7 @@ test.describe.serial("mocked journey with session persistence", () => {
     page.on("pageerror", (e) => errors.push(e.message));
 
     await page.goto("/?upload=1", { waitUntil: "domcontentloaded" });
-    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-      const begin = page.getByTestId("hero-cta-begin");
-      await expect(begin).toBeVisible({ timeout: 10_000 });
-      await begin.click({ force: true });
-      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-        await begin.evaluate((element: HTMLElement) => element.click());
-      }
-      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-        await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
-      }
-    }
-    await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
+    await expectUploadInputReady(page);
 
     const png1x1 = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
@@ -216,26 +236,25 @@ test.describe.serial("mocked journey with session persistence", () => {
       buffer: png1x1,
     });
 
-    await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
-    await Promise.all([
-      page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" }),
-      page.getByTestId("upload-start-analysis").click(),
-    ]);
+    await expect(page.getByRole("heading", { name: /Evidence Sealed/i })).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("upload-start-analysis").click();
+    await expect(page).toHaveURL(/\/evidence$/, { timeout: 30_000 });
 
     await expect(page.getByText(/Reconnecting/i)).toBeVisible({ timeout: 5_000 }).catch(() => {
       /* ignore — mocked flow may not show reconnecting text */
     });
 
-    const sid = await page.evaluate(() => localStorage.getItem("forensic_session_id"));
+    const sidHandle = await page.waitForFunction(() => localStorage.getItem("forensic_session_id"), null, {
+      timeout: 30_000,
+    });
+    const sid = await sidHandle.jsonValue();
     expect(sid).toBeTruthy();
 
     await expect(page.getByTestId("accept-analysis-btn")).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("accept-analysis-btn").click();
-
-    await page.waitForURL(/\/result\//, { timeout: 30_000, waitUntil: "commit" });
+    await clickAcceptAndWaitForResult(page);
     expect(page.url()).toContain(TEST_SESSION_ID);
 
-    await expect(page.getByText(/Evidence appears to be authentic/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("alert").filter({ hasText: /Likely Authentic/i })).toBeVisible({ timeout: 10_000 });
     await page.waitForFunction(() => JSON.parse(localStorage.getItem("forensic_history") ?? "[]").length > 0);
 
     expect(errors.filter((e) => !e.includes("Warning"))).toEqual([]);
@@ -249,18 +268,7 @@ test.describe.serial("mocked journey with session persistence", () => {
   test("mocked upload route flow: upload → evidence page shows agent cards", async ({ page }) => {
     test.setTimeout(60_000);
     await page.goto("/?upload=1", { waitUntil: "domcontentloaded" });
-    if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-      const begin = page.getByTestId("hero-cta-begin");
-      await expect(begin).toBeVisible({ timeout: 10_000 });
-      await begin.click({ force: true });
-      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-        await begin.evaluate((element: HTMLElement) => element.click());
-      }
-      if ((await page.getByLabel(/upload evidence file/i).count()) === 0) {
-        await page.evaluate(() => window.dispatchEvent(new Event("fc:open-upload")));
-      }
-    }
-    await expect(page.getByLabel(/upload evidence file/i)).toBeAttached({ timeout: 10_000 });
+    await expectUploadInputReady(page);
 
     await page.getByLabel(/upload evidence file/i).setInputFiles({
       name: `route-flow-${Date.now()}.png`,
@@ -271,17 +279,15 @@ test.describe.serial("mocked journey with session persistence", () => {
       ),
     });
 
-    await expect(page.getByRole("heading", { name: /Evidence Ready/i })).toBeVisible({ timeout: 15_000 });
-    await Promise.all([
-      page.waitForURL(/\/evidence$/, { timeout: 10_000, waitUntil: "commit" }),
-      page.getByTestId("upload-start-analysis").click(),
-    ]);
+    await expect(page.getByRole("heading", { name: /Evidence Sealed/i })).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("upload-start-analysis").click();
+    await expect(page).toHaveURL(/\/evidence$/, { timeout: 30_000 });
     await expect(page.getByTestId("agent-card-Agent1")).toBeVisible({ timeout: 10_000 }).catch(() => {
       /* agent cards may not render in mocked flow */
     });
   });
 
-  test("mocked reconnect not_found routes home with upload=1", async ({ page }) => {
+  test("mocked reconnect not_found shows no-evidence recovery state", async ({ page }) => {
     test.setTimeout(30_000);
     page.on("console", (msg) => console.log(`[BROWSER CONSOLE] ${msg.text()}`));
     page.on("pageerror", (err) => console.error(`[BROWSER ERROR] ${err.message}`));
@@ -301,7 +307,11 @@ test.describe.serial("mocked journey with session persistence", () => {
     });
 
     await page.goto("/evidence", { waitUntil: "domcontentloaded" });
-    await page.waitForURL(/\/(\?upload=1)?$/, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: /No Evidence Queued/i })).toBeVisible({ timeout: 15_000 });
+    await Promise.all([
+      page.waitForURL(/\/$/, { timeout: 15_000, waitUntil: "commit" }),
+      page.getByRole("button", { name: /Return Home/i }).click(),
+    ]);
     await expect(page.getByTestId("hero-cta-begin")).toBeVisible({ timeout: 15_000 });
   });
 

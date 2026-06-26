@@ -189,7 +189,7 @@ async def refine_report_with_groq(
             from api.routes.metrics import increment_refiner_fallback
 
             increment_refiner_fallback()
-        except Exception:  # metrics must never break report generation
+        except Exception:  # noqa: S110 - metrics must never break report generation
             pass
     return report, success
 

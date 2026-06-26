@@ -230,8 +230,8 @@ def describe_tool(tool: str) -> str:
     return TOOL_DESCRIPTIONS.get(tool, _DEFAULT_DESCRIPTION)
 
 
-def _cap(method: str, model: str = "", license: str = "", research_gated: bool = False) -> dict[str, Any]:
-    return {"method": method, "model": model, "license": license, "research_gated": research_gated}
+def _cap(method: str, model: str = "", license_name: str = "", research_gated: bool = False) -> dict[str, Any]:
+    return {"method": method, "model": model, "license": license_name, "research_gated": research_gated}
 
 
 # tool name -> capability. `research_gated` tools run a HEURISTIC/classical fallback

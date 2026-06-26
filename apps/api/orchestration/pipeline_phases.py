@@ -1842,9 +1842,19 @@ async def _await_deep_analysis_decision(
         # deep pass (no analyst response) from a deliberate baseline acceptance.
         # Matters for court-admissibility — the two look identical otherwise.
         try:
+            timeout_flag = (
+                f"Deep analysis was auto-skipped after {timeout}s because no analyst "
+                "decision was received; initial findings are complete, but deep-pass "
+                "coverage is absent."
+            )
             existing_flags = list(getattr(pipeline, "_degradation_flags", []) or [])
-            if "DEEP_ANALYSIS_AUTO_SKIPPED_TIMEOUT" not in existing_flags:
-                existing_flags.append("DEEP_ANALYSIS_AUTO_SKIPPED_TIMEOUT")
+            existing_flags = [
+                flag
+                for flag in existing_flags
+                if flag != "DEEP_ANALYSIS_AUTO_SKIPPED_TIMEOUT"
+            ]
+            if timeout_flag not in existing_flags:
+                existing_flags.append(timeout_flag)
             pipeline._degradation_flags = existing_flags
         except Exception:
             pass

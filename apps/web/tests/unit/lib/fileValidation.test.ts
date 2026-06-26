@@ -58,6 +58,13 @@ describe("validateEvidenceFile", () => {
       expect(validateEvidenceFile(createMockFile("report.pdf", "application/pdf", 1024))).toBeNull();
     });
 
+    it("accepts backend-supported text and office documents", () => {
+      expect(validateEvidenceFile(createMockFile("notes.txt", "text/plain", 1024))).toBeNull();
+      expect(validateEvidenceFile(createMockFile("brief.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 1024))).toBeNull();
+      expect(validateEvidenceFile(createMockFile("evidence.rtf", "application/rtf", 1024))).toBeNull();
+      expect(validateEvidenceFile(createMockFile("table.csv", "text/csv", 1024))).toBeNull();
+    });
+
     it("rejects a genuinely unsupported type", () => {
       const err = validateEvidenceFile(createMockFile("archive.zip", "application/zip", 1024));
       expect(err).toContain("not supported");
@@ -99,12 +106,13 @@ describe("ALLOWED_EXTENSIONS (multi-modal)", () => {
     for (const ext of [".mp4", ".webm", ".mov", ".avi", ".mkv"]) {
       expect(ALLOWED_EXTENSIONS.has(ext)).toBe(true);
     }
-    expect(ALLOWED_EXTENSIONS.has(".pdf")).toBe(true);
+    for (const ext of [".pdf", ".doc", ".docx", ".odt", ".rtf", ".txt", ".csv", ".md"]) {
+      expect(ALLOWED_EXTENSIONS.has(ext)).toBe(true);
+    }
   });
 
   it("excludes genuinely unsupported types", () => {
     expect(ALLOWED_EXTENSIONS.has(".zip")).toBe(false);
     expect(ALLOWED_EXTENSIONS.has(".exe")).toBe(false);
-    expect(ALLOWED_EXTENSIONS.has(".txt")).toBe(false);
   });
 });

@@ -187,6 +187,52 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
 
     subscribed_event = asyncio.Event()
 
+    def _is_ws_disconnect_error(exc: Exception) -> bool:
+        if isinstance(exc, WebSocketDisconnect):
+            return True
+        message = str(exc).lower()
+        return (
+            isinstance(exc, RuntimeError)
+            and "websocket" in message
+            and (
+                "disconnect" in message
+                or "close" in message
+                or "closed" in message
+            )
+        )
+
+    async def _send_json(payload: dict[str, Any]) -> bool:
+        try:
+            await websocket.send_json(payload)
+            return True
+        except Exception as send_err:
+            if _is_ws_disconnect_error(send_err):
+                logger.debug(
+                    "WebSocket client disconnected during send",
+                    session_id=session_id,
+                )
+            else:
+                logger.debug(
+                    "WebSocket send failed",
+                    session_id=session_id,
+                    error=str(send_err),
+                )
+            return False
+
+    async def _close_websocket(code: int = 1000, reason: str | None = None) -> None:
+        try:
+            if reason is None:
+                await websocket.close(code=code)
+            else:
+                await websocket.close(code=code, reason=reason)
+        except Exception as close_err:
+            if not _is_ws_disconnect_error(close_err):
+                logger.debug(
+                    "WebSocket close failed",
+                    session_id=session_id,
+                    error=str(close_err),
+                )
+
     async def _redis_subscriber():
         nonlocal last_activity
 
@@ -218,9 +264,12 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                 for msg_json in replay_messages:
                     try:
                         data = json.loads(msg_json)
-                        await websocket.send_json(data)
+                        if not await _send_json(data):
+                            return
                         last_activity = time.time()
                     except Exception as replay_error:
+                        if _is_ws_disconnect_error(replay_error):
+                            return
                         logger.debug(
                             "Failed to replay WebSocket update",
                             session_id=session_id,
@@ -233,34 +282,37 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                     if channel_name == control_channel:
                         payload = json.loads(message["data"])
                         if payload.get("type") == "SESSION_TERMINATED":
-                            await websocket.send_json({"type": "ERROR", "message": payload.get("reason", "Session terminated")})
-                            await websocket.close(code=1000, reason="Session terminated")
+                            await _send_json({"type": "ERROR", "message": payload.get("reason", "Session terminated")})
+                            await _close_websocket(code=1000, reason="Session terminated")
                             return
                         continue
                     data = json.loads(message["data"])
-                    await websocket.send_json(data)
+                    if not await _send_json(data):
+                        return
                     last_activity = time.time()
         except asyncio.CancelledError:
             subscribed_event.set()
             raise
         except Exception as e:
             subscribed_event.set()
+            if _is_ws_disconnect_error(e):
+                logger.debug("WebSocket subscriber stopped after client disconnect", session_id=session_id)
+                return
             logger.warning("Redis subscriber error", session_id=session_id, error=str(e))
-            try:
-                await websocket.send_json(
-                    {
-                        "type": "ERROR",
-                        "message": "Live update channel disconnected. Please refresh.",
-                        "data": {"recoverable": True},
-                    }
-                )
-            except Exception as send_error:
+            sent = await _send_json(
+                {
+                    "type": "ERROR",
+                    "message": "Live update channel disconnected. Please refresh.",
+                    "data": {"recoverable": True},
+                }
+            )
+            if sent:
+                await _close_websocket(code=1011)
+            else:
                 logger.debug(
-                    "Failed to send WebSocket subscriber error",
+                    "Skipped WebSocket subscriber error delivery after disconnect",
                     session_id=session_id,
-                    error=str(send_error),
                 )
-            await websocket.close(code=1011)
         finally:
             if pubsub:
                 try:
@@ -290,14 +342,15 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                 try:
                     _ping_start = time.time()
                     await asyncio.wait_for(websocket.ping(), timeout=10.0)
-                    await websocket.send_json({"type": "PING", "timestamp": time.time()})
+                    if not await _send_json({"type": "PING", "timestamp": time.time()}):
+                        break
                     last_activity = time.time()
                 except TimeoutError:
                     logger.warning(
                         "WebSocket ping timeout — client unresponsive",
                         session_id=session_id,
                     )
-                    await websocket.close(code=1000, reason="Ping timeout")
+                    await _close_websocket(code=1000, reason="Ping timeout")
                     break
                 except Exception:
                     break
@@ -317,7 +370,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                         session_id=session_id,
                         idle_seconds=time.time() - last_activity,
                     )
-                    await websocket.close(code=1000, reason="Idle timeout")
+                    await _close_websocket(code=1000, reason="Idle timeout")
                     break
         except asyncio.CancelledError:
             pass
@@ -334,7 +387,7 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
         llm_provider = settings.llm_provider
         llm_key_ok = bool(settings.llm_api_key)
         gemini_ok = settings.gemini_available
-        await websocket.send_json(
+        if not await _send_json(
             {
                 "type": "CONNECTED",
                 "session_id": session_id,
@@ -350,7 +403,8 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                     },
                 },
             }
-        )
+        ):
+            return
 
         while True:
             try:
@@ -369,13 +423,13 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
                         session_id=session_id,
                         messages_per_minute=len(message_timestamps),
                     )
-                    await websocket.send_json(
+                    await _send_json(
                         {
                             "type": "ERROR",
                             "detail": "Rate limit exceeded. Maximum 100 messages per minute.",
                         }
                     )
-                    await websocket.close(code=1008, reason="Rate limit exceeded")
+                    await _close_websocket(code=1008, reason="Rate limit exceeded")
                     break
 
                 message_timestamps.append(now)
@@ -395,7 +449,10 @@ async def _live_updates_impl(websocket: WebSocket, session_id: str, user_id: str
     except asyncio.CancelledError:
         raise
     except Exception as ws_err:
-        logger.warning("WebSocket error", session_id=session_id, error=str(ws_err))
+        if _is_ws_disconnect_error(ws_err):
+            logger.debug("WebSocket stopped after client disconnect", session_id=session_id)
+        else:
+            logger.warning("WebSocket error", session_id=session_id, error=str(ws_err))
     finally:
         ping_task.cancel()
         idle_task.cancel()

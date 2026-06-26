@@ -611,7 +611,7 @@ async def analyze_local_media_profile(file_path: str, mime: str) -> VisualEviden
                     fd, fp = tempfile.mkstemp(suffix=".jpg")
                     os.close(fd)
                     cv2.imwrite(fp, frame)
-            except Exception:
+            except Exception:  # noqa: S110 - video probing is best-effort context only
                 pass
             if fp:
                 try:
@@ -619,12 +619,12 @@ async def analyze_local_media_profile(file_path: str, mime: str) -> VisualEviden
                     r = get_florence_analyzer().analyze(fp)
                     if getattr(r, "available", False):
                         _cap = (r.best_description() or "").strip()
-                except Exception:
+                except Exception:  # noqa: S110 - Florence captioning is an optional fallback
                     pass
                 finally:
                     try:
                         os.unlink(fp)
-                    except Exception:
+                    except Exception:  # noqa: S110 - temp-file cleanup is best-effort
                         pass
             return _dur, _w, _h, _cap
 
@@ -676,33 +676,33 @@ async def analyze_local_media_profile(file_path: str, mime: str) -> VisualEviden
                         paragraphs = [p.text for p in d.paragraphs if p.text.strip()]
                         text = "\n".join(paragraphs[:50]).strip()
                         np_ = max(1, len(d.paragraphs) // 40)  # rough page estimate
-                    except Exception:
+                    except Exception:  # noqa: S110 - DOCX parsing is optional context enrichment
                         pass
                 elif fp_lower.endswith(".odt"):
                     try:
-                        from odf.text import P as _OdfP
                         from odf.opendocument import load as _odf_load
+                        from odf.text import P
                         doc = _odf_load(file_path)
-                        paragraphs = [str(p) for p in doc.getElementsByType(_OdfP) if str(p).strip()]
+                        paragraphs = [str(p) for p in doc.getElementsByType(P) if str(p).strip()]
                         text = "\n".join(paragraphs[:50]).strip()
                         np_ = max(1, len(paragraphs) // 40)
-                    except Exception:
+                    except Exception:  # noqa: S110 - ODT parsing is optional context enrichment
                         pass
                 elif fp_lower.endswith(".rtf"):
                     try:
                         from striprtf.striprtf import rtf_to_text as _rtf2text
-                        with open(file_path, "r", errors="ignore") as rf:
+                        with open(file_path, errors="ignore") as rf:
                             raw = rf.read(200_000)
                         text = _rtf2text(raw).strip()
                         np_ = 1
-                    except Exception:
+                    except Exception:  # noqa: S110 - RTF parsing is optional context enrichment
                         pass
                 else:
                     # Plain text / CSV / Markdown — read directly
-                    with open(file_path, "r", errors="ignore") as f:
+                    with open(file_path, errors="ignore") as f:
                         text = f.read(8000).strip()
                         np_ = 1
-            except Exception:
+            except Exception:  # noqa: S110 - document probing is best-effort context only
                 pass
             return np_, text
 

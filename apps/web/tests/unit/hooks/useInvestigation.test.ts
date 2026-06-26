@@ -8,6 +8,11 @@ import { storage, sessionOnlyStorage } from "@/lib/storage";
 import { authService } from "@/lib/upload/authService";
 import type { HITLCheckpoint } from "@/lib/api/types";
 
+jest.mock("@/hooks/useSound", () => ({
+  playSoundSeq: jest.fn(),
+  useSound: () => ({ playSound: jest.fn() }),
+}));
+
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
 }));

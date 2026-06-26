@@ -71,11 +71,16 @@ async def test_replay_messages_sent_on_websocket_connect():
         '{"type": "AGENT_COMPLETE", "agent_id": "Agent2", "message": "Done."}',
     ]
 
+    async def _empty_pubsub_messages():
+        if False:
+            yield {}
+
     mock_redis_client = AsyncMock()
     mock_redis_client.lrange = AsyncMock(return_value=replay_data)
     mock_pubsub = AsyncMock()
     mock_pubsub.subscribe = AsyncMock()
-    mock_pubsub.listen = AsyncMock(side_effect=Exception("done"))
+    mock_pubsub.listen = MagicMock(return_value=_empty_pubsub_messages())
+    mock_redis_client.pubsub = MagicMock(return_value=mock_pubsub)
 
     with (
         patch.object(_ws_mod, "get_active_pipeline_metadata", return_value={"status": "running"}),
@@ -85,7 +90,6 @@ async def test_replay_messages_sent_on_websocket_connect():
         patch.object(_ws_mod, "unregister_websocket"),
         patch.object(_ws_mod, "Redis", return_value=mock_redis_client),
     ):
-        mock_redis_client.pubsub.return_value = mock_pubsub
         mock_redis_client.lrange = AsyncMock(return_value=replay_data)
 
         try:
