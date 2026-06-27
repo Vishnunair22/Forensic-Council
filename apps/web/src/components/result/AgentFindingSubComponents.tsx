@@ -463,7 +463,7 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
    )}
 
    {/* Metric chips — compact inline */}
-   {metrics.length > 0 && (
+   {metrics.length > 0 && toolName !== "exif_extract" && (
     <div className="pl-[54px] flex flex-wrap gap-1.5 mt-0.5">
      {metrics.map((m) => {
       const cls = METRIC_EMPHASIS_CLS[m.emphasis];
@@ -484,6 +484,38 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
        </div>
       );
      })}
+    </div>
+   )}
+
+   {/* Specialized EXIF Block */}
+   {toolName === "exif_extract" && status !== "na" && (
+    <div className="pl-[54px] mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/[0.02] border border-white/10 rounded-xl p-3">
+        <div className="flex flex-col">
+          <span className="fc-eyebrow fc-text-muted mb-0.5">Device / Software</span>
+          <span className="text-xs font-bold text-white/90 truncate">
+            {String(finding.metadata?.device_model || finding.metadata?.camera_model || finding.metadata?.model || finding.metadata?.software || "Unknown")}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="fc-eyebrow fc-text-muted mb-0.5">Date / Time</span>
+          <span className="text-xs font-bold text-white/90 truncate">
+            {String(finding.metadata?.datetime_original || finding.metadata?.DateTimeOriginal || finding.metadata?.gps_info || "Not available")}
+          </span>
+        </div>
+        <div className="flex flex-col mt-1.5">
+          <span className="fc-eyebrow fc-text-muted mb-0.5">File Type</span>
+          <span className="text-xs font-bold text-white/90 truncate">
+            {String(finding.metadata?.mime_type || finding.metadata?.image_type || "Unknown")}
+          </span>
+        </div>
+        <div className="flex flex-col mt-1.5">
+          <span className="fc-eyebrow fc-text-muted mb-0.5">File Size</span>
+          <span className="text-xs font-bold text-white/90 truncate">
+            {String(finding.metadata?.file_size_human || finding.metadata?.file_size_bytes || "Unknown")}
+          </span>
+        </div>
+      </div>
     </div>
    )}
 

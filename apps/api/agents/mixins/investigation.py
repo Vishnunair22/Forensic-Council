@@ -752,9 +752,15 @@ class AgentInvestigationMixin:
                     "is_ai_generated",
                     "diffusion_detected",
                     "device_model",
+                    "camera_model",
+                    "camera_make",
+                    "make",
+                    "model",
                     "software",
                     "gps_info",
+                    "gps_coordinates",
                     "image_type",
+                    "mime_type",
                     "all_classifications",
                     "detections",
                     "weapon_detections",
@@ -765,9 +771,31 @@ class AgentInvestigationMixin:
                     "text",
                     "word_count",
                     "file_size_bytes",
+                    "file_size_human",
+                    "datetime_original",
+                    "DateTimeOriginal",
+                    "total_exif_tags",
+                    "exif_found",
                     "metadata_timeline_consistent",
                     "inconsistency_detected",
                     "anomaly_detected",
+                    "num_anomaly_regions",
+                    "max_anomaly",
+                    "anomaly_score",
+                    "gan_artifact_detected",
+                    "num_clusters",
+                    "sensor_inconsistency_detected",
+                    "scene_incongruent",
+                    "lighting_inconsistency",
+                    "width",
+                    "height",
+                    "color_mode",
+                    "semantic_scope",
+                    "spectral_probability",
+                    "detection_count",
+                    "top_match",
+                    "top_confidence",
+                    "concern_flag",
                     "summary",
                 }
             }
@@ -1236,13 +1264,18 @@ class AgentInvestigationMixin:
 
                 # 9. EXIF extract
                 elif tool_name == "exif_extract":
-                    device = tool_ctx.get("device_model") or tool_ctx.get("camera_model") or "unknown device"
+                    device = tool_ctx.get("device_model") or tool_ctx.get("camera_model") or tool_ctx.get("make") or "unknown device"
                     software = tool_ctx.get("software") or "no editor listed"
                     gps = tool_ctx.get("gps_coordinates") or "no GPS tags"
-                    if ev == "NEGATIVE" or tool_ctx.get("exif_found"):
-                        opinion = f"EXIF metadata was successfully extracted. Capture device: {device}. Editing software: {software}. GPS coordinates: {gps}."
+                    fsize = tool_ctx.get("file_size_human") or "unknown size"
+                    ftype = tool_ctx.get("mime_type") or "unknown format"
+                    fdate = tool_ctx.get("datetime_original") or tool_ctx.get("DateTimeOriginal") or tool_ctx.get("created_time") or "unknown date/time"
+
+                    base_facts = f"File characteristics: size {fsize}, type {ftype}."
+                    if ev == "NEGATIVE" or tool_ctx.get("exif_found") or tool_ctx.get("total_exif_tags", 0) > 0:
+                        opinion = f"{base_facts} EXIF metadata successfully extracted. Timestamp: {fdate}. Capture device: {device}. Editing software: {software}. GPS: {gps}."
                     else:
-                        opinion = "EXIF metadata has been stripped from the file — no camera, device, or GPS tags remain."
+                        opinion = f"{base_facts} EXIF metadata is mostly or entirely absent (expected for screenshots/social media). No internal timestamp, camera, or GPS tags."
 
                 # 10. GPS Timezone
                 elif tool_name == "gps_timezone_validate":
@@ -1497,15 +1530,15 @@ class AgentInvestigationMixin:
             _sha = (_hash_ctx.get("sha256") or "")[:16]
             # Surface file structure facts that exist in tool context
             _file_ctx = self._tool_context.get("file_structure_analysis") or self._tool_context.get("extract_exif_metadata") or {}
-            _file_size = _file_ctx.get("file_size_human") or _file_ctx.get("file_size") or ""
-            _file_format = _file_ctx.get("format") or _file_ctx.get("mime_type") or ""
+            _file_size = _exif_ctx.get("file_size_human") or _file_ctx.get("file_size_human") or _file_ctx.get("file_size") or ""
+            _file_format = _exif_ctx.get("mime_type") or _file_ctx.get("format") or _file_ctx.get("mime_type") or ""
             _dimensions = ""
-            _w = _file_ctx.get("width") or _file_ctx.get("image_width")
-            _h = _file_ctx.get("height") or _file_ctx.get("image_height")
+            _w = _exif_ctx.get("width") or _file_ctx.get("width") or _file_ctx.get("image_width")
+            _h = _exif_ctx.get("height") or _file_ctx.get("height") or _file_ctx.get("image_height")
             if _w and _h:
                 _dimensions = f"{_w}x{_h}"
-            _created = _file_ctx.get("created_time") or _file_ctx.get("DateTimeOriginal") or ""
-            _modified = _file_ctx.get("modified_time") or ""
+            _created = _exif_ctx.get("datetime_original") or _exif_ctx.get("DateTimeOriginal") or _file_ctx.get("created_time") or _file_ctx.get("DateTimeOriginal") or ""
+            _modified = _exif_ctx.get("modified_time") or _file_ctx.get("modified_time") or ""
             _meta_parts = []
             if _device != "unknown":
                 _meta_parts.append(f"device={_device}")

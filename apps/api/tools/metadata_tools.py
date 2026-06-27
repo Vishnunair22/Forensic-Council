@@ -302,12 +302,34 @@ def _normalize_exif_aliases(exif: dict[str, Any]) -> dict[str, Any]:
 
     make = exif.get("Make")
     model = exif.get("Model")
-    if make:
-        aliases["camera_make"] = str(make).strip()
-        aliases["make"] = str(make).strip()
-    if model:
-        aliases["camera_model"] = str(model).strip()
-        aliases["model"] = str(model).strip()
+
+    # Social media and editing apps often inject their names into the "Make" or "Model" EXIF fields.
+    # If the claimed device matches known software, move it to the Software field to prevent
+    # the watermark from being reported as a hardware camera.
+    _KNOWN_SOFTWARE = {"photoshop", "gimp", "canva", "tiktok", "instagram", "facebook", 
+                       "twitter", "whatsapp", "capcut", "snapseed", "lightroom", "picsart", 
+                       "facetune", "meitu", "watermark", "editor", "snapchat", "wechat"}
+    
+    make_str = str(make).strip() if make else ""
+    if make_str and any(s in make_str.lower() for s in _KNOWN_SOFTWARE):
+        if not exif.get("Software"):
+            exif["Software"] = make_str
+        make = None
+        make_str = ""
+        
+    model_str = str(model).strip() if model else ""
+    if model_str and any(s in model_str.lower() for s in _KNOWN_SOFTWARE):
+        if not exif.get("Software"):
+            exif["Software"] = model_str
+        model = None
+        model_str = ""
+
+    if make_str:
+        aliases["camera_make"] = make_str
+        aliases["make"] = make_str
+    if model_str:
+        aliases["camera_model"] = model_str
+        aliases["model"] = model_str
 
     # Timestamp — prefer original capture time, fall back through the chain
     dt = (

@@ -174,14 +174,18 @@ class NeuralSynthesisMixin:
         _has_agent1_ai_signal = (
             not _is_native
             and (
-                str(profile.get("evidence_verdict") or "").upper() in ("POSITIVE",)
-                or bool(profile.get("ai_generation_signals"))
-                or _pv in _MANIP_PROFILE_VERDICTS
+                bool(profile.get("ai_generation_signals"))
                 or _fta == "ai_generated"
             )
         )
         _profile_is_manip = (_is_native or _has_agent1_ai_signal) and (_pv in _MANIP_PROFILE_VERDICTS or _fta == "ai_generated")
         _evidence_verdict = profile.get("evidence_verdict")
+
+        # Demote cached POSITIVE evidence_verdict from Gemini preflight on images, unless there is a strong AI signal.
+        # This prevents stale Redis cache hits from forcing an authentic image into MANIPULATED state.
+        if not _is_native and not _has_agent1_ai_signal and _evidence_verdict == "POSITIVE":
+            _evidence_verdict = "INCONCLUSIVE"
+
         if _profile_is_manip and (not _evidence_verdict or _evidence_verdict in ("INCONCLUSIVE", "NEGATIVE")):
             _evidence_verdict = "POSITIVE"
         elif not _evidence_verdict:
