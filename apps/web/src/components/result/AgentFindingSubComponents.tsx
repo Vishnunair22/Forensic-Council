@@ -488,25 +488,25 @@ export function ToolRow({ finding, isLast }: { finding: AgentFindingDTO; isLast:
    )}
 
    {/* Specialized EXIF Block */}
-   {toolName === "exif_extract" && status !== "na" && (
+   {(toolName === "exif_extract" || toolName === "mediainfo_profile" || toolName === "av_file_identity") && status !== "na" && (
     <div className="pl-[54px] mt-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/[0.02] border border-white/10 rounded-xl p-3">
         <div className="flex flex-col">
           <span className="fc-eyebrow fc-text-muted mb-0.5">Device / Software</span>
           <span className="text-xs font-bold text-white/90 truncate">
-            {String(finding.metadata?.device_model || finding.metadata?.camera_model || finding.metadata?.model || finding.metadata?.software || "Unknown")}
+            {String(finding.metadata?.device_model || finding.metadata?.camera_model || finding.metadata?.model || finding.metadata?.software || finding.metadata?.writing_application || "Unknown")}
           </span>
         </div>
         <div className="flex flex-col">
           <span className="fc-eyebrow fc-text-muted mb-0.5">Date / Time</span>
           <span className="text-xs font-bold text-white/90 truncate">
-            {String(finding.metadata?.datetime_original || finding.metadata?.DateTimeOriginal || finding.metadata?.gps_info || "Not available")}
+            {String(finding.metadata?.datetime_original || finding.metadata?.DateTimeOriginal || finding.metadata?.encoded_date || finding.metadata?.gps_info || "Not available")}
           </span>
         </div>
         <div className="flex flex-col mt-1.5">
           <span className="fc-eyebrow fc-text-muted mb-0.5">File Type</span>
           <span className="text-xs font-bold text-white/90 truncate">
-            {String(finding.metadata?.mime_type || finding.metadata?.image_type || "Unknown")}
+            {String(finding.metadata?.mime_type || finding.metadata?.image_type || finding.metadata?.format || "Unknown")}
           </span>
         </div>
         <div className="flex flex-col mt-1.5">
