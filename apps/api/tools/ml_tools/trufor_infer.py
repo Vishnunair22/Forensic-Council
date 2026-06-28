@@ -29,6 +29,7 @@ _WEIGHTS_CANDIDATES = [
     os.environ.get("TRUFOR_WEIGHTS", ""),
     "/app/cache/trufor/trufor.pth.tar",
     "/tmp/trufor/trufor.pth.tar",
+    os.path.join(_THIS_DIR, "..", "..", ".cache", "trufor", "trufor.pth.tar"),
 ]
 _MAX_SIDE = 384  # cap long side: SegFormer-B2 on CPU is ~4x faster at 384 vs 1024;
 # the global detection score (primary signal) stays discriminative at this size.

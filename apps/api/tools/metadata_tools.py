@@ -306,17 +306,17 @@ def _normalize_exif_aliases(exif: dict[str, Any]) -> dict[str, Any]:
     # Social media and editing apps often inject their names into the "Make" or "Model" EXIF fields.
     # If the claimed device matches known software, move it to the Software field to prevent
     # the watermark from being reported as a hardware camera.
-    _KNOWN_SOFTWARE = {"photoshop", "gimp", "canva", "tiktok", "instagram", "facebook", 
-                       "twitter", "whatsapp", "capcut", "snapseed", "lightroom", "picsart", 
+    _KNOWN_SOFTWARE = {"photoshop", "gimp", "canva", "tiktok", "instagram", "facebook",
+                       "twitter", "whatsapp", "capcut", "snapseed", "lightroom", "picsart",
                        "facetune", "meitu", "watermark", "editor", "snapchat", "wechat"}
-    
+
     make_str = str(make).strip() if make else ""
     if make_str and any(s in make_str.lower() for s in _KNOWN_SOFTWARE):
         if not exif.get("Software"):
             exif["Software"] = make_str
         make = None
         make_str = ""
-        
+
     model_str = str(model).strip() if model else ""
     if model_str and any(s in model_str.lower() for s in _KNOWN_SOFTWARE):
         if not exif.get("Software"):
