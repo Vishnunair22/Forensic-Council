@@ -1880,7 +1880,7 @@ class GeminiVisionClient:
                         models_to_skip.add(active_model)  # quota — advance to next model, never retry this one
                         continue
 
-                    logger.warning(
+                    logger.info(
                         "Gemini transient HTTP failure; retrying same model"
                         if single_model else "Gemini transient HTTP failure; trying next fallback",
                         model=active_model,
@@ -1891,7 +1891,7 @@ class GeminiVisionClient:
                     continue
 
                 except Exception as exc:
-                    logger.warning(
+                    logger.info(
                         "Gemini model failed; trying next fallback",
                         model=active_model,
                         error=str(exc),

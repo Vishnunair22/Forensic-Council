@@ -1833,7 +1833,7 @@ async def _await_deep_analysis_decision(
 
             await asyncio.sleep(2.0)
 
-        logger.warning(
+        logger.info(
             "HITL decision timed out; defaulting to skip deep analysis",
             session_id=str(session_id),
             timeout_seconds=timeout,

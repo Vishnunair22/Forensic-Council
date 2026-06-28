@@ -531,7 +531,7 @@ async def create_visual_context_preflight(
                     model=context.provider_name,
                 )
         except Exception as exc:
-            logger.warning(
+            logger.info(
                 "Gemini preflight failed — falling back to local ensemble",
                 session_id=session_id,
                 error=str(exc),

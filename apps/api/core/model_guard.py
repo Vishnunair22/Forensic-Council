@@ -63,7 +63,7 @@ MODEL_FOOTPRINT_MB: dict[str, float] = {
     "aasist": 900.0,         # wav2vec-style audio anti-spoofing
 }
 
-_DEFAULT_MIN_FREE_MB = 768.0
+_DEFAULT_MIN_FREE_MB = 512.0
 _DEFAULT_MAX_INFERENCE_DIM = 2560
 
 

@@ -918,7 +918,7 @@ class ImageHandlers(BaseToolHandler, InterToolCommunicationMixin):
         # model runs in a few seconds, so the extra headroom is paid only on a
         # genuinely contended first call.
         result = await run_ml_tool(
-            "ai_generation_detector.py", artifact.file_path, timeout=45.0
+            "ai_generation_detector.py", artifact.file_path, timeout=90.0
         )
         model_ran = bool(result.get("available")) and result.get("method") == "vit_classifier"
 
