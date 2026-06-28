@@ -1371,7 +1371,7 @@ class ReActLoopEngine:
 
                                         # Check for epistemic uncertainty escalation (arXiv:2512.16614)
                                         if cal_result.uncertainty.should_escalate:
-                                            logger.warning(
+                                            logger.info(
                                                 "Epistemic uncertainty escalation triggered",
                                                 agent_id=self.agent_id,
                                                 tool_name=next_step.tool_name,

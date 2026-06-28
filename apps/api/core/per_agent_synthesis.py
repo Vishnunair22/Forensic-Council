@@ -1060,6 +1060,7 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "'14 EXIF fields stripped', '3 scene-inconsistency flags'.\n"
         "  • No two items may cover the same tool or the same forensic signal.\n"
         "  • You MUST ONLY cite tools that are explicitly provided in the 'findings' array. DO NOT invent or guess tool names like 'metadata_analysis' or 'deepfake_frequency_check' if they did not run.\n"
+        "  • If the 'findings' array is empty or contains no applicable tools, you MUST return an empty array [] for key_findings. Do NOT create key findings from the visual context.\n"
         "  • Do NOT include NOT_APPLICABLE or ERROR results — skip those tools entirely.\n"
         "  • Do NOT write: 'flagged a manipulation indicator', 'returned a positive result', "
         "'confirmed authenticity' — always state WHAT was measured and WHAT value it returned.\n\n"
