@@ -130,7 +130,7 @@ def _load_model():
         # downloaded from the authors' server (trusted source).
         ckpt = torch.load(wp, map_location="cpu", weights_only=False)
         state = ckpt.get("state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
-        model.load_state_dict(state)
+        model.load_state_dict(state, assign=True)
         model.eval()
         _model = model
         return _model
