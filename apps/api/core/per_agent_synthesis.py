@@ -826,7 +826,31 @@ def _text_contradicts_verdict(text: str, verdict: str) -> bool:
     if str(verdict or "").upper() not in _CLEAN_VERDICTS:
         return False  # alert verdicts may legitimately use manipulation language
     low = text.lower()
-    return any(term in low for term in _MANIPULATION_TERMS)
+    
+    if not any(term in low for term in _MANIPULATION_TERMS):
+        return False
+
+    # Scrub common negations to avoid false positives (e.g. "no manipulated regions")
+    negations = [
+        r"no\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"absence\s+of\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"without\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"zero\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"0\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"checked\s+for\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"did\s+not\s+detect\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"failed\s+to\s+find\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"negative\s+for\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"clear\s+of\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"lack\s+of\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"free\s+(?:from|of)\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"does\s+not\s+appear\s+(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+    ]
+    scrubbed = low
+    for pat in negations:
+        scrubbed = re.sub(pat, "", scrubbed)
+        
+    return any(term in scrubbed for term in _MANIPULATION_TERMS)
 
 
 def _round_pcts(text: str) -> str:
@@ -886,7 +910,14 @@ def _is_echoed_instruction(text: str) -> bool:
     ``"1 check ran with decisive metrics: tool (40%); verdict: X, confidence: Y%"``
     — reject it and keep the deterministic brief."""
     low = (text or "").lower()
-    return "decisive metric" in low or "verdict + confidence" in low or "<" in low
+    return (
+        "decisive metric" in low 
+        or "verdict + confidence" in low 
+        or "<" in low 
+        or "write one sentence" in low 
+        or "write two sentences" in low 
+        or "write one clear sentence" in low
+    )
 
 
 # Bare file-type / identity labels the vision pass may echo. On their own these
@@ -917,7 +948,7 @@ def _is_degenerate_visual_summary(text: str, baseline: str = "") -> bool:
     # A refined summary far shorter than substantive deterministic prose has dropped
     # the axis detail the deterministic builder already rendered.
     base = (baseline or "").strip()
-    if len(base) >= 60 and len(text.strip()) < 0.35 * len(base):
+    if len(base) >= 60 and len(text.strip()) < 0.15 * len(base) and len(text.strip()) < 50:
         return True
     return False
 
@@ -1001,35 +1032,32 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "  • Cite the ACTUAL metric number — e.g. '0 spliced blocks', 'hash matched', "
         "'14 EXIF fields stripped', '3 scene-inconsistency flags'.\n"
         "  • No two items may cover the same tool or the same forensic signal.\n"
-        "  • You MUST ONLY cite tools that are explicitly provided in the 'findings' array. DO NOT invent or hallucinate tool names.\n"
+        "  • You MUST ONLY cite tools that are explicitly provided in the 'findings' array. DO NOT invent or guess tool names like 'metadata_analysis' or 'deepfake_frequency_check' if they did not run.\n"
         "  • Do NOT include NOT_APPLICABLE or ERROR results — skip those tools entirely.\n"
         "  • Do NOT write: 'flagged a manipulation indicator', 'returned a positive result', "
         "'confirmed authenticity' — always state WHAT was measured and WHAT value it returned.\n\n"
         "━━━ OUTPUT SCHEMA (return exactly this, nothing else) ━━━\n"
         "{\n"
         "  \"Agent1\": {\n"
-        "    \"visual_context_summary\": \"<1 sentence: integrity axis — file type forensic attribute, "
-        "authenticity read, AI/manipulation signals, compression profile>\",\n"
-        "    \"agent_brief\": \"<2 sentences: sentence 1 = N checks + decisive metrics; "
-        "sentence 2 = verdict + confidence rationale>\",\n"
+        "    \"visual_context_summary\": \"Write one clear sentence summarizing the integrity axis here.\",\n"
+        "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
         "    \"key_findings\": [\n"
-        "      \"<Metric-specific finding> — <tool_name> (<conf>%)\",\n"
+        "      \"Metric-specific finding — tool_name (conf%)\",\n"
         "      ...\n"
         "    ]"
-        + (",\n    \"phase_comparison\": \"<1 sentence starting with CONFIRMED/REFINED/ESCALATED/CONTRADICTED — what the deep pass changed or confirmed vs initial>\"" if is_deep else "")
+        + (",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\"" if is_deep else "")
         + "\n  },\n"
         "  \"Agent3\": {\n"
-        "    \"visual_context_summary\": \"<1 sentence: scene + object inventory + any inconsistencies>\",\n"
-        "    \"agent_brief\": \"<2 sentences: checks + metrics; verdict + rationale>\",\n"
-        "    \"key_findings\": [\"<metric finding> — <tool> (<conf>%)\", ...]"
-        + (",\n    \"phase_comparison\": \"<1 sentence: deep pass delta for this agent>\"" if is_deep else "")
+        "    \"visual_context_summary\": \"Write one clear sentence summarizing the scene and objects here.\",\n"
+        "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
+        "    \"key_findings\": [\"Metric-specific finding — tool_name (conf%)\", ...]"
+        + (",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\"" if is_deep else "")
         + "\n  },\n"
         "  \"Agent5\": {\n"
-        "    \"visual_context_summary\": \"<1 sentence: provenance record — timestamp, device, "
-        "field count, GPS — then any contradiction found>\",\n"
-        "    \"agent_brief\": \"<2 sentences: checks + metrics; verdict + rationale>\",\n"
-        "    \"key_findings\": [\"<metric finding> — <tool> (<conf>%)\", ...]"
-        + (",\n    \"phase_comparison\": \"<1 sentence: deep pass delta for this agent>\"" if is_deep else "")
+        "    \"visual_context_summary\": \"Write one clear sentence summarizing the provenance record here.\",\n"
+        "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
+        "    \"key_findings\": [\"Metric-specific finding — tool_name (conf%)\", ...]"
+        + (",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\"" if is_deep else "")
         + "\n  }\n"
         "}"
     )

@@ -781,7 +781,7 @@ class Settings(BaseSettings):
             "(for example llama-3.3-70b-versatile=6K, llama-3.1-8b-instant=30K)."
         ),
     )
-    groq_synthesis_rpm_limit: int = Field(default=5)
+    groq_synthesis_rpm_limit: int = Field(default=30)
     groq_synthesis_rpm_safety_margin: int = Field(default=1)
     groq_per_agent_batch_enabled: bool = Field(default=True)
     groq_per_agent_batch_max_calls_per_session: int = Field(default=1)

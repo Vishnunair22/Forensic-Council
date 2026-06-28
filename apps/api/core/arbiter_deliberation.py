@@ -271,14 +271,14 @@ def deliberate_findings(
     hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") in hash_mismatch_tools and f.get("evidence_verdict") == "POSITIVE"]
 
     ai_gen_tools = {
-        "diffusion_artifact_detector", "ai_generation_detector", "audio_gen_signature", 
+        "diffusion_artifact_detector", "ai_generation_detector", "audio_gen_signature",
         "ai_text_detector", "voice_clone_detect", "synthid_watermark_detect",
         "face_swap_detection", "deepfake_frequency_check", "voice_clone_deep_ensemble"
     }
     ai_positives = [t for t in positive_integrity_tools if t in ai_gen_tools]
     # If the ONLY integrity positives are AI generation tools, or they dominate
     is_primarily_ai = bool(ai_positives) and len(ai_positives) >= len(positive_integrity_tools) / 2
-    
+
     vc_is_ai = False
     if visual_context:
         vis_integrity = getattr(visual_context, "image_integrity_context", None)

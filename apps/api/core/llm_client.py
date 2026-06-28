@@ -728,7 +728,7 @@ class LLMClient:
         "gemini-2.0-flash-lite": 60000,
         "gemini-2.5-flash": 120000,
         "gemini-2.0-flash": 120000,
-        "llama-3.3-70b-versatile": 40000,       # 32k ctx window
+        "llama-3.3-70b-versatile": 18000,       # Max ~4.5k tokens + 1k output = 5.5k < 6k TPM limit
     }
     _DEFAULT_PROMPT_CHAR_LIMIT: int = 18000
 
