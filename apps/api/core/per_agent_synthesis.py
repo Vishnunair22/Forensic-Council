@@ -994,7 +994,8 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
             f"    \"visual_context_summary\": \"Write one clear sentence {hint} here.\",\n"
             "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
             "    \"key_findings\": [\n"
-            "      \"Metric-specific finding — tool_name (conf%)\"\n"
+            "      \"Metric-specific finding — tool_name (conf%)\",\n"
+            "      ...\n"
             "    ]"
         )
         if is_deep:
