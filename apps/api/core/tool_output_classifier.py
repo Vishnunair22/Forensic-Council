@@ -246,6 +246,7 @@ class ToolOutputClassifier:
                     "synthetic_probability",
                     "forgery_score",
                     "diffusion_probability",
+                    "interframe_probability",
                 ):
                     val = _as_unit_float(output.get(key))
                     if val is not None:
@@ -385,6 +386,8 @@ class ToolOutputClassifier:
                     raw_conf = 0.80 if p is True else (0.40 if p is False else 0.50)
                 elif output.get("c2pa_present") is not None or output.get("provenance_found") is not None:
                     raw_conf = 0.85 if output.get("c2pa_present") or output.get("provenance_found") else 0.50
+                elif output.get("roi_artifact") is not None or output.get("roi_path") is not None:
+                    raw_conf = 1.0
 
             # Cap any LLM-derived confidence: this is an UNCALIBRATED LLM SIGNAL
             # (the model's self-assessment, not a measured error rate) — it must
