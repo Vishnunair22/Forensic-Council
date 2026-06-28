@@ -845,6 +845,7 @@ def _text_contradicts_verdict(text: str, verdict: str) -> bool:
         r"lack\s+of\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
         r"free\s+(?:from|of)\s+[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
         r"does\s+not\s+appear\s+(?:" + "|".join(_MANIPULATION_TERMS) + r")",
+        r"not\s+(?:been\s+)?[\w\s-]*?(?:" + "|".join(_MANIPULATION_TERMS) + r")",
     ]
     scrubbed = low
     for pat in negations:
