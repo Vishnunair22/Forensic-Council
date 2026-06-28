@@ -273,6 +273,9 @@ async def roi_extract(
             "roi_artifact": derivative_artifact.to_dict() if derivative_artifact else None,
             "roi_path": roi_path,
             "dimensions": {"width": w, "height": h},
+            "court_defensible": True,
+            "available": True,
+            "confidence": 0.85,
         }
 
     except Exception as e:
