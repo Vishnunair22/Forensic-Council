@@ -27,6 +27,9 @@ esac
 
 check_docker_available || exit 1
 
+echo "==> Cleaning stale artifacts to prevent ghost bytecode regressions..."
+bash "$SCRIPT_DIR/clean_project.sh"
+
 echo "==> No-cache rebuild ${SVC:-all services} ($MODE)"
 if [ -n "$SVC" ]; then
   docker compose "${FILES[@]}" --env-file .env build --no-cache "$SVC"

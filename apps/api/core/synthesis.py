@@ -1275,6 +1275,20 @@ Return ONLY a JSON object with this exact schema:
                     screenshot_like=screenshot_like,
                 )
 
+        # Enforce strict verdict grounding against deterministic tool outputs
+        has_positive = any(_is_positive(row) for row in tool_rows.values())
+        verdict = str(response.get("verdict") or "").upper()
+        if has_positive and verdict in {"AUTHENTIC", "CLEAN", "CONSISTENT"}:
+            logger.warning(
+                f"LLM hallucinated {verdict} despite POSITIVE tool signals in {agent_name}; correcting to SUSPICIOUS."
+            )
+            response["verdict"] = "SUSPICIOUS"
+        elif not has_positive and verdict in {"SUSPICIOUS", "TAMPERED", "MANIPULATED"}:
+            logger.warning(
+                f"LLM hallucinated {verdict} without POSITIVE tool signals in {agent_name}; correcting to INCONCLUSIVE."
+            )
+            response["verdict"] = "INCONCLUSIVE"
+
         raw_sections = response.get("sections")
         sections = raw_sections if isinstance(raw_sections, list) else []
         for section in sections:
