@@ -978,6 +978,32 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
 
     persona_section = "\n\n".join(voice_blocks)
 
+    agent_hints = {
+        "Agent1": "summarizing the integrity axis",
+        "Agent2": "summarizing the audio/spectral context",
+        "Agent3": "summarizing the scene and objects",
+        "Agent4": "summarizing the temporal/video context",
+        "Agent5": "summarizing the provenance record",
+    }
+    
+    schema_parts = []
+    for aid in agent_ids:
+        hint = agent_hints.get(aid, "summarizing the forensic context")
+        part = (
+            f"  \"{aid}\": {{\n"
+            f"    \"visual_context_summary\": \"Write one clear sentence {hint} here.\",\n"
+            "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
+            "    \"key_findings\": [\n"
+            "      \"Metric-specific finding — tool_name (conf%)\"\n"
+            "    ]"
+        )
+        if is_deep:
+            part += ",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\""
+        part += "\n  }"
+        schema_parts.append(part)
+        
+    schema_json = "{\n" + ",\n".join(schema_parts) + "\n}"
+
     prompt = (
         "You are a forensic narrative specialist writing expert testimony for a multi-agent "
         "digital evidence analysis system. Each agent has a distinct expert identity. "
@@ -1037,29 +1063,7 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "  • Do NOT write: 'flagged a manipulation indicator', 'returned a positive result', "
         "'confirmed authenticity' — always state WHAT was measured and WHAT value it returned.\n\n"
         "━━━ OUTPUT SCHEMA (return exactly this, nothing else) ━━━\n"
-        "{\n"
-        "  \"Agent1\": {\n"
-        "    \"visual_context_summary\": \"Write one clear sentence summarizing the integrity axis here.\",\n"
-        "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
-        "    \"key_findings\": [\n"
-        "      \"Metric-specific finding — tool_name (conf%)\",\n"
-        "      ...\n"
-        "    ]"
-        + (",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\"" if is_deep else "")
-        + "\n  },\n"
-        "  \"Agent3\": {\n"
-        "    \"visual_context_summary\": \"Write one clear sentence summarizing the scene and objects here.\",\n"
-        "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
-        "    \"key_findings\": [\"Metric-specific finding — tool_name (conf%)\", ...]"
-        + (",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\"" if is_deep else "")
-        + "\n  },\n"
-        "  \"Agent5\": {\n"
-        "    \"visual_context_summary\": \"Write one clear sentence summarizing the provenance record here.\",\n"
-        "    \"agent_brief\": \"Write two sentences of expert prose summarizing the checks and rationale here.\",\n"
-        "    \"key_findings\": [\"Metric-specific finding — tool_name (conf%)\", ...]"
-        + (",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\"" if is_deep else "")
-        + "\n  }\n"
-        "}"
+        f"{schema_json}\n"
     )
     if is_deep:
         prompt += (
