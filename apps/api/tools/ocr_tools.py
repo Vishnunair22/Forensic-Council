@@ -159,14 +159,15 @@ def _get_easyocr_reader():
             warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
             warnings.filterwarnings("ignore", message=".*Using CPU.*faster with a GPU.*", category=UserWarning, module="easyocr")
 
-            from core.config import get_settings  # noqa: PLC0415
             import torch  # noqa: PLC0415
+
+            from core.config import get_settings  # noqa: PLC0415
 
             model_dir = os.getenv("EASYOCR_MODEL_DIR", "/app/cache/easyocr")
             os.makedirs(model_dir, exist_ok=True)
-            
+
             use_gpu = torch.cuda.is_available()
-            
+
             # Memory-guard the load: if the container lacks headroom, refuse here
             # so the caller falls back to lightweight Tesseract instead of risking
             # an OOM SIGKILL that would crash the worker.

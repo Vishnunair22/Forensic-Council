@@ -827,7 +827,7 @@ def _text_contradicts_verdict(text: str, verdict: str) -> bool:
     if str(verdict or "").upper() not in _CLEAN_VERDICTS:
         return False  # alert verdicts may legitimately use manipulation language
     low = text.lower()
-    
+
     if not any(term in low for term in _MANIPULATION_TERMS):
         return False
 
@@ -851,7 +851,7 @@ def _text_contradicts_verdict(text: str, verdict: str) -> bool:
     scrubbed = low
     for pat in negations:
         scrubbed = re.sub(pat, "", scrubbed)
-        
+
     return any(term in scrubbed for term in _MANIPULATION_TERMS)
 
 
@@ -913,11 +913,11 @@ def _is_echoed_instruction(text: str) -> bool:
     — reject it and keep the deterministic brief."""
     low = (text or "").lower()
     return (
-        "decisive metric" in low 
-        or "verdict + confidence" in low 
-        or "<" in low 
-        or "write one sentence" in low 
-        or "write two sentences" in low 
+        "decisive metric" in low
+        or "verdict + confidence" in low
+        or "<" in low
+        or "write one sentence" in low
+        or "write two sentences" in low
         or "write one clear sentence" in low
     )
 
@@ -987,7 +987,7 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "Agent4": "summarizing the temporal/video context",
         "Agent5": "summarizing the provenance record",
     }
-    
+
     schema_parts = []
     for aid in agent_ids:
         hint = agent_hints.get(aid, "summarizing the forensic context")
@@ -1004,7 +1004,7 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
             part += ",\n    \"phase_comparison\": \"Write one sentence phase comparison here.\""
         part += "\n  }"
         schema_parts.append(part)
-        
+
     schema_json = "{\n" + ",\n".join(schema_parts) + "\n}"
 
     prompt = (
