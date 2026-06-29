@@ -256,6 +256,11 @@ def analyze(image_path: str) -> dict[str, Any]:
         and block_anomaly_ratio > 0.01
     )
 
+    import base64
+    heatmap_colored = cv2.applyColorMap(ela_map.astype(np.uint8), cv2.COLORMAP_JET)
+    _, buffer = cv2.imencode(".png", heatmap_colored)
+    localization_map_png = base64.b64encode(buffer).decode("utf-8")
+
     return {
         "manipulation_detected": manipulation_detected,
         "confidence": confidence,
@@ -267,6 +272,7 @@ def analyze(image_path: str) -> dict[str, Any]:
         "quality_levels_used": quality_levels_used,
         "available": True,
         "court_defensible": True,
+        "localization_map_png": localization_map_png,
         "model_version": "neural_ela_transformer_v1",
     }
 

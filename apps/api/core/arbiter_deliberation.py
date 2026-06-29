@@ -52,6 +52,9 @@ def deliberate_findings(
     visual_context: Any | None,
     tool_coverage: dict[str, Any],
     mime_type: str = "",
+    artifact: Any | None = None,
+    compression_penalty: float = 1.0,
+    fusion_score: float | None = None,
 ) -> ArbiterDeliberationResult:
     """Deliberates agent findings, resolves conflicts, and determines the final verdict and confidence score.
 
@@ -144,6 +147,10 @@ def deliberate_findings(
         visual_context is not None
         and "screenshot" in str(getattr(visual_context, "file_type_assessment", "")).lower()
     )
+    if not _is_screenshot and artifact is not None:
+        from core.file_classifier import classify_evidence_file_sync
+        if classify_evidence_file_sync(artifact).primary_category == "screenshot":
+            _is_screenshot = True
     screenshot_fp_prone = SCREENSHOT_FP_PRONE_TOOLS
 
     # First pass: Deliberate each finding
@@ -533,6 +540,14 @@ def deliberate_findings(
     # and found nothing" (0.0) from "we could not check" (0.10).
     final_confidence = max(0.10, min(_ceiling, raw_conf))
 
+    if compression_penalty < 1.0:
+        final_confidence *= compression_penalty
+
+    if fusion_score is not None and fusion_score > 0:
+        # Cross-modal fusion corroboration adjusts confidence based on multimodal agreement
+        final_confidence = (final_confidence + fusion_score) / 2.0
+
+
     # P0.2 — PDF/document verdicts reached on the metadata-only path (no content
     # or rendered-page analysis) cannot earn high confidence: a forged visible
     # payload with clean container metadata would pass undetected. Cap confidence
@@ -547,6 +562,10 @@ def deliberate_findings(
 
     # Formulate confidence reason
     reasons = []
+    if compression_penalty < 1.0:
+        reasons.append(f"compression penalty (x{compression_penalty:.2f})")
+    if fusion_score is not None and fusion_score > 0:
+        reasons.append("cross-modal fusion score")
     if important_tool_completion_rate > 0.8:
         reasons.append("High tool coverage")
     if cross_agent_agreement_score > 0.8:

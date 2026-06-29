@@ -164,13 +164,14 @@ class ForensicPolicy:
         "compression_artifact_analysis": "compression_artifact",
         "codec_fingerprint": "compression_artifact", "codec_fingerprinting": "compression_artifact",
         "compression_risk_audit": "compression_artifact",
+        "noiseprint_cluster": "compression_artifact", "noiseprint_clustering": "compression_artifact",
         # frequency — spectral GAN/deepfake-fingerprint detectors (generative-artifact
         # oriented, distinct mechanism from the recompression probes above)
         "f3_net_frequency": "frequency", "deepfake_frequency_check": "frequency",
         # boundary_splice — splice-boundary / noise-inconsistency localisation
         "splicing_detect": "boundary_splice", "neural_splicing": "boundary_splice",
         "trufor": "boundary_splice", "splicing_detector": "boundary_splice",
-        "noiseprint_cluster": "boundary_splice", "anomaly_tracer": "boundary_splice",
+        "anomaly_tracer": "boundary_splice",
         # copy_move — internal region duplication
         "copy_move_detect": "copy_move", "neural_copy_move": "copy_move",
         "copy_move_detector": "copy_move",

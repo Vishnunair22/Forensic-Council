@@ -108,6 +108,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         agent_results: dict[str, dict[str, Any]],
         case_id: str = "",
         artifact_mime: str = "",
+        artifact: Any | None = None,
     ) -> ForensicReport:
         """
         Build a deterministic arbiter report from current agent findings.
@@ -119,7 +120,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         self._pre_warm_agent_results = agent_results
         self._pre_warm_case_id = case_id
         self._pre_warm_used_llm = False
-        self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False, artifact_mime=artifact_mime)
+        self._pre_warm_report = await self.deliberate(agent_results, case_id, use_llm=False, artifact_mime=artifact_mime, artifact=artifact)
         return self._pre_warm_report
 
     async def regenerate_missing_narratives(self, report: ForensicReport) -> ForensicReport:
@@ -154,7 +155,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         report.per_agent_narrative_structured = narratives.get("per_agent_narrative_structured", {})
         return report
 
-    async def finalise_from_cache(self, use_llm: bool = True, artifact_mime: str = "") -> ForensicReport:
+    async def finalise_from_cache(self, use_llm: bool = True, artifact_mime: str = "", artifact: Any | None = None) -> ForensicReport:
         """Finalize cached arbiter inputs into the report returned to the result page."""
         if self._pre_warm_agent_results is None:
             raise RuntimeError("Arbiter has no cached agent findings to finalise")
@@ -180,6 +181,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             self._pre_warm_case_id,
             use_llm=use_llm,
             artifact_mime=artifact_mime,
+            artifact=artifact,
         )
         if use_llm:
             self._pre_warm_used_llm = True
@@ -199,6 +201,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         case_id: str = "",
         use_llm: bool = True,
         artifact_mime: str = "",
+        artifact: Any | None = None,
     ) -> ForensicReport:
         """Main deliberation entry point."""
 
@@ -268,10 +271,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             for m in per_agent_metrics.values()
             if not m.get("skipped") and m.get("total_tools_called", 0) > 0
         ]
-        # Only the error rate is consumed downstream — the final overall_confidence
-        # comes from deliberate_findings (and per-agent confidence spread from
-        # active_metrics directly), so the weighted-confidence return is discarded.
-        _, overall_error_rate = self._calculate_weighted_stats(active_metrics)
+        overall_error_rate = self._calculate_error_rate(active_metrics)
 
         # ── 3. Tool Coverage ──
         completed_tools = []
@@ -459,9 +459,10 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             and getattr(visual_context, "external_llm_used", False)
             and getattr(visual_context, "source", "") != "local_ensemble"
         )
+        _holistic_conf = float(getattr(visual_context, "confidence", 0.0) or 0.0) if visual_context else 0.0
         _holistic_verdict = (
             str(getattr(visual_context, "authenticity_verdict", "") or "").upper()
-            if visual_context is not None
+            if visual_context is not None and _holistic_conf >= 0.60
             else ""
         )
 
@@ -629,9 +630,21 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         )
 
         # ── 5. Arbiter Deliberation ──
+        compression_penalty = self._get_compression_penalty(all_findings)
+        
+        _fusion = {}
+        try:
+            from core.cross_modal_fusion import fuse as cross_modal_fuse
+            _fusion_res = cross_modal_fuse(active_results)
+            _fusion = _fusion_res.model_dump(mode="json")
+        except Exception as exc:
+            logger.debug("Cross-modal fusion failed", error=str(exc))
+
         from core.arbiter_deliberation import deliberate_findings
         deliberation_result = deliberate_findings(
-            all_findings, visual_context, tool_coverage, mime_type=artifact_mime
+            all_findings, visual_context, tool_coverage, mime_type=artifact_mime, artifact=artifact,
+            compression_penalty=compression_penalty,
+            fusion_score=_fusion.get("fused_confidence") if _fusion else None
         )
 
         # ── 6. Deterministic Report Builder ──
@@ -857,13 +870,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         }
 
         # ── 9. Case Finalisation ──
-        _fusion = {}
-        try:
-            _fusion_res = cross_modal_fuse(active_results)
-            _fusion = _fusion_res.model_dump(mode="json")
-        except Exception as exc:
-            logger.debug("Cross-modal fusion failed", error=str(exc))
-
         has_deep_findings = any(
             (f.get("metadata") or {}).get("analysis_phase") == "deep"
             for f in all_findings
@@ -977,7 +983,7 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             skipped_agents=skipped_agents,
             analysis_coverage_note=final_report_dict["methodology"],
             cross_modal_fusion=_fusion,
-            compression_penalty=1.0,
+            compression_penalty=compression_penalty,
         )
 
         # P0.4 — embed the deterministic-baseline hash in the signed payload.
@@ -1111,6 +1117,15 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         merged["reasoning_summary"] = " | ".join(merge_parts)
 
         merged_meta = dict(primary.get("metadata") or {})
+        
+        # Ensure localization_map_png is preserved from any finding in the group
+        if "localization_map_png" not in merged_meta:
+            for f in findings:
+                f_meta = f.get("metadata") or {}
+                if "localization_map_png" in f_meta:
+                    merged_meta["localization_map_png"] = f_meta["localization_map_png"]
+                    break
+
         merged_meta["contributing_agents"] = contributing_agents
         merged_meta["source_count"] = len(findings)
         merged_meta["corroboration_strength"] = (
@@ -1172,9 +1187,9 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         # The prior mean-of-raw-confidence averaged heterogeneous per-tool scores
         # (e.g. ELA 0.23 + fingerprint 0.95) into a meaningless ~0.48 that
         # contradicted the badge's graduated confidence.
-        from core.severity import compute_agent_verdict as _cav
-        _agent_verdict, avg_conf, _ = _cav(real)
         deep = sum(1 for f in real if (f.get("metadata") or {}).get("analysis_phase") == "deep")
+        from core.severity import compute_agent_verdict as _cav
+        _agent_verdict, avg_conf, _ = _cav(real, is_deep=(deep > 0))
         return AgentMetrics(
             agent_id=aid,
             agent_name=name,
@@ -1190,29 +1205,15 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             completed_at=latest_time,
         )
 
-    def _calculate_weighted_stats(self, active_metrics: list[dict]) -> tuple[float, float]:
-        w_sum, wc_sum, we_num, we_den = 0.0, 0.0, 0.0, 0.0
+    def _calculate_error_rate(self, active_metrics: list[dict]) -> float:
+        we_num, we_den = 0.0, 0.0
         for m in active_metrics:
             app = m.get("total_tools_called", 0) - m.get("tools_not_applicable", 0)
             if app <= 0:
                 continue
-            rel = max(0.0, 1.0 - m.get("error_rate", 0.0))
-            weight = (
-                rel
-                * app
-                * (
-                    ForensicPolicy.DEEP_ANALYSIS_BONUS
-                    if m.get("deep_finding_count", 0) > 0
-                    else 1.0
-                )
-            )
-            wc_sum += m["confidence_score"] * weight
-            w_sum += weight
-            we_num += m["error_rate"] * max(1, app)
+            we_num += m.get("error_rate", 0.0) * max(1, app)
             we_den += max(1, app)
-        return (round(wc_sum / w_sum, 3) if w_sum > 0 else 0.0), (
-            round(we_num / we_den, 3) if we_den > 0 else 0.0
-        )
+        return round(we_num / we_den, 3) if we_den > 0 else 0.0
 
     def _get_compression_penalty(self, findings: list[dict]) -> float:
         """Retrieve compression penalty from Agent 5's audit finding."""

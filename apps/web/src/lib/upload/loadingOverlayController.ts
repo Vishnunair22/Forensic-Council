@@ -22,8 +22,10 @@ export class LoadingOverlayController {
   show(text?: string): void {
     // Cancel any pending dismiss so a new show() call always wins.
     this.clearTimer();
+    if (!this.visible) {
+      this.showTime = Date.now();
+    }
     this.visible = true;
-    this.showTime = Date.now();
     this.text = text || "Initializing workspace";
     this.syncStorage();
     this.notify();
@@ -52,10 +54,6 @@ export class LoadingOverlayController {
   }
 
   forceDismiss(): void {
-    // Safety: if a handoff is still in-flight, don't force-dismiss
-    const isHandoffActive = sessionOnlyStorage.getItem(STORAGE_KEYS.FC_HANDOFF_FIRED) === "1";
-    const isAutoStart = sessionOnlyStorage.getItem(STORAGE_KEYS.AUTO_START) === "true";
-    if (isHandoffActive || isAutoStart) return;
 
     this.clearTimer();
     this.visible = false;

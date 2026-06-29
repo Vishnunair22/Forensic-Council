@@ -265,12 +265,26 @@ def analyze(image_path: str) -> dict[str, Any]:
             "model_version": "trufor_srm_v1",
         }
 
+    # Stage A: Pre-processing (downscale large images for performance)
+    max_side_limit = 1024
+    downscaled = False
+    scale_ratio = 1.0
+    
+    if max(h, w) > max_side_limit:
+        scale_ratio = max_side_limit / float(max(h, w))
+        new_w = int(w * scale_ratio)
+        new_h = int(h * scale_ratio)
+        gray_analysis = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        downscaled = True
+    else:
+        gray_analysis = gray
+
     # Stage A: SRM residual stack
-    srm_stack = _apply_srm(gray)
+    srm_stack = _apply_srm(gray_analysis)
     srm_global_var = float(np.var(srm_stack))
 
     # Stage B: block-level statistics
-    block_size = 32 if min(h, w) >= 128 else 16
+    block_size = 32 if min(gray_analysis.shape[0], gray_analysis.shape[1]) >= 128 else 16
     features, coords = _block_statistics(srm_stack, block_size=block_size)
 
     if len(features) < 9:
@@ -326,16 +340,33 @@ def analyze(image_path: str) -> dict[str, Any]:
         size = int(len(ys))
         largest_cluster = max(largest_cluster, size)
         if size >= _MIN_CLUSTER:
+            fx = int(cols[int(xs.min())])
+            fy = int(rows[int(ys.min())])
+            fw = int((int(xs.max()) - int(xs.min()) + 1) * block_size)
+            fh = int((int(ys.max()) - int(ys.min()) + 1) * block_size)
+            
+            if downscaled:
+                fx = int(fx / scale_ratio)
+                fy = int(fy / scale_ratio)
+                fw = int(fw / scale_ratio)
+                fh = int(fh / scale_ratio)
+                
             forgery_regions.append({
-                "x": int(cols[int(xs.min())]),
-                "y": int(rows[int(ys.min())]),
-                "w": int((int(xs.max()) - int(xs.min()) + 1) * block_size),
-                "h": int((int(ys.max()) - int(ys.min()) + 1) * block_size),
+                "x": fx,
+                "y": fy,
+                "w": fw,
+                "h": fh,
             })
 
     boundary_anomaly = _boundary_sharpness_anomaly(gray)
     max_z = float(block_score.max()) if block_score.size else 0.0
     splicing_detected = len(forgery_regions) >= 1
+
+    import base64
+    heatmap_colored = cv2.applyColorMap(grid, cv2.COLORMAP_JET)
+    heatmap_colored = cv2.resize(heatmap_colored, (w, h), interpolation=cv2.INTER_NEAREST)
+    _, buffer = cv2.imencode(".png", heatmap_colored)
+    localization_map_png = base64.b64encode(buffer).decode("utf-8")
 
     if splicing_detected:
         conf_cluster = min(largest_cluster / 12.0, 1.0)
@@ -368,8 +399,14 @@ def analyze(image_path: str) -> dict[str, Any]:
         "verdict": verdict,
         "available": True,
         "court_defensible": court_defensible,
+        "localization_map_png": localization_map_png,
         "model_version": "trufor_srm_v2_cluster",
     }
+    
+    if downscaled:
+        result["downscaled_for_performance"] = True
+        
+    return result
 
 
 # ---------------------------------------------------------------------------

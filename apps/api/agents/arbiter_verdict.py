@@ -385,14 +385,14 @@ def _has_legacy_positive_signal(finding: dict[str, Any]) -> bool:
         or str(meta.get("verdict", "")).upper()
         in ("LIKELY_AI_GENERATED", "LIKELY_SPOOFED", "LIKELY_SYNTHETIC")
         or (
-            "INCONSISTENT" in str(meta.get("prnu_verdict", "")).upper()
+            str(meta.get("prnu_verdict", "")).upper() == "INCONSISTENT"
             and meta.get("prnu_verdict") is not None
         )
         or (
-            "INCONSISTENT" in str(meta.get("verdict", "")).upper()
+            str(meta.get("verdict", "")).upper() == "INCONSISTENT"
             and meta.get("verdict") is not None
         )
-        or ("TAMPERED" in str(meta.get("verdict", "")).upper() and meta.get("verdict") is not None)
+        or (str(meta.get("verdict", "")).upper() == "TAMPERED" and meta.get("verdict") is not None)
     )
 
 
@@ -415,8 +415,8 @@ def calculate_manipulation_probability(
         if not f.get("stub_result")
     )
 
-    # (confidence, weight, signal_family, tool_name)
-    _manip_weighted: list[tuple[float, float, str, str]] = []
+    # (confidence, weight, signal_family, tool_name, agent_id)
+    _manip_weighted: list[tuple[float, float, str, str, str]] = []
     _seen_tool_agents: dict[tuple[str, str], tuple[float, str]] = {}
 
     for _f in all_findings:
@@ -471,18 +471,19 @@ def calculate_manipulation_probability(
                         continue
                 _seen_tool_agents[_agent_tool_key] = (_c, _phase)
 
-                _manip_weighted.append((_c, _w, ForensicPolicy.signal_family(_tool), _tool))
+                _manip_weighted.append((_c, _w, ForensicPolicy.signal_family(_tool), _tool, _agent_id))
 
     # WS-3 #11 — signal-family fusion. Correlated detectors (ELA + JPEG-ghost +
     # frequency all fire on the SAME recompression artifact) must not each count as
     # independent evidence. Collapse to ONE signal per family at its strongest member,
     # and delete the volume bonus that rewarded raw signal count — a legitimately
     # re-encoded WhatsApp photo no longer climbs to SUSPICIOUS on volume alone.
-    _by_family: dict[str, tuple[float, float, str]] = {}  # family -> (conf, weight, tool)
-    for _c, _w, _fam, _tool in _manip_weighted:
-        _prev = _by_family.get(_fam)
+    _by_family: dict[str, tuple[float, float, str]] = {}  # agent_id:family -> (conf, weight, tool)
+    for _c, _w, _fam, _tool, _aid in _manip_weighted:
+        _fuse_key = f"{_aid}:{_fam}"
+        _prev = _by_family.get(_fuse_key)
         if _prev is None or (_c * _w) > (_prev[0] * _prev[1]):
-            _by_family[_fam] = (_c, _w, _tool)
+            _by_family[_fuse_key] = (_c, _w, _tool)
     _family_signals = list(_by_family.values())
     signals_count = len(_family_signals)
 

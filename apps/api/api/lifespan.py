@@ -141,11 +141,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning(msg)
 
     if settings.gemini_api_key and not settings.gemini_api_key_policy_ok:
-        logger.warning(
+        msg = (
             "GEMINI_API_KEY is set but GEMINI_API_KEY_POLICY_OK is not true. "
-            "Gemini API calls will be disabled. Set GEMINI_API_KEY_POLICY_OK=true "
-            "after reviewing the terms at https://ai.google.dev/terms"
+            "Set GEMINI_API_KEY_POLICY_OK=true after reviewing the terms at https://ai.google.dev/terms"
         )
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     # ── MIME detection check ─────────────────────────────────────────────────
     try:

@@ -595,6 +595,8 @@ class ForensicCouncilPipeline:
             self.agent_factory.set_evidence_artifact(evidence_artifact)
         if hasattr(self, "inter_agent_bus"):
             self.inter_agent_bus._evidence_artifact = evidence_artifact
+        if self.arbiter is not None:
+            self.arbiter.evidence_artifact = evidence_artifact
 
         # ── Shared visual context (awaited, up-front) ─────────────────────────
         # Resolve the visual context BEFORE any agent runs so it is generated once

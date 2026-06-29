@@ -146,7 +146,8 @@ export function GlobalLoadingOverlay() {
 
       if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
       const elapsed = Date.now() - mountTimeRef.current;
-      const remaining = Math.max(0, EVIDENCE_MAX_DISPLAY_MS - elapsed);
+      // Add a hard fallback so the overlay never stays up longer than 45s, even if EVIDENCE_MAX_DISPLAY_MS is larger
+      const remaining = Math.min(Math.max(0, EVIDENCE_MAX_DISPLAY_MS - elapsed), 45000);
       safetyTimerRef.current = setTimeout(() => {
         dismiss();
       }, remaining);

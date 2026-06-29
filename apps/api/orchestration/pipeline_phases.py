@@ -742,7 +742,7 @@ async def run_agents_concurrent(
             # to the agent's self-synthesis verdict on any error.
             _live_verdict = synthesis.get("verdict") if isinstance(synthesis, dict) else None
             _live_conf = agent_confidence
-            if status == "complete" and isinstance(synthesis, dict):
+            if status == "complete":
                 try:
                     _af = (
                         list(getattr(agent_inst, "_findings", []) or [])
@@ -1262,6 +1262,13 @@ async def run_agents_concurrent(
         pass
 
     # Clear stale findings and AgentX_deep namespaces from working memory before deep phase
+    if pipeline._pre_warm_task and not pipeline._pre_warm_task.done():
+        pipeline._pre_warm_task.cancel()
+        try:
+            await pipeline._pre_warm_task
+        except Exception:
+            pass
+            
     for _aid in registry.get_all_agent_ids():
         try:
             await pipeline.working_memory.clear(session_id, _aid)

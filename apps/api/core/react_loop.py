@@ -717,7 +717,7 @@ def _get_available_tools_for_llm(state: WorkingMemoryState) -> list[dict[str, An
 TOOL_TIMEOUT_POLICY = {
     "noiseprint_cluster": 300.0,
     "noise_fingerprint": 240.0,
-    "neural_splicing": 180.0,
+    "neural_splicing": 80.0,
     "neural_copy_move": 180.0,
     "anomaly_tracer": 150.0,
     "diffusion_artifact_detector": 150.0,

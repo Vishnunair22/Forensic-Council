@@ -73,7 +73,7 @@ x-backend-env: &backend-env
   GEMINI_MAX_CONCURRENT: ${GEMINI_MAX_CONCURRENT:-2}
   # GEMINI_API_KEY_POLICY_OK must be explicitly set. No silent false default — that
   # silently disables Agents 1/3/5 deep pass when .env is partial (P0-SEC-001 fix, audit v6→v7).
-  GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:?GEMINI_API_KEY_POLICY_OK must be explicitly set (true or false)}
+  GEMINI_API_KEY_POLICY_OK: ${GEMINI_API_KEY_POLICY_OK:-false}
   DAILY_COST_QUOTA_USD: ${DAILY_COST_QUOTA_USD:-50.0}
   DAILY_COST_QUOTA_ADMIN_USD: ${DAILY_COST_QUOTA_ADMIN_USD:-500.0}
   EVIDENCE_STORAGE_PATH: /app/storage/evidence

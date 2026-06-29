@@ -400,7 +400,7 @@ export const useSimulation = ({
                             .filter((value): value is number => typeof value === "number")
                         : [];
                       const parsedConfidence =
-                        (typeof confidence === "number" ? confidence : null) ??
+                        (typeof confidence === "number" && confidence > 0 ? confidence : null) ??
                         (previewConfidenceValues.length > 0
                           ? previewConfidenceValues.reduce((sum, value) => sum + value, 0) / previewConfidenceValues.length
                           : 0);

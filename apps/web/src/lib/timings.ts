@@ -3,8 +3,7 @@ export const ARBITER_MIN_DISPLAY_MS = 1500;
 export const SAFETY_TIMEOUT_MS = 5_000;
 
 export const MIN_DISPLAY_MS = 800;
-
-export const EVIDENCE_MAX_DISPLAY_MS = 60_000;
+export const EVIDENCE_MAX_DISPLAY_MS = 30_000;
 
 export const STALL_MS = 30_000;
 

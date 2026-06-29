@@ -72,9 +72,10 @@ def _allowed_numeric_values(payload: dict[str, Any]) -> set[float]:
         allowed.add(v)
         allowed.add(round(v))
         allowed.add(round(v, 2))
-        allowed.add(round(v * 100))
-        allowed.add(round(v * 100, 1))
-        if v != 0:
+        if 0.0 <= v <= 1.0:
+            allowed.add(round(v * 100))
+            allowed.add(round(v * 100, 1))
+        if v > 1.0:
             allowed.add(round(v / 100, 4))
     return allowed
 

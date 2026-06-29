@@ -82,6 +82,13 @@ def detect_splicing(image_path: str) -> dict:
             "note": "Insufficient blocks for analysis",
         }
 
+    sampled_blocks = False
+    if len(features) > 5000:
+        sampled_blocks = True
+        indices = np.random.choice(len(features), 5000, replace=False)
+        features = [features[i] for i in indices]
+        positions = [positions[i] for i in indices]
+
     X = np.array(features)
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -124,7 +131,7 @@ def detect_splicing(image_path: str) -> dict:
         else max(0.05, 1.0 - inconsistency_ratio * 10)
     )
 
-    return {
+    result = {
         "splicing_detected": splicing_detected,
         "confidence": round(confidence, 3),
         "num_inconsistent_blocks": int(len(outlier_indices)),
@@ -133,6 +140,11 @@ def detect_splicing(image_path: str) -> dict:
         "suspicious_regions": suspicious_regions,
         "available": True,
     }
+    
+    if sampled_blocks:
+        result["sampled_blocks"] = True
+        
+    return result
 
 
 if __name__ == "__main__":

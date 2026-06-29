@@ -347,7 +347,7 @@ class InferenceClient:
         # (~10-25s/image + a one-time ~20s load on the first call per worker), so
         # it needs a larger budget than the lightweight heuristics or it would
         # spuriously time out and fall back.
-        timeouts = {"trufor": 120.0, "busternet": 60.0, "mantra": 60.0, "f3net": 30.0}
+        timeouts = {"trufor": 60.0, "busternet": 60.0, "mantra": 60.0, "f3net": 30.0}
         return await run_ml_tool(
             script_map[model_id], image_path, timeout=timeouts.get(model_id, 30.0)
         )

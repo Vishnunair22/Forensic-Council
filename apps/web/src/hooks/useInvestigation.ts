@@ -216,6 +216,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
   const completedAgentsRef = useRef<AgentUpdate[]>([]);
   const arbiterAbortControllerRef = useRef<AbortController | null>(null);
   const resumeInFlightRef = useRef(false);
+  const handoffClearTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const onQuota = () => {
@@ -237,6 +238,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       if (warmupTimeoutRef.current) {
         clearTimeout(warmupTimeoutRef.current);
         warmupTimeoutRef.current = null;
+      }
+      if (handoffClearTimerRef.current) {
+        clearTimeout(handoffClearTimerRef.current);
+        handoffClearTimerRef.current = null;
       }
     };
   }, []);
@@ -340,6 +345,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (warmupTimeoutRef.current) {
       clearTimeout(warmupTimeoutRef.current);
       warmupTimeoutRef.current = null;
+    }
+    if (handoffClearTimerRef.current) {
+      clearTimeout(handoffClearTimerRef.current);
+      handoffClearTimerRef.current = null;
     }
     setIsUploading(false);
     setPhase("initial");
@@ -672,6 +681,13 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
           // Overlay dismissal is handled by the status-tracking effect below.
           // The dismiss effect enforces an 800ms minimum display duration via
           // both the controller's internal timer and a React setTimeout.
+          // 5-second fallback: if no AGENT_UPDATE arrives, force dismiss so user is not stuck
+          if (handoffClearTimerRef.current) clearTimeout(handoffClearTimerRef.current);
+          handoffClearTimerRef.current = setTimeout(() => {
+            sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+            loadingOverlayController.dismiss();
+            handoffClearTimerRef.current = null;
+          }, 5000);
         })
         .catch((wsErr: unknown) => {
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -851,7 +867,17 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
       if (effectCancelled) return;
       connectWebSocket(existingSessionId, true)
-        .then(() => { if (!effectCancelled) setAnalysisStreamReady(true); })
+        .then(() => { 
+          if (!effectCancelled) {
+            setAnalysisStreamReady(true);
+            if (handoffClearTimerRef.current) clearTimeout(handoffClearTimerRef.current);
+            handoffClearTimerRef.current = setTimeout(() => {
+              sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
+              loadingOverlayController.dismiss();
+              handoffClearTimerRef.current = null;
+            }, 5000);
+          }
+        })
         .catch((wsErr: unknown) => {
           if (effectCancelled) return;
           const wsErrMsg = wsErr instanceof Error ? wsErr.message : "Failed to connect to stream";
@@ -1171,6 +1197,10 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
       !!wsConnectionError;
 
     if (shouldDismiss) {
+      if (handoffClearTimerRef.current) {
+        clearTimeout(handoffClearTimerRef.current);
+        handoffClearTimerRef.current = null;
+      }
       sessionOnlyStorage.removeItem(STORAGE_KEYS.FC_HANDOFF_FIRED);
       sessionOnlyStorage.removeItem(STORAGE_KEYS.AUTO_START);
       loadingOverlayController.dismiss();

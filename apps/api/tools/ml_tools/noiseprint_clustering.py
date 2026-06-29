@@ -314,6 +314,17 @@ def analyze(image_path: str) -> dict[str, Any]:
     if not manipulation_detected:
         confidence = 0.0
 
+    import base64
+    grid = np.zeros((h, w), dtype=np.uint8)
+    if manipulation_detected:
+        for i in minority_idx:
+            cx, cy, cw, ch = region_coords[i]
+            grid[cy:cy+ch, cx:cx+cw] = 255
+            
+    heatmap_colored = cv2.applyColorMap(grid, cv2.COLORMAP_JET)
+    _, buffer = cv2.imencode(".png", heatmap_colored)
+    localization_map_png = base64.b64encode(buffer).decode("utf-8")
+
     return {
         "manipulation_detected": manipulation_detected,
         "confidence": confidence,
@@ -328,6 +339,7 @@ def analyze(image_path: str) -> dict[str, Any]:
         # Screening-tier: a K-means noise heuristic, superseded by TruFor's
         # learned Noiseprint++ branch. Not asserted as court-defensible on its own.
         "court_defensible": False,
+        "localization_map_png": localization_map_png,
         "model_version": "noiseprint_clustering_v2_conservative",
     }
 

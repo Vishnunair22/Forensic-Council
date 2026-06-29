@@ -70,7 +70,7 @@ TOOL_TIMEOUTS: dict[str, float] = {
     # persistent worker; cold-start + inference can take ~40-50s, and the
     # chunk-length overflow retry adds another pass. 130s gives headroom for
     # the 120s inner timeout + a subprocess fallback without hitting the registry ceiling.
-    "neural_splicing": 130.0,
+    "neural_splicing": 70.0,
     # copy_move_detect (SIFT) can take up to 120s internally on large images.
     "copy_move_detect": 130.0,
     # neural_copy_move (BusterNet) has an inner timeout of 60s.

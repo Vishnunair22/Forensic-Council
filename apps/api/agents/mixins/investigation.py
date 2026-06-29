@@ -1802,6 +1802,33 @@ class AgentInvestigationMixin:
         )
 
         self._reactive_expansion_agent_id = deep_agent_id
+        
+        async def _deep_keepalive():
+            from api.routes._session_state import broadcast_update
+            from api.schemas import BriefUpdate
+            while True:
+                await asyncio.sleep(15.0)
+                try:
+                    await broadcast_update(
+                        str(self.session_id),
+                        BriefUpdate(
+                            type="AGENT_UPDATE",
+                            session_id=str(self.session_id),
+                            agent_id=self.agent_id,
+                            agent_name=self.agent_name,
+                            message="Running deep analysis tools...",
+                            data={
+                                "status": "running",
+                                "thinking": "Executing extended neural analysis...",
+                                "analysis_phase": "deep",
+                            },
+                        ),
+                    )
+                except Exception as _kp_err:
+                    logger.debug("Deep keepalive broadcast failed", error=str(_kp_err))
+
+        keepalive_task = asyncio.create_task(_deep_keepalive())
+
         try:
             loop_result = await loop_engine.run(
                 initial_thought=enriched_thought,
@@ -1809,6 +1836,11 @@ class AgentInvestigationMixin:
                 llm_generator=None,
             )
         finally:
+            keepalive_task.cancel()
+            try:
+                await keepalive_task
+            except asyncio.CancelledError:
+                pass
             self._reactive_expansion_agent_id = None
 
         deep_findings = loop_result.findings
