@@ -103,7 +103,7 @@ export function HeroAuthActions() {
   const handleStartAnalysis = useCallback(async () => {
     if (!selectedFile || isHandingOffRef.current) return false;
 
-    if (!selectedFileHash) {
+    if (!selectedFileHash && selectedFile.size <= 100 * 1024 * 1024) {
       toast.destructive({
         title: "Hash Not Ready",
         description: "The SHA-256 custody hash must be computed before analysis can begin.",
@@ -157,7 +157,7 @@ export function HeroAuthActions() {
     setIsHashComputing(true);
     try {
       const result = await computeFileSha256(file);
-      setSelectedFileHash(result.hex);
+      setSelectedFileHash(result ? result.hex : null);
       // Chime only once the evidence is truly sealed (validated + hashed),
       // so the success cue can never precede a hash failure.
       playSound("success-chime");

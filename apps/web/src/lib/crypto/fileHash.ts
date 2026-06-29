@@ -17,9 +17,17 @@ const CHUNK_SIZE = 1024 * 1024; // 1 MB — balances memory allocation vs yieldi
 export async function computeFileSha256(
   file: File,
   onProgress?: (percent: number) => void,
-): Promise<FileHashResult> {
+): Promise<FileHashResult | null> {
   if (!globalThis.crypto?.subtle) {
     throw new Error("Browser Web Crypto API is unavailable.");
+  }
+
+  // E-1: Skip frontend hashing for files >100MB to prevent browser OOM.
+  // The backend will automatically compute the hash during upload processing.
+  if (file.size > 100 * 1024 * 1024) {
+    console.warn("File > 100MB; skipping frontend hashing to prevent OOM.");
+    onProgress?.(100);
+    return null;
   }
 
   const _totalChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -87,7 +95,7 @@ export async function computeFileSha256(
 async function computeFileSha256Fallback(
   file: File,
   onProgress?: (percent: number) => void,
-): Promise<FileHashResult> {
+): Promise<FileHashResult | null> {
   const buffer = new Uint8Array(file.size);
   let offset = 0;
   for (let i = 0; i < file.size; i += CHUNK_SIZE) {

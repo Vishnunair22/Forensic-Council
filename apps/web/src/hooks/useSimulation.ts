@@ -261,6 +261,15 @@ export const useSimulation = ({
                       });
                       break;
                     }
+                    if (activePhaseRef.current === "deep" && updatePhase !== "deep") {
+                      const dataStatus = (update.data as Record<string, unknown> | null)?.status;
+                      if (update.agent_id != null || dataStatus === "starting") {
+                        dbg.log("[WebSocket] Ignoring missing-phase deep AGENT_UPDATE", {
+                          agent_id: update.agent_id,
+                        });
+                        break;
+                      }
+                    }
                   }
                   // Pipeline-level updates come through with agent_id=null.
                   // Surface them separately so the UI can show "what the backend is doing" in real time.
@@ -1111,6 +1120,16 @@ export const useSimulation = ({
       setHitlCheckpoint(stored);
     } catch (e) { dbg.warn("[Simulation] HITL checkpoint restore failed:", e); }
   }, []);
+
+  // C-8: HITL modal auto-dismiss on timeout
+  useEffect(() => {
+    if (!hitlCheckpoint) return;
+    const timeout = setTimeout(() => {
+      setHitlCheckpoint(null);
+      try { storage.removeItem(STORAGE_KEYS.HITL_CHECKPOINT); } catch (e) { dbg.warn("[Simulation] HITL checkpoint clear failed:", e); }
+    }, 300_000);
+    return () => clearTimeout(timeout);
+  }, [hitlCheckpoint]);
 
   const resetSimulation = useCallback(() => {
     activePhaseRef.current = "initial";

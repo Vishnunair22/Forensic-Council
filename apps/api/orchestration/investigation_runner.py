@@ -109,7 +109,7 @@ async def run_investigation_task(
 
             meta = await get_active_pipeline_metadata(session_id) or {}
             _case_id = meta.get("case_id") or case_id
-            _content_hash = meta.get("content_hash") or content_sha256
+            _content_hash = meta.get("content_sha256") or meta.get("content_hash") or content_sha256
             if _case_id and _content_hash:
                 _redis = await get_redis_client()
                 await _redis.delete(f"dedup:{_case_id}:{_content_hash}")

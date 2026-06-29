@@ -467,7 +467,7 @@ export function useResult(initialSessionId?: string) {
 
       if (!cancelled) {
         timer = setTimeout(poll, pollInterval);
-        pollInterval = Math.min(pollInterval * 1.3, 3000);
+        pollInterval = Math.min(pollInterval * 1.3, 10000);
       }
     }
 

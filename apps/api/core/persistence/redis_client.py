@@ -78,7 +78,7 @@ class RedisClient:
             # blocking-acquire pathology at high concurrency.
             from core.config import get_settings as _get_settings
 
-            _max_conn = getattr(_get_settings(), "redis_max_connections", 50) or 50
+            _max_conn = getattr(_get_settings(), "redis_max_connections", 200) or 200
             connection_kwargs = {
                 "host": self._host,
                 "port": self._port,

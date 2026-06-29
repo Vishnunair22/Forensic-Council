@@ -47,16 +47,7 @@ async def main() -> None:
     configure_provider_quota_guards(settings)
     logger.info("Starting Forensic Council Worker", pid=os.getpid())
 
-    # Fail-loud self-test + numba/librosa pre-warm. Catches the silent-degradation
-    # class (e.g. NUMBA_DISABLE_JIT breaking audio tools, model load failures) and
-    # warms the JIT so the first audio analysis isn't slow. Threaded so the compile
-    # doesn't block boot; never fatal.
-    try:
-        from core.startup_diagnostics import run_startup_diagnostics
-
-        await asyncio.to_thread(run_startup_diagnostics)
-    except Exception as _diag_exc:
-        logger.warning("Startup diagnostics failed (non-fatal)", error=str(_diag_exc))
+    # Startup diagnostics moved to background warmup task.
 
     keystore = get_keystore()
     await keystore.initialize()
@@ -130,13 +121,32 @@ async def main() -> None:
             except Exception as exc:
                 logger.warning("EasyOCR pre-warm failed (non-fatal)", error=str(exc))
 
+        async def _run_diagnostics() -> None:
+            try:
+                from core.startup_diagnostics import run_startup_diagnostics
+                await loop.run_in_executor(None, run_startup_diagnostics)
+            except Exception as _diag_exc:
+                logger.warning("Startup diagnostics failed (non-fatal)", error=str(_diag_exc))
+
+        async def _run_startup_session_cleanup() -> None:
+            try:
+                from core.session_persistence import get_session_persistence
+                _persistence = await get_session_persistence()
+                _pruned = await _persistence.cleanup_expired_sessions()
+                if _pruned:
+                    logger.info("Pruned expired investigation_state rows on startup", count=_pruned)
+            except Exception as _exc:
+                logger.warning("Startup DB session cleanup failed (non-fatal)", error=str(_exc))
+
         # Run CLIP+inference warmup in parallel with ML-subprocess warmup
-        # so that CLIP is available as quickly as possible (~17s) regardless
-        # of how long the ML-subprocess warmup takes (30-90s).
+        # and startup diagnostics so that everything is available as quickly
+        # as possible regardless of how long individual pieces take.
         await _asyncio.gather(
             _warmup_ml_tools(),
             _warmup_inference_models(),
             _warmup_easyocr(),
+            _run_diagnostics(),
+            _run_startup_session_cleanup(),
         )
 
     _warmup_task = asyncio.create_task(_warmup_background())
@@ -314,14 +324,17 @@ async def main() -> None:
             # Prune expired investigation_state rows from Postgres so the
             # table doesn't grow without bound. This is the only place where
             # cleanup_expired_sessions is invoked.
-            try:
-                from core.session_persistence import get_session_persistence
-                _persistence = await get_session_persistence()
-                _pruned = await _persistence.cleanup_expired_sessions()
-                if _pruned:
-                    logger.info("Pruned expired investigation_state rows", count=_pruned)
-            except Exception as exc:
-                logger.warning("DB session cleanup failed (non-fatal)", error=str(exc))
+            async def _do_db_cleanup():
+                try:
+                    from core.session_persistence import get_session_persistence
+                    _persistence = await get_session_persistence()
+                    _pruned = await _persistence.cleanup_expired_sessions()
+                    if _pruned:
+                        logger.info("Pruned expired investigation_state rows", count=_pruned)
+                except Exception as exc:
+                    logger.warning("DB session cleanup failed (non-fatal)", error=str(exc))
+            
+            asyncio.create_task(_do_db_cleanup())
 
             try:
                 await asyncio.wait_for(shutdown.wait(), timeout=24 * 3600)

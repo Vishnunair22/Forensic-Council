@@ -498,7 +498,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
         if (!pendingClientSha256) {
           try {
             const computed = await computeFileSha256(targetFile);
-            pendingClientSha256 = computed.hex.toLowerCase();
+            pendingClientSha256 = computed ? computed.hex.toLowerCase() : undefined;
 
             const existingMeta = fileHandoffManager.getFileMeta();
             sessionOnlyStorage.setItem(
@@ -1094,6 +1094,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
     if (isNavigating || resumeInFlightRef.current || investigationInFlightRef.current) return;
     resumeInFlightRef.current = true;
     playSound("click");
+    arbiterControl.abort();
     const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
     if (sid) {
       storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "deep");

@@ -715,6 +715,14 @@ class ForensicCouncilPipeline:
 
         arbiter_results = self._normalize_agent_results(agent_results)
 
+        try:
+            from core.capability_manifest import build_capability_manifest
+            build_capability_manifest(
+                agent_results, self.config, mime_type=evidence_artifact.mime_type if evidence_artifact else ""
+            )
+        except Exception as _cap_err:
+            logger.debug("Failed to build capability manifest before deliberation", error=str(_cap_err))
+
         # Check for majority agent failure — abort only when agents failed
         # WITHOUT producing any initial findings. Deep-pass timeouts produce
         # valid initial findings and must not count as "failed" here.

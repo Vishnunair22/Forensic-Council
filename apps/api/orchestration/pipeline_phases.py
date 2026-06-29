@@ -1120,9 +1120,10 @@ async def run_agents_concurrent(
             return agent, findings, "error"
 
     async def _run_one_staggered(agent, aid: str, supported: bool, idx: int):
-        """Stagger initial agent startup by idx * 2s to avoid simultaneous API quota bursts."""
+        """Stagger initial agent startup by idx * 1s to avoid simultaneous API quota bursts."""
+        stagger_s = float(getattr(pipeline.config, "initial_agent_stagger_seconds", 1.0))
         if idx > 0:
-            await asyncio.sleep(idx * 2.0)
+            await asyncio.sleep(idx * stagger_s)
         return await _run_one(agent, aid, supported)
 
     raw_initial = await asyncio.gather(
@@ -1528,9 +1529,10 @@ async def run_agents_concurrent(
             raise
 
     async def _run_deep_with_stagger(aid: str, idx: int):
-        """Stagger deep agent start by index * 4s to avoid simultaneous Gemini slot contention."""
+        """Stagger deep agent start by index * 1.5s to avoid simultaneous Gemini slot contention."""
+        stagger_s = float(getattr(pipeline.config, "deep_agent_stagger_seconds", 1.5))
         if idx > 0:
-            await asyncio.sleep(idx * 4.0)
+            await asyncio.sleep(idx * stagger_s)
         return await _run_deep_with_fallback(aid)
 
     raw_deep_all = await asyncio.gather(
@@ -1815,7 +1817,24 @@ async def _await_deep_analysis_decision(
         timeout = pipeline.config.hitl_decision_timeout or 300
         start_time = time.perf_counter()
 
+        poll_interval = 2.0
         while (time.perf_counter() - start_time) < timeout:
+            # Race the in-process event against a timed sleep
+            try:
+                await asyncio.wait_for(
+                    pipeline.deep_analysis_decision_event.wait(),
+                    timeout=poll_interval
+                )
+                # Event was set — decision arrived via internal event
+                logger.info(
+                    "Analyst decision received via internal event",
+                    session_id=str(session_id),
+                )
+                return bool(pipeline.run_deep_analysis_flag)
+            except asyncio.TimeoutError:
+                pass  # No in-process event; fall through to Redis poll
+
+            # Check Redis for cross-process decisions (worker mode)
             try:
                 raw_decision = await active_redis.get(decision_key)
                 if raw_decision:
@@ -1830,15 +1849,6 @@ async def _await_deep_analysis_decision(
                         return pipeline.run_deep_analysis_flag
             except Exception as poll_err:
                 logger.debug("Decision polling flicker", error=str(poll_err))
-
-            if pipeline.deep_analysis_decision_event.is_set():
-                logger.info(
-                    "Analyst decision received via internal event",
-                    session_id=str(session_id),
-                )
-                return bool(pipeline.run_deep_analysis_flag)
-
-            await asyncio.sleep(2.0)
 
         logger.info(
             "HITL decision timed out; defaulting to skip deep analysis",
@@ -1951,7 +1961,24 @@ async def _await_deep_report_request(
         timeout = pipeline.config.hitl_decision_timeout or 300
         start_time = time.perf_counter()
 
+        poll_interval = 2.0
         while (time.perf_counter() - start_time) < timeout:
+            # Race the in-process event against a timed sleep
+            try:
+                await asyncio.wait_for(
+                    pipeline.deep_analysis_decision_event.wait(),
+                    timeout=poll_interval
+                )
+                # Event was set — decision arrived via internal event
+                logger.info(
+                    "Final report request received via internal event",
+                    session_id=str(session_id),
+                )
+                return
+            except asyncio.TimeoutError:
+                pass  # No in-process event; fall through to Redis poll
+
+            # Check Redis for cross-process decisions (worker mode)
             try:
                 raw_decision = await active_redis.get(decision_key)
                 if raw_decision:
@@ -1962,15 +1989,6 @@ async def _await_deep_report_request(
                     return
             except Exception as poll_err:
                 logger.debug("Final-report decision polling flicker", error=str(poll_err))
-
-            if pipeline.deep_analysis_decision_event.is_set():
-                logger.info(
-                    "Final report request received via internal event",
-                    session_id=str(session_id),
-                )
-                return
-
-            await asyncio.sleep(2.0)
 
         logger.warning(
             "Deep report request timed out; proceeding to arbiter synthesis",

@@ -337,6 +337,20 @@ class InvestigationWorker:
                         timeout_seconds=self._task_timeout_seconds(),
                     )
                     await self.queue._mark_session_failed(task, task.error)
+                    try:
+                        from api.routes._session_state import broadcast_update
+                        from api.schemas import BriefUpdate
+                        await broadcast_update(
+                            str(task.session_id),
+                            BriefUpdate(
+                                type="ERROR",
+                                session_id=str(task.session_id),
+                                message=f"Investigation timed out after {timeout_seconds:.0f}s",
+                                data={"status": "error", "error": "timeout"},
+                            ),
+                        )
+                    except Exception as _broadcast_err:
+                        logger.debug("Timeout error broadcast failed", error=str(_broadcast_err))
                 except Exception as e:
                     task.status = InvestigationStatus.FAILED
                     task.error = str(e)
@@ -382,8 +396,8 @@ class InvestigationWorker:
                         active_tasks = set(pending)
                         continue
 
-                    # BLPOP blocks until a task is available (timeout 5s)
-                    result = await redis.client.blpop(InvestigationQueue.QUEUE_KEY, timeout=5)
+                    # BLPOP blocks until a task is available (timeout 1s)
+                    result = await redis.client.blpop(InvestigationQueue.QUEUE_KEY, timeout=1)
                     if not result:
                         continue
 

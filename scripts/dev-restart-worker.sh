@@ -17,5 +17,6 @@ echo "  Gracefully stopping worker (30s drain window)..."
 # any in-flight investigation before terminating. Investigations running
 # at restart time will need to be resubmitted.
 "${COMPOSE[@]}" stop -t 30 worker
+sleep 2
 "${COMPOSE[@]}" up -d worker
 echo "  Worker restarted."
