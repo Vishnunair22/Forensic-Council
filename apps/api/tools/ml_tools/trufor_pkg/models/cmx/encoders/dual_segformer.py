@@ -460,8 +460,7 @@ def load_dualpath_model(model, model_file):
             state_dict[k.replace('norm', 'extra_norm')] = v
 
     t_ioend = time.time()
-
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(state_dict, strict=False, assign=True)
     del state_dict
     
     t_end = time.time()

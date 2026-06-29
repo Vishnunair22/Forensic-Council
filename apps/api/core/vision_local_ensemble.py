@@ -430,12 +430,18 @@ def _cross_signal_synthesis(
         sl = s.lower()
         return sl.endswith("indicators detected") or "no manipulation" in sl
 
-    weak_markers = (
+    weak_markers = [
         "elevated noise residual",
         "jpeg block artifacts",
         "high_freq_ratio",
         "frequency-domain anomaly",
-    )
+    ]
+    
+    # For heavily compressed web images and memes (text overlays), ELA and weak diffusion
+    # spectral artifacts are expected and should not independently escalate the verdict.
+    if clip_category == "web_image":
+        weak_markers.extend(["ela anomaly detected", "spectral artifacts detected"])
+
     substantive = [s for s in signals if not _is_clean_note(s)]
     # "Strong" = a real manipulation signal, excluding weak screening artifacts
     # (global noise level, blockiness, raw high-freq ratio) that fire on benign
@@ -448,7 +454,9 @@ def _cross_signal_synthesis(
          or "likely region tampering" in s.lower() or "overlap" in s.lower())
         for s in substantive
     )
-    strong_ai = diff_detected and diff_probability > 0.7
+    
+    ai_threshold = 0.85 if clip_category == "web_image" else 0.70
+    strong_ai = diff_detected and diff_probability > ai_threshold
 
     logger.info(
         "Local ensemble verdict signals",

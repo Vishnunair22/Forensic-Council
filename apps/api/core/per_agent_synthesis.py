@@ -797,6 +797,8 @@ _TOOL_ALIAS_MAP: dict[str, str] = {
     "file_identity": "file_structure_analysis",
     "hash_check": "file_hash_verify",
     "scene_geometry": "scene_incongruence",
+    "scene_inconsistency_check": "scene_incongruence",
+    "metadata_fingerprint_check": "metadata_anomaly_score",
 }
 
 
@@ -809,12 +811,23 @@ def _fuzzy_tool_alias(cited: str, agent_tools: set[str]) -> str | None:
         alias = _TOOL_ALIAS_MAP[cited]
         if alias in agent_tools:
             return alias
+        # Alias map hit but the canonical tool is not in this agent's set.
+        # Try substring overlap of the ALIAS against agent tools too —
+        # the canonical name might be a substring of the real tool slug.
+        if len(alias) >= 6:
+            for real in agent_tools:
+                if len(real) >= 6 and (alias in real or real in alias):
+                    return real
     # 2. Substring overlap: check if the cited slug is a prefix/suffix of a
     #    real tool, or vice versa (min 6 chars to avoid false matches).
-    if len(cited) >= 6:
-        for real in agent_tools:
-            if len(real) >= 6 and (cited in real or real in cited):
-                return real
+    candidates: list[str] = [cited]
+    if cited in _TOOL_ALIAS_MAP:
+        candidates.append(_TOOL_ALIAS_MAP[cited])
+    for candidate in candidates:
+        if len(candidate) >= 6:
+            for real in agent_tools:
+                if len(real) >= 6 and (candidate in real or real in candidate):
+                    return real
     return None
 
 
@@ -1056,12 +1069,16 @@ def _build_persona_system_prompt(agent_ids: list[str], is_deep: bool = False) ->
         "Rules:\n"
         "  • Lead with the highest-impact finding (strongest positive signal first; if all clean, "
         "lead with the most definitive clean result).\n"
+        "  • INCLUDE ALL POSITIVE findings: every grounded finding with a POSITIVE or SUSPICIOUS "
+        "verdict MUST appear in the key_findings array. Do not omit any positive result, even if "
+        "it pushes past 5 items.\n"
         "  • If a finding was grounded (severity adjusted because it is not applicable to this "
         "image type), say so: append '(context-adjusted)' after the tool name.\n"
         "  • Cite the ACTUAL metric number — e.g. '0 spliced blocks', 'hash matched', "
         "'14 EXIF fields stripped', '3 scene-inconsistency flags'.\n"
         "  • No two items may cover the same tool or the same forensic signal.\n"
         "  • You MUST ONLY cite tools that are explicitly provided in the 'findings' array. DO NOT invent or guess tool names like 'metadata_analysis' or 'deepfake_frequency_check' if they did not run.\n"
+        "  • Never invent a tool name. The 'findings' array lists every tool that ran. If a tool name you want to cite does not appear verbatim in any finding's tool_name or finding_type field, DO NOT cite it.\n"
         "  • If the 'findings' array is empty or contains no applicable tools, you MUST return an empty array [] for key_findings. Do NOT create key findings from the visual context.\n"
         "  • Do NOT include NOT_APPLICABLE or ERROR results — skip those tools entirely.\n"
         "  • Do NOT write: 'flagged a manipulation indicator', 'returned a positive result', "

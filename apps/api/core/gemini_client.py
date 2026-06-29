@@ -615,8 +615,8 @@ def _parse_preflight_gemini_response(
     _BENIGN_CUTOUT_MARKERS = (
         "background has been removed", "background removed", "removed background",
         "removed the background", "transparent background", "transparent checkerboard",
-        "checkerboard", "cut out", "cut-out", "cutout", "cutting out", "masking",
-        "masked out", "isolated against", "isolated on", "no background", "alpha channel",
+        "checkerboard", "checkered background", "checkered", "cut out", "cut-out", "cutout", "cutting out", "masking",
+        "masked out", "isolated against", "isolated on", "digitally isolated", "isolated", "no background", "alpha channel", "transparent",
     )
     _alarming = _manip_signals + _scene_inc
     if (

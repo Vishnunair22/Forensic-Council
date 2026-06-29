@@ -108,7 +108,7 @@ class myEncoderDecoder(nn.Module):
             logging.info(f'Noiseprint++ weights: {np_weights}')
             if 'network' in dat:
                 dat = dat['network']
-            self.dncnn.load_state_dict(dat)
+            self.dncnn.load_state_dict(dat, assign=True)
 
         logging.info('Initing weights ...')
         init_weight(self.decode_head, nn.init.kaiming_normal_,
