@@ -52,22 +52,8 @@ x-backend-env: &backend-env
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
   JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
   ANALYSIS_EXECUTION_MODE: ${ANALYSIS_EXECUTION_MODE:-local_only}
-  USE_REDIS_WORKER: ${USE_REDIS_WORKER:-1}
-  BACKEND_PREWARM_FLORENCE: ${BACKEND_PREWARM_FLORENCE:-1}
-  OFFLINE_MODE: ${OFFLINE_MODE:-true}
-  LLM_PROVIDER: ${LLM_PROVIDER:-none}
-  LLM_API_KEY: ${LLM_API_KEY:-}
-  LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
-  LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-llama-3.1-8b-instant}
-  LLM_ENABLE_REACT_REASONING: ${LLM_ENABLE_REACT_REASONING:-false}
-  LLM_ENABLE_POST_SYNTHESIS: ${LLM_ENABLE_POST_SYNTHESIS:-false}
-  VISION_PROVIDER_CHAIN: ${VISION_PROVIDER_CHAIN:-local_ensemble}
-  GROQ_VISION_API_KEY: ${GROQ_VISION_API_KEY:-}
-  # Docker stacks use the worker queue by default (DOCKER_USE_REDIS_WORKER=true).
-  # Direct `uv run` uses USE_REDIS_WORKER=false from .env for in-process mode.
-  # Keep these separate so host-local defaults do not silently disable the
-  # Docker worker service.
   USE_REDIS_WORKER: ${DOCKER_USE_REDIS_WORKER:-true}
+  BACKEND_PREWARM_FLORENCE: ${BACKEND_PREWARM_FLORENCE:-false}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
   GEMINI_FALLBACK_MODELS: ${GEMINI_FALLBACK_MODELS:-gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}
@@ -80,8 +66,9 @@ x-backend-env: &backend-env
   DAILY_COST_QUOTA_ADMIN_USD: ${DAILY_COST_QUOTA_ADMIN_USD:-500.0}
   EVIDENCE_STORAGE_PATH: /app/storage/evidence
   CALIBRATION_MODELS_PATH: /app/cache/calibration_models
-  # Must be 0 — disabling numba JIT breaks all of librosa (Agent 2 audio tools).
-  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-0}
+  # Keep false — disabling numba JIT breaks all of librosa (Agent 2 audio tools).
+  # NUMBA_DISABLE_JIT must be "false" not "0" for pydantic-settings compatibility.
+  NUMBA_DISABLE_JIT: ${NUMBA_DISABLE_JIT:-false}
   NUMBA_CACHE_DIR: /app/cache/numba_cache
   HOME: /tmp
   EASYOCR_MODEL_DIR: /app/cache/easyocr
@@ -169,7 +156,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/healthz > /dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/healthz > /dev/null 2>&1 || curl -sf http://127.0.0.1:6333/healthz > /dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -557,11 +544,9 @@ services:
       # and external traffic can reach it from outside the container.
       - HOSTNAME=0.0.0.0
       - PORT=3000
-      # Next.js 15 uses Turbopack by default. WATCHPACK_POLLING/CHOKIDAR vars are
-      # webpack-only and have been removed — Turbopack manages its own file watcher.
+      # Next.js 15 uses Turbopack by default (not webpack), so webpack-only file
+      # watcher env vars (CHOKIDAR_USEPOLLING, WATCHPACK_POLLING) are omitted.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
-      - CHOKIDAR_USEPOLLING=1
-      - WATCHPACK_POLLING=true
       # DEMO_PASSWORD must be explicitly set and MUST equal BOOTSTRAP_INVESTIGATOR_PASSWORD.
       # No silent default — an unset value is caught early (P0-FE-001 fix, audit v6→v7).
       - DEMO_PASSWORD=${DEMO_PASSWORD:?DEMO_PASSWORD must be set and equal BOOTSTRAP_INVESTIGATOR_PASSWORD}

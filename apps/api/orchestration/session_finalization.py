@@ -101,9 +101,9 @@ async def mark_investigation_completed(
                 arbiter.regenerate_missing_narratives(report),
                 timeout=60.0,
             )
-        except TimeoutError:
+        except (TimeoutError, asyncio.CancelledError):
             logger.warning(
-                "Narrative regeneration timed out after 60s — persisting the signed deterministic report"
+                "Narrative regeneration timed out or was cancelled after 60s — persisting the signed deterministic report"
             )
         except Exception as narr_err:
             logger.warning(

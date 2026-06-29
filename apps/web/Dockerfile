@@ -25,6 +25,17 @@ FROM base AS development
 
 COPY apps/web/ ./
 
+# Dev bind-mounts the host source over /app/apps/web, so ownership propagates
+# from the host UID. On Linux/macOS, the `node` user (UID 1000) must own the
+# workdir or npm run dev will fail on permissions. On Windows (the primary dev
+# platform) the chown is a no-op. The `runner` stage already uses a dedicated
+# UID 1001 nextjs user — this is only the dev target.
+RUN chown -R node:node /app/apps/web && \
+    echo 'WARNING: frontend running in DEVELOPMENT target - do not expose publicly' \
+    > /app/apps/web/.dev_target_banner
+
+USER node
+
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=development
 
@@ -32,9 +43,6 @@ EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3000/ > /dev/null || exit 1
-
-RUN echo 'WARNING: frontend running in DEVELOPMENT target - do not expose publicly' \
-    > /app/apps/web/.dev_target_banner
 
 CMD ["npm", "run", "dev"]
 

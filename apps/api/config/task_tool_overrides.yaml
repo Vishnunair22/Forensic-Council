@@ -290,6 +290,19 @@ agent3_initial:
   "run lighting_consistency for shadow validation on held objects": "lighting_consistency"
   "shadow validation on held objects": "lighting_consistency"
 
+# --- Deep Pass Tools (Agent 3 - Scene/Object) ---
+deep_agent3:
+  "run screenshot_scene_applicability for deep screen-capture scope check": "screenshot_scene_applicability"
+  "run screenshot_layout_forensics for deep ui/document consistency cross-check": "screenshot_layout_forensics"
+  "run secondary_classification on deep flagged objects for validation": "secondary_classification"
+  "run scale_validation for deep re-check of weapon size plausibility": "scale_validation"
+  "run lighting_consistency for deep shadow validation on held objects": "lighting_consistency"
+  "run scene_incongruence for deep contextual anomaly detection": "scene_incongruence"
+  "run object_detection for deep scene object re-identification": "object_detection"
+  "run lighting_correlation_initial for deep shadow and light correlation": "lighting_correlation_initial"
+  "run vector_contraband_search for deep risk object screening": "vector_contraband_search"
+  "deep scene/object analysis pass": "read_shared_image_context"
+
 # --- Deep Pass Tools (Agent 2) ---
 deep_agent2:
   "voice clone detect deep ensemble": "voice_clone_detect"

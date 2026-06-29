@@ -30,10 +30,11 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp"],
 
   // ── Compression ──────────────────────────────────────────────────────────
-  // Disabled: Caddy handles compression via `encode zstd gzip` in Caddyfile.
-  // Enabling both causes double-compression (wasted CPU, slightly larger output).
-  // Local dev without Caddy can enable if needed (RUNNING_IN_DOCKER=1 for Docker compose).
-  compress: process.env.RUNNING_IN_DOCKER === "1",
+  // Caddy handles compression via `encode zstd gzip` in Caddyfile. When Caddy
+  // is in front (Docker: RUNNING_IN_DOCKER=1), disable Next.js compression to
+  // avoid double-compression (wasted CPU, slightly larger payload).
+  // When running standalone outside Docker, Next.js compression is enabled.
+  compress: process.env.RUNNING_IN_DOCKER !== "1",
 
   // ── TypeScript & ESLint ───────────────────────────────────────────────
   // Strict by default. CI runs `npm run type-check` and `npm run lint`

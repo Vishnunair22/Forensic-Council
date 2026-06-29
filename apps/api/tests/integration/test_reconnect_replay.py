@@ -11,10 +11,8 @@ from api.schemas import BriefUpdate
 @pytest.mark.asyncio
 async def test_replay_buffer_stores_messages():
     """broadcast_update should store messages in Redis replay buffer."""
-    try:
-        import api.routes._session_state as _ss_mod
-    except (ImportError, AttributeError):
-        pytest.skip("api.routes package not importable (pre-existing _append_chunk issue)")
+    import importlib
+    _ss_mod = importlib.import_module("api.routes._session_state")
 
     broadcast_update = _ss_mod.broadcast_update
 
@@ -52,10 +50,8 @@ async def test_replay_buffer_stores_messages():
 @pytest.mark.asyncio
 async def test_replay_messages_sent_on_websocket_connect():
     """WebSocket handler should send replay messages on connect."""
-    try:
-        import api.routes._websocket as _ws_mod
-    except (ImportError, AttributeError):
-        pytest.skip("api.routes package not importable (pre-existing _append_chunk issue)")
+    import importlib
+    _ws_mod = importlib.import_module("api.routes._websocket")
 
     _live_updates_impl = _ws_mod._live_updates_impl
 
@@ -107,11 +103,9 @@ async def test_replay_messages_sent_on_websocket_connect():
 @pytest.mark.asyncio
 async def test_replay_buffer_expiry():
     """Replay buffer should have a configured TTL."""
-    try:
-        import api.routes._session_state as _ss_mod
-        REPLAY_BUFFER_TTL = _ss_mod.REPLAY_BUFFER_TTL
-    except (ImportError, AttributeError):
-        pytest.skip("api.routes package not importable (pre-existing _append_chunk issue)")
+    import importlib
+    _ss_mod = importlib.import_module("api.routes._session_state")
+    REPLAY_BUFFER_TTL = _ss_mod.REPLAY_BUFFER_TTL
 
     assert REPLAY_BUFFER_TTL >= 300, "Replay buffer TTL should be at least 5 minutes"
 
@@ -119,10 +113,8 @@ async def test_replay_buffer_expiry():
 @pytest.mark.asyncio
 async def test_replay_buffer_maxlen():
     """Replay buffer should have a max length to prevent unbounded growth."""
-    try:
-        import api.routes._session_state as _ss_mod
-        REPLAY_BUFFER_MAX_LEN = _ss_mod.REPLAY_BUFFER_MAX_LEN
-    except (ImportError, AttributeError):
-        pytest.skip("api.routes package not importable (pre-existing _append_chunk issue)")
+    import importlib
+    _ss_mod = importlib.import_module("api.routes._session_state")
+    REPLAY_BUFFER_MAX_LEN = _ss_mod.REPLAY_BUFFER_MAX_LEN
 
     assert 10 <= REPLAY_BUFFER_MAX_LEN <= 200, "Replay buffer max length should be reasonable"

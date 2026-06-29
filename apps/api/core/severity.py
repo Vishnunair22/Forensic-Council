@@ -462,15 +462,25 @@ def compute_agent_verdict(
     if v_verdict in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED"):
         visual_contributed = True
         if v_court:
-            strong_signals += _court_strong_weight
-            alert_signals += _court_strong_weight
             gemini_strong_vote = True
+            # In deep mode, Gemini with tool corroboration gets extra weight;
+            # without any deterministic tool strong signal, treat the extra
+            # weight as an alert-only signal so a solo Gemini read cannot push
+            # the verdict to MANIPULATED on its word alone.
+            if is_deep and tool_strong == 0:
+                _effective_weight = _GEMINI_COURT_STRONG_WEIGHT       # 1 strong
+                _alert_extra = _GEMINI_COURT_STRONG_WEIGHT + 1        # +1 alert
+            else:
+                _effective_weight = _court_strong_weight
+                _alert_extra = _court_strong_weight
+            strong_signals += _effective_weight
+            alert_signals += _alert_extra
             # Gemini's confidence contributes to the average strong-signal
             # confidence used to graduate the MANIPULATED verdict floor.
             # When weighted (deep mode), add confidence proportionally so the
-            # mean remains correct: weight=2 means the signal counts as 2 entries.
-            strong_conf_sum += v_conf * _court_strong_weight
-            strong_conf_n += _court_strong_weight
+            # mean remains correct: weight=N means the signal counts as N entries.
+            strong_conf_sum += v_conf * _effective_weight
+            strong_conf_n += _effective_weight
         else:
             alert_signals += _GEMINI_SCREEN_ALERT_WEIGHT
     elif v_verdict == "SUSPICIOUS":

@@ -22,7 +22,8 @@
         X-Frame-Options "DENY"
         X-Robots-Tag "none"
         Referrer-Policy "strict-origin-when-cross-origin"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        @tls protocol https
+        header @tls Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         # Isolate browsing context — required for SharedArrayBuffer (used by audio/video WASM tools)
         # and hardens against Spectre-class side-channel attacks.
         Cross-Origin-Opener-Policy "same-origin"

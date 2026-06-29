@@ -136,7 +136,33 @@ seed_cache_dir() {
     DST_COUNT=$(find "$DST" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
     SRC_COUNT=$(find "$SRC" -type f 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
+    SHOULD_SEED=0
     if [ "${DST_COUNT:-0}" -lt "$SRC_COUNT" ] && [ "${SRC_COUNT:-0}" -ge "$MIN_FILES" ]; then
+        SHOULD_SEED=1
+    elif [ "${DST_COUNT:-0}" -ge 1 ] && [ "${SRC_COUNT:-0}" -ge "$MIN_FILES" ]; then
+        # Partial-population guard: DST_COUNT >= SRC_COUNT can happen when a
+        # failed first-run download left unrelated files (numba .nbc cache,
+        # partial blobs) in the volume while critical model weights are absent.
+        # Check known model presence markers for each cache family.
+        case "$LABEL" in
+            "HuggingFace")
+                # At least one known model hub directory must exist
+                _HF_OK=0
+                [ -d "$DST/hub/models--facebook--detr-resnet-50" ] && _HF_OK=1
+                [ -d "$DST/hub/models--speechbrain--spkrec-ecapa-voxceleb" ] && _HF_OK=1
+                [ -d "$DST/open_clip" ] && _HF_OK=1
+                [ "$_HF_OK" -eq 0 ] && SHOULD_SEED=1
+                ;;
+            "PyTorch")
+                find "$DST" -type f \( -name "*.pth" -o -name "*.pt" \) 2>/dev/null | grep -q . || SHOULD_SEED=1
+                ;;
+            "EasyOCR")
+                find "$DST" -type f 2>/dev/null | grep -q . || SHOULD_SEED=1
+                ;;
+        esac
+    fi
+
+    if [ "$SHOULD_SEED" -eq 1 ]; then
         echo "  Seeding $LABEL cache into volume: $SRC -> $DST"
         cp -a "$SRC/." "$DST/" 2>/dev/null || true
         if [ "$(id -u)" = "0" ]; then
@@ -223,11 +249,15 @@ if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
 
     if [ "$NEED_DOWNLOAD" -eq 1 ]; then
         echo ""
-        echo "============================================================"
-        echo "  ML cache incomplete - downloading models before startup"
-        echo "  Normal Docker builds should bake these into the image."
-        echo "  This fallback runs once per empty volume."
-        echo "============================================================"
+        echo "========================================================================"
+        echo "  ML cache incomplete — downloading models before startup"
+        echo "  Estimated time: 10–20 minutes (first run only)."
+        echo "  Model weights are persisted in named Docker volumes"
+        echo "  (huggingface_cache, torch_cache, easyocr_cache)."
+        echo "  Subsequent container starts skip this step."
+        echo "  To bake models into the image at build time, set PRELOAD_MODELS=1"
+        echo "  in .env and rebuild:  docker compose build [backend|worker]"
+        echo "========================================================================"
         # chmod is best-effort: scripts/ is bind-mounted read-only in dev, and the
         # script is invoked via `sh` anyway, so a failed chmod must not be fatal.
         chmod +x scripts/model_download_with_retry.sh 2>/dev/null || true

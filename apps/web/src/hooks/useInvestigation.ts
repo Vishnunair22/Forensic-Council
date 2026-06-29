@@ -1164,7 +1164,7 @@ export function useInvestigation(playSound: (type: SoundType) => void) {
 
   useEffect(() => {
     const ready =
-      (awaitingDecision && findingsSurfaced) || (phase === "deep" && allAgentsDone);
+      (awaitingDecision && findingsSurfaced) || (phase === "deep" && status === "complete" && allAgentsDone);
     if (
       ready &&
       !analysisCompleteSoundedRef.current &&

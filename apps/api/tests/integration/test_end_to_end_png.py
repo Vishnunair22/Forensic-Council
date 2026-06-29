@@ -61,11 +61,12 @@ async def test_png_ela_runs_and_returns_lossless_flag(tmp_path, settings):
 @pytest.mark.asyncio
 async def test_png_mime_detection_fallback(tmp_path, settings):
     """Upload with octet-stream should fallback to PIL detection."""
-    try:
-        import api.routes.investigation as _inv_mod
-        _detect_mime_from_head = _inv_mod._detect_mime_from_head
-    except (ImportError, AttributeError):
-        pytest.skip("Pre-existing import error: _append_chunk missing from investigation.py")
+    # Import the private function directly using importlib to avoid triggering
+    # the full api.routes.investigation module-level dependency chain (which
+    # requires FastAPI, DB connections, etc. unavailable in unit-test context).
+    import importlib
+    _inv_mod = importlib.import_module("api.routes.investigation")
+    _detect_mime_from_head = _inv_mod._detect_mime_from_head
 
     arr = np.full((100, 100, 3), 128, dtype=np.uint8)
     path = str(tmp_path / "test.png")

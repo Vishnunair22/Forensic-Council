@@ -593,6 +593,12 @@ export const useSimulation = ({
                     clearInterval(arbiterPollRef.current);
                     arbiterPollRef.current = null;
                   }
+                  if (stallTimerRef.current) {
+                    clearInterval(stallTimerRef.current);
+                    stallTimerRef.current = null;
+                  }
+                  // Abort any in-flight arbiter poll HTTP fetch
+                  import("@/lib/arbiterControl").then(m => m.arbiterControl.abort()).catch(() => {});
                   if (!hasFiredCompleteRef.current) {
                     hasFiredCompleteRef.current = true;
                     playSoundRef.current?.("complete");
@@ -622,13 +628,14 @@ export const useSimulation = ({
                 case "REPORT_READY":
                   dbg.log("[WebSocket] Report ready:", update.data);
                   if (update.data?.report_id) {
-                    setStatus((prev) =>
-                      prev === "complete" || prev === "error" ? prev : "complete"
-                    );
-                    if (!hasFiredCompleteRef.current) {
-                      hasFiredCompleteRef.current = true;
-                      playSoundRef.current?.("complete");
-                      onCompleteRef.current?.();
+                    // Store report_id for the result page to pick up.
+                    // Do NOT fire onComplete() here — PIPELINE_COMPLETE is the
+                    // sole terminal event that triggers navigation. REPORT_READY
+                    // is a data-only event that carries the report_id before the
+                    // pipeline fully completes.
+                    const sid = storage.getItem(STORAGE_KEYS.SESSION_ID);
+                    if (sid) {
+                      storage.setItem(`${STORAGE_KEYS.RESULT_PHASE}:${sid}`, "complete");
                     }
                   }
                   break;
@@ -962,7 +969,8 @@ export const useSimulation = ({
                 const sseConnection = connectLiveSSE(
                   targetSessionId,
                   (data) => {
-                    const update = data as BriefUpdate;
+                    const parsed = BriefUpdateSchema.safeParse(data);
+                    const update: BriefUpdate = parsed.success ? parsed.data : (data as BriefUpdate);
                     if ((update as { type: string }).type === "PING") {
                       return;
                     }
