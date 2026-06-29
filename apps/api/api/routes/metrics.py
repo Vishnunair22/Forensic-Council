@@ -35,6 +35,7 @@ _KEY_ACTIVE_SESSIONS = "metrics:active_sessions"
 _KEY_INV_STARTED = "metrics:investigations_started"
 _KEY_INV_COMPLETED = "metrics:investigations_completed"
 _KEY_INV_FAILED = "metrics:investigations_failed"
+_KEY_INV_DEGRADED = "metrics:investigations_degraded"
 _KEY_START_TIME = "metrics:start_time"
 _KEY_RATE_LIMIT_BYPASSES = "metrics:rate_limit_redis_bypasses"
 
@@ -238,6 +239,16 @@ def increment_investigations_failed() -> None:
         loop.create_task(_redis_incr(_KEY_INV_FAILED))
     except RuntimeError:
         _local["investigations_failed"] = _local.get("investigations_failed", 0) + 1
+
+
+def increment_investigations_degraded() -> None:
+    try:
+        if settings.app_env == "testing":
+            raise RuntimeError("testing fallback")
+        loop = asyncio.get_running_loop()
+        loop.create_task(_redis_incr(_KEY_INV_DEGRADED))
+    except RuntimeError:
+        _local["investigations_degraded"] = _local.get("investigations_degraded", 0) + 1
 
 
 def increment_rate_limit_redis_bypasses() -> None:

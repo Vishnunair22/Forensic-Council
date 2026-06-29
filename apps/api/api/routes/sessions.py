@@ -296,6 +296,7 @@ async def get_arbiter_status(
 
     try:
         from api.routes._session_state import get_active_pipeline_metadata, get_final_report
+        logger.info("ARBITER-STATUS poll", session_id=session_id)
 
         # 1. Check if report is already complete (in-memory / Redis cache)
         try:
@@ -307,6 +308,7 @@ async def get_arbiter_status(
                     if isinstance(report, dict)
                     else getattr(report, "report_id", session_id)
                 )
+                logger.info("ARBITER-STATUS returning complete (cache hit)", session_id=session_id, report_id=str(report_id))
                 return {"status": "complete", "report_id": str(report_id)}
         except Exception as _e:
             logger.debug("Report cache check failed", session_id=session_id, error=str(_e))
@@ -316,6 +318,7 @@ async def get_arbiter_status(
             metadata = await get_active_pipeline_metadata(session_id)
             if metadata:
                 status = metadata.get("status", "running")
+                logger.info("ARBITER-STATUS metadata check", session_id=session_id, status=status)
                 if status == "completed":
                     real_report_id = session_id
                     try:
@@ -326,9 +329,18 @@ async def get_arbiter_status(
                             real_report_id = str(_db["report_id"])
                     except Exception:
                         pass
+                    logger.info("ARBITER-STATUS returning complete (completed)", session_id=session_id, report_id=real_report_id)
                     return {"status": "complete", "report_id": real_report_id}
                 if status == "error":
                     return {"status": "error", "message": metadata.get("error", "Unknown error")}
+                if status == "degraded":
+                    report_id = metadata.get("report_id") or session_id
+                    logger.info("ARBITER-STATUS returning complete (degraded)", session_id=session_id, report_id=report_id)
+                    return {
+                        "status": "complete",
+                        "report_id": report_id,
+                        "message": metadata.get("brief") or "Report ready (degraded).",
+                    }
                 if status == "awaiting_decision":
                     return {
                         "status": "awaiting_decision",
@@ -348,6 +360,14 @@ async def get_arbiter_status(
                     return {
                         "status": "running",
                         "message": metadata.get("brief") or "Council Arbiter is synthesizing the final report.",
+                    }
+                if status == "report_ready":
+                    report_id = metadata.get("report_id") or session_id
+                    logger.info("ARBITER-STATUS returning complete (report_ready)", session_id=session_id, report_id=report_id)
+                    return {
+                        "status": "complete",
+                        "report_id": report_id,
+                        "message": metadata.get("brief") or "Report ready.",
                     }
                 msg = metadata.get("brief") or "Investigation in progress…"
                 return {"status": "running", "message": msg}
@@ -408,6 +428,7 @@ async def get_arbiter_status(
         except Exception as _e:
             logger.debug("In-memory pipeline fallback failed", session_id=session_id, error=str(_e))
 
+        logger.warning("ARBITER-STATUS all checks exhausted — returning not_found", session_id=session_id)
         return {"status": "not_found"}
 
     except Exception as e:
@@ -439,6 +460,7 @@ async def get_session_report(
     4. PostgreSQL session_reports  — survives restarts and is visible to all replicas
     """
     await assert_session_access(session_id, current_user)
+    logger.info("GET-REPORT called", session_id=session_id)
 
     pipeline = get_active_pipeline(session_id)
     pipeline_in_progress = False
@@ -491,6 +513,61 @@ async def get_session_report(
                 raise HTTPException(
                     status_code=500,
                     detail=f"Investigation failed: {db_row.get('error_message', 'unknown')}",
+                )
+            if status == "degraded":
+                if not db_row.get("report_data"):
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Report payload missing (degraded)",
+                    )
+                from api.schemas import ReportDTO as _RD
+                from ._dto import _clean_key_findings, _rebuild_finding
+                rd = db_row["report_data"]
+                per_agent = {
+                    agent_id: [_rebuild_finding(f) for f in findings]
+                    for agent_id, findings in (rd.get("per_agent_findings") or {}).items()
+                }
+                return _RD(
+                    report_id=str(rd.get("report_id", "")),
+                    session_id=str(rd.get("session_id", session_id)),
+                    case_id=rd.get("case_id", ""),
+                    executive_summary=rd.get("executive_summary", ""),
+                    per_agent_findings=per_agent,
+                    per_agent_metrics=rd.get("per_agent_metrics") or {},
+                    per_agent_analysis=rd.get("per_agent_analysis") or {},
+                    overall_confidence=float(rd.get("overall_confidence") or 0.0),
+                    overall_error_rate=float(rd.get("overall_error_rate") or 0.0),
+                    overall_verdict=rd.get("overall_verdict") or "REVIEW REQUIRED",
+                    cross_modal_confirmed=[
+                        _rebuild_finding(f) for f in rd.get("cross_modal_confirmed", [])
+                    ],
+                    contested_findings=rd.get("contested_findings", []),
+                    tribunal_resolved=rd.get("tribunal_resolved", []),
+                    incomplete_findings=[
+                        _rebuild_finding(f) for f in rd.get("incomplete_findings", [])
+                    ],
+                    uncertainty_statement=rd.get("uncertainty_statement", ""),
+                    cryptographic_signature=rd.get("cryptographic_signature", ""),
+                    report_hash=rd.get("report_hash", ""),
+                    signed_utc=rd.get("signed_utc"),
+                    verdict_sentence=rd.get("verdict_sentence", ""),
+                    key_findings=_clean_key_findings(list(rd.get("key_findings") or [])),
+                    reliability_note=rd.get("reliability_note", ""),
+                    manipulation_probability=float(rd.get("manipulation_probability") or 0.0),
+                    compression_penalty=float(rd.get("compression_penalty") or 1.0),
+                    confidence_min=float(rd.get("confidence_min") or 0.0),
+                    confidence_max=float(rd.get("confidence_max") or 0.0),
+                    confidence_std_dev=float(rd.get("confidence_std_dev") or 0.0),
+                    applicable_agent_count=int(rd.get("applicable_agent_count") or 0),
+                    skipped_agents=dict(rd.get("skipped_agents") or {}),
+                    analysis_coverage_note=rd.get("analysis_coverage_note", ""),
+                    per_agent_summary=dict(rd.get("per_agent_summary") or {}),
+                    per_agent_narrative_structured=dict(rd.get("per_agent_narrative_structured") or {}),
+                    summary_structured=dict(rd.get("summary_structured") or {}),
+                    degradation_flags=list(rd.get("degradation_flags") or []),
+                    degraded_findings_summary=rd.get("degraded_findings_summary") or {},
+                    is_deep_analysis=bool(rd.get("is_deep_analysis", False)),
+                    cross_modal_fusion=dict(rd.get("cross_modal_fusion") or {}),
                 )
             if status in ("running", "pending"):
                 return JSONResponse(
@@ -590,15 +667,92 @@ async def get_session_report(
 
     try:
         metadata = await get_active_pipeline_metadata(session_id)
-        if metadata and metadata.get("status") not in {"completed", "error", "terminated"}:
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "in_progress",
-                    "session_id": session_id,
-                    "message": metadata.get("brief") or "Investigation still in progress",
-                },
-            )
+        if metadata:
+            _meta_status = metadata.get("status")
+            if _meta_status not in {"completed", "error", "terminated", "degraded"}:
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "status": "in_progress",
+                        "session_id": session_id,
+                        "message": metadata.get("brief") or "Investigation still in progress",
+                    },
+                )
+            if _meta_status == "degraded":
+                _meta_report_id = metadata.get("report_id") or session_id
+                # Try Redis cache first
+                try:
+                    from api.routes._session_state import get_final_report
+                    _cached = await get_final_report(session_id)
+                    if _cached:
+                        _payload, _ = _cached
+                        _final_reports[session_id] = (_payload, datetime.now(UTC))
+                        return _forensic_report_to_dto(_payload)
+                except Exception:
+                    pass
+                # Then try PostgreSQL
+                try:
+                    from core.session_persistence import get_session_persistence
+                    _persistence = await get_session_persistence()
+                    _db_row = await _persistence.get_report(session_id)
+                    if _db_row and _db_row.get("report_data"):
+                        from api.schemas import ReportDTO as _RD
+                        from ._dto import _clean_key_findings, _rebuild_finding
+                        rd = _db_row["report_data"]
+                        per_agent = {
+                            agent_id: [_rebuild_finding(f) for f in findings]
+                            for agent_id, findings in (rd.get("per_agent_findings") or {}).items()
+                        }
+                        return _RD(
+                            report_id=str(rd.get("report_id", "")),
+                            session_id=str(rd.get("session_id", session_id)),
+                            case_id=rd.get("case_id", ""),
+                            executive_summary=rd.get("executive_summary", ""),
+                            per_agent_findings=per_agent,
+                            per_agent_metrics=rd.get("per_agent_metrics") or {},
+                            per_agent_analysis=rd.get("per_agent_analysis") or {},
+                            overall_confidence=float(rd.get("overall_confidence") or 0.0),
+                            overall_error_rate=float(rd.get("overall_error_rate") or 0.0),
+                            overall_verdict=rd.get("overall_verdict") or "REVIEW REQUIRED",
+                            cross_modal_confirmed=[
+                                _rebuild_finding(f) for f in rd.get("cross_modal_confirmed", [])
+                            ],
+                            contested_findings=rd.get("contested_findings", []),
+                            tribunal_resolved=rd.get("tribunal_resolved", []),
+                            incomplete_findings=[
+                                _rebuild_finding(f) for f in rd.get("incomplete_findings", [])
+                            ],
+                            uncertainty_statement=rd.get("uncertainty_statement", ""),
+                            cryptographic_signature=rd.get("cryptographic_signature", ""),
+                            report_hash=rd.get("report_hash", ""),
+                            signed_utc=rd.get("signed_utc"),
+                            verdict_sentence=rd.get("verdict_sentence", ""),
+                            key_findings=_clean_key_findings(list(rd.get("key_findings") or [])),
+                            reliability_note=rd.get("reliability_note", ""),
+                            manipulation_probability=float(rd.get("manipulation_probability") or 0.0),
+                            compression_penalty=float(rd.get("compression_penalty") or 1.0),
+                            confidence_min=float(rd.get("confidence_min") or 0.0),
+                            confidence_max=float(rd.get("confidence_max") or 0.0),
+                            confidence_std_dev=float(rd.get("confidence_std_dev") or 0.0),
+                            applicable_agent_count=int(rd.get("applicable_agent_count") or 0),
+                            skipped_agents=dict(rd.get("skipped_agents") or {}),
+                            analysis_coverage_note=rd.get("analysis_coverage_note", ""),
+                            per_agent_summary=dict(rd.get("per_agent_summary") or {}),
+                            per_agent_narrative_structured=dict(rd.get("per_agent_narrative_structured") or {}),
+                            summary_structured=dict(rd.get("summary_structured") or {}),
+                            degradation_flags=list(rd.get("degradation_flags") or []),
+                            degraded_findings_summary=rd.get("degraded_findings_summary") or {},
+                            is_deep_analysis=bool(rd.get("is_deep_analysis", False)),
+                            cross_modal_fusion=dict(rd.get("cross_modal_fusion") or {}),
+                        )
+                except Exception:
+                    pass
+                # No report found in any cache despite degraded metadata — data inconsistency
+                logger.warning(
+                    "Degraded metadata found but no report in cache or DB",
+                    session_id=session_id,
+                    report_id=_meta_report_id,
+                )
     except Exception as meta_err:
         logger.debug("Report metadata in-progress fallback failed", session_id=session_id, error=str(meta_err))
 
@@ -962,9 +1116,10 @@ async def resume_investigation(
     validate_session_id(session_id)
 
     _log.info(
-        "Resume investigation called",
+        "RESUME investigation called",
         session_id=session_id,
         deep_analysis=request.deep_analysis,
+        expected_phase=request.expected_phase,
         user_id=current_user.user_id,
     )
 

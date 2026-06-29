@@ -30,7 +30,8 @@ COPY apps/web/ ./
 # workdir or npm run dev will fail on permissions. On Windows (the primary dev
 # platform) the chown is a no-op. The `runner` stage already uses a dedicated
 # UID 1001 nextjs user — this is only the dev target.
-RUN chown -R node:node /app/apps/web && \
+RUN mkdir -p /app/apps/web/.next && \
+    chown -R node:node /app/apps/web && \
     echo 'WARNING: frontend running in DEVELOPMENT target - do not expose publicly' \
     > /app/apps/web/.dev_target_banner
 

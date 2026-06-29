@@ -13,11 +13,13 @@ from datetime import UTC, datetime
 from api.routes._session_state import (
     broadcast_update,
     get_active_pipeline_metadata,
+    get_final_report,
     set_final_report,
     update_active_pipeline_metadata,
 )
 from api.routes.metrics import (
     increment_investigations_completed,
+    increment_investigations_degraded,
     increment_investigations_failed,
 )
 from api.schemas import BriefUpdate
@@ -187,15 +189,18 @@ async def mark_investigation_completed(
         except Exception as _wh_err:
             logger.warning("Webhook fire failed (non-fatal)", error=str(_wh_err))
 
-    await broadcast_update(
-        session_id,
-        BriefUpdate(
-            type="PIPELINE_COMPLETE",
-            session_id=session_id,
-            message="Investigation concluded.",
-            data={"report_id": str(report.report_id)},
-        ),
-    )
+    try:
+        await broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="PIPELINE_COMPLETE",
+                session_id=session_id,
+                message="Investigation concluded.",
+                data={"report_id": str(report.report_id)},
+            ),
+        )
+    except Exception as _e:
+        logger.warning("PIPELINE_COMPLETE broadcast failed (non-fatal)", error=str(_e))
 
 
 async def mark_investigation_failed(
@@ -210,6 +215,49 @@ async def mark_investigation_failed(
     _investigator_id, _investigator_role, _case_label = await _get_investigator_metadata(
         session_id, investigator_id
     )
+
+    # If a cached report exists (pipeline completed report generation but
+    # crashed during cleanup), treat as degraded rather than hard error.
+    _cached_report = await get_final_report(session_id)
+    if _cached_report is not None:
+        _report_data, _ = _cached_report
+        _report_id = _report_data.get("report_id", "unknown")
+        logger.warning(
+            "Investigation finished with degradation (report exists)",
+            session_id=session_id,
+            report_id=_report_id,
+            error=error,
+        )
+        increment_investigations_degraded()
+        try:
+            persistence = await get_session_persistence()
+            await persistence.update_session_status(session_id, "degraded", error)
+        except Exception as exc:
+            logger.error("Failed to persist degraded investigation status", error=str(exc))
+        await update_active_pipeline_metadata(
+            session_id,
+            {
+                "status": "degraded",
+                "brief": "Investigation completed with degraded pipeline cleanup.",
+                "case_id": case_id,
+                "investigator_id": _investigator_id,
+                "investigator_role": _investigator_role,
+                "case_investigator_label": _case_label,
+                "file_path": evidence_file_path,
+                "original_filename": original_filename,
+                "error": error,
+            },
+        )
+        await broadcast_update(
+            session_id,
+            BriefUpdate(
+                type="DEGRADED",
+                session_id=session_id,
+                message="Investigation completed with errors. Report is available.",
+                data={"status": "degraded", "error": error, "report_id": _report_id},
+            ),
+        )
+        return
 
     logger.error("Investigation task failed", error=error, exc_info=True)
     increment_investigations_failed()

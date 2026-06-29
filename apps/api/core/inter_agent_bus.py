@@ -188,7 +188,10 @@ class InterAgentBus:
             except asyncio.CancelledError:
                 pass
         if self._pubsub:
-            await self._pubsub.unsubscribe()
+            try:
+                await self._pubsub.unsubscribe()
+            except Exception:
+                logger.debug("PubSub unsubscribe failed on stop (non-fatal)", exc_info=True)
             self._pubsub = None
 
     def _set_local_event(self, event_name: str) -> None:

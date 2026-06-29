@@ -564,7 +564,7 @@ export async function getReport(sessionId: string): Promise<ReportResponse> {
 }
 
 export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatusResponse> {
-  try {
+  return handleAuthError(async () => {
     const response = await apiFetch(
       `${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}/arbiter-status`,
       {
@@ -579,13 +579,13 @@ export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatus
     }
 
     return response.json();
-  } catch (error) {
+  }).catch((error) => {
     dbg.warn("[api] getArbiterStatus error:", error);
     return {
       status: "unreachable",
       message: error instanceof Error ? error.message : "Backend unreachable",
-    };
-  }
+    } as ArbiterStatusResponse;
+  });
 }
 
 export async function pollForReport(

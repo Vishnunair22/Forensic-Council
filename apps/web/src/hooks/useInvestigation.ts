@@ -17,7 +17,8 @@ import {
   DuplicateInvestigationError,
   WorkerWarmupError,
   type ArbiterStatusResponse,
-  type HITLDecision
+  type HITLDecision,
+  dbg,
 } from "@/lib/api";
 import { toast } from "./use-toast";
 import {
@@ -122,7 +123,10 @@ async function waitForFinalReport(
           if (attempt < 4) {
             await new Promise<void>((r) => {
               const t = setTimeout(r, REPORT_POLL_DELAY_MS);
-              signal?.addEventListener("abort", () => clearTimeout(t), { once: true });
+              signal?.addEventListener("abort", () => {
+                clearTimeout(t);
+                r();
+              }, { once: true });
             });
           }
         }
@@ -143,9 +147,10 @@ async function waitForFinalReport(
     }
     await new Promise<void>((r) => {
       const timer = setTimeout(r, pollInterval);
-      signal?.addEventListener("abort", () => clearTimeout(timer), {
-        once: true,
-      });
+      signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        r();
+      }, { once: true });
     });
     if (signal?.aborted) return false;
     pollInterval = Math.min(pollInterval * 1.2, 3000);

@@ -779,6 +779,7 @@ class ForensicCouncilPipeline:
         try:
             from api.routes._session_state import set_final_report as cache_report
             await cache_report(str(session_id), self._final_report)
+            logger.info("Report cached in Redis successfully", session_id=str(session_id))
         except Exception as cache_err:
             logger.warning("Failed to cache report in Redis", error=str(cache_err))
 
@@ -820,10 +821,13 @@ class ForensicCouncilPipeline:
                 ),
             )
         except Exception as _e:
-            logger.debug("REPORT_READY broadcast skipped", error=str(_e))
+            logger.warning("REPORT_READY broadcast failed (non-fatal)", error=str(_e))
 
         if hasattr(self, "inter_agent_bus"):
-            await self.inter_agent_bus.stop()
+            try:
+                await self.inter_agent_bus.stop()
+            except Exception:
+                logger.debug("InterAgentBus stop failed (non-fatal)", exc_info=True)
 
     async def _run_arbiter_pre_warm(self, agent_results: dict[str, Any], case_id: str, *, suppress_broadcasts: bool = False) -> None:
         """Background task to run arbiter pre-warm with UI broadcasting."""
@@ -1080,13 +1084,14 @@ class ForensicCouncilPipeline:
         thinking: str,
     ) -> None:
         """Broadcast clean arbiter progress text and cache it for polling clients."""
-        try:
-            from api.routes._session_state import (
-                broadcast_update,
-                update_active_pipeline_metadata,
-            )
-            from api.schemas import BriefUpdate
+        from api.routes._session_state import (
+            broadcast_update,
+            update_active_pipeline_metadata,
+        )
+        from api.schemas import BriefUpdate
 
+        # Broadcast is best-effort — never block pipeline progress
+        try:
             await broadcast_update(
                 str(session_id),
                 BriefUpdate(
@@ -1096,22 +1101,42 @@ class ForensicCouncilPipeline:
                     data={"status": status, "thinking": thinking},
                 ),
             )
-            # F-15: use atomic CAS for metadata status transition.
-            # NOTE: Do NOT set terminal status "completed" here — that is the
-            # responsibility of mark_investigation_completed() in
-            # session_finalization.py. Setting it here prematurely causes the
-            # idempotency guard to fire, skipping the DB update and leaving
-            # investigation_state stuck at "queued".
+        except Exception as exc:
+            logger.debug("Arbiter broadcast failed", error=str(exc))
+
+        # F-15: use atomic CAS for metadata status transition.
+        # NOTE: Do NOT set terminal status "completed" here — that is the
+        # responsibility of mark_investigation_completed() in
+        # session_finalization.py. Setting it here prematurely causes the
+        # idempotency guard to fire, skipping the DB update and leaving
+        # investigation_state stuck at "queued".
+        # Metadata update is critical for polling clients — always attempt it.
+        _meta_fields = {
+            "status": "report_ready" if status == "complete" else status,
+            "brief": thinking,
+            "awaiting_decision": False,
+        }
+        try:
             await update_active_pipeline_metadata(
                 str(session_id),
-                {
-                    "status": "report_ready" if status == "complete" else status,
-                    "brief": thinking,
-                    "awaiting_decision": False,
-                },
+                _meta_fields,
             )
         except Exception as exc:
-            logger.debug("Arbiter status broadcast skipped", error=str(exc))
+            logger.debug("Arbiter metadata update failed", error=str(exc))
+            # Direct fallback: try setting metadata without CAS
+            try:
+                from api.routes._session_state import (
+                    get_active_pipeline_metadata,
+                    set_active_pipeline_metadata,
+                )
+                existing = await get_active_pipeline_metadata(str(session_id)) or {}
+                merged = {**existing, **_meta_fields}
+                await set_active_pipeline_metadata(str(session_id), merged)
+            except Exception as fallback_exc:
+                logger.warning(
+                    "Arbiter metadata fallback also failed — polling clients may see stale status",
+                    error=str(fallback_exc),
+                )
 
     async def _handle_global_abort(self, payload: dict | None = None) -> None:
         """Handle a GLOBAL_ABORT signal by cancelling the investigation."""
