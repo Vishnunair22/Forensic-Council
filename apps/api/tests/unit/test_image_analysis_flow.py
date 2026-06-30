@@ -266,8 +266,9 @@ class TestComputeGroundedAgentVerdict:
         assert visual_signal["court_defensible"] is True
         assert len(visual_signal["anomalies"]) == 2
 
-    def test_agent5_visual_signal_has_no_holistic_verdict(self):
-        """Agent5 visual_signal must have verdict='' — provenance axis only."""
+    def test_agent5_visual_signal_inherits_holistic_verdict(self):
+        """Agent5 visual_signal inherits the holistic AI-generation/manipulation verdict
+        so compute_agent_verdict can fold it in — matching _build_live_visual_signal."""
         class _MockMeta:
             metadata_contradictions = ["GPS timezone mismatch"]
 
@@ -278,17 +279,44 @@ class TestComputeGroundedAgentVerdict:
 
         vc = _MockVC()
         _meta_vc = getattr(vc, "metadata_visual_context", None)
+        _holistic = str(getattr(vc, "authenticity_verdict", "") or "").upper()
+        _inherit = _holistic if _holistic in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED", "SUSPICIOUS") else ""
 
         visual_signal = {
-            "verdict": "",  # Agent5 does not carry holistic verdict
+            "verdict": _inherit,
+            "court_defensible": True,
+            "anomalies": list(getattr(_meta_vc, "metadata_contradictions", None) or []),
+        }
+
+        assert visual_signal["verdict"] == "LIKELY_MANIPULATED", (
+            "Agent5 must inherit the holistic verdict into compute_agent_verdict"
+        )
+        assert "GPS timezone mismatch" in visual_signal["anomalies"]
+
+    def test_agent5_visual_signal_skips_authentic_verdict(self):
+        """Agent5 visual_signal must have verdict='' when the holistic read is AUTHENTIC."""
+        class _MockMeta:
+            metadata_contradictions = []
+
+        class _MockVC:
+            authenticity_verdict = "AUTHENTIC"
+            source = "llm_assisted"
+            metadata_visual_context = _MockMeta()
+
+        vc = _MockVC()
+        _meta_vc = getattr(vc, "metadata_visual_context", None)
+        _holistic = str(getattr(vc, "authenticity_verdict", "") or "").upper()
+        _inherit = _holistic if _holistic in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED", "SUSPICIOUS") else ""
+
+        visual_signal = {
+            "verdict": _inherit,
             "court_defensible": True,
             "anomalies": list(getattr(_meta_vc, "metadata_contradictions", None) or []),
         }
 
         assert visual_signal["verdict"] == "", (
-            "Agent5 must not carry the holistic verdict into compute_agent_verdict"
+            "Agent5 must not carry AUTHENTIC as a holistic verdict"
         )
-        assert "GPS timezone mismatch" in visual_signal["anomalies"]
 
 
 # ── 3. per_agent_synthesis — key_findings deduplication ──────────────────────

@@ -153,11 +153,16 @@ class InvestigationQueue:
             # Without these EXPIREs, abandoned/crashed sessions accumulate
             # forever and Redis ultimately hits maxmemory. 24 h covers the
             # longest legitimate investigation lifecycle.
+            #
+            # NOTE: EXPIRE is NOT set on METADATA_KEY or QUEUE_KEY because
+            # those are SHARED keys used by ALL sessions. Setting expire on
+            # a hash or list key would delete EVERY session's data after the
+            # TTL, not just this session's entry. Per-session TTL is managed
+            # by the session_finalization layer and Redis key eviction under
+            # maxmemory-policy=allkeys-lru.
             async with redis.client.pipeline(transaction=True) as pipe:
                 pipe.hset(self.METADATA_KEY, str(session_id), task.model_dump_json())
                 pipe.rpush(self.QUEUE_KEY, str(session_id))
-                pipe.expire(self.METADATA_KEY, 86400)
-                pipe.expire(self.QUEUE_KEY, 86400)
                 await pipe.execute()
         except Exception as e:
             logger.error(

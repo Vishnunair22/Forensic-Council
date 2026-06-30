@@ -539,7 +539,11 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                         # camera-physics noise on non-camera images so the verdict
                         # math and report reflect the calibrated confidence, not the
                         # raw tool score. Only ever reduces, never inflates.
-                        if gr.confidence_scale < 1.0:
+                        # P0.9 — only scale POSITIVE findings; a NEGATIVE from a
+                        # camera-physics tool on a non-camera image is still a valid
+                        # clean signal and must not have its confidence diluted.
+                        _gr_ev = str(gf.get("evidence_verdict") or "").upper()
+                        if _gr_ev == "POSITIVE" and gr.confidence_scale < 1.0:
                             for _ck in ("confidence_raw", "confidence"):
                                 _cv = gf.get(_ck)
                                 if isinstance(_cv, (int, float)):
@@ -714,6 +718,12 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                     _tool = _m.get("tool_name") or _f.get("finding_type") or ""
                     if _tool not in ai_gen_tools:
                         continue
+                    _f_ev = str(_f.get("evidence_verdict") or "").upper()
+                    if _f_ev != "POSITIVE":
+                        # NEGATIVE / INCONCLUSIVE — high confidence in a clean
+                        # result must not be mistaken for an AI-generation
+                        # probability; skip the cap trigger.
+                        continue
                     try:
                         _prob = float(_m.get("diffusion_probability") or _m.get("confidence_raw") or _m.get("confidence") or 0.0)
                     except (TypeError, ValueError):
@@ -722,7 +732,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
                         bool(_m.get("is_ai_generated"))
                         or str(_m.get("predicted_label") or "").lower() == "artificial"
                         or bool(_m.get("corroboration_downgrade"))
-                        or str(_f.get("evidence_verdict") or "").upper() == "POSITIVE"
                         or _prob >= 0.70
                     ):
                         self._uncorroborated_ai_gen_local = True

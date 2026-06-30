@@ -9,7 +9,10 @@ to ensure consistent severity classification across the system.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Tools that are NEVER an "integrity manipulation" positive: provenance/metadata,
 # content/object, hard-evidence (hash), and descriptive/non-manipulation tools.
@@ -518,6 +521,11 @@ def compute_agent_verdict(
         _mean_strong = strong_conf_sum / strong_conf_n if strong_conf_n else 0.85
         _graduated_floor = min(0.90, max(0.70, _mean_strong))
         conf = min(0.94, _graduated_floor + (_CONV_VISUAL_TOOL_CONF_BOOST if visual_tool_convergent else 0.0))
+        logger.info(
+            "MANIPULATED confidence: strong_signals=%d _mean_strong=%.4f "
+            "visual_tool_convergent=%s conf=%.4f",
+            strong_signals, _mean_strong, visual_tool_convergent, conf,
+        )
     elif strong_signals == 1:
         verdict = "SUSPICIOUS"
         if gemini_strong_vote and tool_strong == 0:
@@ -527,6 +535,11 @@ def compute_agent_verdict(
             conf = round(0.72 + _GEMINI_SOLO_CONF_BOOST, 2)
         else:
             conf = 0.72
+        logger.info(
+            "SUSPICIOUS confidence: strong_signals=1 gemini_strong_vote=%s "
+            "gemini_solo=%s conf=%.4f",
+            gemini_strong_vote, gemini_strong_vote and tool_strong == 0, conf,
+        )
     elif alert_signals >= 1:
         # Only medium-strength signals — genuinely ambiguous, not a manipulation
         # call. Confidence is graduated by how strong/numerous the ambiguous signals
@@ -534,15 +547,25 @@ def compute_agent_verdict(
         # two different inconclusive reads don't both render an identical 60%.
         verdict = "INCONCLUSIVE"
         conf = round(min(0.70, 0.50 + 0.18 * alert_conf_max + 0.03 * (alert_signals - 1)), 2)
+        logger.info(
+            "INCONCLUSIVE (alert_signals): completed=%d alert_signals=%d "
+            "alert_conf_max=%.4f conf=%.4f",
+            completed, alert_signals, alert_conf_max, conf,
+        )
     elif completed == 0:
         # No usable tool output — cannot assert authenticity.
         verdict, conf = "INCONCLUSIVE", 0.4
+        logger.info("INCONCLUSIVE (no completed): conf=0.4")
     elif clean_confirmations == 0:
         # Tools ran but NONE affirmatively confirmed clean (every usable result was
         # inconclusive). Asserting AUTHENTIC here would be dishonest — this is
         # genuine ambiguity, not a clean read. Confidence stays in the low band.
         verdict = "INCONCLUSIVE"
         conf = round(min(0.6, 0.45 + 0.03 * completed), 2)
+        logger.info(
+            "INCONCLUSIVE (no clean_confirmations): completed=%d conf=%.4f",
+            completed, conf,
+        )
     else:
         # Clean: confidence scales with the number of tools that AFFIRMATIVELY
         # confirmed clean (NEGATIVE verdicts), not with raw completed count — an
@@ -557,14 +580,21 @@ def compute_agent_verdict(
         # file-dependent: base + a small count bump + the measurement-strength term.
         _mean_clean = (clean_conf_sum / clean_conf_n) if clean_conf_n else 0.65
         conf = min(
-            0.92,
+            0.95,
             max(
                 0.65,
-                0.45 + 0.03 * clean_confirmations + 0.40 * _mean_clean
+                0.35 + 0.02 * clean_confirmations + 0.55 * _mean_clean
                 + (0.04 if gemini_clean_vote else 0.0),
             ),
         )
         verdict = "AUTHENTIC"
+        logger.info(
+            "AUTHENTIC confidence: completed=%d clean_confirmations=%d "
+            "clean_conf_n=%d clean_conf_sum=%.4f _mean_clean=%.4f "
+            "gemini_clean_vote=%s conf=%.4f",
+            completed, clean_confirmations, clean_conf_n, clean_conf_sum,
+            _mean_clean, gemini_clean_vote, conf,
+        )
 
     moderate_signals = alert_signals - strong_signals
     failed_note = f" {failed} check(s) did not complete and are treated as coverage gaps." if failed else ""

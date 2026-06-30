@@ -46,10 +46,7 @@ def _build_live_visual_signal(aid: str, agent_inst: Any, session_id: str) -> dic
     vc = getattr(agent_inst, "visual_context", None) if agent_inst is not None else None
     if vc is None:
         return None
-    is_remote = bool(
-        getattr(vc, "external_llm_used", False)
-        and getattr(vc, "source", "") != "local_ensemble"
-    )
+    is_remote = str(getattr(vc, "source", "") or "").startswith("llm")
     holistic = str(getattr(vc, "authenticity_verdict", "") or "").upper()
     splits = None
     try:
@@ -749,7 +746,11 @@ async def run_agents_concurrent(
                         if agent_inst is not None else []
                     )
                     if _af:
-                        from core.severity import compute_agent_verdict
+                        from core.severity import (
+                            assign_severity_tier,
+                            compute_agent_verdict,
+                        )
+                        from core.visual_grounding import apply_visual_grounding
 
                         # Feed the SAME per-agent visual_signal the arbiter uses
                         # so the streamed card value equals the signed report's
@@ -757,7 +758,65 @@ async def run_agents_concurrent(
                         # truth — no 86%→90% drift between evidence and result).
                         _vsig = _build_live_visual_signal(aid, agent_inst, str(session_id))
                         _is_deep = analysis_phase == "deep"
-                        _cv, _cc, _ = compute_agent_verdict(_af, visual_signal=_vsig, is_deep=_is_deep)
+                        # Build grounded rows matching _compute_grounded_agent_verdict
+                        # so the live-card confidence includes visual-grounding
+                        # confidence_scale — identical inputs → identical outputs.
+                        _vcp = None
+                        try:
+                            _vc_i = getattr(agent_inst, "visual_context", None)
+                            if _vc_i is not None:
+                                from core.visual_context_store import visual_context_to_profile_dict
+                                _vcp = visual_context_to_profile_dict(_vc_i)
+                        except Exception:
+                            pass
+                        _grows = []
+                        for _f in _af:
+                            _meta_f = (
+                                _f.metadata
+                                if isinstance(getattr(_f, "metadata", None), dict)
+                                else {}
+                            )
+                            _tool_f = str(
+                                _meta_f.get("tool_name")
+                                or getattr(_f, "finding_type", "")
+                                or ""
+                            )
+                            _sev_f = assign_severity_tier(_f)
+                            _conf_f = getattr(_f, "confidence_raw", None)
+                            if _vcp is not None:
+                                try:
+                                    _gr_f = apply_visual_grounding(
+                                        _tool_f, aid, _sev_f, _vcp, _meta_f
+                                    )
+                                    _sev_f = _gr_f.adjusted_severity
+                                    if (
+                                        str(getattr(_f, "evidence_verdict", "") or "").upper() == "POSITIVE"
+                                        and _gr_f.confidence_scale < 1.0
+                                        and isinstance(_conf_f, (int, float))
+                                    ):
+                                        _conf_f = round(
+                                            float(_conf_f) * _gr_f.confidence_scale, 4
+                                        )
+                                except Exception:
+                                    pass
+                            _grows.append({
+                                "evidence_verdict": str(
+                                    getattr(_f, "evidence_verdict", "") or ""
+                                ),
+                                "status": str(getattr(_f, "status", "") or ""),
+                                "confidence_raw": _conf_f,
+                                "severity_tier": _sev_f,
+                                "tool_name": _tool_f,
+                                "court_defensible": bool(
+                                    getattr(_f, "court_defensible", None)
+                                    if getattr(_f, "court_defensible", None) is not None
+                                    else _meta_f.get("court_defensible", False)
+                                ),
+                                "metadata": _meta_f,
+                            })
+                        _cv, _cc, _ = compute_agent_verdict(
+                            _grows, visual_signal=_vsig, is_deep=_is_deep
+                        )
                         if _cv:
                             _live_verdict = _cv
                             _live_conf = _cc

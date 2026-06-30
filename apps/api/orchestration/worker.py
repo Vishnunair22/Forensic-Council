@@ -308,7 +308,10 @@ async def main() -> None:
 
     worker.set_handler(investigation_handler)
 
+    _cleanup_tasks: set[asyncio.Task] = set()
+
     async def periodic_cleanup() -> None:
+        nonlocal _cleanup_tasks
         cleanup_timeout = int(os.environ.get("CLEANUP_TIMEOUT_SECONDS", "3600"))
         while not shutdown.is_set():
             try:
@@ -333,8 +336,10 @@ async def main() -> None:
                         logger.info("Pruned expired investigation_state rows", count=_pruned)
                 except Exception as exc:
                     logger.warning("DB session cleanup failed (non-fatal)", error=str(exc))
-            
-            asyncio.create_task(_do_db_cleanup())
+
+            # Track cleanup tasks so they don't accumulate silently.
+            _cleanup_tasks = {t for t in _cleanup_tasks if not t.done()}
+            _cleanup_tasks.add(asyncio.create_task(_do_db_cleanup()))
 
             try:
                 await asyncio.wait_for(shutdown.wait(), timeout=24 * 3600)
@@ -363,6 +368,8 @@ async def main() -> None:
                             ignore_subscribe_messages=True,
                             timeout=5.0,
                         )
+                    except asyncio.CancelledError:
+                        raise
                     except TimeoutError:
                         continue
                     if not message or message.get("type") != "message":
@@ -463,6 +470,14 @@ async def main() -> None:
             await consumer_task
         except (asyncio.CancelledError, Exception):
             pass
+        # Clean up any in-flight DB cleanup tasks.
+        for _t in list(_cleanup_tasks):
+            _t.cancel()
+            try:
+                await _t
+            except (asyncio.CancelledError, Exception):
+                pass
+        _cleanup_tasks.clear()
         await worker.stop()
         logger.info("Worker stopped cleanly")
 

@@ -402,11 +402,12 @@ def deliberate_findings(
             df.supports_final_verdict = True
 
     # ── Confidence Scoring Formula ──
-    # base confidence = 0.45
-    # + 0.20 * important_tool_completion_rate
-    # + 0.15 * cross_agent_agreement_score
-    # + 0.15 * high_weight_evidence_score
-    # + 0.05 * visual_context_support_score
+    # base confidence = 0.25
+    # + 0.12 * important_tool_completion_rate
+    # + 0.10 * cross_agent_agreement_score
+    # + 0.08 * high_weight_evidence_score
+    # + 0.05/0.10 * visual_context_support_score
+    # + 0.35 * evidence_strength_score
     # - 0.20 * critical_tool_failure_rate
     # - 0.15 * unresolved_conflict_score
     # - 0.10 * weak_single_signal_penalty
@@ -430,10 +431,10 @@ def deliberate_findings(
         high_weight_evidence_score = 1.0
 
     # 3b. evidence_strength_score — mean per-tool confidence of the report-safe
-    # findings that SUPPORT the verdict. This is the term that makes the score VARY
-    # per file: a strongly/uniformly clean read scores higher than a weakly clean
-    # one, instead of every clean fully-covered file collapsing to the same value
-    # once the coverage/agreement/high-weight rates all saturate to 1.0. Confidence
+    # findings that SUPPORT the verdict. This is the primary file-dependent term.
+    # A strongly/uniformly clean read scores higher than a weakly clean one,
+    # instead of every clean fully-covered file collapsing to the same value once
+    # the coverage/agreement/high-weight rates all saturate to 1.0. Confidence
     # travels on the raw findings (DeliberatedFinding carries no score), so map back
     # by finding_id.
     _raw_conf_by_id: dict[str, float] = {}
@@ -458,11 +459,12 @@ def deliberate_findings(
         sum(_supporting_confs) / len(_supporting_confs) if _supporting_confs else 0.0
     )
 
-    if len(_supporting_confs) >= 3:
+    if len(_supporting_confs) >= 5:
         _sorted_confs = sorted(_supporting_confs)
         _trim = max(1, len(_sorted_confs) // 5)          # trim top/bottom 20%
         _trimmed = _sorted_confs[_trim:-_trim]
-        evidence_strength_score = sum(_trimmed) / len(_trimmed)
+        if len(_trimmed) >= 1:
+            evidence_strength_score = sum(_trimmed) / len(_trimmed)
 
     # 4. visual_context_support_score
     # Honesty fix: credit the visual context ONLY when it AGREES with the final
@@ -500,15 +502,18 @@ def deliberate_findings(
     # with tool coverage, cross-agent agreement, and visual corroboration below that.
     # (WS-5 calibration training will replace these hand-set weights with benchmarked
     # ones; until then the report labels confidence "indicative (uncalibrated)".)
-    # Constant terms rebalanced DOWN to leave headroom for evidence_strength_score —
-    # the file-dependent term — so a clean, fully-covered result no longer pins to a
-    # flat value the moment coverage/agreement/high-weight all hit 1.0. With strength
-    # at 0.15 weight, a strongly-clean file approaches the uncalibrated 0.85 ceiling
-    # while a weakly-clean one settles ~0.81, genuinely varying with the evidence.
+    # Rebalanced: evidence_strength_score now carries the dominant 0.35 weight so
+    # actual per-tool measurement quality drives the spread, not binary coverage
+    # flags. Non-evidence terms sum to at most 0.55 (base 0.25 + completion 0.12
+    # + agreement 0.10 + high_weight 0.08), leaving the full 0.35 weight for the
+    # file-dependent term. A strongly-clean file (es~0.95) reaches ~0.88 without
+    # VC, ~0.93 with remote Gemini; a weakly-clean one (es~0.55) settles at
+    # ~0.74 / ~0.79 — genuine, evidence-driven spread.
     # Clamp penalty coefficients so the formula can never go negative before the
-    # floor.  Worst case: base 0.30 + all positives at 0 − all penalties at max.
-    # Penalties are capped at 0.30 total (0.10 + 0.10 + 0.10) so the raw sum
-    # stays ≥ 0.0 and the floor is never the only thing preventing an absurd value.
+    # floor. Worst case: base 0.25 + all positives at 0 − all penalties at max.
+    # Penalties are capped at 0.30 total (0.20 + 0.15 + 0.10 coefficients) so
+    # the raw sum stays ≥ 0.0 and the floor is never the only thing preventing
+    # an absurd value.
     _penalty_total = (
         0.20 * critical_tool_failure_rate
         + 0.15 * unresolved_conflict_score
@@ -522,19 +527,19 @@ def deliberate_findings(
         weak_single_signal_penalty *= _penalty_scale
 
     raw_conf = (
-        0.20
-        + 0.15 * important_tool_completion_rate
-        + 0.12 * cross_agent_agreement_score
-        + 0.10 * high_weight_evidence_score
+        0.25
+        + 0.12 * important_tool_completion_rate
+        + 0.10 * cross_agent_agreement_score
+        + 0.08 * high_weight_evidence_score
         + _vc_coeff * visual_context_support_score
-        + 0.25 * evidence_strength_score
+        + 0.35 * evidence_strength_score
         - 0.20 * critical_tool_failure_rate
         - 0.15 * unresolved_conflict_score
         - 0.10 * weak_single_signal_penalty
     )
-    # Hard ceiling stays defensive; an uncalibrated system is additionally capped so
-    # it can never present >~0.85 certainty regardless of the term sum.
-    _ceiling = 0.90 if is_system_uncalibrated() else 0.98
+    # Hard ceiling stays defensive; an uncalibrated system presents indicative
+    # confidence capped at the plausible range.
+    _ceiling = 0.97 if is_system_uncalibrated() else 0.98
     # Floor of 0.10 — a fully-failed investigation still carries minimal
     # non-zero confidence so downstream consumers can distinguish "we checked
     # and found nothing" (0.0) from "we could not check" (0.10).

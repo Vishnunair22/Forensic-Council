@@ -981,9 +981,15 @@ class AgentInvestigationMixin:
                     sev = gr.adjusted_severity
                     # Apply the grounding confidence scale so camera-physics tools on
                     # non-camera images (scale=0.3) don't count as strong signals despite
-                    # their raw confidence. Keeps the agent and arbiter verdict in parity —
-                    # the arbiter already applies this scaling; now the agent does too.
-                    if gr.confidence_scale < 1.0 and isinstance(conf_raw, (int, float)):
+                    # their raw confidence. Only applies to POSITIVE findings — a NEGATIVE
+                    # from a camera-physics tool on a non-camera image is still a valid
+                    # clean signal and must not be down-weighted (doing so dragged the
+                    # per-agent clean confidence floor below 0.65 for clean images).
+                    if (
+                        str(getattr(f, "evidence_verdict", "") or "").upper() == "POSITIVE"
+                        and gr.confidence_scale < 1.0
+                        and isinstance(conf_raw, (int, float))
+                    ):
                         conf_raw = round(float(conf_raw) * gr.confidence_scale, 4)
                 except Exception as g_err:
                     logger.debug("Severity grounding skipped for verdict", error=str(g_err))
@@ -1031,10 +1037,16 @@ class AgentInvestigationMixin:
                         "court_defensible": _is_remote,
                         "anomalies": list(getattr(_objsc, "scene_inconsistencies", None) or []),
                     }
-                else:  # Agent5 — provenance axis, no holistic manipulation vote
+                else:  # Agent5 — provenance axis
+                    # Agent5 inherits the holistic AI-generation/manipulation verdict
+                    # so compute_agent_verdict can fold it in as a visual grounding
+                    # signal. Without this, Agent5 always receives verdict="" and the
+                    # visual folding code never fires — an Agent1 AI_GENERATED read is
+                    # silently ignored in Agent5's verdict computation.
                     _meta_vc = getattr(vc, "metadata_visual_context", None)
+                    _inherit = _holistic if _holistic in ("AI_GENERATED", "LIKELY_MANIPULATED", "MANIPULATED", "SUSPICIOUS") else ""
                     visual_signal = {
-                        "verdict": "",
+                        "verdict": _inherit,
                         "court_defensible": _is_remote,
                         "anomalies": list(getattr(_meta_vc, "metadata_contradictions", None) or []),
                     }
