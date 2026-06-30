@@ -1074,6 +1074,7 @@ class ForensicCouncilPipeline:
             session_id=str(session_id),
             elapsed_seconds=round(time.perf_counter() - _start, 2),
             verdict=report.overall_verdict,
+            confidence=round(report.overall_confidence, 3),
         )
         return report
 

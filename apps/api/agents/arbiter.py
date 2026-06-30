@@ -686,9 +686,18 @@ class CouncilArbiter(ArbiterNarrativeMixin):
         #    so the narrative label and the verdict field can never disagree) ──
         mapped_verdict = "INCONCLUSIVE"
         v_upper = (deliberation_result.final_verdict or "INCONCLUSIVE").upper()
-        if "AI_GENERATED" in v_upper:
+        # Check LIKELY_AI_GENERATED before the broader AI_GENERATED check so the
+        # "LIKELY" qualifier from the single-uncorroborated-signal path is not lost
+        # via substring match (bug: "AI_GENERATED" in "LIKELY_AI_GENERATED" is True).
+        if "LIKELY_AI_GENERATED" in v_upper:
+            mapped_verdict = "SUSPICIOUS"
+        elif "AI_GENERATED" in v_upper:
             mapped_verdict = "AI_GENERATED"
         elif "LIKELY_MANIPULATED" in v_upper:
+            # Deliberation emits LIKELY_MANIPULATED for 2+ corroborating signals
+            # (hash mismatch + tool, or 2+ tool strong) — strong evidence that
+            # intentionally maps to the bare MANIPULATED label. This is NOT the
+            # same inflation bug as LIKELY_AI_GENERATED above.
             mapped_verdict = "MANIPULATED"
         elif "SUSPICIOUS" in v_upper or "PROVENANCE" in v_upper or "CONTENT_RISK" in v_upper:
             mapped_verdict = "SUSPICIOUS"
@@ -1242,76 +1251,6 @@ class CouncilArbiter(ArbiterNarrativeMixin):
             if f.get("evidence_verdict") not in ("NOT_APPLICABLE", "ERROR")
         )
         return 0.95 if agent5_active else 1.0
-
-    def _compute_verdict(
-        self,
-        manipulation_probability: float,
-        manipulation_signals: int,
-        overall_confidence: float,
-        overall_error_rate: float,
-        contested_count: int,
-        active_metrics: list[dict],
-        all_findings: list[dict],
-        mime_type: str = "",
-    ) -> str:
-        # File-type-specific thresholds via ForensicPolicy
-        thresholds = ForensicPolicy.get_verdict_thresholds(mime_type)
-        _manipulated_threshold = thresholds["manipulated"]
-        _likely_manipulated_threshold = thresholds["likely_manipulated"]
-        _suspicious_threshold = thresholds["suspicious"]
-        _authentic_conf_threshold = thresholds["authentic_conf"]
-        _likely_authentic_conf_threshold = thresholds["likely_authentic_conf"]
-
-        if (
-            manipulation_probability >= _manipulated_threshold
-            and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
-        ):
-            return "MANIPULATED"
-
-        elif (
-            manipulation_probability >= _likely_manipulated_threshold
-            and manipulation_signals >= ForensicPolicy.MANIP_SIGNAL_MIN_REQUIRED
-        ):
-            # P0.6 — removed the dead `signals == 1 and prob >= SINGLE_SIGNAL_MANIP_THRESHOLD`
-            # branch: a solo signal is hard-capped at 0.45 (arbiter_verdict.py), so the
-            # 0.85 threshold was unreachable. Hash mismatch — the one signal that may
-            # stand alone — is already escalated separately in arbiter_deliberation. A
-            # proper tiered single-signal rule (P1.9) must wait for validated tool weights
-            # (P1.12) rather than build on unvalidated ones.
-            return "LIKELY_MANIPULATED"
-
-        elif (
-            manipulation_probability >= _suspicious_threshold
-            and manipulation_signals >= 1
-        ):
-            return "SUSPICIOUS"
-
-        elif (
-            manipulation_signals == 0
-            and overall_confidence >= _authentic_conf_threshold
-            and overall_error_rate <= ForensicPolicy.AUTHENTIC_ERROR_MAX
-            and contested_count == 0
-        ):
-            # NEW: don't assert AUTHENTIC when a high-confidence AI-gen tool fired
-            # and was merely held inconclusive due to no remote corroboration.
-            if getattr(self, "_uncorroborated_ai_gen_local", False):
-                return "INCONCLUSIVE"
-            return "AUTHENTIC"
-
-        elif (
-            manipulation_signals == 0
-            and overall_confidence >= _likely_authentic_conf_threshold
-            and overall_error_rate <= ForensicPolicy.LIKELY_AUTHENTIC_ERROR_MAX
-        ):
-            return "LIKELY_AUTHENTIC"
-
-        elif (
-            len(active_metrics) <= 1 and overall_confidence < ForensicPolicy.ABSTAIN_CONF_FLOOR
-        ) or overall_error_rate > ForensicPolicy.ABSTAIN_ERROR_CEILING:
-            return "ABSTAIN"
-
-        else:
-            return "INCONCLUSIVE"
 
     async def _run_challenges(self, comparisons: list[FindingComparison]) -> list[dict]:
         """

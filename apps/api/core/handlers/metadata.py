@@ -690,11 +690,11 @@ class MetadataHandlers(BaseToolHandler):
             result["severity_tier"] = "MEDIUM"
         else:
             result["evidence_verdict"] = "NEGATIVE"
-        # Surface the raw probability as confidence_raw so severity.py and the
-        # arbiter can weight the finding correctly (without this, _get_confidence
-        # returns 0.0 and a POSITIVE ai_text_detector finding is treated as a
-        # medium alert rather than a strong signal).
-        result["confidence_raw"] = prob
+        # Invert confidence for NEGATIVE findings so confidence_raw means
+        # "confidence in the verdict" (high = confident clean), matching every
+        # other tool's convention. Without this inversion a NEGATIVE finding
+        # carries a low raw P(AI) and drags down evidence_strength_score.
+        result["confidence_raw"] = 1.0 - prob if prob < 0.50 else prob
 
         await self.agent._record_tool_result("ai_text_detector", result)
         return result

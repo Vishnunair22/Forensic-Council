@@ -103,7 +103,6 @@ class ForensicPolicy:
     # --- Scoring Constants ---
     SINGLE_SIGNAL_DECAY: float = 0.55
     MANIP_PROBABILITY_CAP: float = 0.95
-    DEEP_ANALYSIS_BONUS: float = 1.05
 
     # --- Verdict Thresholds (Overall) ---
     MANIPULATED_PROB_THRESHOLD = 0.75
@@ -139,12 +138,7 @@ class ForensicPolicy:
     })
 
     AUTHENTIC_CONF_THRESHOLD = 0.70  # Lowered from 0.75 to prevent real images from getting stuck in INCONCLUSIVE
-    AUTHENTIC_ERROR_MAX = 0.20       # Slightly increased to tolerate minor tool timeouts on real images
     LIKELY_AUTHENTIC_CONF_THRESHOLD = 0.55
-    LIKELY_AUTHENTIC_ERROR_MAX = 0.35
-
-    ABSTAIN_CONF_FLOOR = 0.35
-    ABSTAIN_ERROR_CEILING = 0.55
 
     # WS-3 #11 / P0.3 — signal families. Detectors in the same family respond to the
     # SAME underlying artifact (e.g. ELA/JPEG-ghost/classical-FFT all fire on

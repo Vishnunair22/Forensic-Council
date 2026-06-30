@@ -85,36 +85,14 @@ async def test_png_mime_detection_fallback(tmp_path, settings):
 @pytest.mark.asyncio
 async def test_arbiter_file_type_thresholds(settings):
     """Arbiter should apply different thresholds for PNG vs JPEG."""
-    from agents.arbiter import CouncilArbiter
+    from core.forensic_policy import ForensicPolicy
 
-    arbiter = CouncilArbiter(
-        session_id=uuid4(),
-    )
+    png_thresholds = ForensicPolicy.get_verdict_thresholds("image/png")
+    jpeg_thresholds = ForensicPolicy.get_verdict_thresholds("image/jpeg")
 
-    verdict_png = arbiter._compute_verdict(
-        manipulation_probability=0.75,
-        manipulation_signals=2,
-        overall_confidence=0.8,
-        overall_error_rate=0.1,
-        contested_count=0,
-        active_metrics=[{"confidence_score": 0.8, "error_rate": 0.1}],
-        all_findings=[],
-        mime_type="image/png",
-    )
-
-    verdict_jpeg = arbiter._compute_verdict(
-        manipulation_probability=0.75,
-        manipulation_signals=2,
-        overall_confidence=0.8,
-        overall_error_rate=0.1,
-        contested_count=0,
-        active_metrics=[{"confidence_score": 0.8, "error_rate": 0.1}],
-        all_findings=[],
-        mime_type="image/jpeg",
-    )
-
-    assert verdict_jpeg == "MANIPULATED"
-    assert verdict_png != "MANIPULATED"
+    # PNG has higher manipulated threshold than JPEG (less susceptible to recompression)
+    assert png_thresholds["manipulated"] > jpeg_thresholds["manipulated"]
+    assert png_thresholds["likely_manipulated"] > jpeg_thresholds["likely_manipulated"]
 
 
 @pytest.mark.asyncio

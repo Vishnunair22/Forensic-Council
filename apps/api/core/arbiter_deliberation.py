@@ -275,7 +275,7 @@ def deliberate_findings(
 
     # Check custody hash mismatch — includes legacy tool name aliases
     hash_mismatch_tools = {"file_hash_verify", "hash_verify", "custody_check"}
-    hash_mismatches = [f for f in findings if f.get("metadata", {}).get("tool_name") in hash_mismatch_tools and f.get("evidence_verdict") == "POSITIVE"]
+    hash_mismatches = [f for f in findings if (f.get("metadata") or {}).get("tool_name") in hash_mismatch_tools and f.get("evidence_verdict") == "POSITIVE"]
 
     ai_gen_tools = {
         "diffusion_artifact_detector", "ai_generation_detector", "audio_gen_signature",
@@ -300,7 +300,7 @@ def deliberate_findings(
     elif len(positive_integrity_tools) == 1:
         # Check if high confidence or supported by visual context
         finding = positive_integrity_findings[0]
-        conf = finding.get("confidence_raw") or finding.get("metadata", {}).get("confidence") or 0.0
+        conf = finding.get("confidence_raw") or (finding.get("metadata") or {}).get("confidence") or 0.0
         if conf >= single_signal_bar or has_vc_integrity_issue:
             final_verdict = "AI_GENERATED" if (is_primarily_ai or vc_is_ai) else "LIKELY_MANIPULATED"
         else:
@@ -331,6 +331,8 @@ def deliberate_findings(
     # recompressed real photo (e.g. WhatsApp/phone-pipeline artifacts) — hold the
     # verdict inconclusive rather than asserting manipulation. Hard provenance
     # evidence (hash mismatch) is exempt; it is not overridden by visual assessment.
+    # For non-image modalities (audio/video/document) visual_context is None, so
+    # the gate falls back to requiring 2+ strong agreeing signals instead.
     if final_verdict in ("LIKELY_MANIPULATED", "SUSPICIOUS_INTEGRITY_SIGNALS", "AI_GENERATED", "LIKELY_AI_GENERATED") and not hash_mismatches:
         gemini_available_and_clean = visual_context is not None and not has_vc_integrity_issue
         strong_corroborating = sum(
@@ -339,11 +341,18 @@ def deliberate_findings(
             if (f.get("confidence_raw") or (f.get("metadata") or {}).get("confidence") or 0) >= strong_corroborator_bar
             and (f.get("metadata") or {}).get("court_defensible", True)
         )
-        if gemini_available_and_clean and strong_corroborating < 2:
+        # Gate fires when either (a) Gemini is available+clean but disagrees with
+        # the tool signals, or (b) no visual context exists at all (non-image
+        # modalities) — in both cases require 2+ strong corroborating signals.
+        if (gemini_available_and_clean or visual_context is None) and strong_corroborating < 2:
             final_verdict = "INCONCLUSIVE_UNCORROBORATED_SIGNAL"
+            _reason = (
+                "Integrity signal(s) uncorroborated by the visual model" if visual_context is not None
+                else "Integrity signal(s) lack sufficient corroboration (no visual context available)"
+            )
             conflicts.append(
-                "Integrity signal(s) uncorroborated by the visual model — consistent with "
-                "processing/recompression artifacts rather than manipulation; verdict held inconclusive."
+                f"{_reason} — consistent with processing/recompression artifacts "
+                "rather than manipulation; verdict held inconclusive."
             )
 
     # Coverage calculation
@@ -445,13 +454,13 @@ def deliberate_findings(
         _c = float(
             (_f.get("confidence_raw") if isinstance(_f, dict) else getattr(_f, "confidence_raw", 0.0))
             or (_f.get("raw_confidence_score") if isinstance(_f, dict) else getattr(_f, "raw_confidence_score", 0.0))
-            or (_f.get("metadata", {}) if isinstance(_f, dict) else {}).get("confidence")
+            or ((_f.get("metadata") or {}) if isinstance(_f, dict) else {}).get("confidence")
             or 0.0
         )
         if _c > 0:
             _raw_conf_by_id[_fid] = _c
     _supporting_confs = [
-        _raw_conf_by_id[df.finding_id]
+        max(_raw_conf_by_id[df.finding_id], 1.0 - _raw_conf_by_id[df.finding_id])
         for df in deliberated
         if df.report_safe and df.supports_final_verdict and df.finding_id in _raw_conf_by_id
     ]

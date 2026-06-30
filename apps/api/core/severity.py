@@ -396,6 +396,14 @@ def compute_agent_verdict(
                     or 0.0
                 )
             if _cc > 0:
+                # Platt-scaled raw_confidence_score represents P(anomaly), not
+                # "confidence in clean" — the sigmoid was fitted for POSITIVE
+                # findings so it systematically crushes NEGATIVE confidence
+                # (e.g. confidence_raw=0.85 → raw_confidence_score=0.284 for
+                # Agent1). Invert: confidence in clean = max(conf, 1-conf).
+                # Deterministic tools (raw_confidence_score == confidence_raw)
+                # are unchanged since both sides are already ≥ 0.50.
+                _cc = max(_cc, 1.0 - _cc)
                 clean_conf_sum += _cc
                 clean_conf_n += 1
         if verdict != "POSITIVE":
