@@ -598,7 +598,7 @@ export const useSimulation = ({
                     stallTimerRef.current = null;
                   }
                   // Abort any in-flight arbiter poll HTTP fetch
-                  import("@/lib/arbiterControl").then(m => m.arbiterControl.abort()).catch(() => {});
+                  import("@/lib/arbiterControl").then(m => m.arbiterControl.abort("PIPELINE_COMPLETE")).catch(() => {});
                   if (!hasFiredCompleteRef.current) {
                     hasFiredCompleteRef.current = true;
                     playSoundRef.current?.("complete");

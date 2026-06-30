@@ -581,6 +581,9 @@ export async function getArbiterStatus(sessionId: string): Promise<ArbiterStatus
     return response.json();
   }).catch((error) => {
     dbg.warn("[api] getArbiterStatus error:", error);
+    if (error instanceof Error && (error.message.includes("401") || error.message.includes("Session expired"))) {
+      throw error;
+    }
     return {
       status: "unreachable",
       message: error instanceof Error ? error.message : "Backend unreachable",

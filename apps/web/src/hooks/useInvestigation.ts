@@ -96,7 +96,23 @@ async function waitForFinalReport(
   let consecutiveNotFound = 0;
   let pollCount = 0;
   while (Date.now() < deadline && pollCount < _MAX_ARBITER_POLLS) {
-    if (signal?.aborted) return false;
+    if (signal?.aborted) {
+      // Regardless of the abort reason, do a final check to see if the report is actually complete.
+      // This protects against race conditions where PIPELINE_COMPLETE aborts the poll
+      // just as the report becomes available in Redis.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const res = await withTimeout(getReport(sessionId), 30_000);
+          const asAny = res as unknown as Record<string, unknown>;
+          if (asAny.report_id || (asAny.status === "complete" && asAny.report)) return true;
+        } catch {
+        }
+        if (attempt < 4) {
+          await new Promise<void>((r) => setTimeout(r, REPORT_POLL_DELAY_MS));
+        }
+      }
+      return false;
+    }
     try {
       const st = await withTimeout(
         getArbiterStatus(sessionId),
@@ -111,7 +127,6 @@ async function waitForFinalReport(
       if (st.status === "complete") {
         consecutiveNotFound = 0;
         for (let attempt = 0; attempt < 5; attempt++) {
-          if (signal?.aborted) return false;
           try {
             const res = await withTimeout(getReport(sessionId), 30_000);
             // ReportDTO has report_id; a 202 in-progress response has status:"in_progress"
@@ -144,6 +159,8 @@ async function waitForFinalReport(
         throw e;
       if (e instanceof Error && (e.message.includes("not found") || e.message.includes("session may have expired")))
         throw e;
+      if (e instanceof Error && (e.message.includes("401") || e.message.includes("Session expired")))
+        throw e;
     }
     await new Promise<void>((r) => {
       const timer = setTimeout(r, pollInterval);
@@ -152,7 +169,6 @@ async function waitForFinalReport(
         r();
       }, { once: true });
     });
-    if (signal?.aborted) return false;
     pollInterval = Math.min(pollInterval * 1.2, 3000);
     pollCount++;
   }

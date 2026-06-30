@@ -7,9 +7,9 @@
 export const arbiterControl = {
   abortController: null as AbortController | null,
   
-  abort: () => {
+  abort: (reason?: string) => {
     if (arbiterControl.abortController) {
-      arbiterControl.abortController.abort();
+      arbiterControl.abortController.abort(reason);
       arbiterControl.abortController = null;
     }
   }
