@@ -451,14 +451,17 @@ def deliberate_findings(
         _fid = str((_f.get("finding_id") if isinstance(_f, dict) else getattr(_f, "finding_id", "")) or "")
         if not _fid:
             continue
-        _c = float(
-            (_f.get("confidence_raw") if isinstance(_f, dict) else getattr(_f, "confidence_raw", 0.0))
-            or (_f.get("raw_confidence_score") if isinstance(_f, dict) else getattr(_f, "raw_confidence_score", 0.0))
-            or ((_f.get("metadata") or {}) if isinstance(_f, dict) else {}).get("confidence")
-            or 0.0
-        )
-        if _c > 0:
-            _raw_conf_by_id[_fid] = _c
+        # Use explicit None checks (not an OR chain) so that a legitimate
+        # confidence_raw=0.0 (100% confident clean) is not treated as "missing"
+        # and discarded — after the max(_cc, 1-_cc) inversion below, 0.0 maps
+        # to evidence strength 1.0, the strongest possible clean signal.
+        _raw = (_f.get("confidence_raw") if isinstance(_f, dict) else getattr(_f, "confidence_raw", None))
+        if _raw is None:
+            _raw = (_f.get("raw_confidence_score") if isinstance(_f, dict) else getattr(_f, "raw_confidence_score", None))
+        if _raw is None:
+            _raw = ((_f.get("metadata") or {}) if isinstance(_f, dict) else {}).get("confidence")
+        if _raw is not None:
+            _raw_conf_by_id[_fid] = float(_raw)
     _supporting_confs = [
         max(_raw_conf_by_id[df.finding_id], 1.0 - _raw_conf_by_id[df.finding_id])
         for df in deliberated
